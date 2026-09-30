@@ -84,6 +84,7 @@ Available at `https://{server}:44333/api/swagger` — served on the web-UI port 
 ## Feature Folders
 
 - [`wire-contract/`](./wire-contract/feature.md) — the frozen collector↔server wire contract (enums, DTOs, JSON conventions, endpoints).
+- [`alert-administration/`](./alert-administration/feature.md) — the `/api/v1` REST surface for administering alerts (#1500): data-policy and TTL-policy CRUD on sensors and products, bearer-token authenticated.
 
 To add as work lands (from `../_TEMPLATE_feature.md`):
 

@@ -104,6 +104,7 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 | `EditAlerts(EditAlertsViewModel)` | `HomeController.cs` | Multi-edit TTL; unchanged. |
 | `REST CRUD /api/v1/alertTemplates` | `AlertTemplatesApiController.cs` | Bearer-token surface (#1351): full template CRUD at folder scope (`alerts:read`/`alerts:write`), same validation rules as the cookie UI; entity-shaped credential-free DTOs. See `management-api/feature.md`. |
 | `REST read-only /api/v1/alertSchedules` | `AlertSchedulesApiController.cs` | Bearer-token surface (#1352): list/get; caller-wide `alerts:read`-anywhere gate (schedules are global), sensor references filtered per-caller visibility. |
+| `REST CRUD /api/v1/sensors/{id}/policies`, `/ttl-policies`, `/api/v1/products/{id}/...` | `SensorPoliciesApiController.cs`, `ProductPoliciesApiController.cs` | Bearer-token surface (#1500): item-level policy CRUD over one atomic full-list node update — the same machinery `UpdateSensorInfo` drives; reads through `AlertReadService`, writes through `PolicyAdministrationService`. See `features/api/alert-administration/feature.md`. |
 
 ## Key Files
 

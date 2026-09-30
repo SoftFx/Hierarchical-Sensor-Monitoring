@@ -191,7 +191,43 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensorHistory))] = [400, 401, 403, 404, 500],
+
+            // The alert-administration surface (#1500). Writes carry the
+            // semantic-validation 422 (condition-vs-type, chat availability,
+            // schedule references, the TTL interval/inherit switch) and the
+            // template-ownership 409; reads carry the same 403/404 split as the
+            // sensor-tree item endpoints.
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicies))] = [400, 401, 403, 404, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicy))] = [401, 403, 404, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetTtlPolicies))] = [400, 401, 403, 404, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetTtlPolicy))] = [401, 403, 404, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeleteTtlPolicy))] = [401, 403, 404, 409, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.GetPolicies))] = [400, 401, 403, 404, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.GetPolicy))] = [401, 403, 404, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 422, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.GetTtlPolicies))] = [400, 401, 403, 404, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.GetTtlPolicy))] = [401, 403, 404, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.CreateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.UpdateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.DeleteTtlPolicy))] = [401, 403, 404, 409, 500],
         };
+
+        // The ONE action of the area with no success response (#1500):
+        // POST /api/v1/products/{id}/policies is the API's honest "not
+        // expressible" answer — a product owns no data policies (#1142), so the
+        // action always answers 422 pointing at the sensor endpoint. Every other
+        // management action documents a 2xx.
+        private static readonly HashSet<(Type Controller, string Action)> ActionsWithoutSuccessResponse =
+        [
+            (typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.CreatePolicy)),
+        ];
 
 
         [Fact]
@@ -225,8 +261,10 @@ namespace HSMServer.Core.Tests.Swagger
                     foreach (var status in required)
                         Assert.Contains(status, declared);
 
-                    // A success (2xx) response is documented for every action.
-                    Assert.Contains(declared, status => status is >= 200 and < 300);
+                    // A success (2xx) response is documented for every action —
+                    // except the single documented not-expressible action above.
+                    if (!ActionsWithoutSuccessResponse.Contains((controller, action.Name)))
+                        Assert.Contains(declared, status => status is >= 200 and < 300);
                 }
 
             // No dead entries: everything in the map belongs to a real management action.

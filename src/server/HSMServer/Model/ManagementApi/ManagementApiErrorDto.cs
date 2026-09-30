@@ -11,15 +11,15 @@ namespace HSMServer.Model.ManagementApi
         /// <summary>
         /// Stable machine-readable code, one per HTTP status:
         /// validation_failed (400), unauthorized (401), forbidden (403),
-        /// not_found (404), conflict (409), internal_error (500),
-        /// service_unavailable (503).
+        /// not_found (404), conflict (409), unprocessable_entity (422),
+        /// internal_error (500), service_unavailable (503).
         /// </summary>
         public string Error { get; init; }
 
         /// <summary>Human-readable summary; 404 bodies are generic by design (anti-enumeration).</summary>
         public string Message { get; init; }
 
-        /// <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
+        /// <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s and 422s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
         public object Details { get; init; }
     }
 }

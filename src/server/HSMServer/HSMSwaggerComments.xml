@@ -163,6 +163,87 @@
         <member name="M:HSMServer.Controllers.ProductController.UpdateSensorGroups(HSMServer.Model.ViewModel.SensorGroupsRequest)">
             <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
         </member>
+        <member name="T:HSMServer.Controllers.ProductPoliciesApiController">
+            <summary>
+            Alert administration on a product (#1500): the product's own TTL policies
+            (full CRUD) and the product's data-policy aggregate (the subtree's sensor
+            policies — read, and writes routed to the owning sensor; a product owns no
+            data policies of its own, per-node alert creation was removed in #1142, so
+            POST /policies answers 422 pointing at the sensor endpoint). Bearer-token
+            authenticated only (the HsmApiToken scheme); writes need a read-write token
+            and the owner's write access.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.GetPolicies(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The product's data-policy aggregate: every data policy of every sensor
+            in the product's subtree, ordered by sensor path then policy id.
+            </summary>
+            <param name="productId">Product id.</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.GetPolicy(System.Guid,System.Guid)">
+            <summary>One data policy of the product's subtree by id, with its owning sensor.</summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.CreatePolicy(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto)">
+            <summary>
+            Not expressible: a product owns no data policies (the aggregate is
+            read-addressed and writes route to the owning sensor). Always answers
+            422 with the sensor endpoint to use instead.
+            </summary>
+            <param name="productId">Product id.</param>
+            <param name="dto">The policy content (never applied).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.UpdatePolicy(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto)">
+            <summary>
+            Replace the full content of one data policy found anywhere in the
+            product's subtree; the write is applied atomically on the OWNING
+            sensor's full list. A template-owned policy accepts only the disable
+            toggle — anything else answers 409.
+            </summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.DeletePolicy(System.Guid,System.Guid)">
+            <summary>Remove one data policy of the product's subtree, through the owning sensor's full list.</summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.GetTtlPolicies(System.Guid,System.Int32,System.Int32)">
+            <summary>The product's own TTL policies, ordered by policy id.</summary>
+            <param name="productId">Product id.</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.GetTtlPolicy(System.Guid,System.Guid)">
+            <summary>One TTL policy of the product by id.</summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.CreateTtlPolicy(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto)">
+            <summary>
+            Create one TTL policy on the product itself. On a product,
+            <c>inherit</c>=true resolves against the product's OWN Inactivity
+            Period setting (bounded — no parent-chain climb).
+            </summary>
+            <param name="productId">Product id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.UpdateTtlPolicy(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto)">
+            <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductPoliciesApiController.DeleteTtlPolicy(System.Guid,System.Guid)">
+            <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
+            <param name="productId">Product id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
         <member name="T:HSMServer.Controllers.ProductsApiController">
             <summary>
             Root products visible to the token's owner (#1386) — the discovery entry
@@ -189,6 +270,87 @@
             <c>MaxSensorsPerChart</c> children by current value are charted. Read-only; children with no data
             in the window are omitted (drawn with gaps, never zero-filled).
             </summary>
+        </member>
+        <member name="T:HSMServer.Controllers.SensorPoliciesApiController">
+            <summary>
+            Alert administration on a sensor (#1500): item-level CRUD over the
+            sensor's data-alert policies and TTL policies. Bearer-token authenticated
+            only (the HsmApiToken scheme); served on the web-UI port only. Writes need
+            a read-write token and the owner's write access at the sensor; a read-only
+            token never passes the management policy's method backstop (403 before the
+            action runs) and the evaluator's write arm answers 403 for a Viewer owner.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.GetPolicies(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The sensor's data policies, ordered by policy id. Every policy is
+            listed — template-owned ones included, with their template linkage.
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.GetPolicy(System.Guid,System.Guid)">
+            <summary>One data policy of the sensor by id.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.CreatePolicy(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto)">
+            <summary>
+            Create one data policy; the id is server-generated and every other
+            policy of the sensor rides through untouched. The body fully specifies
+            the policy; a condition property the sensor's type does not offer
+            answers 422, as does a chat not available on the node or an unknown
+            schedule reference.
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.UpdatePolicy(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto)">
+            <summary>
+            Replace the full content of one data policy (the route id wins). A
+            template-owned policy accepts only the disable toggle — anything else
+            answers 409.
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.DeletePolicy(System.Guid,System.Guid)">
+            <summary>Remove one data policy; every other policy of the sensor rides through untouched.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.GetTtlPolicies(System.Guid,System.Int32,System.Int32)">
+            <summary>The sensor's TTL (inactivity) policies, ordered by policy id.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.GetTtlPolicy(System.Guid,System.Guid)">
+            <summary>One TTL policy of the sensor by id.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.CreateTtlPolicy(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto)">
+            <summary>
+            Create one TTL policy. The interval is explicit — <c>interval</c>
+            (a TimeSpan string) or <c>inherit</c>=true, never a null: the server
+            owns the reset-to-parent translation.
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.UpdateTtlPolicy(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto)">
+            <summary>Replace one TTL policy; the interval/inherit switch is part of the content.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
+            <param name="dto">The policy content.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorPoliciesApiController.DeleteTtlPolicy(System.Guid,System.Guid)">
+            <summary>Remove one TTL policy; every other TTL policy of the sensor rides through untouched.</summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="policyId">Policy id.</param>
         </member>
         <member name="T:HSMServer.Controllers.SensorsApiController">
             <summary>
@@ -835,6 +997,287 @@
             list carries only paths the token's owner may see.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListSensorPolicies(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The sensor's data policies, ordered by policy id, paginated with the
+            area's shared clamps. The token's owner sees the sensor exactly when
+            the sensor-tree item endpoint would answer it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetSensorPolicy(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>One data policy of the sensor by id (unknown and invisible answer the SAME 404).</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListSensorTtlPolicies(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>The sensor's TTL policies, ordered by policy id, paginated.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetSensorTtlPolicy(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>One TTL policy of the sensor by id.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListProductPolicies(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The product's data-policy aggregate: every data policy of every
+            sensor in the product's subtree, each naming its owning sensor,
+            ordered by sensor path then policy id, paginated. A product owns no
+            data policies of its own — this is the read side of the aggregate
+            the write surface routes through.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetProductPolicy(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>One data policy of the product's subtree by id, with its owning sensor.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListProductTtlPolicies(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>The product's own TTL policies, ordered by policy id, paginated.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetProductTtlPolicy(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>One TTL policy of the product by id.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService">
+            <summary>
+            The write engine of the alert-administration surface (#1500): item-level
+            CRUD over the data and TTL policies of sensors and products. Transport-
+            agnostic — the REST controllers render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/>
+            through the uniform error contract; MCP write tools (phase 2) will render
+            the same failures as tool error text.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Create one data policy on the sensor; the id is server-generated and
+            every other policy of the sensor rides through untouched.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Replace the full content of one data policy (the route id wins; a
+            template-owned policy accepts only the disable toggle — anything else
+            answers 409).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one data policy; every other policy of the sensor rides through untouched.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Create one TTL policy on the sensor. The interval is explicit —
+            <c>interval</c> or <c>inherit</c>, never a null: the server owns the
+            reset-to-parent translation.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Replace one TTL policy of the sensor; the interval/inherit switch is part of the content.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one TTL policy; every other TTL policy of the sensor rides through untouched.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            A product holds no data policies of its own (per-node alert creation
+            was removed in #1142) — the product surface reads the subtree aggregate
+            and routes writes to the owning sensor. Creation is therefore not
+            expressible here and always answers 422 pointing at the sensor endpoint.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Replace one data policy found anywhere in the product's subtree; the
+            write is applied atomically on the OWNING sensor's full list.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one data policy found anywhere in the product's subtree, through the owning sensor's full list.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Create one TTL policy on the product itself.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.PolicyDto">
+            <summary>
+            One data-alert policy of the alert-administration surface (#1500) — the
+            clean wire contract of a <c>Policy</c>, NOT the UI view models and NOT the
+            durable entity. Ids are Guid strings; enum-valued fields carry the DOMAIN
+            ENUM NAME as a string (value tables in the field remarks). Writes are
+            FULL-REPLACE at item granularity: a POST/PATCH body fully specifies the
+            policy's desired content — fields left out fall back to their defaults, and
+            the server generates/keeps the id (route wins on PATCH).
+            </summary>
+            <remarks>
+            Round-trip notes: <c>templateId</c>/<c>templateAlertId</c> are output-only
+            (template linkage is managed by the alert-templates surface); a
+            template-owned policy accepts only the <c>isDisabled</c> toggle through this
+            API — anything else answers 409, and so does its deletion (edit the
+            template instead). A policy must carry at least one effect: a notification,
+            an icon, or a status change.
+            </remarks>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Id">
+            <summary>Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Conditions">
+            <summary>Conditions combined into the policy trigger (1..10 entries, evaluated top to bottom).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Destination">
+            <summary>
+            Where a fired notification goes. Required when <c>notification</c> is present.
+            Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (NotInitialized = never configured; writable only as an echo of a read, never with chats).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Notification">
+            <summary>The notification effect (message template + send schedule); null means no notification.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Icon">
+            <summary>Icon shown on the sensor while the policy is triggered (e.g. "🔥"); null or empty means none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Status">
+            <summary>
+            Status effect while the policy is triggered: "Error" sets the sensor status to Error,
+            "Ok" or null means no status action.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.ConfirmationPeriod">
+            <summary>Confirmation period as a TimeSpan string (e.g. "00:05:00"); null disables confirmation.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.IsDisabled">
+            <summary>Disabled policies stay stored but never fire.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.ScheduleId">
+            <summary>Working-time schedule the policy respects; must reference an existing /api/v1/alertSchedules id; null = always.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.TemplateId">
+            <summary>Output-only: the alert template this policy was minted by, when any.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.TemplateAlertId">
+            <summary>Output-only: the template alert entry this policy was minted by, when any.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto">
+            <summary>
+            One TTL (inactivity) policy (#1500): fires when the node receives no data
+            within the interval. The interval is expressed EXPLICITLY — the client never
+            uses null to mean "reset": <c>inherit</c>=true resets to the parent's
+            interval, <c>interval</c> sets an explicit one, and exactly one of the two
+            is required on every write.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Id">
+            <summary>Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Interval">
+            <summary>
+            Inactivity interval as a TimeSpan string (e.g. "00:30:00"); null exactly when
+            <c>inherit</c> is true (reads: also null for a policy resolving to no interval anywhere).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Inherit">
+            <summary>True = take the interval from the parent node (the explicit reset-to-parent switch; on a product it resolves against the product's own Inactivity Period setting).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Destination">
+            <summary>Where a fired notification goes. Required when <c>notification</c> is present. Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (an echo of an unconfigured destination; never with chats).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Notification">
+            <summary>The notification effect (message template + send schedule); null means no notification.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Icon">
+            <summary>Icon shown on the node while the policy is triggered; null or empty means none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Status">
+            <summary>Status effect while the policy is triggered: "Error", or "Ok"/null for no status action.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.IsDisabled">
+            <summary>Disabled policies stay stored but never fire.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.ScheduleId">
+            <summary>Working-time schedule the policy respects (the TTL schedule gate, #1404); must reference an existing schedule id; null = always.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.TemplateId">
+            <summary>Output-only: the alert template this policy was minted by, when any.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.TemplateAlertId">
+            <summary>Output-only: the template alert entry this policy was minted by, when any.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertConditionDto">
+            <summary>
+            One condition of a policy: property, comparison operation, typed target.
+            The property/operation pair must be one the TARGET SENSOR'S TYPE offers
+            (the same surface the web editor renders) — a mismatch answers 422.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertConditionDto.Property">
+            <summary>
+            The sensor property compared (PolicyProperty enum name).
+            Common to every type: Status, Comment, NewSensorData.
+            Value types: Value; String adds Length; File adds OriginalSize; bar types add
+            Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount;
+            numeric single-value types add EmaValue.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertConditionDto.Operation">
+            <summary>
+            Comparison operation (PolicyOperation enum name). Operation table per property:
+            Status: IsChanged, IsChangedToOk, IsChangedToError, IsOk, IsError (no target);
+            Comment: Equal, NotEqual, Contains, StartsWith, EndsWith, IsChanged (no target for IsChanged);
+            NewSensorData: ReceivedNewValue (no target);
+            numeric properties (Value/Ema/Min/Max/Mean/Count/FirstValue/LastValue/Length/OriginalSize):
+            LessThanOrEqual, LessThan, GreaterThan, GreaterThanOrEqual, Equal, NotEqual;
+            String/Version Value: Equal, NotEqual, Contains, StartsWith, EndsWith.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertConditionDto.Target">
+            <summary>
+            The constant compared against — a typed JSON value whose type follows the property:
+            a JSON number for numeric properties (integer properties require an integer),
+            a string for Comment and String Value, a TimeSpan string ("d.hh:mm:ss") for TimeSpan Value,
+            a version string ("1.2.3") for Version Value. Target-less operations (the table above)
+            take null; anything else is a 422.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertConditionDto.Combination">
+            <summary>How this condition combines with the PREVIOUS one: "And" (default) or "Or"; ignored on the first condition.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertDestinationDto">
+            <summary>The notification destination of a policy.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertDestinationDto.Mode">
+            <summary>Destination mode (PolicyDestinationMode enum name): FromParent, Empty, AllChats, Custom. Table note: NotInitialized marks an unconfigured destination and is writable only as an echo of a read, never with chats.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertDestinationDto.Chats">
+            <summary>Destination chat ids for mode Custom (1..20, every id must be available on the node — folder-bound or global); must be empty for the other modes.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto">
+            <summary>The notification effect of a policy: what is sent and on which cadence.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.Template">
+            <summary>Message template, may reference alert variables ($product, $path, $status, $comment, $operation, $target, $prevStatus).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.Repeat">
+            <summary>Re-send cadence of a still-triggered policy (AlertRepeatMode enum name). Repeat table: Immediately (default), FiveMinutes, TenMinutes, FifteenMinutes, ThirtyMinutes, Hourly, Daily, Weekly.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.InstantSend">
+            <summary>Send the first notification immediately, outside the aggregation window.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.StartAt">
+            <summary>When the repeat cadence starts (UTC ISO 8601); null = at once.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto">
+            <summary>
+            A data policy as seen from a PRODUCT (#1500): the product's sensor-tree
+            aggregate, not an owned list — a product holds no data policies of its own
+            (per-node alert creation was removed in #1142); each item names the sensor
+            that owns it, and writes route to that sensor.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto.SensorId">
+            <summary>The sensor that owns this policy.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto.SensorPath">
+            <summary>Full path of the owning sensor.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto.Policy">
+            <summary>The policy itself.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
             <summary>
             Alert template wire contract of the /api/v1/alertTemplates surface. The shape
@@ -1045,15 +1488,15 @@
             <summary>
             Stable machine-readable code, one per HTTP status:
             validation_failed (400), unauthorized (401), forbidden (403),
-            not_found (404), conflict (409), internal_error (500),
-            service_unavailable (503).
+            not_found (404), conflict (409), unprocessable_entity (422),
+            internal_error (500), service_unavailable (503).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Message">
             <summary>Human-readable summary; 404 bodies are generic by design (anti-enumeration).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Details">
-            <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
+            <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s and 422s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto">
             <summary>
