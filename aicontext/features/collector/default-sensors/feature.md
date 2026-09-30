@@ -512,8 +512,14 @@ enqueue path uses. That counter is folded into the bar by the self-monitor threa
 cycle, and now **once more by Stop** — after that thread is joined, before the bars are flushed — so
 drops counted during the last partial cycle are no longer lost with the thread. Remaining shape
 difference: managed adds one bar value per drop event (a retry drop is a `1`), native one value per
-collect cycle with the cycle's total, so the SUM matches while `Count`/`Mean` differ. Evictions caused by
-Stop's own flush of the bars into a full queue happen after the fold and are still not reported. Pinned
+collect cycle with the cycle's total, so the SUM matches while `Count`/`Mean` differ. **Drops after that
+last fold** cannot reach the bar, which Stop flushes right after it: a send already in flight that fails
+into a full queue before the worker is joined, evictions caused by Stop's own flush of the bars (or by
+values posted while Stopping) into a full queue. Native logs their count at Info when the stop completes
+(`Collector stop: N value(s) dropped from the full send queue after the final Queue overflow report.`)
+and resets the counter, so the next run never reports the previous run's drops as its own (#1503 review;
+before, they rode into the next run's first collect cycle, and vanished on Dispose). Pinned by
+`native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run`. Pinned
 cross-language by `queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` (both drivers:
 park a send with `wait_sender_parked`, fill the queue to capacity, `release_sender_hang` into an injected
 failure, `expect_bar_sum` on the overflow bar — the SUM only, because of the shape difference above),

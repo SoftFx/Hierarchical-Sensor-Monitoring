@@ -18,10 +18,18 @@ namespace HSMDataCollector.PublicInterface
         /// <c>null</c> is sent as a null description, which the server reads as "unchanged" (so it
         /// clears only a description the server has not received yet); pass <c>""</c> to clear a
         /// description the server already has. Callable from any thread; never throws.
+        /// A sensor the collector does not hold is left unchanged and nothing is sent: one the collector
+        /// rejected at creation (created while it was stopping; that handle is inert) or one removed
+        /// from it. The native collector has the same rule in the form its API allows: it returns no
+        /// handle for a rejected sensor, so <c>hsm_sensor_set_description</c> can only fail with
+        /// <c>HSM_RESULT_INVALID_ARGUMENT</c> there. Disposing a sensor handle does not remove the sensor
+        /// from the collector (it is registered again on the next Start), so it still accepts a new
+        /// description.
         /// </summary>
         /// <param name="description">The new description text.</param>
-        /// <returns><c>true</c> when the description was updated; <c>false</c> when the update failed
-        /// (the failure is reported through the collector's error channel).</returns>
+        /// <returns><c>true</c> when the description was updated; <c>false</c> when the collector does
+        /// not hold this sensor (nothing changed, nothing sent) or when the update failed (the failure is
+        /// reported through the collector's error channel).</returns>
         bool SetDescription(string description);
     }
 }

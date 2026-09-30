@@ -5422,6 +5422,63 @@ namespace
         Contains(overflow.back(), "\"Count\":1,");
     }
 
+    // A value lost AFTER Stop's final Queue overflow fold — here an eviction caused by the stop flush's
+    // own enqueue of a bar into a full queue — is logged, and the next run does not report it as one of
+    // its own drops (#1480 review: it used to ride into the next run's first collect cycle). The 1 h
+    // collect period keeps the worker and the self-monitor out of the timeline, so the only fold is
+    // Stop's and the eviction deterministically comes after it.
+    void NativeLateStopDropIsLoggedAndNotInheritedByTheNextRun()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle bar;
+        std::vector<std::string> infos;
+
+        auto options = TestOptions();
+        options.max_queue_size = 5;
+        options.package_collect_period_ms = 3600000;
+        collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                if (level == HSM_LOG_LEVEL_INFO)
+                    static_cast<std::vector<std::string>*>(user_data)->emplace_back(message);
+            },
+            &infos);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        values = CreateIntSensor(collector.value, "contract/queue/late");
+        Require(
+            hsm_collector_create_int_bar_sensor(collector.value, "contract/queue/late-bar", 300000, 0, &bar.value) ==
+                HSM_RESULT_OK,
+            "bar sensor create failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        for (int value = 0; value < 5; ++value)
+            Require(hsm_sensor_add_int(values.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_bar_int(bar.value, 7) == HSM_RESULT_OK, "add bar failed");
+
+        // Stop folds (nothing to report yet), then flushes the non-empty bar into the full queue,
+        // evicting one queued value after the fold.
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        bool logged = false;
+        for (const auto& message : infos)
+            logged = logged || message.find("1 value(s) dropped from the full send queue after the final Queue overflow report") !=
+                                   std::string::npos;
+        Require(logged, "the late drop must be logged");
+
+        // A second run with no loss of its own: its Queue overflow bar must stay empty.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        Require(
+            PayloadsForPath(collector.value, "/Queue overflow\"").empty(),
+            "the next run must not report the previous run's late drop");
+    }
+
     // The four queue-stat rows register the managed descriptions, composed from the collector options
     // the same way (#1480) — here the production defaults, which the conformance harness does not use.
     // The periods go through the managed ToReadableView rules (plural above 1, zero parts skipped).
@@ -8040,6 +8097,8 @@ namespace
               [](const std::string&) { NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry(); } },
             { "native_requeue_drop_at_capacity_counts_as_overflow",
               [](const std::string&) { NativeRequeueDropAtCapacityCountsAsOverflow(); } },
+            { "native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run",
+              [](const std::string&) { NativeLateStopDropIsLoggedAndNotInheritedByTheNextRun(); } },
             { "native_queue_stat_descriptions_match_managed",
               [](const std::string&) { NativeQueueStatDescriptionsMatchManaged(); } },
             { "native_service_alive_beats_on_its_own_period",

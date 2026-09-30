@@ -107,6 +107,9 @@ namespace HSMDataCollector.Core
             if (!_sensors.TryRemove(key, out value))
                 return false;
 
+            // A removed sensor is no longer the collector's: SetDescription must not re-register it.
+            (value as ICollectorOwnedSensor)?.MarkReleased();
+
             Interlocked.Decrement(ref _sensorCount);
             return true;
         }
@@ -258,6 +261,8 @@ namespace HSMDataCollector.Core
 
             if (_sensors.TryAdd(path, sensor))
             {
+                (sensor as ICollectorOwnedSensor)?.MarkOwned();
+
                 var count = Interlocked.Increment(ref _sensorCount);
                 if (count > _options.MaxSensors)
                 {

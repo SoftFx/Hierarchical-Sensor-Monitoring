@@ -402,6 +402,8 @@ set(NATIVE_REGRESSION_TESTS
     # ... and a retry dropped at capacity is counted in Queue overflow (managed #1088), with Stop
     # folding the last partial cycle's drops instead of losing them.
     native_requeue_drop_at_capacity_counts_as_overflow
+    # ... and a drop after Stop's final fold is logged, never carried into the next run.
+    native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run
     native_queue_stat_descriptions_match_managed
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat

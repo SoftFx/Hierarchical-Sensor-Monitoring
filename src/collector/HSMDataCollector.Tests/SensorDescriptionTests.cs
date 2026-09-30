@@ -185,6 +185,90 @@ namespace HSMDataCollector.Tests
             Assert.Equal(sentBefore, sender.Registrations.Count);
         }
 
+        // --- Sensors the collector does not hold (PR #1503 review) ---
+
+        [Fact]
+        public async Task A_sensor_rejected_while_stopping_is_never_registered_by_a_later_call()
+        {
+            // SensorsStorage.Register disposes a sensor created while the collector stops and returns
+            // it inert. A later description change must not register a path no value will reach.
+            var sender = new RegistrationSender();
+            using (var collector = CreateCollector(sender))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var stopTask = collector.Stop(release.Task);
+                Assert.Equal(CollectorStatus.Stopping, collector.Status);
+
+                var rejected = collector.CreateIntSensor("describe/rejected", Options("first"));
+
+                release.SetResult(true);
+                await stopTask.ConfigureAwait(false);
+                await collector.Start().ConfigureAwait(false);
+
+                Assert.False(rejected.SetDescription("second"));
+                await collector.Stop().ConfigureAwait(false);
+
+                Assert.DoesNotContain(sender.Registrations, r => r.Path.EndsWith("describe/rejected", StringComparison.Ordinal));
+            }
+        }
+
+        [Fact]
+        public async Task A_sensor_removed_from_the_collector_is_never_registered_by_a_later_call()
+        {
+            // The removal path the collector itself uses (DefaultSensorsCollection.Unregister ->
+            // SensorsStorage.TryRemove, e.g. UnsubscribeWindowsServiceStatus), driven directly because
+            // that public call hands out no sensor handle.
+            var sender = new RegistrationSender();
+            using (var collector = CreateCollector(sender))
+            {
+                var sensor = collector.CreateIntSensor("describe/removed", Options("first"));
+                await collector.Start().ConfigureAwait(false);
+                Assert.True(await sender.WaitForRegistrationsAsync(1, WaitTimeout).ConfigureAwait(false));
+
+                Assert.True(StorageOf(collector).TryRemove(((ISensor)sensor).SensorPath, out _));
+
+                Assert.False(sensor.SetDescription("second"));
+                await collector.Stop().ConfigureAwait(false);
+                await collector.Start().ConfigureAwait(false);
+                await collector.Stop().ConfigureAwait(false);
+
+                var registration = Assert.Single(sender.Registrations);
+                Assert.Equal("first", registration.Description);
+            }
+        }
+
+        [Fact]
+        public async Task A_sensor_whose_handle_was_disposed_is_still_the_collectors_and_takes_the_new_text()
+        {
+            // Disposing a handle stops the sensor but leaves it in the collector's storage, and the
+            // next Start registers it again anyway — as native hsm_sensor_release frees only the
+            // handle and keeps the sensor. So the description change applies and rides that Start.
+            var sender = new RegistrationSender();
+            using (var collector = CreateCollector(sender))
+            {
+                var sensor = collector.CreateIntSensor("describe/disposed-handle", Options("first"));
+                await collector.Start().ConfigureAwait(false);
+                Assert.True(await sender.WaitForRegistrationsAsync(1, WaitTimeout).ConfigureAwait(false));
+                await collector.Stop().ConfigureAwait(false);
+
+                ((IDisposable)sensor).Dispose();
+
+                Assert.True(sensor.SetDescription("second"));
+                await collector.Start().ConfigureAwait(false);
+                await collector.Stop().ConfigureAwait(false);
+
+                Assert.Equal(2, sender.Registrations.Count);
+                Assert.Equal("second", sender.Registrations[1].Description);
+            }
+        }
+
+        private static SensorsStorage StorageOf(DataCollector collector) =>
+            (SensorsStorage)typeof(DataCollector)
+                .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+
         [Fact]
         public async Task A_sensor_created_while_running_re_registers_after_its_own_registration()
         {

@@ -3061,6 +3061,18 @@ namespace
                 state_ = CollectorState::Stopped;
             }
 
+            // Values lost after the final Queue overflow fold above (an in-flight send failing into
+            // a full queue before the worker is joined, evictions by the stop flush's own enqueues,
+            // or by values posted while Stopping) can no longer reach this run's bar, which is
+            // already flushed. Log them instead (rule #8), and keep them out of the next run's first
+            // cycle, which must not report the previous run's drops (#1480 review). Taken after the
+            // flip to Stopped: the data gate is closed, so nothing is counted after this.
+            const std::int64_t unreported = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+            if (unreported > 0)
+                LogMessage(HSM_LOG_LEVEL_INFO,
+                           "Collector stop: " + std::to_string(unreported) +
+                               " value(s) dropped from the full send queue after the final Queue overflow report.");
+
             NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;
         }

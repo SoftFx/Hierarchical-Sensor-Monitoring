@@ -1823,7 +1823,8 @@ namespace HSMDataCollector.Tests
             if (position < 0)
                 position += registrations.Count;
 
-            Assert.InRange(position, 0, Math.Max(registrations.Count - 1, 0));
+            Assert.NotEmpty(registrations);
+            Assert.InRange(position, 0, registrations.Count - 1);
 
             return registrations[position];
         }
