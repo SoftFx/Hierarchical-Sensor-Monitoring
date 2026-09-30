@@ -37,6 +37,9 @@ jobs:
   probe-linux:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    # Green runs take 1-2.5 min (slowest seen: 2 min 27 s). A stalled mirror once held a probe job
+    # for GitHub's 6 h default; 10 min is 4x the slowest run and still ends a hang quickly.
+    timeout-minutes: 10
     env:
       CARGO_TERM_COLOR: always
       # A build failure in the probe is never worth a cryptic linker message.
@@ -46,8 +49,10 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev pkg-config
+          # Bounded network waits: a stalled mirror fails the step instead of hanging it.
+          apt_net=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_net[@]}" update
+          sudo apt-get "${apt_net[@]}" install -y build-essential cmake libcurl4-openssl-dev pkg-config
 
       # The ubuntu-latest image ships rustup; pin the components this lane needs rather than
       # assuming the preinstalled profile carries them.
@@ -81,8 +86,18 @@ jobs:
   deb:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    # Green runs take 1-1.5 min (slowest seen: 1 min 14 s); 10 min leaves room for a cold rustup
+    # and crate download inside the container while still ending a stalled mirror quickly.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      # build-deb.sh and smoke-deb.sh run apt-get inside debian:13; this file, mounted into both
+      # containers, gives those calls the same bounded network waits as the host step above.
+      - name: Bound apt's network waits in the containers
+        run: |
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' > "$RUNNER_TEMP/apt-timeouts.conf"
 
       # "~ci" sorts below the plain version, so a CI package can never shadow a release on a host.
       - name: Build the .deb in debian:13
@@ -99,6 +114,7 @@ jobs:
           export SOURCE_DATE_EPOCH
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
           docker run --rm -e SOURCE_DATE_EPOCH -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            -v "$RUNNER_TEMP/apt-timeouts.conf:/etc/apt/apt.conf.d/99-ci-timeouts:ro" \
             debian:13 bash packaging/build-deb.sh "${version}~ci"
           echo "deb=dist/hsm-linux-probe_${version}~ci_amd64.deb" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -109,6 +125,7 @@ jobs:
           PROBE_VERSION: ${{ steps.build.outputs.version }}
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            -v "$RUNNER_TEMP/apt-timeouts.conf:/etc/apt/apt.conf.d/99-ci-timeouts:ro" \
             debian:13 bash packaging/smoke-deb.sh "$DEB" "$PROBE_VERSION"
 
       # For hand trials on a real host; not a release (those come only from probe-v* tags).

@@ -285,14 +285,26 @@ impl WriteRecord {
     ) -> Result<(u64, u64), Skip> {
         // The wall clock went back past the running hour (a VM restored, a clock corrected):
         // what was counted belongs to an hour that has not come yet — start the current one
-        // afresh rather than let hours of writes pile into it. A step back into the hour just
-        // posted (an NTP step of seconds across the boundary) keeps the running hour instead:
-        // reopening the posted hour would post it a second time, with a few seconds' bytes (#1489).
-        if hour_start(now_ms) < self.hour_start && self.posted_hour != Some(hour_start(now_ms)) {
-            self.hour_start = hour_start(now_ms);
-            self.bytes = 0;
-            self.covered_ms = 0;
-            self.deltas = 0;
+        // afresh rather than let hours of writes pile into it. The one exception is a *small* step
+        // back into the hour just posted (an NTP step of seconds across the boundary): the running
+        // hour is kept, since reopening the posted hour would only collect a few seconds' bytes
+        // that `roll` then refuses to hand out twice (#1489). "Small" is the longest interval a
+        // sample may cover (`MAX_INTERVAL_FACTOR` sample periods, 15 s at the 5 s default): a step
+        // within it is indistinguishable from one late sample; a larger one is a real correction
+        // and resets as any other step back does. Either way `roll` never posts the posted hour
+        // again.
+        let now_hour = hour_start(now_ms);
+        if now_hour < self.hour_start {
+            let tolerance_ms = sample_period.as_secs_f64() * 1000.0 * contract::MAX_INTERVAL_FACTOR;
+            let step_ms = self.hour_start.saturating_mul(1000).saturating_sub(now_ms);
+            let small_step_into_posted =
+                self.posted_hour == Some(now_hour) && step_ms as f64 <= tolerance_ms;
+            if !small_step_into_posted {
+                self.hour_start = now_hour;
+                self.bytes = 0;
+                self.covered_ms = 0;
+                self.deltas = 0;
+            }
         }
         // A sample read after the boundary, in a tick that rolled before it: leave everything for
         // the next tick, which rolls first — no write of the new hour goes into the old one.
@@ -915,6 +927,95 @@ mod tests {
         )
         .unwrap();
         assert_eq!(old.posted_hour, None);
+    }
+
+    /// A large step back into the posted hour (a VM restore, a bad RTC corrected by chrony) is a
+    /// real correction: the running hour resets as before #1489 instead of collecting ~2 h of
+    /// writes, and the posted hour is still never handed out again.
+    #[test]
+    fn a_large_clock_step_back_into_the_posted_hour_resets_the_running_hour() {
+        let mut record = WriteRecord::new(H13);
+        record
+            .sample("a", 0, H13 + 60 * MIN - 10_000, PERIOD, None)
+            .ok();
+        record
+            .sample("a", 100, H13 + 60 * MIN - 5_000, PERIOD, None)
+            .unwrap();
+        let posted = H13 + 60 * MIN + 1_000;
+        assert_eq!(record.roll(posted).expect("posted").bytes, 100);
+        assert_eq!(
+            record.sample("a", 150, posted, PERIOD, None),
+            Ok((50, 6_000))
+        );
+        // The clock is corrected back 50 minutes, to 13:10:01.
+        let back = posted - 50 * MIN;
+        assert_eq!(record.roll(back), None);
+        assert_eq!(
+            record.sample("a", 170, back, PERIOD, None),
+            Err(Skip::ClockBackwards)
+        );
+        assert_eq!(
+            record.hour_start * 1000,
+            H13,
+            "the running hour restarts at 13:00"
+        );
+        assert_eq!(
+            (record.bytes, record.deltas),
+            (0, 0),
+            "14:00's bytes are dropped"
+        );
+        // The writes of the stepped 13:10–14:00 go to the reopened 13:00 hour …
+        let mut at = back;
+        let mut written = 170;
+        while at + 5_000 < H13 + 60 * MIN {
+            at += 5_000;
+            written += 1;
+            record.sample("a", written, at, PERIOD, None).unwrap();
+        }
+        assert!(record.deltas > 0);
+        // … which is not posted a second time when the stepped clock reaches 14:00.
+        assert_eq!(
+            record.roll(H13 + 60 * MIN + 1_000),
+            None,
+            "13:00–14:00 is not posted twice"
+        );
+        assert_eq!(record.hour_start * 1000, H13 + 60 * MIN);
+        assert_eq!((record.bytes, record.deltas), (0, 0));
+        // 14:00 then collects only its own hour and posts once, covering at most an hour.
+        let mut at = H13 + 60 * MIN + 1_000;
+        record.sample("a", written + 5, at, PERIOD, None).unwrap();
+        while at + 5_000 < H13 + 120 * MIN {
+            at += 5_000;
+            written += 1;
+            let (_, gap) = record.sample("a", written + 5, at, PERIOD, None).unwrap();
+            record.cover(gap, at);
+        }
+        let next = record.roll(H13 + 120 * MIN + 1_000).expect("14:00 posted");
+        assert_eq!(next.hour_start * 1000, H13 + 60 * MIN);
+        assert!(next.covered_ms <= 3_600_000, "{}", next.covered_ms);
+
+        // Just outside the tolerance (3 sample periods = 15 s) already resets; just inside keeps.
+        for (step_ms, kept) in [(15_000, true), (16_000, false)] {
+            let mut record = WriteRecord::new(H13);
+            record
+                .sample("a", 0, H13 + 60 * MIN - 5_000, PERIOD, None)
+                .ok();
+            record
+                .sample("a", 10, H13 + 60 * MIN - 1_000, PERIOD, None)
+                .unwrap();
+            record.roll(H13 + 60 * MIN).expect("posted");
+            record
+                .sample("a", 20, H13 + 60 * MIN + 1_000, PERIOD, None)
+                .unwrap();
+            record
+                .sample("a", 30, H13 + 60 * MIN - step_ms, PERIOD, None)
+                .ok();
+            assert_eq!(
+                record.hour_start * 1000 == H13 + 60 * MIN,
+                kept,
+                "{step_ms} ms"
+            );
+        }
     }
 
     #[test]

@@ -321,9 +321,11 @@ and its counter survived and the hour did not change. A gap that crosses an hour
 be split between the two hours and is dropped. The hour that has just ended is posted on the first
 tick after it — also when that tick is the first after a restart, since its bytes were measured;
 an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
-line. An hour is posted once: a clock stepped back into the hour just posted (an NTP step of a few
-seconds across the boundary) does not reopen it — the running hour keeps counting, the writes made
-meanwhile included (#1489). A skip that discards measured bytes (a clock that went backwards, a gap
+line. An hour is posted once: a clock stepped back a little into the hour just posted (at most three
+sample periods, 15 s by default — an NTP step across the boundary) does not reopen it — the running
+hour keeps counting, the writes made meanwhile included (#1489). A larger step back (a VM restore, a
+badly set clock corrected) resets the running hour, as any step back past it does, and the hour
+just posted is still never posted a second time. A skip that discards measured bytes (a clock that went backwards, a gap
 across an hour) is logged once. A write through a stacked device (LVM, dm-crypt, md) is
 accounted by the kernel on that device and again on the disk under it; the probe resolves the
 stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is

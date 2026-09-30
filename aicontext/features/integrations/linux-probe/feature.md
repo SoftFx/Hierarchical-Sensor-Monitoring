@@ -75,8 +75,9 @@ The probe registers **two separately pinned sets**:
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
    containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
-   same stats; sent just after the hour, once — the comment names the window, and a clock stepped
-   back into the hour just posted does not reopen it (#1489); the running hour survives
+   same stats; sent just after the hour, once — the comment names the window; a clock stepped
+   back at most three sample periods into the hour just posted keeps the running hour, a larger
+   step resets it, and the posted hour is never posted twice (#1489); the running hour survives
    a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
