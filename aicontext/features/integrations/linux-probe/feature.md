@@ -98,7 +98,10 @@ The probe registers **two separately pinned sets**:
    `/proc/<pid>/stat` `utime+stime` deltas over `/proc/stat`'s total (Total CPU's total), stat split
    at the last `)`, identity `(pid, starttime)`; name = field 2 (= `/proc/<pid>/comm`, ≤ 15 bytes),
    normalized to the server's template-wildcard charset, kernel threads by the part before `/`
-   (`kworker/…` → `kworker`). **Off unless the top-level `topCpu` block enables it** (the agent's
+   (`kworker/…` → `kworker`). The description's path line is the `exe` link, or — for another
+   user's process, whose link the unprivileged probe cannot read — argv[0] from `/proc/<pid>/cmdline`
+   when absolute (only argv[0], cut at NUL and whitespace; the arguments never), else a note.
+   **Off unless the top-level `topCpu` block enables it** (the agent's
    block and defaults). Every sensor registers at runtime, so none is in the pinned sets. Needs the
    `top-cpu.conf` drop-in (`ProtectProc=default`) to see other processes; without it, or under any
    `hidepid`, it runs on what it sees and says so in one INFO line. Cost: ≈ 1 440 records/day per
@@ -169,8 +172,9 @@ Linux is the only supported target. The initiative is
   again, so a hung mount can neither hold up Start nor stall the other disks.
 - **The unit hides other processes (`ProtectProc=invisible`) unless top-CPU is on.** Only the
   `top-cpu.conf` drop-in (written by the server bundle's `install.sh` when the switch is on, removed by
-  `uninstall.sh` and `postrm`) sets `ProtectProc=default`; the probe never reads `cmdline`, `environ` or
-  anything outside `/proc/stat`, `/proc/<pid>/stat` and the `/proc/<pid>/exe` link.
+  `uninstall.sh` and `postrm`) sets `ProtectProc=default`. Top-CPU reads only `/proc/stat`,
+  `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
+  argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.

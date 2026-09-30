@@ -457,11 +457,23 @@ result gets no sensor. **Kernel threads** (`PF_KTHREAD`) are named by the part b
 `kworker/3:1-events` → `kworker`, `ksoftirqd/0` → `ksoftirqd`, `irq/42-nvme0q1` → `irq`. Processes
 with the same name are summed (Windows rule), also when two names normalize to the same one.
 
-**Path line** of the description, set once when the name's sensor is created: the executable
-(`readlink /proc/<pid>/exe` of the name's busiest process), `_(system process - path
-unavailable)_` for a kernel thread (the Windows wording), `_(another user's process - path
-unavailable)_` when the unprivileged probe may not read that link (another user's process — most
-of them), nothing when the process exited first.
+**Path line** of the description, set once when the name's sensor is created, for the name's
+busiest process:
+
+* its executable, `readlink /proc/<pid>/exe`;
+* for another user's process — most of them: the unprivileged probe may not read that link — its
+  **argv[0]** from the world-readable `/proc/<pid>/cmdline`, **only when it is an absolute path**
+  (`/usr/local/bin/node`), so a 15-byte `node`/`java`/`python3` still says what it is. Only
+  argv[0] is ever used, never the arguments (they can carry secrets): it is cut at the first NUL
+  and at the first whitespace, since a process that rewrites its title may join its arguments
+  with spaces (the cost: a path containing a space is shown up to it). At most 4 KiB of `cmdline`
+  is read;
+* `_(another user's process - path unavailable)_` when argv[0] is relative (`python3`), rewritten
+  (`postgres: checkpointer`), empty (a zombie) or unreadable;
+* `_(system process - path unavailable)_` for a kernel thread (the Windows wording);
+* nothing when the process exited first.
+
+Control characters and backticks are removed and a path is capped at 256 characters.
 
 **Visibility — the drop-in.** The unit mounts `/proc` with `ProtectProc=invisible`, which hides
 every process but the probe's own. With `topCpu` on, lift it for this unit only:

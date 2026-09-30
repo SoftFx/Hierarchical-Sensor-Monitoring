@@ -75,8 +75,8 @@ pub const UNIT_PERCENTS: i32 = 100;
 /// kernel thread, which has no executable. ASCII `-`, as on Windows.
 const SYSTEM_PROCESS_PATH: &str = "\n\n**Path:** _(system process - path unavailable)_";
 /// Linux only: `/proc/<pid>/exe` of another user's process is not readable without
-/// `CAP_SYS_PTRACE`, which the unprivileged probe does not have. Calling that a "system process"
-/// would be wrong for most of them.
+/// `CAP_SYS_PTRACE`, which the unprivileged probe does not have, and its argv[0] was no absolute
+/// path either. Calling that a "system process" would be wrong for most of them.
 const OTHER_USER_PATH: &str = "\n\n**Path:** _(another user's process - path unavailable)_";
 
 const WHAT: &str = "top CPU processes";
@@ -96,19 +96,75 @@ pub fn description(count: usize, path_line: &str) -> String {
     format!("Top **{count}** CPU consumers by % of machine CPU{path_line}")
 }
 
+/// The longest path a description shows, in characters; longer ones are cut and end in `...`.
+const MAX_PATH_CHARS: usize = 256;
+/// How much of `/proc/<pid>/cmdline` is ever read: enough for argv[0], never the whole command.
+const CMDLINE_READ_LIMIT: u64 = 4096;
+
 /// The path line for the process a sensor is created for: its executable, the Windows "system
-/// process" note for a kernel thread, a note for another user's process, and nothing when the
-/// process exited before it could be looked at (the managed "never looked up" case).
+/// process" note for a kernel thread, and nothing when the process exited before it could be
+/// looked at (the managed "never looked up" case). Another user's process — most of them, the
+/// probe being unprivileged — has an unreadable `exe` link (it needs `CAP_SYS_PTRACE`); it is
+/// named by its absolute argv[0] ([`argv0_path`]) and otherwise by a note saying so.
 fn path_line(proc_root: &Path, usage: &Usage) -> String {
     if usage.kernel_thread {
         return SYSTEM_PROCESS_PATH.to_string();
     }
-    match std::fs::read_link(proc_root.join(usage.pid.to_string()).join("exe")) {
-        Ok(path) => format!("\n\n**Path:** `{}`", path.display()),
+    let process_dir = proc_root.join(usage.pid.to_string());
+    path_line_from(std::fs::read_link(process_dir.join("exe")), &process_dir)
+}
+
+fn path_line_from(exe: std::io::Result<PathBuf>, process_dir: &Path) -> String {
+    let shown = |path: &str| format!("\n\n**Path:** `{}`", sanitize_path(path));
+    match exe {
+        Ok(path) => shown(&path.to_string_lossy()),
         Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
-            OTHER_USER_PATH.to_string()
+            match argv0_path(process_dir) {
+                Some(argv0) => shown(&argv0),
+                None => OTHER_USER_PATH.to_string(),
+            }
         }
         Err(_) => String::new(),
+    }
+}
+
+/// argv[0] from `<pid>/cmdline` — world-readable, unlike the `exe` link — when it is an absolute
+/// path; `None` when it is relative, empty (a zombie or a kernel thread has an empty cmdline) or
+/// unreadable. **Only argv[0] ever leaves this function**: the arguments can carry secrets. It is
+/// cut at the first NUL *and* at the first whitespace, because a process that rewrites its title
+/// (`setproctitle`, Chrome) may join its arguments with spaces into one NUL-free string; the cost
+/// is that an executable path containing a space is shown only up to it. At most
+/// [`CMDLINE_READ_LIMIT`] bytes are read.
+fn argv0_path(process_dir: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(process_dir.join("cmdline"))
+        .ok()?
+        .take(CMDLINE_READ_LIMIT)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    let first = bytes.split(|byte| *byte == 0).next().unwrap_or_default();
+    let text = String::from_utf8_lossy(first);
+    let argv0 = text.split(char::is_whitespace).next().unwrap_or_default();
+    if argv0.starts_with('/') {
+        Some(argv0.to_string())
+    } else {
+        None
+    }
+}
+
+/// A path as the description's code span shows it: control characters and backticks (which would
+/// end the span) removed, at most [`MAX_PATH_CHARS`] characters.
+fn sanitize_path(path: &str) -> String {
+    let clean: String = path
+        .chars()
+        .filter(|c| !c.is_control() && *c != '`')
+        .collect();
+    if clean.chars().count() <= MAX_PATH_CHARS {
+        clean
+    } else {
+        let cut: String = clean.chars().take(MAX_PATH_CHARS - 3).collect();
+        format!("{cut}...")
     }
 }
 
@@ -380,6 +436,70 @@ mod tests {
             description(10, &path_line(&tree.0, &usage)),
             "Top **10** CPU consumers by % of machine CPU\n\n**Path:** \
              `/usr/lib/postgresql/17/bin/postgres`"
+        );
+    }
+
+    fn denied() -> std::io::Result<PathBuf> {
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    }
+
+    /// Another user's process: `exe` is EACCES for the unprivileged probe, so argv[0] names it —
+    /// only when absolute, and never with its arguments.
+    #[test]
+    fn another_users_process_is_named_by_its_absolute_argv0_only() {
+        let tree = FakeTree::new("topcpu-argv0");
+        let line = |cmdline: &[u8]| {
+            std::fs::write(tree.0.join("cmdline"), cmdline).expect("write");
+            path_line_from(denied(), &tree.0)
+        };
+        // Absolute argv[0]: shown; the arguments (a secret among them) are not.
+        let shown = line(b"/usr/local/bin/node\0/srv/app/server.js\0--token=s3cr3t\0");
+        assert_eq!(shown, "\n\n**Path:** `/usr/local/bin/node`");
+        // A title rewritten into one space-joined string must not leak its arguments either.
+        let rewritten = line(b"/opt/google/chrome/chrome --type=renderer --token=s3cr3t\0\0\0");
+        assert_eq!(rewritten, "\n\n**Path:** `/opt/google/chrome/chrome`");
+        for leaked in [&shown, &rewritten] {
+            assert!(
+                !leaked.contains("s3cr3t") && !leaked.contains("--"),
+                "{leaked}"
+            );
+        }
+        // Relative argv[0], a rewritten title, an empty cmdline (a zombie), a missing file: the
+        // note.
+        for cmdline in [
+            &b"python3\0app.py\0"[..],
+            b"postgres: checkpointer \0",
+            b"",
+            b"\0",
+        ] {
+            assert_eq!(line(cmdline), OTHER_USER_PATH, "{cmdline:?}");
+        }
+        std::fs::remove_file(tree.0.join("cmdline")).expect("rm");
+        assert_eq!(path_line_from(denied(), &tree.0), OTHER_USER_PATH);
+        // Control characters and backticks never reach the description; a long path is capped.
+        assert_eq!(
+            line(b"/opt/a`b\x07c/run\0x\0"),
+            "\n\n**Path:** `/opt/abc/run`"
+        );
+        let long = format!("/{}\0", "d".repeat(1000));
+        let capped = line(long.as_bytes());
+        assert!(capped.ends_with("...`"), "{capped}");
+        assert_eq!(
+            capped.len(),
+            "\n\n**Path:** ``".len() + MAX_PATH_CHARS,
+            "{capped}"
+        );
+        // A readable exe link wins; any other error (the process exited) omits the line.
+        assert_eq!(
+            path_line_from(Ok(PathBuf::from("/usr/bin/yes")), &tree.0),
+            "\n\n**Path:** `/usr/bin/yes`"
+        );
+        assert_eq!(
+            path_line_from(
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
+                &tree.0
+            ),
+            ""
         );
     }
 
