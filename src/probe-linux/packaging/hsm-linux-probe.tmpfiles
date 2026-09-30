@@ -1,0 +1,12 @@
+# systemd-tmpfiles rule for hsm-linux-probe, installed as /usr/lib/tmpfiles.d/hsm-linux-probe.conf
+# by packaging/build-deb.sh.
+#
+# The probe rolls its log file daily (hsm-linux-probe_<UTC date>.log in the unit's LogsDirectory=)
+# but never deletes one. systemd-tmpfiles-clean.timer (daily) removes files in that directory that
+# were last written more than 30 days ago; today's file is written continuously and never is.
+# "m:" ages by the modification time only, so an operator reading an old log (atime) does not keep
+# it alive (the age-by prefix needs systemd >= 250; Debian 13 ships 257). "e" only ages the
+# contents of an existing directory: it neither creates it nor changes its owner or mode, which
+# stay LogsDirectory='s (hsm-probe, 0750). The same lines also go to the journal, whose retention
+# is the host's journald configuration.
+e /var/log/hsm-linux-probe - - - m:30d

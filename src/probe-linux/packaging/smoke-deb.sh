@@ -45,7 +45,8 @@ CONTENTS="$(dpkg-deb --contents "$DEB")"
 echo "$CONTENTS"
 for path in ./usr/bin/hsm-linux-probe ./lib/systemd/system/hsm-linux-probe.service \
     ./usr/share/hsm-linux-probe/config.example.json ./usr/lib/hsm-linux-probe/docker-access.sh \
-    ./usr/share/doc/hsm-linux-probe/copyright ./etc/hsm-linux-probe/; do
+    ./usr/lib/tmpfiles.d/hsm-linux-probe.conf ./usr/share/doc/hsm-linux-probe/copyright \
+    ./etc/hsm-linux-probe/; do
     grep -qF " $path" <<<"$CONTENTS" || fail "the package does not ship $path"
 done
 # The operator's config is not a conffile (0.3.1, #1484): nothing may ship under /etc but the
