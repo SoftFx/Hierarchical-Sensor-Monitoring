@@ -133,8 +133,12 @@ namespace HSMServer.Core.Tests
             // events never match this pattern, so nothing is written twice.
             var aspNetJsonRules = config.LoggingRules.Where(r => r.LoggerNamePattern == "Microsoft.AspNetCore*" && r.Targets.Contains(jsonFile)).ToList();
             var frameworkJsonRule = Assert.Single(aspNetJsonRules);
+            // Exactly Warn+ (Warn, Error, Fatal): not Info+ (request noise), and a
+            // contrived non-contiguous level set must not pass either.
             Assert.Contains(LogLevel.Warn, frameworkJsonRule.Levels);
+            Assert.Contains(LogLevel.Error, frameworkJsonRule.Levels);
             Assert.Contains(LogLevel.Fatal, frameworkJsonRule.Levels);
+            Assert.DoesNotContain(LogLevel.Trace, frameworkJsonRule.Levels);
             Assert.DoesNotContain(LogLevel.Info, frameworkJsonRule.Levels);
             AssertStructuredLogsGate(frameworkJsonRule);
             Assert.True(
