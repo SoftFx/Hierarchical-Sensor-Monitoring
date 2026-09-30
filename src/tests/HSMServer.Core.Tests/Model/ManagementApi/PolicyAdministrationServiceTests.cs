@@ -504,6 +504,62 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensor.Policies.TTLPolicies);
         }
 
+        // #1501 round-2 (F2): a full-list TTL write must not RE-STAMP the
+        // change-table ownership of the siblings it merely re-asserts — the
+        // TTL stamp loop in BaseNodeModel.Update stamps unconditionally per
+        // id, so without PreserveChangeOwnership one API call would claim a
+        // template-applied sibling as the calling user and the NEXT template
+        // apply (AlertTemplate, type 15) would fail the node's CanChange
+        // pre-check (100 <= 15 is false) for the whole node.
+        [Fact]
+        public async Task CreateSensorTtlPolicy_DoesNotRestampSiblingTtlOwnership_TemplateReapplyStillLands()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTtlSiblingOwnership");
+
+            var templateId = Guid.NewGuid();
+
+            // A template-applied TTL sibling, seeded the way a template apply
+            // lands it: an AlertTemplate-initiated full-list update carrying a
+            // non-empty id (the stamp loop skips empty ids on creation), which
+            // stamps the change-table owner as AlertTemplate.
+            var seed = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AlertTemplate,
+                TTLPolicies = [TtlUpdate(InitiatorInfo.AlertTemplate, TimeSpan.FromMinutes(30)) with { Id = Guid.NewGuid(), TemplateId = templateId }],
+            });
+            Assert.True(seed.IsOk, seed.Error);
+
+            var sibling = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.Equal(InitiatorType.AlertTemplate, sensor.ChangeTable.TtlPolicies[sibling.Id.ToString()].Initiator.Type);
+
+            // An API write of an UNRELATED TTL policy re-asserts the sibling...
+            var created = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("01:00:00"), User);
+
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Equal(2, sensor.Policies.TTLPolicies.Count);
+
+            // ...WITHOUT re-stamping its change-table owner: a re-assert is not
+            // an edit. (The CHANGED item keeps normal stamping — the new
+            // policy is owned by the API user.)
+            Assert.Equal(InitiatorType.AlertTemplate, sensor.ChangeTable.TtlPolicies[sibling.Id.ToString()].Initiator.Type);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[created.Value.Id.ToString()].Initiator.Type);
+
+            // Consequence, pinned end-to-end: the next template apply — the
+            // same AlertTemplate full-list update shape
+            // UpdateTemplateSensorAlerts sends — still lands on the node
+            // (the sibling takes the template's new interval).
+            var reapply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AlertTemplate,
+                TTLPolicies = [TtlUpdate(InitiatorInfo.AlertTemplate, TimeSpan.FromMinutes(99)) with { Id = sibling.Id, TemplateId = templateId }],
+            });
+            Assert.True(reapply.IsOk, reapply.Error);
+
+            Assert.Equal(TimeSpan.FromMinutes(99).Ticks, sibling.TTLInterval.Ticks);
+        }
+
         [Fact]
         public async Task UpdateSensorTtlPolicy_TemplateOwnedToggle_NoEffectEcho_SkipsContentValidation()
         {
@@ -635,6 +691,49 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.True(deleted.Success, deleted.Failure?.Message);
             var survivor = Assert.Single(product.Policies.TTLPolicies);
             Assert.Equal(TimeSpan.FromMinutes(15).Ticks, survivor.TTLInterval.Ticks);
+        }
+
+
+        // === Slice E: write-gate lifecycle (#1501 round-2, F3) ===
+
+        // A write for an unknown id answers 404 BEFORE any gate exists: a
+        // read-write token spraying random GUIDs must not leak one gate per
+        // id (each answered 404, none ever removed).
+        [Fact]
+        public async Task WriteGate_UnknownSensor404_AllocatesNoGate()
+        {
+            var result = await _service.CreateSensorPolicyAsync(Guid.NewGuid(), DataPolicy(), User);
+
+            Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
+            Assert.Equal(0, _service.WriteGateCount);
+        }
+
+        [Fact]
+        public async Task WriteGate_ForbiddenWrite_AllocatesNoGate()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcGateForbidden");
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            var result = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00"), User);
+
+            Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
+            Assert.Equal(0, _service.WriteGateCount);
+        }
+
+        // The registry is bounded: an idle gate (nobody holding or waiting)
+        // leaves when its last user does — the count is 0 again after a
+        // completed write, not one per node ever written.
+        [Fact]
+        public async Task WriteGate_IdleGateIsRemovedAfterTheWrite()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcGateIdle");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Equal(0, _service.WriteGateCount);
         }
 
 

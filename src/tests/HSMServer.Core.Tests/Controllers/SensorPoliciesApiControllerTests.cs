@@ -407,6 +407,82 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        // === Target-less operations are decided per OPERATION (#1501 round-2) ===
+
+        // The editor's own split (IsTargetVisible): IsChanged on Comment never
+        // renders a target — the core compares the comment against the sensor's
+        // PREVIOUS comment (LastValue self), the same thing the web editor's
+        // form submits.
+        private static PolicyDto CommentChangedDto(JsonElement? target = null) => DataDto() with
+        {
+            Conditions = [new AlertConditionDto { Property = "Comment", Operation = "IsChanged", Target = target }],
+        };
+
+        [Fact]
+        public async Task CreatePolicy_CommentIsChanged_WithoutTarget_StoresTheSensorsOwnPreviousValue()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var created = await CreateController().CreatePolicy(sensor.Id, CommentChangedDto());
+
+            Assert.Equal(201, StatusCodeOf(created));
+
+            // The stored target is the core's LastValue(self) — the same value
+            // the web editor stores for the same condition, not a constant.
+            var condition = sensor.Policies.Single().Conditions.Single();
+
+            Assert.Equal(PolicyProperty.Comment, condition.Property);
+            Assert.Equal(PolicyOperation.IsChanged, condition.Operation);
+            Assert.Equal(TargetType.LastValue, condition.Target.Type);
+            Assert.Equal(sensor.Id.ToString(), condition.Target.Value);
+        }
+
+        [Fact]
+        public async Task CreatePolicy_CommentIsChanged_WithExplicitTarget_Is422()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            // An explicit target would store a constant the core evaluates as
+            // NotEqual semantics — not "comment changed". It is rejected.
+            var result = await CreateController().CreatePolicy(sensor.Id,
+                CommentChangedDto(JsonSerializer.SerializeToElement("x")));
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Contains("conditions[0].target", DetailsOf(ErrorBodyOf(result)).Keys);
+        }
+
+        [Fact]
+        public async Task CommentIsChangedPolicy_GetEchoPatch_RoundTrips()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var controller = CreateController();
+
+            var created = Assert.IsType<CreatedAtActionResult>(await controller.CreatePolicy(sensor.Id, CommentChangedDto())).Value as PolicyDto;
+
+            Assert.NotNull(created);
+
+            // The self-target reads back as target: null (non-Const targets
+            // render null) — the same shape a WEB-CREATED Comment/IsChanged
+            // policy GETs with.
+            var fetched = Assert.IsType<OkObjectResult>(controller.GetPolicy(sensor.Id, created.Id)).Value as PolicyDto;
+
+            Assert.Null(fetched.Conditions.Single().Target);
+
+            // The documented round-trip: echo the GET body back with one field
+            // changed. The null target is ACCEPTED for this operation and
+            // re-resolved to LastValue(self) — before the fix this echo was a
+            // 422 ("requires a target").
+            var patched = await controller.UpdatePolicy(sensor.Id, created.Id, fetched with { IsDisabled = true });
+
+            Assert.Equal(200, StatusCodeOf(patched));
+
+            var stored = sensor.Policies.Single();
+
+            Assert.True(stored.IsDisabled);
+            Assert.Equal(TargetType.LastValue, stored.Conditions.Single().Target.Type);
+        }
+
+
         // === Round-trip ===
 
         [Fact]

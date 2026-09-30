@@ -19,7 +19,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // outside the table is a 422, never a silently-degrading policy.
     internal enum ConditionTargetKind
     {
-        // The operation compares without a constant (IsChanged, IsOk, ...).
+        // The property offers no targeted operations at all (Status,
+        // NewSensorData) — whether an OPERATION takes a target is decided
+        // per operation (IsTargetless below), mirroring the editor.
         None,
 
         // JSON number, integer range (the core parses int).
@@ -169,6 +171,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
         public static string DescribeSupportedProperties(SensorType sensorType) =>
             string.Join(", ", Table(sensorType).Concat(CommonRules).Select(r => r.Property.ToString()));
 
+        // The operations whose target the web editor never renders
+        // (AlertExtensions.IsTargetVisible): wherever the rule table admits
+        // them, they compare against the sensor's OWN previous value — the
+        // core's LastValue(self) target — never a constant. Target-less-ness
+        // is therefore a property of the OPERATION, not of the property:
+        // IsChanged on Comment takes no target, Equal on Comment requires
+        // one.
+        internal static bool IsTargetless(PolicyOperation operation) =>
+            operation is PolicyOperation.IsChanged or PolicyOperation.IsError or PolicyOperation.IsOk or
+                PolicyOperation.IsChangedToError or PolicyOperation.IsChangedToOk or PolicyOperation.ReceivedNewValue;
+
         // The property names an agent may send for this sensor type — the doc
         // error message quotes it, so a 422 is self-correcting.
         private static IEnumerable<ConditionRule> Table(SensorType sensorType) => sensorType switch
@@ -283,10 +296,14 @@ namespace HSMServer.Model.ManagementApi.Alerts
             return errors.Count == 0;
         }
 
-        // Targetless operations get the core's LastValue(self) target — the same
-        // value the web editor's form submits for them; Const targets are
-        // validated against the property's target kind and serialized in the
-        // invariant form the core's parsers read back.
+        // Target validation mirrors the web editor's own split
+        // (IsTargetVisible): target-less operations get the core's
+        // LastValue(self) target — the same value the editor's form submits
+        // for them — and accept ONLY an absent/null target (an explicit one
+        // would store a constant the core evaluates as Equal/NotEqual
+        // semantics, not "changed"); every other operation requires a target
+        // parsed by the property's kind and serialized in the invariant form
+        // the core's parsers read back.
         private static bool TryBuildTarget(ConditionRule rule, PolicyOperation operation, object rawTarget,
             Guid sensorId, out TargetValue target, out string error)
         {
@@ -295,11 +312,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var element = rawTarget as JsonElement?;
 
-            if (rule.TargetKind is ConditionTargetKind.None)
+            if (AlertPolicyConditionRules.IsTargetless(operation))
             {
                 if (element is { ValueKind: not JsonValueKind.Null and not JsonValueKind.Undefined })
                 {
-                    error = $"Operation '{operation}' takes no target.";
+                    error = $"Operation '{operation}' takes no target — it compares against the sensor's own previous value.";
                     return false;
                 }
 
