@@ -49,6 +49,15 @@ namespace HSMServer.Core.Model
 
         internal bool IsExpired { get; set; }
 
+        // #1441 diagnostics (Architecture Rule #8 — no silent data loss):
+        // unusual ingest shapes are counted per sensor so the loss shapes
+        // TAM-1870 hid are visible. Fields (not properties) because they are
+        // updated with Interlocked. Written from the owning product's queue
+        // thread (and the UI value-edit thread); read by tests and logs.
+        internal long OutOfOrderValuesStored;
+        internal long SameTickValuesSuperseded;
+        internal long RejectedValues;
+
         // Server-clock instant of the last expiry TRANSITION that had a value
         // to judge (#1404) — recorded on the transition itself and seeded
         // from the marker row on the cold-load path, which restores
@@ -312,6 +321,8 @@ namespace HSMServer.Core.Model
         internal abstract void Revalidate();
 
         internal abstract bool TryAddValue(BaseValue value);
+
+        internal abstract bool TryAddValue(BaseValue value, out AddValueResult result);
 
         internal abstract bool TryUpdateLastValue(BaseValue value);
 

@@ -88,6 +88,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 - Never renumber or reuse enum values; never rename JSON fields; additive evolution only.
 - Server tolerates unknown/omitted optional fields; collectors must tolerate unknown response fields.
 - `ProductEntity.Policies` (non-TTL persisted policy-id list on a product) is deprecated and no longer populated by the server. Node-level alerts on Folders/Products were removed in #1142; the collector wire format is unaffected because template materialization targets sensors only.
+- **Batch storage semantics (#1441):** values are stored regardless of their order inside a batch — an out-of-order value (older than the sensor's cached newest) is persisted directly and does not participate in alert evaluation; it is Warn-logged and counted per sensor. Two values with the exact same timestamp collapse to the LAST one in the database (the storage key is `(sensorId, ticks)`, a compatibility-frozen format) — every such supersede is Warn-logged and counted. Values rejected by validation or the singleton gate are counted and Warn-logged too; the batch response stays empty for them (a rejected value is a sensor-level event, not a transport error). A 200 response therefore means "transport accepted", not "every value stored" — the per-sensor counters and the `hsm-server` log are the visibility surface.
 
 ## Native port (C++)
 

@@ -880,7 +880,8 @@ namespace HSMServer.Core.Cache
                     if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
                     {
                         var value = request.BuildNewValue(sensor);
-                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : TryAddValueWithDeliveryStamp(sensor, value);
+                        var addedResult = AddValueResult.Cached;
+                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : TryAddValueWithDeliveryStamp(sensor, value, out addedResult);
 
                         if (result)
                         {
@@ -896,7 +897,9 @@ namespace HSMServer.Core.Cache
                                 NewValue = request.BuildComment(value: newValue)
                             });
 
-                            if (sensor.LastDbValue != null)
+                            if (!request.ChangeLast)
+                                PersistAddedValue(sensor, sensor.FullPath, request.Id, value, addedResult, lastValue?.Time, ignoreSnapshot: false);
+                            else if (sensor.LastDbValue != null)
                                 SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
 
                             SensorUpdateViewAndNotify(sensor);
@@ -2726,11 +2729,50 @@ namespace HSMServer.Core.Cache
         // keeps the old value's timestamps — not new data under either
         // witness — nor by the expiry marker's add in SetExpiredSnapshot:
         // that add IS the expiry, not a delivery.
-        private bool TryAddValueWithDeliveryStamp(BaseSensorModel sensor, BaseValue value)
+        private bool TryAddValueWithDeliveryStamp(BaseSensorModel sensor, BaseValue value, out AddValueResult result)
         {
             value.DeliverySequence = Interlocked.Increment(ref _dispatchSequence);
 
-            return sensor.TryAddValue(value);
+            return sensor.TryAddValue(value, out result);
+        }
+
+        // Shared persistence for one accepted value-add (#1441). Callers capture the
+        // cached newest value's time BEFORE the add so a same-timestamp pair is
+        // detected: the database key is (sensorId, ticks) — a compatibility-frozen
+        // format — so within one tick only the LAST value keeps its row; that
+        // supersede is counted and logged instead of passing silently (Rule #8).
+        private void PersistAddedValue(BaseSensorModel sensor, string path, Guid sensorId, BaseValue incomingValue, in AddValueResult result, DateTime? previousLastTime, bool ignoreSnapshot = false)
+        {
+            if (result.Kind == AddValueKind.OutOfOrder)
+            {
+                // #1441: accepted data that cannot enter the bounded ordered cache —
+                // persist the validated value directly so history keeps it. Nothing
+                // else is written: the cache's newest value and its row are untouched
+                // by an older sibling.
+                SaveSensorValueToDb(result.OutOfOrderValue, sensorId, ignoreSnapshot);
+                Interlocked.Increment(ref sensor.OutOfOrderValuesStored);
+                _logger.Warn($"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
+                return;
+            }
+
+            if (sensor.LastDbValue != null)
+            {
+                SaveSensorValueToDb(sensor.LastDbValue, sensorId, ignoreSnapshot);
+
+                // Cached real values only: an Aggregated fold rewrites the merged row
+                // (no separate row existed to supersede), and a timeout marker never
+                // changes the cached newest value, so its before/after comparison
+                // would trivially match.
+                if (result.Kind == AddValueKind.Cached && !incomingValue.IsTimeout &&
+                    previousLastTime?.Ticks == sensor.LastValue?.Time.Ticks)
+                {
+                    // Two values on one timestamp: the row written a moment ago for the
+                    // same tick has just been superseded — only the last of them stays
+                    // in the database.
+                    Interlocked.Increment(ref sensor.SameTickValuesSuperseded);
+                    _logger.Warn($"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
+                }
+            }
         }
 
         private bool TryAddNewSensorValue(AddSensorValueRequest request, out string error)
@@ -2747,8 +2789,24 @@ namespace HSMServer.Core.Cache
             if (sensor.State == SensorState.Blocked)
                 return true;
 
-            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue) && sensor.LastDbValue != null)
-               SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+            // The previous cached newest, captured before the add: a value that
+            // lands on the SAME tick as it keeps only the last row in the
+            // database (the write key is (sensorId, ticks)) — that supersede is
+            // counted and logged instead of passing silently (#1441).
+            var previousLastTime = sensor.LastValue?.Time;
+
+            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue, out var result))
+                PersistAddedValue(sensor, request.Path, sensor.Id, request.BaseValue, result, previousLastTime);
+            else if (!request.BaseValue.IsTimeout)
+            {
+                // #1441: a value rejected by validation (policy status calculation)
+                // or the singleton gate used to vanish with a clean 200 and no
+                // trace — count and log it (Rule #8). The batch response stays
+                // empty: a rejected value is a sensor-level event, not a
+                // transport error, and clients treat response entries as such.
+                Interlocked.Increment(ref sensor.RejectedValues);
+                _logger.Warn($"Value rejected by validation and not stored (sensor '{request.Path}', time {request.BaseValue.Time:O})");
+            }
 
             SensorUpdateViewAndNotify(sensor);
 
