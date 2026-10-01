@@ -898,7 +898,7 @@ namespace HSMServer.Core.Cache
                             });
 
                             if (!request.ChangeLast)
-                                PersistAddedValue(sensor, sensor.FullPath, request.Id, value, addedResult, lastValue?.Time, ignoreSnapshot: false);
+                                PersistAddedValue(sensor, sensor.FullPath, request.Id, value, addedResult, lastValue?.Time);
                             else if (sensor.LastDbValue != null)
                                 SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
 
@@ -2739,25 +2739,28 @@ namespace HSMServer.Core.Cache
         // Shared persistence for one accepted value-add (#1441). Callers capture the
         // cached newest value's time BEFORE the add so a same-timestamp pair is
         // detected: the database key is (sensorId, ticks) — a compatibility-frozen
-        // format — so within one tick only the LAST value keeps its row; that
+        // format — so within one tick only the LAST WRITTEN value keeps its row; that
         // supersede is counted and logged instead of passing silently (Rule #8).
-        private void PersistAddedValue(BaseSensorModel sensor, string path, Guid sensorId, BaseValue incomingValue, in AddValueResult result, DateTime? previousLastTime, bool ignoreSnapshot = false)
+        private void PersistAddedValue(BaseSensorModel sensor, string path, Guid sensorId, BaseValue incomingValue, in AddValueResult result, DateTime? previousLastTime)
         {
             if (result.Kind == AddValueKind.OutOfOrder)
             {
                 // #1441: accepted data that cannot enter the bounded ordered cache —
                 // persist the validated value directly so history keeps it. Nothing
                 // else is written: the cache's newest value and its row are untouched
-                // by an older sibling.
-                SaveSensorValueToDb(result.OutOfOrderValue, sensorId, ignoreSnapshot);
-                Interlocked.Increment(ref sensor.OutOfOrderValuesStored);
-                _logger.Warn($"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
+                // by an older sibling. An out-of-order write at a tick that already
+                // has a row also overwrites that row (last written wins) but does not
+                // touch the supersede counter — detecting it would need a
+                // read-before-write on the hot path; see the wire-contract invariant.
+                SaveSensorValueToDb(result.OutOfOrderValue, sensorId);
+                CountAndWarnRateLimited(ref sensor.OutOfOrderValuesStored,
+                    $"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
                 return;
             }
 
             if (sensor.LastDbValue != null)
             {
-                SaveSensorValueToDb(sensor.LastDbValue, sensorId, ignoreSnapshot);
+                SaveSensorValueToDb(sensor.LastDbValue, sensorId);
 
                 // Cached real values only: an Aggregated fold rewrites the merged row
                 // (no separate row existed to supersede), and a timeout marker never
@@ -2769,10 +2772,24 @@ namespace HSMServer.Core.Cache
                     // Two values on one timestamp: the row written a moment ago for the
                     // same tick has just been superseded — only the last of them stays
                     // in the database.
-                    Interlocked.Increment(ref sensor.SameTickValuesSuperseded);
-                    _logger.Warn($"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
+                    CountAndWarnRateLimited(ref sensor.SameTickValuesSuperseded,
+                        $"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
                 }
             }
+        }
+
+        // Flood-safe shape for the #1441 per-sensor diagnostics: the counted shapes
+        // are steady state (a shuffled 10k-value backfill, a collector retry loop),
+        // so a per-value Warn would turn the log into a self-inflicted flood. Every
+        // occurrence is counted; the Warn fires on the FIRST occurrence and then on
+        // every 1000th, carrying the running total so the sequence reads as a
+        // periodic summary (a 10k backfill = 11 lines).
+        private void CountAndWarnRateLimited(ref long counter, string message)
+        {
+            var total = Interlocked.Increment(ref counter);
+
+            if (total == 1L || total % 1000L == 0L)
+                _logger.Warn($"{message} (total {total})");
         }
 
         private bool TryAddNewSensorValue(AddSensorValueRequest request, out string error)
@@ -2799,13 +2816,18 @@ namespace HSMServer.Core.Cache
                 PersistAddedValue(sensor, request.Path, sensor.Id, request.BaseValue, result, previousLastTime);
             else if (!request.BaseValue.IsTimeout)
             {
-                // #1441: a value rejected by validation (policy status calculation)
-                // or the singleton gate used to vanish with a clean 200 and no
-                // trace — count and log it (Rule #8). The batch response stays
-                // empty: a rejected value is a sensor-level event, not a
-                // transport error, and clients treat response entries as such.
+                // #1441: a value rejected here used to vanish with a clean 200 and
+                // no trace. The real rejector is the singleton gate — steady state
+                // when several app instances feed one singleton sensor (N-1
+                // rejections per second, forever); a wrong-typed value can also
+                // fail the type check inside TryValidate, while the policy status
+                // calculation effectively always accepts. Count it (Rule #8) but
+                // deliberately log NOTHING, not even Debug: the singleton shape is
+                // steady state and a per-value line would flood the log — the
+                // counter is the surface. The batch response stays empty: a
+                // rejected value is a sensor-level event, not a transport error,
+                // and clients treat response entries as such.
                 Interlocked.Increment(ref sensor.RejectedValues);
-                _logger.Warn($"Value rejected by validation and not stored (sensor '{request.Path}', time {request.BaseValue.Time:O})");
             }
 
             SensorUpdateViewAndNotify(sensor);

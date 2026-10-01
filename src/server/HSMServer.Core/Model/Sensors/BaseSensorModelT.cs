@@ -137,9 +137,10 @@ namespace HSMServer.Core.Model
                 // Time >= the cached last one, and the caller persisted only the cache's
                 // newest, so a shuffled or backfilled burst silently kept a handful of
                 // record-maxima (TAM-1870's "all data missed"). It is accepted data: report
-                // it to the caller, which persists the validated value directly. Deliberately
-                // no ReceivedNewValue here: policy evaluation keys on the cached newest
-                // value, which this is not.
+                // it to the caller, which persists the validated value directly. The value
+                // HAS been through Policies.TryValidate above (with isLastValue: false) —
+                // its alerts and notifications are evaluated as for any other value; only
+                // ReceivedNewValue is skipped, because this is not the cached newest value.
                 if (Storage.LastValue is not null && value.Time < Storage.LastValue.Time)
                 {
                     result = AddValueResult.OutOfOrder(validatedValue);

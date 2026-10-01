@@ -9,6 +9,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
@@ -124,7 +125,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             // compatibility-frozen format, so the second Put overwrites the
             // first row. That collapse cannot be avoided without a key-format
             // migration — but it must not be SILENT (#1441, Rule #8): every
-            // supersede is counted on the sensor and logged.
+            // supersede is counted on the sensor and Warn-logged at a bounded
+            // rate (first occurrence, then every 1000th, with a running total).
             var path = "denseBatch/duplicates";
             var baseTime = DateTime.UtcNow.AddDays(-2);
             const int seconds = 10;
@@ -164,7 +166,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             // A sensor with the singleton option keeps at most one value per
             // second: a second value inside the same second is rejected by
             // design — but it used to vanish with no trace (Rule #8). The
-            // rejection is now counted and logged.
+            // rejection is now counted; deliberately not logged per value —
+            // singleton rejections are steady state (N app instances feeding
+            // one singleton sensor reject N-1 values per second forever) and
+            // the counter is the visibility surface.
             var path = "denseBatch/singleton";
             var now = DateTime.UtcNow.AddMinutes(-1);
             var time = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond)); // whole second
@@ -182,6 +187,78 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             Assert.Single(stored); // the singleton gate: one value per second
             Assert.Equal(1, Volatile.Read(ref sensor.RejectedValues));
+        }
+
+
+        [Fact]
+        public async Task UiAddedValue_OlderThanCachedNewest_IsStoredDirectly_AndOutOfOrderCounted()
+        {
+            // The UI add-value entry (HomeController.UpdateSensorStatus ->
+            // UpdateSensorValueAsync, ChangeLast = false) now routes through the
+            // same PersistAddedValue tail as the batch API. The request has no
+            // time field — BuildNewValue stamps DateTime.UtcNow on the product
+            // queue thread — so the deterministic way to put a UI value OLDER
+            // than the cached newest is a future-dated sibling: UtcNow is always
+            // older than "an hour ahead".
+            var path = "denseBatch/uiAddOutOfOrder";
+            var futureTime = DateTime.UtcNow.AddHours(1);
+
+            var seed = new SensorValueBase[] { new DoubleSensorValue { Path = path, Time = futureTime, Value = 123.45, Status = HSMSensorDataObjects.SensorStatus.Ok } };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            await AddUiValueAsync(sensor, "42");
+
+            // The UI value landed in the database (the future-dated seed is
+            // outside the window) and is queryable through the same history
+            // read the UI uses.
+            var stored = await ReadStoredWindowAsync(sensor.Id, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
+
+            var row = Assert.IsType<DoubleValue>(Assert.Single(stored));
+            Assert.Equal(42, row.Value);
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // The cache's newest value is untouched by the older sibling, and the
+            // out-of-order shape must not count as a same-tick supersede even
+            // though its before/after newest comparison trivially matches.
+            Assert.Equal(futureTime, sensor.LastValue.Time);
+            Assert.Equal(0, Volatile.Read(ref sensor.SameTickValuesSuperseded));
+        }
+
+        [Fact]
+        public async Task UiAddedValues_AtDistinctTicks_BothStored_NoFalseSameTickSupersede()
+        {
+            // The exact same-tick pair of the duplicate-timestamps test cannot be
+            // planted through UpdateSensorValueAsync: the request has no time
+            // field and the queue thread's DateTime.UtcNow never coincides with a
+            // pre-planted tick (the clock is precise, and the queue hop alone is
+            // thousands of ticks). The shared detection branch itself is covered
+            // by DenseBatch_DuplicateTimestamps_LastValuePerTickIsKept_AndTheSupersedeIsCounted
+            // above; this pins the UI-path wiring around it — every accepted UI
+            // add is persisted through the same tail, and the supersede
+            // comparison (previous cached newest vs the value just added) does
+            // not misfire on distinct ticks.
+            var path = "denseBatch/uiAddDistinctTicks";
+            var baseTime = DateTime.UtcNow.AddMinutes(-5);
+
+            var seed = new SensorValueBase[] { new DoubleSensorValue { Path = path, Time = baseTime, Value = 0, Status = HSMSensorDataObjects.SensorStatus.Ok } };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            await AddUiValueAsync(sensor, "1");
+            await AddUiValueAsync(sensor, "2");
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, baseTime.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
+
+            // Seed plus both UI rows; the last UI value owns the newest row
+            // (the window read walks the database newest-to-oldest).
+            Assert.Equal(3, stored.Count);
+            Assert.Equal(2, Assert.IsType<DoubleValue>(stored[0]).Value);
+
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.SameTickValuesSuperseded));
         }
 
 
@@ -228,11 +305,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var stored = new List<BaseValue>();
 
             // The same paged read the history controllers use; negative count
-            // = full range oldest-to-newest (MaxHistoryCount convention).
+            // = the full range, and pages walk the database newest-to-oldest
+            // (MaxHistoryCount convention, GetValuesTo's reverse iterator).
             await foreach (var page in _valuesCache.GetSensorValuesPage(sensorId, from, to, -TreeValuesCache.MaxHistoryCount))
                 stored.AddRange(page);
 
             return stored;
+        }
+
+        // A UI add exactly as HomeController.UpdateSensorStatus builds it: the
+        // comment is what makes the request carry a value at all, and
+        // ChangeLast = false selects the ADD branch (not the replace-last one).
+        private async Task AddUiValueAsync(BaseSensorModel sensor, string value)
+        {
+            var result = await _valuesCache.UpdateSensorValueAsync(new UpdateSensorValueRequestModel(sensor.Id, sensor.Path)
+            {
+                Id = sensor.Id,
+                Status = SensorStatus.Ok,
+                Comment = "operator-added value",
+                Value = value,
+                ChangeLast = false,
+            });
+
+            Assert.True(result.IsOk);
         }
     }
 }
