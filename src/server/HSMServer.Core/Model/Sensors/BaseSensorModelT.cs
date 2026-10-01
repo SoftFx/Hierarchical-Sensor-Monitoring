@@ -96,8 +96,12 @@ namespace HSMServer.Core.Model
                 Policies.TryRevalidate(LastValue);
         }
 
-        internal override bool TryAddValue(BaseValue value)
+        internal override bool TryAddValue(BaseValue value) => TryAddValue(value, out _);
+
+        internal override bool TryAddValue(BaseValue value, out AddValueResult result)
         {
+            result = AddValueResult.Cached;
+
             if (!_isInitialized)
                 Initialize();
 
@@ -121,13 +125,32 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                // Every path from here stores — AddValue, or TryAggregateValue folding into the
-                // cached value — so the sensor is no longer running on a hollow retry restore.
-                // Cleared at the write, not tested against HasData on read: a later retention
-                // pass or history clear must not resurrect the degraded state.
+                // Every path from here stores — AddValue, TryAggregateValue folding into the
+                // cached value, or the out-of-order direct write below — so the sensor is no
+                // longer running on a hollow retry restore. Cleared at the write, not tested
+                // against HasData on read: a later retention pass or history clear must not
+                // resurrect the degraded state.
                 _historyRestoredByRetry = false;
 
+                // #1441: an accepted value OLDER than the cached newest one used to fall on
+                // the floor here — AddValueBase's ordering guard enqueues only values with
+                // Time >= the cached last one, and the caller persisted only the cache's
+                // newest, so a shuffled or backfilled burst silently kept a handful of
+                // record-maxima (TAM-1870's "all data missed"). It is accepted data: report
+                // it to the caller, which persists the validated value directly. The value
+                // HAS been through Policies.TryValidate above (with isLastValue: false) —
+                // its alerts and notifications are evaluated as for any other value; only
+                // ReceivedNewValue is skipped, because this is not the cached newest value.
+                if (Storage.LastValue is not null && value.Time < Storage.LastValue.Time)
+                {
+                    result = AddValueResult.OutOfOrder(validatedValue);
+                    return true;
+                }
+
                 bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
+
+                if (!isNewValue)
+                    result = AddValueResult.Aggregated;
 
                 if (isNewValue)
                 {
