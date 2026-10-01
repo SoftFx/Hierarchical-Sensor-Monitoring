@@ -17,6 +17,10 @@ decisions under `docs/decisions/`. The layout below is the one these skills were
 exist side by side for the duration of the skills trial — see `.claude/plugins/matt/README.md` for why,
 and what has to be decided at the end of it.
 
+Until the trial is decided, the canon wins on collisions: when `/matt:domain-modeling` resolves a term
+into a new `CONTEXT.md`, fold that term into `aicontext/glossary.md` (PR #1505 set the precedent) — the
+root `CONTEXT.md` is scratch for the trial, never the surviving copy of a term.
+
 ## File structure
 
 Single-context repo (most repos):
