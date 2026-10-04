@@ -155,7 +155,7 @@ once until it recovers.
 
 ### Disks — every mounted real filesystem (#1481)
 
-Six sensors per filesystem, named like the Windows per-drive sensors (`Free space on C disk`,
+Seven sensors per filesystem, named like the Windows per-drive sensors (`Free space on C disk`,
 `Average disk write speed on C disk` in the managed and native Windows collectors) with a name in
 place of the drive letter: **`root`** for `/`, else the **last segment** of the mount path; names
 that collide use the whole mount path with `/` → `_` (`/srv/data` → `_srv_data`), plus `_2`, `_3`
@@ -172,11 +172,12 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 | `Free space on <name> disk %` | Double · Percents | every 5 min | 15 min | [5, 10) → warning; < 5 → **Error** | `statvfs` `f_bavail / f_blocks` (what `df` shows a non-root user) |
 | `Free inodes on <name> disk %` | Double · Percents | every 5 min | 15 min | < 10 → warning | `statvfs` `f_favail / f_files`; not registered when the filesystem has no inode count |
 | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec, EMA | a sample every 5 s into a 5-min bar | 15 min | — (the Windows sensor has none) | `/proc/diskstats` sectors written × 512 of the **whole disk** under the filesystem, MB = 1024² |
+| `Average disk read speed on <name> disk` | as the write speed | the same samples and bar | 15 min | — | `/proc/diskstats` **sectors read** × 512 from the same line (#1506), the same rate rules |
 | `Written per day on <name> disk` | Double · GB (**decimal**, 10⁹ bytes, three decimals), no statistics | the same 5-s samples; **posted once a day**, in its last 30 s | **26 h** | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 of the whole disk during one **local day** (the host's timezone); registered wherever the write speed is |
 | `Read per day on <name> disk` | as `Written per day` | as `Written per day`, posted with it | **26 h** | — | Σ Δ `/proc/diskstats` **sectors read** × 512, from the same line of the same 5-s reads (#1506); registered wherever `Written per day` is |
 
-**Cost:** ≈ 288 × 4 + 2 ≈ **1 150 records/day per filesystem** (`Written per day`, `Read per
-day`: 1/day each); garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 4 600/day.
+**Cost:** ≈ 288 × 5 + 2 ≈ **1 440 records/day per filesystem** (`Written per day`, `Read per
+day`: 1/day each); garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 770/day.
 
 **Written per day — the midnight rules** (#1498; until 0.6.1 this was `Written today`, posted
 every 5 minutes — those nodes are stale history since). Each 5-s sample adds the disk's delta to
@@ -296,8 +297,8 @@ still blocked in a read.
 (`enabled` switches off both; `Logical cores` has no switch of its own) and
 `probe.disks { enabled, exclude, writeSpeed }` for the disks: `exclude` is a list of mount-point
 patterns (`*` = any run of characters) matched against the mount point a filesystem is named
-after, `writeSpeed: false` drops the sensors fed by `/proc/diskstats` (the write speed,
-`Written per day` and `Read per day`). All default on. Before 0.4.0 the host
+after, `writeSpeed: false` drops the sensors fed by `/proc/diskstats` (the write and read
+speeds, `Written per day` and `Read per day`). All default on. Before 0.4.0 the host
 switches covered the disk sensor, so **while `probe.disks.enabled` is not set** a
 `hostSensors.enabled: false` or the deprecated `hostSensors.disk: false` still turns the disks off
 — an upgrade never switches them back on; an explicit `probe.disks.enabled` always wins.

@@ -44,7 +44,7 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-   **Disks** (#1481, part of the probe-only set) — six sensors per mounted real filesystem under
+   **Disks** (#1481, part of the probe-only set) — seven sensors per mounted real filesystem under
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
    `/` → `_`, then a counter; the mount point → name map is persisted in
@@ -52,7 +52,8 @@ The probe registers **two separately pinned sets**:
    the name follows the mount point, not the device):
    `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
-   `/proc/diskstats` of the whole disk) and `Written per day on <name> disk` (#1485, once a day
+   `/proc/diskstats` of the whole disk), its mirror `Average disk read speed on <name> disk`
+   (#1506: "sectors read" of the same samples, the same bar) and `Written per day on <name> disk` (#1485, once a day
    since #1498: decimal GB written to that whole disk during one local day, from the same counter,
    **posted once** in the day's last 30 s — TTL 26 h, a day that ended while the probe was down is
    not posted (logged once); a value whose post failed while others went out, and a measured disk
@@ -72,7 +73,7 @@ The probe registers **two separately pinned sets**:
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 24 paths) by
+   opened, listed or read. Pinned for garage-server (4 filesystems, 28 paths) by
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.

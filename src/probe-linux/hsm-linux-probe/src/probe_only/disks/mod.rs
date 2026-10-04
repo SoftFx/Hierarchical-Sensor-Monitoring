@@ -1,5 +1,5 @@
 //! Disk sensors for every mounted real filesystem (#1481): free space (MB and %), free inodes (%)
-//! and the write speed and daily written and read volumes of the disk underneath.
+//! and the write and read speeds and daily written and read volumes of the disk underneath.
 //!
 //! # Layout — the Windows per-drive naming
 //!
@@ -14,6 +14,7 @@
 //! | `Free space on <name> disk %` | Double · Percents | 5 min |
 //! | `Free inodes on <name> disk %` | Double · Percents | 5 min |
 //! | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec | 5 s samples, 5-min bar |
+//! | `Average disk read speed on <name> disk` | DoubleBar · MBytes_sec | the same samples and bar |
 //! | `Written per day on <name> disk` | Double · GB (decimal) | 5 s samples, posted once a day |
 //! | `Read per day on <name> disk` | Double · GB (decimal) | the same samples, posted with it |
 //!
@@ -114,6 +115,9 @@ pub fn free_inodes_percent_path(name: &str) -> String {
 }
 pub fn write_speed_path(name: &str) -> String {
     format!("{CATEGORY}/Average disk write speed on {name} disk")
+}
+pub fn read_speed_path(name: &str) -> String {
+    format!("{CATEGORY}/Average disk read speed on {name} disk")
 }
 pub fn written_per_day_path(name: &str) -> String {
     format!("{CATEGORY}/Written per day on {name} disk")
@@ -246,6 +250,8 @@ struct Node<'c> {
     /// decided — and the inode sensor registered or not — on the first successful sample.
     inodes_pending: bool,
     write_speed: Option<DoubleBarSensor<'c>>,
+    /// Registered wherever the write speed is: the same disk, the same samples.
+    read_speed: Option<DoubleBarSensor<'c>>,
     /// Registered wherever the write speed is: the same disk, the same counter.
     written_per_day: Option<DoubleSensor<'c>>,
     /// Registered wherever `Written per day` is: the same disk, the same samples.
@@ -472,6 +478,16 @@ impl<'c> Disks<'c> {
                                         &[],
                                     );
                                 }
+                                if node.read_speed.is_none() {
+                                    node.read_speed = register_read_speed(
+                                        self.collector,
+                                        logger,
+                                        &node.name,
+                                        &node.fs,
+                                        &disk,
+                                        &[],
+                                    );
+                                }
                                 if node.written_per_day.is_none() {
                                     node.written_per_day = register_written_per_day(
                                         self.collector,
@@ -586,6 +602,9 @@ fn register_node<'c>(
     let write_speed = disk
         .as_ref()
         .and_then(|disk| register_write_speed(collector, logger, &name, &fs, disk, &sharing));
+    let read_speed = disk
+        .as_ref()
+        .and_then(|disk| register_read_speed(collector, logger, &name, &fs, disk, &sharing));
     let written_per_day = disk
         .as_ref()
         .and_then(|disk| register_written_per_day(collector, logger, &name, &fs, disk, &sharing));
@@ -602,6 +621,7 @@ fn register_node<'c>(
         free_inodes,
         inodes_pending: inodes_counted.is_none(),
         write_speed,
+        read_speed,
         written_per_day,
         read_per_day,
         in_flight,
@@ -668,6 +688,51 @@ fn register_write_speed<'c>(
             where_(fs)
         ));
     let path = write_speed_path(name);
+    match collector.double_bar_sensor(
+        &path,
+        WRITE_BAR_PERIOD,
+        WRITE_BAR_POST_PERIOD,
+        WRITE_BAR_PRECISION,
+        &options,
+    ) {
+        Ok(sensor) => Some(sensor),
+        Err(error) => {
+            logger.error(format!("cannot register {path}: {error}"));
+            None
+        }
+    }
+}
+
+/// The mirror of [`register_write_speed`] for "sectors read" (#1506): the same bar, unit, EMA and
+/// TTL, from the same samples.
+fn register_read_speed<'c>(
+    collector: &'c Collector,
+    logger: &Logger,
+    name: &str,
+    fs: &Filesystem,
+    disk: &str,
+    sharing: &[String],
+) -> Option<DoubleBarSensor<'c>> {
+    let shared = if sharing.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The disk is shared, so this is also the read speed of: {}.",
+            sharing.join(", ")
+        )
+    };
+    let options = SensorOptions::default()
+        .with_is_computer_sensor(true)
+        .with_ttl(TTL)
+        .with_unit(UNIT_MBYTES_SEC)
+        .with_statistics(STATISTICS_EMA)
+        .with_description(format!(
+            "Average read speed of the whole disk {disk} under {}, in MB/s: /proc/diskstats \
+             sectors read, from the write speed's samples (one every 5 s) into a 5-minute bar. \
+             Kernel counters only: a sleeping disk is not woken.{shared}",
+            where_(fs)
+        ));
+    let path = read_speed_path(name);
     match collector.double_bar_sensor(
         &path,
         WRITE_BAR_PERIOD,
@@ -922,6 +987,7 @@ fn build<'c>(
             disks,
             diskstats: environment.diskstats.clone(),
             rates: BTreeMap::new(),
+            read_rates: BTreeMap::new(),
             failures: FailureLog::default(),
             ledger,
             ledger_path: environment.disk_written.clone(),
@@ -1097,6 +1163,8 @@ struct WriteSpeedSource<'c> {
     disks: Arc<Disks<'c>>,
     diskstats: PathBuf,
     rates: BTreeMap<String, WriteRate>,
+    /// The read-speed rates: the same arithmetic on "sectors read".
+    read_rates: BTreeMap<String, WriteRate>,
     failures: FailureLog,
     ledger: Ledger,
     /// `$STATE_DIRECTORY/disk-written.json`; `None` keeps the day in memory only.
@@ -1346,6 +1414,7 @@ impl Source for WriteSpeedSource<'_> {
             .filter(|node| {
                 node.mounted
                     && (node.write_speed.is_some()
+                        || node.read_speed.is_some()
                         || node.written_per_day.is_some()
                         || node.read_per_day.is_some())
             })
@@ -1363,6 +1432,7 @@ impl Source for WriteSpeedSource<'_> {
                 missing.push(disk.to_string());
                 // Gone from the table: the next appearance starts a new baseline.
                 self.rates.remove(disk);
+                self.read_rates.remove(disk);
                 self.ledger.forget_baseline(disk);
                 self.identities.remove(disk);
                 continue;
@@ -1421,6 +1491,32 @@ impl Source for WriteSpeedSource<'_> {
                 Err(Skip::AbnormalInterval) => logger.log(Level::Debug, &format!(
                     "disks: write-speed sample of {disk} skipped (interval out of range)"
                 )),
+            }
+            // The read speed: the same sample's "sectors read". A baseline or an implausible
+            // interval is the write rate's too (logged above); only a read counter that went
+            // backwards on its own is the read rate's to say.
+            let read_rate = self
+                .read_rates
+                .entry(disk.to_string())
+                .or_insert_with(|| WriteRate::new(DISK_SAMPLE_PERIOD))
+                .sample(sectors.read, now);
+            match read_rate {
+                Ok(mb_per_second) => {
+                    for node in nodes
+                        .iter()
+                        .filter(|node| node.mounted && node.disk.as_deref() == Some(disk))
+                    {
+                        if let Some(bar) = &node.read_speed {
+                            if let Err(error) = bar.add(mb_per_second) {
+                                logger.error(format!("disks: cannot post a read speed: {error}"));
+                            }
+                        }
+                    }
+                }
+                Err(Skip::CounterReset) => logger.info(format!(
+                    "disks: the read counter of {disk} went backwards (device reset?); new baseline"
+                )),
+                Err(Skip::Baseline | Skip::AbnormalInterval) => {}
             }
         }
         if missing.is_empty() {
@@ -1494,6 +1590,7 @@ pub mod tests {
                     free_space_percent_path(name),
                     free_inodes_percent_path(name),
                     write_speed_path(name),
+                    read_speed_path(name),
                     written_per_day_path(name),
                     read_per_day_path(name),
                 ]
@@ -1689,7 +1786,10 @@ pub mod tests {
         let metered: Vec<&str> = write.rates.keys().map(String::as_str).collect();
         assert_eq!(metered, vec!["sda", "sdb", "sdc"]);
         let before = collector.registrations().len();
-        assert_eq!(before, 24, "four filesystems x six sensors");
+        assert_eq!(before, 28, "four filesystems x seven sensors");
+        // One /proc/diskstats read feeds the read speed of the same three disks.
+        let read: Vec<&str> = write.read_rates.keys().map(String::as_str).collect();
+        assert_eq!(read, metered);
 
         // A USB stick is plugged in and the oldlinux partition is unmounted.
         let mounted = mounts::tests::GARAGE_MOUNTINFO
@@ -1713,9 +1813,9 @@ pub mod tests {
             "{new_paths:#?}"
         );
         // No disk in sysfs for sdd: no write-speed sensor, the rest registers.
-        assert!(new_paths
-            .iter()
-            .all(|json| !json.contains("write speed on usb")));
+        assert!(new_paths.iter().all(
+            |json| !json.contains("write speed on usb") && !json.contains("read speed on usb")
+        ));
         assert_eq!(new_paths.len(), 3);
         let nodes = space.disks.nodes.lock().unwrap();
         let oldlinux = nodes.iter().find(|node| node.name == "oldlinux").unwrap();
@@ -2320,6 +2420,47 @@ pub mod tests {
         collector.stop().expect("stop");
     }
 
+    /// A registration without its `Description` (the one field the read speed words differently).
+    fn without_description(json: &str) -> String {
+        let start = json.find("\"Description\":\"").expect("a description");
+        let end = start + json[start..].find("\",\"EnumOptions\"").expect("its end");
+        format!("{}{}", &json[..start], &json[end + 2..])
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_speed_mirrors_the_write_speed_registration() {
+        let (_tree, environment) = written_host("read-speed");
+        let logger = Logger::new(Level::Error, None);
+        let collector = test_collector();
+        let _write = written_source(&collector, &environment, &logger);
+        collector.start().expect("start");
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        let find = |path: &str| {
+            registrations
+                .iter()
+                .find(|json| json.contains(&format!("\"Path\":\"{path}\"")))
+                .unwrap_or_else(|| panic!("{path} registered"))
+                .clone()
+        };
+        for (name, disk) in GARAGE_NODES {
+            let write = find(&write_speed_path(name));
+            let read = find(&read_speed_path(name));
+            // The same bar, unit, statistics, TTL and (no) alerts: only the path and the words.
+            assert_eq!(
+                without_description(&read),
+                without_description(&write).replace("disk write speed", "disk read speed")
+            );
+            assert!(
+                read.contains(&format!(
+                    "Average read speed of the whole disk {disk} under"
+                )) && read.contains("/proc/diskstats sectors read"),
+                "{read}"
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn an_unmounted_filesystem_does_not_count_towards_a_disks_mount_point_identity() {
@@ -2359,6 +2500,7 @@ pub mod tests {
             free_inodes: None,
             inodes_pending: false,
             write_speed: None,
+            read_speed: None,
             written_per_day: None,
             read_per_day: None,
             in_flight: Arc::new(AtomicBool::new(false)),

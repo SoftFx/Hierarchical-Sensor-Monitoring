@@ -498,8 +498,12 @@ mod tests {
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
-    /// eleven mounts, named after the Windows per-drive pattern; six sensors each (24 paths).
+    /// eleven mounts, named after the Windows per-drive pattern; seven sensors each (28 paths).
     const DISKS_GARAGE_SET: &[&str] = &[
+        ".computer/Disks monitoring/Average disk read speed on mediacentr disk",
+        ".computer/Disks monitoring/Average disk read speed on oldlinux disk",
+        ".computer/Disks monitoring/Average disk read speed on root disk",
+        ".computer/Disks monitoring/Average disk read speed on wd4tb disk",
         ".computer/Disks monitoring/Average disk write speed on mediacentr disk",
         ".computer/Disks monitoring/Average disk write speed on oldlinux disk",
         ".computer/Disks monitoring/Average disk write speed on root disk",

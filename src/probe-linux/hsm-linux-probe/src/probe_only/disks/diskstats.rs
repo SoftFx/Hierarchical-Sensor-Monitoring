@@ -75,7 +75,7 @@ pub fn whole_disk(sys_root: &Path, device: &str, source: &str) -> Option<String>
     }
 }
 
-/// Write-rate state of one disk.
+/// Write-rate state of one disk (and its read rate: the same arithmetic on "sectors read").
 #[derive(Debug)]
 pub struct WriteRate {
     period: Duration,
