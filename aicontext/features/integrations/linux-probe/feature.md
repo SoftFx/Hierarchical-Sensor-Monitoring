@@ -44,7 +44,7 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-   **Disks** (#1481, part of the probe-only set) — five sensors per mounted real filesystem under
+   **Disks** (#1481, part of the probe-only set) — six sensors per mounted real filesystem under
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
    `/` → `_`, then a counter; the mount point → name map is persisted in
@@ -60,13 +60,19 @@ The probe registers **two separately pinned sets**:
    the mount-point identity counts only mounted filesystems; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
    with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
    continues the day, a reboot keeps the day (only for the same physical disk) but not the
-   counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
+   counters, and a disk renamed by the kernel never inherits another disk's day) and its mirror
+   `Read per day on <name> disk` (#1506: "sectors read" from the same `/proc/diskstats` line of
+   the same 5-s reads — no new I/O — posted with it; one ledger record per disk carries both
+   totals with one shared day/baseline/identity/boot id, so every rule above applies to both; the
+   read fields are additive `serde(default)`, so a 0.7.0 ledger loads and its read day starts at
+   the first sample; an unposted day is logged once per disk in one line naming both totals).
+   One constant, `DISK_SAMPLE_PERIOD` (5 s), governs the sampling of every disk counter. Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out; every 5-min
    sample re-checks the mount table first; automounted and over-mounted filesystems are skipped —
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 20 paths) by
+   opened, listed or read. Pinned for garage-server (4 filesystems, 24 paths) by
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.

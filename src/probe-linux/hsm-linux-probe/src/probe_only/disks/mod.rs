@@ -1,5 +1,5 @@
 //! Disk sensors for every mounted real filesystem (#1481): free space (MB and %), free inodes (%)
-//! and the write speed and daily written volume of the disk underneath.
+//! and the write speed and daily written and read volumes of the disk underneath.
 //!
 //! # Layout — the Windows per-drive naming
 //!
@@ -15,10 +15,11 @@
 //! | `Free inodes on <name> disk %` | Double · Percents | 5 min |
 //! | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec | 5 s samples, 5-min bar |
 //! | `Written per day on <name> disk` | Double · GB (decimal) | 5 s samples, posted once a day |
+//! | `Read per day on <name> disk` | Double · GB (decimal) | the same samples, posted with it |
 //!
 //! Every 5-minute sensor carries a 15-minute TTL (three periods): a filesystem that stops being
 //! sampled — unmounted, or its `statvfs` hanging — turns to Timeout on the server. `Written per
-//! day` carries 26 hours, so a day without its post shows.
+//! day` and `Read per day` carry 26 hours, so a day without its post shows.
 //! The shared collector's `Disks monitoring/Free space on disk` (+ `prediction`) is the managed
 //! Unix parity sensor on `/` and is not touched.
 //!
@@ -64,7 +65,7 @@ use hsm_collector::{
 
 use self::diskstats::{Skip, WriteRate};
 use self::mounts::Filesystem;
-use self::written::{Ledger, LocalTime};
+use self::written::{Kind, Ledger, LocalTime};
 use super::{FailureLog, HostEnvironment, Source};
 use crate::config::DisksConfig;
 use crate::logging::{Level, Logger};
@@ -73,15 +74,17 @@ use crate::logging::{Level, Logger};
 pub const SPACE_PERIOD: Duration = Duration::from_secs(300);
 /// How often the mount table is re-read for filesystems that appeared or went away.
 pub const RESCAN_PERIOD: Duration = Duration::from_secs(600);
-/// Write-speed sampling period (the managed `BarTickPeriod`); the bar is 5 minutes.
-pub const WRITE_SAMPLE_PERIOD: Duration = Duration::from_secs(5);
+/// The one `/proc/diskstats` sampling period (the managed `BarTickPeriod`): every disk counter —
+/// the write-speed bar (5 minutes), `Written per day` and `Read per day` — comes from these reads.
+pub const DISK_SAMPLE_PERIOD: Duration = Duration::from_secs(5);
 const WRITE_BAR_PERIOD: Duration = Duration::from_secs(300);
 /// Carried by the ABI for parity with the managed `PostDataPeriod`.
 const WRITE_BAR_POST_PERIOD: Duration = Duration::from_secs(15);
 const WRITE_BAR_PRECISION: i32 = 2;
-/// `Written per day` is posted in the day's last this many sample periods (its only post).
+/// `Written per day` and `Read per day` are posted in the day's last this many sample periods
+/// (their only post).
 const FINAL_READING_PERIODS: i64 = 6;
-/// `Written per day`'s TTL: a day and two hours, so one missed day turns it to Timeout.
+/// The per-day sensors' TTL: a day and two hours, so one missed day turns them to Timeout.
 const PER_DAY_TTL: Duration = Duration::from_secs(26 * 3600);
 /// Three periods of the 5-minute sensors.
 const TTL: Duration = Duration::from_secs(3 * 300);
@@ -114,6 +117,9 @@ pub fn write_speed_path(name: &str) -> String {
 }
 pub fn written_per_day_path(name: &str) -> String {
     format!("{CATEGORY}/Written per day on {name} disk")
+}
+pub fn read_per_day_path(name: &str) -> String {
+    format!("{CATEGORY}/Read per day on {name} disk")
 }
 
 /// The `statvfs` fields the sensors use.
@@ -242,6 +248,8 @@ struct Node<'c> {
     write_speed: Option<DoubleBarSensor<'c>>,
     /// Registered wherever the write speed is: the same disk, the same counter.
     written_per_day: Option<DoubleSensor<'c>>,
+    /// Registered wherever `Written per day` is: the same disk, the same samples.
+    read_per_day: Option<DoubleSensor<'c>>,
     in_flight: Arc<AtomicBool>,
     failures: FailureLog,
 }
@@ -474,6 +482,16 @@ impl<'c> Disks<'c> {
                                         &[],
                                     );
                                 }
+                                if node.read_per_day.is_none() {
+                                    node.read_per_day = register_read_per_day(
+                                        self.collector,
+                                        logger,
+                                        &node.name,
+                                        &node.fs,
+                                        &disk,
+                                        &[],
+                                    );
+                                }
                             }
                         }
                     }
@@ -571,6 +589,9 @@ fn register_node<'c>(
     let written_per_day = disk
         .as_ref()
         .and_then(|disk| register_written_per_day(collector, logger, &name, &fs, disk, &sharing));
+    let read_per_day = disk
+        .as_ref()
+        .and_then(|disk| register_read_per_day(collector, logger, &name, &fs, disk, &sharing));
     Node {
         name,
         fs,
@@ -582,6 +603,7 @@ fn register_node<'c>(
         inodes_pending: inodes_counted.is_none(),
         write_speed,
         written_per_day,
+        read_per_day,
         in_flight,
         failures: FailureLog::default(),
     }
@@ -699,6 +721,51 @@ fn register_written_per_day<'c>(
                  the day; the writes during a reboot are not counted; a day that ended while the \
                  probe was not running is not posted. TTL 26 h: a missing day shows as \
                  Timeout.{shared}",
+                where_(fs)
+            )),
+        Vec::new(),
+    )
+}
+
+/// The mirror of [`register_written_per_day`] for the bytes read (#1506): the same day, unit,
+/// TTL and post; no alert and no statistics.
+fn register_read_per_day<'c>(
+    collector: &'c Collector,
+    logger: &Logger,
+    name: &str,
+    fs: &Filesystem,
+    disk: &str,
+    sharing: &[String],
+) -> Option<DoubleSensor<'c>> {
+    let shared = if sharing.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The disk is shared, so this is also the volume read per day of: {}.",
+            sharing.join(", ")
+        )
+    };
+    register_double(
+        collector,
+        logger,
+        &read_per_day_path(name),
+        SensorOptions::default()
+            .with_is_computer_sensor(true)
+            .with_ttl(PER_DAY_TTL)
+            .with_unit(UNIT_GB)
+            .with_description(format!(
+                "Read from the whole disk {disk} under {} during one local day (the host's \
+                 timezone), in GB (decimal: 1 GB = 10⁹ bytes): /proc/diskstats sectors read, \
+                 summed from the same 5-s samples as the write speed (kernel counters only: the \
+                 disk is never asked, so a sleeping disk stays asleep). **One value per day**, \
+                 posted with Written per day in the day's last 30 seconds: the total read from \
+                 the previous day's post (about 23:59:30) to this one — what is read between a \
+                 post and midnight counts towards the next day. The first sample or a counter \
+                 reset only sets a baseline; a day with no measurement is not posted (never an \
+                 invented 0), and a day whose measurement began after midnight says since when \
+                 in the comment. A probe restart continues the day; the reads during a reboot \
+                 are not counted; a day that ended while the probe was not running is not \
+                 posted. TTL 26 h: a missing day shows as Timeout.{shared}",
                 where_(fs)
             )),
         Vec::new(),
@@ -1024,8 +1091,8 @@ fn post(sensor: &Option<DoubleSensor<'_>>, value: Option<f64>, logger: &Logger) 
 }
 
 /// Disk write speed: one `/proc/diskstats` read every 5 s, one rate per whole disk, posted into the
-/// bar of every mounted filesystem on that disk. The same read feeds each disk's written-today
-/// total ([`written`]), posted every 5 minutes.
+/// bar of every mounted filesystem on that disk. The same read feeds each disk's written and read
+/// per-day totals ([`written`]), posted once a day.
 struct WriteSpeedSource<'c> {
     disks: Arc<Disks<'c>>,
     diskstats: PathBuf,
@@ -1039,13 +1106,13 @@ struct WriteSpeedSource<'c> {
     ledger_dirty: bool,
     /// When the ledger was last saved (every 5 minutes, at the day's post and on stop).
     last_save: Instant,
-    /// Values handed to the collector (tests: exactly one per disk per day).
+    /// Values handed to the collector (tests: exactly one per sensor per day).
     #[cfg(test)]
     posts: usize,
     /// The wall clock, Unix milliseconds, and the host's local calendar (seams for tests).
     clock: fn() -> i64,
     local: LocalTime,
-    /// Hands one `Written per day` value to the collector (a seam for tests).
+    /// Hands one `Written per day` or `Read per day` value to the collector (a seam for tests).
     post: PostFn,
     /// The days that ended while the probe was down are still to be reported (at the first
     /// sample, on the source's own clock).
@@ -1056,13 +1123,14 @@ struct WriteSpeedSource<'c> {
 }
 
 impl WriteSpeedSource<'_> {
-    /// Post every filesystem's `Written per day` (its disk's day total) — the day's only post —
-    /// and mark `day` posted when a value went out, or there was nothing to post: if every post
-    /// failed, the next sample in the window tries again. What a marked day leaves unposted is
-    /// logged with the disk, the day and the total (root rule #8): a value whose post failed, and
-    /// a measured disk that no mounted filesystem with a sensor posts. The caller saves the ledger
-    /// after releasing the nodes lock. Returns `(attempted, sent)`.
-    fn post_written_per_day(
+    /// Post every filesystem's `Written per day` and `Read per day` (its disk's day totals) — the
+    /// day's only post — and mark `day` posted when a value went out, or there was nothing to
+    /// post: if every post failed, the next sample in the window tries again. What a marked day
+    /// leaves unposted is logged with the disk, the day and the total (root rule #8): a value
+    /// whose post failed, and a measured disk that no mounted filesystem with a sensor posts (one
+    /// line naming both totals). The caller saves the ledger after releasing the nodes lock.
+    /// Returns `(attempted, sent)`.
+    fn post_per_day_totals(
         &mut self,
         nodes: &[Node<'_>],
         day: i64,
@@ -1071,30 +1139,41 @@ impl WriteSpeedSource<'_> {
         let (mut attempted, mut sent) = (0, 0);
         let now_ms = (self.clock)();
         let label = written::day_label(day);
-        let mut offered: BTreeSet<&str> = BTreeSet::new();
+        let mut offered: BTreeSet<(&str, Kind)> = BTreeSet::new();
         let mut failed = Vec::new();
         for node in nodes.iter().filter(|node| node.mounted) {
-            let (Some(sensor), Some(disk)) = (&node.written_per_day, node.disk.as_deref()) else {
+            let Some(disk) = node.disk.as_deref() else {
                 continue;
             };
-            let Some((gigabytes, comment)) = self.ledger.today(disk, now_ms, self.local) else {
-                continue;
-            };
-            attempted += 1;
-            offered.insert(disk);
-            match (self.post)(sensor, gigabytes, comment.as_deref()) {
-                Ok(()) => {
-                    sent += 1;
-                    #[cfg(test)]
-                    {
-                        self.posts += 1;
+            for (kind, sensor) in [
+                (Kind::Written, &node.written_per_day),
+                (Kind::Read, &node.read_per_day),
+            ] {
+                let Some(sensor) = sensor else {
+                    continue;
+                };
+                let Some((gigabytes, comment)) =
+                    self.ledger.day_total(disk, kind, now_ms, self.local)
+                else {
+                    continue;
+                };
+                attempted += 1;
+                offered.insert((disk, kind));
+                match (self.post)(sensor, gigabytes, comment.as_deref()) {
+                    Ok(()) => {
+                        sent += 1;
+                        #[cfg(test)]
+                        {
+                            self.posts += 1;
+                        }
                     }
+                    Err(error) => failed.push(format!(
+                        "disks: cannot post {} on {} disk ({disk}, {label}, {gigabytes} GB): \
+                         {error}",
+                        kind.sensor(),
+                        node.name
+                    )),
                 }
-                Err(error) => failed.push(format!(
-                    "disks: cannot post Written per day on {} disk ({disk}, {label}, {gigabytes} \
-                     GB): {error}",
-                    node.name
-                )),
             }
         }
         let marked = attempted == 0 || sent > 0;
@@ -1109,13 +1188,24 @@ impl WriteSpeedSource<'_> {
             self.ledger.posted_day = Some(day);
             self.ledger_dirty = true;
             for disk in self.ledger.disks.keys() {
-                if offered.contains(disk.as_str()) {
-                    continue;
-                }
-                if let Some((gigabytes, _)) = self.ledger.today(disk, now_ms, self.local) {
+                let (sensors, amounts) =
+                    written::describe_totals([Kind::Written, Kind::Read].map(|kind| {
+                        let unoffered = !offered.contains(&(disk.as_str(), kind));
+                        let total = self.ledger.day_total(disk, kind, now_ms, self.local);
+                        (
+                            kind,
+                            total.filter(|_| unoffered).map(|(gigabytes, _)| gigabytes),
+                        )
+                    }));
+                if !sensors.is_empty() {
+                    let verb = if sensors.contains(" and ") {
+                        "are"
+                    } else {
+                        "is"
+                    };
                     logger.info(format!(
-                        "disks: {disk}: its Written per day for {label} ({gigabytes} GB) is not \
-                         posted: no filesystem on it is mounted with a registered sensor"
+                        "disks: {disk}: its {sensors} for {label} ({amounts}) {verb} not posted: \
+                         no filesystem on it is mounted with a registered sensor"
                     ));
                 }
             }
@@ -1173,7 +1263,7 @@ impl WriteSpeedSource<'_> {
 
 type PostFn = fn(&DoubleSensor<'_>, f64, Option<&str>) -> hsm_collector::Result<()>;
 
-/// Hand one `Written per day` value, with its comment if any, to the collector.
+/// Hand one `Written per day` or `Read per day` value, with its comment if any, to the collector.
 fn post_per_day(
     sensor: &DoubleSensor<'_>,
     gigabytes: f64,
@@ -1214,19 +1304,21 @@ impl Source for WriteSpeedSource<'_> {
     }
 
     fn period(&self) -> Duration {
-        WRITE_SAMPLE_PERIOD
+        DISK_SAMPLE_PERIOD
     }
 
     fn sample(&mut self, logger: &Logger) {
         // Days that ended while the probe was down are never posted: say so once, here only (the
-        // day turn does not report them again).
+        // day turn does not report them again) — one line per disk naming both totals.
         if std::mem::take(&mut self.unposted_pending) {
             let today = (self.local)((self.clock)()).0;
-            for (disk, day, gigabytes) in self.ledger.unposted_days(today) {
+            for lost in self.ledger.unposted_days(today) {
+                let (sensors, amounts) = lost.describe();
                 logger.info(format!(
-                    "disks: {disk}: the day {} ended while the probe was not running; its \
-                     measured {gigabytes} GB are not posted as Written per day",
-                    written::day_label(day)
+                    "disks: {}: the day {} ended while the probe was not running; its measured \
+                     {amounts} are not posted as {sensors}",
+                    lost.disk,
+                    written::day_label(lost.day)
                 ));
                 self.ledger_dirty = true;
             }
@@ -1252,7 +1344,10 @@ impl Source for WriteSpeedSource<'_> {
         let disks: BTreeSet<&str> = nodes
             .iter()
             .filter(|node| {
-                node.mounted && (node.write_speed.is_some() || node.written_per_day.is_some())
+                node.mounted
+                    && (node.write_speed.is_some()
+                        || node.written_per_day.is_some()
+                        || node.read_per_day.is_some())
             })
             .filter_map(|node| node.disk.as_deref())
             .collect();
@@ -1264,7 +1359,7 @@ impl Source for WriteSpeedSource<'_> {
             .forget_baselines_except(|disk| counters.contains_key(disk));
         let mut missing = Vec::new();
         for disk in disks {
-            let Some(&written) = counters.get(disk) else {
+            let Some(&sectors) = counters.get(disk) else {
                 missing.push(disk.to_string());
                 // Gone from the table: the next appearance starts a new baseline.
                 self.rates.remove(disk);
@@ -1272,29 +1367,31 @@ impl Source for WriteSpeedSource<'_> {
                 self.identities.remove(disk);
                 continue;
             };
-            // Today's volume: every sample, whatever the rate makes of it (a long gap inside the
+            // Today's volumes: every sample, whatever the rate makes of it (a long gap inside the
             // day still counts; the ledger has its own rules).
             let identity = self.identity_of(disk, &nodes);
-            // Each of these skips sets a new baseline, so it is logged once per event.
-            match self.ledger.sample(
+            // Each of these skips sets a new baseline for both counters, so it is logged once per
+            // event, in one line for both totals.
+            match self.ledger.sample_counters(
                 disk,
                 identity.as_deref(),
-                written,
+                sectors,
                 now_ms,
                 self.local,
-                WRITE_SAMPLE_PERIOD,
+                DISK_SAMPLE_PERIOD,
             ) {
                 Err(written::Skip::OtherDisk) => logger.info(format!(
                     "disks: {disk} is not the disk that had this name before (or it cannot be \
-                     told after a reboot); its written-per-day total starts afresh"
+                     told after a reboot); its written and read per-day totals start afresh"
                 )),
                 Err(written::Skip::ClockBackwards) => logger.info(format!(
-                    "disks: {disk}: the clock went backwards; the writes since the previous \
-                     sample are not counted in Written per day"
+                    "disks: {disk}: the clock went backwards; the writes and reads since the \
+                     previous sample are not counted in Written per day and Read per day"
                 )),
                 Err(written::Skip::GapAcrossDays) => logger.info(format!(
                     "disks: {disk}: no sample across local midnight (the probe was not running); \
-                     the writes in that gap are not counted in Written per day"
+                     the writes and reads in that gap are not counted in Written per day and \
+                     Read per day"
                 )),
                 _ => {}
             }
@@ -1302,8 +1399,8 @@ impl Source for WriteSpeedSource<'_> {
             let rate = self
                 .rates
                 .entry(disk.to_string())
-                .or_insert_with(|| WriteRate::new(WRITE_SAMPLE_PERIOD))
-                .sample(written, now);
+                .or_insert_with(|| WriteRate::new(DISK_SAMPLE_PERIOD))
+                .sample(sectors.written, now);
             match rate {
                 Ok(mb_per_second) => {
                     for node in nodes
@@ -1337,30 +1434,32 @@ impl Source for WriteSpeedSource<'_> {
         }
         // A day that missed its post window while the probe ran (a suspend over midnight,
         // unreadable /proc/diskstats, every post in the window failed) is lost: say so, with its
-        // total.
-        for (disk, missed_day, gigabytes) in std::mem::take(&mut self.ledger.missed) {
+        // totals — one line per disk.
+        for lost in std::mem::take(&mut self.ledger.missed) {
+            let (sensors, amounts) = lost.describe();
             logger.info(format!(
-                "disks: {disk}: the day {} ended without its Written per day post (the probe did \
-                 not sample in its last 30 s, or every post there failed); its measured \
-                 {gigabytes} GB are not posted",
-                written::day_label(missed_day)
+                "disks: {}: the day {} ended without its {sensors} post (the probe did not sample \
+                 in its last 30 s, or every post there failed); its measured {amounts} are not \
+                 posted",
+                lost.disk,
+                written::day_label(lost.day)
             ));
         }
         // The day's only post, in its last six sample periods (30 s): one slow read or a late tick
-        // still lands in it. What is written after the post counts towards the next day. A window
-        // missed altogether (a suspend, a stopped probe) leaves the day unposted — logged.
+        // still lands in it. What is written or read after the post counts towards the next day.
+        // A window missed altogether (a suspend, a stopped probe) leaves the day unposted — logged.
         let (day, second) = (self.local)(now_ms);
-        let period = i64::try_from(WRITE_SAMPLE_PERIOD.as_secs()).unwrap_or(5);
+        let period = i64::try_from(DISK_SAMPLE_PERIOD.as_secs()).unwrap_or(5);
         let day_ends = second + FINAL_READING_PERIODS * period >= 86_400
             && self.ledger.posted_day.is_none_or(|posted| posted < day);
         if day_ends {
-            self.post_written_per_day(&nodes, day, logger);
+            self.post_per_day_totals(&nodes, day, logger);
         }
         // The ledger is saved every 5 minutes (half a sample period of slack) and right after the
         // post, so a restart continues the day and never posts it twice. The fsync'd save runs
         // without the nodes lock: the space source shares it, and a slow state disk must not stall
         // its samples or re-scan.
-        if day_ends || self.last_save.elapsed() + WRITE_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
+        if day_ends || self.last_save.elapsed() + DISK_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
             self.last_save = Instant::now();
             drop(nodes);
             self.save_ledger(logger);
@@ -1396,6 +1495,7 @@ pub mod tests {
                     free_inodes_percent_path(name),
                     write_speed_path(name),
                     written_per_day_path(name),
+                    read_per_day_path(name),
                 ]
             })
             .map(|path| path.to_string())
@@ -1589,7 +1689,7 @@ pub mod tests {
         let metered: Vec<&str> = write.rates.keys().map(String::as_str).collect();
         assert_eq!(metered, vec!["sda", "sdb", "sdc"]);
         let before = collector.registrations().len();
-        assert_eq!(before, 20, "four filesystems x five sensors");
+        assert_eq!(before, 24, "four filesystems x six sensors");
 
         // A USB stick is plugged in and the oldlinux partition is unmounted.
         let mounted = mounts::tests::GARAGE_MOUNTINFO
@@ -1790,16 +1890,16 @@ pub mod tests {
             write.sample(&logger);
         }
         assert_eq!(write.posts, 0, "nothing before the day's end");
-        // 23:59:33: the day's total is posted, once per filesystem (root, wd4tb, mediacentr,
-        // oldlinux), and the day is remembered as posted.
+        // 23:59:33: the day's totals are posted, written and read once per filesystem (root,
+        // wd4tb, mediacentr, oldlinux), and the day is remembered as posted.
         let late = written::tests::MIDNIGHT + 86_373_000;
         NOW_MS.with(|now| now.set(late));
         write.sample(&logger);
-        assert_eq!(write.posts, 4);
+        assert_eq!(write.posts, 8);
         assert_eq!(write.ledger.posted_day, Some(written::tests::utc(late).0));
         NOW_MS.with(|now| now.set(late + 5_000));
         write.sample(&logger);
-        assert_eq!(write.posts, 4, "exactly one post per day");
+        assert_eq!(write.posts, 8, "exactly one post per sensor per day");
         {
             // A restart inside the window does not post the day again: the ledger remembers it.
             let again_collector = Collector::new(&options).expect("create");
@@ -1956,8 +2056,11 @@ pub mod tests {
         assert!(
             lines.iter().any(|line| line.contains("sdc")
                 && line.contains("the day")
-                && line.contains("1.024 GB")),
-            "the total is named: {lines:#?}"
+                && line.contains(
+                    "1.024 GB written and 0 GB read are not posted as Written per \
+                     day and Read per day"
+                )),
+            "both totals are named, in the one line: {lines:#?}"
         );
     }
 
@@ -2005,7 +2108,7 @@ pub mod tests {
         {
             let nodes = disks.nodes.lock().unwrap();
             let day = written::tests::utc(midnight).0;
-            assert_eq!(write.post_written_per_day(&nodes, day, &logger), (0, 0));
+            assert_eq!(write.post_per_day_totals(&nodes, day, &logger), (0, 0));
             assert_eq!(write.ledger.posted_day, Some(day));
         }
         assert_eq!(write.posts, 0);
@@ -2019,11 +2122,12 @@ pub mod tests {
         at(d1 + 9 * HOUR_MS + 5_000);
         write.sample(&logger);
         at(d1 + window);
-        FAIL_POSTS.with(|left| left.set(4));
+        // Four filesystems, a written and a read total each.
+        FAIL_POSTS.with(|left| left.set(8));
         {
             let nodes = disks.nodes.lock().unwrap();
             let day = written::tests::utc(d1).0;
-            assert_eq!(write.post_written_per_day(&nodes, day, &logger), (4, 0));
+            assert_eq!(write.post_per_day_totals(&nodes, day, &logger), (8, 0));
             assert_eq!(write.ledger.posted_day, Some(day - 1), "not marked");
         }
         {
@@ -2032,7 +2136,7 @@ pub mod tests {
                 .iter()
                 .filter(|line| line.contains("every post failed, so the next sample"))
                 .collect();
-            assert_eq!(retried.len(), 4, "{lines:#?}");
+            assert_eq!(retried.len(), 8, "{lines:#?}");
             let d1_label = label(d1);
             assert!(
                 retried.iter().any(|line| line.contains(&format!(
@@ -2040,17 +2144,23 @@ pub mod tests {
                 ))),
                 "{retried:#?}"
             );
+            assert!(
+                retried.iter().any(|line| line.contains(&format!(
+                    "Read per day on root disk (sdc, {d1_label}, 0 GB)"
+                ))),
+                "{retried:#?}"
+            );
         }
         at(d1 + window + 5_000);
         write.sample(&logger);
         assert_eq!(
-            write.posts, 4,
+            write.posts, 8,
             "the next sample in the window posts the day"
         );
         assert_eq!(write.ledger.posted_day, Some(written::tests::utc(d1).0));
 
         // Day D+2: wd4tb (sda) is unmounted after its day was measured, and one of the other
-        // three posts fails. The day is marked (values went out); what it loses is named.
+        // six posts fails. The day is marked (values went out); what it loses is named.
         let d2 = midnight + 2 * DAY_MS;
         at(d2 + 9 * HOUR_MS);
         write.sample(&logger);
@@ -2067,8 +2177,8 @@ pub mod tests {
         at(d2 + window);
         write.sample(&logger);
         assert_eq!(
-            write.posts, 6,
-            "two of the three mounted filesystems posted"
+            write.posts, 13,
+            "five of the six values of the three mounted filesystems posted"
         );
         assert_eq!(write.ledger.posted_day, Some(written::tests::utc(d2).0));
         let d2_label = label(d2);
@@ -2079,13 +2189,134 @@ pub mod tests {
             .collect();
         assert_eq!(lost.len(), 1, "{lines:#?}");
         assert!(lost[0].contains(&format!("{d2_label}, 0 GB)")), "{lost:#?}");
+        // One line for the disk, naming both totals.
+        let unmounted: Vec<&String> = lines
+            .iter()
+            .filter(|line| line.contains("sda: its "))
+            .collect();
+        assert_eq!(unmounted.len(), 1, "{lines:#?}");
         assert!(
-            lines.iter().any(|line| line.contains(&format!(
-                "sda: its Written per day for {d2_label} (0 GB) is not posted"
-            ))),
-            "{lines:#?}"
+            unmounted[0].contains(&format!(
+                "sda: its Written per day and Read per day for {d2_label} (0 GB written and 0 GB \
+                 read) are not posted"
+            )),
+            "{unmounted:#?}"
         );
         drop(lines);
+        collector.stop().expect("stop");
+    }
+
+    thread_local! {
+        /// What [`recording_post`] handed to the collector: `(GB, comment)`.
+        static POSTED: std::cell::RefCell<Vec<(f64, Option<String>)>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    fn recording_post(
+        sensor: &DoubleSensor<'_>,
+        gigabytes: f64,
+        comment: Option<&str>,
+    ) -> hsm_collector::Result<()> {
+        POSTED.with(|posted| {
+            posted
+                .borrow_mut()
+                .push((gigabytes, comment.map(str::to_string)))
+        });
+        post_per_day(sensor, gigabytes, comment)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_per_day_is_registered_and_posted_with_written_per_day() {
+        let (tree, environment) = written_host("read-per-day");
+        let logger = Logger::new(Level::Error, None);
+        let collector = test_collector();
+        let mut write = written_source(&collector, &environment, &logger);
+        write.post = recording_post;
+        collector.start().expect("start");
+
+        let registrations = collector.registrations();
+        let root = registrations
+            .iter()
+            .find(|json| json.contains("Read per day on root disk"))
+            .expect("registered")
+            .clone();
+        // Written per day's shape: decimal GB, no statistics, no alert, TTL 26 h.
+        assert!(root.contains("\"OriginalUnit\":4"), "{root}");
+        assert!(!root.contains("\"Statistics\":1"), "{root}");
+        assert!(!root.contains("\"Alerts\":[{"), "{root}");
+        assert!(root.contains("936000000000"), "{root}");
+        assert!(
+            root.contains("/proc/diskstats sectors read")
+                && root.contains("(about 23:59:30) to this one"),
+            "{root}"
+        );
+        assert!(registrations
+            .iter()
+            .any(|json| json.contains("Read per day on oldlinux disk")
+                && json.contains("also the volume read per day of: mediacentr")));
+        // Every filesystem with Written per day has Read per day.
+        for (name, _) in GARAGE_NODES {
+            for path in [written_per_day_path(name), read_per_day_path(name)] {
+                assert!(
+                    registrations.iter().any(|json| json.contains(&path)),
+                    "{path}"
+                );
+            }
+        }
+
+        // Day D from 09:00: sdc writes 1.024 GB and reads 2.048 GB.
+        let day = written::tests::MIDNIGHT + 9 * HOUR_MS;
+        at(day);
+        write.sample(&logger);
+        tree.file(
+            "diskstats",
+            &diskstats_later().replace(" 161806974 ", " 165806974 "),
+        );
+        at(day + 5_000);
+        write.sample(&logger);
+        let window = written::tests::MIDNIGHT + 86_373_000; // 23:59:33
+        at(window);
+        write.sample(&logger);
+        assert_eq!(write.posts, 8, "four filesystems, written and read");
+        let posted = POSTED.with(|posted| posted.take());
+        let since = |what: &str| {
+            Some(format!(
+                "measured since 09:00 local time ({what} before that are not counted)"
+            ))
+        };
+        assert!(posted.contains(&(1.024, since("writes"))), "{posted:?}");
+        assert!(posted.contains(&(2.048, since("reads"))), "{posted:?}");
+        assert_eq!(
+            posted
+                .iter()
+                .filter(|(_, comment)| *comment == since("reads"))
+                .count(),
+            4,
+            "{posted:?}"
+        );
+
+        // Day D+1 was watched from its start (sampled through midnight after D's post): no
+        // comment. sdc reads another 1.024 GB during it.
+        for after_post in (5_000..=40_000).step_by(5_000) {
+            at(window + after_post);
+            write.sample(&logger);
+        }
+        tree.file(
+            "diskstats",
+            &diskstats_later().replace(" 161806974 ", " 167806974 "),
+        );
+        at(window + 9 * HOUR_MS);
+        write.sample(&logger);
+        at(window + DAY_MS);
+        write.sample(&logger);
+        assert_eq!(write.posts, 16);
+        let posted = POSTED.with(|posted| posted.take());
+        assert!(posted.contains(&(1.024, None)), "{posted:?}");
+        assert!(
+            posted.iter().all(|(_, comment)| comment.is_none()),
+            "{posted:?}"
+        );
         collector.stop().expect("stop");
     }
 
@@ -2129,6 +2360,7 @@ pub mod tests {
             inodes_pending: false,
             write_speed: None,
             written_per_day: None,
+            read_per_day: None,
             in_flight: Arc::new(AtomicBool::new(false)),
             failures: FailureLog::default(),
         };

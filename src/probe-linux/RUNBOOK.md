@@ -138,7 +138,9 @@ hsm-linux-probe --version && systemctl is-active hsm-linux-probe
 The restart marker works the same way (for targets from 0.2.0 on). Config, key and state stay.
 The versioned state files (`disk-written.json`, `docker-state.json`) carry a format version; an
 older probe that does not know it treats the file as absent and that source starts fresh, as on a
-first install (logged once). A rollback across a release that moved sensors
+first install (logged once). Fields added without a new version — the read totals in
+`disk-written.json` (#1506) — are ignored by an older probe, which keeps the written day; back on
+the newer one, the read day starts afresh with its "measured since" comment. A rollback across a release that moved sensors
 puts the sensors back under the older paths. Below 0.7.0 the `topCpu` block is ignored (unknown keys
 are), its sensors time out, and a `top-cpu.conf` drop-in only relaxes `ProtectProc` for nothing:
 delete it (`sudo rm /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf && sudo systemctl
@@ -170,7 +172,7 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Probe log | `/var/log/hsm-linux-probe/hsm-linux-probe_<UTC date>.log` (`LogsDirectory=`, 0750) | every line at or above `logging.level` (default `info`) | one file per UTC day; files not written for **30 days** are deleted by `systemd-tmpfiles-clean.timer` (`/usr/lib/tmpfiles.d/hsm-linux-probe.conf`, in packages built since #1418; older ones never delete a log file); purge deletes the directory |
 | Journal | journald (the unit's stderr) | the same lines | the host's journald limits (default: 10 % of the filesystem, at most 4 GiB); not removed by purge |
 | Disk names | `/var/lib/hsm-linux-probe/disk-names.json` (`StateDirectory=`, 0700) | when a mount point first gets a name | **for good**: a name is never given away or removed, so the sensors of a mount point keep their history across restarts; one small entry per mount point ever reported; purge deletes it |
-| Disk write day | `/var/lib/hsm-linux-probe/disk-written.json` | every 5 min, at the day's post, on stop | the running local day and each disk's last counter; a disk not seen for more than a day is dropped |
+| Disk write day | `/var/lib/hsm-linux-probe/disk-written.json` | every 5 min, at the day's post, on stop | the running local day — its written and read totals (the read fields since #1506) — and each disk's last counters; a disk not seen for more than a day is dropped |
 | Docker state | `/var/lib/hsm-linux-probe/docker-state.json` | on change (last-seen at most hourly; the hourly write total at most every 5 min, per hour and on stop) | per Compose service; a service that disappeared is reported `Stopped` and kept for **7 days** after last seen, then forgotten; an OOM latch lasts `probe.docker.oomLatchHours` (24 h) |
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |

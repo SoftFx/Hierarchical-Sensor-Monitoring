@@ -23,15 +23,23 @@ use std::time::{Duration, Instant};
 const SECTOR_BYTES: f64 = 512.0;
 const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
 
-/// Sectors written per device name.
-pub fn parse_diskstats(text: &str) -> BTreeMap<String, u64> {
+/// One device's sector counters, both from its one `/proc/diskstats` line.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Sectors {
+    pub written: u64,
+    pub read: u64,
+}
+
+/// Sectors written and read per device name.
+pub fn parse_diskstats(text: &str) -> BTreeMap<String, Sectors> {
     text.lines()
         .filter_map(|line| {
             let fields: Vec<&str> = line.split_whitespace().collect();
             // major minor name reads merged sectors_read ms writes merged sectors_written ...
             let name = fields.get(2)?;
+            let read = fields.get(5)?.parse().ok()?;
             let written = fields.get(9)?.parse().ok()?;
-            Some((name.to_string(), written))
+            Some((name.to_string(), Sectors { written, read }))
         })
         .collect()
 }
@@ -116,12 +124,16 @@ pub mod tests {
     pub const GARAGE_DISKSTATS: &str = include_str!("fixtures/garage-diskstats.txt");
 
     #[test]
-    fn diskstats_parses_sectors_written_per_device() {
+    fn diskstats_parses_sectors_written_and_read_per_device() {
         let stats = parse_diskstats(GARAGE_DISKSTATS);
-        assert_eq!(stats["sda"], 307_480_584);
-        assert_eq!(stats["sdb"], 39_386_608);
-        assert_eq!(stats["sdb5"], 280);
-        assert_eq!(stats["sdc"], 683_671_624);
+        assert_eq!(stats["sda"].written, 307_480_584);
+        assert_eq!(stats["sdb"].written, 39_386_608);
+        assert_eq!(stats["sdb5"].written, 280);
+        assert_eq!(stats["sdc"].written, 683_671_624);
+        // "sectors read" is the third counter of the same line.
+        assert_eq!(stats["sda"].read, 530_467_632);
+        assert_eq!(stats["sdb"].read, 747_765_872);
+        assert_eq!(stats["sdc"].read, 161_806_974);
         assert_eq!(stats.len(), 12);
         assert!(parse_diskstats("short line\n").is_empty());
     }
