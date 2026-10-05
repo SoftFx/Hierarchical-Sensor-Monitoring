@@ -104,6 +104,6 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Metric | Sensor or sensor value | HSM domain model is sensor-based. |
 | Backend | HSM Server | Public docs should name the product component. |
 | Timer task | Scheduled task | Matches collector scheduler terminology. |
-| Telemetry | Self-monitoring | "Telemetry" is too generic; HSM's term names the server-watching-itself product. |
-| Internal metrics | Self-monitoring | Same reason as "telemetry". |
+| Telemetry (for the server's own health/traffic product) | Self-monitoring | Only when referring to the server-watching-itself product; collector diagnostic sensors ("overflow telemetry") and access-key/request telemetry (`TelemetryCollector`, "key telemetry") keep their names. |
+| Internal metrics (for the server's own health/traffic product) | Self-monitoring | Same scope as the "telemetry" row. |
 | API key | Access key (product data: collectors, Grafana) or API token (management) | Ambiguous blend of two distinct credentials; name the one meant. |
