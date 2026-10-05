@@ -372,14 +372,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        public async Task OutOfOrderValue_OlderThanHistoryBoundary_IsNotStored_AndCounted()
+        public async Task OutOfOrderValue_OlderThanKeepHistoryWindow_IsNotStored_AndCounted()
         {
-            // Retention floor (#1441 round-2): an out-of-order value older than
-            // the sensor's post-cut From boundary is not written — otherwise a
-            // skewed or hostile clock could force open a weekly LevelDB per
-            // past week and re-fill windows the operator cleared.
-            var path = "denseBatch/retentionFloor";
-            var newest = DateTime.UtcNow.AddMinutes(-1);
+            // Retention floor (#1441): with KeepHistory configured, an
+            // out-of-order value older than the retention window is not
+            // written (the retention pass would purge it anyway) — counted as
+            // OutOfRetentionValues. Within the window, out-of-order values
+            // keep being stored.
+            var path = "denseBatch/retentionKeep";
+            var newest = DateTime.UtcNow.AddHours(-1);
 
             var seed = new SensorValueBase[]
             {
@@ -388,27 +389,96 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(1).Ticks), Initiator = InitiatorInfo.System });
 
-            var boundary = newest.AddMinutes(-10);
-            sensor.Cut(boundary); // history before the boundary is gone; From moves to it
-
-            var withinFloor = new SensorValueBase[]
+            // In-window out-of-order (older than the newest, newer than the floor): stored.
+            var inWindow = new SensorValueBase[]
             {
-                new DoubleSensorValue { Path = path, Time = boundary.AddMinutes(5), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = newest.AddHours(-2), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
             };
-            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, withinFloor)));
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, inWindow)));
             Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
             Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
 
-            var beforeFloor = new SensorValueBase[]
+            // Out-of-window (older than UtcNow - 1 day): not stored, counted.
+            var outOfWindow = new SensorValueBase[]
             {
-                new DoubleSensorValue { Path = path, Time = boundary.AddMinutes(-5), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = DateTime.UtcNow.AddDays(-3), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
             };
-            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, beforeFloor)));
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, outOfWindow)));
             Assert.Equal(1, Volatile.Read(ref sensor.OutOfRetentionValues));
 
-            var stored = await ReadStoredWindowAsync(sensor.Id, boundary.AddMinutes(-10), newest.AddMinutes(1));
-            Assert.Equal(2, stored.Count); // seed + the within-floor value; the pre-boundary one is not stored
+            var stored = await ReadStoredWindowAsync(sensor.Id, DateTime.UtcNow.AddDays(-5), newest.AddMinutes(1));
+            Assert.Equal(2, stored.Count); // seed + the in-window value; the out-of-window one is not stored
+        }
+
+        [Fact]
+        public async Task OutOfOrderValue_OlderThanOldestRow_ButWithinKeepHistory_IsStored()
+        {
+            // The restart shape (#1441 round-3): the history load seeds
+            // Storage.From with the OLDEST STORED ROW, which is not a retention
+            // boundary — a backfill older than the first row but inside the
+            // KeepHistory window must be stored, or the fix would depend on the
+            // server's restart history.
+            var path = "denseBatch/retentionRestart";
+            var firstRow = DateTime.UtcNow.AddHours(-2);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = firstRow, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks), Initiator = InitiatorInfo.System });
+
+            // What a restart does: the history load cuts From to the oldest row.
+            sensor.Cut(firstRow);
+
+            var backfill = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = firstRow.AddHours(-1), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, backfill)));
+
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, firstRow.AddHours(-2), firstRow.AddMinutes(1));
+            Assert.Equal(2, stored.Count); // the seeded row AND the backfill older than it
+        }
+
+        [Fact]
+        public async Task OutOfOrderValue_IntoClearedWindow_IsNotStored()
+        {
+            // The other floor half: after an explicit history clear, a late
+            // value inside the cleared window must not re-fill it.
+            var path = "denseBatch/retentionCleared";
+            var newest = DateTime.UtcNow.AddMinutes(-30);
+
+            var seed = new SensorValueBase[]
+            {
+                // Oldest first (monotonic): the seed itself must not register as out-of-order.
+                new DoubleSensorValue { Path = path, Time = newest.AddMinutes(-20), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = newest, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            var clearedTo = newest.AddMinutes(-10); // erase the older value's window edge
+            await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, clearedTo));
+            Assert.NotNull(sensor.HistoryClearedTo); // probe: the clear actually ran through the queue
+
+            var lateIntoCleared = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = newest.AddMinutes(-25), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, lateIntoCleared)));
+
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfRetentionValues));
         }
 
 

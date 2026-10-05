@@ -58,10 +58,20 @@ namespace HSMServer.Core.Model
         internal long SameTickValuesSuperseded;
         internal long RejectedValues;
         // Out-of-order values NOT persisted because their timestamp precedes the
-        // sensor's history boundary (post-cut From / retention window): without
-        // the floor, a skewed or hostile clock could force one weekly LevelDB
-        // per distinct past week and re-fill windows the operator cleared.
+        // sensor's history floor (the KeepHistory window, when configured, and
+        // the last explicit history clear): without a floor, a skewed or hostile
+        // clock could force one weekly LevelDB per distinct past week and
+        // re-fill windows the operator cleared. Deliberately NOT Storage.From:
+        // the history load seeds it with the oldest stored row, which would make
+        // legitimate backfill lossy depending on restart history.
         internal long OutOfRetentionValues;
+
+        // Upper bound of the last explicit history clear (ClearSensorHistory),
+        // null = never cleared in this process. The floor half that keeps late
+        // values from re-filling a window the operator cleared. In-memory only:
+        // a cleared-then-restarted sensor loses the guard (a value old enough
+        // to predate the clear is also a candidate for the KeepHistory floor).
+        internal DateTime? HistoryClearedTo;
 
         // Server-clock instant of the last expiry TRANSITION that had a value
         // to judge (#1404) — recorded on the transition itself and seeded

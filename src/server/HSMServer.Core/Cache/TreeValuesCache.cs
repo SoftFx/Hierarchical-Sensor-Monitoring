@@ -885,8 +885,17 @@ namespace HSMServer.Core.Cache
 
                         if (result)
                         {
+                            // The journal's "new" side is the value this request produced. For an
+                            // out-of-order add the cached newest does not change (the value went
+                            // straight to the database), so sensor.LastValue would record the OLD
+                            // value as new; use the persisted out-of-order value instead. Otherwise
+                            // the value can be rebuilt in storage, so LastValue is the right source.
+                            var newValueForJournal = !request.ChangeLast && addedResult.Kind == AddValueKind.OutOfOrder
+                                ? addedResult.OutOfOrderValue
+                                : sensor.LastValue;
+
                             var (oldValue, newValue) =
-                                request.GetValues(lastValue, sensor.LastValue); // value can be rebuild in storage so use LastValue
+                                request.GetValues(lastValue, newValueForJournal);
 
                             _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                             {
@@ -1086,6 +1095,12 @@ namespace HSMServer.Core.Cache
             }
 
             sensor.Clear(to);
+
+            // The retention-floor half for late values: everything up to `to`
+            // was just erased on purpose — an out-of-order write must not
+            // re-fill the cleared window (#1441 round-3). Storage.From is not
+            // usable for this: the history load seeds it with the oldest row.
+            sensor.HistoryClearedTo = to;
 
             if (!sensor.HasData)
                 sensor.ResetSensor();
@@ -2753,15 +2768,23 @@ namespace HSMServer.Core.Cache
                 // touch the supersede counter — detecting it would need a
                 // read-before-write on the hot path; see the wire-contract invariant.
                 //
-                // Retention floor: a value older than the sensor's history boundary
-                // (the post-cut From; the storage's retention window already bounds
-                // it from the other side) is NOT written — without the floor, a
-                // skewed or hostile clock could force open one weekly LevelDB per
-                // distinct past week and re-fill windows the operator cleared.
-                if (result.OutOfOrderValue.Time < sensor.From)
+                // Retention floor (#1441 round-3): the later of the KeepHistory
+                // window (when configured — values older than it are purged by
+                // the retention pass anyway) and the last explicit history clear.
+                // Deliberately NOT Storage.From: the history load seeds it with
+                // the oldest stored row, so using it would drop legitimate
+                // backfill depending on the server's restart history. Without
+                // any floor, a skewed or hostile clock could force open one
+                // weekly LevelDB per distinct past week.
+                var keepPolicy = sensor.Settings.KeepHistory.Value;
+                var keepFloor = keepPolicy.IsNone ? DateTime.MinValue : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
+                var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
+                var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
+
+                if (result.OutOfOrderValue.Time < floor)
                 {
                     CountAndWarnRateLimited(ref sensor.OutOfRetentionValues,
-                        $"Out-of-order value older than the sensor's history boundary, not stored (sensor '{path}', time {result.OutOfOrderValue.Time:O}, boundary {sensor.From:O})");
+                        $"Out-of-order value older than the sensor's history floor, not stored (sensor '{path}', time {result.OutOfOrderValue.Time:O}, floor {floor:O})");
                     return;
                 }
 
