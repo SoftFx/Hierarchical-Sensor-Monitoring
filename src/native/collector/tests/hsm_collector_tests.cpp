@@ -38,6 +38,8 @@
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
 extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector);
+extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector);
 #if defined(HSM_COLLECTOR_HTTP)
 // Live-path seam (#1097): swap the recording sender for the libcurl transport before Start.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector);
@@ -701,6 +703,18 @@ namespace
         return static_cast<size_t>(index);
     }
 
+    // The same rule for a registration index (expect_registration_contains).
+    size_t ResolveRegistrationIndex(ConformanceState& state, const std::string& token)
+    {
+        const auto count = static_cast<long long>(hsm_collector_registration_count(state.collector.value));
+        long long index = std::stoll(token);
+        if (index < 0)
+            index += count;
+
+        Require(index >= 0 && index < count, "registration index out of range");
+        return static_cast<size_t>(index);
+    }
+
     hsm_metric_read_t SampledBarCounterRead(void* user_data, hsm_metric_sample_t* sample)
     {
         sample->double_value = static_cast<double>(++*static_cast<std::atomic<int>*>(user_data));
@@ -1185,6 +1199,14 @@ namespace
             return;
         }
 
+        if (action == "add_queue_diagnostic_sensors")
+        {
+            Require(
+                hsm_collector_add_all_queue_diagnostic_sensors(state.collector.value) == HSM_RESULT_OK,
+                "add_queue_diagnostic_sensors failed");
+            return;
+        }
+
         if (action == "service_send_custom" || action == "service_send_restart" || action == "service_send_start" ||
             action == "service_send_stop" || action == "service_send_update" || action == "service_send_update_version")
         {
@@ -1379,15 +1401,15 @@ namespace
             return;
         }
 
-        // Native-only (hsm_sensor_set_description, 0.10.0): the managed driver marks it unsupported
-        // until #1482 gives the managed collector a counterpart, so no corpus scenario uses it yet.
+        // hsm_sensor_set_description (0.10.0); managed counterpart IDescribableSensor.SetDescription (#1482).
         if (action == "set_sensor_description")
         {
             Require(step.size() >= 3, "set_sensor_description requires sensor index and description");
             const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
             Require(sensor_index < state.sensors.size(), "sensor index out of range");
             const auto description = ExpandTextToken(step[2]);
-            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description.c_str()) == HSM_RESULT_OK,
+            const char* description_ptr = step[2] == "token:null" ? nullptr : description.c_str();
+            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description_ptr) == HSM_RESULT_OK,
                     "set_sensor_description failed");
             return;
         }
@@ -2053,7 +2075,7 @@ namespace
         if (action == "expect_registration_contains")
         {
             Require(step.size() >= 3, "expect_registration_contains requires index and substring");
-            Contains(RegistrationJson(state.collector.value, static_cast<size_t>(ToInt(step[1]))), step[2]);
+            Contains(RegistrationJson(state.collector.value, ResolveRegistrationIndex(state, step[1])), step[2]);
             return;
         }
 
@@ -2447,6 +2469,26 @@ namespace
             return;
         }
 
+        // (#1480) Wait until a data send is parked in the hang: its package has left the queue.
+        if (action == "wait_sender_parked")
+        {
+            Require(step.size() >= 2, "wait_sender_parked requires a timeout in seconds");
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[1]));
+            while (hsm_collector_test_hung_send_count(state.collector.value) == 0 &&
+                   std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            Require(hsm_collector_test_hung_send_count(state.collector.value) > 0, "no data send was parked in the hang");
+            return;
+        }
+
+        // (#1480) Lift the hang: a parked send continues (and consumes a charged fail token), later
+        // sends are no longer blocked.
+        if (action == "release_sender_hang")
+        {
+            hsm_collector_set_send_hang(state.collector.value, false);
+            return;
+        }
+
         if (action == "stop_expect_under_ms")
         {
             Require(step.size() >= 2, "stop_expect_under_ms requires a bound in milliseconds");
@@ -2630,6 +2672,36 @@ namespace
             for (const auto& bar : BarPayloadsInDeliveryOrder(state.collector.value))
                 opens.insert(bar.open);
             Require(static_cast<int>(opens.size()) >= ToInt(step[1]), "too few distinct bar OpenTimes");
+            return;
+        }
+
+        // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload of each
+        // OpenTime (partial posts are snapshots of one bar), over the bars whose Path ends with the
+        // suffix. Exact only when each bar's mean is exact — design the fixture accordingly.
+        if (action == "expect_bar_sum")
+        {
+            Require(step.size() >= 3, "expect_bar_sum requires a path suffix and the expected sum");
+            const std::string path_end = step[1] + "\"";
+            std::map<long long, double> latest;
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (!IsBarPayload(payload) || payload.find(path_end) == std::string::npos)
+                    continue;
+
+                latest[std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"))] =
+                    std::stod(NumberFieldFromPayload(payload, "Mean")) *
+                    static_cast<double>(std::stoll(NumberFieldFromPayload(payload, "Count")));
+            }
+
+            double sum = 0.0;
+            for (const auto& bar : latest)
+                sum += bar.second;
+
+            Require(
+                std::abs(sum - std::stod(step[2])) < 1e-9,
+                ("bar sum mismatch for " + step[1] + ": expected " + step[2] + ", got " + std::to_string(sum)).c_str());
             return;
         }
 
@@ -5190,6 +5262,253 @@ namespace
         Require(
             sizes.back().find("\"Mean\":0,") == std::string::npos,
             ("a dispatched package must not read as zero: " + sizes.back()).c_str());
+    }
+
+    // A collector whose worker never dispatches on its own (1 h collect period) and whose send queue
+    // stamps on a manual clock, with the queue-stat group registered and started. Only a file payload
+    // — push-driven, its enqueue kicks the worker — makes it build a package, so the test decides the
+    // package time exactly.
+    CollectorHandle StartQueueWaitCollector(SensorHandle& values, SensorHandle& files)
+    {
+        auto options = TestOptions();
+        options.package_collect_period_ms = 3600000;
+        auto collector = CreateCollector(options);
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        values = CreateIntSensor(collector.value, "contract/queue/wait");
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "contract/queue/kick", "kick", "txt", &files.value) ==
+                HSM_RESULT_OK,
+            "file sensor create failed");
+
+        return collector;
+    }
+
+    void WaitForSentCount(hsm_collector_t* collector, size_t count)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector) < count && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        Require(hsm_collector_sent_count(collector) >= count, "the package was not dispatched");
+    }
+
+    // ".module/Collector queue stats/Package process time" is the average time, in seconds, the
+    // package's values waited in the send queue before the package was collected — managed
+    // PackageInfo.AvrTimeInQueue (#1480). It used to be the HTTP send duration (~0 here). Values
+    // enqueued at t=0 and t=3 s and packaged at t=4 s waited 4 s and 1 s: one bar sample of 2.5. The
+    // file enqueued at t=4 s rides in the same package but is not averaged (the managed file queue
+    // never feeds this sensor) — counting it would read (4 + 1 + 0) / 3.
+    void NativePackageProcessTimeIsTheAverageQueueWait()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+        collector = StartQueueWaitCollector(values, files);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 3000);
+        Require(hsm_sensor_add_int(values.value, 2, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 1000);
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+
+        WaitForSentCount(collector.value, 3);
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto bars = PayloadsForPath(collector.value, "/Package process time\"");
+        Require(!bars.empty(), "the process-time bar must be flushed on stop");
+        Contains(bars.back(), "\"Min\":2.5,\"Max\":2.5,\"Mean\":2.5,");
+        Contains(bars.back(), "\"Count\":1,");
+    }
+
+    // A failed send puts the values back with the stamp they FIRST entered the queue with, as managed
+    // keeps QueueItem.BuildDate across a retry, so the wait the failure cost shows in the sensor. The
+    // value is enqueued at t=0, the failing package is built no earlier than t=2 s, the successful one
+    // at t=5 s: the one sample is 5.0 — a stamp reset on re-enqueue would read 3.0 (or 0).
+    void NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+        collector = StartQueueWaitCollector(values, files);
+        hsm_collector_set_send_fail_next(collector.value, 1);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 2000);
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 3000);
+
+        // The first dispatch consumes the injected failure whenever it runs; keep kicking (files are
+        // not averaged) until a package is delivered. The clock no longer moves, so that package is
+        // built at t=5 s whichever kick it came from.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+        {
+            Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        Require(hsm_collector_sent_count(collector.value) > 0, "the retried package was not delivered");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto bars = PayloadsForPath(collector.value, "/Package process time\"");
+        Require(!bars.empty(), "the process-time bar must be flushed on stop");
+        Contains(bars.back(), "\"Min\":5,\"Max\":5,\"Mean\":5,");
+        Contains(bars.back(), "\"Count\":1,");
+    }
+
+    // A failed batch put back into a FULL queue is dropped (the #1088 backstop), and every dropped
+    // value is counted in ".module/Collector queue stats/Queue overflow" — managed ReEnqueueItem reports
+    // each one through ReportRequeueEviction. Native used to drop them without a trace (#1480).
+    // Deterministic: the worker only dispatches on a file kick (1 h collect period); the test waits
+    // until that batch is parked in the injected transport hang (so it has left the queue), fills the
+    // queue to capacity, and lifts the hang into an injected failure, so all 3 retried values find the
+    // queue full. The self-monitor's cycle is also 1 h, so the count reaches the bar through Stop's
+    // final fold — which is part of the fix: without it, drops of the last partial cycle were lost.
+    void NativeRequeueDropAtCapacityCountsAsOverflow()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+
+        auto options = TestOptions();
+        options.max_queue_size = 5;
+        options.package_collect_period_ms = 3600000;
+        collector = CreateCollector(options);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        values = CreateIntSensor(collector.value, "contract/queue/requeue");
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "contract/queue/kick", "kick", "txt", &files.value) ==
+                HSM_RESULT_OK,
+            "file sensor create failed");
+
+        hsm_collector_set_send_hang(collector.value, true);
+        hsm_collector_set_send_fail_next(collector.value, 1);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_int(values.value, 2, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_test_hung_send_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Require(hsm_collector_test_hung_send_count(collector.value) == 1, "the batch never reached the transport");
+
+        // The queue is empty now; fill it exactly to capacity (no eviction on this path).
+        for (int value = 10; value < 15; ++value)
+            Require(hsm_sensor_add_int(values.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_collector_test_requeue_dropped_total(collector.value) == 0, "nothing may be dropped before the send fails");
+
+        hsm_collector_set_send_hang(collector.value, false);
+
+        deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_test_requeue_dropped_total(collector.value) < 3 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Require(hsm_collector_test_requeue_dropped_total(collector.value) == 3, "the 3 retried values must be dropped");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto overflow = PayloadsForPath(collector.value, "/Queue overflow\"");
+        Require(!overflow.empty(), "the dropped retries must reach the Queue overflow bar");
+        Contains(overflow.back(), "\"Min\":3,\"Max\":3,\"Mean\":3,");
+        Contains(overflow.back(), "\"Count\":1,");
+    }
+
+    // A value lost AFTER Stop's final Queue overflow fold — here an eviction caused by the stop flush's
+    // own enqueue of a bar into a full queue — is logged, and the next run does not report it as one of
+    // its own drops (#1480 review: it used to ride into the next run's first collect cycle). The 1 h
+    // collect period keeps the worker and the self-monitor out of the timeline, so the only fold is
+    // Stop's and the eviction deterministically comes after it.
+    void NativeLateStopDropIsLoggedAndNotInheritedByTheNextRun()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle bar;
+        std::vector<std::string> infos;
+
+        auto options = TestOptions();
+        options.max_queue_size = 5;
+        options.package_collect_period_ms = 3600000;
+        collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                if (level == HSM_LOG_LEVEL_INFO)
+                    static_cast<std::vector<std::string>*>(user_data)->emplace_back(message);
+            },
+            &infos);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        values = CreateIntSensor(collector.value, "contract/queue/late");
+        Require(
+            hsm_collector_create_int_bar_sensor(collector.value, "contract/queue/late-bar", 300000, 0, &bar.value) ==
+                HSM_RESULT_OK,
+            "bar sensor create failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        for (int value = 0; value < 5; ++value)
+            Require(hsm_sensor_add_int(values.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_bar_int(bar.value, 7) == HSM_RESULT_OK, "add bar failed");
+
+        // Stop folds (nothing to report yet), then flushes the non-empty bar into the full queue,
+        // evicting one queued value after the fold.
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        bool logged = false;
+        for (const auto& message : infos)
+            logged = logged || message.find("1 value(s) dropped from the full send queue after the final Queue overflow report") !=
+                                   std::string::npos;
+        Require(logged, "the late drop must be logged");
+
+        // A second run with no loss of its own: its Queue overflow bar must stay empty.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        Require(
+            PayloadsForPath(collector.value, "/Queue overflow\"").empty(),
+            "the next run must not report the previous run's late drop");
+    }
+
+    // The four queue-stat rows register the managed descriptions, composed from the collector options
+    // the same way (#1480) — here the production defaults, which the conformance harness does not use.
+    // The periods go through the managed ToReadableView rules (plural above 1, zero parts skipped).
+    void NativeQueueStatDescriptionsMatchManaged()
+    {
+        auto options = TestOptions();
+        options.max_queue_size = 20000;
+        options.max_values_in_package = 1000;
+        options.package_collect_period_ms = 3723000; // 1 h 2 min 3 s
+        auto collector = CreateCollector(options);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        std::string all;
+        for (size_t index = 0; index < hsm_collector_registration_count(collector.value); ++index)
+            all += RegistrationJson(collector.value, index) + "\n";
+
+        const std::string bar = "Bar period is 5 minutes with updates every 5 seconds.";
+        Contains(all, "\"Description\":\"The sensor sends the amount of data that was removed from the queue during the overflow process. " +
+                          bar + "  \\nCollector max queue size = **20000**, collect period = **1 hour 2 minutes 3 seconds**.\"");
+        Contains(all, "\"Description\":\"The sensor sends information about the number of values in each collected package. " + bar +
+                          " Package max values count = **1000**.\"");
+        Contains(all, "\"Description\":\"The sensor sends, for each sent package, the average time in seconds its values waited in the "
+                      "send queue before the package was collected. " +
+                          bar + " Package collect period = **1 hour 2 minutes 3 seconds**.\"");
+        Contains(all, "\"Description\":\"The sensor sends information about the package body size. " + bar + "\"");
     }
 
     // The heartbeat follows the SENSOR's post period (15 s), not the collector's package-collect
@@ -7772,6 +8091,16 @@ namespace
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
             { "native_package_content_size_reports_kilobytes",
               [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
+            { "native_package_process_time_is_the_average_queue_wait",
+              [](const std::string&) { NativePackageProcessTimeIsTheAverageQueueWait(); } },
+            { "native_package_process_time_keeps_the_first_enqueue_across_a_retry",
+              [](const std::string&) { NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry(); } },
+            { "native_requeue_drop_at_capacity_counts_as_overflow",
+              [](const std::string&) { NativeRequeueDropAtCapacityCountsAsOverflow(); } },
+            { "native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run",
+              [](const std::string&) { NativeLateStopDropIsLoggedAndNotInheritedByTheNextRun(); } },
+            { "native_queue_stat_descriptions_match_managed",
+              [](const std::string&) { NativeQueueStatDescriptionsMatchManaged(); } },
             { "native_service_alive_beats_on_its_own_period",
               [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
             { "native_self_monitoring_group_from_listener_does_not_deadlock",

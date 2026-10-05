@@ -87,3 +87,22 @@ var barSensor = collector.Create10MinIntBarSensor("testSettings/testAlerts22222"
 
 await collector.Start();
 ```
+
+## Changing the description later
+A sensor's description can be replaced after the sensor was created (HSMDataCollector 3.6.0), for example when it states a limit that can change while the application runs. `SetDescription` works on every sensor handle the collector returns (instant, last-value, rate, file, bar, function and service-commands sensors) and is safe to call from any thread.
+
+```C#
+using HSMDataCollector.Core;
+
+var collector = new DataCollector(productKey);
+
+var sensor = collector.CreateDoubleSensor("memory/used", "of the 1024 MB limit");
+
+await collector.Start();
+
+sensor.SetDescription("of the 2048 MB limit");
+```
+
+- Before `Start()` (and while the collector is stopped) the new text is what the next `Start()` registers.
+- While the collector is running the sensor is re-registered on the server at once, with all its other settings unchanged.
+- `null` leaves the description the server already has untouched; pass `""` to clear it.

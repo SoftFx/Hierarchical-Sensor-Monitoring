@@ -17,6 +17,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -253,7 +254,12 @@ namespace HSMDataCollector.Tests
                     // arg(0)=id, arg(1)=disk_letter, arg(2)=interface_name — thread the interface
                     // through so a non-"Ethernet" fixture (or the fuzzer) registers the same path the
                     // native driver does, instead of always hardcoding "Ethernet".
-                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0), step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
+                    // The collector's own options feed the queue-stat descriptions (#1480), as they do in
+                    // production (PrototypesCollection.ApplyOptions) and in the native catalog.
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(
+                        step.Arg(0),
+                        OptionsOf(state.Collector),
+                        step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
                     break;
 
                 case "add_collector_monitoring_sensors":
@@ -268,6 +274,14 @@ namespace HSMDataCollector.Tests
                         state.Collector.Windows.AddCollectorMonitoringSensors();
                     else
                         state.Collector.Unix.AddCollectorMonitoringSensors();
+                    break;
+
+                case "add_queue_diagnostic_sensors":
+                    // The ".module/Collector queue stats" group, as hsm_collector_add_all_queue_diagnostic_sensors.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddAllQueueDiagnosticSensors();
+                    else
+                        state.Collector.Unix.AddAllQueueDiagnosticSensors();
                     break;
 
                 case "service_send_custom":
@@ -366,10 +380,11 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "set_sensor_description":
-                    // CONFORMANCE-UNSUPPORTED: set_sensor_description (#1482) — the managed collector
-                    // cannot change a sensor's description after creation; the native collector can
-                    // (hsm_sensor_set_description, 0.10.0). No corpus scenario uses the verb until #1482.
-                    throw new NotSupportedException("CONFORMANCE-UNSUPPORTED: set_sensor_description (#1482)");
+                    // sensor_index is the flat creation order, like dispose_sensor and the native driver.
+                    Assert.True(
+                        ((IDescribableSensor)state.Sensors[int.Parse(step.Arg(0))]).SetDescription(ExpandTextToken(step.Arg(1))),
+                        "set_sensor_description failed");
+                    break;
 
                 case "create_last_int_sensor":
                     AddSensor(state, state.IntSensors, state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
@@ -575,7 +590,7 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "expect_registration_contains":
-                    Assert.Contains(step.Arg(1), RegistrationText(state.Sender.Registrations[int.Parse(step.Arg(0))]));
+                    Assert.Contains(step.Arg(1), RegistrationText(RegistrationAt(state, step.Arg(0))));
                     break;
 
                 case "expect_payload_not_contains":
@@ -802,6 +817,40 @@ namespace HSMDataCollector.Tests
                 case "set_sender_hang":
                     state.Sender.HangSends();
                     break;
+
+                // (#1480) Wait until a data send is parked in the hang: its package has left the queue.
+                case "wait_sender_parked":
+                {
+                    var parkedBy = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(step.Arg(0)));
+                    while (state.Sender.ParkedSends == 0 && DateTime.UtcNow < parkedBy)
+                        await Task.Delay(5).ConfigureAwait(false);
+
+                    Assert.True(state.Sender.ParkedSends > 0, "No data send was parked in the hang.");
+                    break;
+                }
+
+                // (#1480) Lift the hang: a parked send continues (and consumes a charged fail token),
+                // later sends are no longer blocked.
+                case "release_sender_hang":
+                    state.Sender.ReleaseHangs();
+                    break;
+
+                // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload
+                // of each OpenTime, over the bars whose Path ends with the suffix.
+                case "expect_bar_sum":
+                {
+                    var sum = state.Sender.Values
+                        .OfType<BarSensorValueBase>()
+                        .Where(bar => bar.Path != null && bar.Path.EndsWith(step.Arg(0), StringComparison.Ordinal))
+                        .GroupBy(bar => bar.OpenTime)
+                        .Select(group => group.Last())
+                        .Sum(bar => GetBarNumericField(bar, "mean") * bar.Count);
+
+                    Assert.True(
+                        Math.Abs(sum - ParseDouble(step.Arg(1))) < 1e-9,
+                        $"Bar sum for '{step.Arg(0)}': expected {step.Arg(1)}, got {sum}.");
+                    break;
+                }
 
                 case "stop_expect_under_ms":
                     var stopTimer = Stopwatch.StartNew();
@@ -1606,8 +1655,9 @@ namespace HSMDataCollector.Tests
         // The default-sensor catalog (#1099): build a built-in sensor's REAL registration request from
         // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
         // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
-        // options object. Names mirror the native DefaultSensorIdFromName map.
-        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, string interfaceName = null)
+        // options object. Names mirror the native DefaultSensorIdFromName map. The queue-stat rows
+        // compose their descriptions from the collector options (ApplyOptions), like production.
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, CollectorOptions collectorOptions, string interfaceName = null)
         {
             switch (id)
             {
@@ -1646,13 +1696,18 @@ namespace HSMDataCollector.Tests
                 case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
                 case "product_version": return new ProductVersionPrototype().Get(null).ApiRequest;
                 case "service_status": return new ServiceStatusPrototype().Get(new ServiceSensorOptions { IsHostService = true }).ApiRequest;
-                case "queue_overflow": return new QueueOverflowPrototype().Get(null).ApiRequest;
-                case "queue_values_count": return new PackageValuesCountPrototype().Get(null).ApiRequest;
-                case "queue_process_time": return new PackageProcessTimePrototype().Get(null).ApiRequest;
+                case "queue_overflow": return new QueueOverflowPrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
+                case "queue_values_count": return new PackageValuesCountPrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
+                case "queue_process_time": return new PackageProcessTimePrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
                 case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
                 default: throw new ArgumentException("Unknown default sensor id name: " + id);
             }
         }
+
+        private static CollectorOptions OptionsOf(DataCollector collector) =>
+            (CollectorOptions)typeof(DataCollector)
+                .GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
 
         // Build a registration request for the per-interface speed sensor catalog prototype (#1189).
         // The path mirrors the native RevealDefaultPath output (.computer/Network/<iface>/...) so the
@@ -1757,6 +1812,21 @@ namespace HSMDataCollector.Tests
             Assert.InRange(position, 0, Math.Max(values.Count - 1, 0));
 
             return values[position];
+        }
+
+        // A registration index; a NEGATIVE index counts back from the end (-1 = last), like PayloadAt.
+        private static AddOrUpdateSensorRequest RegistrationAt(ContractState state, string index)
+        {
+            var registrations = state.Sender.Registrations;
+            var position = int.Parse(index);
+
+            if (position < 0)
+                position += registrations.Count;
+
+            Assert.NotEmpty(registrations);
+            Assert.InRange(position, 0, registrations.Count - 1);
+
+            return registrations[position];
         }
 
         private static string PayloadText(SensorValueBase value)
@@ -2235,12 +2305,42 @@ namespace HSMDataCollector.Tests
             // Nothing is recorded — the bounded stop must give up on these sends, not wait them out.
             public void HangSends() => Volatile.Write(ref _hangSends, 1);
 
+            // (#1480) Lift the hang: every parked send continues (to the fail-token check below) and
+            // later sends are not blocked. Mirrors the native hsm_collector_set_send_hang(false).
+            public void ReleaseHangs()
+            {
+                Volatile.Write(ref _hangSends, 0);
+                _hangRelease.TrySetResult(true);
+            }
+
+            // Data sends currently parked in the hang — their package has already left the queue.
+            public int ParkedSends => Volatile.Read(ref _parkedSends);
+
+            private readonly TaskCompletionSource<bool> _hangRelease =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            private int _parkedSends;
+
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
             public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
                 if (Volatile.Read(ref _hangSends) == 1)
-                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                {
+                    Interlocked.Increment(ref _parkedSends);
+                    try
+                    {
+                        // Parked until released or until the caller's cancellation fires (the stop
+                        // path giving up on a dead transport), which throws as before.
+                        var cancelled = Task.Delay(Timeout.Infinite, token);
+                        if (await Task.WhenAny(_hangRelease.Task, cancelled).ConfigureAwait(false) != _hangRelease.Task)
+                            await cancelled.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _parkedSends);
+                    }
+                }
 
                 if (TryConsumeFailToken())
                     throw new InvalidOperationException("Conformance: injected send failure.");

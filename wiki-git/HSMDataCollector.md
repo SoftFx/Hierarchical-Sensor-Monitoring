@@ -157,7 +157,7 @@ These sensors expose the DataCollector's own internal health. Always recommended
 | `Collector errors` | String | Internal DataCollector errors (connection failures, exceptions) |
 | `Queue overflow` | IntBar | Count of values dropped due to queue overflow (should be 0) |
 | `Package content size` | IntBar | Number of values per sent package |
-| `Package process time` | IntBar | Time to process and send a package (ms) |
+| `Package process time` | DoubleBar | Per sent package, the average time (seconds) its values waited in the send queue before the package was collected |
 | `Package data count` | IntBar | Total values sent per package |
 | `Product version` | Version | Version of the monitored application |
 

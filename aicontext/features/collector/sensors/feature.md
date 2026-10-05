@@ -85,6 +85,7 @@ C++ analogue: the native collector's bar sensors (`src/native/collector/src/hsm_
 - Prototype merge (`DefaultPrototype.Merge`): custom non-null wins for most properties, BUT `Path`/`Type`/`IsComputerSensor`/`ComputerName`/`Module` are always pinned from the prototype, and custom `DefaultAlertsOptions`/`IsPrioritySensor`/`IsForceUpdate` are dropped for default sensors; bar prototypes merge period fields separately.
 - Last-value default validation: the construction-time default goes through `ThrowIfUnsupportedValue` — a `null` default (e.g. parameterless `CreateLastValueStringSensor`) throws `ArgumentException`.
 - On `InitAsync` every sensor sends its `AddOrUpdateSensorRequest` (registration command) built from options — see `../../api/wire-contract/feature.md`.
+- The description is the one option that can change after creation: `SensorBase.SetDescription` (#1482) writes it into the sensor's options and, while the collector is Starting/Running, queues a fresh `AddOrUpdateSensorRequest` built from them; otherwise the next Start registers it. Rules and API shape: [`../public-api/feature.md`](../public-api/feature.md#changing-a-sensors-description-after-creation-1482).
 
 ## Key Files
 

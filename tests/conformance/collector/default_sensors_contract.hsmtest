@@ -12,6 +12,9 @@
 #   (assert the trailing "/<SensorName>").
 # - Description is NOT pinned (the managed originals interpolate machine-specific data); byte-exact
 #   alert/payload parity is locked by WireFormatGoldenLockTests + NativeDefaultSensorWireMatchesNet.
+#   Exception: the four ".module/Collector queue stats" rows (#1480) interpolate only the collector
+#   options, which both harnesses set alike (max queue 20000, 50 values per package, 20 ms collect
+#   period — ToReadableView truncates that to "0 seconds"), so their FULL text is pinned byte-exact.
 # - A default sensor registers on Start (the native publishes the deferred registration there), so each
 #   case starts the collector before asserting.
 
@@ -115,7 +118,7 @@ collector_version_registers|expect_registration_contains|0|.module/Collector ver
 collector_version_registers|expect_registration_contains|0|"SensorType":8,
 collector_version_registers|expect_registration_contains|0|"KeepHistory":1577664000000000
 
-# Diagnostics: queue overflow — IntegerBar, Count unit.
+# Diagnostics: queue overflow — IntegerBar, Count unit, the managed description (#1480).
 queue_overflow_registers|create_collector
 queue_overflow_registers|add_default_sensor|queue_overflow
 queue_overflow_registers|start
@@ -124,6 +127,35 @@ queue_overflow_registers|expect_registration_count|1
 queue_overflow_registers|expect_registration_contains|0|.module/Collector queue stats/Queue overflow"
 queue_overflow_registers|expect_registration_contains|0|"SensorType":4,
 queue_overflow_registers|expect_registration_contains|0|"OriginalUnit":1100,
+queue_overflow_registers|expect_registration_contains|0|"Description":"The sensor sends the amount of data that was removed from the queue during the overflow process. Bar period is 5 minutes with updates every 5 seconds.  \nCollector max queue size = **20000**, collect period = **0 seconds**.",
+
+# Diagnostics: items count in package — IntegerBar, Count unit, the managed description (#1480).
+queue_values_count_registers|create_collector
+queue_values_count_registers|add_default_sensor|queue_values_count
+queue_values_count_registers|start
+queue_values_count_registers|stop
+queue_values_count_registers|expect_registration_count|1
+queue_values_count_registers|expect_registration_contains|0|.module/Collector queue stats/Items count in package"
+queue_values_count_registers|expect_registration_contains|0|"SensorType":4,
+queue_values_count_registers|expect_registration_contains|0|"OriginalUnit":1100,
+queue_values_count_registers|expect_registration_contains|0|"Description":"The sensor sends information about the number of values in each collected package. Bar period is 5 minutes with updates every 5 seconds. Package max values count = **50**.",
+
+# Diagnostics: package process time — DoubleBar in SECONDS (1011). Both collectors report the same
+# quantity (#1480): the average time a package's values waited in the send queue before the package
+# was collected (managed PackageInfo.AvrTimeInQueue). Native used to post the HTTP send duration under
+# this path. The description names the quantity and the unit, since the UI shows the unit only in the
+# sensor's info panel. The VALUE is timing-dependent, so it is pinned by unit tests on each side:
+# native_package_process_time_is_the_average_queue_wait (+ _keeps_the_first_enqueue_across_a_retry)
+# and PackageProcessTimeSensorTests.
+queue_process_time_registers_in_seconds|create_collector
+queue_process_time_registers_in_seconds|add_default_sensor|queue_process_time
+queue_process_time_registers_in_seconds|start
+queue_process_time_registers_in_seconds|stop
+queue_process_time_registers_in_seconds|expect_registration_count|1
+queue_process_time_registers_in_seconds|expect_registration_contains|0|.module/Collector queue stats/Package process time"
+queue_process_time_registers_in_seconds|expect_registration_contains|0|"SensorType":5,
+queue_process_time_registers_in_seconds|expect_registration_contains|0|"OriginalUnit":1011,
+queue_process_time_registers_in_seconds|expect_registration_contains|0|"Description":"The sensor sends, for each sent package, the average time in seconds its values waited in the send queue before the package was collected. Bar period is 5 minutes with updates every 5 seconds. Package collect period = **0 seconds**.",
 
 # Diagnostics: package content size — DoubleBar in KILOBYTES (#1459). It used to register MB, which
 # the bar's 2-decimal display precision rounded to 0.00 for every realistic package (a couple of KB),
@@ -136,6 +168,7 @@ queue_content_size_registers_in_kilobytes|expect_registration_count|1
 queue_content_size_registers_in_kilobytes|expect_registration_contains|0|.module/Collector queue stats/Package content size"
 queue_content_size_registers_in_kilobytes|expect_registration_contains|0|"SensorType":5,
 queue_content_size_registers_in_kilobytes|expect_registration_contains|0|"OriginalUnit":2,
+queue_content_size_registers_in_kilobytes|expect_registration_contains|0|"Description":"The sensor sends information about the package body size. Bar period is 5 minutes with updates every 5 seconds.",
 
 # Network: established connections — Int, TTL 5 min, KeepHistory 90 d.
 network_established_registers|create_collector
