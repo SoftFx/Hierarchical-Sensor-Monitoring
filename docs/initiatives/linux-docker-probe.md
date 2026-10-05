@@ -118,7 +118,7 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
         │           (VERIFYPEER=1, VERIFYHOST=2; Debian system trust store via update-ca-certificates)
         ├── probe sources feeding the collector's public sensor API:
         │     ├── loadavg (60 s): /proc/loadavg — exists in no collector today
-        │     ├── docker (stats 5 s, state 60 s): Docker Engine API over the unix socket
+        │     ├── docker (stats 60 s, state 60 s): Docker Engine API over the unix socket
         │     │     (HTTP/1.1 GET over UnixStream, one-shot stats; no stream, no external CLI)
         │     └── disks (5 min / 5 s): statvfs of every real filesystem incl. the archives
         │           (#1481 — measured not to wake them) + /proc/diskstats write speed
@@ -251,7 +251,7 @@ source rules, alert semantics and config in `src/probe-linux/README.md` "Probe-o
 | Path | Type · period | Alert | Source | Records/day |
 |---|---|---|---|---|
 | `.computer/Logical cores` | Int · at start + daily, TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` | ≈ 2 |
-| `.computer/CPU temperature` | DoubleBar °C · 5 s samples, 5-min bar, TTL 15 min | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
+| `.computer/CPU temperature` | DoubleBar °C · 60 s samples, 5-min bar, TTL 15 min | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
 
 "Warning" is a notification with the ⚠ icon and no status change: HSM alerts can only raise
 Error (the server's only status action), exactly like the managed Total CPU / Free RAM alerts.
@@ -295,7 +295,7 @@ operator-facing table and the edge behavior are in the probe README ("Probe-only
 
 | Sensor | Type / cadence | Value | Alert (attached at registration) |
 |---|---|---|---|
-| `CPU` | DoubleBar, 5-min bar, sample every 5 s (`probe.docker.samplePeriodSec`) | % of the **whole host**, max 100 = Δ`total_usage` / Δ`system_cpu_usage` × 100 (not × `online_cpus`; the description says `docker stats` shows per-core %). First sample, counter reset, container-id change, interval outside ½…3× the period ⇒ skipped, never 0 | mean > 90 for 30 min → warning notification |
+| `CPU` | DoubleBar, 5-min bar, sample every 60 s (`probe.docker.samplePeriodSec`) | % of the **whole host**, max 100 = Δ`total_usage` / Δ`system_cpu_usage` × 100 (not × `online_cpus`; the description says `docker stats` shows per-core %). First sample, counter reset, container-id change, interval outside ½…3× the period ⇒ skipped, never 0 | mean > 90 for 30 min → warning notification |
 | `Memory used %` | DoubleBar, same sampling | (`usage` − `inactive_file`) / limit × 100; unlimited ⇒ of host `MemTotal`. The limit is stated in the description and a changed limit re-registers it (`hsm_sensor_set_description`, collector 0.10.0); no separate `Memory limit` sensor (owner decision, 2026-09-29) | mean > 90 → warning notification |
 | `Service status` | Enum, 60 s, AggregateData | the Windows `ServiceStatusPrototype` options byte-for-byte; running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last sighting. A service first seen with every container Exited (0) under restart policy `no` is a completed one-shot job: not registered, one INFO line; once it runs it is a service from then on (owner decision) | `IfValue NotEqual Running`, confirmation 5 min, instant-hourly notification — the Windows prototype's alert byte for byte |
 | `Health` | Enum {starting, healthy, unhealthy}, 60 s, AggregateData, only where a healthcheck exists | `State.Health.Status` | `unhealthy` for 5 min → notification |
@@ -629,6 +629,7 @@ coverage in both drivers and an agent version bump:
 | #1479 PR | `.computer/Top CPU processes/<name>` on Linux, probe-only (the Windows agents' wire shape and ≥ 1 % / top-10 / 1-per-minute rule, from `/proc/<pid>/stat` against `/proc/stat`); top-level `topCpu` block (the agent's), off by default; the server bundle honours "Report top processes by CPU" and then lifts `ProtectProc=invisible` with a `top-cpu.conf` drop-in | probe 0.7.0 |
 | #1418 PR | packaging + release channel: the `.deb` built and install-smoked in `debian:13` on every probe PR, `probe-release.yml` (tag == workspace version, plain forward-sorting `X.Y.Z`, `--latest=false` + badge repair, least-privilege publish job), staging refuses an asset of another version, daily logs aged out after 30 days (tmpfiles.d), `RUNBOOK.md` (install/upgrade/rollback/remove, retention, sleeping-disk acceptance, soak); #1417 reconciled (§4.4). No release published | — |
 | #1506 PR | `Read per day on <name> disk`: the mirror of `Written per day` from the "sectors read" field of the same `/proc/diskstats` samples (no new I/O), carried by the same ledger record (additive `serde(default)` fields: a 0.7.0 `disk-written.json` loads, an older probe ignores them); an unposted day is logged once per disk naming both totals; one constant (`DISK_SAMPLE_PERIOD`) governs the sampling of every disk counter; `Average disk read speed on <name> disk`, the write speed's mirror from the same samples | probe 0.8.0 |
+| cadence PR | Docker stats (`probe.docker.samplePeriodSec` default) and `CPU temperature` sampled once a minute instead of every 5 s (owner decision 2026-10-05: the samples only feed 5-minute bars, so the records/day are unchanged, and the Engine API is no longer asked eleven times every 5 s; disks, top-CPU, the Docker state poll, bars, TTLs and alerts unchanged); fix: at a 60-s tick the state poll, the outage retry and the state-file save were due exactly one interval after a tick that woke late and slipped a whole tick (poll every 2 min) — their deadlines now take half a period of slack (`on_tick_grid`) | probe 0.8.1 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against

@@ -27,8 +27,11 @@ pub const DISK_WRITTEN: &str = "Disk written per hour";
 
 // ---- Cadences ----------------------------------------------------------------------------------
 
-/// Default stats sampling period (`docker.samplePeriodSec`).
-pub const DEFAULT_SAMPLE_PERIOD: Duration = Duration::from_secs(5);
+/// Default stats sampling period (`docker.samplePeriodSec`): one stats round a minute, five samples
+/// per 5-minute bar (owner decision 2026-10-05; 5 s before). The samples only feed the bars, so the
+/// records/day are the same; what drops is the Engine API traffic — one stats call per container
+/// per round.
+pub const DEFAULT_SAMPLE_PERIOD: Duration = Duration::from_secs(60);
 /// Upper bound on `docker.samplePeriodSec`: a sample period longer than the bar leaves bars empty.
 pub const MAX_SAMPLE_PERIOD: Duration = BAR_PERIOD;
 /// The state poll: list + inspect, feeding status, health, restart count and OOM.
@@ -43,7 +46,8 @@ pub const BAR_POST_PERIOD: Duration = Duration::from_secs(15);
 pub const BAR_PRECISION: i32 = 2;
 
 /// A CPU delta is used only when the two samples are between these multiples of the sample period
-/// apart; otherwise it is skipped (a gap after an outage must not become one averaged sample).
+/// apart (30 s…180 s at the 60 s default); otherwise it is skipped (a gap after an outage must not
+/// become one averaged sample).
 pub const MIN_INTERVAL_FACTOR: f64 = 0.5;
 pub const MAX_INTERVAL_FACTOR: f64 = 3.0;
 
@@ -100,7 +104,8 @@ pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Largest response body accepted. The garage list is ~30 KB, an inspect ~8 KB; the cap keeps a
 /// misbehaving peer from growing the probe towards its `MemoryMax=64M`.
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
-/// Backoff after the Engine API fails: starts at the sample period, doubles, capped here.
+/// Backoff after the Engine API fails: starts at the sample period, doubles, capped here (so at the
+/// 60 s default it is one sample period throughout: the next tick retries).
 pub const MAX_BACKOFF: Duration = STATE_POLL_PERIOD;
 
 // ---- Enum options ------------------------------------------------------------------------------
@@ -187,7 +192,9 @@ mod tests {
     fn the_contract_matches_the_agreed_table() {
         // SENSORS-DECISIONS.md §2 as agreed with the owner. Changing any of these is a contract
         // change: update the README table and initiative §4.2a with it.
-        assert_eq!(DEFAULT_SAMPLE_PERIOD, Duration::from_secs(5));
+        // Owner decision 2026-10-05: stats once a minute (5 s before), 5 samples per bar.
+        assert_eq!(DEFAULT_SAMPLE_PERIOD, Duration::from_secs(60));
+        assert_eq!(BAR_PERIOD.as_secs() / DEFAULT_SAMPLE_PERIOD.as_secs(), 5);
         assert_eq!(BAR_PERIOD, Duration::from_secs(300));
         assert_eq!(STATE_POLL_PERIOD, Duration::from_secs(60));
         assert_eq!(CPU_ALERT_MEAN_PERCENT, 90.0);

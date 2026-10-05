@@ -39,7 +39,8 @@ The probe registers **two separately pinned sets**:
 2. **The probe-only set** (#1476) — sensors the owner agreed one by one that exist **only in the
    Linux probe**, never in the shared collector catalog and never on Windows (moving one into the
    catalog is a separate, later decision). Host: `.computer/Logical cores`,
-   `.computer/CPU temperature` (computer-level). Pinned by `PROBE_ONLY_SET` in
+   `.computer/CPU temperature` (computer-level; a 5-minute bar of one sample a minute — 5 s until
+   the owner decision of 2026-10-05). Pinned by `PROBE_ONLY_SET` in
    `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` ("nothing more,
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
@@ -79,7 +80,8 @@ The probe registers **two separately pinned sets**:
    different sensor and untouched.
 3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
    service under `.probe/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
-   of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
+   of one sample a minute, `samplePeriodSec` — 5 s until the owner decision of 2026-10-05; CPU as
+   % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
    containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
    same stats; sent just after the hour, once — the comment names the window; a clock stepped
