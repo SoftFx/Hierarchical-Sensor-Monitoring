@@ -756,6 +756,14 @@ Placeholders only — **no secrets**:
   5 minutes whatever it is; the state poll runs on the tick nearest every 60 s), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
   patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
+  **Upgrade note (0.8.1):** the default `samplePeriodSec` went from 5 to 60 (owner decision
+  2026-10-05), but configs seeded from the skeleton of an earlier `.deb` spell out
+  `"samplePeriodSec": 5`, and an upgrade never edits the config (it is not a conffile), so such
+  a host keeps sampling every 5 s. Remove `samplePeriodSec` from `probe.docker` (or set it to
+  `60`) and restart the probe. Until then the start log says so in one INFO line
+  (`probe.docker.samplePeriodSec is 5 s in the config, below the 60 s default …`), and the
+  Docker `CPU`, `Memory used %` and `Disk written per hour` descriptions state the period the
+  probe actually samples at.
 * `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See

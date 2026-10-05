@@ -10,6 +10,8 @@
 //! Sensors are registered while the collector runs; the collector sends each registration
 //! immediately.
 
+use std::time::Duration;
+
 use hsm_collector::{
     BoolSensor, Collector, DoubleBarSensor, DoubleSensor, EnumOption, EnumSensor, IntSensor,
     Result, SensorOptions, STATISTICS_EMA,
@@ -30,10 +32,12 @@ pub struct ServiceSensors<'c> {
     pub disk_written: Option<DoubleSensor<'c>>,
     /// The memory limit (MB, unlimited) the `Memory used %` description currently states.
     pub described_limit: Option<(i32, bool)>,
+    /// The configured stats period (`docker.samplePeriodSec`), stated in the stats descriptions.
+    pub sample_period: Duration,
 }
 
 impl<'c> ServiceSensors<'c> {
-    pub fn new(node: String) -> Self {
+    pub fn new(node: String, sample_period: Duration) -> Self {
         Self {
             node,
             status: None,
@@ -44,6 +48,7 @@ impl<'c> ServiceSensors<'c> {
             memory_used: None,
             disk_written: None,
             described_limit: None,
+            sample_period,
         }
     }
 
@@ -114,7 +119,7 @@ impl<'c> ServiceSensors<'c> {
             let path = self.path(contract::CPU);
             keep(
                 &mut self.cpu,
-                register_cpu(collector, &path),
+                register_cpu(collector, &path, self.sample_period),
                 &path,
                 &mut problems,
             );
@@ -123,7 +128,7 @@ impl<'c> ServiceSensors<'c> {
             let path = self.path(contract::MEMORY_USED);
             keep(
                 &mut self.memory_used,
-                register_memory_used(collector, &path, limit),
+                register_memory_used(collector, &path, limit, self.sample_period),
                 &path,
                 &mut problems,
             );
@@ -143,7 +148,7 @@ impl<'c> ServiceSensors<'c> {
             return None;
         }
         let path = self.path(contract::DISK_WRITTEN);
-        match register_disk_written(collector, &path) {
+        match register_disk_written(collector, &path, self.sample_period) {
             Ok(sensor) => {
                 self.disk_written = Some(sensor);
                 None
@@ -162,7 +167,10 @@ impl<'c> ServiceSensors<'c> {
         if self.described_limit == Some(limit) {
             return Ok(());
         }
-        sensor.set_description(Some(&memory_used_description(Some(limit))))?;
+        sensor.set_description(Some(&memory_used_description(
+            Some(limit),
+            self.sample_period,
+        )))?;
         self.described_limit = Some(limit);
         Ok(())
     }
@@ -243,9 +251,13 @@ fn register_oom_killed<'c>(collector: &'c Collector, path: &str) -> Registered<B
     Ok((sensor, alert))
 }
 
-fn register_cpu<'c>(collector: &'c Collector, path: &str) -> Registered<DoubleBarSensor<'c>> {
+fn register_cpu<'c>(
+    collector: &'c Collector,
+    path: &str,
+    sample_period: Duration,
+) -> Registered<DoubleBarSensor<'c>> {
     let options = SensorOptions::default()
-        .with_description(CPU_DESCRIPTION)
+        .with_description(cpu_description(sample_period))
         .with_unit(contract::UNIT_PERCENTS);
     let sensor = collector.double_bar_sensor(
         path,
@@ -262,9 +274,10 @@ fn register_memory_used<'c>(
     collector: &'c Collector,
     path: &str,
     limit: Option<(i32, bool)>,
+    sample_period: Duration,
 ) -> Registered<DoubleBarSensor<'c>> {
     let options = SensorOptions::default()
-        .with_description(memory_used_description(limit))
+        .with_description(memory_used_description(limit, sample_period))
         .with_unit(contract::UNIT_PERCENTS);
     let sensor = collector.double_bar_sensor(
         path,
@@ -279,40 +292,60 @@ fn register_memory_used<'c>(
 
 // No alert (owner decision): what is "too much" differs per service; EMA statistics give the
 // server a smoothed trend to read instead.
-fn register_disk_written<'c>(collector: &'c Collector, path: &str) -> Result<DoubleSensor<'c>> {
+fn register_disk_written<'c>(
+    collector: &'c Collector,
+    path: &str,
+    sample_period: Duration,
+) -> Result<DoubleSensor<'c>> {
     let options = SensorOptions::default()
-        .with_description(DISK_WRITTEN_DESCRIPTION)
+        .with_description(disk_written_description(sample_period))
         .with_unit(contract::UNIT_MB)
         .with_statistics(STATISTICS_EMA);
     collector.double_sensor(path, &options)
 }
 
-const DISK_WRITTEN_DESCRIPTION: &str =
-    "Megabytes (decimal: 1 MB = 10⁶ bytes, the unit SSD endurance is rated in) the Compose \
+/// "every N s": the configured stats period as the descriptions state it. A config that still
+/// pins an older period (the skeleton wrote 5 s before 0.8.1) is described as it runs.
+fn every(sample_period: Duration) -> String {
+    format!("every {} s", sample_period.as_secs())
+}
+
+fn disk_written_description(sample_period: Duration) -> String {
+    format!(
+        "Megabytes (decimal: 1 MB = 10⁶ bytes, the unit SSD endurance is rated in) the Compose \
 service's containers wrote to **block devices** during one clock hour (UTC), replicas and disks \
 summed — who is wearing the disk. Physical writes: a write through LVM or dm-crypt counts once, \
 on the disk; a mirrored write (md RAID1/10) counts once per member disk. Source: the \
 containers' cgroup I/O counters (`blkio_stats.io_service_bytes_recursive`, op write) from the \
-Docker Engine API, sampled once a minute by default. Writes still in the page cache count when they \
+Docker Engine API, sampled {every} (docker.samplePeriodSec). Writes still in the page cache \
+count when they \
 are flushed; reads and tmpfs never count. One value per hour, **sent just after the hour it \
 covers**: its time is about one hour later than the writes, and the comment names the window \
 (e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was \
 measured. The first sample of a container (a recreate), a restart of it or a counter reset \
 only sets a baseline; an hour with no measurement is skipped, never sent as 0. With EMA \
-statistics.";
+statistics.",
+        every = every(sample_period)
+    )
+}
 
-const CPU_DESCRIPTION: &str = "CPU used by the Compose service's containers, as a percentage of \
-the **whole host** (all cores together = 100 %), replicas summed. Sampled every \
-docker.samplePeriodSec (60 s by default: 5 samples per bar) from the Docker Engine API and \
-aggregated into 5-minute bars. Note: `docker stats` shows per-core percent (up to 100 % × the number of cores); \
-divide its figure by the host's core count to compare. A sample that cannot give an honest delta \
-(first sample, counter reset, recreated container, irregular interval) is skipped, never sent \
-as 0.";
+fn cpu_description(sample_period: Duration) -> String {
+    format!(
+        "CPU used by the Compose service's containers, as a percentage of \
+the **whole host** (all cores together = 100 %), replicas summed. Sampled {every} \
+(docker.samplePeriodSec, 60 s by default) from the Docker Engine API and aggregated into \
+5-minute bars. Note: `docker stats` shows per-core percent (up to 100 % × the number of \
+cores); divide its figure by the host's core count to compare. A sample that cannot give an \
+honest delta (first sample, counter reset, recreated container, irregular interval) is skipped, \
+never sent as 0.",
+        every = every(sample_period)
+    )
+}
 
 /// The `Memory used %` description, stating the limit the percentage is taken against — the
 /// container's own limit, or the host's total memory when none is set. `None` before the limit is
 /// known (the first stats round replaces it).
-pub fn memory_used_description(limit: Option<(i32, bool)>) -> String {
+pub fn memory_used_description(limit: Option<(i32, bool)>, sample_period: Duration) -> String {
     let basis = match limit {
         Some((megabytes, false)) => {
             format!("of the containers' memory limit — **{megabytes} MB** on this host")
@@ -328,8 +361,9 @@ pub fn memory_used_description(limit: Option<(i32, bool)>) -> String {
     format!(
         "Memory used by the Compose service's containers as a percentage {basis}: \
          (usage − inactive_file) / limit, the `docker stats` convention. Replicas: summed usage \
-         over summed limits, capped at the host's memory. 5-minute bars of samples taken once a \
-         minute by default. The description follows a changed limit."
+         over summed limits, capped at the host's memory. 5-minute bars of samples taken {every} \
+         (docker.samplePeriodSec). The description follows a changed limit.",
+        every = every(sample_period)
     )
 }
 
@@ -357,19 +391,42 @@ every minute.";
 mod tests {
     use super::*;
 
+    const MINUTE: Duration = contract::DEFAULT_SAMPLE_PERIOD;
+
     #[test]
     fn the_memory_used_description_states_the_limit() {
-        assert!(memory_used_description(Some((1024, false))).contains("**1024 MB** on this host"));
-        let unlimited = memory_used_description(Some((15917, true)));
+        assert!(memory_used_description(Some((1024, false)), MINUTE)
+            .contains("**1024 MB** on this host"));
+        let unlimited = memory_used_description(Some((15917, true)), MINUTE);
         assert!(unlimited.contains("**no memory limit is set**"));
         assert!(unlimited.contains("MemTotal (15917 MB)"));
-        assert!(memory_used_description(None).contains("or of the host's total memory"));
+        assert!(memory_used_description(None, MINUTE).contains("or of the host's total memory"));
     }
 
     #[test]
     fn the_disk_written_description_states_the_offset_and_the_unit() {
-        assert!(DISK_WRITTEN_DESCRIPTION.contains("sent just after the hour it covers"));
-        assert!(DISK_WRITTEN_DESCRIPTION.contains("1 MB = 10⁶ bytes"));
-        assert!(DISK_WRITTEN_DESCRIPTION.contains("never sent as 0"));
+        let text = disk_written_description(MINUTE);
+        assert!(text.contains("sent just after the hour it covers"));
+        assert!(text.contains("1 MB = 10⁶ bytes"));
+        assert!(text.contains("never sent as 0"));
+    }
+
+    /// The stats descriptions state the period the probe actually samples at: a config that
+    /// still pins 5 s (the skeleton before 0.8.1) must not be described as "once a minute".
+    #[test]
+    fn the_stats_descriptions_state_the_configured_period() {
+        let five = Duration::from_secs(5);
+        for text in [
+            cpu_description(five),
+            memory_used_description(Some((1024, false)), five),
+            disk_written_description(five),
+        ] {
+            assert!(text.contains("every 5 s (docker.samplePeriodSec"), "{text}");
+            assert!(!text.contains("every 60 s"), "{text}");
+        }
+        assert!(cpu_description(MINUTE)
+            .contains("Sampled every 60 s (docker.samplePeriodSec, 60 s by default)"));
+        assert!(memory_used_description(None, MINUTE).contains("taken every 60 s"));
+        assert!(disk_written_description(MINUTE).contains("sampled every 60 s"));
     }
 }

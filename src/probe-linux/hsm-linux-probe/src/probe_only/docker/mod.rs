@@ -253,11 +253,14 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         if failure.is_none() {
             failure = self.sample_stats(logger, &should_stop).err();
         }
-        // Half a period of slack, as in `on_tick_grid`: `saved_at` is stamped at the end of a
-        // tick, so without it the save slips a tick (6 minutes at the 60 s default).
-        if self.written_dirty
-            && self.saved_at.elapsed() + self.sample_period / 2 >= contract::WRITTEN_PERSIST_PERIOD
-        {
+        // The third tick-grid deadline: without the slack the save slips a tick (6 minutes at
+        // the 60 s default).
+        let save_due = on_tick_grid(
+            self.saved_at,
+            contract::WRITTEN_PERSIST_PERIOD,
+            self.sample_period,
+        );
+        if self.written_dirty && now >= save_due {
             self.persist(logger);
         }
 
@@ -434,7 +437,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let sensors = self
                 .sensors
                 .entry(key.clone())
-                .or_insert_with(|| ServiceSensors::new(node.clone()));
+                .or_insert_with(|| ServiceSensors::new(node.clone(), self.sample_period));
             if let Some(problem) = sensors.ensure_disk_written(self.collector) {
                 if self.log_once.raise(&format!("register:{problem}")) {
                     logger.error(format!(
@@ -479,7 +482,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let node = self.naming.node(key);
         self.sensors
             .entry(key.clone())
-            .or_insert_with(|| ServiceSensors::new(node))
+            .or_insert_with(|| ServiceSensors::new(node, self.sample_period))
     }
 
     /// The service a listed container belongs to, or `None` (logged once) when it is not
@@ -681,7 +684,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let sensors = self
                 .sensors
                 .entry(key.clone())
-                .or_insert_with(|| ServiceSensors::new(node));
+                .or_insert_with(|| ServiceSensors::new(node, self.sample_period));
             let problems = sensors.ensure_state_sensors(
                 self.collector,
                 report.present,
@@ -919,7 +922,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let sensors = self
                 .sensors
                 .entry(key.clone())
-                .or_insert_with(|| ServiceSensors::new(node));
+                .or_insert_with(|| ServiceSensors::new(node, self.sample_period));
             let memory = memory_valid
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
@@ -1118,6 +1121,9 @@ pub fn register<'c>(
         host_mem_total(),
     );
     source.stacking = written::Stacking::new(Some(sys_root));
+    if let Some(note) = sample_period_note(config) {
+        logger.info(note);
+    }
     match source.prime(logger) {
         Ok(count) => logger.info(format!(
             "docker: {count} Compose service(s) registered (socket {}, stats every {} s, state \
@@ -1133,6 +1139,22 @@ pub fn register<'c>(
         )),
     }
     Some(Box::new(source))
+}
+
+/// One start-up line when `probe.docker.samplePeriodSec` samples faster than the default: a config
+/// seeded by a probe before 0.8.1 pins the old 5 s (the skeleton wrote it out, and an upgrade never
+/// edits the config), so the owner's once-a-minute decision does not reach that host by itself.
+fn sample_period_note(config: &DockerConfig) -> Option<String> {
+    let default = contract::DEFAULT_SAMPLE_PERIOD.as_secs();
+    (config.sample_period_sec < default).then(|| {
+        format!(
+            "docker: probe.docker.samplePeriodSec is {} s in the config, below the {default} s \
+             default since probe 0.8.1, so Docker stats are sampled every {} s; to sample once a \
+             minute remove the key (or set {default}) and restart — see the README \
+             \"Upgrade note (0.8.1)\"",
+            config.sample_period_sec, config.sample_period_sec
+        )
+    })
 }
 
 /// `MemTotal` of this host, bytes, from `/proc/meminfo`.
@@ -1425,12 +1447,18 @@ pub(crate) mod tests {
         // The source, at the default period: a tick that polled is due again on the next tick.
         let collector = test_collector();
         collector.start().expect("start");
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-grid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let mut source = garage_source(
             &collector,
             FixtureEngine::garage(),
             &DockerConfig::default(),
-            None,
+            Some(dir.join(state::STATE_FILE_NAME)),
         );
+        // Mid-hour on a fixed wall clock: no hour rolls (and saves) between the ticks below.
+        source.clock = || 1_800_001_800_000;
         Source::sample(&mut source, &quiet());
         assert!(source.next_poll <= Instant::now() + period / 2);
         // An outage: the backoff stays one period (the 60 s cap) and the next tick retries.
@@ -1440,7 +1468,49 @@ pub(crate) mod tests {
         assert_eq!(source.backoff, period);
         let until = source.unavailable_until.expect("backing off");
         assert!(until <= Instant::now() + period / 2);
+
+        // The state-file save, every 5 minutes. `saved_at` is stamped at the end of the saving
+        // tick, so on the fifth tick after it slightly less than 5 minutes have passed: that tick
+        // saves. The fourth does not (not a tick early).
+        source.engine.down = false;
+        source.unavailable_until = None;
+        let ago = |elapsed: Duration| Instant::now().checked_sub(elapsed).expect("clock");
+        source.written_dirty = true;
+        let fourth = ago(contract::WRITTEN_PERSIST_PERIOD - period + Duration::from_millis(1));
+        source.saved_at = fourth;
+        Source::sample(&mut source, &quiet());
+        assert!(source.written_dirty, "not saved a tick early");
+        assert_eq!(source.saved_at, fourth);
+        let fifth = ago(contract::WRITTEN_PERSIST_PERIOD - Duration::from_millis(1));
+        source.saved_at = fifth;
+        Source::sample(&mut source, &quiet());
+        assert!(!source.written_dirty, "saved on this tick, not the next");
+        assert!(source.saved_at > fifth);
         collector.stop().expect("stop");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_config_sampling_faster_than_the_default_says_so_once_at_start() {
+        assert_eq!(sample_period_note(&DockerConfig::default()), None);
+        let slow = DockerConfig {
+            sample_period_sec: 120,
+            ..DockerConfig::default()
+        };
+        assert_eq!(sample_period_note(&slow), None);
+        let old = DockerConfig {
+            sample_period_sec: 5,
+            ..DockerConfig::default()
+        };
+        assert_eq!(
+            sample_period_note(&old).as_deref(),
+            Some(
+                "docker: probe.docker.samplePeriodSec is 5 s in the config, below the 60 s \
+                 default since probe 0.8.1, so Docker stats are sampled every 5 s; to sample once \
+                 a minute remove the key (or set 60) and restart — see the README \
+                 \"Upgrade note (0.8.1)\""
+            )
+        );
     }
 
     /// The garage tree primed before Start: everything registers in the Start batch.

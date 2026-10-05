@@ -115,6 +115,10 @@ config is not a dpkg conffile (from 0.3.1), so no upgrade stops at a conffile pr
 `--force-confold` is only belt and braces. Read the [README](README.md) upgrade notes of the
 versions in between first: some releases moved sensors (e.g. 0.4.0, 0.6.0, 0.6.1, 0.6.2; 0.7.0
 and 0.8.0 move none), and the old nodes then go stale on the server and are removed there by hand.
+Upgrading to **0.8.1**: Docker stats are sampled once a minute by default, but a config seeded by
+an earlier package pins `"samplePeriodSec": 5` — remove that key from `probe.docker` (or set `60`)
+in `/etc/hsm-linux-probe/config.json` and `sudo systemctl restart hsm-linux-probe`; the start log
+flags a pinned faster period in one INFO line (README, "Upgrade note (0.8.1)").
 
 Re-running a newer server bundle's `install.sh` upgrades the same way and keeps the existing config
 and key; `install.sh --force-config` replaces the config with the bundle's.
