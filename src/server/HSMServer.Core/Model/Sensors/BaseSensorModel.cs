@@ -57,6 +57,11 @@ namespace HSMServer.Core.Model
         internal long OutOfOrderValuesStored;
         internal long SameTickValuesSuperseded;
         internal long RejectedValues;
+        // Out-of-order values NOT persisted because their timestamp precedes the
+        // sensor's history boundary (post-cut From / retention window): without
+        // the floor, a skewed or hostile clock could force one weekly LevelDB
+        // per distinct past week and re-fill windows the operator cleared.
+        internal long OutOfRetentionValues;
 
         // Server-clock instant of the last expiry TRANSITION that had a value
         // to judge (#1404) — recorded on the transition itself and seeded

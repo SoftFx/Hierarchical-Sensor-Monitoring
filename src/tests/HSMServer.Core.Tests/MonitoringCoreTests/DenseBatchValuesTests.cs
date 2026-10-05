@@ -262,6 +262,156 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
+        [Fact]
+        public async Task BarSensor_LatePartialSamePeriod_MergesInMemory_NoDuplicatedRows()
+        {
+            // Bars merge same-period partials in memory by OpenTime; the DB row
+            // for a period appears only when the period closes. A partial sent
+            // after a NEWER partial of the same period must NOT be persisted as
+            // its own row (#1441 round-2): a bar row's DB key is its SEND time,
+            // so a direct write would duplicate the period.
+            var path = "denseBatch/barPeriod";
+            var periodOpen = DateTime.UtcNow.AddMinutes(-5);
+            var periodClose = periodOpen.AddSeconds(5);
+
+            var batch = new SensorValueBase[]
+            {
+                // Second partial (later send time, same period) arrives FIRST.
+                new DoubleBarSensorValue
+                {
+                    Path = path, Time = periodOpen.AddSeconds(3), OpenTime = periodOpen, CloseTime = periodClose,
+                    Min = 0, Max = 10, Mean = 5, Count = 2, Status = HSMSensorDataObjects.SensorStatus.Ok,
+                },
+                // First partial (earlier send time, same period) arrives SECOND — out of send order.
+                new DoubleBarSensorValue
+                {
+                    Path = path, Time = periodOpen.AddSeconds(1), OpenTime = periodOpen, CloseTime = periodClose,
+                    Min = 1, Max = 9, Mean = 4, Count = 1, Status = HSMSensorDataObjects.SensorStatus.Ok,
+                },
+            };
+
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            // Pre-existing bar bootstrap (unchanged by #1441): the FIRST value of
+            // a sensor makes IsNewBar promote the partial into _prevValue, so one
+            // bootstrap row for it exists immediately. The LATE partial must NOT
+            // have added a row of its own — it merged in memory.
+            var stored = await ReadStoredWindowAsync(sensor.Id, periodOpen.AddMinutes(-1), periodClose.AddMinutes(2));
+            Assert.Single(stored);
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.SameTickValuesSuperseded));
+
+            // The NEXT period closes the first one: exactly one row must appear
+            // for it — the merged in-memory bar, not a per-partial duplicate.
+            var nextOpen = periodClose;
+            var nextClose = nextOpen.AddSeconds(5);
+            var next = new SensorValueBase[]
+            {
+                new DoubleBarSensorValue
+                {
+                    Path = path, Time = nextOpen.AddSeconds(2), OpenTime = nextOpen, CloseTime = nextClose,
+                    Min = 2, Max = 8, Mean = 5, Count = 1, Status = HSMSensorDataObjects.SensorStatus.Ok,
+                },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, next)));
+
+            stored = await ReadStoredWindowAsync(sensor.Id, periodOpen.AddMinutes(-1), nextClose.AddMinutes(2));
+
+            // Exactly the pre-#1441 shape: the bootstrap row plus ONE row for the
+            // closed period — no per-partial duplicate (a direct write of the late
+            // partial would be a third row under its own send time).
+            Assert.Equal(2, stored.Count);
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.SameTickValuesSuperseded));
+        }
+
+        [Fact]
+        public async Task AggregateSensor_OlderEqualContentFolds_OlderDistinctContentPersistsDirectly()
+        {
+            // Pre-#1441 semantics restored (#1441 round-2): with AggregateValues
+            // on, an OLDER value with EQUAL content folds into the cached newest
+            // (no row of its own); only a non-foldable older value takes the
+            // out-of-order direct write.
+            var path = "denseBatch/aggregate";
+            var baseTime = DateTime.UtcNow.AddMinutes(-10);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = baseTime, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, AggregateValues = true, Initiator = InitiatorInfo.System });
+
+            var before = await ReadStoredWindowAsync(sensor.Id, baseTime.AddMinutes(-1), baseTime.AddMinutes(1));
+
+            // Older, EQUAL content: folds, no new row, no out-of-order counter.
+            var olderEqual = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = baseTime.AddMinutes(-1), Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, olderEqual)));
+
+            var afterFold = await ReadStoredWindowAsync(sensor.Id, baseTime.AddMinutes(-5), baseTime.AddMinutes(1));
+            Assert.Equal(before.Count, afterFold.Count);
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // Older, DIFFERENT content: persisted directly as out-of-order.
+            var olderDistinct = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = baseTime.AddMinutes(-2), Value = 7, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, olderDistinct)));
+
+            var afterDirect = await ReadStoredWindowAsync(sensor.Id, baseTime.AddMinutes(-5), baseTime.AddMinutes(1));
+            Assert.Equal(before.Count + 1, afterDirect.Count);
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+        }
+
+        [Fact]
+        public async Task OutOfOrderValue_OlderThanHistoryBoundary_IsNotStored_AndCounted()
+        {
+            // Retention floor (#1441 round-2): an out-of-order value older than
+            // the sensor's post-cut From boundary is not written — otherwise a
+            // skewed or hostile clock could force open a weekly LevelDB per
+            // past week and re-fill windows the operator cleared.
+            var path = "denseBatch/retentionFloor";
+            var newest = DateTime.UtcNow.AddMinutes(-1);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = newest, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            var boundary = newest.AddMinutes(-10);
+            sensor.Cut(boundary); // history before the boundary is gone; From moves to it
+
+            var withinFloor = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = boundary.AddMinutes(5), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, withinFloor)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
+
+            var beforeFloor = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = boundary.AddMinutes(-5), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, beforeFloor)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfRetentionValues));
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, boundary.AddMinutes(-10), newest.AddMinutes(1));
+            Assert.Equal(2, stored.Count); // seed + the within-floor value; the pre-boundary one is not stored
+        }
+
+
         private static void Shuffle<T>(IList<T> list)
         {
             var random = new Random(20260930); // deterministic: the loss must not depend on the shuffle

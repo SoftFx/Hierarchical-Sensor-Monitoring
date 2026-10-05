@@ -2752,6 +2752,19 @@ namespace HSMServer.Core.Cache
                 // has a row also overwrites that row (last written wins) but does not
                 // touch the supersede counter — detecting it would need a
                 // read-before-write on the hot path; see the wire-contract invariant.
+                //
+                // Retention floor: a value older than the sensor's history boundary
+                // (the post-cut From; the storage's retention window already bounds
+                // it from the other side) is NOT written — without the floor, a
+                // skewed or hostile clock could force open one weekly LevelDB per
+                // distinct past week and re-fill windows the operator cleared.
+                if (result.OutOfOrderValue.Time < sensor.From)
+                {
+                    CountAndWarnRateLimited(ref sensor.OutOfRetentionValues,
+                        $"Out-of-order value older than the sensor's history boundary, not stored (sensor '{path}', time {result.OutOfOrderValue.Time:O}, boundary {sensor.From:O})");
+                    return;
+                }
+
                 SaveSensorValueToDb(result.OutOfOrderValue, sensorId);
                 CountAndWarnRateLimited(ref sensor.OutOfOrderValuesStored,
                     $"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
@@ -2762,11 +2775,13 @@ namespace HSMServer.Core.Cache
             {
                 SaveSensorValueToDb(sensor.LastDbValue, sensorId);
 
-                // Cached real values only: an Aggregated fold rewrites the merged row
-                // (no separate row existed to supersede), and a timeout marker never
-                // changes the cached newest value, so its before/after comparison
-                // would trivially match.
-                if (result.Kind == AddValueKind.Cached && !incomingValue.IsTimeout &&
+                // Cached real instant values only: an Aggregated fold rewrites the
+                // merged row (no separate row existed to supersede), a timeout marker
+                // never changes the cached newest value (its before/after comparison
+                // would trivially match), and for bar sensors LastValue is the
+                // in-progress partial, which is never written to the database at all.
+                if (sensor is not IBarSensor &&
+                    result.Kind == AddValueKind.Cached && !incomingValue.IsTimeout &&
                     previousLastTime?.Ticks == sensor.LastValue?.Time.Ticks)
                 {
                     // Two values on one timestamp: the row written a moment ago for the
