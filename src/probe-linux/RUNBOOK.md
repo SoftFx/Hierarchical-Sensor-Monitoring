@@ -5,7 +5,7 @@ it keeps on the host and for how long; how to prove it does not wake sleeping di
 Everything about *what* the probe reports is in [`README.md`](README.md); the design is
 [`docs/initiatives/linux-docker-probe.md`](../../docs/initiatives/linux-docker-probe.md) (epic #1413).
 
-Commands run as root (`sudo`). `<v>` is a probe version such as `0.7.0`.
+Commands run as root (`sudo`). `<v>` is a probe version such as `0.8.0`.
 
 ## Where the package comes from
 
@@ -114,7 +114,7 @@ starts it again, so an upgrade does not end monitoring (a probe that was stopped
 config is not a dpkg conffile (from 0.3.1), so no upgrade stops at a conffile prompt, and
 `--force-confold` is only belt and braces. Read the [README](README.md) upgrade notes of the
 versions in between first: some releases moved sensors (e.g. 0.4.0, 0.6.0, 0.6.1, 0.6.2; 0.7.0
-moves none), and the old nodes then go stale on the server and are removed there by hand.
+and 0.8.0 move none), and the old nodes then go stale on the server and are removed there by hand.
 
 Re-running a newer server bundle's `install.sh` upgrades the same way and keeps the existing config
 and key; `install.sh --force-config` replaces the config with the bundle's.
