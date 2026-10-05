@@ -334,7 +334,9 @@ impl Ledger {
     /// why none. The new counters always become the baseline. `identity` names the physical disk
     /// now behind the name ([`same_disk`]). The read total follows every rule of the written one,
     /// from the same sample; on its own it only skips a read counter that went backwards and the
-    /// first sample after a ledger without one (both only set its baseline).
+    /// first sample after a ledger without one (both only set its baseline). A counter reset is
+    /// per counter: the written counter alone going backwards (`CounterReset`) still counts the
+    /// sample's read delta, as a read reset leaves the written delta counted.
     pub fn sample_counters(
         &mut self,
         disk: &str,
@@ -412,28 +414,36 @@ impl Ledger {
             .baseline
             .replace(Baseline::at(sectors, now_ms, day))
             .ok_or(Skip::Baseline)?;
-        if sectors.written < previous.sectors {
-            return Err(Skip::CounterReset);
-        }
-        if now_ms < previous.at_ms {
-            return Err(Skip::ClockBackwards);
-        }
+        let clock_back = now_ms < previous.at_ms;
         let gap = u64::try_from(now_ms - previous.at_ms).unwrap_or(u64::MAX);
         let longest = u64::try_from(period.as_millis()).unwrap_or(u64::MAX) * 3;
-        if gap > longest && previous.day != day {
-            return Err(Skip::GapAcrossDays);
-        }
+        let gap_across_days = gap > longest && previous.day != day;
         // A delta that began yesterday — or one counted towards tomorrow after today's post —
         // means the day was watched from its start.
         let since = || (previous.day == day && target == day).then(|| local(previous.at_ms).1);
+        // Each counter's own reset only drops its own delta: the read one still counts when the
+        // written counter alone went backwards (and the reverse, below).
+        let read_delta = previous
+            .read_sectors
+            .filter(|before| sectors.read >= *before)
+            .map(|before| sectors.read - before);
+        if sectors.written < previous.sectors {
+            if let Some(delta) = read_delta.filter(|_| !clock_back && !gap_across_days) {
+                record.read.add(delta, since);
+            }
+            return Err(Skip::CounterReset);
+        }
+        if clock_back {
+            return Err(Skip::ClockBackwards);
+        }
+        if gap_across_days {
+            return Err(Skip::GapAcrossDays);
+        }
         let bytes = record
             .written
             .add(sectors.written - previous.sectors, since);
-        if let Some(read_before) = previous
-            .read_sectors
-            .filter(|before| sectors.read >= *before)
-        {
-            record.read.add(sectors.read - read_before, since);
+        if let Some(delta) = read_delta {
+            record.read.add(delta, since);
         }
         Ok(bytes)
     }
@@ -1089,6 +1099,44 @@ pub mod tests {
         assert_eq!(
             ledger.day_total("sdc", Kind::Written, after, utc),
             Some((0.0, None))
+        );
+    }
+
+    #[test]
+    fn a_written_counter_reset_alone_still_counts_the_samples_reads() {
+        let mut ledger = Ledger::default();
+        let d = Some("wwid:sdc");
+        let t = MIDNIGHT + 10 * HOUR;
+        ledger
+            .sample_counters("sdc", d, both(5_000, 0), t, utc, PERIOD)
+            .ok();
+        ledger
+            .sample_counters("sdc", d, both(6_000, 1_000), t + 5_000, utc, PERIOD)
+            .unwrap();
+        // The written counter went backwards, the read one advanced 2 000 sectors: the written
+        // total re-bases, the read total counts them.
+        assert_eq!(
+            ledger.sample_counters("sdc", d, both(100, 3_000), t + 10_000, utc, PERIOD),
+            Err(Skip::CounterReset)
+        );
+        assert_eq!(ledger.disks["sdc"].written.bytes, 1_000 * 512);
+        assert_eq!(ledger.disks["sdc"].read.bytes, 3_000 * 512);
+        // Both counters continue from the reset sample.
+        ledger
+            .sample_counters("sdc", d, both(300, 3_500), t + 15_000, utc, PERIOD)
+            .unwrap();
+        assert_eq!(ledger.disks["sdc"].written.bytes, 1_200 * 512);
+        assert_eq!(ledger.disks["sdc"].read.bytes, 3_500 * 512);
+        // A written reset across a missed midnight drops the reads too (the gap rule is shared).
+        let next_day = t + 24 * HOUR;
+        assert_eq!(
+            ledger.sample_counters("sdc", d, both(10, 9_000), next_day, utc, PERIOD),
+            Err(Skip::CounterReset)
+        );
+        assert!(
+            !ledger.disks["sdc"].read.measured,
+            "{:?}",
+            ledger.disks["sdc"]
         );
     }
 
