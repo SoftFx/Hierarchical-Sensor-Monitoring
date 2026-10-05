@@ -207,7 +207,8 @@ the Linux probe only.
 ├── .computer/          Total CPU, Free RAM memory, CPU temperature, Logical cores,
 │   └── Disks monitoring/   Free space on disk (+ prediction), Free space on <name> disk (+ %),
 │                           Free inodes on <name> disk %, Average disk write speed on <name> disk,
-│                           Written per day on <name> disk
+│                           Average disk read speed on <name> disk,
+│                           Written per day on <name> disk, Read per day on <name> disk
 └── .probe/             the probe's module node
     ├── .module/        Service alive, Collector version, Collector errors, Version,
     │   ├── Process process/    Process CPU, Process memory, Process thread count
@@ -274,12 +275,15 @@ Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-
 | `Free space on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `f_bavail / f_blocks` |
 | `Free inodes on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning | `f_favail / f_files` |
 | `Average disk write speed on <name> disk` | DoubleBar MBytes_sec, EMA · 5 s samples, 5-min bar, TTL 15 min | — (as on Windows) | `/proc/diskstats` of the whole disk under the partition |
+| `Average disk read speed on <name> disk` | as the write speed, from the same samples | — | `/proc/diskstats` sectors read of the same line (#1506) |
 | `Written per day on <name> disk` | Double GB (decimal), no statistics · the same 5 s samples, **posted once a day** (its last 30 s), TTL 26 h | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 during one local day (host timezone), from 0 at midnight; first sample / counter reset only a baseline; a day without measurement not posted; a day measured from after midnight says since when; the day survives a restart (`disk-written.json`, with the boot id — a reboot keeps the day, not the counters); a day that ended while the probe was down is not posted (logged). #1485 as `Written today` (every 5 min), once a day since #1498; 1/day |
+| `Read per day on <name> disk` | as `Written per day`, posted with it | — | its mirror for `/proc/diskstats` sectors read (the same line of the same 5 s reads, no new I/O), in the same ledger record with every rule shared. #1506; 1/day |
 
 Real filesystems are the block-backed types in `/proc/self/mountinfo`, deduplicated by source
 device (garage-server's 11 real-type mounts are 4 filesystems: `root`, `wd4tb`, `mediacentr`,
-`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 150 records/day per
-filesystem (`Written per day` adds 1), ≈ 4 600 on garage-server. The two #1476 root-only percent sensors moved to
+`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 440 records/day per
+filesystem (the read-speed bar adds 288; `Written per day` and `Read per day` add 1 each), ≈ 5 770
+on garage-server. The two #1476 root-only percent sensors moved to
 `Free space on root disk %` / `Free inodes on root disk %`; the managed-parity
 `Free space on disk` (+ prediction) is unchanged.
 
@@ -624,6 +628,7 @@ coverage in both drivers and an agent version bump:
 | #1489 + #1495 PR | write-volume edges: a clock stepped back into the hour just posted does not re-post it; an unmounted filesystem no longer counts toward a disk's mount-point identity; a day missed while the probe was down is logged once; a partly failed daily post and a measured-but-unmounted disk are logged with disk, day and GB; the install bundle writes `computerName: ""` / `module: ".probe"` explicitly; config → collector-options test | probe 0.7.0 (one PR with #1479 and #1418; 0.6.3 was never released) |
 | #1479 PR | `.computer/Top CPU processes/<name>` on Linux, probe-only (the Windows agents' wire shape and ≥ 1 % / top-10 / 1-per-minute rule, from `/proc/<pid>/stat` against `/proc/stat`); top-level `topCpu` block (the agent's), off by default; the server bundle honours "Report top processes by CPU" and then lifts `ProtectProc=invisible` with a `top-cpu.conf` drop-in | probe 0.7.0 |
 | #1418 PR | packaging + release channel: the `.deb` built and install-smoked in `debian:13` on every probe PR, `probe-release.yml` (tag == workspace version, plain forward-sorting `X.Y.Z`, `--latest=false` + badge repair, least-privilege publish job), staging refuses an asset of another version, daily logs aged out after 30 days (tmpfiles.d), `RUNBOOK.md` (install/upgrade/rollback/remove, retention, sleeping-disk acceptance, soak); #1417 reconciled (§4.4). No release published | — |
+| #1506 PR | `Read per day on <name> disk`: the mirror of `Written per day` from the "sectors read" field of the same `/proc/diskstats` samples (no new I/O), carried by the same ledger record (additive `serde(default)` fields: a 0.7.0 `disk-written.json` loads, an older probe ignores them); an unposted day is logged once per disk naming both totals; one constant (`DISK_SAMPLE_PERIOD`) governs the sampling of every disk counter; `Average disk read speed on <name> disk`, the write speed's mirror from the same samples | probe 0.8.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
