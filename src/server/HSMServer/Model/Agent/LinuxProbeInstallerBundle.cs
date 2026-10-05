@@ -12,9 +12,10 @@ namespace HSMServer.Model.Agent
     /// <summary>
     /// Parameters baked into one per-product Linux probe bundle. <see cref="AccessKey"/> goes into its
     /// own <c>access-key</c> file, never into config.json. <see cref="ServerCaPem"/> is the server's
-    /// public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+    /// public certificate, or null to leave <c>server-ca.pem</c> out of the bundle. <see cref="EnableTopCpu"/>
+    /// adds the agent's <c>topCpu</c> block, as <see cref="AgentBundleOptions.EnableTopCpu"/> does (#1479).
     /// </summary>
-    public sealed record LinuxProbeBundleOptions(string ServerAddress, int Port, string AccessKey, string ServerCaPem = null);
+    public sealed record LinuxProbeBundleOptions(string ServerAddress, int Port, string AccessKey, string ServerCaPem = null, bool EnableTopCpu = false);
 
     /// <summary>
     /// Builds the downloadable HSM Linux probe bundle (#1424, initiative linux-docker-probe §4.6): a
@@ -35,6 +36,19 @@ namespace HSMServer.Model.Agent
 
         /// <summary>Directory under wwwroot the server build stages the pinned probe .deb into.</summary>
         public const string StagingFolder = "probe";
+
+        /// <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
+        public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
+        public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
+
+        /// <summary>
+        /// The POSIX extended regular expression install.sh applies to the installed config with its
+        /// newlines removed to decide whether top CPU is on (an enabled <c>topCpu</c> block; the block
+        /// holds no nested object). One source of truth: the tests apply it to what
+        /// <see cref="BuildConfigJson"/> emits. Contains no single quote (it is embedded in '...').
+        /// </summary>
+        public const string TopCpuEnabledPattern =
+            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true";
 
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
@@ -118,8 +132,8 @@ namespace HSMServer.Model.Agent
 
         /// <summary>
         /// The generated config.json in the probe schema. It references the key by path only, and
-        /// carries no computerName and no module, so the probe's defaults apply: no computer node
-        /// (one product = one host) and the module node `.probe` (#1493, #1496).
+        /// spells out the layout — no computer node and the module node <c>.probe</c> (#1493, #1496)
+        /// — rather than relying on the probe's defaults, which differ before 0.6.1 (#1495).
         /// </summary>
         public static string BuildConfigJson(LinuxProbeBundleOptions options)
         {
@@ -130,17 +144,27 @@ namespace HSMServer.Model.Agent
                     address = options.ServerAddress,
                     port = options.Port,
                     accessKeyFile = AccessKeyCredentialPath,
+                    computerName = "",
+                    module = ".probe",
                 },
             };
 
-            return JsonSerializer.Serialize(config, _jsonOptions) + "\n";
+            var json = JsonSerializer.SerializeToNode(config).AsObject();
+
+            // "Report top processes by CPU" (Configuration → Agent): the same block the agent bundle
+            // writes, at the same top level of the probe's config (#1479).
+            if (options.EnableTopCpu)
+                json["topCpu"] = JsonSerializer.SerializeToNode(AgentInstallerBundle.TopCpuBlock);
+
+            return json.ToJsonString(_jsonOptions) + "\n";
         }
 
         /// <summary>
         /// The installer. Runs as root, installs the package, places config + key + CA, enables the unit.
-        /// The key is only ever handled as a file: never echoed, never an argument.
+        /// The key is only ever handled as a file: never echoed, never an argument. With
+        /// <paramref name="enableTopCpu"/> it also writes the <see cref="TopCpuDropIn"/> drop-in.
         /// </summary>
-        public static string BuildInstallScript()
+        public static string BuildInstallScript(bool enableTopCpu = false)
         {
             return Join(
                 "#!/usr/bin/env bash",
@@ -228,6 +252,8 @@ namespace HSMServer.Model.Agent
                 "  echo \"after the server certificate is renewed, download the bundle again and re-run install.sh.\"",
                 "fi",
                 "",
+                TopCpuDropInScript(enableTopCpu),
+                "",
                 "systemctl daemon-reload",
                 "# A failed start is judged by the status check below, which prints the diagnostics.",
                 "systemctl enable --now \"$UNIT\" || true",
@@ -281,6 +307,9 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "rm -f \"$CONFIG_DIR/" + ConfigName + "\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-dist\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-old\"",
                 "rmdir \"$CONFIG_DIR\" 2>/dev/null || true",
+                "# The top-CPU drop-in install.sh may have written (a package older than 0.7.0 does not remove it).",
+                "rm -f \"" + TopCpuDropIn + "\"",
+                "rmdir \"" + DropInDirectory + "\" 2>/dev/null || true",
                 "",
                 "if [ -f \"$CA_TARGET\" ]; then",
                 "  rm -f \"$CA_TARGET\"",
@@ -314,7 +343,7 @@ namespace HSMServer.Model.Agent
                 if (!string.IsNullOrEmpty(options.ServerCaPem))
                     AddEntry(tar, TarEntryType.RegularFile, prefix + ServerCaName, Encoding.ASCII.GetBytes(options.ServerCaPem), DataMode, modified);
 
-                AddEntry(tar, TarEntryType.RegularFile, prefix + InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript()), ScriptMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript(options.EnableTopCpu)), ScriptMode, modified);
                 AddEntry(tar, TarEntryType.RegularFile, prefix + UninstallScript, Encoding.UTF8.GetBytes(BuildUninstallScript()), ScriptMode, modified);
             }
 
@@ -340,6 +369,69 @@ namespace HSMServer.Model.Agent
                 entry.DataStream = data;
 
             tar.WriteEntry(entry);
+        }
+
+        /// <summary>
+        /// The install.sh step for top CPU processes (#1479). The unit mounts /proc with
+        /// <c>ProtectProc=invisible</c>, which hides every process but the probe's own, and the top-CPU
+        /// sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so the step lifts that one setting for
+        /// this unit with a drop-in. <b>The drop-in follows the config actually installed on the host</b>
+        /// (the bundle's, or the existing one the script kept), not the bundle's switch: an enabled
+        /// <c>topCpu</c> block there writes it, anything else removes it — so a kept config also wins over
+        /// a bundle with the switch off. A bundle with the switch on whose config was not installed (kept,
+        /// no <c>--force-config</c>) and does not enable top-CPU prints a WARNING naming the way out.
+        /// The check is plain POSIX tools over the config with its newlines removed (the block holds no
+        /// nested object); a config it cannot read or recognise counts as "off" — the safe side.
+        /// uninstall.sh and the package's postrm remove the drop-in too.
+        /// </summary>
+        private static string TopCpuDropInScript(bool enableTopCpu)
+        {
+            var lines = new List<string>
+            {
+                "# Top CPU processes (#1479): the drop-in follows the config installed above, not the bundle alone.",
+                "# An enabled topCpu block lets the probe see every process in /proc; anything else keeps the unit's",
+                "# ProtectProc=invisible.",
+                "TOP_CPU_DROPIN=\"" + TopCpuDropIn + "\"",
+                "top_cpu_on=0",
+                "# grep reads all of its input (no -q): under pipefail an early exit would SIGPIPE tr and turn a",
+                "# match into \"off\".",
+                "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
+                "  | grep -E '" + TopCpuEnabledPattern + "' >/dev/null; then",
+                "  top_cpu_on=1",
+                "fi",
+                "if [ \"$top_cpu_on\" -eq 1 ]; then",
+                "  install -d -m 0755 -o root -g root \"$(dirname \"$TOP_CPU_DROPIN\")\"",
+                "  cat > \"$TOP_CPU_DROPIN\" <<'EOF'",
+                "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topCpu.",
+                "# The unit's ProtectProc=invisible hides every process but the probe's own from /proc, and the",
+                "# top-CPU sensors read /proc/<pid>/stat of every process. Delete this file, then",
+                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to hide them again.",
+                "[Service]",
+                "ProtectProc=default",
+                "EOF",
+                "  chmod 0644 \"$TOP_CPU_DROPIN\"",
+                "  echo \"Top CPU processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry ($TOP_CPU_DROPIN).\"",
+                "else",
+                "  if [ -f \"$TOP_CPU_DROPIN\" ]; then",
+                "    rm -f \"$TOP_CPU_DROPIN\"",
+                "    rmdir \"$(dirname \"$TOP_CPU_DROPIN\")\" 2>/dev/null || true",
+                "    echo \"Top CPU processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_CPU_DROPIN (ProtectProc=invisible again).\"",
+                "  fi",
+            };
+
+            if (enableTopCpu)
+            {
+                lines.AddRange(new[]
+                {
+                    "  # This bundle enables top CPU, so its config does; this is reached only when the existing one was kept.",
+                    "  echo \"WARNING: this bundle enables top CPU processes, but the existing $CONFIG_DIR/" + ConfigName + " was kept and does not.\" >&2",
+                    "  echo \"WARNING: top CPU processes stay off until you re-run: sudo ./install.sh --force-config\" >&2",
+                    "  echo \"WARNING: (or enable the topCpu block by hand and add the drop-in: RUNBOOK.md, 'Top CPU processes').\" >&2",
+                });
+            }
+
+            lines.Add("fi");
+            return string.Join("\n", lines);
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.

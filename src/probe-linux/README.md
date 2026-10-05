@@ -4,7 +4,9 @@ A systemd-hosted Linux host probe that reports into an existing HSM server by **
 native collector** (`src/native/collector`) through its stable C ABI.
 
 Architecture and rationale: [`docs/initiatives/linux-docker-probe.md`](../../docs/initiatives/linux-docker-probe.md)
-(epic #1413). This directory is workstream 2 (#1415) — the skeleton.
+(epic #1413). This directory is workstream 2 (#1415) — the skeleton. **Operating it** (install,
+upgrade, rollback, retention, the sleeping-disk acceptance check, measured cost):
+[`RUNBOOK.md`](RUNBOOK.md).
 
 ## The one rule that shapes everything here
 
@@ -19,7 +21,9 @@ module set — the [parity contract](#parity-contract)), **plus** a set of
 exist only here — never in the shared collector catalog, never on Windows — and go through the
 collector's public sensor API, so wire format, queuing, batching, retry and TLS stay the library's;
 only the acquisition (a sysfs read, a `statvfs`, a Docker Engine API call) and the schedule live in
-the probe. The archive/backup part of #1417 is the next probe-only source.
+the probe. Backup health (#1417) is deliberately **not** a probe source: by owner decision the
+host's own backup tooling posts it straight to the Sensor API, and the archive disks' capacity is
+the ordinary per-filesystem disk sensors.
 
 **The tree sits directly under the product, with no computer node** (owner decisions #1493 and
 #1496 — one product = one host). The product root holds the host's `.computer/…` and the probe's
@@ -34,8 +38,9 @@ module node `.probe/`, which carries `.module/…` and `Docker/…` — the .NET
     └── Docker/<project>/<service>/…
 ```
 
-`hsm.computerName` is empty by default and `hsm.module` defaults to `.probe`; the skeleton and the
-server's install bundle write neither, so the defaults apply. Both keys are still accepted, but a
+`hsm.computerName` is empty by default and `hsm.module` defaults to `.probe`; the skeleton writes
+neither, and the server's install bundle writes exactly those values (`""`, `".probe"`, #1495).
+Other values are still accepted, but a
 `computerName` re-introduces a `<computer>/` level and another `module` renames `.probe` — **not
 recommended**. This holds for the Linux probe only: the Windows agent (HsmAgent) keeps its
 `<MACHINE>/HSM Agent/.module` layout.
@@ -179,10 +184,14 @@ is posted once**, in its last 30 seconds (six samples, so one slow read or a lat
 in it): the day's total. What is still written between the post and midnight counts towards the
 next day — counted once, never lost. The ledger remembers the posted day, so a restart inside that
 window does not post it twice, and a day is marked posted only when a value went out (if every post
-failed, the next sample in the window tries again). A day whose window was missed — the probe not
-running at midnight, or running but not sampling (a suspend, unreadable `/proc/diskstats`) — is not
-posted; one INFO line names it with its measured total, and the 26-hour TTL shows the missing day as
-Timeout. The day only
+failed, the next sample in the window tries again). What a marked day leaves unposted is logged with
+the filesystem or disk, the day and its total: a value whose post failed while others went out
+(ERROR, not retried), and a measured disk no mounted filesystem posts (unmounted in the window,
+INFO). A day whose window was missed — the probe not
+running at midnight, or running but not sampling (a suspend, unreadable `/proc/diskstats`, every
+post in the window failed) — is not posted; one INFO line names it with its measured total (a day
+that ended while the probe was down: at its first sample after the start, once), and the 26-hour
+TTL shows the missing day as Timeout. The day only
 turns forward: a clock stepped back across midnight (or a DST fall-back at local midnight) keeps
 counting into the day it came from until the clock reaches the next one. A timezone change
 (`timedatectl set-timezone`) applies without a restart. The first sample, a counter
@@ -200,7 +209,9 @@ the first after it are not counted. Kernel names are not stable (a reboot can sw
 `sdb`), so each disk's day also records which physical disk it belongs to — its WWID or serial
 from sysfs, else the mount points on it: a different disk under a known name starts its day
 afresh (with the "measured since" comment), and after a reboot a day is kept only when that
-identity matches. Disks not seen for more than a day are dropped from the file. One case cannot
+identity matches. The mount-point fallback counts only filesystems mounted now: an unmounted one
+keeps its old disk name, and its mount point must not tie a new disk to the old one (#1489).
+Disks not seen for more than a day are dropped from the file. One case cannot
 be told apart: a removable disk without a WWID or serial swapped, within one boot, for another
 such disk at the same mount point — both identities are that mount point, so the second continues
 the first one's day. Two filesystems
@@ -310,8 +321,12 @@ and its counter survived and the hour did not change. A gap that crosses an hour
 be split between the two hours and is dropped. The hour that has just ended is posted on the first
 tick after it — also when that tick is the first after a restart, since its bytes were measured;
 an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
-line. A skip that discards measured bytes (a clock that went backwards, a gap across an hour) is
-logged once. A write through a stacked device (LVM, dm-crypt, md) is
+line. An hour is posted once: a clock stepped back a little into the hour just posted (at most three
+sample periods, 15 s by default — an NTP step across the boundary) does not reopen it — the running
+hour keeps counting, the writes made meanwhile included (#1489). A larger step back (a VM restore, a
+badly set clock corrected) resets the running hour, as any step back past it does, and the hour
+just posted is still never posted a second time. A skip that discards measured bytes (a clock that went backwards, a gap
+across an hour) is logged once. A write through a stacked device (LVM, dm-crypt, md) is
 accounted by the kernel on that device and again on the disk under it; the probe resolves the
 stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
 listed too. The sensor therefore reports **physical** writes: through LVM or dm-crypt a write
@@ -398,6 +413,97 @@ projects) under `hsm-linux-probe/fixtures/docker/`: the listing, the inspects (t
 fields the probe reads — `Config.Env` and mounts dropped), two stats rounds 5.3 s apart, and three
 raw HTTP responses (chunked, `Content-Length`, 404) byte for byte.
 
+### Top CPU processes (#1479)
+
+The Windows agents' sensor family on Linux: `.computer/Top CPU processes/<name>`, one Double
+sensor per busy process name. **Off unless the top-level `topCpu` block enables it**, exactly like
+HsmAgent; the server's Configuration → Agent → "Report top processes by CPU" writes that block into
+the downloaded probe bundle as it does for the agent's.
+
+**Placement.** Probe-only by the owner's rule for this epic (new Linux sources live in the probe;
+moving one into the shared catalog is a later, separate step). That move would have to mirror a
+managed Unix implementation over the same `/proc` source (root `CLAUDE.md` rule #10) with a
+conformance scenario (rule #9). It does not break [the one rule](#the-one-rule-that-shapes-everything-here):
+the collector's top-CPU source is Windows-only (`hsm_collector_enable_top_cpu_sensors` refuses other
+platforms), so on Linux there is no collector sensor to host — only its wire shape to match.
+
+**Indistinguishable from Windows on the wire**, so alert templates written for the agents apply
+unchanged — every value is copied from `cpu_top.cpp`/`RunTopCpuLoop` (HsmAgent) and
+`WindowsTopCpuMonitor.cs`, which agree:
+
+| | |
+|---|---|
+| Path | `.computer/Top CPU processes/<name>` (computer sensor: `<ComputerName>/.computer/…` on Windows, the product root here) |
+| Type · unit | Double (instant) · `Percents` (100) |
+| TTL | 5 min — a name that stops being posted turns to Timeout |
+| Options | `EnableGrafana` true; no statistics, no alert, `KeepHistory` left to the server default |
+| Description | `Top **10** CPU consumers by % of machine CPU` + a path line (below) |
+| Value | % of the **whole host** (all cores = 100 %, like Total CPU), summed over every process of the name |
+| Rule | every `periodMs` (1 min): names at or above `minPercent` (1 %), the busiest `count` (10), ties by name; the first period only takes the baseline |
+| Name cap | at most `max(count × 8, 64)` distinct names ever get a sensor (the server has no sensor delete); then one WARN line, the tracked names keep reporting |
+
+One registration field differs: Windows sends `DisplayUnit: null`, and an instant sensor created
+through the C ABI always sends `0`. The server reads `DisplayUnit` only for Rate sensors.
+
+**Source.** `/proc/stat` (the aggregate `cpu` line without `guest`/`guest_nice`, the collector's
+Total CPU total) and, for every numeric entry of `/proc`, `/proc/<pid>/stat`: `utime + stime`
+(the whole thread group) over the interval, divided by the host's total over the same interval.
+Nothing outside `/proc` is read, and no root is needed. The stat line is split at the **last** `)`
+(a process may name itself `a) b (c`). A process is `(pid, starttime)`: a reused pid is never
+credited with its predecessor's time; a process that started or exited during the interval
+contributes nothing; a `/proc/<pid>` that vanishes while being read is skipped silently. An
+unreadable `/proc/stat` is logged once until it recovers and posts nothing.
+
+**Names.** Field 2 of the stat line, which the kernel renders with the same function as
+`/proc/<pid>/comm` (one read per process instead of two): `task->comm`, **at most 15 bytes** —
+longer executable names arrive truncated (`systemd-journald` → `systemd-journal`). Normalized to
+the characters the server's alert-template wildcard `*` matches (ASCII letters and digits, space,
+`. _ # , % $ - &`), anything else → `_` (`/`, the path separator, included), then trimmed; an empty
+result gets no sensor. **Kernel threads** (`PF_KTHREAD`) are named by the part before their first
+`/`, so the per-CPU/per-device instances are one sensor, summed like several `chrome.exe`:
+`kworker/3:1-events` → `kworker`, `ksoftirqd/0` → `ksoftirqd`, `irq/42-nvme0q1` → `irq`. Processes
+with the same name are summed (Windows rule), also when two names normalize to the same one.
+
+**Path line** of the description, set once when the name's sensor is created, for the name's
+busiest process:
+
+* its executable, `readlink /proc/<pid>/exe`;
+* for another user's process — most of them: the unprivileged probe may not read that link — its
+  **argv[0]** from the world-readable `/proc/<pid>/cmdline`, **only when it is an absolute path**
+  (`/usr/local/bin/node`), so a 15-byte `node`/`java`/`python3` still says what it is. Only
+  argv[0] is ever used, never the arguments (they can carry secrets): it is cut at the first NUL
+  and at the first whitespace, since a process that rewrites its title may join its arguments
+  with spaces (the cost: a path containing a space is shown up to it). At most 4 KiB of `cmdline`
+  is read;
+* `_(another user's process - path unavailable)_` when argv[0] is relative (`python3`), rewritten
+  (`postgres: checkpointer`), empty (a zombie) or unreadable;
+* `_(system process - path unavailable)_` for a kernel thread (the Windows wording);
+* nothing when the process exited first.
+
+Control characters and backticks are removed and a path is capped at 256 characters.
+
+**Visibility — the drop-in.** The unit mounts `/proc` with `ProtectProc=invisible`, which hides
+every process but the probe's own. With `topCpu` on, lift it for this unit only:
+
+```ini
+# /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+[Service]
+ProtectProc=default
+```
+
+then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server bundle's
+`install.sh` writes exactly this file when the config it leaves on the host — its own, or an
+existing one it kept — enables `topCpu`, and removes it when that config does not; a bundle with
+the switch on over a kept config without the block writes nothing and prints a WARNING naming
+`install.sh --force-config`. `uninstall.sh` and the package's `postrm` (remove/purge) delete it. Without it — or on any
+host that mounts `/proc` with `hidepid` — the source still runs and says so in one INFO line at
+start (`/proc is mounted with hidepid=invisible …`); the start log also states how many processes
+the baseline saw.
+
+**Cost:** one record per minute per posted name — ≈ 1 440 records/day for each process that stays
+at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
+is one read of `/proc/stat` plus one small read per process per minute.
+
 ## Crate layout
 
 ```
@@ -405,10 +511,12 @@ src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/probe_only/    probe-only sources (host.rs, disks/, docker/) and their per-source threads
+    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/) and their per-source threads
     fixtures/docker/   Engine API captures from garage-server
   packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
-                       docker-access.sh (Docker socket drop-in)
+                       smoke-deb.sh (install smoke), docker-access.sh (Docker socket drop-in),
+                       hsm-linux-probe.tmpfiles (log ageing)
+  RUNBOOK.md           install / upgrade / rollback, retention, disk-standby acceptance, cost
 ```
 
 **Alerts in the wrapper.** `Collector::alert(AlertKind)` returns an `AlertBuilder` (conditions,
@@ -493,7 +601,8 @@ cargo build
 cargo test
 ```
 
-The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`.
+The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`; its `deb` job
+also builds the package and install-smokes it (below).
 
 ### Building the `.deb`
 
@@ -516,8 +625,12 @@ check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
 The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
 `/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
-`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`
-and the copyright file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`,
+`/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (deletes daily log files not written for 30 days — the
+probe itself never deletes one) and the copyright file;
+`Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1` — libcurl and, through it,
+OpenSSL are the distribution's shared libraries, so their security fixes arrive with `apt upgrade`,
+not with a probe rebuild. The maintainer scripts
 are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
 the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
 start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
@@ -529,6 +642,49 @@ seeds `/etc/hsm-linux-probe/config.json` from the skeleton only when it is absen
 touches it or stops at a prompt (a conffile-era file becomes an obsolete conffile: kept, never
 prompted about; purge removes it). The upgrade command keeps `--force-confold` as belt and braces:
 `sudo apt-get install -y -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`.
+
+`packaging/smoke-deb.sh <deb> [<probe version>]` is the install smoke, run in a **clean**
+`debian:13` container (nothing of the build environment in it):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src/src/probe-linux \
+    debian:13 bash packaging/smoke-deb.sh dist/hsm-linux-probe_<version>~trial1_amd64.deb
+```
+
+It checks the control fields and the layout (no conffile), installs with `apt-get` so the `Depends`
+resolve from the Debian archive, checks that `--version` reports the package version up to its
+`~` suffix (or the version given as the second argument), checks the `hsm-probe` user and the seeded
+config, runs the probe for 6 s against an unreachable server and stops it with SIGTERM (exit 0, a
+log file, no key in the log), reinstalls over an edited config (unchanged, no `.dpkg-*` files) and
+purges. What needs systemd as PID 1 — the unit's hardening, `LoadCredential=`, `StateDirectory=` —
+is checked on a real host ([RUNBOOK](RUNBOOK.md)). The `deb` job of `probe-linux.yml` runs both
+scripts on every probe PR with the version `<workspace version>~ci` and uploads the package as the
+artifact `hsm-linux-probe-deb-ci` for hand trials.
+
+### Release channel (`probe-v*`, #1418)
+
+The probe ships as a GitHub Release, and servers reference it by version — the model of the HSM
+Agent's `agent-v*` channel.
+
+- **Version.** `[workspace.package] version` in `Cargo.toml` is the probe version: what `--version`
+  prints, what `.probe/.module/Version` reports, and the package version. Released versions are
+  plain `X.Y.Z`, each above every earlier release (dpkg order); trials use `~trialN` (local) or
+  `~ci` (CI artifact), which sort below the release.
+- **Publish:** after the version-bump PR is merged, push the tag `probe-v<version>`.
+  `.github/workflows/probe-release.yml` fails unless the tag equals the workspace version, is a
+  plain `X.Y.Z` and sorts above every released `probe-v*`; builds with `build-deb.sh` in `debian:13`;
+  runs `smoke-deb.sh` in a clean `debian:13`; and publishes `hsm-linux-probe_<version>_amd64.deb` +
+  `hsm-linux-probe_<version>_amd64.deb.sha256` (`sha256sum` format) with `--latest=false` — the
+  repo's "Latest" badge belongs to the server releases, and the lane hands it back to the newest
+  `server-v*` release if GitHub moves it anyway. Only the publishing job holds `contents: write`.
+- **Dry run:** *Actions → HSM Linux probe release → Run workflow* on a branch builds, smokes and
+  uploads the two assets as an artifact without tagging or releasing (it warns when the version
+  would not sort above the released ones).
+- **Consume:** the server ships the release named in `src/server/HSMServer/probe-release.txt`; both
+  `server-build.yml` legs (`scripts/stage-linux-probe.sh`) and `scripts/local-docker-build.ps1`
+  download it, refuse an asset that is not that version or does not match its `.sha256`, and serve
+  the `.deb` byte-identical in the per-product bundle. An empty pin ships no probe (the download
+  answers 503). To ship a newer probe: tag, then bump the pin in a one-line PR.
 
 ## Configuration
 
@@ -551,8 +707,10 @@ Placeholders only — **no secrets**:
   product root (0.6.0) — to `.probe/…` (the old nodes go stale; `.computer/…` does not move when
   `computerName` is unset). Configs from an older server bundle or the old skeleton set both keys
   explicitly and keep their layout until edited — or until the bundle is re-installed with
-  `install.sh --force-config`, which writes the new config without either key and so moves the
-  tree to the default layout (the old nodes, their alerts and TTL state stay behind).
+  `install.sh --force-config`, which writes the new config and so moves the tree to the default
+  layout (the old nodes, their alerts and TTL state stay behind). The server bundle writes that
+  layout explicitly (`"computerName": ""`, `"module": ".probe"`; #1495, alongside probe 0.7.0),
+  so it does not depend on the defaults of the probe version the server ships.
   **One product per host:** with no host node, two hosts reporting into one product write into the
   same sensors — give every host its own product. For the default layout remove both keys; to keep
   an older one, set `"module"` (and `"computerName"`) explicitly.
@@ -572,6 +730,10 @@ Placeholders only — **no secrets**:
   5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
   patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
+* `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),
+  `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
+  checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See
+  [Top CPU processes](#top-cpu-processes-1479); it also needs the `top-cpu.conf` drop-in.
 
 ## Running
 

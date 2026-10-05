@@ -1,0 +1,255 @@
+name: HSM Linux probe release
+
+# Publishes the Linux probe .deb as a versioned GitHub Release (#1418, initiative
+# docs/initiatives/linux-docker-probe.md §4.5). The model is agent-release.yml:
+#
+#   * push a tag `probe-v<X.Y.Z>`  -> build + smoke, then a GitHub Release carrying
+#                                     hsm-linux-probe_<X.Y.Z>_amd64.deb and its .sha256
+#   * manual `workflow_dispatch`   -> the same build + smoke from the chosen ref, uploaded as a
+#                                     workflow artifact only (a dry run: no tag, no release)
+#
+# Guardrails, in order:
+#   1. <X.Y.Z> must equal `[workspace.package] version` in src/probe-linux/Cargo.toml — the version
+#      `hsm-linux-probe --version` reports — and be a plain X.Y.Z (see "Resolve and verify");
+#   2. it must sort above every probe-v* already released: apt refuses an "upgrade" to a lower
+#      version, which is how the 0.1.0 trials got stuck (initiative §4.5);
+#   3. packaging/build-deb.sh builds the package in a plain debian:13 container, the oldest target
+#      release (a newer build image would raise the glibc floor and the Depends);
+#   4. packaging/smoke-deb.sh installs it in a clean debian:13 and runs it (the PR lane,
+#      probe-linux.yml, runs the same two scripts);
+#   5. the release is created with --latest=false, and the badge is handed back to the newest
+#      server-v* release if GitHub moved it anyway (the agent-v0.5.28 lesson).
+#
+# Consumers reference the release by version: the server stages the .deb named by
+# src/server/HSMServer/probe-release.txt (scripts/stage-linux-probe.sh, both server-build.yml legs)
+# after checking its SHA-256, and serves it byte-identical in the per-product bundle. Shipping a
+# probe = merge the version bump, push the tag, then bump probe-release.txt in a one-line PR.
+
+on:
+  push:
+    tags:
+      - 'probe-v*'
+  workflow_dispatch:
+
+# Least privilege: the default token is read-only for every job. Only the `release` job (tag
+# pushes) elevates to contents: write, so a dry run never holds a release-publishing token.
+permissions:
+  contents: read
+
+# One publish at a time per ref; two close tag pushes must not interleave their release steps.
+# Never cancel an in-flight publish.
+concurrency:
+  group: probe-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # The same build + smoke as probe-linux.yml's `deb` job (green in 1-1.5 min, slowest 1 min 14 s;
+    # this lane has not run yet) plus the release lookup and the artifact upload: 15 min ends a
+    # stalled mirror instead of GitHub's 6 h default.
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # build-deb.sh and smoke-deb.sh run apt-get inside debian:13; this file, mounted into both
+      # containers, bounds their network waits (a stalled mirror fails instead of hanging).
+      - name: Bound apt's network waits in the containers
+        run: |
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' > "$RUNNER_TEMP/apt-timeouts.conf"
+
+      # The tag is the delivery key: the pin, the asset name and the package version are all this
+      # string, so a tag that disagrees with the source would publish a package whose --version
+      # (and whose server-side sensor Version) says something else.
+      - name: Resolve and verify the version
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cargo_version=$(awk -F'"' '/^\[workspace\.package\]/ { s = 1; next } /^\[/ { s = 0 }
+            s && $1 ~ /^version *= *$/ { print $2; exit }' src/probe-linux/Cargo.toml)
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            version="${GITHUB_REF_NAME#probe-v}"
+            echo "tag: $version, src/probe-linux/Cargo.toml: $cargo_version"
+            if [ "$version" != "$cargo_version" ]; then
+              echo "::error::tag probe-v$version does not match [workspace.package] version = \"$cargo_version\" in src/probe-linux/Cargo.toml — bump Cargo.toml or fix the tag"
+              exit 1
+            fi
+          else
+            version="$cargo_version"
+            echo "dry run from $GITHUB_REF_NAME: version $version (src/probe-linux/Cargo.toml)"
+          fi
+          # A plain X.Y.Z only. A semver pre-release (0.7.0-rc1) reads as upstream 0.7.0 with Debian
+          # revision rc1 and so sorts ABOVE 0.7.0, and git ref names cannot carry the '~' that would
+          # sort below it; trials stay local builds (build-deb.sh 0.7.0~trial1). The pattern also
+          # keeps every downstream use of the value (file names, gh arguments) well-formed.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::probe version '$version' is not a plain X.Y.Z"
+            exit 1
+          fi
+          # Forward-sorting releases only (dpkg order, the order apt upgrades in).
+          released=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName \
+            --jq '.[].tagName | select(startswith("probe-v"))')
+          blocking=""
+          for tag in $released; do
+            other="${tag#probe-v}"
+            [ "$tag" = "probe-v$version" ] && continue
+            if dpkg --compare-versions "$other" ge "$version"; then
+              blocking="$blocking $tag"
+            fi
+          done
+          if [ -n "$blocking" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              echo "::error::$version does not sort above the already released$blocking — hosts would refuse it as a downgrade; bump the version"
+              exit 1
+            fi
+            echo "::warning::$version does not sort above the already released$blocking; a probe-v$version tag would fail"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the .deb in debian:13
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          docker run --rm -e SOURCE_DATE_EPOCH -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            -v "$RUNNER_TEMP/apt-timeouts.conf:/etc/apt/apt.conf.d/99-ci-timeouts:ro" \
+            debian:13 bash packaging/build-deb.sh "$VERSION"
+
+      # Release gate, not CI hygiene: a package that does not install, run and purge on a clean
+      # debian:13 must not become the release every server bundle ships.
+      - name: Install smoke in a clean debian:13
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            -v "$RUNNER_TEMP/apt-timeouts.conf:/etc/apt/apt.conf.d/99-ci-timeouts:ro" \
+            debian:13 bash packaging/smoke-deb.sh "dist/hsm-linux-probe_${VERSION}_amd64.deb" "$VERSION"
+
+      - name: Stage release assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          deb="hsm-linux-probe_${VERSION}_amd64.deb"
+          cp "src/probe-linux/dist/$deb" "staging/$deb"
+          # Standard `sha256sum` format: `sha256sum -c` works on a host, and
+          # scripts/stage-linux-probe.sh reads the first field.
+          (cd staging && sha256sum "$deb" > "$deb.sha256")
+          cat "staging/$deb.sha256"
+          ls -l staging
+
+      - name: Upload the release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-linux-probe-${{ steps.version.outputs.version }}
+          path: staging/
+          if-no-files-found: error
+
+  release:
+    # Publish only on a tag push. A manual dispatch stops at the artifact above.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/probe-v')
+    needs: build
+    runs-on: ubuntu-latest
+    # Download two small assets, create the release, fix the Latest badge: a few API calls.
+    timeout-minutes: 10
+    permissions:
+      contents: write # scoped to this job only: create the GitHub Release
+    steps:
+      - name: Download the release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: hsm-linux-probe-${{ needs.build.outputs.version }}
+          path: staging
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }} # gh targets the repo without a checkout
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          deb="hsm-linux-probe_${VERSION}_amd64.deb"
+          for asset in "$deb" "$deb.sha256"; do
+            if [ ! -s "staging/$asset" ]; then
+              echo "::error::the build artifact lacks a non-empty $asset"
+              exit 1
+            fi
+          done
+          sha=$(cut -d' ' -f1 "staging/$deb.sha256")
+          # Lane re-runs must not fail on "release already exists": a complete release is skipped, a
+          # partial one (create succeeded, an asset upload didn't) is reported for manual deletion —
+          # never silently kept, never auto-deleted.
+          have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '[.assets[].name] | sort | join(",")' 2>/dev/null || echo "__absent__")
+          if [ "$have" = "$deb,$deb.sha256" ]; then
+            echo "release $GITHUB_REF_NAME already exists with both assets (lane re-run) — skipping create"
+            exit 0
+          elif [ "$have" != "__absent__" ]; then
+            echo "::error::release $GITHUB_REF_NAME exists but is incomplete (assets: '$have') — delete it (gh release delete $GITHUB_REF_NAME) and re-run"
+            exit 1
+          fi
+          notes=$(printf '%s\n' \
+            "HSM Linux probe $VERSION — Debian 13 (trixie) amd64 package." \
+            "" \
+            "SHA-256: $sha" \
+            "" \
+            "Install, upgrade and rollback: src/probe-linux/RUNBOOK.md. Servers ship this package through src/server/HSMServer/probe-release.txt (#1418); the per-product bundle serves it byte-identical.")
+          gh release create "$GITHUB_REF_NAME" \
+            "staging/$deb" \
+            "staging/$deb.sha256" \
+            --verify-tag \
+            --latest=false \
+            --title "HSM Linux probe $VERSION" \
+            --notes "$notes"
+
+      # --latest=false above is not reliable: the bootstrap agent-v0.5.28 release grabbed the repo's
+      # "Latest" badge despite it (observed 2026-07-21, see agent-release.yml). Clients discover the
+      # server zip through that badge, so assert-and-repair: if this release ended up "latest", hand
+      # the badge back to the newest server-v* release, and fail loudly if that cannot be done.
+      - name: Keep the Latest badge on server releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+          echo "repo Latest after publish: $latest"
+          if [ "$latest" != "$GITHUB_REF_NAME" ]; then
+            echo "Latest badge untouched — nothing to repair"
+            exit 0
+          fi
+          # Drafts and prereleases are excluded: GitHub's Latest badge can only sit on a full release,
+          # and this repo routinely publishes server prereleases.
+          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(startswith("server-v"))][0]')
+          if [ -z "$server_tag" ]; then
+            echo "::error::this probe release grabbed the Latest badge and no server-v* release exists to give it back to"
+            exit 1
+          fi
+          server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
+          # Re-read with a short retry: the badge update may lag a moment behind the PATCH, and a
+          # propagation delay must not fail an otherwise-successful publish.
+          for attempt in 1 2 3; do
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+            [ "$latest" = "$server_tag" ] && break
+            echo "attempt $attempt: Latest is still $latest, retrying..."
+            sleep 5
+          done
+          if [ "$latest" != "$server_tag" ]; then
+            echo "::error::failed to return the Latest badge to $server_tag (still $latest)"
+            exit 1
+          fi
+          echo "Latest badge returned to $server_tag"

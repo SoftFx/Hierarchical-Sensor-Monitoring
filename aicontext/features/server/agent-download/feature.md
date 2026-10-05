@@ -46,7 +46,8 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 `AgentConfig.EnableTopCpuProcesses` (admin toggle, Configuration → Agent) makes `BuildConfigJson` add a
 `topCpu` block (`enabled:true, periodMs:60000, minPercent:1.0, count:10`) to the generated `config.json`,
 so the downloaded agent also reports the top processes by CPU (issue #1175). Off by default; the client
-agent has no UI and just runs the baked config.
+agent has no UI and just runs the baked config. The Linux probe bundle honours the same switch with the
+same block (`AgentInstallerBundle.TopCpuBlock`, #1479; see `../linux-probe-download/feature.md`).
 
 ## Connection URL resolution
 

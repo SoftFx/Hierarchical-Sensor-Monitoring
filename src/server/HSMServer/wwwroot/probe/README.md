@@ -15,8 +15,9 @@ legs and `scripts/local-docker-build.ps1` read `src/server/HSMServer/probe-relea
 
 - **Empty pin (the state until the first `probe-v*` release exists):** staging is skipped, the build
   does not fail, and the endpoint answers HTTP 503 with a clear message.
-- **Pinned version:** `gh release download probe-v<pin>`, SHA-256 check against the release's
-  `.deb.sha256`, then the `.deb` is staged here. The publish output and the Docker image are then
+- **Pinned version:** `gh release download probe-v<pin>`, a check that the asset is
+  `hsm-linux-probe_<pin>_<arch>.deb`, SHA-256 check against the release's `.deb.sha256`, then the
+  `.deb` is staged here. The release itself comes from `.github/workflows/probe-release.yml` (#1418). The publish output and the Docker image are then
   required to contain exactly one non-empty `hsm-linux-probe_*.deb`.
 
 Exactly one package is expected here; staging clears older ones first. With none or several, the

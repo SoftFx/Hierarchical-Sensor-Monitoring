@@ -72,13 +72,105 @@ namespace HSMServer.Core.Tests
             Assert.Equal("https://hsm.example.com", hsm.GetProperty("address").GetString());
             Assert.Equal(44330, hsm.GetProperty("port").GetInt32());
             Assert.Equal("/run/credentials/hsm-linux-probe.service/access-key", hsm.GetProperty("accessKeyFile").GetString());
-            // One product = one host (#1493): no computer node and no module node, so the config
-            // carries neither and the probe's sensors sit directly under the product.
-            Assert.False(hsm.TryGetProperty("module", out _));
-            Assert.False(hsm.TryGetProperty("computerName", out _));
+            // One product = one host: no computer node (#1493) and the module node `.probe` (#1496),
+            // written out so the layout does not depend on the probe's defaults, which were
+            // `LinuxProbe` before 0.6.0 and empty in 0.6.0 (#1495).
+            Assert.Equal("", hsm.GetProperty("computerName").GetString());
+            Assert.Equal(".probe", hsm.GetProperty("module").GetString());
 
             Assert.False(hsm.TryGetProperty("accessKey", out _));
             Assert.False(hsm.TryGetProperty("allowUntrustedCertificate", out _));
+        }
+
+        [Fact]
+        public void ConfigJson_OmitsTopCpu_WhenDisabled()
+        {
+            using var doc = JsonDocument.Parse(LinuxProbeInstallerBundle.BuildConfigJson(_options)); // EnableTopCpu defaults to false
+
+            Assert.False(doc.RootElement.TryGetProperty("topCpu", out _));
+        }
+
+        [Fact]
+        public void ConfigJson_CarriesTheAgentsTopCpuBlock_WhenEnabled()
+        {
+            using var doc = JsonDocument.Parse(LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true }));
+            var topCpu = doc.RootElement.GetProperty("topCpu");
+
+            // The probe reads the agent's keys and defaults at the same top level (#1479).
+            Assert.True(topCpu.GetProperty("enabled").GetBoolean());
+            Assert.Equal(60000, topCpu.GetProperty("periodMs").GetInt32());
+            Assert.Equal(10, topCpu.GetProperty("count").GetInt32());
+            Assert.Equal(1.0, topCpu.GetProperty("minPercent").GetDouble());
+
+            using var agent = JsonDocument.Parse(AgentInstallerBundle.BuildConfigJson(new AgentBundleOptions("https://hsm.example.com", 44330, Key, false, EnableTopCpu: true)));
+            Assert.Equal(agent.RootElement.GetProperty("topCpu").GetRawText(), topCpu.GetRawText());
+
+            // The rest of the probe config is unchanged by the switch.
+            Assert.Equal("https://hsm.example.com", doc.RootElement.GetProperty("hsm").GetProperty("address").GetString());
+            Assert.EndsWith("}\n", LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true }));
+        }
+
+        /// <summary>
+        /// The shell pattern install.sh uses, applied (POSIX classes translated for .NET) to exactly
+        /// what the bundle writes, newlines removed as install.sh removes them: a serializer change that
+        /// broke the match would otherwise silently drop the drop-in on every install.
+        /// </summary>
+        [Fact]
+        public void TopCpu_InstallScriptPatternMatchesTheGeneratedConfig()
+        {
+            Assert.DoesNotContain("'", LinuxProbeInstallerBundle.TopCpuEnabledPattern); // embedded in '...'
+            var pattern = new System.Text.RegularExpressions.Regex(
+                LinuxProbeInstallerBundle.TopCpuEnabledPattern.Replace("[[:space:]]", @"\s"));
+            string Flatten(string json) => json.Replace("\r", "").Replace("\n", "");
+
+            Assert.Matches(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true })));
+            Assert.DoesNotMatch(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options)));
+
+            // Hand-written shapes the operator may keep: key order, spacing, a disabled block.
+            Assert.Matches(pattern, "{\"topCpu\":{\"count\":10, \"enabled\" :\ttrue}}");
+            Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false, \"count\": 10}}");
+            Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false}, \"x\": {\"enabled\": true}}");
+        }
+
+        [Fact]
+        public void TopCpu_InstallScriptLiftsProtectProcOnlyWhenEnabled()
+        {
+            var off = LinuxProbeInstallerBundle.BuildInstallScript();
+            var on = LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true);
+
+            // Both scripts decide from the config installed on the host (the bundle's, or the kept one),
+            // not from the bundle's switch: a kept config that enables topCpu wins over a bundle without it.
+            foreach (var script in new[] { off, on })
+            {
+                Assert.Contains("TOP_CPU_DROPIN=\"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", script);
+                // grep without -q reads all input, so pipefail never sees tr killed by SIGPIPE.
+                Assert.Contains("if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/config.json\" \\\n" +
+                                "  | grep -E '" + LinuxProbeInstallerBundle.TopCpuEnabledPattern + "' >/dev/null; then", script);
+                Assert.DoesNotContain("grep -Eq", script);
+                Assert.Contains("  cat > \"$TOP_CPU_DROPIN\" <<'EOF'", script);
+                Assert.Contains("\n[Service]\nProtectProc=default\nEOF\n", script);
+                // Anything else (off, missing, unrecognised) removes the drop-in: the safe side.
+                Assert.Contains("    rm -f \"$TOP_CPU_DROPIN\"", script);
+                // Decided after the config is placed and before systemd is reloaded and the unit (re)started.
+                var check = script.IndexOf("top_cpu_on=0", System.StringComparison.Ordinal);
+                Assert.True(script.IndexOf("install -m 0644 -o root -g root config.json", System.StringComparison.Ordinal) < check);
+                Assert.True(check < script.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+                Assert.DoesNotContain("python", script);
+                Assert.DoesNotContain("jq ", script);
+            }
+
+            // Only a bundle that enables top CPU warns when the kept config does not.
+            Assert.Contains("WARNING: this bundle enables top CPU processes, but the existing $CONFIG_DIR/config.json was kept and does not.", on);
+            Assert.Contains("sudo ./install.sh --force-config", on);
+            Assert.Contains("RUNBOOK.md, 'Top CPU processes'", on);
+            Assert.DoesNotContain("WARNING: this bundle enables top CPU", off);
+
+            // The bundle ships the script matching its config.
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { EnableTopCpu = true }));
+            Assert.Equal(on, Encoding.UTF8.GetString(entries["install.sh"].Content));
+            Assert.Contains("\"topCpu\"", Encoding.UTF8.GetString(entries["config.json"].Content));
+
+            Assert.Contains("rm -f \"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", LinuxProbeInstallerBundle.BuildUninstallScript());
         }
 
         [Fact]
