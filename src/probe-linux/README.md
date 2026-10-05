@@ -128,6 +128,14 @@ for the 5-minute sensors (48 h, one missed day, for the daily cores value): a so
 producing — a read that keeps failing, a thread stuck on a hung filesystem, an unmounted disk —
 turns the sensor to Timeout on the server instead of leaving its last value looking fresh.
 
+**Sampling cadences** (owner decision 2026-10-05): Docker stats and `CPU temperature` are sampled
+**once a minute** (5 s before), because their samples only feed 5-minute bars — the records/day do
+not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
+eleven times every 5 seconds on garage-server (one stats call per running container); the disk
+counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
+also drives the daily write/read totals), as do top-CPU (60 s), the shared collector's own bars,
+the heartbeat and the dispatch, which this decision did not touch.
+
 ### Host (#1476)
 
 Computer-level (`is_computer_sensor`), so under `.computer/…` at the product root.
@@ -135,7 +143,7 @@ Computer-level (`is_computer_sensor`), so under `.computer/…` at the product r
 | Path | Type · unit | Period | TTL | Alerts (registered with the sensor) | Source | Records/day |
 |---|---|---|---|---|---|---|
 | `.computer/Logical cores` | Int | at start + every 24 h | 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
-| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | 15 min | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
+| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 60 s into a 5-min bar (5 samples; a spike shorter than a minute may be missed by Max) | 15 min | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
 
 **Alert semantics.** Every alert notifies (the managed "instant hourly" schedule: the first
 notification at once, repeats hourly while it holds — the same action as the managed default
@@ -312,13 +320,13 @@ Everything lives under one node in the probe's module node:
 
 | Sensor | Type · unit | Cadence | Value | Alert (at registration) | Records/day |
 |---|---|---|---|---|---|
-| `CPU` | DoubleBar · % | sample every 5 s (`probe.docker.samplePeriodSec`), 5-min bar | % of the **whole host** (all cores = 100 %): Δ`cpu_usage.total_usage` / Δ`system_cpu_usage` × 100. Not × `online_cpus` — `docker stats` shows per-core % (up to 400 % on 4 cores) | mean > 90 for 30 min → warning notification | 288 |
+| `CPU` | DoubleBar · % | sample every 60 s (`probe.docker.samplePeriodSec`), 5-min bar (5 samples) | % of the **whole host** (all cores = 100 %): Δ`cpu_usage.total_usage` / Δ`system_cpu_usage` × 100. Not × `online_cpus` — `docker stats` shows per-core % (up to 400 % on 4 cores) | mean > 90 for 30 min → warning notification | 288 |
 | `Memory used %` | DoubleBar · % | as CPU | (`usage` − `inactive_file`) / limit × 100; no limit ⇒ of the host's `MemTotal`. **The limit is stated in the description** ("… **1024 MB** on this host", or "no memory limit is set … MemTotal (15917 MB)") and a changed limit re-registers the sensor with the new text — there is no separate limit sensor (owner decision) | mean > 90 → warning notification | 288 |
 | `Service status` | Enum (the Windows `ServiceControllerStatus` options) | poll every 60 s, AggregateData | running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last seen. A service first seen as a **completed one-shot job** — every container Exited (0) under restart policy `no` — is not monitored at all (see below) | `IfValue NotEqual Running`, confirmation 5 min, notification repeated hourly — the Windows `ServiceStatusPrototype` alert byte for byte (test-pinned) | ~0 |
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
 | `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`probe.docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
-| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the 5-s samples. The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
+| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the stats samples (one a minute by default). The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
 
 Cost: ≈ **604 records/day per service** (two bars, 24 hourly write totals and a handful of state
 changes), ≈ 4 830/day for eight services — within the owner's budget. The stats sensors register
@@ -326,17 +334,19 @@ only for a service that has run, `Disk written per hour` only once its container
 counter, `Health` only where a healthcheck is defined: no empty nodes.
 
 **Disk written per hour — who wears the disk.** The disks' `Average disk write speed` says how
-much a disk is written, not by whom; this sensor splits it by Compose service. Each 5-s sample adds
-a container's write-counter delta to the service's current clock hour; the hour is posted on the
-first tick after it ends. The running hour and each container's last counter live in the state
+much a disk is written, not by whom; this sensor splits it by Compose service. Each stats sample
+(one a minute by default) adds a container's write-counter delta to the service's current clock
+hour; the hour is posted on the first tick after it ends, and the delta of the sample that spans
+the boundary counts in the new hour — so up to about one sample period (60 s by default) of an
+hour's writes lands in the next one. The running hour and each container's last counter live in the state
 file (written at most every 5 minutes, at every posted hour and on stop), so a probe restart
 continues the hour — and the writes made while the probe was down count too, when the container
-and its counter survived and the hour did not change. A gap that crosses an hour boundary cannot
-be split between the two hours and is dropped. The hour that has just ended is posted on the first
-tick after it — also when that tick is the first after a restart, since its bytes were measured;
+and its counter survived and the hour did not change. A gap longer than three sample periods
+(3 min by default) that crosses an hour boundary cannot be split between the two hours and is
+dropped. The hour that has just ended is posted on the first tick after it — also when that tick is the first after a restart, since its bytes were measured;
 an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
 line. An hour is posted once: a clock stepped back a little into the hour just posted (at most three
-sample periods, 15 s by default — an NTP step across the boundary) does not reopen it — the running
+sample periods, 3 min by default — an NTP step across the boundary) does not reopen it — the running
 hour keeps counting, the writes made meanwhile included (#1489). A larger step back (a VM restore, a
 badly set clock corrected) resets the running hour, as any step back past it does, and the hour
 just posted is still never posted a second time. A skip that discards measured bytes (a clock that went backwards, a gap
@@ -387,10 +397,12 @@ Behavior at the edges:
   memory); status and health are worst-of (Stopped < StartPending < Paused < Running; unhealthy <
   starting < healthy); restart counts are summed.
 - **CPU is never posted as 0 for lack of data:** a container's first sample, a counter that went
-  backwards, a new container id and an interval outside ½…3× the sample period are skipped. A
-  service with any skipped replica skips that sample.
+  backwards, a new container id and an interval outside ½…3× the sample period (30 s…3 min by
+  default) are skipped. A service with any skipped replica skips that sample, so a new or
+  recreated container's first CPU value comes one sample period (a minute) after it is first seen.
 - **An unreachable daemon** is logged once (an info line when there is no socket at all, an error
-  with a hint on `EACCES`), retried with a backoff doubling up to 60 s, and resumed silently;
+  with a hint on `EACCES`), retried with a backoff doubling from the sample period up to 60 s — at
+  the 60 s default simply on every tick — and resumed silently;
   nothing is posted meanwhile. A failed or timed-out inspect or stats call skips that service's
   values (logged once per container) without touching the other services, and never posts a
   guess. A panic in a tick is caught and logged.
@@ -740,8 +752,8 @@ Placeholders only — **no secrets**:
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
   with `update-ca-certificates`; libcurl/OpenSSL picks up the system store with verification on.
 * `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
-  (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`5`, 1–300; the bars stay
-  5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
+  (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`60`, 1–300; the bars stay
+  5 minutes whatever it is; the state poll runs on the tick nearest every 60 s), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
   patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
 * `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),

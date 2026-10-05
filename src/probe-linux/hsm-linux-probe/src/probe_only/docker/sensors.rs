@@ -293,7 +293,7 @@ service's containers wrote to **block devices** during one clock hour (UTC), rep
 summed — who is wearing the disk. Physical writes: a write through LVM or dm-crypt counts once, \
 on the disk; a mirrored write (md RAID1/10) counts once per member disk. Source: the \
 containers' cgroup I/O counters (`blkio_stats.io_service_bytes_recursive`, op write) from the \
-Docker Engine API, sampled every few seconds. Writes still in the page cache count when they \
+Docker Engine API, sampled once a minute by default. Writes still in the page cache count when they \
 are flushed; reads and tmpfs never count. One value per hour, **sent just after the hour it \
 covers**: its time is about one hour later than the writes, and the comment names the window \
 (e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was \
@@ -302,9 +302,9 @@ only sets a baseline; an hour with no measurement is skipped, never sent as 0. W
 statistics.";
 
 const CPU_DESCRIPTION: &str = "CPU used by the Compose service's containers, as a percentage of \
-the **whole host** (all cores together = 100 %), replicas summed. Sampled every few seconds \
-(docker.samplePeriodSec, 5 s by default) from the Docker Engine API and aggregated into \
-5-minute bars. Note: `docker stats` shows per-core percent (up to 100 % × the number of cores); \
+the **whole host** (all cores together = 100 %), replicas summed. Sampled every \
+docker.samplePeriodSec (60 s by default: 5 samples per bar) from the Docker Engine API and \
+aggregated into 5-minute bars. Note: `docker stats` shows per-core percent (up to 100 % × the number of cores); \
 divide its figure by the host's core count to compare. A sample that cannot give an honest delta \
 (first sample, counter reset, recreated container, irregular interval) is skipped, never sent \
 as 0.";
@@ -328,8 +328,8 @@ pub fn memory_used_description(limit: Option<(i32, bool)>) -> String {
     format!(
         "Memory used by the Compose service's containers as a percentage {basis}: \
          (usage − inactive_file) / limit, the `docker stats` convention. Replicas: summed usage \
-         over summed limits, capped at the host's memory. 5-minute bars of samples taken every \
-         few seconds. The description follows a changed limit."
+         over summed limits, capped at the host's memory. 5-minute bars of samples taken once a \
+         minute by default. The description follows a changed limit."
     )
 }
 

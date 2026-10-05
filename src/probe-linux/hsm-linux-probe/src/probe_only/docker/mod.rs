@@ -3,8 +3,9 @@
 //! the Docker Engine API over its Unix socket.
 //!
 //! A probe-only [`Source`] on a thread of its own with two cadences: stats every
-//! `probe.docker.samplePeriodSec` (CPU and memory samples into 5-minute bars, write counters into
-//! the running hour — [`written`]) and, on the first tick and every 60 s after, a state poll
+//! `probe.docker.samplePeriodSec`, 60 s by default (CPU and memory samples into 5-minute bars,
+//! write counters into the running hour — [`written`]) and, on the first tick and every 60 s
+//! after, a state poll
 //! (listing + inspect: status, health, restart count, OOM). Every tick first closes a clock hour
 //! that has ended and posts its `Disk written per hour`, whether or not the daemon answers.
 //! [`register`] primes the source before the collector starts: every service already running is
@@ -247,12 +248,16 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let mut failure = None;
         if now >= self.next_poll {
             failure = self.poll(logger, &should_stop).err();
-            self.next_poll = now + contract::STATE_POLL_PERIOD;
+            self.next_poll = on_tick_grid(now, contract::STATE_POLL_PERIOD, self.sample_period);
         }
         if failure.is_none() {
             failure = self.sample_stats(logger, &should_stop).err();
         }
-        if self.written_dirty && self.saved_at.elapsed() >= contract::WRITTEN_PERSIST_PERIOD {
+        // Half a period of slack, as in `on_tick_grid`: `saved_at` is stamped at the end of a
+        // tick, so without it the save slips a tick (6 minutes at the 60 s default).
+        if self.written_dirty
+            && self.saved_at.elapsed() + self.sample_period / 2 >= contract::WRITTEN_PERSIST_PERIOD
+        {
             self.persist(logger);
         }
 
@@ -279,7 +284,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         ));
                     }
                 }
-                self.unavailable_until = Some(Instant::now() + self.backoff);
+                self.unavailable_until = Some(on_tick_grid(now, self.backoff, self.sample_period));
                 self.backoff = (self.backoff * 2).min(contract::MAX_BACKOFF);
                 // Re-list first thing after the outage.
                 self.next_poll = Instant::now();
@@ -1040,6 +1045,17 @@ fn report_problems(logger: &Logger, log_once: &mut LogOnce, problems: &[String])
     }
 }
 
+/// The deadline for "`wait` after the tick that started at `from`": the tick on the grid nearest
+/// to `from + wait` meets it. Ticks come on a fixed-rate grid (`run_source`) but each starts a
+/// little late (wake-up latency), and by a different amount each time, so a deadline of exactly
+/// `from + wait` is missed whenever the later tick starts earlier within its slot than this one
+/// did, and the action slips by a whole period: at the 60 s default the state poll would run every
+/// 2 minutes and the retry after an outage would wait 2 minutes. Half a period of slack absorbs
+/// that jitter (a 5 s period still polls every 60 s, a 7 s one every 63 s).
+fn on_tick_grid(from: Instant, wait: Duration, period: Duration) -> Instant {
+    from + wait.saturating_sub(period / 2)
+}
+
 fn short_id(id: &str) -> &str {
     id.get(..12).unwrap_or(id)
 }
@@ -1137,7 +1153,7 @@ pub(crate) mod tests {
     use hsm_collector::CollectorOptions;
 
     /// Serves the garage captures: the listing, every inspect, and the two stats rounds (5.3 s
-    /// apart on the host) in turn.
+    /// apart on the host, taken at the old 5 s cadence) in turn.
     pub(crate) struct FixtureEngine {
         pub list: Vec<ContainerSummary>,
         pub inspects: HashMap<String, ContainerInspect>,
@@ -1258,7 +1274,7 @@ pub(crate) mod tests {
     const GARAGE_MEM_TOTAL: u64 = 16_298_872 * 1024;
 
     /// Drive the garage fixtures through one poll and two stats rounds, as the running source
-    /// would over its first ~10 seconds.
+    /// would over its first minute.
     pub(crate) fn drive_garage(collector: &Collector) {
         drive_garage_on(collector, |_| {});
     }
@@ -1280,11 +1296,13 @@ pub(crate) mod tests {
             .sample_stats(&quiet(), &never)
             .expect("first stats round");
         source.engine.round = 1;
-        // The captures are ~5.3 s apart; model that interval on the source's monotonic clock.
+        // One default sample period on the source's monotonic clock, so the CPU interval check
+        // passes. The captures are really 5.3 s apart, but the percent is the ratio of the two
+        // counters' deltas, whatever the interval.
         source.origin = source
             .origin
-            .checked_sub(Duration::from_millis(5_300))
-            .expect("monotonic clock past 5 s");
+            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
+            .expect("monotonic clock past one sample period");
         source
             .sample_stats(&quiet(), &never)
             .expect("second stats round");
@@ -1340,7 +1358,12 @@ pub(crate) mod tests {
         collector.start().expect("start");
         let mut engine = FixtureEngine::garage();
         engine.down = true;
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        // A 5 s period, so the doubling is visible under the 60 s cap.
+        let config = DockerConfig {
+            sample_period_sec: 5,
+            ..DockerConfig::default()
+        };
+        let mut source = garage_source(&collector, engine, &config, None);
         let error = source.poll(&quiet(), &|| false).expect_err("down");
         assert!(error.is_unavailable());
         assert!(
@@ -1375,6 +1398,49 @@ pub(crate) mod tests {
             .find(|json| json.contains(".probe/Docker/gitea/db/Service status"))
             .expect("gitea/db registered at runtime");
         assert!(status.contains("$operation Running"), "{status}");
+    }
+
+    /// Ticks start a little late on their fixed-rate grid, each by a different amount. A deadline
+    /// "60 s after this tick" must still be met by the tick one minute later when that one starts
+    /// earlier within its slot — otherwise, at the 60 s default, the state poll and the retry after
+    /// an outage would slip to every 2 minutes.
+    #[test]
+    fn at_the_default_period_the_state_poll_and_the_retry_run_every_tick() {
+        let period = contract::DEFAULT_SAMPLE_PERIOD;
+        assert_eq!(period, contract::STATE_POLL_PERIOD);
+        let jitter = Duration::from_millis(1);
+        let tick = Instant::now() + Duration::from_secs(1);
+        let deadline = on_tick_grid(tick, contract::STATE_POLL_PERIOD, period);
+        assert!(tick < deadline, "not due again in the same tick");
+        assert!(
+            tick + period - jitter >= deadline,
+            "the next tick polls although it started earlier in its slot"
+        );
+        // A 5 s period keeps polling every 60 s: the 11th tick does not, the 12th does.
+        let five = Duration::from_secs(5);
+        let deadline = on_tick_grid(tick, contract::STATE_POLL_PERIOD, five);
+        assert!(tick + five * 11 + jitter < deadline);
+        assert!(tick + five * 12 - jitter >= deadline);
+
+        // The source, at the default period: a tick that polled is due again on the next tick.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        Source::sample(&mut source, &quiet());
+        assert!(source.next_poll <= Instant::now() + period / 2);
+        // An outage: the backoff stays one period (the 60 s cap) and the next tick retries.
+        source.engine.down = true;
+        source.next_poll = Instant::now();
+        Source::sample(&mut source, &quiet());
+        assert_eq!(source.backoff, period);
+        let until = source.unavailable_until.expect("backing off");
+        assert!(until <= Instant::now() + period / 2);
+        collector.stop().expect("stop");
     }
 
     /// The garage tree primed before Start: everything registers in the Start batch.
@@ -1661,7 +1727,7 @@ pub(crate) mod tests {
             }
             source.origin = source
                 .origin
-                .checked_sub(Duration::from_millis(5_300))
+                .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
                 .expect("clock");
             source
                 .sample_stats(&quiet(), &|| false)

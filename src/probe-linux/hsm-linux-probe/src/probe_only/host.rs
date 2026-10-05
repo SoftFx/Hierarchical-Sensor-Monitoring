@@ -34,8 +34,11 @@ pub const CPU_TEMPERATURE_PATH: &str = ".computer/CPU temperature";
 const LOGICAL_CORES_PERIOD: Duration = Duration::from_secs(24 * 3600);
 const LOGICAL_CORES_TTL: Duration = Duration::from_secs(48 * 3600);
 
-/// One sample every 5 s into a 5-minute bar: 60 samples per bar, one stored record per 5 minutes.
-const TEMPERATURE_SAMPLE_PERIOD: Duration = Duration::from_secs(5);
+/// One sample a minute into a 5-minute bar: 5 samples per bar, one stored record per 5 minutes
+/// (owner decision 2026-10-05; 5 s and 60 samples before — the records/day are the same). A spike
+/// shorter than a minute can fall between two samples and be missed by the bar's Max; the alerts
+/// read the Mean.
+const TEMPERATURE_SAMPLE_PERIOD: Duration = Duration::from_secs(60);
 const TEMPERATURE_BAR_PERIOD: Duration = Duration::from_secs(300);
 /// Carried by the ABI for parity with the managed option; the collector does not post partial bars
 /// of a custom bar, so the stored record is the closed 5-minute bar.
@@ -207,7 +210,8 @@ pub fn register_cpu_temperature<'c>(
         .with_ttl(TEMPERATURE_TTL)
         .with_description(format!(
             "CPU package temperature in °C (the collector has no temperature unit): a 5-minute bar \
-             of one sample every 5 s. Source on this host: {}.",
+             of one sample a minute (5 samples; a spike shorter than a minute may be missed by \
+             Max). Source on this host: {}.",
             input.origin
         ));
     let sensor = match collector.double_bar_sensor(
@@ -487,5 +491,22 @@ pub mod tests {
         tree.file("temp", "n/a\n");
         assert!(read_celsius(&tree.0.join("temp")).is_err());
         assert!(read_celsius(&tree.0.join("absent")).is_err());
+    }
+
+    #[test]
+    fn the_temperature_is_sampled_once_a_minute_into_five_minute_bars() {
+        // Owner decision 2026-10-05: 60 s (5 s before), 5 samples per bar; the bar, the TTL of
+        // three bars and the alerts stay.
+        assert_eq!(TEMPERATURE_SAMPLE_PERIOD, Duration::from_secs(60));
+        assert_eq!(TEMPERATURE_BAR_PERIOD, Duration::from_secs(300));
+        assert_eq!(
+            TEMPERATURE_BAR_PERIOD.as_secs() / TEMPERATURE_SAMPLE_PERIOD.as_secs(),
+            5
+        );
+        assert_eq!(TEMPERATURE_TTL, Duration::from_secs(900));
+        assert_eq!(
+            (TEMPERATURE_WARNING_ABOVE, TEMPERATURE_ERROR_ABOVE),
+            ("80", "90")
+        );
     }
 }

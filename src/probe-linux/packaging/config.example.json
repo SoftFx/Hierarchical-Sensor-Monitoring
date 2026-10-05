@@ -24,7 +24,7 @@
       "enabled": true,
       "socket": "/var/run/docker.sock",
       "composeOnly": true,
-      "samplePeriodSec": 5,
+      "samplePeriodSec": 60,
       "oomLatchHours": 24,
       "exclude": []
     }

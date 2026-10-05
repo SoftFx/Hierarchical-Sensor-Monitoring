@@ -546,6 +546,8 @@ mod tests {
             config.probe.docker.sample_period_sec,
             defaults.sample_period_sec
         );
+        // Owner decision 2026-10-05: the shipped skeleton samples Docker stats once a minute.
+        assert_eq!(config.probe.docker.sample_period(), Duration::from_secs(60));
         assert_eq!(
             config.probe.docker.oom_latch_hours,
             defaults.oom_latch_hours
@@ -764,7 +766,7 @@ mod tests {
     }
 
     #[test]
-    fn the_docker_source_defaults_to_on_compose_only_every_five_seconds() {
+    fn the_docker_source_defaults_to_on_compose_only_every_minute() {
         let config = Config::parse(MINIMAL).expect("parse");
         assert!(config.probe.docker.enabled);
         assert_eq!(
@@ -772,7 +774,7 @@ mod tests {
             PathBuf::from("/var/run/docker.sock")
         );
         assert!(config.probe.docker.compose_only);
-        assert_eq!(config.probe.docker.sample_period(), Duration::from_secs(5));
+        assert_eq!(config.probe.docker.sample_period(), Duration::from_secs(60));
         assert_eq!(
             config.probe.docker.oom_latch(),
             Duration::from_secs(24 * 3600)

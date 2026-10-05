@@ -289,7 +289,7 @@ impl WriteRecord {
         // back into the hour just posted (an NTP step of seconds across the boundary): the running
         // hour is kept, since reopening the posted hour would only collect a few seconds' bytes
         // that `roll` then refuses to hand out twice (#1489). "Small" is the longest interval a
-        // sample may cover (`MAX_INTERVAL_FACTOR` sample periods, 15 s at the 5 s default): a step
+        // sample may cover (`MAX_INTERVAL_FACTOR` sample periods, 3 min at the 60 s default): a step
         // within it is indistinguishable from one late sample; a larger one is a real correction
         // and resets as any other step back does. Either way `roll` never posts the posted hour
         // again.
