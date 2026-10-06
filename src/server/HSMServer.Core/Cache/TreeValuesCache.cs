@@ -1096,24 +1096,6 @@ namespace HSMServer.Core.Cache
 
             sensor.Clear(to);
 
-            // The retention-floor half for late values: everything up to the clear
-            // was just erased on purpose — an out-of-order write must not re-fill
-            // the cleared window (#1441 round-3). Storage.From is not usable for
-            // this: the history load seeds it with the oldest row.
-            //
-            // The floor is the moment the clear REACHED, not the requested bound:
-            // a UI full clear sends To = MaxValue (ClearHistoryRequest default),
-            // and stamping that verbatim would drop every later out-of-order value
-            // until restart — switching the #1441 fix off with a routine operator
-            // action. Clamped to UtcNow, a full clear floors at the clear moment:
-            // values stamped after it are new data, a replay of pre-clear stamps
-            // is refused. Monotone (max): the automatic KeepHistory pass also runs
-            // through here with its own cutoff, and it must never LOWER a floor a
-            // later operator clear raised — only widen the protected window.
-            var clearFloor = to < DateTime.UtcNow ? to : DateTime.UtcNow;
-            if (sensor.HistoryClearedTo is null || sensor.HistoryClearedTo < clearFloor)
-                sensor.HistoryClearedTo = clearFloor;
-
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
@@ -1134,6 +1116,30 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id, from, to);
+
+            // The retention-floor half for late values: everything up to the clear
+            // was just erased on purpose — an out-of-order write must not re-fill
+            // the cleared window (#1441 round-3). Storage.From is not usable for
+            // this: the history load seeds it with the oldest row.
+            //
+            // The floor is the moment the clear REACHED, not the requested bound:
+            // a UI full clear sends To = MaxValue (ClearHistoryRequest default),
+            // and stamping that verbatim would drop every later out-of-order value
+            // until restart — switching the #1441 fix off with a routine operator
+            // action. Clamped to UtcNow, a full clear floors at the clear moment:
+            // values stamped after it are new data, a replay of pre-clear stamps
+            // is refused. Monotone (max): the automatic KeepHistory pass also runs
+            // through here with its own cutoff, and it must never LOWER a floor a
+            // later operator clear raised — only widen the protected window.
+            //
+            // Stamped AFTER the database erase (#1441 round-6): the bordered-value
+            // adjustment above can return early without erasing anything, and a
+            // floor stamped on that path would refuse backfill for rows that are
+            // still in the database.
+            var clearFloor = to < DateTime.UtcNow ? to : DateTime.UtcNow;
+            if (sensor.HistoryClearedTo is null || sensor.HistoryClearedTo < clearFloor)
+                sensor.HistoryClearedTo = clearFloor;
+
             sensor.Cut(to);
 
             SensorUpdateView(sensor);
@@ -2794,8 +2800,19 @@ namespace HSMServer.Core.Cache
                 // DateTime.MinValue, so such sensors accept arbitrary past
                 // timestamps and the weekly-database protection does NOT apply
                 // to them.
+                //
+                // Round-6: KeepHistory inherited from a folder reaches here as a
+                // FromFolder policy carrying the FOLDER model's ticks — Forever
+                // as long.MaxValue, the month presets as 0. The retention pass
+                // (TimeIsUp) treats both as "never expires", and the floor must
+                // agree: shifting long.MaxValue throws and would abort the whole
+                // batch loop, and shifting 0 floors at UtcNow and would refuse
+                // every out-of-order value. Any ticks window too large to
+                // represent below DateTime.MinValue is the same no-floor case.
                 var keepPolicy = sensor.Settings.KeepHistory.Value;
-                var keepFloor = keepPolicy.IsNone ? DateTime.MinValue : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
+                var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= DateTime.UtcNow.Ticks))
+                    ? DateTime.MinValue
+                    : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
                 var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
                 var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
 

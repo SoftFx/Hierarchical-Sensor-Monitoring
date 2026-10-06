@@ -67,7 +67,12 @@ namespace HSMServer.Core.Model
         // The floor is bounded ONLY by KeepHistory and explicit clears: with
         // Forever retention (KeepHistory = None, never cleared) it is
         // DateTime.MinValue, so such sensors accept arbitrary past timestamps
-        // and the weekly-database protection does NOT apply to them.
+        // and the weekly-database protection does NOT apply to them. The same
+        // MinValue applies to KeepHistory inherited from a folder when the
+        // folder window never expires for the retention pass (FromFolder with
+        // the folder's month presets, Ticks = 0) or is too large to shift
+        // (FromFolder Forever, long.MaxValue) — the floor mirrors TimeIsUp,
+        // not just IsNone.
         internal long OutOfRetentionValues;
 
         // Upper bound of the last explicit history clear (ClearSensorHistory),

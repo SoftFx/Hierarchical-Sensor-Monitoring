@@ -681,6 +681,89 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
+        [Fact]
+        public async Task OutOfOrderValue_InheritedForeverKeepHistory_DoesNotAbortTheBatch()
+        {
+            // Round-6 P1, first shape: a product inheriting KeepHistory from a
+            // folder holds a FromFolder policy with the FOLDER model's ticks —
+            // folder Forever arrives as long.MaxValue (None's ticks carried by
+            // ToFromFolderModel). Shifting that by -1 threw
+            // ArgumentOutOfRangeException with no catch in the batch loop, so
+            // ONE such out-of-order value dropped every LATER value in the
+            // same batch, for any sensor. The floor must treat "too large to
+            // shift" as no floor — the same MinValue as the documented Forever
+            // limit.
+            var path = "denseBatch/inheritedForever";
+            var siblingPath = "denseBatch/inheritedForeverSibling";
+            var newest = DateTime.UtcNow.AddHours(-1);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = newest, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeInterval.FromFolder, long.MaxValue), Initiator = InitiatorInfo.System });
+
+            var batch = new SensorValueBase[]
+            {
+                // The out-of-order value whose floor computation used to throw.
+                new DoubleSensorValue { Path = path, Time = newest.AddMinutes(-30), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                // A LATER value for another sensor in the SAME batch: before the
+                // fix it was never reached.
+                new DoubleSensorValue { Path = siblingPath, Time = DateTime.UtcNow, Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch)));
+
+            // The out-of-order value itself: stored, no retention floor, counted.
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
+            var stored = await ReadStoredWindowAsync(sensor.Id, newest.AddHours(-1), newest.AddMinutes(1));
+            Assert.Equal(2, stored.Count);
+
+            // The sibling BEHIND the throwing value in the batch survived it.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, siblingPath, out var sibling));
+            var siblingStored = await ReadStoredWindowAsync(sibling.Id, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5));
+            Assert.Single(siblingStored);
+        }
+
+        [Fact]
+        public async Task OutOfOrderValue_InheritedMonthKeepHistory_IsStored_NotRefused()
+        {
+            // Round-6 P1, second shape: the folder month presets (Month,
+            // Three/Six Months, Year) inherit as FromFolder with Ticks = 0.
+            // TimeIsUp treats Ticks <= 0 as "never expires" — the retention
+            // pass never purges these sensors — but the floor shifted 0 ticks
+            // and landed at UtcNow, refusing EVERY out-of-order value as
+            // out-of-retention. No window means no floor: a value months back
+            // must be stored, exactly as the retention pass would keep it.
+            var path = "denseBatch/inheritedMonth";
+            var newest = DateTime.UtcNow.AddHours(-1);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = newest, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeInterval.FromFolder, 0), Initiator = InitiatorInfo.System });
+
+            var backfill = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = DateTime.UtcNow.AddDays(-40), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, backfill)));
+
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, DateTime.UtcNow.AddDays(-45), newest.AddMinutes(1));
+            Assert.Equal(2, stored.Count); // the seed AND the 40-days-back value
+        }
+
+
         private static void Shuffle<T>(IList<T> list)
         {
             var random = new Random(20260930); // deterministic: the loss must not depend on the shuffle
