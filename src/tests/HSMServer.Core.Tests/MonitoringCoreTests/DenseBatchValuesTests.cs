@@ -7,6 +7,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 using HSMCommon.Model;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
@@ -449,6 +450,94 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        public async Task OutOfOrderRow_BelowStorageFrom_IsRemovedByFullClear()
+        {
+            // #1441 round-5: the direct out-of-order write can land a row
+            // OLDER than Storage.From (which a restart seeds with the oldest
+            // stored row). ClearSensorHistory deletes [sensor.From, to] and
+            // the retention pass starts at From too — unless From is widened
+            // down to the new oldest row, a full operator clear leaves that
+            // row in the database (still visible in history reads) until a
+            // restart.
+            var path = "denseBatch/belowFromClear";
+            var firstRow = DateTime.UtcNow.AddHours(-2);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = firstRow, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            // What a restart does: the history load cuts From to the oldest row.
+            sensor.Cut(firstRow);
+            Assert.Equal(firstRow, sensor.From);
+
+            // A shuffled batch backfills BELOW From: stored directly (#1441)...
+            var backfillTime = firstRow.AddMinutes(-30);
+            var backfill = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = backfillTime, Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, backfill)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // ...and From now tracks the new oldest row (the fix under test):
+            // MinValue itself never widens, but any From above the row does.
+            Assert.Equal(backfillTime, sensor.From);
+
+            var beforeClear = await ReadStoredWindowAsync(sensor.Id, backfillTime.AddMinutes(-5), firstRow.AddMinutes(1));
+            Assert.Equal(2, beforeClear.Count);
+
+            // A full UI clear must remove BOTH rows — the backfilled one
+            // below the old From included — and must not get refused.
+            await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id));
+            Assert.NotNull(sensor.HistoryClearedTo); // the clear ran, not refused
+
+            var afterClear = await ReadStoredWindowAsync(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+            Assert.Empty(afterClear);
+        }
+
+        [Fact]
+        public async Task OutOfOrderFileValue_IsStoredCompressed()
+        {
+            // #1441 round-5: the out-of-order direct write bypasses
+            // Storage.AddValue, where FileValuesStorage compresses incoming
+            // content — the persisted copy must get the same write-side
+            // transform (PrepareForPersist), or late file values would sit
+            // in the database raw, larger on disk than the same content
+            // through the storage's rules. Readers are agnostic:
+            // DecompressContent passes through when Value.Length ==
+            // OriginalSize and decompresses otherwise.
+            var path = "denseBatch/fileOutOfOrderCompressed";
+            var baseTime = DateTime.UtcNow.AddMinutes(-10);
+            var content = Enumerable.Repeat((byte)'A', 50_000).ToArray();
+
+            var batch = new SensorValueBase[]
+            {
+                // In-order first: becomes the cached newest.
+                new FileSensorValue { Path = path, Time = baseTime, Value = [.. content], Name = "inOrder", Extension = "txt", Status = HSMSensorDataObjects.SensorStatus.Ok },
+                // The late (older) sibling: the #1441 direct write.
+                new FileSensorValue { Path = path, Time = baseTime.AddMinutes(-5), Value = [.. content], Name = "outOfOrder", Extension = "txt", Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, baseTime.AddHours(-1), baseTime.AddMinutes(1));
+            Assert.Equal(2, stored.Count);
+
+            var late = Assert.IsType<FileValue>(stored.Single(v => v is FileValue file && file.Name == "outOfOrder"));
+
+            // Compressed on disk, and the decompress roundtrip returns the content.
+            Assert.True(late.Value.Length < late.OriginalSize,
+                $"the persisted out-of-order file value must be compressed: Value.Length={late.Value.Length}, OriginalSize={late.OriginalSize}");
+            Assert.Equal(content, late.DecompressContent().Value);
+        }
+
+        [Fact]
         public async Task OutOfOrderValue_IntoClearedWindow_IsNotStored()
         {
             // The other floor half: after an explicit history clear, a late
@@ -537,6 +626,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             // The automatic KeepHistory pass runs through the same
             // ClearSensorHistory with its own cutoff; it must never LOWER a
             // floor a later operator clear raised (#1441 round-4 P3).
+            //
+            // Round-5 note on actually reaching the guard: the operator
+            // clear ends with sensor.Cut(to), pinning From at T2, so a
+            // retention cutoff T1 < T2 would take the from > to early
+            // return and never evaluate the max-update. In a single session
+            // nothing lowers From below the floor honestly (values below
+            // the floor are refused; a restart cuts From to the oldest row,
+            // which the operator clear just made newer than T2) — the guard
+            // is reachable only in the From-reverted shape the restart race
+            // documented at LoadHistoryUnderLock can leave behind. That
+            // shape is simulated below with this file's established restart
+            // idiom (sensor.Cut), so the second clear genuinely runs through
+            // the floor guard instead of the early return.
             var path = "denseBatch/floorMonotone";
             var newest = DateTime.UtcNow.AddMinutes(-5);
 
@@ -549,14 +651,22 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
 
-            // Operator clears up to T2 (the later bound)...
+            // Operator clears up to T2 (the later bound): the floor is raised...
             var t2 = newest.AddMinutes(-10);
             await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, t2));
+            Assert.Equal(t2, sensor.HistoryClearedTo);
 
-            // ...then the retention pass clears up to an EARLIER cutoff T1 < T2.
+            // ...and the clear's Cut leaves From AT T2. Revert From below T1
+            // (the restart-race shape above) so the retention pass genuinely
+            // reaches the max-update guard.
             var t1 = newest.AddMinutes(-25);
+            sensor.Cut(t1.AddMinutes(-1));
+
+            // The retention pass clears up to an EARLIER cutoff T1 < T2: it
+            // runs (from <= to) and must NOT lower the operator's floor.
             await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, t1));
 
+            Assert.Equal(t1, sensor.From); // the second clear RAN: its Cut moved From up to T1 (an early return would have left it below)
             Assert.Equal(t2, sensor.HistoryClearedTo); // the floor did not regress
 
             // A late value inside (T1, T2) — inside the operator's cleared

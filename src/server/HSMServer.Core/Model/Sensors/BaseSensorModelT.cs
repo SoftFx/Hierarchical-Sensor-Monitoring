@@ -164,7 +164,13 @@ namespace HSMServer.Core.Model
                     // receiving them; only cache membership and the DB-write path differ.
                     ReceivedNewValue?.Invoke(validatedValue);
 
-                    result = AddValueResult.OutOfOrder(validatedValue);
+                    // The persisted copy gets the storage's write-side transform
+                    // (#1441 round-5): this branch skips Storage.AddValue, where
+                    // FileValuesStorage compresses file content — without this,
+                    // late file values would be stored raw (larger on disk).
+                    // PrepareForPersist returns a new instance when it transforms,
+                    // so the value delivered above stays untouched.
+                    result = AddValueResult.OutOfOrder(Storage.PrepareForPersist(validatedValue));
                     return true;
                 }
 

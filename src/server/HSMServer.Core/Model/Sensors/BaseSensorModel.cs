@@ -64,6 +64,10 @@ namespace HSMServer.Core.Model
         // re-fill windows the operator cleared. Deliberately NOT Storage.From:
         // the history load seeds it with the oldest stored row, which would make
         // legitimate backfill lossy depending on restart history.
+        // The floor is bounded ONLY by KeepHistory and explicit clears: with
+        // Forever retention (KeepHistory = None, never cleared) it is
+        // DateTime.MinValue, so such sensors accept arbitrary past timestamps
+        // and the weekly-database protection does NOT apply to them.
         internal long OutOfRetentionValues;
 
         // Upper bound of the last explicit history clear (ClearSensorHistory),
@@ -326,6 +330,15 @@ namespace HSMServer.Core.Model
         public void Cut(DateTime time)
         {
             Storage.Cut(time);
+        }
+
+        // Min-only counterpart of Cut for the #1441 direct out-of-order write:
+        // lowers From to a newly stored row that precedes it, so history
+        // clears and the retention pass (both bounded below by From) can
+        // still reach that row. No-op when the value is at/above From.
+        internal void WidenFrom(DateTime time)
+        {
+            Storage.WidenFrom(time);
         }
 
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());

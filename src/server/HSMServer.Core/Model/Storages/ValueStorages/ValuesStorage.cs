@@ -41,6 +41,8 @@ namespace HSMServer.Core.Model
 
         internal abstract void Cut(DateTime time);
 
+        internal abstract void WidenFrom(DateTime time);
+
     }
 
 
@@ -96,6 +98,15 @@ namespace HSMServer.Core.Model
 
 
         internal virtual void AddValue(T value) => AddValueBase(value);
+
+        // Write-side transform for values persisted OUTSIDE the AddValue
+        // pipeline (#1441 round-5): the out-of-order direct write never
+        // enters the cache, so a storage that transforms values on write
+        // (FileValuesStorage compresses file content) applies it here to the
+        // copy being persisted. Base: nothing to transform. The cached and
+        // ReceivedNewValue instances are deliberately left untouched — this
+        // shapes only what goes to the database.
+        internal virtual T PrepareForPersist(T value) => value;
 
         internal virtual void AddValueBase(T value)
         {
@@ -178,6 +189,20 @@ namespace HSMServer.Core.Model
         internal override void Cut(DateTime time)
         {
             _from = time;
+        }
+
+        // Min-only companion to Cut (#1441 round-5): a direct out-of-order
+        // write can land a row OLDER than _from (the history load seeds _from
+        // with the oldest stored row), and both ClearSensorHistory and the
+        // KeepHistory retention pass delete starting AT From — a From above
+        // the new oldest row would leave that row unremovable until restart.
+        // Only LOWERS From, and like Cut a bare field write: the neighboring
+        // code already tolerates the benign interleavings of unlocked _from
+        // writes (see LoadHistoryUnderLock's race note).
+        internal override void WidenFrom(DateTime time)
+        {
+            if (time < _from)
+                _from = time;
         }
 
         internal override void Clear()

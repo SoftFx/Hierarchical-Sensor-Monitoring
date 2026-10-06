@@ -2788,6 +2788,12 @@ namespace HSMServer.Core.Cache
                 // backfill depending on the server's restart history. Without
                 // any floor, a skewed or hostile clock could force open one
                 // weekly LevelDB per distinct past week.
+                // KNOWN LIMIT (#1441 round-5, deliberate): the floor is bounded
+                // only by KeepHistory and explicit clears. With Forever
+                // retention — KeepHistory None, never cleared — it is
+                // DateTime.MinValue, so such sensors accept arbitrary past
+                // timestamps and the weekly-database protection does NOT apply
+                // to them.
                 var keepPolicy = sensor.Settings.KeepHistory.Value;
                 var keepFloor = keepPolicy.IsNone ? DateTime.MinValue : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
                 var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
@@ -2801,6 +2807,16 @@ namespace HSMServer.Core.Cache
                 }
 
                 SaveSensorValueToDb(result.OutOfOrderValue, sensorId);
+
+                // The row just written is the oldest one whenever it precedes
+                // Storage.From (From is MinValue until a restart seeds it with
+                // the oldest row, or a clear raises it): ClearSensorHistory and
+                // the retention pass both delete starting AT From, so a From
+                // above the new oldest row would leave it unremovable until a
+                // restart (#1441 round-5). Min-only — a value at/above From
+                // leaves it alone, and MinValue itself never widens.
+                sensor.WidenFrom(result.OutOfOrderValue.Time);
+
                 CountAndWarnRateLimited(ref sensor.OutOfOrderValuesStored,
                     $"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
                 return;
