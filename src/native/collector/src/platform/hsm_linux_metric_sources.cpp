@@ -5,7 +5,7 @@
 //   Total CPU            /proc/stat aggregate line, busy% by delta   <- UnixTotalCpu + ProcStatCpuUsage
 //   Free RAM memory      /proc/meminfo MemAvailable, kB -> MB        <- UnixFreeRamMemory + ProcMeminfo
 //   Free space on disk   statvfs("/") available bytes -> MB          <- UnixFreeDiskSpace + UnixDiskInfo
-//   Free space ... prediction  statvfs("/") available kB -> TimeSpan <- UnixFreeDiskSpacePrediction
+//   Free space ... prediction  statvfs("/") available bytes -> TimeSpan <- UnixFreeDiskSpacePrediction
 //   Process CPU          /proc/self/stat utime+stime delta           <- UnixProcessCpu
 //   Process memory       /proc/self/stat rss pages -> MB             <- UnixProcessMemory (WorkingSet64)
 //   Process thread count /proc/self/task entry count                 <- UnixProcessThreadCount
@@ -213,20 +213,23 @@ namespace hsm
                 if (!ReadRootFreeBytes(available_bytes, error))
                     return Fail(sample, std::move(error));
 
-                // UnixDiskInfo reports (AvailableFreeSpace / 1024).KilobytesToMegabytes() — two
-                // INTEGER divisions, so the value is whole megabytes with kB granularity lost.
-                // Reproduced exactly here.
-                const std::uint64_t available_mb = (available_bytes / 1024u) / 1024u;
+                // UnixDiskInfo reports AvailableFreeSpace.BytesToMegabytes() — an INTEGER division,
+                // so the value is whole megabytes (until #1466 it went through whole kB first, which
+                // floors to the same number). Reproduced exactly here.
+                const std::uint64_t available_mb = available_bytes / (1024u * 1024u);
 
                 sample->double_value = static_cast<double>(available_mb);
                 return HSM_METRIC_READ_OK;
             }
 
             // ---- Free disk space prediction --------------------------------------------------
-            // UnixFreeDiskSpacePrediction: a 30 s sampling loop feeding the drain-speed EMA, and a
-            // TimeSpan posted on the sensor's own post period. UnixDiskInfo.FreeSpace is
-            // AvailableFreeSpace / 1024 — whole KILOBYTES — and the unit cancels in the division, so
-            // the same kB figure is what this source samples and divides.
+            // UnixFreeDiskSpacePrediction: a sampling loop every kSpaceCheckPeriodMs (10 min) feeding
+            // the drain-speed EMA, and a TimeSpan posted on the sensor's own post period.
+            // UnixDiskInfo.FreeSpace is AvailableFreeSpace in BYTES (#1466, as WindowsDiskInfo), so
+            // this source samples and divides bytes too, and the comment's "Mbytes" is true on both
+            // platforms. It used to be whole KILOBYTES, which made the Unix comment print GiB as
+            // "Mbytes" (a number 1024x too small); the posted TimeSpan is unchanged, because the
+            // unit cancels in the division.
             struct DiskPredictionSource
             {
                 DiskSpacePrediction prediction{ kCalibrationRequests };
@@ -234,13 +237,13 @@ namespace hsm
                 bool has_last_sample = false;
             };
 
-            bool ReadRootFreeKilobytes(double& kilobytes, std::string& error)
+            bool ReadRootFreeSpace(double& free_bytes, std::string& error)
             {
                 std::uint64_t bytes = 0;
                 if (!ReadRootFreeBytes(bytes, error))
                     return false;
 
-                kilobytes = static_cast<double>(bytes / 1024u);
+                free_bytes = static_cast<double>(bytes);
                 return true;
             }
 
@@ -251,12 +254,12 @@ namespace hsm
             // unseeded, exactly as managed leaves _hasBaseline false.
             void SeedDiskPrediction(DiskPredictionSource& source)
             {
-                double free_kb = 0.0;
+                double free_bytes = 0.0;
                 std::string error;
-                if (!ReadRootFreeKilobytes(free_kb, error))
+                if (!ReadRootFreeSpace(free_bytes, error))
                     return;
 
-                source.prediction.Sample(free_kb, 0.0);
+                source.prediction.Sample(free_bytes, 0.0);
                 source.last_sample_ms = SteadyClockMilliseconds();
                 source.has_last_sample = true;
             }
@@ -267,16 +270,16 @@ namespace hsm
                 if (source == nullptr)
                     return HSM_METRIC_READ_ERROR;
 
-                double free_kb = 0.0;
+                double free_bytes = 0.0;
                 std::string error;
-                if (!ReadRootFreeKilobytes(free_kb, error))
+                if (!ReadRootFreeSpace(free_bytes, error))
                     return Fail(sample, std::move(error)); // managed TryReadFreeSpace -> HandleException
 
                 const auto now_ms = SteadyClockMilliseconds();
                 const double elapsed_seconds =
                     source->has_last_sample ? static_cast<double>(now_ms - source->last_sample_ms) / 1000.0 : 0.0;
 
-                source->prediction.Sample(free_kb, elapsed_seconds);
+                source->prediction.Sample(free_bytes, elapsed_seconds);
                 source->last_sample_ms = now_ms;
                 source->has_last_sample = true;
                 return HSM_METRIC_READ_NO_VALUE; // a sampling tick never posts
@@ -288,12 +291,12 @@ namespace hsm
                 if (source == nullptr)
                     return HSM_METRIC_READ_ERROR;
 
-                double free_kb = 0.0;
+                double free_bytes = 0.0;
                 std::string error;
-                if (!ReadRootFreeKilobytes(free_kb, error))
+                if (!ReadRootFreeSpace(free_bytes, error))
                     return Fail(sample, std::move(error));
 
-                const auto post = source->prediction.NextPost(free_kb);
+                const auto post = source->prediction.NextPost(free_bytes);
                 ScratchComment() = post.comment;
 
                 sample->kind = HSM_METRIC_VALUE_TIMESPAN_MS;

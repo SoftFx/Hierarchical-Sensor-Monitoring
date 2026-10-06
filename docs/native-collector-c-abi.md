@@ -156,6 +156,16 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.10.2** (#1466, #1508) — behavior fixes, ABI unchanged. The Linux free-space prediction source
+  samples free space in BYTES, like the Windows one and the managed `UnixDiskInfo` (both changed
+  together): the comment's `Free space decreases by X Mbytes/hour` printed GiB on Linux, a number
+  1024x too small; the posted TimeSpan and `Free space on disk` are unchanged. A Stop that finds
+  values dropped from the full send queue while the queue diagnostics group is NOT registered
+  logs `Collector stop: N value(s) dropped from the full send queue during this run (Queue
+  overflow sensor not registered).` at Error — nothing folded the counter, so N is the whole run
+  and no report was made; with the group registered the Info line about drops after the final
+  report is unchanged. Pinned by `native_stop_overflow_log_without_the_queue_sensor_names_the_run`
+  and the managed `Unix_disk_info_reports_bytes_and_the_same_whole_megabytes`.
 - **0.10.1** (#1480) — behavior fix, ABI unchanged. `.module/Collector queue stats/Package process
   time` reports what the managed collector reports under that path: per sent package, the average
   time in seconds its values waited in the send queue before the package was collected (managed

@@ -5479,6 +5479,55 @@ namespace
             "the next run must not report the previous run's late drop");
     }
 
+    // Without the queue diagnostics group nothing folds the overflow counter, so the Stop line carries
+    // the whole run's drops and must not claim a report was made (#1508): it names the run, says the
+    // sensor is missing, and is logged at Error. The 1 h collect period keeps the worker out of the
+    // timeline, so the evictions are exactly the two values past capacity.
+    void NativeStopOverflowLogWithoutTheQueueSensorNamesTheRun()
+    {
+        struct Line
+        {
+            hsm_log_level_t level;
+            std::string message;
+        };
+
+        CollectorHandle collector; // declared first so the sensor handle is released before it
+        SensorHandle values;
+        std::vector<Line> lines;
+
+        auto options = TestOptions();
+        options.max_queue_size = 5;
+        options.package_collect_period_ms = 3600000;
+        collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                static_cast<std::vector<Line>*>(user_data)->push_back(Line{ level, message });
+            },
+            &lines);
+
+        values = CreateIntSensor(collector.value, "contract/queue/no-diagnostics");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        for (int value = 0; value < 7; ++value)
+            Require(hsm_sensor_add_int(values.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        int run_lines = 0;
+        for (const auto& line : lines)
+        {
+            Require(
+                line.message.find("after the final Queue overflow report") == std::string::npos,
+                "no Queue overflow report was made, so the line must not claim one");
+            if (line.message.find("2 value(s) dropped from the full send queue during this run (Queue overflow "
+                                  "sensor not registered)") != std::string::npos)
+            {
+                Require(line.level == HSM_LOG_LEVEL_ERROR, "the run's only drop report must be logged at Error");
+                ++run_lines;
+            }
+        }
+        Require(run_lines == 1, "the run's drops must be logged once, naming the missing sensor");
+    }
+
     // The four queue-stat rows register the managed descriptions, composed from the collector options
     // the same way (#1480) — here the production defaults, which the conformance harness does not use.
     // The periods go through the managed ToReadableView rules (plural above 1, zero parts skipped).
@@ -8099,6 +8148,8 @@ namespace
               [](const std::string&) { NativeRequeueDropAtCapacityCountsAsOverflow(); } },
             { "native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run",
               [](const std::string&) { NativeLateStopDropIsLoggedAndNotInheritedByTheNextRun(); } },
+            { "native_stop_overflow_log_without_the_queue_sensor_names_the_run",
+              [](const std::string&) { NativeStopOverflowLogWithoutTheQueueSensorNamesTheRun(); } },
             { "native_queue_stat_descriptions_match_managed",
               [](const std::string&) { NativeQueueStatDescriptionsMatchManaged(); } },
             { "native_service_alive_beats_on_its_own_period",

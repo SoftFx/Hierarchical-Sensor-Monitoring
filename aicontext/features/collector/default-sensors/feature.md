@@ -181,18 +181,26 @@ EMA засеялась бы огромным отрицательным знач
 - value, status и comment одного поста считаются из ОДНОГО снимка состояния, так что тройка
   всегда согласована (до #1445 счётчик калибровки двигался внутри `GetValue`, и пост СРАЗУ после
   калибровки нёс `TimeSpan.Zero` с уже рабочими status и comment);
-- the comment divides the speed by 1 MiB whatever unit the platform's `IDiskInfo` reports in
-  (bytes on Windows, kB on Unix) — mirrored rather than corrected, because the two collectors
-  must produce the same comment for the same host;
+- the comment divides the speed by 1 MiB, and every free-space reader reports **bytes** (#1466,
+  managed 3.6.1 / native 0.10.2): `IDiskInfo.FreeSpace` on Windows and Unix, and the native
+  Windows and Linux metric sources. Until then the Unix readers of both collectors reported kB,
+  so a Unix comment printed GiB as `Mbytes` (a number 1024x too small) — mirrored in both, so
+  the two agreed and were wrong together. **Intentional change:** a Unix host's comment number
+  is now 1024x larger than before for the same drain, and correct. The posted VALUE is
+  unchanged (the unit cancels in free space / speed, and with a block size that is a multiple of
+  1 KiB — the usual case — the kB figure was an exact scaling of the byte one; a filesystem with
+  smaller blocks only gains sub-KiB precision), and so is `Free space on disk`
+  (whole MB: `bytes / 1 MiB` floors to the number `(bytes / 1024) / 1024` did). Pinned by
+  `Unix_disk_info_reports_bytes_and_the_same_whole_megabytes` and
+  `Unix_prediction_comment_reads_megabytes_like_windows`;
 - **the rate is printed in MB/HOUR with up to SIX decimals (#1460, collector 3.5.4 / native
   0.8.2).** It used to be MB/sec in the payload's shortest-round-trip form, so a realistic idle
   drain reached the operator as `Free space decreases by 1.6574101944286661E-06 Mbytes/sec.` —
   a 17-digit scientific literal in a sentence a human reads. Per hour is the scale a 365-day
-  sensor answers on. Six decimals rather than three **because the `Mbytes` label above is only
-  accurate on Windows**: the comment divides by 1 MiB whatever unit the platform reports free
-  space in, and the Unix reader reports kB, so a Unix number is 1024x smaller than its label
-  says — at three decimals an ordinary Unix drain rounded back to `0.000`, the same
-  structurally-zero reading the issue was about. Trailing zeros are trimmed with one decimal
+  sensor answers on. Six decimals rather than three because a slow but real drain is a fraction
+  of a MB per hour, and three decimals rounded it back to `0.000`, the same structurally-zero
+  reading the issue was about (until #1466 the kB Unix readers made that worse: a Unix number was
+  1024x smaller than its label). Trailing zeros are trimmed with one decimal
   always kept, so a fast drain reads `1800.0` rather than `1800.000000`. The sensor VALUE is
   unaffected: only the comment text changed. The digits are produced by INTEGER arithmetic
   (scale the same double by 1 000 000, round half away from zero) rather than by
@@ -520,7 +528,12 @@ values posted while Stopping) into a full queue. Native logs their count at Info
 (`Collector stop: N value(s) dropped from the full send queue after the final Queue overflow report.`)
 and resets the counter, so the next run never reports the previous run's drops as its own (#1503 review;
 before, they rode into the next run's first collect cycle, and vanished on Dispose). Pinned by
-`native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run`. Pinned
+`native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run`. **Without the queue diagnostics
+group** (no `Queue overflow` sensor) nothing folds the counter, so at Stop it holds the whole run's
+drops and no report was ever made: native then logs `Collector stop: N value(s) dropped from the full
+send queue during this run (Queue overflow sensor not registered).` at Error instead — the native logger
+has no Warning level, and this line is the run's only trace of the loss (rule #8; #1508, native 0.10.2).
+Pinned by `native_stop_overflow_log_without_the_queue_sensor_names_the_run`. Pinned
 cross-language by `queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` (both drivers:
 park a send with `wait_sender_parked`, fill the queue to capacity, `release_sender_hang` into an injected
 failure, `expect_bar_sum` on the overflow bar — the SUM only, because of the shape difference above),

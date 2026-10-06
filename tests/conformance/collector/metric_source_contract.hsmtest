@@ -41,9 +41,14 @@
 # - X is the rate in MB/HOUR with up to six decimals, trailing zeros trimmed to at least one
 #   (#1460), rounded from the same double by integer arithmetic in both collectors so the text
 #   is byte-identical; it used to be MB/sec in shortest-round-trip form, which rendered a slow
-#   drain as a 17-digit scientific literal. Six decimals because the "Mbytes" label is only
-#   accurate on Windows (the Unix reader reports kB, so a Unix number is 1024x smaller than its
-#   label), and three would round an ordinary Unix drain back to 0.000.
+#   drain as a 17-digit scientific literal. Six decimals because a slow but real drain is a
+#   fraction of a MB per hour, which three decimals round back to 0.000.
+# - The scripted series is in BYTES (#1466): every production reader reports bytes, on Windows and
+#   on Unix, in both collectors, so "Mbytes" is true for every host. The Unix readers reported kB
+#   until #1466, which printed GiB as "Mbytes" (a number 1024x too small) on Unix hosts only. The
+#   readers themselves are OS reads outside the corpus; their unit is pinned by the managed
+#   `Unix_disk_info_reports_bytes_and_the_same_whole_megabytes` and
+#   `Unix_prediction_comment_reads_megabytes_like_windows`.
 # - Calibration counts SAMPLES, not posts: (n/N) means n completed free-space measurements.
 # - The NUMBER of calibration posts is deliberately NOT pinned. Managed starts its send loop in
 #   InitAsync (first post due immediately) while the sampler's first tick is aligned to the next

@@ -258,11 +258,15 @@ namespace HSMDataCollector.Core
         private ISensor AddSensor(ISensor sensor)
         {
             var path = sensor.SensorPath;
+            var owned = sensor as ICollectorOwnedSensor;
+
+            // Owned BEFORE it becomes visible in storage (#1508): marked after TryAdd, a TryRemove of
+            // the same path in between released it first and was then overridden, leaving a removed
+            // sensor marked owned, which SetDescription would register as a ghost.
+            owned?.MarkOwned();
 
             if (_sensors.TryAdd(path, sensor))
             {
-                (sensor as ICollectorOwnedSensor)?.MarkOwned();
-
                 var count = Interlocked.Increment(ref _sensorCount);
                 if (count > _options.MaxSensors)
                 {
@@ -276,7 +280,13 @@ namespace HSMDataCollector.Core
                 return sensor;
             }
 
-            if (_sensors.TryGetValue(path, out var existingSensor))
+            // Not added by this call: unless storage already holds this very instance, it is not the
+            // collector's.
+            var stored = _sensors.TryGetValue(path, out var existingSensor);
+            if (!stored || !ReferenceEquals(existingSensor, sensor))
+                owned?.MarkReleased();
+
+            if (stored)
                 return ResolveExistingSensor(sensor, existingSensor);
 
             throw new InvalidOperationException($"Sensor with path {path} already exists");

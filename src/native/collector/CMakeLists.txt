@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.10.1 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.10.2 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -404,6 +404,8 @@ set(NATIVE_REGRESSION_TESTS
     native_requeue_drop_at_capacity_counts_as_overflow
     # ... and a drop after Stop's final fold is logged, never carried into the next run.
     native_late_stop_drop_is_logged_and_not_inherited_by_the_next_run
+    # #1508: without the Queue overflow sensor the Stop line names the run's drops, at Error.
+    native_stop_overflow_log_without_the_queue_sensor_names_the_run
     native_queue_stat_descriptions_match_managed
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
