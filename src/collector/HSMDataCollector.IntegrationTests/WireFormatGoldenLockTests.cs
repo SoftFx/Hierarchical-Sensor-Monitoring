@@ -55,9 +55,15 @@ namespace HSMDataCollector.IntegrationTests
         public void Bar_and_file_dtos_match_the_native_golden_bytes()
         {
             Assert.Equal(
-                "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"StdDev\":1.41,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
                 + "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
                 + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+                Wire(new IntBarSensorValue { Path = "p/ib", Min = 1, Max = 5, Mean = 3, StdDev = 1.41, FirstValue = 1, LastValue = 5, Count = 5, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
+            // StdDev (#1509) is an optional double on both bar flavors: unknown goes out as null,
+            // never as 0 (the native `unknown StdDev is null on the wire` case).
+            Assert.Contains(
+                "\"Mean\":3,\"StdDev\":null,\"FirstValue\":1,",
                 Wire(new IntBarSensorValue { Path = "p/ib", Min = 1, Max = 5, Mean = 3, FirstValue = 1, LastValue = 5, Count = 5, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
 
             Assert.Equal(
@@ -80,10 +86,10 @@ namespace HSMDataCollector.IntegrationTests
                 Wire(new BoolSensorValue { Path = "p/b", Value = true, Time = Epoch, Comment = null }));
 
             Assert.Equal(
-                "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"StdDev\":1.5,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
                 + "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
                 + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
-                Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+                Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, StdDev = 1.5, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
         }
 
         [Fact]

@@ -64,6 +64,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     double last,
     int32_t count,
     int precision,
+    double welford_m2,
+    int stddev_unknown,
     int64_t open_ms,
     int64_t close_ms,
     int64_t time_ms,
@@ -2530,6 +2532,7 @@ namespace
                 { "min", "Min" },
                 { "max", "Max" },
                 { "mean", "Mean" },
+                { "stddev", "StdDev" },
                 { "first", "First" },
                 { "last", "Last" },
                 { "count", "Count" },
@@ -6011,9 +6014,11 @@ namespace
     void NativeWireBarJsonMatchesNetByteLayout()
     {
         // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
+        // Samples 1..5 have M2 = 10 -> population StdDev sqrt(2) = 1.414.. -> 1.41 (int bars round
+        // StdDev to a fixed 2 digits). Cross-locked by WireFormatGoldenLockTests (#1509).
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                1, 1, 5, 15, 1, 5, 5, 2, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"StdDev\":1.41,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
                                                                  "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
                                                                  "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
@@ -6023,20 +6028,31 @@ namespace
         // also half-to-even, so 2.5 -> 2 and 3.5 -> 4 on BOTH sides. (Round-away-from-zero would
         // give 3 and 4 and break parity.) Pins the half-way cases the all-integer case can't.
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
             "int bar mean 2.5 rounds half-to-even -> 2");
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
             "int bar mean 3.5 rounds half-to-even -> 4");
 
         // double bar (Type 5): sum13/count4 -> mean 3.25; min/max/first/last carry one decimal.
+        // M2 = 9 over 4 samples -> StdDev sqrt(2.25) = 1.5.
         // Cross-locked by WireFormatGoldenLockTests double-bar case.
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"StdDev\":1.5,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
                                                                            "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
                                                                            "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
             "double bar wire layout");
+
+        // An unknown StdDev (a bar fed with pre-aggregated partials) goes on the wire as null,
+        // like the C# DTO's double? -- never as 0 (#1509).
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 1, 5, 15, 1, 5, 5, 2, 0, 1, 0, 2000, 0, "p/ib")).find("\"Mean\":3,\"StdDev\":null,\"FirstValue\":1,") != std::string::npos,
+            "unknown StdDev is null on the wire");
+        // A single-sample bar has StdDev 0.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(0, 2.5, 2.5, 2.5, 2.5, 2.5, 1, 2, 0, 0, 0, 2000, 0, "p/db")).find("\"StdDev\":0,") != std::string::npos,
+            "single-sample StdDev is 0");
     }
 
     void NativeWireFileJsonMatchesNetByteLayout()

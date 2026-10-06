@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.10.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.11.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -140,6 +140,14 @@ target_link_libraries(hsm_collector_core PUBLIC Threads::Threads)
 
 hsm_collector_set_warnings(hsm_collector_core)
 hsm_collector_apply_sanitizer(hsm_collector_core)
+
+# Bar statistics are part of the byte-identical wire contract with the managed collector (#1509:
+# the Welford StdDev, the weighted mean). RyuJIT never fuses a*b+c into one FMA, so the native
+# build must not either: GCC/Clang may contract by default on FMA-capable targets (e.g. aarch64),
+# which changes the last bits and with them the posted text. MSVC /fp:precise does not contract.
+if(NOT MSVC)
+    target_compile_options(hsm_collector_core PRIVATE -ffp-contract=off)
+endif()
 
 # libcurl HTTP transport (#1096 §12). Opt-in so the serialization/behavior build and the existing
 # CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides curl[ssl] —
