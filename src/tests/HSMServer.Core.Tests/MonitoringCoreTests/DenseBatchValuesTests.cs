@@ -373,6 +373,86 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        public async Task AggregateSensor_LateValueOnOrInsideStoredSpan_IsSkippedNotOverwritten()
+        {
+            // #1441 round-7 (review P2): with AggregateValues on, a run of equal
+            // values is ONE row — key = the first tick, LastUpdateTime = the last
+            // one, AggregatedValuesCount = the run length. After a different value
+            // becomes the cached newest, a collector retry re-sending a value AT
+            // the span's key is a NON-foldable out-of-order value: the direct
+            // write used to replace the whole stored run with a count-1 row,
+            // losing the already-stored coverage (pre-#1441 the re-send was
+            // dropped on the ordering guard and the row survived). A
+            // distinct-content value INSIDE the span would add an overlapping
+            // row. Both are now probed, skipped and counted; a late value
+            // outside any span keeps being stored directly.
+            var path = "denseBatch/aggregateSpan";
+            var t0 = DateTime.UtcNow.AddMinutes(-30);
+            var t1 = t0.AddMinutes(1);
+            var t2 = t0.AddMinutes(2);
+            var tMid = t0.AddSeconds(90); // strictly inside (t1, t2)
+            var t3 = t0.AddMinutes(10);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t0, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, AggregateValues = true, Initiator = InitiatorInfo.System });
+
+            // Fold A@t1 and A@t2 into the t0 row (span t0..t2, count 3), then a
+            // DIFFERENT value becomes the cached newest — only after that is a
+            // re-sent A@t0 non-foldable out-of-order data, the retry shape.
+            var foldAndNewest = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t1, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = t2, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = t3, Value = 7, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, foldAndNewest)));
+
+            // The retry re-send AT the span's key: skipped, the span survives.
+            var reSend = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t0, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, reSend)));
+            Assert.Equal(1, Volatile.Read(ref sensor.AggregateSpanOverlapsSkipped));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // Distinct content strictly INSIDE the span: skipped too — a direct
+            // write here would add a row overlapping the span.
+            var insideSpan = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = tMid, Value = 9, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, insideSpan)));
+            Assert.Equal(2, Volatile.Read(ref sensor.AggregateSpanOverlapsSkipped));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // A late value BEFORE any stored row: outside every span — still
+            // stored directly (the probe must not over-block backfill).
+            var beforeSpan = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t0.AddMinutes(-5), Value = 5, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, beforeSpan)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            var stored = await ReadStoredWindowAsync(sensor.Id, t0.AddMinutes(-10), t3.AddMinutes(1));
+
+            // Exactly three rows: the pre-span backfill, the intact span, the
+            // newest — no count-1 replacement at t0, no overlapping row at tMid.
+            Assert.Equal(3, stored.Count);
+            Assert.DoesNotContain(stored, v => v.Time == tMid);
+            var spanRow = Assert.Single(stored, v => v.Time == t0);
+            Assert.Equal(3, spanRow.AggregatedValuesCount);
+            Assert.Equal(t2, spanRow.LastUpdateTime);
+        }
+
+        [Fact]
         public async Task OutOfOrderValue_OlderThanKeepHistoryWindow_IsNotStored_AndCounted()
         {
             // Retention floor (#1441): with KeepHistory configured, an

@@ -2778,24 +2778,31 @@ namespace HSMServer.Core.Cache
         {
             if (result.Kind == AddValueKind.OutOfOrder)
             {
+                // `in` parameters cannot be captured by the deferred message
+                // builders below — the value is a reference type, copy it once.
+                var lateValue = result.OutOfOrderValue;
+
                 // #1441: accepted data that cannot enter the bounded ordered cache —
                 // persist the validated value directly so history keeps it. Nothing
                 // else is written: the cache's newest value and its row are untouched
-                // by an older sibling. An out-of-order write at a tick that already
-                // has a row also overwrites that row (last written wins) but does not
-                // touch the supersede counter — detecting it would need a
-                // read-before-write on the hot path; see the wire-contract invariant.
+                // by an older sibling. For NON-aggregate sensors an out-of-order
+                // write at a tick that already has a row also overwrites that row
+                // (last written wins) but does not touch the supersede counter —
+                // detecting it would need a read-before-write on the hot path; see
+                // the wire-contract invariant. Aggregate sensors DO the read below
+                // (round-7): there one row can stand for a whole run of values.
                 //
                 // Retention floor (#1441 round-3): the later of the KeepHistory
                 // window (when configured — values older than it are purged by
-                // the retention pass anyway) and the last explicit history clear.
-                // Deliberately NOT Storage.From: the history load seeds it with
-                // the oldest stored row, so using it would drop legitimate
+                // the retention pass anyway) and the last history clear, explicit
+                // or automatic retention pass (HistoryClearedTo is stamped by
+                // both). Deliberately NOT Storage.From: the history load seeds it
+                // with the oldest stored row, so using it would drop legitimate
                 // backfill depending on the server's restart history. Without
                 // any floor, a skewed or hostile clock could force open one
                 // weekly LevelDB per distinct past week.
                 // KNOWN LIMIT (#1441 round-5, deliberate): the floor is bounded
-                // only by KeepHistory and explicit clears. With Forever
+                // only by KeepHistory and clears. With Forever
                 // retention — KeepHistory None, never cleared — it is
                 // DateTime.MinValue, so such sensors accept arbitrary past
                 // timestamps and the weekly-database protection does NOT apply
@@ -2816,14 +2823,32 @@ namespace HSMServer.Core.Cache
                 var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
                 var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
 
-                if (result.OutOfOrderValue.Time < floor)
+                if (lateValue.Time < floor)
                 {
                     CountAndWarnRateLimited(ref sensor.OutOfRetentionValues,
-                        $"Out-of-order value older than the sensor's history floor, not stored (sensor '{path}', time {result.OutOfOrderValue.Time:O}, floor {floor:O})");
+                        () => $"Out-of-order value older than the sensor's history floor, not stored (sensor '{path}', time {lateValue.Time:O}, floor {floor:O})");
                     return;
                 }
 
-                SaveSensorValueToDb(result.OutOfOrderValue, sensorId);
+                // #1441 round-7 (review P2): with AggregateValues on, one row can
+                // stand for a whole run of equal values (DB key = the span's first
+                // tick, LastUpdateTime = the last one). A late re-send AT the span's
+                // key would replace the stored run with a count-1 value — losing
+                // coverage that is already in history (pre-#1441 the re-send was
+                // dropped and the row survived); a distinct-content value INSIDE the
+                // span would add a row overlapping it. Probe first — the same
+                // IsBorderedValue read the clear path uses — and skip the write when
+                // the tick lands on or inside an existing span. Cold path only
+                // (aggregate sensors' out-of-order writes); the non-aggregate
+                // last-written-wins rule two comments up is unchanged.
+                if (sensor.AggregateValues && IsBorderedValue(sensor, lateValue.Time.Ticks, out var aggregateSpan))
+                {
+                    CountAndWarnRateLimited(ref sensor.AggregateSpanOverlapsSkipped,
+                        () => $"Out-of-order value not stored: its tick lands on an aggregated span row it would replace or overlap (sensor '{path}', time {lateValue.Time:O}, span {aggregateSpan.Time:O}..{aggregateSpan.LastUpdateTime:O})");
+                    return;
+                }
+
+                SaveSensorValueToDb(lateValue, sensorId);
 
                 // The row just written is the oldest one whenever it precedes
                 // Storage.From (From is MinValue until a restart seeds it with
@@ -2832,10 +2857,10 @@ namespace HSMServer.Core.Cache
                 // above the new oldest row would leave it unremovable until a
                 // restart (#1441 round-5). Min-only — a value at/above From
                 // leaves it alone, and MinValue itself never widens.
-                sensor.WidenFrom(result.OutOfOrderValue.Time);
+                sensor.WidenFrom(lateValue.Time);
 
                 CountAndWarnRateLimited(ref sensor.OutOfOrderValuesStored,
-                    $"Out-of-order value stored directly (sensor '{path}', time {result.OutOfOrderValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
+                    () => $"Out-of-order value stored directly (sensor '{path}', time {lateValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
                 return;
             }
 
@@ -2856,7 +2881,7 @@ namespace HSMServer.Core.Cache
                     // same tick has just been superseded — only the last of them stays
                     // in the database.
                     CountAndWarnRateLimited(ref sensor.SameTickValuesSuperseded,
-                        $"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
+                        () => $"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
                 }
             }
         }
@@ -2866,13 +2891,16 @@ namespace HSMServer.Core.Cache
         // so a per-value Warn would turn the log into a self-inflicted flood. Every
         // occurrence is counted; the Warn fires on the FIRST occurrence and then on
         // every 1000th, carrying the running total so the sequence reads as a
-        // periodic summary (a 10k backfill = 11 lines).
-        private void CountAndWarnRateLimited(ref long counter, string message)
+        // periodic summary (a 10k backfill = 11 lines). The message is a deferred
+        // builder (round-7): with two DateTime:O formats per line, building it for
+        // every counted value would put an allocation and two date formats per value
+        // on the ingest hot path just to throw 999 of every 1000 away.
+        private void CountAndWarnRateLimited(ref long counter, Func<string> message)
         {
             var total = Interlocked.Increment(ref counter);
 
             if (total == 1L || total % 1000L == 0L)
-                _logger.Warn($"{message} (total {total})");
+                _logger.Warn($"{message()} (total {total})");
         }
 
         private bool TryAddNewSensorValue(AddSensorValueRequest request, out string error)
