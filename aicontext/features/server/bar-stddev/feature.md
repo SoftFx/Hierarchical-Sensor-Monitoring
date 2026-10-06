@@ -39,9 +39,13 @@ tails stay visible.
   M2 = Σ nᵢ·(σᵢ² + (μᵢ − μ)²)     σ = sqrt(M2 / N)
   ```
 
-  Parts with `Count ≤ 0` (timeout rows) carry no samples and are skipped; one counted part keeps its σ
-  unchanged; any counted part with an unknown σ makes the merged σ unknown. The parts' Mean and σ are
-  the collector's rounded values, so the result is exact for the stored parts (`BarStdDev.Combine`).
+  Timeout rows (a copy of the last bar with `IsTimeout`, `GetTimeoutValue`) and parts with
+  `Count ≤ 0` carry no new samples and are skipped; one counted part keeps its σ unchanged; any counted
+  part with an unknown σ makes the merged σ unknown. The parts' Mean and σ are the collector's rounded
+  values, so the result is exact for the stored parts (`BarStdDev.Combine`) — with one caveat: an int
+  bar's Mean is rounded to an integer, so for int bars with a small spread the between-bar term carries
+  up to 0.5 of rounding per part and the merged σ can come out high (samples {0,1} and {1,2} store
+  means 0 and 2 and merge to 1.12 instead of 0.71).
 - **Partial bars.** Same-`OpenTime` partial posts replace each other in `BarValuesStorage` (the
   collector's running σ rides on each post like Mean), so no σ merge happens on ingestion;
   `BarBaseValue<T>.TrySetValue` and `NotCompressedValue<T>` copy σ like the other fields.
@@ -98,7 +102,7 @@ migration: old rows read with `StdDev = null`.
   unknown σ break the band (one filled polygon per run of known σ) — no band is drawn there, the mean line
   continues. Hover text: min, mean, max, σ (only when known), count, open/close time.
 - **Dashboards.** `StdDev (σ)` is selectable for bar sources next to Min/Mean/Max/Count; bars with an
-  unknown σ are left out of the line. When the panel downsamples several bars into one visible point, σ
+  unknown σ and timeout rows are left out of the line. When the panel downsamples several bars into one visible point, σ
   is averaged like Mean (a display approximation — a one-number line point does not keep Count/Mean);
   the sensor page compresses exactly.
 - The dashboard "Bar" property (candlestick) is unchanged: no mean line, no view switch.
@@ -132,5 +136,6 @@ migration: old rows read with `StdDev = null`.
 ## Known Issues / Limitations
 
 - Dashboard downsampling averages σ (see above) instead of pooling it.
+- Compressed σ of int bars inherits the rounding of their integer Mean (see Invariants).
 - No alerts on σ (`AlertProperty` has no StdDev member) and no σ column in the sensor page's history
   table; both would be follow-ups.

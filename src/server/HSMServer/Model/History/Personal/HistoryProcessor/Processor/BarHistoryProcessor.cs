@@ -106,7 +106,10 @@ namespace HSMServer.Model.History
             IsCompressed = summary.Count != 0;
 
             _meanList.Add((value.Mean, value.Count));
-            _stdDevParts.Add((value.Count, double.CreateChecked(value.Mean), value.StdDev));
+            // A timeout row is a copy of the last bar (GetTimeoutValue), not new samples: counting
+            // it would weigh that bar twice in the merged StdDev.
+            if (!value.IsTimeout)
+                _stdDevParts.Add((value.Count, double.CreateChecked(value.Mean), value.StdDev));
 
             if (!IsCompressed)
                 summary.FirstValue = value.FirstValue;

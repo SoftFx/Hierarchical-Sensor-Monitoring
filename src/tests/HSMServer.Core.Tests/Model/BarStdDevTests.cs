@@ -59,7 +59,7 @@ namespace HSMServer.Core.Tests.Model
         [Trait("Category", "Simple")]
         public void Combine_skips_parts_without_samples()
         {
-            // A timeout row has Count 0 and no StdDev: it carries no samples, so it changes nothing.
+            // A part with no samples changes nothing, whatever its StdDev.
             var combined = BarStdDev.Combine([FirstHalf, (0, 0.0, null), SecondHalf]);
 
             Assert.Equal(2.0, combined.Value, 12);
@@ -97,6 +97,24 @@ namespace HSMServer.Core.Tests.Model
             var compressed = Compress(new DoubleBarHistoryProcessor(), bars, TimeSpan.FromMinutes(10));
 
             Assert.Null(Assert.IsAssignableFrom<DoubleBarValue>(Assert.Single(compressed)).StdDev);
+        }
+
+        [Fact]
+        [Trait("Category", "Simple")]
+        public void History_compression_ignores_timeout_rows()
+        {
+            // GetTimeoutValue repeats the last bar with IsTimeout set; it must not weigh it twice.
+            var last = DoubleBar(1, SecondHalf);
+            var bars = new List<BaseValue>
+            {
+                DoubleBar(0, FirstHalf),
+                last,
+                last with { IsTimeout = true, Time = last.Time.AddMinutes(1) },
+            };
+
+            var compressed = Compress(new DoubleBarHistoryProcessor(), bars, TimeSpan.FromMinutes(10));
+
+            Assert.Equal(2.0, Assert.IsAssignableFrom<DoubleBarValue>(Assert.Single(compressed)).StdDev.Value, 12);
         }
 
         [Fact]

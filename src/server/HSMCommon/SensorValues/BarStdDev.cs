@@ -9,14 +9,17 @@ namespace HSMCommon.Model
     /// all (#1509), from each part's (Count, Mean, StdDev) alone — no raw samples. Population
     /// (parallel-variance) form: with N = sum(n_i) and mu = sum(n_i * mu_i) / N,
     /// M2 = sum(n_i * (sigma_i^2 + (mu_i - mu)^2)) and sigma = sqrt(M2 / N). It is exact for the
-    /// parts as given (a part's Mean and StdDev are the collector's rounded values).
+    /// parts as given; a part's Mean and StdDev are the collector's rounded values, and an int
+    /// bar's Mean is rounded to an integer, so for int bars with a small spread the between-bar
+    /// term carries up to 0.5 of rounding per part and the merged value can come out high.
     /// </summary>
     public static class BarStdDev
     {
         /// <returns>
         /// The combined StdDev, or <c>null</c> (unknown) when any counted part has an unknown
-        /// StdDev or no part has samples. Parts with Count &lt;= 0 (e.g. timeout rows) carry no
-        /// samples and are skipped. A single counted part keeps its own value unchanged.
+        /// StdDev or no part has samples. Parts with Count &lt;= 0 carry no samples and are
+        /// skipped (callers leave out timeout rows, which repeat the last bar). A single counted
+        /// part keeps its own value unchanged.
         /// </returns>
         public static double? Combine(IReadOnlyList<(int Count, double Mean, double? StdDev)> parts)
         {
