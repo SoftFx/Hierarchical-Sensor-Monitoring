@@ -202,9 +202,12 @@
                 `Removing '${name}' product`,
                 `Do you really want to remove '${name}' product?`,
                 function () {
+                    // POST + antiforgery header (#1512): the action rejects GET and a missing token.
                     $.ajax({
-                        type: 'GET',
-                        url: deleteAction + "?Product=" + key,
+                        type: 'POST',
+                        url: deleteAction,
+                        data: { Product: key },
+                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').first().val() },
                         cache: false,
                         async: true,
                         success: function () {
