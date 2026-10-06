@@ -1,5 +1,7 @@
 # /release-server — Cut an HSMServer release
 
+> An adapted mirror for ZCode lives at `.agents/commands/release-server.md` — keep the release steps in sync.
+
 Cut a release for HSMServer. Reads the current version, proposes the next patch,
 bumps the csproj, regenerates `ReleaseNote.md` from commits since the last
 `server-v*` tag, opens a PR, then runs the build workflow on master after the

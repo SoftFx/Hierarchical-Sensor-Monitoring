@@ -1,5 +1,7 @@
 # /release-collector <optional-version> — Cut a DataCollector NuGet release
 
+> An adapted mirror for ZCode lives at `.agents/commands/release-collector.md` — keep the release steps in sync.
+
 Cut a release for the C# HSMDataCollector (published as the
 `HSMDataCollector.HSMDataCollector` NuGet package). Reads the current version,
 proposes the next patch, bumps the csproj, regenerates `ReleaseNote.Collector.md`
