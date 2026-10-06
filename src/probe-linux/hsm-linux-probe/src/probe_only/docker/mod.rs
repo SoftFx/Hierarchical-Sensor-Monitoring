@@ -124,8 +124,12 @@ pub struct DockerSource<'c, E: EngineApi> {
     backoff: Duration,
     /// A `Disk written per hour` accumulator changed since the state file was last written.
     written_dirty: bool,
-    /// When the state file was last written.
+    /// When the state file was last written: the start of the tick that wrote it.
     saved_at: Instant,
+    /// The start of the current tick (its `now`). Every save during the tick stamps `saved_at`
+    /// with it, so the save deadline and the later ticks it is compared with share one reference,
+    /// and the tick's own Engine API work does not eat into the half-period slack (#1507).
+    tick_started: Instant,
     should_stop: fn() -> bool,
     /// The wall clock, Unix milliseconds (a seam for the hour-boundary tests).
     clock: fn() -> i64,
@@ -226,6 +230,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             backoff: config.sample_period(),
             written_dirty: false,
             saved_at: Instant::now(),
+            tick_started: Instant::now(),
             should_stop: crate::shutdown::is_requested,
             clock: unix_now_ms,
             stacking: written::Stacking::default(),
@@ -238,9 +243,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     /// is logged once and backed off (doubling up to [`contract::MAX_BACKOFF`]); ticks inside the
     /// backoff make no call at all. Nothing is posted for a failed read.
     fn tick(&mut self, logger: &Logger) {
+        let now = Instant::now();
+        self.tick_started = now;
         // Hours close on the wall clock, whether or not the daemon answers.
         self.roll_written_hours(logger);
-        let now = Instant::now();
         if self.unavailable_until.is_some_and(|until| now < until) {
             return;
         }
@@ -345,7 +351,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let (limit, writes) = if *has_run {
                 roster
                     .get(key)
-                    .map_or((None, false), |ids| self.first_stats_of(ids))
+                    .map_or((None, false), |ids| self.first_stats_of(key, ids, logger))
             } else {
                 (None, false)
             };
@@ -369,21 +375,29 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
 
     /// From one stats read of each container: the service's memory limit (MB, unlimited) — `None`
     /// when a read fails (the first stats round then sets it) — and whether any container reports
-    /// a block-device write counter.
-    fn first_stats_of(&mut self, ids: &[String]) -> (Option<(i32, bool)>, bool) {
+    /// a block-device write counter. A failed read is logged (#1507): the service then registers
+    /// without them, and they follow at the first stats round.
+    fn first_stats_of(
+        &mut self,
+        key: &ServiceKey,
+        ids: &[String],
+        logger: &Logger,
+    ) -> (Option<(i32, bool)>, bool) {
         let mut readings = Vec::with_capacity(ids.len());
         let mut complete = true;
         let mut writes = false;
-        for id in ids {
+        for (index, id) in ids.iter().enumerate() {
             let stats = match self.engine.stats(id) {
                 Ok(stats) => stats,
                 // A daemon or container that does not answer costs one timeout per service, not
                 // one per replica, before Start; the first stats round catches up.
                 Err(error) if error.is_unavailable() => {
+                    logger.info(first_stats_failed(key, id, &error, index + 1 < ids.len()));
                     complete = false;
                     break;
                 }
-                Err(_) => {
+                Err(error) => {
+                    logger.info(first_stats_failed(key, id, &error, false));
                     complete = false;
                     continue;
                 }
@@ -1016,7 +1030,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let Some(path) = &self.state_path else {
             return;
         };
-        self.saved_at = Instant::now();
+        self.saved_at = self.tick_started;
         match self.tracker.state.save(path) {
             Ok(()) => {
                 self.written_dirty = false;
@@ -1038,6 +1052,22 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     pub(crate) fn tracker(&self) -> &Tracker {
         &self.tracker
     }
+}
+
+/// The priming stats read of one container failed (#1507): name the service, the container and
+/// the error, so a Start batch short of a few sensors can be explained from the journal.
+fn first_stats_failed(key: &ServiceKey, id: &str, error: &EngineError, skips_rest: bool) -> String {
+    let rest = if skips_rest {
+        " (its other replicas are not asked either)"
+    } else {
+        ""
+    };
+    format!(
+        "docker: priming stats of {key} container {} failed ({error}){rest}; it registers \
+         without the stats-based details (the memory limit, Disk written per hour), which follow \
+         at the first stats round",
+        short_id(id)
+    )
 }
 
 fn report_problems(logger: &Logger, log_once: &mut LogOnce, problems: &[String]) {
@@ -1186,6 +1216,8 @@ pub(crate) mod tests {
         pub wedged: Option<&'static str>,
         /// Stats calls made, for the bounded-priming test.
         pub stats_calls: usize,
+        /// When the latest stats call was made, for the save-stamp test.
+        pub last_stats_at: Option<Instant>,
     }
 
     impl FixtureEngine {
@@ -1208,6 +1240,7 @@ pub(crate) mod tests {
                 down: false,
                 wedged: None,
                 stats_calls: 0,
+                last_stats_at: None,
             }
         }
 
@@ -1253,6 +1286,7 @@ pub(crate) mod tests {
         }
         fn stats(&mut self, id: &str) -> Result<ContainerStats, EngineError> {
             self.stats_calls += 1;
+            self.last_stats_at = Some(Instant::now());
             self.check_container(id)?;
             let round = &self.rounds[self.round.min(self.rounds.len() - 1)];
             round.get(id).cloned().ok_or_else(|| EngineError::Status {
@@ -1469,9 +1503,10 @@ pub(crate) mod tests {
         let until = source.unavailable_until.expect("backing off");
         assert!(until <= Instant::now() + period / 2);
 
-        // The state-file save, every 5 minutes. `saved_at` is stamped at the end of the saving
-        // tick, so on the fifth tick after it slightly less than 5 minutes have passed: that tick
-        // saves. The fourth does not (not a tick early).
+        // The state-file save, every 5 minutes. `saved_at` is stamped with the saving tick's start
+        // (#1507), the reference the later ticks compare with, so on the fifth tick after it
+        // slightly less than 5 minutes have passed: that tick saves. The fourth does not (not a
+        // tick early).
         source.engine.down = false;
         source.unavailable_until = None;
         let ago = |elapsed: Duration| Instant::now().checked_sub(elapsed).expect("clock");
@@ -1483,9 +1518,17 @@ pub(crate) mod tests {
         assert_eq!(source.saved_at, fourth);
         let fifth = ago(contract::WRITTEN_PERSIST_PERIOD - Duration::from_millis(1));
         source.saved_at = fifth;
+        source.engine.last_stats_at = None;
         Source::sample(&mut source, &quiet());
         assert!(!source.written_dirty, "saved on this tick, not the next");
         assert!(source.saved_at > fifth);
+        // Stamped with the tick's start, before its Engine API work, not after it.
+        assert_eq!(source.saved_at, source.tick_started);
+        let stats_at = source.engine.last_stats_at.expect("the tick sampled stats");
+        assert!(
+            source.saved_at <= stats_at,
+            "stamped before the tick's stats calls"
+        );
         collector.stop().expect("stop");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2169,9 +2212,23 @@ pub(crate) mod tests {
             .id
             .clone();
         // Three replicas that all time out: one timeout, not three.
-        let (limit, writes) = source.first_stats_of(&[db.clone(), db.clone(), db]);
+        let key = ServiceKey::new("gitea", "db");
+        let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&lines);
+        let logger = Logger::with_sink(Level::Debug, move |line: &str| {
+            sink.lock().unwrap().push(line.to_string())
+        });
+        let (limit, writes) = source.first_stats_of(&key, &[db.clone(), db.clone(), db], &logger);
         assert_eq!((limit, writes), (None, false));
         assert_eq!(source.engine.stats_calls, 1);
+        // The failure is in the journal, naming the service and the container (#1507).
+        let lines = lines.lock().unwrap();
+        assert_eq!(lines.len(), 1, "{lines:#?}");
+        assert!(
+            lines[0].contains("priming stats of gitea/db container abbd59dcacc8 failed")
+                && lines[0].contains("its other replicas are not asked either"),
+            "{lines:#?}"
+        );
     }
 
     #[test]

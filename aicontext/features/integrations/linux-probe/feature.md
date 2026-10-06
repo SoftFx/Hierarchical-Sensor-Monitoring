@@ -62,7 +62,8 @@ The probe registers **two separately pinned sets**:
    the mount-point identity counts only mounted filesystems; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
    with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
    continues the day, a reboot keeps the day (only for the same physical disk) but not the
-   counters, and a disk renamed by the kernel never inherits another disk's day) and its mirror
+   counters — the probe takes a final `/proc/diskstats` reading when it stops (0.8.2, #1507), so
+   a clean shutdown loses only what is written after the probe stopped — and a disk renamed by the kernel never inherits another disk's day) and its mirror
    `Read per day on <name> disk` (#1506: "sectors read" from the same `/proc/diskstats` line of
    the same 5-s reads — no new I/O — posted with it; one ledger record per disk carries both
    totals with one shared day/baseline/identity/boot id, so every rule above applies to both; the
@@ -171,8 +172,9 @@ edited config, purge); the `deb` job of `probe-linux.yml` runs build + smoke on 
 and sorts above every released `probe-v*` (apt refuses a lower version as an upgrade); it builds
 with `build-deb.sh` in `debian:13`, runs `smoke-deb.sh`, and publishes
 `hsm-linux-probe_<X.Y.Z>_amd64.deb` + `.deb.sha256` with `--latest=false` from a job that alone holds
-`contents: write`, then hands the "Latest" badge back to the newest `server-v*` release if GitHub
-moved it. `workflow_dispatch` is a dry run (build, smoke, artifact; no release). The server ships
+`contents: write`, then re-asserts the "Latest" badge on the newest `server-v*` release and watches
+it for ~30 s (GitHub moved it to `probe-v0.8.1` a moment after a read-and-decide check had passed;
+#1507 — `agent-release.yml` does the same). `workflow_dispatch` is a dry run (build, smoke, artifact; no release). The server ships
 the release named in `src/server/HSMServer/probe-release.txt` (`../../server/linux-probe-download/feature.md`
 → *Staging*). Trials are `~trialN` (local) or `~ci` (CI artifact) and sort below the release.
 Operating the package — install, upgrade, rollback, retention, the sleeping-disk acceptance check,

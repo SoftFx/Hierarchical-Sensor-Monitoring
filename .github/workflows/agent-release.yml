@@ -146,39 +146,42 @@ jobs:
       # --latest=false above is not reliable: the bootstrap agent-v0.5.28 release grabbed the repo's
       # "Latest" badge despite it (observed 2026-07-21; GET /releases/latest returned the agent
       # release until the newest server release was re-marked by hand). Clients discover the server
-      # zip through that badge, so assert-and-repair: if this release ended up "latest", hand the
-      # badge back to the newest server-v* release, and fail loudly if that cannot be done.
+      # zip through that badge, so the badge is re-asserted on the newest full server-v* release and
+      # verified. Unconditionally, not "repair if this release holds it": GitHub can move the badge a
+      # moment AFTER `gh release create` returns — probe-v0.8.1 (probe-release.yml, run 37447780251)
+      # read it 0.5 s later, still saw the server release, logged "nothing to repair", and the badge
+      # moved to the probe release afterwards (#1507). The verification polls ~30 s and re-asserts
+      # on a move.
       - name: Keep the Latest badge on server releases
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
-          echo "repo Latest after publish: $latest"
-          if [ "$latest" != "$GITHUB_REF_NAME" ]; then
-            echo "Latest badge untouched — nothing to repair"
-            exit 0
-          fi
           # Drafts and prereleases are excluded: GitHub's Latest badge can only sit on a full release,
           # and this repo routinely publishes server prereleases (e.g. 3.40.29/3.40.30).
           server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(startswith("server-v"))][0]')
           if [ -z "$server_tag" ]; then
-            echo "::error::this agent release grabbed the Latest badge and no server-v* release exists to give it back to"
-            exit 1
+            # A fork or a repo without server releases: there is no release the badge belongs to.
+            echo "::warning::no full server-v* release exists; the Latest badge is left as GitHub sets it"
+            exit 0
           fi
           server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
-          # Re-read with a short retry: the badge update may lag a moment behind the PATCH, and a
-          # propagation delay must not fail an otherwise-successful publish.
-          for attempt in 1 2 3; do
-            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
-            [ "$latest" = "$server_tag" ] && break
-            echo "attempt $attempt: Latest is still $latest, retrying..."
+          # Verify for ~30 s: a late move by GitHub lands inside the window and is re-asserted. A repo
+          # without a Latest release answers 404 here, read as "none" rather than failing the step.
+          latest=""
+          for attempt in 1 2 3 4 5 6 7; do
             sleep 5
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || true)
+            if [ "$latest" != "$server_tag" ] && [ "$attempt" -lt 7 ]; then
+              echo "check $attempt: Latest is ${latest:-none}; re-asserting it on $server_tag"
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
+            fi
           done
+          # The 7th read is the verdict: it follows the last re-assert by a full interval.
           if [ "$latest" != "$server_tag" ]; then
-            echo "::error::failed to return the Latest badge to $server_tag (still $latest)"
+            echo "::error::failed to keep the Latest badge on $server_tag (last seen: ${latest:-none})"
             exit 1
           fi
-          echo "Latest badge returned to $server_tag"
+          echo "Latest badge kept on $server_tag"
