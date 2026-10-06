@@ -41,25 +41,35 @@ namespace HSMServer.Model.Agent
         public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
         public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
+        // A JSON string with any characters, escaped quotes included (#1515): a brace inside one
+        // (an exclude pattern, say) is text, not structure. Inside a POSIX bracket expression the
+        // backslash is literal, so [^"\\] is "neither a quote nor a backslash", as in .NET.
+        private const string StringPattern = "\"([^\"\\\\]|\\\\.)*\"";
+
+        // One token of an object's own text: a string, or any character but a brace or a quote.
+        private const string TextPattern = "[^{}\"]|" + StringPattern;
+
         // A balanced JSON object up to three levels deep (POSIX ERE has no recursion): the values
         // that may precede a TOP-LEVEL "topCpu" key. The probe config nests three levels at most
         // (probe -> docker -> ...); a deeper one fails the match, which counts as "off".
-        private const string FlatObjectPattern = "\\{[^{}]*\\}";
-        private const string TwoLevelObjectPattern = "\\{([^{}]|" + FlatObjectPattern + ")*\\}";
-        private const string ThreeLevelObjectPattern = "\\{([^{}]|" + TwoLevelObjectPattern + ")*\\}";
+        private const string FlatObjectPattern = "\\{(" + TextPattern + ")*\\}";
+        private const string TwoLevelObjectPattern = "\\{(" + TextPattern + "|" + FlatObjectPattern + ")*\\}";
+        private const string ThreeLevelObjectPattern = "\\{(" + TextPattern + "|" + TwoLevelObjectPattern + ")*\\}";
 
         /// <summary>
         /// The POSIX extended regular expression install.sh applies to the installed config with its
         /// newlines removed to decide whether top CPU is on: an enabled <c>topCpu</c> block at the TOP
         /// level, the only one the probe reads (<c>Config::top_cpu</c>). Everything before the key must
-        /// be the root object's own text or balanced nested objects, so a block nested one level too
-        /// deep (<c>"probe": { "topCpu": { "enabled": true } }</c>) does not match (#1507); the block
-        /// itself holds no nested object. One source of truth: the tests apply it to what
-        /// <see cref="BuildConfigJson"/> emits. Contains no single quote (it is embedded in '...').
+        /// be the root object's own text, whole strings or balanced nested objects, so a block nested
+        /// one level too deep (<c>"probe": { "topCpu": { "enabled": true } }</c>) does not match
+        /// (#1507), a brace inside a string value does not unbalance the match, and a key spelled
+        /// inside a string is not a key (#1515); the block itself holds no nested object. One source
+        /// of truth: the tests apply it to what <see cref="BuildConfigJson"/> emits. Contains no single
+        /// quote (it is embedded in '...').
         /// </summary>
         public const string TopCpuEnabledPattern =
-            "^[[:space:]]*\\{([^{}]|" + ThreeLevelObjectPattern + ")*" +
-            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true";
+            "^[[:space:]]*\\{(" + TextPattern + "|" + ThreeLevelObjectPattern + ")*" +
+            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{(" + TextPattern + ")*\"enabled\"[[:space:]]*:[[:space:]]*true";
 
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
