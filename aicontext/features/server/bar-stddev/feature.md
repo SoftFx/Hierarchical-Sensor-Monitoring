@@ -23,13 +23,18 @@ tails stay visible.
   does not send it (managed < 3.7.0, native < 0.11.0, any third-party sender), a row stored before the
   field existed, or a bar built from pre-aggregated partials (`AddPartial` carries no spread). Nothing
   draws, plots or reports an unknown σ as 0.
-- **Additive everywhere.** Wire, DTO and storage only gain an optional field; older collectors, servers
-  and rows keep working unchanged.
-- **Storage format.** `BarBaseValue<T>.StdDev` is the LAST member of the MemoryPack-serialized bar records
-  (`IntegerBarValue`/`DoubleBarValue`). MemoryPack writes members in declaration order with a member
-  count; appending is version tolerant (an old row has one member fewer and reads with `StdDev = null`),
-  inserting or reordering is not. Pinned by `MemoryPackFormatterTests.Bars_stored_before_stddev_read_with_it_unknown`
-  (bytes captured from the formatter before the field existed).
+- **Additive on the wire.** Wire and DTO only gain an optional field: older collectors keep working
+  with a newer server, and older servers ignore the field from newer collectors. **Storage is not
+  backward compatible** — see the next point.
+- **Storage format — forward-only.** `BarBaseValue<T>.StdDev` is the LAST member of the
+  MemoryPack-serialized bar records (`IntegerBarValue`/`DoubleBarValue`). These records use MemoryPack's
+  default (not version-tolerant) layout: members in declaration order behind a member count. An old row
+  has one member fewer and reads with `StdDev = null` (pinned by
+  `MemoryPackFormatterTests.Bars_stored_before_stddev_read_with_it_unknown`, bytes captured from the
+  formatter before the field existed), but a reader whose schema has FEWER members than the row throws.
+  So a server older than #1509 cannot read any bar row written after the upgrade — **rolling the server
+  back means restoring a database backup taken before the upgrade** (or losing the bar rows written
+  since). Inserting or reordering members would break old rows too; only appending is safe.
 - **Exact compression.** When the sensor page compresses history into coarser bars, σ of the merged bar
   is computed from the parts' (Count, Mean, σ) alone with the parallel-variance formula — no raw
   samples:
@@ -91,7 +96,11 @@ dashboards (`BarBaseStdDevLineDatasource`), Sensor API / CSV / Grafana outputs.
 ## Storage / Persistence
 
 Bar rows in the sensor-values LevelDB store, MemoryPack format, `StdDev` appended as the last member. No
-migration: old rows read with `StdDev = null`.
+migration: old rows read with `StdDev = null`. **Forward-only:** every bar row written by this server
+version or later carries one more member, which a pre-#1509 server rejects when it reads the row
+(MemoryPack's default layout throws on a member count larger than its schema). A rollback to an older
+server therefore needs the database backup taken before the upgrade; there is no down-migration.
+A version-tolerant layout was deliberately not introduced (it would rewrite every stored row).
 
 ## UI / Operator Visibility
 

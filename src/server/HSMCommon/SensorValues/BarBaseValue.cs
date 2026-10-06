@@ -45,7 +45,9 @@ namespace HSMCommon.Model
         /// collector that does not send it, a row stored before it existed, a bar built from
         /// pre-aggregated partials). Unknown is never 0. MemoryPack serializes members in
         /// declaration order with a member count, so this field MUST stay the last member of the
-        /// bar records: a row written before it existed deserializes with it null.
+        /// bar records: a row written before it existed deserializes with it null. Forward-only: a
+        /// server built without this member cannot read rows written with it (MemoryPack's default
+        /// layout throws on extra members), so a rollback needs a pre-upgrade database backup.
         /// </summary>
         public double? StdDev { get; init; }
 
