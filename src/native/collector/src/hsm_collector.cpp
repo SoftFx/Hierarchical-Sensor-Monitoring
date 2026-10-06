@@ -2829,13 +2829,16 @@ namespace
                 std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
                 pending.swap(pending_registrations_);
             }
+            // Taken before the empty check: a retry the next Start batch already landed leaves
+            // nothing due, and a flag kept past it would credit a later, unrelated registration
+            // with a recovery that never happened.
+            const bool retrying = registration_retry_pending_.exchange(false, std::memory_order_acq_rel);
             std::vector<std::shared_ptr<NativeSensor>> due;
             for (auto& sensor : pending)
                 if (sensor->RegistrationPostPending())
                     due.push_back(std::move(sensor));
             if (due.empty())
                 return;
-            const bool retrying = registration_retry_pending_.exchange(false, std::memory_order_acq_rel);
             const RegistrationPost outcome = PostRegistrationsWire(due, /*runtime=*/true);
             if (outcome == RegistrationPost::Retry)
                 RetryRegistrations(due);
