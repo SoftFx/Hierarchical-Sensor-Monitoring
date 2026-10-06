@@ -69,6 +69,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Min, actual.Min);
             Assert.Equal(expected.Max, actual.Max);
             Assert.Equal(expected.Mean, actual.Mean);
+            Assert.Equal(expected.StdDev, actual.StdDev);
             Assert.Equal(expected.FirstValue, actual.FirstValue);
             Assert.Equal(expected.LastValue, actual.LastValue);
         }

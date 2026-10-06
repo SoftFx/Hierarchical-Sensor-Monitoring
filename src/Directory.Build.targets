@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Since 3.5.0 the HSMDataCollector NuGet package bundles its own copy of HSMSensorDataObjects.dll.
+    The server (and everything built on it: database, server tests) consumes that package AND
+    references the in-repo HSMSensorDataObjects project, so two assemblies with one name reach the
+    build: with equal versions the package's copy silently won (a DTO change in this repo stayed
+    invisible to the server until the next collector release), with different versions the compiler
+    fails with CS1704. When the in-repo DTO project is among the resolved references, drop the
+    package's copy before assembly resolution, so the server compiles and runs against the in-repo
+    DTO. The package's collector code binds to it at run time, which is safe because DTO changes are
+    additive (the wire contract requires it). A project that only consumes the package (no in-repo
+    DTO reference) is left untouched.
+  -->
+  <Target Name="HsmPreferInRepoSensorDataObjects" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_HsmInRepoSensorDataObjects Include="@(_ResolvedProjectReferencePaths)" Condition="'%(_ResolvedProjectReferencePaths.Filename)' == 'HSMSensorDataObjects'" />
+    </ItemGroup>
+    <ItemGroup Condition="'@(_HsmInRepoSensorDataObjects)' != ''">
+      <Reference Remove="@(Reference)" Condition="'%(Reference.NuGetPackageId)' == 'HSMDataCollector.HSMDataCollector' and '%(Reference.Filename)' == 'HSMSensorDataObjects'" />
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)" Condition="'%(RuntimeCopyLocalItems.NuGetPackageId)' == 'HSMDataCollector.HSMDataCollector' and '%(RuntimeCopyLocalItems.Filename)' == 'HSMSensorDataObjects'" />
+    </ItemGroup>
+  </Target>
+</Project>

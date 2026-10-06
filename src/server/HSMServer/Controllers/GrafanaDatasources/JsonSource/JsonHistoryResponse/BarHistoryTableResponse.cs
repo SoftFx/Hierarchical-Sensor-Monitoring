@@ -16,6 +16,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             new(nameof(IntegerBarValue.Min), NumberType),
             new(nameof(IntegerBarValue.Max), NumberType),
             new(nameof(IntegerBarValue.Mean), NumberType),
+            new(nameof(IntegerBarValue.StdDev), NumberType),
             new(nameof(IntegerBarValue.FirstValue), NumberType),
             new(nameof(IntegerBarValue.LastValue), NumberType),
             new(nameof(IntegerBarValue.Count), NumberType),
@@ -46,6 +47,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                         historyRow.AddFluent(intBar.Min)
                                   .AddFluent(intBar.Max)
                                   .AddFluent(intBar.Mean)
+                                  .AddFluent(intBar.StdDev)
                                   .AddFluent(intBar.FirstValue)
                                   .AddFluent(intBar.LastValue)
                                   .AddFluent(intBar.Count);
@@ -55,6 +57,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                         historyRow.AddFluent(doubleBar.Min)
                                   .AddFluent(doubleBar.Max)
                                   .AddFluent(doubleBar.Mean)
+                                  .AddFluent(doubleBar.StdDev)
                                   .AddFluent(doubleBar.FirstValue)
                                   .AddFluent(doubleBar.LastValue)
                                   .AddFluent(doubleBar.Count);
