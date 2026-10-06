@@ -64,9 +64,9 @@ services:
       # serving; a listening but wedged server fails this probe, while the TCP connect used here
       # before reported it healthy.
       test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
-      interval: 30s
+      interval: 5m
       timeout: 5s
-      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
+      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 5 min. A
       # database that needs longer: change start_period in this block. The block sets every field,
       # so it works with any image. A trimmed override that sets start_period alone works only
       # with an image that carries the healthcheck - not with 3.41.5, where it would leave the
