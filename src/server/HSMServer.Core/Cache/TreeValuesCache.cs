@@ -880,12 +880,22 @@ namespace HSMServer.Core.Cache
                     if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
                     {
                         var value = request.BuildNewValue(sensor);
-                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : TryAddValueWithDeliveryStamp(sensor, value);
+                        var addedResult = AddValueResult.Cached;
+                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : TryAddValueWithDeliveryStamp(sensor, value, out addedResult);
 
                         if (result)
                         {
+                            // The journal's "new" side is the value this request produced. For an
+                            // out-of-order add the cached newest does not change (the value went
+                            // straight to the database), so sensor.LastValue would record the OLD
+                            // value as new; use the persisted out-of-order value instead. Otherwise
+                            // the value can be rebuilt in storage, so LastValue is the right source.
+                            var newValueForJournal = !request.ChangeLast && addedResult.Kind == AddValueKind.OutOfOrder
+                                ? addedResult.OutOfOrderValue
+                                : sensor.LastValue;
+
                             var (oldValue, newValue) =
-                                request.GetValues(lastValue, sensor.LastValue); // value can be rebuild in storage so use LastValue
+                                request.GetValues(lastValue, newValueForJournal);
 
                             _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                             {
@@ -896,7 +906,9 @@ namespace HSMServer.Core.Cache
                                 NewValue = request.BuildComment(value: newValue)
                             });
 
-                            if (sensor.LastDbValue != null)
+                            if (!request.ChangeLast)
+                                PersistAddedValue(sensor, sensor.FullPath, request.Id, value, addedResult, lastValue?.Time);
+                            else if (sensor.LastDbValue != null)
                                 SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
 
                             SensorUpdateViewAndNotify(sensor);
@@ -1104,6 +1116,30 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id, from, to);
+
+            // The retention-floor half for late values: everything up to the clear
+            // was just erased on purpose — an out-of-order write must not re-fill
+            // the cleared window (#1441 round-3). Storage.From is not usable for
+            // this: the history load seeds it with the oldest row.
+            //
+            // The floor is the moment the clear REACHED, not the requested bound:
+            // a UI full clear sends To = MaxValue (ClearHistoryRequest default),
+            // and stamping that verbatim would drop every later out-of-order value
+            // until restart — switching the #1441 fix off with a routine operator
+            // action. Clamped to UtcNow, a full clear floors at the clear moment:
+            // values stamped after it are new data, a replay of pre-clear stamps
+            // is refused. Monotone (max): the automatic KeepHistory pass also runs
+            // through here with its own cutoff, and it must never LOWER a floor a
+            // later operator clear raised — only widen the protected window.
+            //
+            // Stamped AFTER the database erase (#1441 round-6): the bordered-value
+            // adjustment above can return early without erasing anything, and a
+            // floor stamped on that path would refuse backfill for rows that are
+            // still in the database.
+            var clearFloor = to < DateTime.UtcNow ? to : DateTime.UtcNow;
+            if (sensor.HistoryClearedTo is null || sensor.HistoryClearedTo < clearFloor)
+                sensor.HistoryClearedTo = clearFloor;
+
             sensor.Cut(to);
 
             SensorUpdateView(sensor);
@@ -2726,11 +2762,145 @@ namespace HSMServer.Core.Cache
         // keeps the old value's timestamps — not new data under either
         // witness — nor by the expiry marker's add in SetExpiredSnapshot:
         // that add IS the expiry, not a delivery.
-        private bool TryAddValueWithDeliveryStamp(BaseSensorModel sensor, BaseValue value)
+        private bool TryAddValueWithDeliveryStamp(BaseSensorModel sensor, BaseValue value, out AddValueResult result)
         {
             value.DeliverySequence = Interlocked.Increment(ref _dispatchSequence);
 
-            return sensor.TryAddValue(value);
+            return sensor.TryAddValue(value, out result);
+        }
+
+        // Shared persistence for one accepted value-add (#1441). Callers capture the
+        // cached newest value's time BEFORE the add so a same-timestamp pair is
+        // detected: the database key is (sensorId, ticks) — a compatibility-frozen
+        // format — so within one tick only the LAST WRITTEN value keeps its row; that
+        // supersede is counted and logged instead of passing silently (Rule #8).
+        private void PersistAddedValue(BaseSensorModel sensor, string path, Guid sensorId, BaseValue incomingValue, in AddValueResult result, DateTime? previousLastTime)
+        {
+            if (result.Kind == AddValueKind.OutOfOrder)
+            {
+                // `in` parameters cannot be captured by the deferred message
+                // builders below — the value is a reference type, copy it once.
+                var lateValue = result.OutOfOrderValue;
+
+                // #1441: accepted data that cannot enter the bounded ordered cache —
+                // persist the validated value directly so history keeps it. Nothing
+                // else is written: the cache's newest value and its row are untouched
+                // by an older sibling. For NON-aggregate sensors an out-of-order
+                // write at a tick that already has a row also overwrites that row
+                // (last written wins) but does not touch the supersede counter —
+                // detecting it would need a read-before-write on the hot path; see
+                // the wire-contract invariant. Aggregate sensors DO the read below
+                // (round-7): there one row can stand for a whole run of values.
+                //
+                // Retention floor (#1441 round-3): the later of the KeepHistory
+                // window (when configured — values older than it are purged by
+                // the retention pass anyway) and the last history clear, explicit
+                // or automatic retention pass (HistoryClearedTo is stamped by
+                // both). Deliberately NOT Storage.From: the history load seeds it
+                // with the oldest stored row, so using it would drop legitimate
+                // backfill depending on the server's restart history. Without
+                // any floor, a skewed or hostile clock could force open one
+                // weekly LevelDB per distinct past week.
+                // KNOWN LIMIT (#1441 round-5, deliberate): the floor is bounded
+                // only by KeepHistory and clears. With Forever
+                // retention — KeepHistory None, never cleared — it is
+                // DateTime.MinValue, so such sensors accept arbitrary past
+                // timestamps and the weekly-database protection does NOT apply
+                // to them.
+                //
+                // Round-6: KeepHistory inherited from a folder reaches here as a
+                // FromFolder policy carrying the FOLDER model's ticks — Forever
+                // as long.MaxValue, the month presets as 0. The retention pass
+                // (TimeIsUp) treats both as "never expires", and the floor must
+                // agree: shifting long.MaxValue throws and would abort the whole
+                // batch loop, and shifting 0 floors at UtcNow and would refuse
+                // every out-of-order value. Any ticks window too large to
+                // represent below DateTime.MinValue is the same no-floor case.
+                var keepPolicy = sensor.Settings.KeepHistory.Value;
+                var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= DateTime.UtcNow.Ticks))
+                    ? DateTime.MinValue
+                    : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
+                var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
+                var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
+
+                if (lateValue.Time < floor)
+                {
+                    CountAndWarnRateLimited(ref sensor.OutOfRetentionValues,
+                        () => $"Out-of-order value older than the sensor's history floor, not stored (sensor '{path}', time {lateValue.Time:O}, floor {floor:O})");
+                    return;
+                }
+
+                // #1441 round-7 (review P2): with AggregateValues on, one row can
+                // stand for a whole run of equal values (DB key = the span's first
+                // tick, LastUpdateTime = the last one). A late re-send AT the span's
+                // key would replace the stored run with a count-1 value — losing
+                // coverage that is already in history (pre-#1441 the re-send was
+                // dropped and the row survived); a distinct-content value INSIDE the
+                // span would add a row overlapping it. Probe first — the same
+                // IsBorderedValue read the clear path uses — and skip the write when
+                // the tick lands on or inside an existing span. Cold path only
+                // (aggregate sensors' out-of-order writes); the non-aggregate
+                // last-written-wins rule two comments up is unchanged.
+                if (sensor.AggregateValues && IsBorderedValue(sensor, lateValue.Time.Ticks, out var aggregateSpan))
+                {
+                    CountAndWarnRateLimited(ref sensor.AggregateSpanOverlapsSkipped,
+                        () => $"Out-of-order value not stored: its tick lands on an aggregated span row it would replace or overlap (sensor '{path}', time {lateValue.Time:O}, span {aggregateSpan.Time:O}..{aggregateSpan.LastUpdateTime:O})");
+                    return;
+                }
+
+                SaveSensorValueToDb(lateValue, sensorId);
+
+                // The row just written is the oldest one whenever it precedes
+                // Storage.From (From is MinValue until a restart seeds it with
+                // the oldest row, or a clear raises it): ClearSensorHistory and
+                // the retention pass both delete starting AT From, so a From
+                // above the new oldest row would leave it unremovable until a
+                // restart (#1441 round-5). Min-only — a value at/above From
+                // leaves it alone, and MinValue itself never widens.
+                sensor.WidenFrom(lateValue.Time);
+
+                CountAndWarnRateLimited(ref sensor.OutOfOrderValuesStored,
+                    () => $"Out-of-order value stored directly (sensor '{path}', time {lateValue.Time:O}, cached newest {sensor.LastValue?.Time:O})");
+                return;
+            }
+
+            if (sensor.LastDbValue != null)
+            {
+                SaveSensorValueToDb(sensor.LastDbValue, sensorId);
+
+                // Cached real instant values only: an Aggregated fold rewrites the
+                // merged row (no separate row existed to supersede), a timeout marker
+                // never changes the cached newest value (its before/after comparison
+                // would trivially match), and for bar sensors LastValue is the
+                // in-progress partial, which is never written to the database at all.
+                if (sensor is not IBarSensor &&
+                    result.Kind == AddValueKind.Cached && !incomingValue.IsTimeout &&
+                    previousLastTime?.Ticks == sensor.LastValue?.Time.Ticks)
+                {
+                    // Two values on one timestamp: the row written a moment ago for the
+                    // same tick has just been superseded — only the last of them stays
+                    // in the database.
+                    CountAndWarnRateLimited(ref sensor.SameTickValuesSuperseded,
+                        () => $"Same-timestamp value supersedes the previous one in the database (sensor '{path}', time {sensor.LastValue?.Time:O})");
+                }
+            }
+        }
+
+        // Flood-safe shape for the #1441 per-sensor diagnostics: the counted shapes
+        // are steady state (a shuffled 10k-value backfill, a collector retry loop),
+        // so a per-value Warn would turn the log into a self-inflicted flood. Every
+        // occurrence is counted; the Warn fires on the FIRST occurrence and then on
+        // every 1000th, carrying the running total so the sequence reads as a
+        // periodic summary (a 10k backfill = 11 lines). The message is a deferred
+        // builder (round-7): with two DateTime:O formats per line, building it for
+        // every counted value would put an allocation and two date formats per value
+        // on the ingest hot path just to throw 999 of every 1000 away.
+        private void CountAndWarnRateLimited(ref long counter, Func<string> message)
+        {
+            var total = Interlocked.Increment(ref counter);
+
+            if (total == 1L || total % 1000L == 0L)
+                _logger.Warn($"{message()} (total {total})");
         }
 
         private bool TryAddNewSensorValue(AddSensorValueRequest request, out string error)
@@ -2747,8 +2917,29 @@ namespace HSMServer.Core.Cache
             if (sensor.State == SensorState.Blocked)
                 return true;
 
-            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue) && sensor.LastDbValue != null)
-               SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+            // The previous cached newest, captured before the add: a value that
+            // lands on the SAME tick as it keeps only the last row in the
+            // database (the write key is (sensorId, ticks)) — that supersede is
+            // counted and logged instead of passing silently (#1441).
+            var previousLastTime = sensor.LastValue?.Time;
+
+            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue, out var result))
+                PersistAddedValue(sensor, request.Path, sensor.Id, request.BaseValue, result, previousLastTime);
+            else if (!request.BaseValue.IsTimeout)
+            {
+                // #1441: a value rejected here used to vanish with a clean 200 and
+                // no trace. The real rejector is the singleton gate — steady state
+                // when several app instances feed one singleton sensor (N-1
+                // rejections per second, forever); a wrong-typed value can also
+                // fail the type check inside TryValidate, while the policy status
+                // calculation effectively always accepts. Count it (Rule #8) but
+                // deliberately log NOTHING, not even Debug: the singleton shape is
+                // steady state and a per-value line would flood the log — the
+                // counter is the surface. The batch response stays empty: a
+                // rejected value is a sensor-level event, not a transport error,
+                // and clients treat response entries as such.
+                Interlocked.Increment(ref sensor.RejectedValues);
+            }
 
             SensorUpdateViewAndNotify(sensor);
 

@@ -96,8 +96,12 @@ namespace HSMServer.Core.Model
                 Policies.TryRevalidate(LastValue);
         }
 
-        internal override bool TryAddValue(BaseValue value)
+        internal override bool TryAddValue(BaseValue value) => TryAddValue(value, out _);
+
+        internal override bool TryAddValue(BaseValue value, out AddValueResult result)
         {
+            result = AddValueResult.Cached;
+
             if (!_isInitialized)
                 Initialize();
 
@@ -121,21 +125,59 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                // Every path from here stores — AddValue, or TryAggregateValue folding into the
-                // cached value — so the sensor is no longer running on a hollow retry restore.
-                // Cleared at the write, not tested against HasData on read: a later retention
-                // pass or history clear must not resurrect the degraded state.
+                // Every path from here stores — AddValue, TryAggregateValue folding into the
+                // cached value, or the out-of-order direct write below — so the sensor is no
+                // longer running on a hollow retry restore. Cleared at the write, not tested
+                // against HasData on read: a later retention pass or history clear must not
+                // resurrect the degraded state.
                 _historyRestoredByRetry = false;
 
+                // Aggregation fold FIRST, in any arrival order (pre-#1441 semantics): an
+                // equal-content older value folds into the cached newest value instead of
+                // becoming its own row. For a non-foldable older value, TryAggregateValue's
+                // internal AddValue drops it on the ordering guard — harmless, the direct
+                // write below is what persists it.
                 bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
 
-                if (isNewValue)
+                if (!isNewValue)
                 {
-                    if (!AggregateValues)
-                        Storage.AddValue(validatedValue);
-
-                    ReceivedNewValue?.Invoke(validatedValue);
+                    result = AddValueResult.Aggregated;
+                    return true;
                 }
+
+                // #1441: an accepted value OLDER than the cached newest one used to fall on
+                // the floor silently — AddValueBase's ordering guard enqueues only values
+                // with Time >= the cached last one, and the caller persisted only the
+                // cache's newest, so a shuffled or backfilled burst kept a handful of
+                // record-maxima (TAM-1870's "all data missed"). It is accepted data: report
+                // it to the caller, which persists the validated value directly. The value
+                // HAS been through Policies.TryValidate above (with isLastValue: false) —
+                // its alerts and notifications are evaluated as for any other value.
+                // INSTANT values only: bars keep their fall-through to Storage.AddValue,
+                // where the bar storage merges same-period partials in memory by OpenTime —
+                // a bar row's DB key is its SEND time, so a direct write of a late partial
+                // would add a second row for the period when the completed bar lands.
+                if (Storage.LastValue is not null && value.Time < Storage.LastValue.Time && value is not BarBaseValue)
+                {
+                    // Full pre-#1441 delivery parity: ReceivedNewValue fired for
+                    // out-of-order values before this change — charts and live views keep
+                    // receiving them; only cache membership and the DB-write path differ.
+                    ReceivedNewValue?.Invoke(validatedValue);
+
+                    // The persisted copy gets the storage's write-side transform
+                    // (#1441 round-5): this branch skips Storage.AddValue, where
+                    // FileValuesStorage compresses file content — without this,
+                    // late file values would be stored raw (larger on disk).
+                    // PrepareForPersist returns a new instance when it transforms,
+                    // so the value delivered above stays untouched.
+                    result = AddValueResult.OutOfOrder(Storage.PrepareForPersist(validatedValue));
+                    return true;
+                }
+
+                if (!AggregateValues)
+                    Storage.AddValue(validatedValue);
+
+                ReceivedNewValue?.Invoke(validatedValue);
             }
 
             return canStore;

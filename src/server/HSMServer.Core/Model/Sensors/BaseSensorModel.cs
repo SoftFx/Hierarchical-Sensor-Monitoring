@@ -49,6 +49,58 @@ namespace HSMServer.Core.Model
 
         internal bool IsExpired { get; set; }
 
+        // #1441 diagnostics (Architecture Rule #8 — no silent data loss):
+        // unusual ingest shapes are counted per sensor so the loss shapes
+        // TAM-1870 hid are visible. Fields (not properties) because they are
+        // updated with Interlocked. Written from the owning product's queue
+        // thread (and the UI value-edit thread); read by tests and logs.
+        internal long OutOfOrderValuesStored;
+        internal long SameTickValuesSuperseded;
+        internal long RejectedValues;
+        // Out-of-order values NOT persisted because their tick lands on or
+        // inside an existing AGGREGATED span row (#1441 round-7): with
+        // AggregateValues on, one row stands for a whole run of equal values
+        // (DB key = the span's first tick, LastUpdateTime = the last one), so
+        // a direct write there would replace the stored run with a count-1
+        // value (pre-#1441 the re-send was dropped and the row survived) or
+        // add a row overlapping the span. Skipped and counted instead —
+        // the probe runs only on this cold path (aggregate sensors'
+        // out-of-order writes), never on the regular ingest hot path.
+        internal long AggregateSpanOverlapsSkipped;
+        // Out-of-order values NOT persisted because their timestamp precedes the
+        // sensor's history floor (the KeepHistory window, when configured, and
+        // the last history clear — explicit or automatic retention pass, see
+        // HistoryClearedTo): without a floor, a skewed or hostile
+        // clock could force one weekly LevelDB per distinct past week and
+        // re-fill windows the operator cleared. Deliberately NOT Storage.From:
+        // the history load seeds it with the oldest stored row, which would make
+        // legitimate backfill lossy depending on restart history.
+        // The floor is bounded ONLY by KeepHistory and explicit clears: with
+        // Forever retention (KeepHistory = None, never cleared) it is
+        // DateTime.MinValue, so such sensors accept arbitrary past timestamps
+        // and the weekly-database protection does NOT apply to them. The same
+        // MinValue applies to KeepHistory inherited from a folder when the
+        // folder window never expires for the retention pass (FromFolder with
+        // the folder's month presets, Ticks = 0) or is too large to shift
+        // (FromFolder Forever, long.MaxValue) — the floor mirrors TimeIsUp,
+        // not just IsNone.
+        internal long OutOfRetentionValues;
+
+        // Upper bound of the last history clear (ClearSensorHistory), null =
+        // never cleared in this process. Both clear paths stamp it — explicit
+        // operator clears AND the automatic KeepHistory retention pass, which
+        // routes through the same method (monotone max, #1441 round-4): a
+        // later, wider pass must never lower a floor an earlier clear raised.
+        // Consequence, kept deliberately (round-6/round-7 adjudication):
+        // widening KeepHistory does NOT lower this floor until restart, so
+        // backfill into the newly opened older window is conservatively
+        // refused (counted as OutOfRetentionValues) for the current uptime.
+        // The floor half that keeps late values from re-filling a window the
+        // operator cleared. In-memory only: a cleared-then-restarted sensor
+        // loses the guard (a value old enough to predate the clear is also a
+        // candidate for the KeepHistory floor).
+        internal DateTime? HistoryClearedTo;
+
         // Server-clock instant of the last expiry TRANSITION that had a value
         // to judge (#1404) — recorded on the transition itself and seeded
         // from the marker row on the cold-load path, which restores
@@ -304,6 +356,15 @@ namespace HSMServer.Core.Model
             Storage.Cut(time);
         }
 
+        // Min-only counterpart of Cut for the #1441 direct out-of-order write:
+        // lowers From to a newly stored row that precedes it, so history
+        // clears and the retention pass (both bounded below by From) can
+        // still reach that row. No-op when the value is at/above From.
+        internal void WidenFrom(DateTime time)
+        {
+            Storage.WidenFrom(time);
+        }
+
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 
 
@@ -312,6 +373,8 @@ namespace HSMServer.Core.Model
         internal abstract void Revalidate();
 
         internal abstract bool TryAddValue(BaseValue value);
+
+        internal abstract bool TryAddValue(BaseValue value, out AddValueResult result);
 
         internal abstract bool TryUpdateLastValue(BaseValue value);
 
