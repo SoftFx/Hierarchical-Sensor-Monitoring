@@ -1,6 +1,11 @@
-# /release-collector <optional-version> — Cut a DataCollector NuGet release
+---
+description: Cut a HSMDataCollector NuGet release - bump the csproj version, regenerate ReleaseNote.Collector.md, open a PR, then run the collector-nuget-build workflow after merge.
+argument-hint: X.Y.Z (optional next version)
+---
 
-> An adapted mirror for ZCode lives at `.agents/commands/release-collector.md` — keep the release steps in sync.
+> Adapted mirror of `.claude/commands/release-collector.md` for ZCode — only the frontmatter, the PR-footer attribution and the confirmation-tool wording differ. Keep the release steps in sync with the source.
+
+# /release-collector <optional-version> — Cut a DataCollector NuGet release
 
 Cut a release for the C# HSMDataCollector (published as the
 `HSMDataCollector.HSMDataCollector` NuGet package). Reads the current version,
@@ -26,7 +31,9 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
 
 3. **Propose next version** — compute PATCH+1 (e.g. `3.4.12` → `3.4.13`). If
    `$ARGUMENTS` is non-empty and looks like a semver (`X.Y.Z`), use it instead.
-   Use AskUserQuestion to confirm:
+   Stop and confirm with the user before proceeding — use the agent's
+   interactive question tool if it has one (ZCode and Claude Code both provide
+   AskUserQuestion); otherwise ask in plain text and wait for the answer:
    - Show the current version in the question text.
    - Offer the proposed next version as the first option labeled `(Recommended)`.
    - The user can pick "Other" to enter a custom version.
@@ -59,7 +66,7 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
    ```
    git log --pretty=format:"- %s" collector-v<OLD>..master -- src/collector
    ```
-   If no `collector-v3*` tag exists yet (first run of this skill), fall back to
+   If no `collector-v3*` tag exists yet (first run of this command), fall back to
    the commit where `<Version>` was last bumped:
    ```
    git log -1 --format="%H" -- src/collector/HSMDataCollector/HSMDataCollector.csproj
@@ -111,7 +118,7 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
    which publishes `HSMDataCollector.HSMDataCollector` `<NEW>` to nuget.org and
    automatically tags `collector-v<NEW>`.
 
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   🤖 Generated with ZCode
    EOF
    )"
    ```
@@ -167,17 +174,18 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
   `gh run view <RUN_ID> --log-failed` and report the failing step. Common
   causes: `NUGETKEY` secret rotated or `Nuget` environment approval pending.
   Do not retry blindly — fix the root cause.
-- If the user supplied `$ARGUMENTS` as a version, still confirm via
-  AskUserQuestion before bumping — typos in a release version are expensive,
+- If the user supplied `$ARGUMENTS` as a version, still stop and confirm the
+  version with the user before bumping (AskUserQuestion where the tool exists,
+  a plain-text question otherwise) — typos in a release version are expensive,
   and a bad version pushed to nuget.org cannot be reused or deleted (only
   unlisted).
 - **Publishing to nuget.org is irreversible.** A version once pushed can be
   unlisted but never deleted or re-uploaded. If the build fails AFTER the push
   step succeeds, do not silently re-run — confirm with the user how to proceed.
-- The skill assumes `master` is the default branch and the source of truth for
+- This command assumes `master` is the default branch and the source of truth for
   releases. If the repo has been reconfigured to use `main` or a release branch,
   stop and ask.
-- This skill is **C# / managed only**. The native C++ collector, the
+- This command is **C# / managed only**. The native C++ collector, the
   `hsm-collector-registry` vcpkg workflow, and the wrapper release are separate
   and out of scope. If the user asks for those, do not improvise — point them
   at the relevant workflow file.
