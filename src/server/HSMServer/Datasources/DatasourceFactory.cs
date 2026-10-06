@@ -11,7 +11,7 @@ namespace HSMServer.Datasources
         public static bool IsSupportedPlotProperty(BaseSensorModel sensor, PlottedProperty property)
             => sensor.Type switch
             {
-                SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine(),
+                SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine() || property.IsBarStdDevLine(),
                 SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Enum => property.IsInstantView() || property.IsInstantDoubleLine(),
                 SensorType.TimeSpan or SensorType.Version => property.IsInstantView(),
 
@@ -40,11 +40,13 @@ namespace HSMServer.Datasources
                 SensorType.IntegerBar when property.IsBarLine() => new IntBarLineDatasource(),
                 SensorType.IntegerBar when property.IsBarIntLine() => new IntBarIntLineSource(),
                 SensorType.IntegerBar when property.IsBarDoubleLine() => new IntBarNullDoubleSource(),
+                SensorType.IntegerBar when property.IsBarStdDevLine() => new IntBarStdDevSource(),
 
                 SensorType.DoubleBar when property.IsBarView() => new BarsDatasource(),
                 SensorType.DoubleBar when property.IsBarLine() => new DoubleBarLineDatasource(),
                 SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarIntLineSource(),
                 SensorType.DoubleBar when property.IsBarDoubleLine() => new DoubleBarNullDoubleSource(),
+                SensorType.DoubleBar when property.IsBarStdDevLine() => new DoubleBarStdDevSource(),
 
                 SensorType.Version when property.IsInstantView() => new VersionSensorLineDatasource(),
 
@@ -70,6 +72,8 @@ namespace HSMServer.Datasources
         private static bool IsBarLine(this PlottedProperty property) => property is PlottedProperty.Min or PlottedProperty.Mean or PlottedProperty.Max;
 
         private static bool IsBarIntLine(this PlottedProperty property) => property is PlottedProperty.Count;
+
+        private static bool IsBarStdDevLine(this PlottedProperty property) => property is PlottedProperty.StdDev;
 
         private static bool IsBarDoubleLine(this PlottedProperty property) => property is PlottedProperty.EmaMin or
             PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount;

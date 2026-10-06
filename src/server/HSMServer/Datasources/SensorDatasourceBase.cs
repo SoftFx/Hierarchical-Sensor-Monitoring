@@ -38,6 +38,11 @@ namespace HSMServer.Datasources
         protected abstract ChartType NormalType { get; }
 
 
+        // A value the source has nothing to draw for (e.g. a bar whose StdDev is unknown) is left
+        // out of the chart instead of becoming a made-up point.
+        protected virtual bool IsPlotted(BaseValue value) => true;
+
+
         internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
             static object DefaultFilter(BaseChartValue value) => value;
@@ -94,7 +99,7 @@ namespace HSMServer.Datasources
             var versionPoints = new List<BaseChartValue>(values.Capacity);
             foreach (var value in values)
             {
-                if (DataAggregator.TryAddNewPoint(value, out var newPoint))
+                if (IsPlotted(value) && DataAggregator.TryAddNewPoint(value, out var newPoint))
                     versionPoints.Add(newPoint);
             }
             
@@ -117,7 +122,7 @@ namespace HSMServer.Datasources
 
         private void AddNewValue(BaseValue value)
         {
-            if (!DataAggregator.TryAddNewPoint(value, out var newPoint))
+            if (!IsPlotted(value) || !DataAggregator.TryAddNewPoint(value, out var newPoint))
                 return;
 
             _newVisibleValues.AddLast(newPoint);

@@ -17,6 +17,8 @@ namespace HSMServer.Model.History
 
         public T Mean { get; set; }
 
+        public double? StdDev { get; set; }
+
         public T? FirstValue { get; set; }
 
         public T LastValue { get; set; }

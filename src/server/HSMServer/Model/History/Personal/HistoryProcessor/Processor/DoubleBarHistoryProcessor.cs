@@ -24,6 +24,7 @@ namespace HSMServer.Model.History
               Min = summary.Min,
               Max = summary.Max,
               Mean = summary.Mean,
+              StdDev = summary.StdDev,
               Time = summary.CloseTime.ToUniversalTime(),
               ReceivingTime = summary.CloseTime.ToUniversalTime(),
               FirstValue = summary.FirstValue,

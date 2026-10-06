@@ -14,7 +14,10 @@ namespace HSMServer.Datasources.Aggregators
 
                 PlottedProperty.Min => LineNumberPointState<T>.GetMinState,
 
-                PlottedProperty.Value or PlottedProperty.Mean or PlottedProperty.EmaValue or PlottedProperty.EmaMin or
+                // StdDev averages like Mean when several bars fall into one visible point: a display
+                // approximation (the exact pooled value needs each bar's Count and Mean, which a
+                // one-number line point does not keep). The sensor page compresses exactly.
+                PlottedProperty.Value or PlottedProperty.Mean or PlottedProperty.StdDev or PlottedProperty.EmaValue or PlottedProperty.EmaMin or
                 PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount => LineNumberPointState<T>.GetAvrState,
 
                 _ => throw BuildNotSupportedException(property),

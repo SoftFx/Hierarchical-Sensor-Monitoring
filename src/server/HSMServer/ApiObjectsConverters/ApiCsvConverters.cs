@@ -86,6 +86,7 @@ namespace HSMServer.ApiObjectsConverters
             { new(nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
+            { new(nameof(IntegerBarValue.StdDev)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
             { new(nameof(IntegerBarValue.EmaMin)), ExportOptions.EmaStatistics },
             { new(nameof(IntegerBarValue.EmaMean)), ExportOptions.EmaStatistics },

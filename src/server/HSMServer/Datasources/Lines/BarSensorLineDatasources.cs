@@ -52,6 +52,37 @@ namespace HSMServer.Datasources
     public sealed class DoubleBarNullDoubleSource : BarBaseNullDoubleLineDatasource<DoubleBarValue> { }
 
 
+    // StdDev (#1509) is unknown for bars from older collectors, rows stored before it existed and
+    // bars built from partials. Unknown is not 0, so such bars are left out of the line instead of
+    // being drawn at zero (the EMA sources above map null to 0.0).
+    public abstract class BarBaseStdDevLineDatasource<TValue> : BaseNumberLineDatasource<TValue, double?, double>
+        where TValue : BarBaseValue
+    {
+        protected override Func<TValue, double?> GetPropertyFactory(PlottedProperty property) => property switch
+        {
+            PlottedProperty.StdDev => v => GetStdDev(v),
+
+            _ => throw BuildException(property),
+        };
+
+        protected override double ConvertToChartType(double? value) => value ?? double.NaN;
+
+        protected override bool IsPlotted(BaseValue value) => value is TValue bar && GetStdDev(bar) is not null;
+
+
+        private static double? GetStdDev(TValue value) => value switch
+        {
+            BarBaseValue<int> intBar => intBar.StdDev,
+            BarBaseValue<double> doubleBar => doubleBar.StdDev,
+            _ => null,
+        };
+    }
+
+    public sealed class IntBarStdDevSource : BarBaseStdDevLineDatasource<IntegerBarValue> { }
+
+    public sealed class DoubleBarStdDevSource : BarBaseStdDevLineDatasource<DoubleBarValue> { }
+
+
     public abstract class BarBaseIntLineDatasource<TValue> : BaseNumberLineDatasource<TValue, int, int>
         where TValue : BarBaseValue
     {

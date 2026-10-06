@@ -390,8 +390,16 @@ export class DoublePlot extends ErrorColorPlot {
     }
 }
 
+// Sensor-page bar views (#1509): the candlestick (default) or a mean +/- 1 sigma band. The sensor
+// page draws the mean line in both; dashboards build BarPLot without a view and keep the bare
+// candlestick.
+export const BarView = {
+    candlestick: 'candlestick',
+    stdDev: 'stddev',
+}
+
 export class BarPLot extends Plot {
-    constructor(data, name, unitType = undefined, color = Colors.default) {
+    constructor(data, name, unitType = undefined, color = Colors.default, view = undefined) {
         super(data, unitType, color);
 
         this.type = 'candlestick';
@@ -409,6 +417,12 @@ export class BarPLot extends Plot {
         this.hoverinfo = 'text';
         this.xaxis = 'x';
         this.yaxis = 'y';
+
+        // Kept off the trace's own attribute names: `this` is handed to Plotly as the candlestick.
+        this.barView = view;
+        this.barMeans = [];
+        this.barStdDevs = [];
+
         this.setUpData(data);
     }
 
@@ -422,19 +436,113 @@ export class BarPLot extends Plot {
             this.high.push(i.max);
             this.low.push(i.min);
 
+            // StdDev is unknown (null/absent) for older collectors, older rows and bars built
+            // from partials: no band is drawn there, and the hover text does not show one.
+            const stdDev = BarPLot.getStdDev(i);
+
             this.open.push(i.firstValue === null ? i.min : i.firstValue);
             this.text.push(
                 'min: ' + i.min +
                 '<br>mean: ' + i.mean +
                 '<br>max: ' + i.max +
+                (stdDev === null ? '' : '<br>σ: ' + stdDev) +
                 '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : '') +
                 '<br>open time: ' + moment.utc(i.openTime).format('DD/MM/yyyy HH:mm:ss') +
                 '<br>close time: ' + moment.utc(i.closeTime).format('DD/MM/yyyy HH:mm:ss'));
             this.close.push(i.lastValue);
+
+            this.barMeans.push(i.mean);
+            this.barStdDevs.push(stdDev);
         }
 
         window.graphData.plot = this;
         window.graphData.plotData = data;
+    }
+
+    getPlotData() {
+        if (this.barView === undefined)
+            return [this];
+
+        // Every trace is named 'bar', so the Bar checkbox shows/hides the whole view at once.
+        if (this.barView === BarView.stdDev)
+            return [this.getStdDevBandTrace(), this.getMeanTrace(true)];
+
+        return [this, this.getMeanTrace(false)];
+    }
+
+    getMeanTrace(withHover) {
+        return {
+            type: 'scatter',
+            mode: 'lines',
+            name: this.name,
+            x: this.x,
+            y: this.barMeans,
+            line: {color: this.line.color, width: 1.5},
+            showlegend: false,
+            text: this.text,
+            hoverinfo: withHover ? 'text' : 'skip',
+            xaxis: this.xaxis,
+            yaxis: this.yaxis,
+        };
+    }
+
+    // One filled polygon per run of bars with a known sigma (upper edge left to right, lower edge
+    // back), runs separated by nulls: Plotly closes each gap-separated segment of a 'toself' fill
+    // on its own, so a bar with an unknown sigma breaks the band instead of being drawn at 0.
+    getStdDevBandTrace() {
+        const x = [];
+        const y = [];
+        let run = [];
+
+        const closeRun = () => {
+            if (run.length === 0)
+                return;
+
+            for (const idx of run) {
+                x.push(this.x[idx]);
+                y.push(this.barMeans[idx] + this.barStdDevs[idx]);
+            }
+
+            for (const idx of [...run].reverse()) {
+                x.push(this.x[idx]);
+                y.push(this.barMeans[idx] - this.barStdDevs[idx]);
+            }
+
+            x.push(null);
+            y.push(null);
+            run = [];
+        };
+
+        for (let idx = 0; idx < this.x.length; idx++) {
+            if (this.barStdDevs[idx] === null || typeof this.barMeans[idx] !== 'number')
+                closeRun();
+            else
+                run.push(idx);
+        }
+
+        closeRun();
+
+        return {
+            type: 'scatter',
+            mode: 'lines',
+            name: this.name,
+            x: x,
+            y: y,
+            fill: 'toself',
+            fillcolor: 'rgba(31, 119, 180, 0.2)',
+            line: {color: 'rgba(31, 119, 180, 0.4)', width: 1},
+            connectgaps: false,
+            showlegend: false,
+            hoverinfo: 'skip',
+            xaxis: this.xaxis,
+            yaxis: this.yaxis,
+        };
+    }
+
+    static getStdDev(value) {
+        const stdDev = value.stdDev;
+
+        return typeof stdDev === 'number' && isFinite(stdDev) ? stdDev : null;
     }
 }
 

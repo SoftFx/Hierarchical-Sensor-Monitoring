@@ -33,6 +33,7 @@ public class DatasourceViewModel
         PlottedProperty.Min,
         PlottedProperty.Mean,
         PlottedProperty.Max,
+        PlottedProperty.StdDev,
         PlottedProperty.Count,
     ];
 

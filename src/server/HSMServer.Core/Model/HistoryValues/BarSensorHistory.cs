@@ -16,6 +16,9 @@ namespace HSMServer.Core.Model.HistoryValues
 
         public string Mean { get; init; }
 
+        // Population standard deviation (#1509); null when unknown (never "0").
+        public string StdDev { get; init; }
+
         public string FirstValue { get; init; }
 
         public string LastValue { get; init; }
