@@ -1303,6 +1303,89 @@ impl WriteSpeedSource<'_> {
         })
     }
 
+    /// Add `disk`'s counters to its per-day totals. Each skip sets a new baseline for both
+    /// counters, so it is logged once per event, in one line for both totals.
+    fn sample_ledger(
+        &mut self,
+        disk: &str,
+        sectors: diskstats::Sectors,
+        now_ms: i64,
+        nodes: &[Node<'_>],
+        logger: &Logger,
+    ) {
+        // Today's volumes: every sample, whatever the rate makes of it (a long gap inside the
+        // day still counts; the ledger has its own rules).
+        let identity = self.identity_of(disk, nodes);
+        match self.ledger.sample_counters(
+            disk,
+            identity.as_deref(),
+            sectors,
+            now_ms,
+            self.local,
+            DISK_SAMPLE_PERIOD,
+        ) {
+            Err(written::Skip::OtherDisk) => logger.info(format!(
+                "disks: {disk} is not the disk that had this name before (or it cannot be \
+                 told after a reboot); its written and read per-day totals start afresh"
+            )),
+            Err(written::Skip::ClockBackwards) => logger.info(format!(
+                "disks: {disk}: the clock went backwards; the writes and reads since the \
+                 previous sample are not counted in Written per day and Read per day"
+            )),
+            Err(written::Skip::GapAcrossDays) => logger.info(format!(
+                "disks: {disk}: no sample across local midnight (the probe was not running); \
+                 the writes and reads in that gap are not counted in Written per day and \
+                 Read per day"
+            )),
+            _ => {}
+        }
+        self.ledger_dirty = true;
+    }
+
+    /// A day that missed its post window while the probe ran (a suspend over midnight,
+    /// unreadable /proc/diskstats, every post in the window failed) is lost: say so, with its
+    /// totals — one line per disk.
+    fn log_missed_days(&mut self, logger: &Logger) {
+        for lost in std::mem::take(&mut self.ledger.missed) {
+            let (sensors, amounts) = lost.describe();
+            logger.info(format!(
+                "disks: {}: the day {} ended without its {sensors} post (the probe did not sample \
+                 in its last 30 s, or every post there failed); its measured {amounts} are not \
+                 posted",
+                lost.disk,
+                written::day_label(lost.day)
+            ));
+        }
+    }
+
+    /// The stop's last `/proc/diskstats` reading, for the per-day totals only: no speed and no
+    /// post (the collector is stopping), so the writes and reads since the last sample — up to
+    /// one sample period — still count when the host is shutting down (#1507).
+    fn final_ledger_sample(&mut self, logger: &Logger) {
+        let text = match std::fs::read_to_string(&self.diskstats) {
+            Ok(text) => text,
+            Err(error) => {
+                logger.error(format!(
+                    "disks: cannot read {} at stop: {error}; the writes and reads since the last \
+                     sample are not counted in Written per day and Read per day",
+                    self.diskstats.display()
+                ));
+                return;
+            }
+        };
+        let now_ms = (self.clock)();
+        let counters = diskstats::parse_diskstats(&text);
+        let disks_handle = Arc::clone(&self.disks);
+        let nodes = disks_handle.nodes.lock().unwrap_or_else(|p| p.into_inner());
+        for disk in metered_disks(&nodes) {
+            if let Some(&sectors) = counters.get(disk) {
+                self.sample_ledger(disk, sectors, now_ms, &nodes, logger);
+            }
+        }
+        // A stop just past midnight turns the day here, with no later sample to report it.
+        self.log_missed_days(logger);
+    }
+
     fn save_ledger(&mut self, logger: &Logger) {
         let Some(path) = &self.ledger_path else {
             return;
@@ -1341,6 +1424,21 @@ fn post_per_day(
         Some(comment) => sensor.add_with(gigabytes, hsm_collector::SensorStatus::Ok, Some(comment)),
         None => sensor.add(gigabytes),
     }
+}
+
+/// The disks behind a mounted filesystem with a speed or per-day sensor.
+fn metered_disks<'n>(nodes: &'n [Node<'_>]) -> BTreeSet<&'n str> {
+    nodes
+        .iter()
+        .filter(|node| {
+            node.mounted
+                && (node.write_speed.is_some()
+                    || node.read_speed.is_some()
+                    || node.written_per_day.is_some()
+                    || node.read_per_day.is_some())
+        })
+        .filter_map(|node| node.disk.as_deref())
+        .collect()
 }
 
 /// `wwid:<…>` or `serial:<…>` of a whole disk from sysfs; `None` when the device exposes neither.
@@ -1409,17 +1507,7 @@ impl Source for WriteSpeedSource<'_> {
 
         let disks_handle = Arc::clone(&self.disks);
         let nodes = disks_handle.nodes.lock().unwrap_or_else(|p| p.into_inner());
-        let disks: BTreeSet<&str> = nodes
-            .iter()
-            .filter(|node| {
-                node.mounted
-                    && (node.write_speed.is_some()
-                        || node.read_speed.is_some()
-                        || node.written_per_day.is_some()
-                        || node.read_per_day.is_some())
-            })
-            .filter_map(|node| node.disk.as_deref())
-            .collect();
+        let disks = metered_disks(&nodes);
         // A name absent from /proc/diskstats (unplugged, even while unmounted and not sampled) may
         // come back as another disk: forget what was cached or counted under it.
         self.identities
@@ -1439,38 +1527,36 @@ impl Source for WriteSpeedSource<'_> {
             };
             // Today's volumes: every sample, whatever the rate makes of it (a long gap inside the
             // day still counts; the ledger has its own rules).
-            let identity = self.identity_of(disk, &nodes);
-            // Each of these skips sets a new baseline for both counters, so it is logged once per
-            // event, in one line for both totals.
-            match self.ledger.sample_counters(
-                disk,
-                identity.as_deref(),
-                sectors,
-                now_ms,
-                self.local,
-                DISK_SAMPLE_PERIOD,
-            ) {
-                Err(written::Skip::OtherDisk) => logger.info(format!(
-                    "disks: {disk} is not the disk that had this name before (or it cannot be \
-                     told after a reboot); its written and read per-day totals start afresh"
-                )),
-                Err(written::Skip::ClockBackwards) => logger.info(format!(
-                    "disks: {disk}: the clock went backwards; the writes and reads since the \
-                     previous sample are not counted in Written per day and Read per day"
-                )),
-                Err(written::Skip::GapAcrossDays) => logger.info(format!(
-                    "disks: {disk}: no sample across local midnight (the probe was not running); \
-                     the writes and reads in that gap are not counted in Written per day and \
-                     Read per day"
-                )),
-                _ => {}
-            }
-            self.ledger_dirty = true;
+            self.sample_ledger(disk, sectors, now_ms, &nodes, logger);
             let rate = self
                 .rates
                 .entry(disk.to_string())
                 .or_insert_with(|| WriteRate::new(DISK_SAMPLE_PERIOD))
                 .sample(sectors.written, now);
+            // The read speed: the same sample's "sectors read". A baseline or an implausible
+            // interval is the write rate's too (logged below).
+            let read_rate = self
+                .read_rates
+                .entry(disk.to_string())
+                .or_insert_with(|| WriteRate::new(DISK_SAMPLE_PERIOD))
+                .sample(sectors.read, now);
+            // One line per device reset (#1507): a real reset sets both counters back at once.
+            match (
+                matches!(rate, Err(Skip::CounterReset)),
+                matches!(read_rate, Err(Skip::CounterReset)),
+            ) {
+                (true, true) => logger.info(format!(
+                    "disks: the write and read counters of {disk} went backwards (device \
+                     reset?); new baseline"
+                )),
+                (true, false) => logger.info(format!(
+                    "disks: the write counter of {disk} went backwards (device reset?); new baseline"
+                )),
+                (false, true) => logger.info(format!(
+                    "disks: the read counter of {disk} went backwards (device reset?); new baseline"
+                )),
+                (false, false) => {}
+            }
             match rate {
                 Ok(mb_per_second) => {
                     for node in nodes
@@ -1484,22 +1570,12 @@ impl Source for WriteSpeedSource<'_> {
                         }
                     }
                 }
-                Err(Skip::Baseline) => {}
-                Err(Skip::CounterReset) => logger.info(format!(
-                    "disks: the write counter of {disk} went backwards (device reset?); new baseline"
-                )),
-                Err(Skip::AbnormalInterval) => logger.log(Level::Debug, &format!(
-                    "disks: write-speed sample of {disk} skipped (interval out of range)"
-                )),
+                Err(Skip::Baseline | Skip::CounterReset) => {}
+                Err(Skip::AbnormalInterval) => logger.log(
+                    Level::Debug,
+                    &format!("disks: write-speed sample of {disk} skipped (interval out of range)"),
+                ),
             }
-            // The read speed: the same sample's "sectors read". A baseline or an implausible
-            // interval is the write rate's too (logged above); only a read counter that went
-            // backwards on its own is the read rate's to say.
-            let read_rate = self
-                .read_rates
-                .entry(disk.to_string())
-                .or_insert_with(|| WriteRate::new(DISK_SAMPLE_PERIOD))
-                .sample(sectors.read, now);
             match read_rate {
                 Ok(mb_per_second) => {
                     for node in nodes
@@ -1513,10 +1589,7 @@ impl Source for WriteSpeedSource<'_> {
                         }
                     }
                 }
-                Err(Skip::CounterReset) => logger.info(format!(
-                    "disks: the read counter of {disk} went backwards (device reset?); new baseline"
-                )),
-                Err(Skip::Baseline | Skip::AbnormalInterval) => {}
+                Err(Skip::Baseline | Skip::CounterReset | Skip::AbnormalInterval) => {}
             }
         }
         if missing.is_empty() {
@@ -1528,19 +1601,7 @@ impl Source for WriteSpeedSource<'_> {
                 &format!("{} not in {}", missing.join(", "), self.diskstats.display()),
             );
         }
-        // A day that missed its post window while the probe ran (a suspend over midnight,
-        // unreadable /proc/diskstats, every post in the window failed) is lost: say so, with its
-        // totals — one line per disk.
-        for lost in std::mem::take(&mut self.ledger.missed) {
-            let (sensors, amounts) = lost.describe();
-            logger.info(format!(
-                "disks: {}: the day {} ended without its {sensors} post (the probe did not sample \
-                 in its last 30 s, or every post there failed); its measured {amounts} are not \
-                 posted",
-                lost.disk,
-                written::day_label(lost.day)
-            ));
-        }
+        self.log_missed_days(logger);
         // The day's only post, in its last six sample periods (30 s): one slow read or a late tick
         // still lands in it. What is written or read after the post counts towards the next day.
         // A window missed altogether (a suspend, a stopped probe) leaves the day unposted — logged.
@@ -1563,6 +1624,9 @@ impl Source for WriteSpeedSource<'_> {
     }
 
     fn stop(&mut self, logger: &Logger) {
+        // A final reading first (#1507): after a reboot the saved counters are not trusted, so
+        // without it what was written and read since the last sample would never be counted.
+        self.final_ledger_sample(logger);
         // Today's totals and counters, so a restart continues the day.
         self.save_ledger(logger);
     }
@@ -2161,6 +2225,86 @@ pub mod tests {
                      day and Read per day"
                 )),
             "both totals are named, in the one line: {lines:#?}"
+        );
+    }
+
+    /// sdc wrote AND read 2 000 000 sectors (1.024 GB each) since `GARAGE_DISKSTATS`.
+    fn diskstats_written_and_read_later() -> String {
+        diskstats_later().replace(" 161806974 ", " 163806974 ")
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_stop_takes_a_final_reading_so_a_reboot_keeps_the_last_seconds() {
+        let (tree, environment) = written_host("written-stop-final");
+        let quiet = Logger::new(Level::Error, None);
+        let start = written::tests::MIDNIGHT + 9 * HOUR_MS;
+        {
+            let collector = test_collector();
+            let mut write = written_source(&collector, &environment, &quiet);
+            collector.start().expect("start");
+            at(start);
+            write.sample(&quiet);
+            // Written and read after the last sample, then the probe stops for a shutdown: the
+            // stop's own reading counts them (#1507).
+            tree.file("diskstats", &diskstats_written_and_read_later());
+            at(start + 3_000);
+            write.stop(&quiet);
+            collector.stop().expect("stop");
+        }
+
+        // The host rebooted: the saved counters are not trusted, the day's totals continue.
+        tree.file("boot_id", "4b1c7a52-0000-4000-8000-000000000002\n");
+        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
+        let collector = test_collector();
+        let mut write = written_source(&collector, &environment, &quiet);
+        collector.start().expect("start");
+        let after = start + 10 * 60_000;
+        at(after);
+        write.sample(&quiet);
+        collector.stop().expect("stop");
+        for kind in [Kind::Written, Kind::Read] {
+            assert_eq!(
+                write
+                    .ledger
+                    .day_total("sdc", kind, after, written::tests::utc)
+                    .map(|(gigabytes, _)| gigabytes),
+                Some(1.024),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn one_device_reset_is_one_log_line() {
+        let (tree, environment) = written_host("written-reset-line");
+        let (logger, lines) = capturing_logger();
+        let collector = test_collector();
+        let mut write = written_source(&collector, &environment, &logger);
+        collector.start().expect("start");
+        let start = written::tests::MIDNIGHT + 9 * HOUR_MS;
+        at(start);
+        write.sample(&logger);
+        // A device reset sets both of sdc's counters back.
+        tree.file(
+            "diskstats",
+            &diskstats::tests::GARAGE_DISKSTATS
+                .replace(" 683671624 ", " 1000 ")
+                .replace(" 161806974 ", " 1000 "),
+        );
+        at(start + 5_000);
+        write.sample(&logger);
+        collector.stop().expect("stop");
+        let lines = lines.lock().unwrap();
+        let resets: Vec<&String> = lines
+            .iter()
+            .filter(|line| line.contains("went backwards"))
+            .collect();
+        assert_eq!(resets.len(), 1, "{lines:#?}");
+        assert!(
+            resets[0].contains("the write and read counters of sdc went backwards"),
+            "{resets:#?}"
         );
     }
 

@@ -130,6 +130,18 @@ namespace HSMServer.Core.Tests
             Assert.Matches(pattern, "{\"topCpu\":{\"count\":10, \"enabled\" :\ttrue}}");
             Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false, \"count\": 10}}");
             Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false}, \"x\": {\"enabled\": true}}");
+
+            // Only the TOP-LEVEL block counts (#1507): the probe reads no other, so a block nested one
+            // level too deep must not lift ProtectProc for a feature that is not running.
+            Assert.DoesNotMatch(pattern, "{\"probe\": {\"topCpu\": {\"enabled\": true}}}");
+            Assert.DoesNotMatch(pattern, "{\"hsm\": {\"port\": 1}, \"probe\": { \"docker\": {\"exclude\": []}, \"topCpu\": {\"enabled\": true} }}");
+            Assert.DoesNotMatch(pattern, "{\"a\": {\"b\": {\"c\": {\"topCpu\": {\"enabled\": true}}}}}");
+
+            // A top-level block after nested siblings, as in config.example.json (three levels deep).
+            Assert.Matches(pattern,
+                "  {\"hsm\": {\"port\": 1}, \"probe\": {\"hostSensors\": {\"enabled\": true}, " +
+                "\"docker\": {\"exclude\": [], \"enabled\": true}}, \"topCpu\": {\"enabled\": true, \"count\": 10}, " +
+                "\"shutdownTimeoutSec\": 10}");
         }
 
         [Fact]

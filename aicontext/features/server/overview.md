@@ -92,6 +92,11 @@ TypeScript 5.3 + Webpack 5:
 
 - Cookie-based authentication
 - Custom `UserManager` with roles: Viewer (read-only), Manager (read-write)
+- Hiding a button is not authorization: a mutating MVC action must check the role server-side and
+  be POST (+ antiforgery for a destructive one), because the auth cookie is `SameSite=Lax` and rides
+  a top-level cross-site GET. Removing a product or node (`ProductController.RemoveProduct`,
+  `HomeController.RemoveNode`) requires Manager of the node's ROOT product or admin — the removal is
+  recursive and irreversible (#1512; `ProductControllerTests`).
 - Access keys authenticate DataCollector instances (no user session needed)
 
 ## Feature Folders To Add Here

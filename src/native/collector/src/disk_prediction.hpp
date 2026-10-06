@@ -64,10 +64,10 @@ namespace hsm
             {
             }
 
-            // The sampling loop's tick. `free_space` is in the platform's own unit and `elapsed_seconds`
-            // is the time since the previous sample; the unit cancels in NextPost's division, so the
-            // Windows factory may pass bytes and the Linux one kilobytes — exactly as the managed
-            // WindowsDiskInfo/UnixDiskInfo pair does.
+            // The sampling loop's tick. `free_space` is in BYTES and `elapsed_seconds` is the time
+            // since the previous sample. Both platform factories pass bytes (#1466), as the managed
+            // WindowsDiskInfo/UnixDiskInfo pair does: the value's unit cancels in NextPost's
+            // division, but the comment's "Mbytes/hour" is true only for a byte series.
             void Sample(double free_space, double elapsed_seconds)
             {
                 if (!has_last_space_)
@@ -107,11 +107,10 @@ namespace hsm
                     return post;
                 }
 
-                // Managed divides the speed by 1 MiB whatever unit the platform's IDiskInfo reports
-                // in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
-                // collectors must produce the same comment for the same host. The comment then
-                // renders this per HOUR (FormatRatePerHour, #1460) — both collectors changed
-                // together, since the corpus pins the text byte-for-byte.
+                // Bytes per second over 1 MiB, as managed: both collectors' readers report bytes on
+                // every platform since #1466 (the Unix ones reported kB, so a Unix comment printed
+                // GiB as "Mbytes", a number 1024x too small). The comment then renders this per HOUR (FormatRatePerHour,
+                // #1460) — both collectors change together, since the corpus pins the text.
                 const double mb_per_sec = change_speed_ / (1024.0 * 1024.0);
 
                 if (change_speed_ < 0.0)
@@ -168,12 +167,11 @@ namespace hsm
             // "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an
             // operator reads. Per hour is the scale this sensor answers on anyway.
             //
-            // Six decimals, not three, because the "Mbytes" label is only accurate on Windows:
-            // the comment divides by 1 MiB whatever unit the platform reports free space in, and
-            // the Unix reader reports kB, so a Unix number is 1024x smaller than its label says.
-            // Three decimals turned an ordinary Unix drain back into "0.000" — the same
-            // structurally-zero reading this issue is about. Trailing zeros are trimmed (at least
-            // one decimal is always kept), so a fast drain still reads "1800.0" rather than
+            // Six decimals, not three: a slow but real drain is a fraction of a MB per hour, and
+            // three decimals round it back to "0.000" — the structurally-zero reading #1460 is
+            // about. (Until #1466 the Unix readers reported kB, which also made a Unix number
+            // 1024x smaller than its label; they report bytes now.) Trailing zeros are trimmed (at least one
+            // decimal is always kept), so a fast drain still reads "1800.0" rather than
             // "1800.000000".
             //
             // The digits are produced by INTEGER arithmetic on purpose: the two collectors must

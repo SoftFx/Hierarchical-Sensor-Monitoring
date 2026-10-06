@@ -3011,9 +3011,14 @@ namespace
             // The self-monitor loop folds overflow once per collect cycle; drops counted since its
             // last pass would otherwise vanish with it. Fold them now, so the flush below carries
             // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
+            // Without the Queue overflow sensor nothing is ever folded, so the counter still holds
+            // the whole run's drops at the log below, which then has to say so (#1508).
+            bool overflow_reported = false;
             try
             {
-                PostOverflowDelta(SelfMonitorSnapshot());
+                const auto handles = SelfMonitorSnapshot();
+                overflow_reported = static_cast<bool>(handles.queue_overflow);
+                PostOverflowDelta(handles);
             }
             catch (...)
             {
@@ -3067,11 +3072,19 @@ namespace
             // already flushed. Log them instead (rule #8), and keep them out of the next run's first
             // cycle, which must not report the previous run's drops (#1480 review). Taken after the
             // flip to Stopped: the data gate is closed, so nothing is counted after this.
+            // Without the Queue overflow sensor this line is the run's only report of its drops, so
+            // it says so and is logged at Error, the native logger's level above Info (rule #8;
+            // the C ABI has no Warning level).
             const std::int64_t unreported = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
-            if (unreported > 0)
+            if (unreported > 0 && overflow_reported)
                 LogMessage(HSM_LOG_LEVEL_INFO,
                            "Collector stop: " + std::to_string(unreported) +
                                " value(s) dropped from the full send queue after the final Queue overflow report.");
+            else if (unreported > 0)
+                LogMessage(HSM_LOG_LEVEL_ERROR,
+                           "Collector stop: " + std::to_string(unreported) +
+                               " value(s) dropped from the full send queue during this run (Queue overflow sensor "
+                               "not registered).");
 
             NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;

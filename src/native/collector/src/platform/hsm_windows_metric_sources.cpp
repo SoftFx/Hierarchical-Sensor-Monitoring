@@ -246,9 +246,10 @@ namespace hsm
             }
 
             // ---- Free disk space prediction (#1426) ------------------------------------------
-            // WindowsFreeDiskSpacePrediction: a 30 s sampling loop feeding the drain-speed EMA and a
-            // TimeSpan posted on the sensor's own post period. WindowsDiskInfo.FreeSpace is in BYTES
-            // (DriveInfo.AvailableFreeSpace), which is what this source samples and divides.
+            // WindowsFreeDiskSpacePrediction: a sampling loop every kSpaceCheckPeriodMs (10 min)
+            // feeding the drain-speed EMA and a TimeSpan posted on the sensor's own post period.
+            // WindowsDiskInfo.FreeSpace is in BYTES (DriveInfo.AvailableFreeSpace), which is what
+            // this source samples and divides.
             struct DiskPredictionSource
             {
                 DiskSource disk;

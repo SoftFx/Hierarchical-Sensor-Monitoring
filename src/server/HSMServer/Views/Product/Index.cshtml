@@ -14,8 +14,11 @@
 }
 
 
+@* The token the product list's Remove posts with (#1512). *@
+@Html.AntiForgeryToken()
+
 <script>
-    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
+    var deleteAction ="@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
     var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 

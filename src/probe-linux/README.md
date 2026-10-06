@@ -105,7 +105,10 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 - **F2 — Medium, #1428 family.** Non-metric bars (queue stats) keep the 5-min window but get no
   periodic partial post, so they surface only once per 5 min; the managed collector posts the
   running partial every ~15 s. Different symptom from the metric bars in #1428 (which shortened the
-  window instead) — the #1428 fix should cover both.
+  window instead) — the #1428 fix should cover both. **Fixed since collector 0.7.1 (#1428):** the
+  push-fed built-in bars, the queue stats included, run the metric bars' schedule — one 5-min bar
+  with a partial post every 15 s — so the "only after 5 min" cells above describe the captured
+  0.7.0 build, not the current one.
 - **F3 — Low.** `Service alive`: the managed `CollectorAlive` posts `False` on its first tick as a
   start marker, then `True`; the native heartbeat posts `True` from the first post.
 - **F4 — Low.** `Collector version` comment: the native collector writes `Start: <ISO-8601>` and no
@@ -701,8 +704,9 @@ Agent's `agent-v*` channel.
   plain `X.Y.Z` and sorts above every released `probe-v*`; builds with `build-deb.sh` in `debian:13`;
   runs `smoke-deb.sh` in a clean `debian:13`; and publishes `hsm-linux-probe_<version>_amd64.deb` +
   `hsm-linux-probe_<version>_amd64.deb.sha256` (`sha256sum` format) with `--latest=false` — the
-  repo's "Latest" badge belongs to the server releases, and the lane hands it back to the newest
-  `server-v*` release if GitHub moves it anyway. Only the publishing job holds `contents: write`.
+  repo's "Latest" badge belongs to the server releases, so the lane then re-asserts it on the newest
+  `server-v*` release and watches it for ~30 s, re-asserting if GitHub moves it late (it did, a moment
+  after the `probe-v0.8.1` publish; #1507). Only the publishing job holds `contents: write`.
 - **Dry run:** *Actions → HSM Linux probe release → Run workflow* on a branch builds, smokes and
   uploads the two assets as an artifact without tagging or releasing (it warns when the version
   would not sort above the released ones).

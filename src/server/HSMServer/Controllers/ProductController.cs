@@ -13,6 +13,7 @@ using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
@@ -127,7 +128,27 @@ namespace HSMServer.Controllers
         }
 
 
-        public async ValueTask RemoveProduct(Guid product) => await _treeValuesCache.RemoveProductAsync(product);
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        // #1512: removing a product — or a nested node, since RemoveProductAsync is recursive and takes
+        // any node id — wipes its subtree's history, policies, journal and access keys for good. Only
+        // the button was hidden from non-managers: the action checked no role and answered GET, so any
+        // signed-in Viewer, or a cross-site link riding the SameSite=Lax cookie, could delete any
+        // product. Now: Manager of the node's root product (or admin), POST + antiforgery only — the
+        // HomeController.RemoveNode and AlertTemplatesController.Remove shapes.
+        public async Task<IActionResult> RemoveProduct(Guid product)
+        {
+            if (!_treeValuesCache.TryGetProduct(product, out var model))
+                return NotFound();
+
+            if (!CurrentUser.IsManager(model.Root.Id))
+                return StatusCode(StatusCodes.Status403Forbidden);
+
+            await _treeValuesCache.RemoveProductAsync(model.Id, CurrentInitiator);
+            _logger.LogInformation("Product '{Path}' ({Id}) removed by '{User}'", model.FullPath, model.Id, CurrentUser.Name);
+
+            return Ok();
+        }
 
         #endregion
 

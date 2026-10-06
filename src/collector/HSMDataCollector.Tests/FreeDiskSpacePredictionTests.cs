@@ -226,6 +226,65 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        // ---- Unix reader unit (#1466) ----------------------------------------------------------
+
+        [Theory]
+        [InlineData(0L)]
+        [InlineData(1_048_575L)]
+        [InlineData(1_048_576L)]
+        [InlineData(5_369_757_695L)]  // 5 GiB + 1 MiB - 1
+        [InlineData(52_428_800_000L)]
+        public void Unix_disk_info_reports_bytes_and_the_same_whole_megabytes(long availableBytes)
+        {
+            var disk = new UnixDiskInfo(() => availableBytes);
+
+            // Bytes, like WindowsDiskInfo: the prediction comment divides by 1 MiB.
+            Assert.Equal(availableBytes, disk.FreeSpace);
+
+            // The "Free space on disk" VALUE is unchanged: what the kB path floored to.
+            Assert.Equal(availableBytes / 1024L / 1024L, disk.FreeSpaceMb);
+        }
+
+        [Fact]
+        public async Task Unix_prediction_comment_reads_megabytes_like_windows()
+        {
+            using (var collector = CreateCollector())
+            {
+                var free = SeedFreeSpace;
+                var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                var options = CreateOptions(collector);
+                options.CalibrationRequests = 1;
+                options.PostDataPeriod = TimeSpan.FromHours(1);
+                options.SpaceCheckPeriod = TimeSpan.FromHours(1);
+
+                var sensor = new TestFreeDiskSpacePrediction(options, new UnixDiskInfo(() => free));
+                sensor.UtcNowProvider = () => now;
+
+                await sensor.StartAsync().ConfigureAwait(false);
+
+                try
+                {
+                    // 300 MiB consumed over one 10-minute interval: 0.5 MiB/sec = 1800 MB/hour.
+                    now += TimeSpan.FromSeconds(FreeDiskSpacePredictionBase.DefaultSpaceCheckPeriodInSec);
+                    free -= DrainPerInterval;
+                    sensor.UpdateDiskSpeed();
+
+                    var value = sensor.ReadValue();
+
+                    // The value never depended on the unit: 49 700 MiB at 0.5 MiB/sec.
+                    Assert.Equal(TimeSpan.FromSeconds(99400), value);
+                    Assert.Equal(SensorStatus.Ok, sensor.ReadStatus());
+
+                    // Until #1466 the Unix reader reported kB and this read "1.757813 Mbytes/hour".
+                    Assert.Equal("Free space decreases by 1800.0 Mbytes/hour.", sensor.ReadComment());
+                }
+                finally
+                {
+                    await sensor.StopAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
         [Fact]
         public void The_first_free_space_sample_is_taken_a_full_period_after_start()
         {

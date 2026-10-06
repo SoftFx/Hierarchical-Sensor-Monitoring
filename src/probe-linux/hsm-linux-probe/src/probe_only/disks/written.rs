@@ -28,7 +28,9 @@
 //! `$STATE_DIRECTORY/disk-written.json`, so a restart continues the day, and the writes made while
 //! the probe was down count too. The counters restart at boot, so the file also records the boot
 //! (`/proc/sys/kernel/random/boot_id`): after a reboot the old counters are not trusted and the
-//! writes between the last sample before it and the first after it are not counted. The read
+//! writes between the last sample before it and the first after it are not counted. The probe
+//! therefore takes a final reading when it stops (0.8.2), so on a clean shutdown only what the host
+//! writes after the probe stopped is lost, not the last sample period too. The read
 //! fields are additive (`serde(default)`): a file saved before them (0.7.0) loads, its written day
 //! continues and the read day starts at the first sample (a baseline); an older probe ignores them.
 //!
@@ -414,7 +416,7 @@ impl Ledger {
             .baseline
             .replace(Baseline::at(sectors, now_ms, day))
             .ok_or(Skip::Baseline)?;
-        let clock_back = now_ms < previous.at_ms;
+        // A clock behind `previous` returned `ClockBackwards` above, before the day turn.
         let gap = u64::try_from(now_ms - previous.at_ms).unwrap_or(u64::MAX);
         let longest = u64::try_from(period.as_millis()).unwrap_or(u64::MAX) * 3;
         let gap_across_days = gap > longest && previous.day != day;
@@ -428,13 +430,10 @@ impl Ledger {
             .filter(|before| sectors.read >= *before)
             .map(|before| sectors.read - before);
         if sectors.written < previous.sectors {
-            if let Some(delta) = read_delta.filter(|_| !clock_back && !gap_across_days) {
+            if let Some(delta) = read_delta.filter(|_| !gap_across_days) {
                 record.read.add(delta, since);
             }
             return Err(Skip::CounterReset);
-        }
-        if clock_back {
-            return Err(Skip::ClockBackwards);
         }
         if gap_across_days {
             return Err(Skip::GapAcrossDays);

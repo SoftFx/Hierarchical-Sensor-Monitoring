@@ -53,8 +53,14 @@ export async function removeProductByName(page: Page, name: string): Promise<voi
       return '';
     }, name);
 
-    if (productId)
-      await page.request.get(`/Product/RemoveProduct?product=${productId}`);
+    // POST + antiforgery since #1512: the token is the one the Products page renders.
+    if (productId) {
+      const token = await page.locator('input[name="__RequestVerificationToken"]').first().inputValue();
+      await page.request.post('/Product/RemoveProduct', {
+        form: { product: productId },
+        headers: { RequestVerificationToken: token },
+      });
+    }
   } catch {
     // best-effort cleanup — never fail the run on teardown
   }

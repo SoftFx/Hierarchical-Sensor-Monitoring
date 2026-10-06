@@ -192,12 +192,12 @@ namespace HSMDataCollector.DefaultSensors
         /// "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an operator
         /// reads. Per hour is the scale this sensor answers on anyway.
         /// <para>
-        /// Six decimals, not three, because the "Mbytes" label is only accurate on Windows: the
-        /// comment divides by 1 MiB whatever unit the platform's <see cref="IDiskInfo"/> reports
-        /// free space in, and the Unix reader reports kB, so a Unix number is 1024x smaller than
-        /// its label says. Three decimals turned an ordinary Unix drain back into "0.000" — the
-        /// same structurally-zero reading this issue is about. Trailing zeros are trimmed (one
-        /// decimal is always kept), so a fast drain still reads "1800.0".
+        /// Six decimals, not three: a slow but real drain is a fraction of a MB per hour, and three
+        /// decimals round it back to "0.000" — the structurally-zero reading #1460 is about. The
+        /// comment divides bytes by 1 MiB: every <see cref="IDiskInfo"/> reports bytes since #1466
+        /// (the Unix reader reported kB, so a Unix number was 1024x smaller than its label).
+        /// Trailing zeros are trimmed (one decimal is always kept), so a fast drain still reads
+        /// "1800.0".
         /// </para>
         /// <para>
         /// The digits come from INTEGER arithmetic on purpose: the native collector must emit
