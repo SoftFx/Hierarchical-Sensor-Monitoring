@@ -75,8 +75,10 @@ collector 0.11.0): `BarSensorValueBase<T>` gained `StdDev` (`double?`), serializ
   (`AddPartial` carries no spread, so the whole bar's σ becomes unknown) and absent from older collectors
   and third-party senders. The server stores and shows it as unknown
   ([`server/bar-stddev/feature.md`](../../server/bar-stddev/feature.md)).
-- Compatibility: older servers ignore the unknown property (System.Text.Json default); a newer server
-  accepts bars without it. Pinned by `WireFormatGoldenLockTests` ↔ `NativeWireBarJsonMatchesNetByteLayout`
+- Compatibility (wire only): older servers ignore the unknown property (System.Text.Json default); a
+  newer server accepts bars without it. The server's **stored** bar rows are not backward compatible —
+  a pre-#1509 server cannot read rows written after the upgrade
+  ([`server/bar-stddev/feature.md`](../../server/bar-stddev/feature.md#storage--persistence)). Pinned by `WireFormatGoldenLockTests` ↔ `NativeWireBarJsonMatchesNetByteLayout`
   and the `stddev` conformance cases in `bar_double_contract` / `bar_int_contract` / `bar_partial_contract` /
   `bar_sampled_partial_contract`.
 

@@ -2807,8 +2807,10 @@ namespace
                 for (const auto& sensor : sensors)
                     if (queued.insert(sensor.get()).second)
                         pending_registrations_.push_back(sensor);
+                // Set with the push, under the same lock: a flush that swaps the queue either takes
+                // these sensors and the flag together or neither.
+                registration_retry_pending_ = true;
             }
-            registration_retry_pending_.store(true, std::memory_order_release);
         }
 
         // A direct registration post (the Start batch, a built-in source's sensor) whose retryable
@@ -2825,14 +2827,19 @@ namespace
         void FlushRuntimeRegistrations()
         {
             std::vector<std::shared_ptr<NativeSensor>> pending;
+            bool retrying = false;
             {
+                // Read-and-clear the flag in the same section as the swap, so it always describes
+                // the sensors taken: a retry queued by another thread (a built-in source's sampler)
+                // after the swap keeps both its sensors and its flag for the next cycle. Cleared
+                // before the empty check: a retry the next Start batch already landed leaves nothing
+                // due, and a flag kept past it would credit a later, unrelated registration with a
+                // recovery that never happened.
                 std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
                 pending.swap(pending_registrations_);
+                retrying = registration_retry_pending_;
+                registration_retry_pending_ = false;
             }
-            // Taken before the empty check: a retry the next Start batch already landed leaves
-            // nothing due, and a flag kept past it would credit a later, unrelated registration
-            // with a recovery that never happened.
-            const bool retrying = registration_retry_pending_.exchange(false, std::memory_order_acq_rel);
             std::vector<std::shared_ptr<NativeSensor>> due;
             for (auto& sensor : pending)
                 if (sensor->RegistrationPostPending())
@@ -5973,8 +5980,9 @@ namespace
         std::mutex pending_registrations_mutex_;
         std::vector<std::shared_ptr<NativeSensor>> pending_registrations_;
         // Set when a registration post failed retryably (RetryRegistrations); the flush that next
-        // lands one says so at Info, closing the Error line the failure logged (#1515).
-        std::atomic<bool> registration_retry_pending_{ false };
+        // lands one says so at Info, closing the Error line the failure logged (#1515). Guarded by
+        // pending_registrations_mutex_, so it changes together with pending_registrations_.
+        bool registration_retry_pending_ = false;
 #endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps

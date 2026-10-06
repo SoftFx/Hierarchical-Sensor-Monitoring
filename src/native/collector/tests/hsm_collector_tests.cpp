@@ -6019,8 +6019,8 @@ namespace
         Require(
             std::string(hsm_collector_test_wire_bar_json(
                 1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"StdDev\":1.41,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
-                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
-                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+                                                                        "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
+                                                                        "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
 
         // int-bar Mean rounding must match C# `(int)Math.Round(_totalSum / Count)`
@@ -6040,8 +6040,8 @@ namespace
         Require(
             std::string(hsm_collector_test_wire_bar_json(
                 0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"StdDev\":1.5,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
-                                                                           "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
-                                                                           "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+                                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
             "double bar wire layout");
 
         // An unknown StdDev (a bar fed with pre-aggregated partials) goes on the wire as null,
