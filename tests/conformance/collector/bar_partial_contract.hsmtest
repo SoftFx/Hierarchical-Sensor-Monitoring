@@ -95,3 +95,25 @@ double_partial_nan_field_rejected|start
 double_partial_nan_field_rejected|add_double_bar_partial|0|0|1000|NaN|0|1000|4
 double_partial_nan_field_rejected|stop
 double_partial_nan_field_rejected|expect_sent_count|0
+
+# StdDev (#1509): a pre-aggregated partial carries no spread, so a bar that took one reports its
+# StdDev as unknown (null), never 0 and never a guess, while Min/Max/Mean/Count merge as above.
+int_partial_makes_stddev_unknown|create_collector
+int_partial_makes_stddev_unknown|create_int_bar_sensor|contract/partial/stddev|3600000|0
+int_partial_makes_stddev_unknown|start
+int_partial_makes_stddev_unknown|add_bar_int|0|1
+int_partial_makes_stddev_unknown|add_bar_int|0|3
+int_partial_makes_stddev_unknown|add_int_bar_partial|0|1|5|3|1|5|4
+int_partial_makes_stddev_unknown|add_bar_int|0|2
+int_partial_makes_stddev_unknown|stop
+int_partial_makes_stddev_unknown|expect_sent_count|1
+int_partial_makes_stddev_unknown|expect_bar_field|0|count|7
+int_partial_makes_stddev_unknown|expect_payload_contains|0|"StdDev":null,
+
+double_partial_only_stddev_unknown|create_collector
+double_partial_only_stddev_unknown|create_double_bar_sensor|contract/partial/stddev-only|3600000|0|2
+double_partial_only_stddev_unknown|start
+double_partial_only_stddev_unknown|add_double_bar_partial|0|1.5|5.5|3.5|1.5|5.5|2
+double_partial_only_stddev_unknown|stop
+double_partial_only_stddev_unknown|expect_sent_count|1
+double_partial_only_stddev_unknown|expect_payload_contains|0|"Mean":3.5,"StdDev":null,

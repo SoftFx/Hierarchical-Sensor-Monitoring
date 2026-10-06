@@ -156,6 +156,15 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.0** (#1509) — wire addition, ABI unchanged (no new exported `hsm_*` function; MINOR because the
+  bar payload gains a field consumers may start relying on). Every bar posts `StdDev` right after `Mean`:
+  the population standard deviation of its samples via Welford moments in the same operation order as
+  the managed collector, rounded to the bar precision (double bar) or 2 digits (int bar), `null` once a
+  pre-aggregated partial entered the bar. GCC/Clang builds of the core use `-ffp-contract=off` so the
+  arithmetic is not fused into FMAs on FMA-capable targets. The test-only hook
+  `hsm_collector_test_wire_bar_json` takes two more arguments (`welford_m2`, `stddev_unknown`).
+  Pinned by `native_wire_*` (`NativeWireBarJsonMatchesNetByteLayout`) against `WireFormatGoldenLockTests`
+  and the `stddev` conformance cases.
 - **0.10.2** (#1466, #1508) — behavior fixes, ABI unchanged. The Linux free-space prediction source
   samples free space in BYTES, like the Windows one and the managed `UnixDiskInfo` (both changed
   together): the comment's `Free space decreases by X Mbytes/hour` printed GiB on Linux, a number

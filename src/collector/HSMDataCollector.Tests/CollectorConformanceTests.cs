@@ -1417,6 +1417,7 @@ namespace HSMDataCollector.Tests
                     case "min": return intBar.Min;
                     case "max": return intBar.Max;
                     case "mean": return intBar.Mean;
+                    case "stddev": return intBar.StdDev ?? double.NaN;
                     case "first": return intBar.FirstValue ?? double.NaN;
                     case "last": return intBar.LastValue;
                 }
@@ -1428,6 +1429,7 @@ namespace HSMDataCollector.Tests
                     case "min": return doubleBar.Min;
                     case "max": return doubleBar.Max;
                     case "mean": return doubleBar.Mean;
+                    case "stddev": return doubleBar.StdDev ?? double.NaN;
                     case "first": return doubleBar.FirstValue ?? double.NaN;
                     case "last": return doubleBar.LastValue;
                 }
@@ -1851,6 +1853,7 @@ namespace HSMDataCollector.Tests
         private static string BarPayloadText(BarSensorValueBase bar)
         {
             string min, max, mean, first, last;
+            string stdDev = "null";
 
             if (bar is BarSensorValueBase<int> intBar)
             {
@@ -1859,6 +1862,7 @@ namespace HSMDataCollector.Tests
                 mean = intBar.Mean.ToString(CultureInfo.InvariantCulture);
                 first = intBar.FirstValue?.ToString(CultureInfo.InvariantCulture) ?? "null";
                 last = intBar.LastValue.ToString(CultureInfo.InvariantCulture);
+                stdDev = intBar.StdDev?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
             }
             else if (bar is BarSensorValueBase<double> doubleBar)
             {
@@ -1867,6 +1871,7 @@ namespace HSMDataCollector.Tests
                 mean = doubleBar.Mean.ToString("R", CultureInfo.InvariantCulture);
                 first = doubleBar.FirstValue?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
                 last = doubleBar.LastValue.ToString("R", CultureInfo.InvariantCulture);
+                stdDev = doubleBar.StdDev?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
             }
             else
             {
@@ -1879,6 +1884,7 @@ namespace HSMDataCollector.Tests
                    $"\"Min\":{min}," +
                    $"\"Max\":{max}," +
                    $"\"Mean\":{mean}," +
+                   $"\"StdDev\":{stdDev}," +
                    $"\"First\":{first}," +
                    $"\"Last\":{last}," +
                    $"\"Count\":{bar.Count}," +

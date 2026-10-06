@@ -64,6 +64,7 @@ push_bar_partial_posts_share_open_time|expect_partial_bars_accumulate
 push_bar_partial_posts_share_open_time|expect_bar_posts_sharing_open_time_at_least|3
 push_bar_partial_posts_share_open_time|expect_bar_field|0|first|1
 push_bar_partial_posts_share_open_time|expect_bar_field|-1|count|3
+push_bar_partial_posts_share_open_time|expect_bar_field|-1|stddev|0.82
 push_bar_partial_posts_share_open_time|expect_bar_open_close_aligned|0|86400000
 
 # The tick rolls a closed push-fed bar and publishes it with NO further value (managed CheckCurrentBar

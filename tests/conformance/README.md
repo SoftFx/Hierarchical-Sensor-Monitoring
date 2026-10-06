@@ -64,7 +64,7 @@ part of the contract:
 
 ```
 instant:  {"Type":N,"Path":"...","Value":V,"Status":N,"Comment":"..."}
-bar:      {"Type":N,"Path":"...","Min":m,"Max":M,"Mean":u,"First":f,"Last":l,
+bar:      {"Type":N,"Path":"...","Min":m,"Max":M,"Mean":u,"StdDev":s|null,"First":f,"Last":l,
            "Count":c,"OpenTimeMs":o,"CloseTimeMs":e,"Status":N,"Comment":"..."}
 file:     {"Type":6,"Path":"...","Value":"utf8 content","Name":"...",
            "Extension":"...","Status":N,"Comment":"..."}
@@ -73,6 +73,8 @@ file:     {"Type":6,"Path":"...","Value":"utf8 content","Name":"...",
 `Type` is the numeric wire discriminator (bool 0, int 1, double 2, string 3,
 int bar 4, double bar 5, file 6, rate 9, enum 10). `OpenTimeMs`/`CloseTimeMs`
 are unix milliseconds. String fields are JSON-escaped (`"` `\` control chars).
+`StdDev` (#1509) is the bar's population standard deviation as a double on both bar flavors
+(`"R"` format), or `null` when unknown (a bar that took a pre-aggregated partial).
 
 ## Verb catalog
 
@@ -194,7 +196,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_payload_type_counts\|bool\|int\|double\|string\|enum` | per-type payload counts |
 | `expect_comment_length\|payload_index\|length` | pins the 1024-char comment trim |
 | `expect_time_marker_comments\|prefix\|count` | exactly `count` payloads carry a lifecycle-marker comment `"<prefix>: dd/MM/yyyy HH:mm:ss"` (the managed `SensorBase.DefaultTimeFormat`). A comment opening with `"<prefix>: "` that loses the shape FAILS, so a broken format cannot hide by dropping out of the count; the instant itself is wall-clock and is never compared |
-| `expect_bar_field\|payload_index\|field\|expected` | `field ∈ type\|min\|max\|mean\|first\|last\|count\|status`; numeric compare rel. tolerance 1e-9 (type/count/status exact) |
+| `expect_bar_field\|payload_index\|field\|expected` | `field ∈ type\|min\|max\|mean\|stddev\|first\|last\|count\|status`; numeric compare rel. tolerance 1e-9 (type/count/status exact); a `null` StdDev never matches a number — assert it with `expect_payload_contains\|i\|"StdDev":null,` |
 | `expect_bar_count_total\|expected` | Σ Count over all bar payloads — "no value lost", timing-immune |
 | `expect_bar_sum\|path_suffix\|expected` | (#1480) Σ of the values in the bars whose Path ends with `path_suffix`: Mean × Count of the LAST payload of each OpenTime (partial posts are snapshots of one bar). For sensors whose bar SHAPE legitimately differs between collectors (managed Queue overflow adds one value per lost value, native one per collect cycle) while the total must match. Exact only when each bar's mean is exact — an int bar's Mean is rounded — so design the fixture so it is |
 | `expect_bar_open_close_aligned\|payload_index\|period_ms` | close−open == period and open % period == 0 (unix ms) |
