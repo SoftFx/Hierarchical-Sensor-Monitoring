@@ -5,7 +5,7 @@
 > agreed with the owner one by one (§4.2a): host (#1476), every mounted disk including the
 > archives (#1481) and Docker Compose (#1416). The backup contract (#1417) is **not** a probe
 > source by owner decision (§4.4). The `.deb` is built and install-smoked in CI and the `probe-v*`
-> release channel exists (#1418), but releases are on hold by owner decision (§4.5); operating the
+> release channel (#1418) shipped its first release, `probe-v0.8.1`, on 2026-10-06 (§4.5); operating the
 > probe is `src/probe-linux/RUNBOOK.md`.
 > See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
@@ -409,15 +409,16 @@ of other devices, never a disk's temperature input (a `drivetemp` read would wak
 
 ### 4.5 Distribution & install channel
 
-> **Status (#1418).** The channel below is **built but not used**: `.github/workflows/probe-release.yml`
+> **Status (#1418).** The channel below is **in use**: `.github/workflows/probe-release.yml`
 > publishes a `probe-v<X.Y.Z>` tag, and the `deb` job of `probe-linux.yml` builds and install-smokes
-> the package on every probe PR. No `probe-v*` release exists yet — the owner has put releases on
-> hold and publishes the first one himself — so `src/server/HSMServer/probe-release.txt` is empty
-> and on an ordinary server the download endpoint answers 503 by design; trial hosts run
-> hand-built `~trialN` packages. **Packaging lesson from the trial**, now enforced by the release
-> lane: a version that sorts *below* the installed one (`0.1.0~rc1` after `0.1.0~trial2`) makes
-> `apt-get install` refuse the upgrade, so released versions are plain `X.Y.Z`, each above every
-> earlier release, and trials carry a `~` suffix that sorts below the release.
+> the package on every probe PR. The owner lifted the release hold for this channel only on
+> 2026-10-06 (the server download must work); the first release is `probe-v0.8.1` and
+> `src/server/HSMServer/probe-release.txt` pins it, so a server built from that pin serves the
+> bundle instead of answering 503. Trial hosts ran hand-built `~trialN` packages before that.
+> **Packaging lesson from the trial**, now enforced by the release lane: a version that sorts
+> *below* the installed one (`0.1.0~rc1` after `0.1.0~trial2`) makes `apt-get install` refuse the
+> upgrade, so released versions are plain `X.Y.Z`, each above every earlier release, and trials
+> carry a `~` suffix that sorts below the release.
 
 Ship as a **`.deb` package published through a GitHub Release**, mirroring the repo's
 existing release channels (`agent-v*`, `wrapper-v*`): tag `probe-v<version>` → CI workflow
@@ -705,9 +706,8 @@ runs on an invariant locale with no `N:` drive and a quiet disk.
 - whether the probe-only host sensors (logical cores, CPU temperature) ever move into the shared
   catalog and onto Windows — for now they stay Linux-probe-only (load average was rejected);
 - when releases resume: `agent-v*` plus the `agent-release.txt` pin (without it none of the
-  Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the first
-  `probe-v*` release plus the `probe-release.txt` pin — the channel is built (#1418), the owner
-  publishes the first release himself (`src/probe-linux/README.md` → *Release channel*).
+  Windows-affecting fixes above reach deployed agents) and the managed NuGet push. The probe
+  channel is exempt since 2026-10-06: `probe-v0.8.1` is released and pinned in `probe-release.txt`.
 
 **Decided, no code:** the backup contract (#1417) stays out of the probe — the host's backup
 tooling posts to HSM itself; archive capacity is the ordinary disk sensors (§4.4).

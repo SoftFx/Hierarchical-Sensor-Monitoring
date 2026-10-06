@@ -13,7 +13,7 @@ around it are generated per product.
 The `.deb` is a **staged release artifact, not a source** and is gitignored. Both `server-build.yml`
 legs and `scripts/local-docker-build.ps1` read `src/server/HSMServer/probe-release.txt`:
 
-- **Empty pin (the state until the first `probe-v*` release exists):** staging is skipped, the build
+- **Empty pin (e.g. after reverting the pin):** staging is skipped, the build
   does not fail, and the endpoint answers HTTP 503 with a clear message.
 - **Pinned version:** `gh release download probe-v<pin>`, a check that the asset is
   `hsm-linux-probe_<pin>_<arch>.deb`, SHA-256 check against the release's `.deb.sha256`, then the

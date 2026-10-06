@@ -1,6 +1,6 @@
 # Feature: Per-product Linux probe download (server side)
 
-> Owner: server | Last reviewed: 2026-09-30 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-06 | Canonical: yes
 > Scope: the admin-only endpoint + UI that give an operator a ready-to-run, per-product HSM Linux probe
 > bundle (#1424, epic #1413, initiative `docs/initiatives/linux-docker-probe.md` §4.6). The Linux sibling of
 > `../agent-download/feature.md` (Windows agent); the probe itself lives in `src/probe-linux/`.
@@ -202,8 +202,9 @@ The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). The release is pub
 plain `X.Y.Z` sorting above every earlier `probe-v*`, built and install-smoked in `debian:13`, asset
 + `sha256sum`-format `.sha256`, `--latest=false`; see `../../integrations/linux-probe/feature.md` →
 *Release channel*). Shipping a newer probe = merge the version bump, push the `probe-v*` tag, then
-bump `probe-release.txt` in a one-line PR. The pin stays empty until the owner publishes the first
-release.
+bump `probe-release.txt` in a one-line PR. The first release, `probe-v0.8.1`, was published on
+2026-10-06 (owner decision: the download must work; the hold is lifted for the probe channel only),
+and the pin names it.
 
 ## Key components
 
@@ -224,8 +225,8 @@ shredded after a failed install, re-run idempotency, `--force-config`, uninstall
 ## Contract with the probe package (#1415 / #1418)
 
 Nothing in the build ties the two sides together: a rename on the probe side would still produce a bundle
-that installs cleanly and never sends a value. These must move in lockstep with the probe, and be
-re-verified before the first non-empty `probe-release.txt`:
+that installs cleanly and never sends a value. These must move in lockstep with the probe; they were
+re-verified against probe 0.8.1 before the first non-empty `probe-release.txt` (2026-10-06):
 
 | Symbol | Here | Probe side |
 |---|---|---|
@@ -246,5 +247,3 @@ bundle, exactly as an operator would, and the probe connected through the `LoadC
 ## Out of scope (follow-up)
 
 - A dedicated, separately-revocable per-download key (shared follow-up with the Windows agent).
-- Publishing the first `probe-v*` release and pinning it: the channel exists (#1418), releases are on hold by
-  owner decision; until a pin is set the button answers 503.
