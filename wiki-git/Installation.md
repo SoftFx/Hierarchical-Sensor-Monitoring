@@ -247,9 +247,12 @@ services:
       # serving; a listening but wedged server fails this probe, while the TCP connect used here
       # before reported it healthy.
       test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
-      interval: 30s
+      interval: 5m
       timeout: 5s
-      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
+      # Budget before caddy is skipped for good (see depends_on below): ~20 min on Docker
+      # Engine 25+ (start_period + (retries - 1) x interval = 10 min + 2 x 5 min, because it
+      # probes every start-interval while starting), up to 25 min (10 min + 3 x 5 min) on an
+      # older daemon. A
       # database that needs longer: change start_period in this block. The block sets every field,
       # so it works with any image. A trimmed override that sets start_period alone works only
       # with an image that carries the healthcheck - not with 3.41.5, where it would leave the
@@ -360,7 +363,7 @@ What must stay as it is, if you ever adapt it:
 | Part | Why |
 |---|---|
 | No ports on app | HSM is reachable only through Caddy in this compose setup. |
-| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 30 s: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that. The conversion keeps running inside the container: wait until `docker ps` shows `hsm-server` healthy again (`docker logs hsm-server` shows `Now listening`), then run `docker compose up -d` again — repeating it earlier gives the same error, and restarting the container only starts the conversion over. |
+| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 5 min: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that. The conversion keeps running inside the container: wait until `docker ps` shows `hsm-server` healthy again (`docker logs hsm-server` shows `Now listening`), then run `docker compose up -d` again — repeating it earlier gives the same error, and restarting the container only starts the conversion over. |
 | Separate reverse proxies to app:44333 and app:44330 | Not a split of the UI from the Sensor API — both listeners serve the same routes, and the API answers on 44333 as well. It keeps each published port mapped to the same HSM port, so collectors and agents already configured for 44330 keep working unchanged. Only the management API, MCP, Swagger and browser sign-in are restricted to the site port, so never send the web UI to 44330. |
 | tls_insecure_skip_verify on the upstream | HSM serves its own HTTPS certificate inside the compose network. |
 | HSM_DOMAIN and HSM_CERTIFICATE in Caddy's environment | The entrypoint validates the mode and selects exactly one TLS source. No automatic fallback is used. |

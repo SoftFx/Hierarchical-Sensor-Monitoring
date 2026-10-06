@@ -67,7 +67,15 @@ FROM ${BASE_IMAGE}
 # the same way, because an unhealthy dependency is refused at once.
 # Note also that a probe failure inside the start period never marks the container unhealthy, so
 # this is also how long a wedge can hide right after a restart.
+# --interval=5m (30 s until 2026-10): the probe reports health, it does not watch it second by
+# second, and at 30 s it put 2 880 anonymous requests a day into the server log. The price is
+# steady-state detection latency: a wedged-but-listening server is declared unhealthy after up to
+# retries x interval = 15 min instead of 90 s. Startup is unaffected on Docker Engine 25+, which
+# probes at its own --start-interval (5 s by default) inside the start period, as long as HSM is
+# listening before that period ends — past it the next probe can be up to one --interval (5 min)
+# away, so `app` can stay `starting`, holding a `depends_on` Caddy back, that much longer. An
+# older daemon probes at --interval instead, delaying a `depends_on` Caddy by up to one interval.
 # Kept on one line: a continuation inside CMD would land in the image config verbatim, and
 # `docker inspect` would print the padding as part of the command.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10m --retries=3 \
+HEALTHCHECK --interval=5m --timeout=5s --start-period=10m --retries=3 \
     CMD wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1
