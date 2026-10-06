@@ -104,6 +104,19 @@ namespace HSMServer.Core.Model.Policies
         private protected Func<BaseValue> _getLastValue;
 
 
+        // The operations whose target the web editor never renders (its
+        // AlertExtensions.IsTargetVisible) and the alert-administration API's
+        // rule table marks target-less: they either compare against the sensor's
+        // own previous value (IsChanged, the status operations) or ignore the
+        // target entirely (ReceivedNewValue). Whatever TargetValue is posted or
+        // stored alongside them, the evaluated target is LastValue(self) — a
+        // Const one would hand their executors a typed const builder those
+        // executors cannot run (#1439).
+        public static bool IsTargetless(PolicyOperation operation) =>
+            operation is PolicyOperation.IsChanged or PolicyOperation.IsError or PolicyOperation.IsOk or
+                PolicyOperation.IsChangedToError or PolicyOperation.IsChangedToOk or PolicyOperation.ReceivedNewValue;
+
+
         public abstract PolicyOperation Operation { get; set; }
 
         public abstract PolicyProperty Property { get; set; }
@@ -124,11 +137,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyCondition FromEntity(PolicyConditionEntity entity)
         {
-            Target = new TargetValue((TargetType)entity.Target.Type, entity.Target.Value);
-
+            // Property before Target: the Property setter rebuilds the executor
+            // and re-applies the current target, and the target application
+            // must already know the operation to decide whether the target
+            // value is a meaningful constant (see PolicyCondition<T,U>.SetTarget).
             Combination = (PolicyCombination)entity.Combination;
             Operation = (PolicyOperation)entity.Operation;
             Property = (PolicyProperty)entity.Property;
+            Target = new TargetValue((TargetType)entity.Target.Type, entity.Target.Value);
 
             return this;
         }

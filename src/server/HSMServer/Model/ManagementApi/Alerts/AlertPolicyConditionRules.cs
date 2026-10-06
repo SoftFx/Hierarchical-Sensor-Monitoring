@@ -177,10 +177,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // core's LastValue(self) target — never a constant. Target-less-ness
         // is therefore a property of the OPERATION, not of the property:
         // IsChanged on Comment takes no target, Equal on Comment requires
-        // one.
-        internal static bool IsTargetless(PolicyOperation operation) =>
-            operation is PolicyOperation.IsChanged or PolicyOperation.IsError or PolicyOperation.IsOk or
-                PolicyOperation.IsChangedToError or PolicyOperation.IsChangedToOk or PolicyOperation.ReceivedNewValue;
+        // one. The core's PolicyCondition.IsTargetless is the single source
+        // of truth (it also drives the core-side Const-target coercion #1439).
+        internal static bool IsTargetless(PolicyOperation operation) => PolicyCondition.IsTargetless(operation);
 
         // The property names an agent may send for this sensor type — the doc
         // error message quotes it, so a 422 is self-correcting.

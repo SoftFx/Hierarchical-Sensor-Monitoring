@@ -121,7 +121,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     /// <summary>The right-hand side of a condition.</summary>
     public sealed record PolicyTargetDto
     {
-        /// <summary>0=Const (compare against <see cref="Value"/>), 1=LastValue (compare against the sensor's last value).</summary>
+        /// <summary>
+        /// 0=Const (compare against <see cref="Value"/>), 1=LastValue (compare against the sensor's last value).
+        /// Target-less operations (IsChanged, IsError, IsOk, IsChangedToError, IsChangedToOk, ReceivedNewValue)
+        /// never read the constant — a Const target on them is accepted and evaluated as LastValue
+        /// (the sensor's own previous value), matching what the web UI submits for them.
+        /// </summary>
         public byte Type { get; init; }
 
         /// <summary>The constant compared against when type is Const; ignored for LastValue.</summary>

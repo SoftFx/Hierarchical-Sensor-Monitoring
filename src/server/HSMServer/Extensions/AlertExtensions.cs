@@ -151,14 +151,7 @@ namespace HSMServer.Extensions
             };
 
 
-        public static bool IsTargetVisible(this PolicyOperation operation) =>
-            operation switch
-            {
-                PolicyOperation.IsChanged or PolicyOperation.IsError or PolicyOperation.IsOk or
-                PolicyOperation.IsChangedToError or PolicyOperation.IsChangedToOk or PolicyOperation.ReceivedNewValue => false,
-
-                _ => true,
-            };
+        public static bool IsTargetVisible(this PolicyOperation operation) => !PolicyCondition.IsTargetless(operation);
 
         public static bool IsNotInitializedDestination(this DataAlertViewModelBase alert, SensorNodeViewModel sensor)
         {

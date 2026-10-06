@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
         {
             Func<T> constBuilder => constBuilder,
             Func<BaseValue> getLastValue => () => GetCheckedValue(getLastValue()),
-            _ => throw new NotImplementedException($"Notsupported alert target type"),
+            _ => throw new NotImplementedException($"Not supported alert target type {target?.GetType().Name}"),
         };
 
 
