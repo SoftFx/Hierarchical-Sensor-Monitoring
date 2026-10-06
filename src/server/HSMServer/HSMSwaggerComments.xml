@@ -790,10 +790,12 @@
             The POSIX extended regular expression install.sh applies to the installed config with its
             newlines removed to decide whether top CPU is on: an enabled <c>topCpu</c> block at the TOP
             level, the only one the probe reads (<c>Config::top_cpu</c>). Everything before the key must
-            be the root object's own text or balanced nested objects, so a block nested one level too
-            deep (<c>"probe": { "topCpu": { "enabled": true } }</c>) does not match (#1507); the block
-            itself holds no nested object. One source of truth: the tests apply it to what
-            <see cref="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)"/> emits. Contains no single quote (it is embedded in '...').
+            be the root object's own text, whole strings or balanced nested objects, so a block nested
+            one level too deep (<c>"probe": { "topCpu": { "enabled": true } }</c>) does not match
+            (#1507), a brace inside a string value does not unbalance the match, and a key spelled
+            inside a string is not a key (#1515); the block itself holds no nested object. One source
+            of truth: the tests apply it to what <see cref="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)"/> emits. Contains no single
+            quote (it is embedded in '...').
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">

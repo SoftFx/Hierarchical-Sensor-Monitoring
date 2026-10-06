@@ -327,6 +327,15 @@ namespace hsm::test
             return count;
         }
 
+        // The next `count` requests to a path starting with `path_prefix` are recorded and answered
+        // 502 Bad Gateway — a server restarting behind its reverse proxy (#1515).
+        void FailNext(std::string path_prefix, int count)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            fail_path_prefix_ = std::move(path_prefix);
+            fail_remaining_ = count;
+        }
+
     private:
         void AcceptLoop()
         {
@@ -372,8 +381,14 @@ namespace hsm::test
 
                 const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
                 const bool reject = !reject_path_prefix_.empty() && recorded.path.rfind(reject_path_prefix_, 0) == 0;
+                bool fail = false;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
+                    if (fail_remaining_ > 0 && recorded.path.rfind(fail_path_prefix_, 0) == 0)
+                    {
+                        --fail_remaining_;
+                        fail = true;
+                    }
                     requests_.push_back(std::move(recorded));
                 }
 
@@ -385,7 +400,8 @@ namespace hsm::test
 
                 static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                const std::string& response = reject ? bad : ok;
+                static const std::string gateway = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                const std::string& response = fail ? gateway : reject ? bad : ok;
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
@@ -455,5 +471,7 @@ namespace hsm::test
         std::vector<socket_t> hung_; // worker-thread only until the join in the destructor
         mutable std::mutex mutex_;
         std::vector<Recorded> requests_;
+        std::string fail_path_prefix_; // guarded by mutex_
+        int fail_remaining_ = 0;       // guarded by mutex_
     };
 } // namespace hsm::test

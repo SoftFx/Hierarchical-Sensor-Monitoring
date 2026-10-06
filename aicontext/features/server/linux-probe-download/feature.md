@@ -55,8 +55,8 @@ compressed).
   with 400 and a pointer to Configuration → Agent → *Agent connection URL*, instead of a bundle that never
   connects.
 - **Not staged ⇒ 503** with a clear message (no web root, no `wwwroot/probe/`, no `.deb`, or more than one).
-  This is checked first, so an out-of-the-box server (no release pinned, default certificate) reports the
-  missing package, not the certificate.
+  This is checked first, so a server built without a staged package (empty pin, or staging skipped) reports
+  the missing package rather than its default certificate.
 - **Never cacheable.** The response carries a bearer credential: `Installer` and `LinuxInstaller` are
   `[ResponseCache(NoStore = true, Location = None)]`, the `ProductController` convention. The self-update
   endpoints stay cacheable.
@@ -132,7 +132,13 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    one that was kept — not the bundle's switch. The unit's `ProtectProc=invisible` hides every process
    but the probe's own from `/proc`, and the top-CPU sensors read `/proc/<pid>/stat` of every process.
    The check is POSIX `tr`/`grep` over the config with its newlines removed (the `topCpu` block holds no
-   nested object; whitespace, key order and CRLF do not matter); no `python`/`jq`, no probe CLI.
+   nested object; whitespace, key order and CRLF do not matter); no `python`/`jq`, no probe CLI. Only a
+   **top-level** block counts, the only one the probe reads (#1507). The pattern
+   (`LinuxProbeInstallerBundle.TopCpuEnabledPattern`) matches balanced nested objects up to three levels
+   deep before the key and treats a JSON string as one token, escaped quotes included. A `{` or `}` inside
+   a string value (an exclude pattern, say) therefore cannot unbalance the match, and `"topCpu"` spelled
+   inside a string is not a key (#1515). A config nested deeper than three levels before the key reads
+   as "off", the safe side.
 
    | Installed config | Bundle switch | Result |
    |---|---|---|
