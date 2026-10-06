@@ -395,7 +395,8 @@ async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
         await Plotly.update(graphId, {}, updateLayout);
     }
 
-    if (graph._fullData.length === 1)
+    // Count plots, not traces: the sensor page's bar view is several traces under one name.
+    if (new Set(graph._fullData.map(x => x.name)).size === 1)
         await Plotly.update(graphId, {}, {
             hovermode: 'closest',
             title: {}

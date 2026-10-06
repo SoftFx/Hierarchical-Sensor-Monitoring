@@ -67,7 +67,8 @@ namespace HSMServer.Datasources
 
         protected override double ConvertToChartType(double? value) => value ?? double.NaN;
 
-        protected override bool IsPlotted(BaseValue value) => value is TValue bar && GetStdDev(bar) is not null;
+        // A timeout row repeats the last bar's fields (GetTimeoutValue); it is not a bar of its own.
+        protected override bool IsPlotted(BaseValue value) => value is TValue bar && !bar.IsTimeout && GetStdDev(bar) is not null;
 
 
         private static double? GetStdDev(TValue value) => value switch
