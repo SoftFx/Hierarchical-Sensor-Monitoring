@@ -1096,11 +1096,23 @@ namespace HSMServer.Core.Cache
 
             sensor.Clear(to);
 
-            // The retention-floor half for late values: everything up to `to`
-            // was just erased on purpose — an out-of-order write must not
-            // re-fill the cleared window (#1441 round-3). Storage.From is not
-            // usable for this: the history load seeds it with the oldest row.
-            sensor.HistoryClearedTo = to;
+            // The retention-floor half for late values: everything up to the clear
+            // was just erased on purpose — an out-of-order write must not re-fill
+            // the cleared window (#1441 round-3). Storage.From is not usable for
+            // this: the history load seeds it with the oldest row.
+            //
+            // The floor is the moment the clear REACHED, not the requested bound:
+            // a UI full clear sends To = MaxValue (ClearHistoryRequest default),
+            // and stamping that verbatim would drop every later out-of-order value
+            // until restart — switching the #1441 fix off with a routine operator
+            // action. Clamped to UtcNow, a full clear floors at the clear moment:
+            // values stamped after it are new data, a replay of pre-clear stamps
+            // is refused. Monotone (max): the automatic KeepHistory pass also runs
+            // through here with its own cutoff, and it must never LOWER a floor a
+            // later operator clear raised — only widen the protected window.
+            var clearFloor = to < DateTime.UtcNow ? to : DateTime.UtcNow;
+            if (sensor.HistoryClearedTo is null || sensor.HistoryClearedTo < clearFloor)
+                sensor.HistoryClearedTo = clearFloor;
 
             if (!sensor.HasData)
                 sensor.ResetSensor();

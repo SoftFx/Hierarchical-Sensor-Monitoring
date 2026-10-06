@@ -482,6 +482,95 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
+        [Fact]
+        public async Task FullUiClear_LaterValuesAfterClearMoment_AreStored()
+        {
+            // The UI "Clear history" sends the default ClearHistoryRequest
+            // (To = DateTime.MaxValue). Stamping that verbatim would floor at
+            // 9999-12-31 and drop every later out-of-order value until restart
+            // (#1441 round-4). The floor must be the clear MOMENT: values
+            // stamped after it are stored; a replay of pre-clear stamps is not.
+            var path = "denseBatch/fullClear";
+            var seedTime = DateTime.UtcNow.AddMinutes(-30);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = seedTime, Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            var clearMoment = DateTime.UtcNow;
+            await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id)); // UI shape: To defaults to MaxValue
+            Assert.NotNull(sensor.HistoryClearedTo);
+            Assert.True(sensor.HistoryClearedTo.Value <= clearMoment.AddSeconds(1), "the floor must clamp to the clear moment, not MaxValue");
+
+            // Fresh data after the clear: becomes the cached newest.
+            var newest = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = clearMoment.AddSeconds(10), Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, newest)));
+
+            // Out-of-order but stamped AFTER the clear moment: stored.
+            var afterClearBackfill = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = clearMoment.AddSeconds(5), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, afterClearBackfill)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfRetentionValues));
+
+            // A replay of PRE-clear stamps: refused, counted.
+            var preClearReplay = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = seedTime.AddMinutes(5), Value = 4, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, preClearReplay)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfRetentionValues));
+        }
+
+        [Fact]
+        public async Task RetentionPassClear_DoesNotLowerAnOperatorClearFloor()
+        {
+            // The automatic KeepHistory pass runs through the same
+            // ClearSensorHistory with its own cutoff; it must never LOWER a
+            // floor a later operator clear raised (#1441 round-4 P3).
+            var path = "denseBatch/floorMonotone";
+            var newest = DateTime.UtcNow.AddMinutes(-5);
+
+            var seed = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = newest.AddMinutes(-30), Value = 1, Status = HSMSensorDataObjects.SensorStatus.Ok },
+                new DoubleSensorValue { Path = path, Time = newest, Value = 2, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, seed)));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            // Operator clears up to T2 (the later bound)...
+            var t2 = newest.AddMinutes(-10);
+            await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, t2));
+
+            // ...then the retention pass clears up to an EARLIER cutoff T1 < T2.
+            var t1 = newest.AddMinutes(-25);
+            await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, t1));
+
+            Assert.Equal(t2, sensor.HistoryClearedTo); // the floor did not regress
+
+            // A late value inside (T1, T2) — inside the operator's cleared
+            // window — must still be refused despite the later T1 pass.
+            var intoOperatorWindow = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t2.AddMinutes(-5), Value = 3, Status = HSMSensorDataObjects.SensorStatus.Ok },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, intoOperatorWindow)));
+            Assert.Equal(1, Volatile.Read(ref sensor.OutOfRetentionValues));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+        }
+
+
         private static void Shuffle<T>(IList<T> list)
         {
             var random = new Random(20260930); // deterministic: the loss must not depend on the shuffle
