@@ -146,3 +146,18 @@ push_bar_partial_posts_carry_running_stddev|sleep_ms|1200
 push_bar_partial_posts_carry_running_stddev|stop
 push_bar_partial_posts_carry_running_stddev|expect_bar_field|-1|count|3
 push_bar_partial_posts_carry_running_stddev|expect_bar_field|-1|stddev|0.82
+
+# A spread too large for a double: M2 of {1e200, 2e200} overflows, so StdDev is unknown (null) — never
+# a non-finite number, never a throw across the C ABI — and the bar still posts Min/Max/Mean.
+double_bar_stddev_overflow_is_unknown|create_collector
+double_bar_stddev_overflow_is_unknown|create_double_bar_sensor|contract/dbar/stddev-overflow|3600000|0|2
+double_bar_stddev_overflow_is_unknown|start
+double_bar_stddev_overflow_is_unknown|add_bar_double|0|1e200
+double_bar_stddev_overflow_is_unknown|add_bar_double|0|2e200
+double_bar_stddev_overflow_is_unknown|stop
+double_bar_stddev_overflow_is_unknown|expect_sent_count|1
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|count|2
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|min|1e200
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|max|2e200
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|mean|1.5e200
+double_bar_stddev_overflow_is_unknown|expect_payload_contains|0|"Mean":1.5E+200,"StdDev":null,

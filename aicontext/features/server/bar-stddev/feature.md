@@ -24,7 +24,8 @@ tails stay visible.
 - **Unknown is not 0.** `StdDev` is `double?` everywhere on the server. `null` = unknown: a collector that
   does not send it (the managed collector, native < 0.11.0, any other sender), a row stored before the
   field existed, or a bar built from pre-aggregated partials (`AddPartial` carries no spread). Nothing
-  draws, plots or reports an unknown σ as 0.
+  draws, plots or reports an unknown σ as 0. An incoming σ that is negative, NaN or infinite is stored
+  as unknown too (`BarStdDev.Normalize`, applied in both `ApiConverters` sites — `HSMServer.Core.ApiObjectsConverters` and `HSMServer.ApiObjectsConverters`).
 - **Additive on the wire.** Wire and DTO only gain an optional field: older collectors keep working
   with a newer server, and older servers ignore the field from newer collectors. **Storage is not
   backward compatible** — see the next point.

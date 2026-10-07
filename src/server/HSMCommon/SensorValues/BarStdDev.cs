@@ -15,6 +15,13 @@ namespace HSMCommon.Model
     /// </summary>
     public static class BarStdDev
     {
+        /// <summary>
+        /// What the server stores for an incoming StdDev: a standard deviation is finite and never
+        /// negative, so anything else a sender posts (negative, NaN, infinity) is treated as unknown
+        /// (<c>null</c>) instead of being stored, merged or drawn.
+        /// </summary>
+        public static double? Normalize(double? value) => value is double s && s >= 0 && double.IsFinite(s) ? s : null;
+
         /// <returns>
         /// The combined StdDev, or <c>null</c> (unknown) when any counted part has an unknown
         /// StdDev or no part has samples. Parts with Count &lt;= 0 carry no samples and are

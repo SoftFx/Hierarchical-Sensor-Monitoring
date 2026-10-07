@@ -6065,6 +6065,28 @@ namespace
         Require(
             std::string(hsm_collector_test_wire_bar_json(0, 2.5, 2.5, 2.5, 2.5, 2.5, 1, 2, 0, 0, 0, 2000, 0, "p/db")).find("\"StdDev\":0,") != std::string::npos,
             "single-sample StdDev is 0");
+
+        // An M2 that overflowed (samples around 1e200) is unknown, not a non-finite number, and the
+        // rest of the bar still serializes; a Mean whose sum overflowed goes out as the quoted named
+        // literal the managed serializer writes (AllowNamedFloatingPointLiterals), never a throw.
+        const std::string overflowed(hsm_collector_test_wire_bar_json(
+            0, 1e200, 2e200, 3e200, 1e200, 2e200, 2, 2, std::numeric_limits<double>::infinity(), 0, 0, 2000, 0, "p/db"));
+        Require(overflowed.find("{\"Type\":5,\"StdDev\":null,\"Min\":1E+200,\"Max\":2E+200,\"Mean\":1.5E+200,") == 0,
+                ("overflowed StdDev is null and the bar still posts: " + overflowed).c_str());
+        const std::string sum_overflow(hsm_collector_test_wire_bar_json(
+            0, 1.7e308, 1.7e308, std::numeric_limits<double>::infinity(), 1.7e308, 1.7e308, 2, 2, 0, 0, 0, 2000, 0, "p/db"));
+        Require(sum_overflow.find("\"Max\":1.7E+308,\"Mean\":\"Infinity\",") != std::string::npos,
+                ("overflowed Mean is the quoted named literal: " + sum_overflow).c_str());
+    }
+
+    void NativeDoubleFormatHandlesNonFinite()
+    {
+        // Never throws (the exponent parse used to: std::stoi on "nf"), and matches .NET's invariant
+        // "R" text for non-finite values.
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::quiet_NaN()) == "NaN", "NaN text");
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::infinity()) == "Infinity", "+inf text");
+        Require(hsm::collector::DoubleToInvariantString(-std::numeric_limits<double>::infinity()) == "-Infinity", "-inf text");
+        Require(hsm::collector::DoubleToInvariantString(1.7976931348623157e308) == "1.7976931348623157E+308", "DBL_MAX text");
     }
 
     void NativeWireFileJsonMatchesNetByteLayout()
@@ -8229,6 +8251,7 @@ namespace
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
+            { "native_double_format_handles_non_finite", [](const std::string&) { NativeDoubleFormatHandlesNonFinite(); } },
             { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },

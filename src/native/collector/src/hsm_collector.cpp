@@ -955,8 +955,14 @@ namespace
 
     // .NET shortest round-trip ("R") double text. The implementation lives in double_format.hpp
     // so the prediction sensor's comment (disk_prediction.hpp) renders numbers identically (#1426).
+    // A non-finite value is written as the quoted named literal ("NaN", "Infinity", "-Infinity"),
+    // byte-for-byte what the managed serializer emits with AllowNamedFloatingPointLiterals — a bare
+    // NaN/Infinity token would not be JSON. Validated sample values are always finite; this covers
+    // derived numbers (a bar Mean whose sum overflowed near DBL_MAX).
     std::string DoubleJson(double value)
     {
+        if (!std::isfinite(value))
+            return "\"" + hsm::collector::DoubleToInvariantString(value) + "\"";
         return hsm::collector::DoubleToInvariantString(value);
     }
 
@@ -1823,6 +1829,10 @@ namespace
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
     {
+        // .NET returns the value unchanged at or above 1e16 (doubleRoundLimit): such a double has no
+        // fractional digits to round, and scaling it could overflow to infinity near DBL_MAX.
+        if (!(std::abs(value) < 1e16))
+            return value;
         const double scale = std::pow(10.0, precision);
         return std::round(value * scale) / scale;
     }
@@ -1929,12 +1939,18 @@ namespace
     constexpr int kIntBarStdDevDigits = 2;
 
     // The bar's StdDev wire text: a double on both bar flavors, `null` when unknown.
+    // A spread too large for a double (M2 overflows for samples around 1e154 and up) is reported as
+    // unknown, never as a non-finite number: the server reads null as "no band".
     std::string BarStdDevJson(const MonitoringBar& bar)
     {
         if (bar.stddev_unknown)
             return "null";
 
-        return DoubleJson(RoundAwayFromZero(bar.StdDev(), bar.is_int ? kIntBarStdDevDigits : bar.precision));
+        const double rounded = RoundAwayFromZero(bar.StdDev(), bar.is_int ? kIntBarStdDevDigits : bar.precision);
+        if (!std::isfinite(rounded))
+            return "null";
+
+        return DoubleJson(rounded);
     }
 
     // Strict inclusive validation for int partials (PublicBarMonitoringSensor.IsValidPartial).

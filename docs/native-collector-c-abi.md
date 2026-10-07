@@ -160,8 +160,15 @@ Version history:
   bar payload gains a field consumers may start relying on). Every bar posts `StdDev` right after `Type`
   (where the server DTO declares it): the population standard deviation of its samples via Welford
   moments, rounded to the bar precision (double bar) or 2 digits (int bar), `null` once a pre-aggregated
-  partial entered the bar. Native only: the managed collector does not send it (owner decision
-  2026-10-07, #1529, ADR-0009). GCC/Clang builds of the core use `-ffp-contract=off` so the
+  partial entered the bar, and `null` when the spread overflows a double (samples around 1e154 and
+  up). Native only: the managed collector does not send it (owner decision 2026-10-07, #1529,
+  ADR-0009). Non-finite numbers can no longer throw across the C ABI: the double formatter returns
+  .NET's `NaN` / `Infinity` / `-Infinity` text instead of failing to parse an exponent, and a JSON
+  double that is non-finite (a bar Mean whose sum overflowed near DBL_MAX) goes out as the quoted
+  named literal the managed serializer writes (`AllowNamedFloatingPointLiterals`). Double-bar
+  rounding now leaves values at or above 1e16 unchanged, as .NET's `Math.Round(value, digits, mode)`
+  does (it used to scale them, which overflowed near DBL_MAX and could differ from .NET in the last
+  bits). GCC/Clang builds of the core use `-ffp-contract=off` so the
   arithmetic is not fused into FMAs on FMA-capable targets. The test-only hook
   `hsm_collector_test_wire_bar_json` takes two more arguments (`welford_m2`, `stddev_unknown`).
   Pinned by `native_wire_*` (`NativeWireBarJsonMatchesNetByteLayout`) against `WireFormatGoldenLockTests`

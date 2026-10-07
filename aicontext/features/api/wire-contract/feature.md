@@ -81,9 +81,13 @@ differ by exactly that one member (pinned by `WireFormatGoldenLockTests` ↔ `Na
   int bar has no precision of its own).
 - Partial posts carry the running σ of the bar so far, like `Mean`.
 - `null` / absent = **unknown**, never the same as 0: `null` for a bar that took a pre-aggregated partial
-  (`AddPartial` carries no spread, so the whole bar's σ becomes unknown); absent from the managed
+  (`AddPartial` carries no spread, so the whole bar's σ becomes unknown) and for a spread too large for
+  a double (M2 overflows for samples around 1e154 and up; σ is never sent as a non-finite number);
+  absent from the managed
   collector, older native collectors and other senders. The server stores and shows it as unknown
   ([`server/bar-stddev/feature.md`](../../server/bar-stddev/feature.md)).
+- The server stores only a finite, non-negative σ: anything else a sender posts (negative, NaN,
+  infinity) is normalised to unknown at conversion (`BarStdDev.Normalize`).
 - Compatibility (wire only): older servers ignore the unknown property (System.Text.Json default); a
   newer server accepts bars without it. The server's **stored** bar rows are not backward compatible —
   a pre-#1509 server cannot read rows written after the upgrade

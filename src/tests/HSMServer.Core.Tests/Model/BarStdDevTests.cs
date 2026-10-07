@@ -134,6 +134,25 @@ namespace HSMServer.Core.Tests.Model
             Assert.Equal(1.0, Assert.IsAssignableFrom<IntegerBarValue>(Assert.Single(compressed)).StdDev.Value, 12);
         }
 
+        [Theory]
+        [InlineData(1.5, 1.5)]
+        [InlineData(0.0, 0.0)]
+        [InlineData(-1.0, null)]
+        [InlineData(double.NaN, null)]
+        [InlineData(double.PositiveInfinity, null)]
+        [InlineData(null, null)]
+        [Trait("Category", "Simple")]
+        public void Incoming_stddev_is_normalised_at_both_converter_sites(double? sent, double? stored)
+        {
+            var intBar = new HSMSensorDataObjects.SensorValueRequests.IntBarSensorValue { Count = 2, StdDev = sent };
+            var doubleBar = new HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue { Count = 2, StdDev = sent };
+
+            Assert.Equal(stored, global::HSMServer.Core.ApiObjectsConverters.ApiConverters.Convert(intBar).StdDev);
+            Assert.Equal(stored, global::HSMServer.Core.ApiObjectsConverters.ApiConverters.Convert(doubleBar).StdDev);
+            Assert.Equal(stored, global::HSMServer.ApiObjectsConverters.ApiConverters.Convert(intBar).StdDev);
+            Assert.Equal(stored, global::HSMServer.ApiObjectsConverters.ApiConverters.Convert(doubleBar).StdDev);
+        }
+
         [Fact]
         [Trait("Category", "Simple")]
         public void Sensor_api_history_carries_stddev_and_null_when_unknown()

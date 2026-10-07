@@ -76,7 +76,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Min = RandomGenerator.GetRandomInt(),
                 Max = RandomGenerator.GetRandomInt(),
                 Mean = RandomGenerator.GetRandomInt(),
-                StdDev = RandomGenerator.GetRandomDouble(),
+                StdDev = System.Math.Abs(RandomGenerator.GetRandomDouble()),
             };
 
             return intBarSensorValue.FillCommonBarSensorValueProperties(_productKey);
@@ -91,7 +91,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Min = RandomGenerator.GetRandomDouble(),
                 Max = RandomGenerator.GetRandomDouble(),
                 Mean = RandomGenerator.GetRandomDouble(),
-                StdDev = RandomGenerator.GetRandomDouble(),
+                StdDev = System.Math.Abs(RandomGenerator.GetRandomDouble()),
             };
 
             return doubleBarSensorValue.FillCommonBarSensorValueProperties(_productKey);
