@@ -72,7 +72,7 @@ tails stay visible.
 | `BarSensorValueBase<T>.StdDev` (`double?`) | `src/api/HSMSensorDataObjects/SensorValueRequests/BarSensorValueBase.cs` | wire field, right after `Mean`; DTO 3.2.0 |
 | `BarBaseValue<T>.StdDev` (`double?`) | `src/server/HSMCommon/SensorValues/BarBaseValue.cs` | stored; last MemoryPack member |
 | `BarSensorHistory.StdDev` (`string`, null = unknown) | `src/server/HSMServer.Core/Model/HistoryValues/BarSensorHistory.cs` | Sensor API JSON history, formatted like `Mean` |
-| CSV column `StdDev` (after `Max`) | `src/server/HSMServer/ApiObjectsConverters/ApiCsvConverters.cs` | empty cell when unknown |
+| CSV column `StdDev` (the LAST column of the bar export, so existing columns keep their positions) | `src/server/HSMServer/ApiObjectsConverters/ApiCsvConverters.cs` | empty cell when unknown |
 | Grafana table column `StdDev` (after `Mean`) | `.../GrafanaDatasources/JsonSource/JsonHistoryResponse/BarHistoryTableResponse.cs` | `null` when unknown |
 | `PlottedProperty.StdDev = 57` | `src/server/HSMServer/Dashboards/Panels/Modules/BasePlotPanelModule.cs` | persisted panel property value; never renumber |
 
