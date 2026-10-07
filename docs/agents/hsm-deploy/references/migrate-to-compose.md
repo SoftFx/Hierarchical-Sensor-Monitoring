@@ -73,15 +73,22 @@ exposed only 44330/44333 becomes reachable on 80/443 (wiki-git/Installation.md,
 
 ## 3. Place the compose files in the base directory
 
-Both downloads are guarded — a machine that already has these files is not a fresh
-migrate. An existing `.env` means compose already ran there (its TLS tokens are
-irreplaceable): stop and go back to the update flow instead of overwriting.
+Both downloads are guarded — a machine that already has an `.env` is not a fresh
+migrate, and the guard distinguishes the two situations (the user may already have
+filled real tokens into that file — never delete it):
+
+- `hsm-server` container exists → already on compose: go back to the update flow
+  (its TLS tokens are irreplaceable).
+- `.env` without `hsm-server` → a previous session died between step 3 and the
+  switchover: **migration in progress** — skip the downloads and resume at step 4.
 
 ```bash
-ssh -p <port> <ssh> 'cd <dir> && [ ! -e .env ] || { echo ".env already exists — not a fresh migrate, stop"; exit 1; }'
+ssh -p <port> <ssh> 'cd <dir> && if [ -e .env ]; then if docker ps -a --format "{{.Names}}" | grep -q "^hsm-server$"; then echo "already on compose: update flow, not migrate"; exit 1; else echo "migration in progress: skip the downloads, resume at step 4"; exit 2; fi; fi'
 ssh -p <port> <ssh> 'cd <dir> && { [ ! -f docker-compose.yml ] || cp docker-compose.yml docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S); } && curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml'
 ssh -p <port> <ssh> 'cd <dir> && curl -fsSL -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/.env.example'
 ```
+
+On exit 1 or exit 2, do not run the remaining downloads of this block.
 
 The local workstation's checkout may be on any branch — pull the files from
 `master` raw, not from the working tree. An unexpected `docker-compose.yml`
@@ -101,18 +108,26 @@ more than necessary):
 
 ## 5. Switch over
 
+Pull **before** stopping anything — the download (app + caddy + VictoriaLogs,
+several hundred MB on a fresh compose host) must not sit inside the downtime
+window, and a failed pull (Hub rate limit, flaky link, unpublished caddy tag) must
+leave the old container still serving:
+
 ```bash
+ssh -p <port> <ssh> 'cd <dir> && docker compose pull'
 ssh -p <port> <ssh> 'docker stop <old-container> && docker rm <old-container>'
-ssh -p <port> <ssh> 'cd <dir> && docker compose pull && docker compose up -d'
+ssh -p <port> <ssh> 'cd <dir> && docker compose up -d'
 ```
 
 The switchover above deploys `latest`. When the user's request named a version,
 pin it here instead — write `docker-compose.version.yml`
-(`services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:X.Y.Z' } }`)
-and run the pull/up with the full file set exactly as in the invoking skill's pinned
-update variant; otherwise the migrated machine lands on a different version than
-the one requested (and, on live, than the one the gate showed). A migration with no
-version named deploys `latest` — say so in the plan/confirmation.
+(`services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:X.Y.Z' } }`),
+pull with the full file set (`-f` base + override when present + pin) *before*
+stopping the old container, then `up -d` with the same file set, exactly as in the
+invoking skill's pinned update variant; otherwise the migrated machine lands on a
+different version than the one requested (and, on live, than the one the gate
+showed). A migration with no version named deploys `latest` — say so in the
+plan/confirmation.
 
 Then wait for health and verify exactly as in the update flow's wait-for-health and
 verify steps of the invoking skill (first start after migration may legitimately take

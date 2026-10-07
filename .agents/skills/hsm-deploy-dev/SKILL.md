@@ -74,7 +74,9 @@ Detect migrate during preflight: no compose project in `<dir>` **and** no
 (any state — a legacy install sits stopped after a host reboot) → switch to the
 migrate reference instead of updating. A leftover stopped `HSMServer_*` next to a
 working compose stack means update, not migrate; deleting the leftover is the
-user's call.
+user's call. An interrupted migration (`.env` already written, switchover not
+done) also lands here — the reference's step 3 recognizes it and resumes at
+step 4.
 
 ## Mode: status (read-only)
 
@@ -132,6 +134,10 @@ releases — filter them out):
    - If the remote has a `docker-compose.override.yml` or mounted custom `Caddyfile`,
      do not remove them — warn that compose/Caddyfile changes may need re-merging
      (wiki-git/Installation.md, "Advanced Caddyfile customization").
+   - The sync overwrites local edits to the base compose file — an ad-hoc fix like
+     a raised `start_period` belongs in `docker-compose.override.yml`, not the base
+     (see troubleshooting). If the diff reverts a local edit instead of applying an
+     upstream change, say so in the plan message instead of applying silently.
    - **Never modify the remote `.env`** (holds TLS tokens). Do compare its *key names*
      against `origin/master:.env.example` and report keys the user may want to add
      (e.g. `HSM_STRUCTURED_LOGS`, `VL_UI_*`). Extract names only — never `cat` the

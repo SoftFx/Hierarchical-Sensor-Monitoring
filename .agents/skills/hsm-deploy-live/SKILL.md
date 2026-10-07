@@ -69,7 +69,9 @@ Detect migrate during preflight: no compose project in `<dir>` **and** no
 (any state — a legacy install sits stopped after a host reboot) → switch to the
 migrate reference instead of updating. A leftover stopped `HSMServer_*` next to a
 working compose stack means update, not migrate; deleting the leftover is the
-user's call.
+user's call. An interrupted migration (`.env` already written, switchover not
+done) also lands here — the reference's step 3 recognizes it and resumes at
+step 4.
 
 ## Mode: status (read-only)
 
@@ -98,7 +100,8 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    confirm) if the compose project is missing (→ migrate), `hsm-server` is unhealthy
    *before* the update, or free disk is under a few GiB.
 
-2. **Compute the compose-file change (read-only, apart from a `/tmp` staging file)**:
+2. **Compute the compose-file change (read-only, apart from the
+   `<dir>/.docker-compose.yml.new` staging file)**:
 
    ```bash
    git fetch origin
@@ -109,7 +112,11 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    Never sync the compose file from a local branch. Stage inside `<dir>`, not in
    shared `/tmp` under a predictable name — this file runs as root containers, and
    the diff shown at the gate must be the file that gets applied (step 5a re-checks
-   it before the swap). If the remote has a
+   it before the swap). The sync also overwrites local edits to the base compose
+   file (ad-hoc fixes like a raised `start_period` belong in
+   `docker-compose.override.yml`, see troubleshooting) — if the diff reverts a local
+   edit rather than applying an upstream change, flag that in the confirmation. If
+   the remote has a
    `docker-compose.override.yml` or mounted custom `Caddyfile`, note it in the
    confirmation (custom copies may need re-merging — wiki-git/Installation.md).
    **Never modify the remote `.env`**; compare only its *key names* against
@@ -140,7 +147,9 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
 
    No state-changing command runs before an explicit yes. If the user says dev was
    updated earlier in another session, the auto-check in step 3 still decides what the
-   confirmation shows.
+   confirmation shows. A declined gate cleans up after itself —
+   `rm -f <dir>/.docker-compose.yml.new` — so a later session cannot mistake the
+   staged file for fresh.
 
 5. **Apply** (only after the gate passes). Order matters — swap the compose file
    first (it carries the pinned Caddy/VictoriaLogs image versions), then pull, then up.

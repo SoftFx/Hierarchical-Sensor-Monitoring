@@ -41,9 +41,12 @@ of this file) — it then only creates Caddy.
 error.
 
 For a database that legitimately needs longer than the budget, raise `start_period`
-inside the full `healthcheck:` block in the remote `docker-compose.yml` (keep the whole
-block — a trimmed override on an image without its own healthcheck leaves no check at
-all, and `depends_on` then fails instantly).
+in a full `healthcheck:` block in the machine's `docker-compose.override.yml` —
+not in the base `docker-compose.yml`, which the update flow re-syncs from
+`origin/master` and would silently revert the edit on the next update. Keep the
+whole block (a trimmed override on an image without its own healthcheck leaves no
+check at all, and `depends_on` then fails instantly) and apply it with the full
+`-f` file set from the top of this file.
 
 ## `hsm-server` stays `starting` for many minutes
 
