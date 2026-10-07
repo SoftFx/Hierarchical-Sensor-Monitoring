@@ -10,7 +10,10 @@ the old volumes in place — nothing is copied or moved.
 Shared by the `hsm-deploy-dev` and `hsm-deploy-live` skills. Migration is a
 state-changing, downtime-carrying operation: confirm the plan with the user first
 (downtime is roughly the container restart plus database load, minutes). On the live
-machine it additionally goes through that skill's confirmation gate.
+machine it additionally goes through that skill's confirmation gate. The plan/gate
+must state the target version: the requested one when the request named it (pinned
+in step 5), otherwise `latest` — never let a version the user asked for silently
+become `latest`.
 
 ## Equivalence with the old load.sh install — verify, then trust
 
@@ -103,6 +106,14 @@ ssh -p <port> <ssh> 'docker stop <old-container> && docker rm <old-container>'
 ssh -p <port> <ssh> 'cd <dir> && docker compose pull && docker compose up -d'
 ```
 
+The switchover above deploys `latest`. When the user's request named a version,
+pin it here instead — write `docker-compose.version.yml`
+(`services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:X.Y.Z' } }`)
+and run the pull/up with the full file set exactly as in the invoking skill's pinned
+update variant; otherwise the migrated machine lands on a different version than
+the one requested (and, on live, than the one the gate showed). A migration with no
+version named deploys `latest` — say so in the plan/confirmation.
+
 Then wait for health and verify exactly as in the update flow's wait-for-health and
 verify steps of the invoking skill (first start after migration may legitimately take
 longer — see troubleshooting).
@@ -112,15 +123,20 @@ container back from the **image ID recorded in step 1**. A plain `load.sh <versi
 cannot do that when the old install ran `latest`: `load.sh` defaults to `latest` and
 pulls the tag, and step 5's `docker compose pull` has already moved the local
 `latest` onto the new image — the old image survives only as an untagged ID. Re-tag
-it and load that:
+it and run the container directly, with `<dir>` taken from the step-1 mount sources
+(`load.sh` also defaults its base directory to `/usr/HSM` — run bare on an install
+that lives elsewhere, it would mount the wrong, likely empty data tree):
 
 ```bash
-ssh -p <port> <ssh> 'docker tag <old-image-id> hsmonitoring/hierarchical_sensor_monitoring:rollback && load.sh rollback'
+ssh -p <port> <ssh> 'docker tag <old-image-id> hsmonitoring/hierarchical_sensor_monitoring:rollback'
+ssh -p <port> <ssh> 'docker run -d -it -u 0 --name HSMServer_rollback -v <dir>/Logs:/app/Logs -v <dir>/Config:/app/Config -v <dir>/Databases:/app/Databases -v <dir>/DatabasesBackups:/app/DatabasesBackups -p 44330:44330 -p 44333:44333 hsmonitoring/hierarchical_sensor_monitoring:rollback'
 ```
 
-(`load.sh` prints a pull error for the local-only `rollback` tag — expected, it
-still runs the locally found image. It also runs `docker container prune -f`, which
-removes **every** stopped container on the host — say so before running it.) Data
+(Or, when the old `load.sh` really is still on the host:
+`<path-to>/load.sh rollback <dir>` — the base-directory argument is mandatory for
+any install outside `/usr/HSM`, and expect a pull error for the local-only
+`rollback` tag. Note `load.sh` also runs `docker container prune -f`, which removes
+**every** stopped container on the host — say so before running it.) Data
 directories were shared, so nothing else needs restoring.
 
 ## 6. Post-migration checks

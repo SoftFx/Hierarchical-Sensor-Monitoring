@@ -102,16 +102,24 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
 
    ```bash
    git fetch origin
-   git show origin/master:docker-compose.yml | ssh -p <port> <ssh> 'cat > /tmp/hsm-compose.new'
-   ssh -p <port> <ssh> 'diff -u <dir>/docker-compose.yml /tmp/hsm-compose.new || true'
+   git show origin/master:docker-compose.yml | ssh -p <port> <ssh> 'cat > <dir>/.docker-compose.yml.new'
+   ssh -p <port> <ssh> 'diff -u <dir>/docker-compose.yml <dir>/.docker-compose.yml.new || true'
    ```
 
-   Never sync the compose file from a local branch. If the remote has a
+   Never sync the compose file from a local branch. Stage inside `<dir>`, not in
+   shared `/tmp` under a predictable name — this file runs as root containers, and
+   the diff shown at the gate must be the file that gets applied (step 5a re-checks
+   it before the swap). If the remote has a
    `docker-compose.override.yml` or mounted custom `Caddyfile`, note it in the
    confirmation (custom copies may need re-merging — wiki-git/Installation.md).
    **Never modify the remote `.env`**; compare only its *key names* against
-   `origin/master:.env.example` and list keys the user may want to add — names only,
-   never values.
+   `origin/master:.env.example` and list keys the user may want to add — extract
+   names, never `cat` the file (that puts tokens into the chat), never values:
+
+   ```bash
+   ssh -p <port> <ssh> "sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <dir>/.env | sort"
+   git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
+   ```
 
 3. **Dev status check (read-only, best effort)**: if
    `.agents/skills/hsm-deploy-dev/machine.local.json` exists, read the dev machine's
@@ -136,10 +144,17 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
 
 5. **Apply** (only after the gate passes). Order matters — swap the compose file
    first (it carries the pinned Caddy/VictoriaLogs image versions), then pull, then up.
+   `up -d` blocks until the app is healthy (caddy's `depends_on` waits for it), so
+   during a legacy database migration one command can occupy the full budget — run
+   it with a long/background timeout, or detached
+   (`nohup … > /tmp/hsm-up.log 2>&1 &`) and rely on the health poll in step 6.
 
-   a. *Compose file* (only if step 2 found a diff):
+   a. *Compose file* (only if step 2 found a diff): re-run the diff first — the gate
+   may have sat unanswered for a long time and the staged file must be exactly what
+   was shown there — then swap:
    ```bash
-   ssh -p <port> <ssh> 'cp <dir>/docker-compose.yml <dir>/docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S) && mv /tmp/hsm-compose.new <dir>/docker-compose.yml'
+   ssh -p <port> <ssh> 'diff -u <dir>/docker-compose.yml <dir>/.docker-compose.yml.new || true'
+   ssh -p <port> <ssh> 'cp <dir>/docker-compose.yml <dir>/docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S) && mv <dir>/.docker-compose.yml.new <dir>/docker-compose.yml'
    ```
 
    b. *latest:* remove a stale pin, pull, up:
@@ -162,10 +177,12 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
 
 6. **Wait for health.** `starting` while LevelDB loads is normal (seconds-to-minutes;
-   budget ~20–25 min). Poll (30 s interval, 30 min cap):
+   budget ~20–25 min). Poll in short bursts of ~5 min each, repeating the call until
+   healthy or the budget is spent (agent shell tools kill commands past their own
+   timeouts — one 30-min loop reads as a failure while the app is still loading):
 
    ```bash
-   ssh -p <port> <ssh> 'for i in $(seq 1 60); do s=$(docker inspect hsm-server --format "{{.State.Health.Status}}"); echo "$(date +%T) $s"; [ "$s" = healthy ] && exit 0; sleep 30; done; exit 1'
+   ssh -p <port> <ssh> 'for i in $(seq 1 10); do s=$(docker inspect hsm-server --format "{{.State.Health.Status}}"); echo "$(date +%T) $s"; [ "$s" = healthy ] && exit 0; sleep 30; done; exit 1'
    ```
 
    On failure read `docs/agents/hsm-deploy/references/troubleshooting.md` before

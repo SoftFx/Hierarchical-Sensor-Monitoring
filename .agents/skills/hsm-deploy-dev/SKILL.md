@@ -118,23 +118,35 @@ releases — filter them out):
 
    ```bash
    git fetch origin
-   git show origin/master:docker-compose.yml | ssh -p <port> <ssh> 'cat > /tmp/hsm-compose.new'
-   ssh -p <port> <ssh> 'diff -u <dir>/docker-compose.yml /tmp/hsm-compose.new || true'
+   git show origin/master:docker-compose.yml | ssh -p <port> <ssh> 'cat > <dir>/.docker-compose.yml.new'
+   ssh -p <port> <ssh> 'diff -u <dir>/docker-compose.yml <dir>/.docker-compose.yml.new || true'
    ```
+
+   Stage inside `<dir>`, not in shared `/tmp` under a predictable name — this file
+   runs as root containers, and the diff shown must be the file that gets applied.
 
    If different, apply with a backup:
    ```bash
-   ssh -p <port> <ssh> 'cp <dir>/docker-compose.yml <dir>/docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S) && mv /tmp/hsm-compose.new <dir>/docker-compose.yml'
+   ssh -p <port> <ssh> 'cp <dir>/docker-compose.yml <dir>/docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S) && mv <dir>/.docker-compose.yml.new <dir>/docker-compose.yml'
    ```
    - If the remote has a `docker-compose.override.yml` or mounted custom `Caddyfile`,
      do not remove them — warn that compose/Caddyfile changes may need re-merging
      (wiki-git/Installation.md, "Advanced Caddyfile customization").
    - **Never modify the remote `.env`** (holds TLS tokens). Do compare its *key names*
      against `origin/master:.env.example` and report keys the user may want to add
-     (e.g. `HSM_STRUCTURED_LOGS`, `VL_UI_*`). Names only — never print values or run
-     `docker compose config` into the chat.
+     (e.g. `HSM_STRUCTURED_LOGS`, `VL_UI_*`). Extract names only — never `cat` the
+     file (that puts tokens into the chat), never values, no
+     `docker compose config`:
 
-4. **Pull and up** — two variants by target:
+     ```bash
+     ssh -p <port> <ssh> "sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <dir>/.env | sort"
+     git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
+     ```
+
+4. **Pull and up** — two variants by target. `up -d` blocks until the app is healthy
+   (caddy's `depends_on` waits for it), so during a legacy database migration one
+   command can occupy the full budget — run these with a long/background timeout,
+   or detached (`nohup … > /tmp/hsm-up.log 2>&1 &`) and rely on the health poll:
 
    *latest:*
    ```bash
@@ -156,11 +168,13 @@ releases — filter them out):
    `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
 
 5. **Wait for health.** The app reports `starting` until the LevelDB tree is loaded —
-   normally seconds-to-minutes, budget allows ~20–25 min. Poll (30 s interval, 30 min
-   cap):
+   normally seconds-to-minutes, budget allows ~20–25 min. Poll in short bursts of
+   ~5 min each, repeating the call until healthy or the budget is spent (agent shell
+   tools kill commands past their own timeouts — one 30-min loop reads as a failure
+   while the app is still loading):
 
    ```bash
-   ssh -p <port> <ssh> 'for i in $(seq 1 60); do s=$(docker inspect hsm-server --format "{{.State.Health.Status}}"); echo "$(date +%T) $s"; [ "$s" = healthy ] && exit 0; sleep 30; done; exit 1'
+   ssh -p <port> <ssh> 'for i in $(seq 1 10); do s=$(docker inspect hsm-server --format "{{.State.Health.Status}}"); echo "$(date +%T) $s"; [ "$s" = healthy ] && exit 0; sleep 30; done; exit 1'
    ```
 
    On failure read `docs/agents/hsm-deploy/references/troubleshooting.md` before

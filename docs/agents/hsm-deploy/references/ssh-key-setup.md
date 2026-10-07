@@ -5,18 +5,34 @@ breaks the flow. Switch the machine to key-based login once — after that ssh i
 non-interactive and nothing secret is stored anywhere (the skills' machine config
 holds only `user@host`, port, and the deployment directory).
 
-The workstation already has a key pair: `~/.ssh/id_rsa` (private, never leaves this
-machine) and `~/.ssh/id_rsa.pub` (public, goes to the server). If `id_rsa.pub` is
-missing, generate a pair first:
+Any existing key pair will do — check what the workstation already has and reuse it
+(the public half goes to the server; the private one never leaves this machine):
 
 ```bash
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+ls ~/.ssh/id_*.pub
 ```
+
+If there is none, generate an Ed25519 key **with a passphrase** — this key grants
+docker-level (root-equivalent) access to production machines, so it must not sit
+unencrypted on disk:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+```
+
+A passphrase does not break the non-interactive flow: load the key into ssh-agent
+once per session and `BatchMode` logins keep working:
+
+```bash
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+```
+
+Below, `<key>` is the key chosen above (`id_ed25519`, an existing `id_rsa`, …).
 
 ## Option A — ssh-copy-id (when available)
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_rsa.pub -p <port> user@host
+ssh-copy-id -i ~/.ssh/<key>.pub -p <port> user@host
 ```
 
 Enter the password one last time. Check availability with `command -v ssh-copy-id`;
@@ -25,7 +41,7 @@ Git for Windows usually ships it in `/usr/bin`. If it is missing, use option B.
 ## Option B — manual append (works everywhere, incl. any Git Bash)
 
 ```bash
-cat ~/.ssh/id_rsa.pub | ssh -p <port> user@host 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+cat ~/.ssh/<key>.pub | ssh -p <port> user@host 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
 ```
 
 Enter the password one last time. This appends the public key to the machine's

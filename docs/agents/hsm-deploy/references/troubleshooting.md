@@ -85,7 +85,13 @@ same `up -d`.
 ## Old `.env` after a compose file upgrade
 
 New compose features default off when `.env` predates them — an upgrade then silently
-runs without them. Compare **key names only** (never values — `.env` holds tokens):
+runs without them. Compare **key names only** (never values — `.env` holds tokens;
+extract the names, never `cat` the file into the chat):
+
+```bash
+ssh -p <port> <ssh> "sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <dir>/.env | sort"
+git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
+```
 
 - `COMPOSE_PROFILES` missing/without `logs` → VictoriaLogs stack does not run.
 - `HSM_STRUCTURED_LOGS` missing → app writes no JSON log, so vlagent has nothing to ship.
@@ -106,16 +112,22 @@ finished; wait for it.
 
 ## Rollback to the previous app version
 
-The previous image stays on the host until pruned. Find it and re-pin:
+The previous image stays on the host until pruned. The reliable handle on it is the
+image ID the update flow's step 1 recorded before the deploy ("Record the image ID
+for the before/after check"). A `docker images | grep hierarchical_sensor_monitoring`
+lookup misses it in the common `latest` case — once `docker compose pull` moved the
+tag, the old image dangles as `<none>:<none>`; when the step-1 ID is unavailable,
+list candidates without the repository filter:
 
 ```bash
-ssh -p <port> <ssh> 'docker images --format "{{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.CreatedSince}}" | grep hierarchical_sensor_monitoring'
+ssh -p <port> <ssh> 'docker images -a --format "{{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.CreatedSince}}" | head -20'
 ```
 
 Then on the remote, create (or edit) `docker-compose.version.yml` with
-`services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:<older-tag-or-digest>' } }`
-and run `up -d` with the full `-f` list — base, `docker-compose.override.yml` when
-present, then the pin:
+`services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:<older-tag>' } }`
+(or pin by digest — `…hierarchical_sensor_monitoring@sha256:…`, the separator is
+`@`, not `:`) and run `up -d` with the full `-f` list — base,
+`docker-compose.override.yml` when present, then the pin:
 ```bash
 ssh -p <port> <ssh> 'cd <dir> && F="-f docker-compose.yml"; [ -f docker-compose.override.yml ] && F="$F -f docker-compose.override.yml"; F="$F -f docker-compose.version.yml"; docker compose $F up -d app'
 ```
