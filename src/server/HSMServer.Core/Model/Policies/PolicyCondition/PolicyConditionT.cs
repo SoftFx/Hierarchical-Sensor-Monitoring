@@ -67,10 +67,18 @@ namespace HSMServer.Core.Model.Policies
             if (value is null)
                 return;
 
+            // Target-less operations never read the constant: their executors
+            // compare against the sensor's own previous value or ignore the
+            // target, which is exactly what the editor submits for them. A
+            // Const target from an API client or a stored entity is therefore
+            // evaluated as LastValue(self) — building the typed const builder
+            // instead would hand those executors a Func<U> they cannot run,
+            // and parsing the value could throw before the operation is even
+            // consulted (#1439).
             object targetBuilder = value.Type switch
             {
-                TargetType.Const => BuildConstTargetBuilder(value.Value),
-                TargetType.LastValue => _getLastValue,
+                TargetType.Const when !IsTargetless(Operation) => BuildConstTargetBuilder(value.Value),
+                TargetType.Const or TargetType.LastValue => _getLastValue,
                 _ => throw new NotImplementedException($"Unsupported target type {value.Type}"),
             };
 

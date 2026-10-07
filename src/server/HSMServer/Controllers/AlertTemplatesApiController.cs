@@ -315,10 +315,12 @@ namespace HSMServer.Controllers
                 catch (Exception e)
                 {
                     // e.g. Policy.Apply throws NotImplementedException for a condition
-                    // property the sensor-type policy does not support. A 400 with a
-                    // generic message — never a 500 out of the API area.
+                    // property the sensor-type policy does not support, or FormatException
+                    // for an unparseable Const target. A 400 carrying the reconstruction
+                    // reason — never a 500 out of the API area, and never one static
+                    // string masking the actual cause (#1439).
                     _logger.LogWarning(e, "API alert-template payload could not be reconstructed");
-                    Add(errorMap, "policies", "The template could not be parsed: a condition is not supported for this sensor type.");
+                    Add(errorMap, "policies", $"The template could not be parsed: {e.Message}");
                 }
 
                 if (model is not null)

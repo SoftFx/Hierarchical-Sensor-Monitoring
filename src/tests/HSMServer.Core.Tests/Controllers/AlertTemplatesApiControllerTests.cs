@@ -566,6 +566,57 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Create_NewSensorDataConditionWithConstTarget_IsCreated()
+        {
+            // The #1439 repro: a Const target on the target-less ReceivedNewValue
+            // operation used to throw NotImplementedException inside reconstruction
+            // (the typed const builder Func<U> matches no executor the new-data
+            // property runs under), surfacing as the misleading "a condition is
+            // not supported for this sensor type" 400. The target is now evaluated
+            // as the sensor's own previous value, exactly like the web editor's
+            // implicit LastValue(self) submission.
+            var dto = BuildDto(sensorType: (byte)SensorType.DoubleBar) with
+            {
+                Policies =
+                [
+                    new AlertPolicyDto
+                    {
+                        Conditions =
+                        [
+                            new PolicyConditionDto
+                            {
+                                Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "0" },
+                                Combination = (byte)PolicyCombination.And,
+                                Operation = (byte)PolicyOperation.ReceivedNewValue,
+                                Property = (byte)PolicyProperty.NewSensorData,
+                            },
+                        ],
+                        SensorStatus = (byte)SensorStatus.Ok,
+                    },
+                ],
+            };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
+        }
+
+        [Fact]
+        public async Task Create_UnsupportedCondition_SurfacesTheReconstructionReason()
+        {
+            // A File sensor's Value condition has no typed executor (the value is a
+            // byte[]): reconstruction throws, and the 400 must name the actual
+            // reason instead of one static sensor-type wording (#1439), so this
+            // class of failure is diagnosable from the API response alone.
+            var dto = BuildDto(sensorType: (byte)SensorType.File);
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
+            Assert.Contains("Byte[]", details["policies"].Single());
+        }
+
+        [Fact]
         public async Task Create_DuplicateName_Is400()
         {
             _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "taken" };
