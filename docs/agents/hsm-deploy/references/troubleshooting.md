@@ -6,6 +6,18 @@ states are normal, and one common failure is made worse by restarting.
 
 Shared by the `hsm-deploy-dev` and `hsm-deploy-live` skills.
 
+**File set for every command below.** Any compose command that operates the stack
+must carry the machine's full `-f` list: `docker-compose.yml`, plus
+`docker-compose.override.yml` when present, plus `docker-compose.version.yml` when
+a pin exists. A bare `docker compose up -d` skips the last two — on a machine with
+an override it drops the custom mounts, and on a pinned machine it re-resolves
+`app` to `latest` and **recreates `hsm-server`**, silently undoing the pin (and,
+mid database migration, restarting it). Build the list once and reuse it:
+
+```bash
+cd <dir> && F="-f docker-compose.yml"; [ -f docker-compose.override.yml ] && F="$F -f docker-compose.override.yml"; [ -f docker-compose.version.yml ] && F="$F -f docker-compose.version.yml"; docker compose $F up -d
+```
+
 ## `docker compose up` fails: "dependency failed to start: container hsm-server is unhealthy"
 
 The app healthcheck gives the database load ~20 min (Docker 25+) / ~25 min (older
@@ -22,7 +34,8 @@ ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.State.Health.Status}
 ```
 
 When logs show `Now listening` and health turns `healthy` (next probe can be up to
-5 min away), run `docker compose up -d` again — it then only creates Caddy.
+5 min away), run `up -d` again with the machine's full `-f` file set (see the top
+of this file) — it then only creates Caddy.
 **Restarting `hsm-server` during the migration starts the migration over.** Re-running
 `up -d` while it is still migrating fails the same way; that is expected, not a new
 error.
@@ -65,8 +78,9 @@ investigating the server.
 There is no automatic fallback between certificate modes — a failed Let's Encrypt
 issuance leaves HTTPS without a certificate rather than silently downgrading. Check
 `docker logs hsm-caddy`; fix DNS/reachability (HTTP-01) or the provider token (DNS-01),
-then `docker compose up -d` to recreate Caddy. Mode is switched by editing `.env`
-(user's file — never edit it yourself) followed by `docker compose up -d`.
+then `up -d` with the machine's full `-f` file set to recreate Caddy. Mode is
+switched by editing `.env` (user's file — never edit it yourself) followed by the
+same `up -d`.
 
 ## Old `.env` after a compose file upgrade
 
@@ -78,7 +92,8 @@ runs without them. Compare **key names only** (never values — `.env` holds tok
 - `VL_UI_USER`/`VL_UI_PASSWORD` unset → log UI/API not exposed (that is the shipped
   default; both must be set together, password ≥ 12 chars, to enable).
 
-Ask the user to add the missing keys themselves; a plain `docker compose up -d` applies.
+Ask the user to add the missing keys themselves; `up -d` with the machine's full
+`-f` file set applies.
 
 ## Caddy / VictoriaLogs image never updates
 
@@ -99,7 +114,11 @@ ssh -p <port> <ssh> 'docker images --format "{{.ID}}\t{{.Repository}}:{{.Tag}}\t
 
 Then on the remote, create (or edit) `docker-compose.version.yml` with
 `services: { app: { image: 'hsmonitoring/hierarchical_sensor_monitoring:<older-tag-or-digest>' } }`
-and run `docker compose -f docker-compose.yml -f docker-compose.version.yml up -d app`.
+and run `up -d` with the full `-f` list — base, `docker-compose.override.yml` when
+present, then the pin:
+```bash
+ssh -p <port> <ssh> 'cd <dir> && F="-f docker-compose.yml"; [ -f docker-compose.override.yml ] && F="$F -f docker-compose.override.yml"; F="$F -f docker-compose.version.yml"; docker compose $F up -d app'
+```
 (If the old version only survives as an image ID, `docker tag <id> hsmonitoring/rollback:<date>`
 first and pin that.) Rollback is a decision for the user — offer it, do not decide it.
 

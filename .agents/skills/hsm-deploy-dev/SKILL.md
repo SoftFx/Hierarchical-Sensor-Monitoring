@@ -69,8 +69,12 @@ Parse the target version from the request:
 | update | "обнови дев [версия]" — default |
 | migrate | machine still runs the old `load.sh` container (`HSMServer_*`) — follow `docs/agents/hsm-deploy/references/migrate-to-compose.md`; it preserves all paths and data |
 
-Detect migrate during preflight: no compose project in `<dir>` or a `HSMServer_*`
-container in `docker ps -a` → switch to the migrate reference instead of updating.
+Detect migrate during preflight: no compose project in `<dir>` **and** no
+`hsm-server` container, while a `HSMServer_*` container exists in `docker ps -a`
+(any state — a legacy install sits stopped after a host reboot) → switch to the
+migrate reference instead of updating. A leftover stopped `HSMServer_*` next to a
+working compose stack means update, not migrate; deleting the leftover is the
+user's call.
 
 ## Mode: status (read-only)
 
@@ -138,11 +142,18 @@ releases — filter them out):
    ```
    (removing a stale pin is what "обнови дев" без версии means: back on `latest`)
 
-   *pinned X.Y.Z:*
+   *pinned X.Y.Z:* write the pin, then pull and up with the machine's **full file
+   set** — base, the user's `docker-compose.override.yml` when present (any explicit
+   `-f` list disables its automatic loading, and that file is where a custom
+   Caddyfile mount would live), then the pin:
    ```bash
    printf 'services:\n  app:\n    image: "hsmonitoring/hierarchical_sensor_monitoring:X.Y.Z"\n' | ssh -p <port> <ssh> 'cat > <dir>/docker-compose.version.yml'
-   ssh -p <port> <ssh> 'cd <dir> && docker compose -f docker-compose.yml -f docker-compose.version.yml pull app && docker compose -f docker-compose.yml -f docker-compose.version.yml up -d'
+   ssh -p <port> <ssh> 'cd <dir> && F="-f docker-compose.yml"; [ -f docker-compose.override.yml ] && F="$F -f docker-compose.override.yml"; F="$F -f docker-compose.version.yml"; docker compose $F pull app && docker compose $F up -d'
    ```
+
+   The same file set applies to every later compose command on a pinned machine —
+   a bare `docker compose up -d` skips `docker-compose.version.yml`, re-resolves
+   `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
 
 5. **Wait for health.** The app reports `starting` until the LevelDB tree is loaded —
    normally seconds-to-minutes, budget allows ~20–25 min. Poll (30 s interval, 30 min
@@ -160,7 +171,7 @@ releases — filter them out):
 
    ```bash
    ssh -p <port> <ssh> 'cd <dir> && docker compose ps'
-   ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.Image}}"'        # must differ from step 1
+   ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.Image}}"'        # must differ from step 1 — unless the plan was app-image-neutral (compose-only sync, re-pinning the running version)
    ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1/api/sensors/testConnection'   # through caddy, expect 200
    ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:44330/api/sensors/testConnection'
    ssh -p <port> <ssh> 'docker logs hsm-server --since 15m 2>&1 | tail -20'     # expect "Now listening", no errors
@@ -172,7 +183,9 @@ releases — filter them out):
 7. **Report**: machine, image ID old → new (plus the version label when the image
    carries one), services recreated,
    health and verification results, pin state (`latest` or pinned `X.Y.Z` — note that
-   a plain "обнови дев" returns the machine to `latest`). Suggest checking the web UI
+   a plain "обнови дев" returns the machine to `latest`; when pinned, also say that
+   every later compose command on that machine must repeat the full `-f` file set —
+   bare `docker compose` silently reverts the app to `latest`). Suggest checking the web UI
    and one collector; when the goal was release verification, remind that promoting
    to live is the live skill's job.
 

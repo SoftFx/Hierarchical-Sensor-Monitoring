@@ -64,8 +64,12 @@ Parse the target version from the request:
 | update | "обнови лайв [версия]" — default, gated |
 | migrate | machine still runs the old `load.sh` container (`HSMServer_*`) — follow `docs/agents/hsm-deploy/references/migrate-to-compose.md` (it preserves all paths and data), gated like an update |
 
-Detect migrate during preflight: no compose project in `<dir>` or a `HSMServer_*`
-container in `docker ps -a` → switch to the migrate reference instead of updating.
+Detect migrate during preflight: no compose project in `<dir>` **and** no
+`hsm-server` container, while a `HSMServer_*` container exists in `docker ps -a`
+(any state — a legacy install sits stopped after a host reboot) → switch to the
+migrate reference instead of updating. A leftover stopped `HSMServer_*` next to a
+working compose stack means update, not migrate; deleting the leftover is the
+user's call.
 
 ## Mode: status (read-only)
 
@@ -144,11 +148,18 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    ```
    (removing a stale pin is what "обнови лайв" без версии means: back on `latest`)
 
-   c. *pinned X.Y.Z:* write the override, then pull and up with both files:
+   c. *pinned X.Y.Z:* write the pin, then pull and up with the machine's **full
+   file set** — base, the user's `docker-compose.override.yml` when present (any
+   explicit `-f` list disables its automatic loading, and that file is where a
+   custom Caddyfile mount would live), then the pin:
    ```bash
    printf 'services:\n  app:\n    image: "hsmonitoring/hierarchical_sensor_monitoring:X.Y.Z"\n' | ssh -p <port> <ssh> 'cat > <dir>/docker-compose.version.yml'
-   ssh -p <port> <ssh> 'cd <dir> && docker compose -f docker-compose.yml -f docker-compose.version.yml pull app && docker compose -f docker-compose.yml -f docker-compose.version.yml up -d'
+   ssh -p <port> <ssh> 'cd <dir> && F="-f docker-compose.yml"; [ -f docker-compose.override.yml ] && F="$F -f docker-compose.override.yml"; F="$F -f docker-compose.version.yml"; docker compose $F pull app && docker compose $F up -d'
    ```
+
+   The same file set applies to every later compose command while the pin exists —
+   a bare `docker compose up -d` skips `docker-compose.version.yml`, re-resolves
+   `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
 
 6. **Wait for health.** `starting` while LevelDB loads is normal (seconds-to-minutes;
    budget ~20–25 min). Poll (30 s interval, 30 min cap):
@@ -160,13 +171,15 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    On failure read `docs/agents/hsm-deploy/references/troubleshooting.md` before
    touching anything — restarting `hsm-server` during a legacy database migration
    restarts the migration, and "dependency failed to start" often just needs waiting
-   and a second `up -d`.
+   and a second `up -d` (with the machine's full `-f` file set — a bare
+   `docker compose up -d` on a pinned machine re-resolves `app` to `latest` and
+   restarts the migration).
 
 7. **Verify (read-only)**:
 
    ```bash
    ssh -p <port> <ssh> 'cd <dir> && docker compose ps'
-   ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.Image}}"'        # must differ from step 1
+   ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.Image}}"'        # must differ from step 1 — unless the plan was app-image-neutral (compose-only sync, re-pinning the running version)
    ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1/api/sensors/testConnection'   # through caddy, expect 200
    ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:44330/api/sensors/testConnection'
    ssh -p <port> <ssh> 'docker logs hsm-server --since 15m 2>&1 | tail -20'     # expect "Now listening", no errors
@@ -177,9 +190,11 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
 
 8. **Report**: machine, image ID old → new (plus the version label when the image
    carries one), services recreated,
-   health and verification results, pin state, `.env` key-drift follow-ups for the
-   user. Keep an eye on the machine for the next few minutes if a legacy database
-   migration was in progress (`docker logs hsm-server`).
+   health and verification results, pin state (when pinned, say that every later
+   compose command on that machine must repeat the full `-f` file set — bare
+   `docker compose` silently reverts the app to `latest`), `.env` key-drift
+   follow-ups for the user. Keep an eye on the machine for the next few minutes if
+   a legacy database migration was in progress (`docker logs hsm-server`).
 
 ## Hard safety rules
 

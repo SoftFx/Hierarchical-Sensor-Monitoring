@@ -70,13 +70,19 @@ exposed only 44330/44333 becomes reachable on 80/443 (wiki-git/Installation.md,
 
 ## 3. Place the compose files in the base directory
 
+Both downloads are guarded — a machine that already has these files is not a fresh
+migrate. An existing `.env` means compose already ran there (its TLS tokens are
+irreplaceable): stop and go back to the update flow instead of overwriting.
+
 ```bash
-ssh -p <port> <ssh> 'cd <dir> && curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml'
+ssh -p <port> <ssh> 'cd <dir> && [ ! -e .env ] || { echo ".env already exists — not a fresh migrate, stop"; exit 1; }'
+ssh -p <port> <ssh> 'cd <dir> && { [ ! -f docker-compose.yml ] || cp docker-compose.yml docker-compose.yml.bak-$(date +%Y%m%d-%H%M%S); } && curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml'
 ssh -p <port> <ssh> 'cd <dir> && curl -fsSL -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/.env.example'
 ```
 
 The local workstation's checkout may be on any branch — pull the files from
-`master` raw, not from the working tree.
+`master` raw, not from the working tree. An unexpected `docker-compose.yml`
+(without `.env`) is backed up before the download, same as the update flow.
 
 ## 4. Fill `.env` — user's step, not yours
 
@@ -101,8 +107,21 @@ Then wait for health and verify exactly as in the update flow's wait-for-health 
 verify steps of the invoking skill (first start after migration may legitimately take
 longer — see troubleshooting).
 
-Rollback at this point: `cd <dir> && docker compose down`, then re-run the old
-`load.sh <version>` (the old image is still on the host); data directories were shared.
+Rollback at this point: `cd <dir> && docker compose down`, then bring the old
+container back from the **image ID recorded in step 1**. A plain `load.sh <version>`
+cannot do that when the old install ran `latest`: `load.sh` defaults to `latest` and
+pulls the tag, and step 5's `docker compose pull` has already moved the local
+`latest` onto the new image — the old image survives only as an untagged ID. Re-tag
+it and load that:
+
+```bash
+ssh -p <port> <ssh> 'docker tag <old-image-id> hsmonitoring/hierarchical_sensor_monitoring:rollback && load.sh rollback'
+```
+
+(`load.sh` prints a pull error for the local-only `rollback` tag — expected, it
+still runs the locally found image. It also runs `docker container prune -f`, which
+removes **every** stopped container on the host — say so before running it.) Data
+directories were shared, so nothing else needs restoring.
 
 ## 6. Post-migration checks
 
