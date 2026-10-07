@@ -76,7 +76,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 - Database snapshots
 - Data cleanup/retention
 - Notification delivery (Telegram, email)
-- SFTP backups
+- Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
 
 ## Web Frontend
 
@@ -108,6 +108,7 @@ TypeScript 5.3 + Webpack 5:
 - `auth/` - authentication, access keys, users, permissions.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
+- `database-backup-monitoring/` - self-monitoring of the server's own database backup (#1525): per-run `Backup result` (status + TTL so a missed run turns Timeout), backup file sizes, duration, and per-database sizes.
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.
 - `agent-download/` - admin-only per-product HSM Agent (Windows) bundle download and its `agent-release.txt` staging.
 - `linux-probe-download/` - its Linux sibling (#1424): per-product probe `.tar.gz` with `install.sh`, staged from `probe-release.txt`.
