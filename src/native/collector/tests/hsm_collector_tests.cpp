@@ -2055,6 +2055,17 @@ namespace
                     line.erase(time_field, end - time_field);
                 }
 
+                // A bar's canonical "StdDev" is native-only (owner decision 2026-10-07, #1529): the
+                // managed text has no such field, so drop it to keep the dumps byte-comparable.
+                const std::string stddev_key = "\"StdDev\":";
+                const auto stddev_field = line.find(stddev_key);
+                if (stddev_field != std::string::npos)
+                {
+                    const auto comma = line.find(',', stddev_field);
+                    if (comma != std::string::npos)
+                        line.erase(stddev_field, comma + 1 - stddev_field);
+                }
+
                 output << line << '\n';
             }
             return;
@@ -6015,10 +6026,11 @@ namespace
     {
         // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
         // Samples 1..5 have M2 = 10 -> population StdDev sqrt(2) = 1.414.. -> 1.41 (int bars round
-        // StdDev to a fixed 2 digits). Cross-locked by WireFormatGoldenLockTests (#1509).
+        // StdDev to a fixed 2 digits). Cross-locked by WireFormatGoldenLockTests (#1509): these bytes
+        // are the server DTO's; the managed collector's bar is the same minus "StdDev" (#1529).
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"StdDev\":1.41,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"StdDev\":1.41,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
                                                                         "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
                                                                         "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
@@ -6039,7 +6051,7 @@ namespace
         // Cross-locked by WireFormatGoldenLockTests double-bar case.
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"StdDev\":1.5,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"StdDev\":1.5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
                                                                                  "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
                                                                                  "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
             "double bar wire layout");
@@ -6047,7 +6059,7 @@ namespace
         // An unknown StdDev (a bar fed with pre-aggregated partials) goes on the wire as null,
         // like the C# DTO's double? -- never as 0 (#1509).
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 1, 5, 15, 1, 5, 5, 2, 0, 1, 0, 2000, 0, "p/ib")).find("\"Mean\":3,\"StdDev\":null,\"FirstValue\":1,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 1, 5, 15, 1, 5, 5, 2, 0, 1, 0, 2000, 0, "p/ib")).find("{\"Type\":4,\"StdDev\":null,\"Min\":1,") != std::string::npos,
             "unknown StdDev is null on the wire");
         // A single-sample bar has StdDev 0.
         Require(
@@ -8293,6 +8305,7 @@ namespace
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_sampled_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_stddev_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },

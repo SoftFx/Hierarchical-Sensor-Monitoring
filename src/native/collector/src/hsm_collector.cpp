@@ -1845,9 +1845,10 @@ namespace
         int32_t count = 0;
         // Welford moments for StdDev (#1509) — a running mean and the sum of squared deviations
         // from it (M2), O(1) per sample, no sample storage. Kept apart from total_sum so the wire
-        // Mean is unchanged. Same operations in the same order as the C# MonitoringBarBase<T>
-        // (AddMoments), so both collectors post identical bytes for identical samples. A
-        // pre-aggregated partial carries no spread and makes the bar's StdDev unknown (null).
+        // Mean is unchanged. NATIVE ONLY: the managed collector does not post StdDev (owner
+        // decision 2026-10-07, #1529; ADR 0009) — see the wire-contract doc for the operation order
+        // a future managed port must reproduce. A pre-aggregated partial carries no spread and
+        // makes the bar's StdDev unknown (null).
         double welford_mean = 0.0;
         double welford_m2 = 0.0;
         bool stddev_unknown = false;
@@ -1883,7 +1884,7 @@ namespace
                 max = std::max(max, value);
             }
 
-            // Before ++count, like the C# AddMoments: n is the count including this sample.
+            // Before ++count: n is the count including this sample.
             const double n = static_cast<double>(count + 1);
             const double delta = value - welford_mean;
             welford_mean += delta / n;
@@ -1893,7 +1894,7 @@ namespace
             ++count;
         }
 
-        // Population standard deviation; 0 for a single sample (C# CountStdDev).
+        // Population standard deviation; 0 for a single sample.
         double StdDev() const
         {
             return count <= 1 ? 0.0 : std::sqrt(welford_m2 / count);
@@ -1923,8 +1924,8 @@ namespace
         }
     };
 
-    // An int bar has no precision of its own, so its StdDev is rounded to a fixed 2 digits
-    // (C# IntMonitoringBar.IntBarStdDevDigits); a double bar's follows the bar precision.
+    // An int bar has no precision of its own, so its StdDev is rounded to a fixed 2 digits; a
+    // double bar's follows the bar precision (half away from zero, like Mean).
     constexpr int kIntBarStdDevDigits = 2;
 
     // The bar's StdDev wire text: a double on both bar flavors, `null` when unknown.
@@ -2017,7 +2018,7 @@ namespace
         return json.str();
     }
 
-    // Real wire JSON for a bar DTO (#1096 §15): Type, Min, Max, Mean, StdDev (#1509), FirstValue,
+    // Real wire JSON for a bar DTO (#1096 §15): Type, StdDev (#1509), Min, Max, Mean, FirstValue,
     // LastValue, Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
     // Field VALUES reuse the same int/double formatting as the internal MonitoringBarJson.
     std::string BuildWireBarJson(const MonitoringBar& bar, int64_t time_ms, const std::string& path)
@@ -2045,10 +2046,13 @@ namespace
         std::ostringstream json;
         json << "{\"Type\":"
              << (bar.is_int ? static_cast<int>(HSM_SENSOR_TYPE_INT_BAR) : static_cast<int>(HSM_SENSOR_TYPE_DOUBLE_BAR))
+             // StdDev sits where System.Text.Json puts it for the server's IntBarSensorValue /
+             // DoubleBarSensorValue DTO (declared there, so right after Type). The managed collector's
+             // bars do not carry it: native = managed + this one field (#1509, #1529).
+             << ",\"StdDev\":" << BarStdDevJson(bar)
              << ",\"Min\":" << min_text
              << ",\"Max\":" << max_text
              << ",\"Mean\":" << mean_text
-             << ",\"StdDev\":" << BarStdDevJson(bar)
              << ",\"FirstValue\":" << first_text
              << ",\"LastValue\":" << last_text
              << ",\"Percentiles\":null"

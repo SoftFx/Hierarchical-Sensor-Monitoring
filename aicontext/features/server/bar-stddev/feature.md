@@ -10,9 +10,11 @@
 A bar carries `Min`, `Max`, `Mean`, `Count`, `FirstValue`, `LastValue` and, since #1509, `StdDev`: the
 **population** standard deviation of the bar's samples, `sqrt(Σ(x − mean)² / Count)`. One spike stretches
 the candlestick's whisker to the ceiling and hides the typical behaviour inside a 5-minute bar; a mean
-line with a ±σ band shows it. Both collectors compute it (collector side:
+line with a ±σ band shows it. **The native C++ collector computes it; the managed .NET collector does
+not** (owner decision 2026-10-07, #1529, [ADR-0009](../../../../docs/decisions/0009-bar-stddev-native-only.md)),
+so bars from managed hosts show no band. Collector side:
 [`collector/sensors/feature.md`](../../collector/sensors/feature.md#bar-mechanics); wire:
-[`api/wire-contract/feature.md`](../../api/wire-contract/feature.md#bar-stddev-1509)). Reading the band:
+[`api/wire-contract/feature.md`](../../api/wire-contract/feature.md#bar-stddev-1509). Reading the band:
 for normally distributed samples mean ± 1σ holds about 68 % of the values; CPU load, temperature or write
 speed inside a bar are not normal, so it is a rule of thumb — the hover text keeps Min/Max/Count so the
 tails stay visible.
@@ -20,7 +22,7 @@ tails stay visible.
 ## Invariants
 
 - **Unknown is not 0.** `StdDev` is `double?` everywhere on the server. `null` = unknown: a collector that
-  does not send it (managed < 3.7.0, native < 0.11.0, any third-party sender), a row stored before the
+  does not send it (the managed collector, native < 0.11.0, any other sender), a row stored before the
   field existed, or a bar built from pre-aggregated partials (`AddPartial` carries no spread). Nothing
   draws, plots or reports an unknown σ as 0.
 - **Additive on the wire.** Wire and DTO only gain an optional field: older collectors keep working
@@ -69,7 +71,7 @@ tails stay visible.
 
 | Contract | Location | Notes |
 |---|---|---|
-| `BarSensorValueBase<T>.StdDev` (`double?`) | `src/api/HSMSensorDataObjects/SensorValueRequests/BarSensorValueBase.cs` | wire field, right after `Mean`; DTO 3.2.0 |
+| `IntBarSensorValue.StdDev` / `DoubleBarSensorValue.StdDev` (`double?`) | `src/api/HSMSensorDataObjects/SensorValueRequests/{Int,Double}BarSensorValue.cs` | wire field, right after `Type`; DTO 3.2.0; not on `BarSensorValueBase<T>`, so the managed collector's bars never carry it |
 | `BarBaseValue<T>.StdDev` (`double?`) | `src/server/HSMCommon/SensorValues/BarBaseValue.cs` | stored; last MemoryPack member |
 | `BarSensorHistory.StdDev` (`string`, null = unknown) | `src/server/HSMServer.Core/Model/HistoryValues/BarSensorHistory.cs` | Sensor API JSON history, formatted like `Mean` |
 | CSV column `StdDev` (the LAST column of the bar export, so existing columns keep their positions) | `src/server/HSMServer/ApiObjectsConverters/ApiCsvConverters.cs` | empty cell when unknown |
@@ -118,7 +120,7 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
 
 ## Dependencies
 
-- Depends on: collector bar accumulation (both collectors), `HSMSensorDataObjects` 3.2.0.
+- Depends on: the native collector's bar accumulation (0.11.0; the managed collector sends no σ, #1529), `HSMSensorDataObjects` 3.2.0.
 - Used by: sensor page chart, dashboards, Sensor API history, Grafana datasource.
 
 ## Tests
@@ -139,8 +141,8 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
   `src/Directory.Build.targets` drops the package's copy whenever the in-repo DTO project is among the
   resolved references; the package's collector code then binds to the in-repo DTO at run time — safe
   because DTO changes are additive.
-- The server's own self-monitoring bars come from the `HSMDataCollector` package it references (3.5.0):
-  they report σ only after the server moves to a collector package ≥ 3.7.0; until then they show no band.
+- The server's own self-monitoring bars come from the managed `HSMDataCollector` package, so they never
+  carry σ (#1529) and show no band.
 
 ## Known Issues / Limitations
 

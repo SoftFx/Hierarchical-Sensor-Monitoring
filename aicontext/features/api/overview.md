@@ -50,7 +50,7 @@ All DTOs live in `HSMSensorDataObjects` (shared library):
 
 - `SensorValueBase` — base class with `Path`, `Time`, `Status`, `Comment`
 - Typed descendants add the `Value` field of the appropriate type
-- `BarSensorValueBase` adds `Min`, `Max`, `Mean`, `StdDev?` (#1509, optional, `null` = unknown), `Count`, `OpenTime`, `CloseTime`
+- `BarSensorValueBase` adds `Min`, `Max`, `Mean`, `Count`, `OpenTime`, `CloseTime`; the concrete `IntBarSensorValue` / `DoubleBarSensorValue` add `StdDev?` (#1509, optional, `null`/absent = unknown — sent by the native collector only, #1529)
 - `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`
 - `CommandRequestBase` — collector-to-server command (registration etc.)
 

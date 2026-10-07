@@ -64,7 +64,7 @@ part of the contract:
 
 ```
 instant:  {"Type":N,"Path":"...","Value":V,"Status":N,"Comment":"..."}
-bar:      {"Type":N,"Path":"...","Min":m,"Max":M,"Mean":u,"StdDev":s|null,"First":f,"Last":l,
+bar:      {"Type":N,"Path":"...","Min":m,"Max":M,"Mean":u,"First":f,"Last":l,
            "Count":c,"OpenTimeMs":o,"CloseTimeMs":e,"Status":N,"Comment":"..."}
 file:     {"Type":6,"Path":"...","Value":"utf8 content","Name":"...",
            "Extension":"...","Status":N,"Comment":"..."}
@@ -73,8 +73,16 @@ file:     {"Type":6,"Path":"...","Value":"utf8 content","Name":"...",
 `Type` is the numeric wire discriminator (bool 0, int 1, double 2, string 3,
 int bar 4, double bar 5, file 6, rate 9, enum 10). `OpenTimeMs`/`CloseTimeMs`
 are unix milliseconds. String fields are JSON-escaped (`"` `\` control chars).
-`StdDev` (#1509) is the bar's population standard deviation as a double on both bar flavors
-(`"R"` format), or `null` when unknown (a bar that took a pre-aggregated partial).
+**Native-only bar field.** The native driver's bar text also carries `"StdDev":s|null` right after
+`"Mean"` (#1509: the bar's population standard deviation, a double on both bar flavors, `null` when
+unknown). The managed collector does not compute it (owner decision 2026-10-07, #1529,
+`docs/decisions/0009-bar-stddev-native-only.md`), so the managed text has no such field and the native
+`dump_payloads_to` strips it to keep the fuzzer dumps byte-comparable.
+
+**Native-only fixtures.** `collector/native/*.hsmtest` holds scenarios only the native collector
+satisfies by an owner decision — today `bar_stddev_contract.hsmtest` (#1529). The managed driver's
+discovery is non-recursive, so it never reads them; the native driver registers them in CMake like any
+fixture. A case moves back into the shared fixtures when the managed collector gains the behavior.
 
 ## Verb catalog
 
@@ -196,7 +204,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_payload_type_counts\|bool\|int\|double\|string\|enum` | per-type payload counts |
 | `expect_comment_length\|payload_index\|length` | pins the 1024-char comment trim |
 | `expect_time_marker_comments\|prefix\|count` | exactly `count` payloads carry a lifecycle-marker comment `"<prefix>: dd/MM/yyyy HH:mm:ss"` (the managed `SensorBase.DefaultTimeFormat`). A comment opening with `"<prefix>: "` that loses the shape FAILS, so a broken format cannot hide by dropping out of the count; the instant itself is wall-clock and is never compared |
-| `expect_bar_field\|payload_index\|field\|expected` | `field ∈ type\|min\|max\|mean\|stddev\|first\|last\|count\|status`; numeric compare rel. tolerance 1e-9 (type/count/status exact); a `null` StdDev never matches a number — assert it with `expect_payload_contains\|i\|"StdDev":null,` |
+| `expect_bar_field\|payload_index\|field\|expected` | `field ∈ type\|min\|max\|mean\|stddev\|first\|last\|count\|status`; numeric compare rel. tolerance 1e-9 (type/count/status exact). `stddev` is native-only (managed: `CONFORMANCE-UNSUPPORTED`, #1529) and used only by `collector/native/`; a `null` StdDev never matches a number — assert it with `expect_payload_contains\|i\|"StdDev":null,` |
 | `expect_bar_count_total\|expected` | Σ Count over all bar payloads — "no value lost", timing-immune |
 | `expect_bar_sum\|path_suffix\|expected` | (#1480) Σ of the values in the bars whose Path ends with `path_suffix`: Mean × Count of the LAST payload of each OpenTime (partial posts are snapshots of one bar). For sensors whose bar SHAPE legitimately differs between collectors (managed Queue overflow adds one value per lost value, native one per collect cycle) while the total must match. Exact only when each bar's mean is exact — an int bar's Mean is rounded — so design the fixture so it is |
 | `expect_bar_open_close_aligned\|payload_index\|period_ms` | close−open == period and open % period == 0 (unix ms) |
@@ -253,9 +261,11 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. No verb is
-in that state today (the last one, `set_sensor_description`, gained its managed
-counterpart in #1482).
+a generic unknown-verb error; the failure list is the port backlog. One field is
+in that state: `expect_bar_field … stddev` in the managed driver (#1529 — the managed
+collector does not compute a bar StdDev by owner decision); only the native-only
+fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
+`set_sensor_description`, gained its managed counterpart in #1482.)
 
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced

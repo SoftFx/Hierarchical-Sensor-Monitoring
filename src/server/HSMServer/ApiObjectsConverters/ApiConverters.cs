@@ -162,7 +162,6 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
-                StdDev = value.StdDev,
                 FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
             };
@@ -180,7 +179,6 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
-                StdDev = value.StdDev,
                 FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
             };

@@ -12,7 +12,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | HSM | Hierarchical-Sensor-Monitoring product and repository. | Use `HSM` after first expansion when useful. |
 | Sensor | A monitored value source identified by a hierarchical path. | Avoid using "metric" when the code/API uses sensor semantics. |
 | Bar sensor | Aggregating sensor that collects min/max/mean/count over a time window. | Keep bar period and post period semantics explicit. |
-| StdDev (σ) | A bar's population standard deviation, `sqrt(Σ(x − mean)² / Count)`, posted as `StdDev` (#1509). | Always population, never sample (n − 1). `null` = unknown, never 0. See `features/server/bar-stddev/feature.md`. |
+| StdDev (σ) | A bar's population standard deviation, `sqrt(Σ(x − mean)² / Count)`, posted as `StdDev` (#1509) by the native collector only (#1529). | Always population, never sample (n − 1). `null`/absent = unknown, never 0. See `features/server/bar-stddev/feature.md`. |
 | Rate sensor | Sensor that accumulates values and reports a rate over a configured period. | Check zero/NaN handling when changing accumulation. |
 | Function sensor | Sensor that periodically calls user-provided code and sends the result. | User exceptions must be isolated. |
 | Instant sensor | Sensor where the integrator explicitly calls `AddValue()` / `SendValue()`. | Public methods can be called from any thread. |

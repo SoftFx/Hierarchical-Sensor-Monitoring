@@ -155,22 +155,3 @@ int_bar_two_sensors_count_total|add_bar_int|1|20
 int_bar_two_sensors_count_total|stop
 int_bar_two_sensors_count_total|expect_sent_count|2
 int_bar_two_sensors_count_total|expect_bar_count_total|5
-
-# StdDev (#1509) on an int bar is a double (population, Welford), rounded to a fixed 2 digits:
-# an int bar has no precision of its own. Samples 1..5: sqrt(2) = 1.4142.. -> 1.41.
-int_bar_stddev_is_a_double|create_collector
-int_bar_stddev_is_a_double|create_int_bar_sensor|contract/bar/stddev|3600000|0
-int_bar_stddev_is_a_double|start
-int_bar_stddev_is_a_double|add_bar_int_sequence|0|5|1|1
-int_bar_stddev_is_a_double|stop
-int_bar_stddev_is_a_double|expect_sent_count|1
-int_bar_stddev_is_a_double|expect_bar_field|0|stddev|1.41
-int_bar_stddev_is_a_double|expect_payload_contains|0|"Mean":3,"StdDev":1.41,"First":1,
-
-int_bar_stddev_single_value_is_zero|create_collector
-int_bar_stddev_single_value_is_zero|create_int_bar_sensor|contract/bar/stddev-one|3600000|0
-int_bar_stddev_single_value_is_zero|start
-int_bar_stddev_single_value_is_zero|add_bar_int|0|7
-int_bar_stddev_single_value_is_zero|stop
-int_bar_stddev_single_value_is_zero|expect_sent_count|1
-int_bar_stddev_single_value_is_zero|expect_payload_contains|0|"Mean":7,"StdDev":0,
