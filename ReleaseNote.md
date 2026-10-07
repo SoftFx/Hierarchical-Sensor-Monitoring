@@ -1,25 +1,31 @@
 # HSM Server
 
 ## Alerts and schedules
-* TTL alerts bound to a schedule gate on the schedule at evaluation time instead of the stale value's timestamp — fixes scheduled TTL alerts firing and re-sending overnight after a restart. Out-of-window repeats are cancelled per policy, window-caused resolutions stay silent, and a genuine recovery still sends its Ok.
-* Deleting an alert schedule now clears its references from sensor policies, product TTL policies and alert templates (persisted, restart-safe) instead of leaving dangling ids; missing-schedule lookups still fail open and are reported at most hourly per id. Migration note: creating, editing and deleting alert schedules is now admin-only; viewing stays open to all users.
-* Migration note: creating, editing and deleting alert templates is now admin-only, aligned with alert schedules; viewing (templates page, tree context) stays open to all users. The REST API is unchanged (own token grants).
-* Fixed a database race that could silently drop a policy from the index after concurrent template applies — alerts no longer vanish after a restart; orphaned rows self-heal at boot.
+* A Const target on a targetless condition (New data, Status, Is changed) is now evaluated as the sensor's last value instead of failing template reconstruction with a generic "condition is not supported for this sensor type"; the templates API reports the actual reconstruction reason, and the stored target echoes the input unchanged.
+* Migration note: creating, editing and deleting alert templates is now admin-only, aligned with alert schedules; viewing stays open to all users. The REST API is unchanged (own token grants).
+* Removing a chat from a folder no longer wipes TTL intervals and schedule/template references from unaffected policies — the policy re-assertion on chat removal is no longer lossy.
+* The newDataArrived witness that decides whether a TTL resolution sends its recovery Ok is hardened (queue-order discriminator, atomic expiry stamp) — a stale witness can no longer suppress or double-send the recovery.
+
+## Management API
+* REST administration of alerts: data-alert policies and TTL policies on sensors and products (create, update, delete) for non-interactive clients — authenticated with a personal API token and authorized per folder through the token's alerts grants.
 
 ## API tokens
-* Per-token usage monitoring for `/api/v1` and `/mcp`: rate and request-duration sensors per token (self-monitoring) and the token EntityId in Profile.
+* The Profile page becomes "Personal tokens" in the user menu, and the token name is now an optional note (a blank note gets a generated default).
+* Migration note: the API tokens section is gone from Settings → Server — the kill switch is a server-configuration-file setting only (`ApiTokens.Disabled`), and API tokens are on by default. A settings save can no longer silently revert a hand-edited kill switch when the configuration reload lags.
 
-## Linux probe
-* First Linux host + Docker Compose probe: Linux metric sources, per-product Linux probe download bundle, native bar-period and stop-drain fixes, `.module` start/stop markers in both collectors.
+## Security
+* Removing a product now requires Manager rights on the product (or admin) and a POST with an antiforgery token, and is journaled as the user — previously any signed-in user could remove any product over a GET link.
+
+## Data storage
+* Out-of-order values inside a dense batch are stored instead of being silently dropped, and every dropped-value shape is now reported by the add-value result.
 
 ## Infrastructure
-* docker-compose ships Caddy with automatic Let's Encrypt certificates (explicit certificate modes, startup gating); native collector 0.7.4, HsmAgent 0.5.33.
+* The server Docker image declares its own HEALTHCHECK — health no longer depends on this repo's compose file; the compose healthcheck runs every 5 minutes instead of 30 seconds (2 880 anonymous testConnection requests a day → 288).
+* docker-compose can ship server logs to VictoriaLogs: a vlagent shipper with a VictoriaLogs single-node, Caddy path exposure and env-gated JSON logging.
+* Ready-made Caddy image (`hsmonitoring/hsm-caddy`) with Cloudflare and dynv6 DNS-01 modules — DNS-01 certificates no longer require a self-built Caddy; certificate modes letsencrypt-dns, letsencrypt-http, custom PEM and self-signed.
 
-## Chats
-* Slack/Mattermost webhook URLs are masked in EditChat (partial edits of the masked value are rejected); the configured Telegram bot name shows on the Add Chat Telegram tab; FromParent chat routing now stops at the first non-inheriting ancestor.
-
-## Sensors
-* Self-destroy defers its decision for uninitialized sensors and isolates per-sensor failures in the sweep; metric-source read errors are reported and the disk-space prediction reports the truth.
+## Linux probe
+* The server ships the pinned Linux probe 0.8.2 `.deb` in the per-product download: Docker Compose metrics (per-container CPU, memory, network, disk write volume), host and per-disk sensors for every mounted disk (free space, inodes, read/write speed, read and write volume per day), Top CPU processes, alert rules in the Rust wrapper, and the `.probe` module node layout under the product; Docker stats and CPU temperature are sampled once a minute.
 
 ## Dependencies
-* Bundled `HSMDataCollector` 3.5.0.
+* Bundled `HSMDataCollector` 3.5.0 and HsmAgent 0.5.28 (both unchanged since 3.41.5).
