@@ -41,11 +41,14 @@ Git for Windows usually ships it in `/usr/bin`. If it is missing, use option B.
 ## Option B — manual append (works everywhere, incl. any Git Bash)
 
 ```bash
-cat ~/.ssh/<key>.pub | ssh -p <port> user@host 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+cat ~/.ssh/<key>.pub | ssh -p <port> user@host 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && { [ -z "$(tail -c1 ~/.ssh/authorized_keys)" ] || echo >> ~/.ssh/authorized_keys; } && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
 ```
 
 Enter the password one last time. This appends the public key to the machine's
-`~/.ssh/authorized_keys` (Ubuntu Server accepts key auth out of the box).
+`~/.ssh/authorized_keys` (Ubuntu Server accepts key auth out of the box). The
+newline guard matters: appended to a file whose last line lacks a trailing
+newline (a key pasted with an editor or `echo -n`), the new line would glue onto
+it and break **both** keys — including the one that already worked.
 
 ## Verify non-interactive login
 

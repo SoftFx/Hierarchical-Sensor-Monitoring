@@ -54,7 +54,13 @@ ssh -p <port> <ssh> 'docker inspect <old-container> --format "{{.Image}}"'
 - The old container is named `HSMServer_<version>` (load.sh convention).
 - The mounts reveal the base directory (load.sh default `/usr/HSM`; the source lines
   look like `/usr/HSM/Databases:/app/Databases`). Record the **mount sources** — they
-  are the equivalence check for step 6 — and the image ID for rollback.
+  are the equivalence check for step 6 — and the image ID for rollback, and persist
+  both on the remote: they must survive a crashed session, not just this chat:
+
+  ```bash
+  ssh -p <port> <ssh> 'docker inspect <old-container> --format "image={{.Image}}" > <dir>/.migrate-state && docker inspect <old-container> --format "{{json .Mounts}}" >> <dir>/.migrate-state'
+  ```
+
 - If there is no old container at all (fresh machine), just pick a base directory.
 
 ## 2. Check port availability BEFORE stopping anything
@@ -115,7 +121,16 @@ leave the old container still serving:
 
 ```bash
 ssh -p <port> <ssh> 'cd <dir> && docker compose pull'
-ssh -p <port> <ssh> 'docker stop <old-container> && docker rm <old-container>'
+```
+
+Stop and **rename** the old container — never `docker rm` it here. A crash between
+this step and a healthy `hsm-server` (agent timeout on the blocking `up -d`, an
+unpublished caddy tag, a port grabbed meanwhile) must leave the rollback path
+intact: a renamed container can be renamed back and started; a removed one leaves
+only the untagged old image and the step-1 state file:
+
+```bash
+ssh -p <port> <ssh> 'if docker ps -a --format "{{.Names}}" | grep -q "^<old-container>_premigrate$"; then echo "premigrate container exists — switchover already done, resume with up -d"; else docker stop <old-container> && docker rename <old-container> <old-container>_premigrate; fi'
 ssh -p <port> <ssh> 'cd <dir> && docker compose up -d'
 ```
 
@@ -133,14 +148,23 @@ Then wait for health and verify exactly as in the update flow's wait-for-health 
 verify steps of the invoking skill (first start after migration may legitimately take
 longer — see troubleshooting).
 
-Rollback at this point: `cd <dir> && docker compose down`, then bring the old
-container back from the **image ID recorded in step 1**. A plain `load.sh <version>`
-cannot do that when the old install ran `latest`: `load.sh` defaults to `latest` and
-pulls the tag, and step 5's `docker compose pull` has already moved the local
-`latest` onto the new image — the old image survives only as an untagged ID. Re-tag
-it and run the container directly, with `<dir>` taken from the step-1 mount sources
-(`load.sh` also defaults its base directory to `/usr/HSM` — run bare on an install
-that lives elsewhere, it would mount the wrong, likely empty data tree):
+Rollback at this point: `cd <dir> && docker compose down`, then restore the old
+container. While step 5's `<old-container>_premigrate` still exists (the normal
+case until step 6 passes) that is just a rename back and a start:
+
+```bash
+ssh -p <port> <ssh> 'docker rename <old-container>_premigrate <old-container> && docker start <old-container>'
+```
+
+Without the kept container, rebuild it from the **image ID recorded in step 1**
+(`<dir>/.migrate-state` keeps it across crashed sessions). A plain
+`load.sh <version>` cannot do that when the old install ran `latest`: `load.sh`
+defaults to `latest` and pulls the tag, and step 5's `docker compose pull` has
+already moved the local `latest` onto the new image — the old image survives only
+as an untagged ID. Re-tag it and run the container directly, with `<dir>` taken
+from the step-1 mount sources (`load.sh` also defaults its base directory to
+`/usr/HSM` — run bare on an install that lives elsewhere, it would mount the
+wrong, likely empty data tree):
 
 ```bash
 ssh -p <port> <ssh> 'docker tag <old-image-id> hsmonitoring/hierarchical_sensor_monitoring:rollback'
@@ -157,7 +181,8 @@ directories were shared, so nothing else needs restoring.
 ## 6. Post-migration checks
 
 - **Mount equivalence (the data guarantee):** the new container must mount the exact
-  sources recorded in step 1 —
+  sources recorded in step 1 (or in `<dir>/.migrate-state` after an interrupted
+  session) —
   `ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{json .Mounts}}"'`
   — same host directories for `/app/Logs`, `/app/Config`, `/app/Databases`,
   `/app/DatabasesBackups`. A mismatch means the compose file landed in the wrong
@@ -171,3 +196,12 @@ directories were shared, so nothing else needs restoring.
   Clients that allow untrusted certificates keep working in every mode; with a trusted
   certificate they can later drop that flag.
 - Web UI: `https://<HSM_DOMAIN>` (or `:44333`).
+- **Cleanup (only after everything above passed):** remove the kept old container
+  and the state file:
+
+  ```bash
+  ssh -p <port> <ssh> 'docker rm <old-container>_premigrate && rm -f <dir>/.migrate-state'
+  ```
+
+  From this point rollback follows the troubleshooting reference — the old image is
+  still on the host, untagged, until pruned.

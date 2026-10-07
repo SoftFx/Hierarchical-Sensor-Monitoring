@@ -70,13 +70,14 @@ Parse the target version from the request:
 | migrate | machine still runs the old `load.sh` container (`HSMServer_*`) — follow `docs/agents/hsm-deploy/references/migrate-to-compose.md`; it preserves all paths and data |
 
 Detect migrate during preflight: no compose project in `<dir>` **and** no
-`hsm-server` container, while a `HSMServer_*` container exists in `docker ps -a`
-(any state — a legacy install sits stopped after a host reboot) → switch to the
-migrate reference instead of updating. A leftover stopped `HSMServer_*` next to a
-working compose stack means update, not migrate; deleting the leftover is the
-user's call. An interrupted migration (`.env` already written, switchover not
-done) also lands here — the reference's step 3 recognizes it and resumes at
-step 4.
+`hsm-server` container, while either a `HSMServer_*` container exists in
+`docker ps -a` (any state — a legacy install sits stopped after a host reboot) or
+`<dir>` already holds an `.env` (a migration that placed its files but never
+finished the switchover — the old container may or may not still exist) → switch
+to the migrate reference instead of updating. A leftover stopped `HSMServer_*`
+next to a working compose stack means update, not migrate; deleting the leftover
+is the user's call. The reference's step 3 recognizes an interrupted migration
+and resumes at step 4.
 
 ## Mode: status (read-only)
 
