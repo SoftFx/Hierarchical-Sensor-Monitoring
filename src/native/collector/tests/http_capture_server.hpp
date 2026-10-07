@@ -401,7 +401,7 @@ namespace hsm::test
                 static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string gateway = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                const std::string& response = fail ? gateway : reject ? bad : ok;
+                const std::string& response = fail ? gateway : (reject ? bad : ok);
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
