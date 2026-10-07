@@ -1,0 +1,6 @@
+{
+  "ssh": "user@live-host",
+  "port": 22,
+  "dir": "/usr/HSM",
+  "note": "Live (production) — every state change goes through the explicit confirmation gate"
+}
