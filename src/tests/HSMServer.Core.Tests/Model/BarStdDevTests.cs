@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using HSMCommon.Model;
@@ -142,6 +143,34 @@ namespace HSMServer.Core.Tests.Model
 
             Assert.Equal(2.0.ToString(), known.StdDev);
             Assert.Null(unknown.StdDev);
+        }
+
+
+        [Fact]
+        [Trait("Category", "Simple")]
+        public void Bar_csv_export_appends_stddev_as_the_last_column()
+        {
+            var separator = CultureInfo.CurrentUICulture.TextInfo.ListSeparator;
+            var expectedHeader = string.Join(separator,
+                "Open time", "Last update time", "Close time", "Receiving time", "First value", "Last value",
+                "Min", "Mean", "Max", "Count", "Status", "Comment", "StdDev");
+
+            // The cell text is the JSON number, independent of the culture.
+            foreach (var (values, cell) in new (List<BaseValue>, string)[]
+            {
+                ([new DoubleBarValue { Count = 4, Mean = 5, StdDev = 2, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1) }], "\"2\""),
+                ([new IntegerBarValue { Count = 4, Mean = 5, StdDev = 1.5, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1) }], "\"1.5\""),
+            })
+            {
+                var lines = values.ConvertToCsv().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+                // The header (and so every pre-#1509 column position) is unchanged up to Comment.
+                Assert.Equal(expectedHeader, lines[0]);
+                Assert.EndsWith(cell, lines[1]);
+            }
+
+            var unknown = new List<BaseValue> { new DoubleBarValue { Count = 4, Mean = 5, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1) } };
+            Assert.EndsWith("\"\"", unknown.ConvertToCsv().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[1]);
         }
 
 
