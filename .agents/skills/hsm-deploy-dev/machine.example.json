@@ -1,0 +1,6 @@
+{
+  "ssh": "user@dev-host",
+  "port": 22,
+  "dir": "/usr/HSM",
+  "note": "Dev machine — update first, verify, then promote to live (hsm-deploy-live skill)"
+}

@@ -172,5 +172,8 @@ CMakeUserPresets.json
 # docker-compose.yml settings (HSM_DOMAIN), machine-local
 /.env
 
+# SSH targets of the Dev/Live machines for the hsm-deploy skills, machine-local
+.agents/skills/*/machine.local.json
+
 # Local override for scripts/local-docker-build.ps1 — pins image tag, machine-local
 docker-compose.local.yml
