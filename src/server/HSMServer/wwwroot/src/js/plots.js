@@ -390,9 +390,9 @@ export class DoublePlot extends ErrorColorPlot {
     }
 }
 
-// Sensor-page bar views (#1509): the candlestick (default) or a mean +/- 1 sigma band. The sensor
-// page draws the mean line in both; dashboards build BarPLot without a view and keep the bare
-// candlestick.
+// Sensor-page bar views (#1509): the candlestick (default, drawn exactly as before #1509; the
+// "Mean" checkbox still adds a mean line) or a mean +/- 1 sigma band with its mean line. Dashboards
+// build BarPLot without a view and keep the bare candlestick.
 export const BarView = {
     candlestick: 'candlestick',
     stdDev: 'stddev',
@@ -465,12 +465,12 @@ export class BarPLot extends Plot {
 
         // Every trace is named 'bar', so the Bar checkbox shows/hides the whole view at once.
         if (this.barView === BarView.stdDev)
-            return [this.getStdDevBandTrace(), this.getMeanTrace(true)];
+            return [this.getStdDevBandTrace(), this.getMeanTrace()];
 
-        return [this, this.getMeanTrace(false)];
+        return [this];
     }
 
-    getMeanTrace(withHover) {
+    getMeanTrace() {
         return {
             type: 'scatter',
             mode: 'lines',
@@ -480,7 +480,7 @@ export class BarPLot extends Plot {
             line: {color: this.line.color, width: 1.5},
             showlegend: false,
             text: this.text,
-            hoverinfo: withHover ? 'text' : 'skip',
+            hoverinfo: 'text',
             xaxis: this.xaxis,
             yaxis: this.yaxis,
         };

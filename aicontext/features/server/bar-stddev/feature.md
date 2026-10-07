@@ -76,7 +76,7 @@ tails stay visible.
 | `BarBaseValue<T>.StdDev` (`double?`) | `src/server/HSMCommon/SensorValues/BarBaseValue.cs` | stored; last MemoryPack member |
 | `BarSensorHistory.StdDev` (`string`, null = unknown) | `src/server/HSMServer.Core/Model/HistoryValues/BarSensorHistory.cs` | Sensor API JSON history, formatted like `Mean` |
 | CSV column `StdDev` (the LAST column of the bar export, so existing columns keep their positions) | `src/server/HSMServer/ApiObjectsConverters/ApiCsvConverters.cs` | empty cell when unknown |
-| Grafana table column `StdDev` (after `Mean`) | `.../GrafanaDatasources/JsonSource/JsonHistoryResponse/BarHistoryTableResponse.cs` | `null` when unknown |
+| Grafana table column `StdDev` (the LAST column, after `Comment`, so existing columns keep their positions) | `.../GrafanaDatasources/JsonSource/JsonHistoryResponse/BarHistoryTableResponse.cs` | `null` when unknown |
 | `PlottedProperty.StdDev = 57` | `src/server/HSMServer/Dashboards/Panels/Modules/BasePlotPanelModule.cs` | persisted panel property value; never renumber |
 
 ## Key Files
@@ -108,8 +108,9 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
 ## UI / Operator Visibility
 
 - **Sensor page.** The bar picker (⋮ next to the chart) gains a view switch: **Candlestick** (default:
-  body FirstValue→LastValue, whiskers Min/Max) and **Mean ± σ** (a filled band from mean − σ to
-  mean + σ). The mean line is drawn in both views. The choice is remembered per sensor graph
+  body FirstValue→LastValue, whiskers Min/Max — drawn exactly as before #1509; the existing **Mean**
+  checkbox still adds a mean line) and **Mean ± σ** (a mean line with a filled band from mean − σ to
+  mean + σ). The choice is remembered per sensor graph
   (`localStorage` key `barView_graph_<id>`). The **Bar** checkbox shows/hides the whole view. Bars with an
   unknown σ break the band (one filled polygon per run of known σ) — no band is drawn there, the mean line
   continues. Hover text: min, mean, max, σ (only when known), count, open/close time.

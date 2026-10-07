@@ -16,12 +16,14 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             new(nameof(IntegerBarValue.Min), NumberType),
             new(nameof(IntegerBarValue.Max), NumberType),
             new(nameof(IntegerBarValue.Mean), NumberType),
-            new(nameof(IntegerBarValue.StdDev), NumberType),
             new(nameof(IntegerBarValue.FirstValue), NumberType),
             new(nameof(IntegerBarValue.LastValue), NumberType),
             new(nameof(IntegerBarValue.Count), NumberType),
             new(nameof(BaseValue.Status)),
             new(nameof(BaseValue.Comment)),
+            // #1509: appended LAST so consumers relying on the column order are unaffected (as in the
+            // CSV export); null when the bar's StdDev is unknown.
+            new(nameof(IntegerBarValue.StdDev), NumberType),
         };
 
         public override List<ColumnInfo> Columns => _barHistoryColumns;
@@ -47,7 +49,6 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                         historyRow.AddFluent(intBar.Min)
                                   .AddFluent(intBar.Max)
                                   .AddFluent(intBar.Mean)
-                                  .AddFluent(intBar.StdDev)
                                   .AddFluent(intBar.FirstValue)
                                   .AddFluent(intBar.LastValue)
                                   .AddFluent(intBar.Count);
@@ -57,14 +58,19 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                         historyRow.AddFluent(doubleBar.Min)
                                   .AddFluent(doubleBar.Max)
                                   .AddFluent(doubleBar.Mean)
-                                  .AddFluent(doubleBar.StdDev)
                                   .AddFluent(doubleBar.FirstValue)
                                   .AddFluent(doubleBar.LastValue)
                                   .AddFluent(doubleBar.Count);
                     }
 
                     Rows.Add(historyRow.AddFluent($"{bar.Status}")
-                                       .AddFluent(bar.Comment));
+                                       .AddFluent(bar.Comment)
+                                       .AddFluent(bar switch
+                                       {
+                                           IntegerBarValue i => i.StdDev,
+                                           DoubleBarValue d => d.StdDev,
+                                           _ => null,
+                                       }));
                 }
         }
     }

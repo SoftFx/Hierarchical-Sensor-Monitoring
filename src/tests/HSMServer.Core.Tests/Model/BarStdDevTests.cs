@@ -193,6 +193,28 @@ namespace HSMServer.Core.Tests.Model
         }
 
 
+        [Fact]
+        [Trait("Category", "Simple")]
+        public void Grafana_bar_table_appends_stddev_as_the_last_column()
+        {
+            var table = new HSMServer.Controllers.GrafanaDatasources.JsonSource.BarHistoryTableResponse();
+            table.FillRows(
+            [
+                new DoubleBarValue { Count = 4, Mean = 5, StdDev = 2, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1), Comment = "c" },
+                new IntegerBarValue { Count = 4, Mean = 5, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1), Comment = "c" },
+            ]);
+
+            // Every pre-#1509 column keeps its position; StdDev comes after Comment.
+            Assert.Equal(
+                ["Time", "OpenTime", "CloseTime", "Min", "Max", "Mean", "FirstValue", "LastValue", "Count", "Status", "Comment", "StdDev"],
+                table.Columns.Select(c => c.Text).ToArray());
+            Assert.All(table.Rows, row => Assert.Equal(table.Columns.Count, row.Count));
+            Assert.Equal("c", table.Rows[0][^2]);
+            Assert.Equal(2.0, table.Rows[0][^1]);
+            Assert.Null(table.Rows[1][^1]);
+        }
+
+
         private static DoubleBarValue DoubleBar(int minute, (int Count, double Mean, double? StdDev) part) =>
             new()
             {
