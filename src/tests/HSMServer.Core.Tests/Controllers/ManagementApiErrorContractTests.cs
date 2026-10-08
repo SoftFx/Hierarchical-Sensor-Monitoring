@@ -75,16 +75,21 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private AlertTemplatesApiController CreateTemplatesController() =>
-            new(_cache.Object, _folders.Object, _chats.Object, _schedulesProvider.Object, _authorization.Object,
-                new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object),
-                NullLogger<AlertTemplatesApiController>.Instance)
+        private AlertTemplatesApiController CreateTemplatesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertTemplateAdministrationService(_cache.Object, _folders.Object, _chats.Object,
+                _schedulesProvider.Object, _authorization.Object,
+                NullLogger<AlertTemplateAdministrationService>.Instance);
+
+            return new AlertTemplatesApiController(reader, writer)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
+        }
 
         private AlertSchedulesApiController CreateSchedulesController()
         {

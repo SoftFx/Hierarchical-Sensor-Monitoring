@@ -30,6 +30,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertSchedules;
+using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
@@ -100,6 +101,13 @@ namespace HSMServer.ServiceExtensions
             // Scoped like its readers: it owns no gating state (schedule
             // writes have no full-list merge to serialize).
             services.AddScoped<AlertScheduleAdministrationService>();
+
+            // The template write engine — extracted verbatim from
+            // AlertTemplatesApiController (#1393 precedent) so the REST
+            // controller and the MCP write tools share one decision. Scoped
+            // like its reader twin AlertReadService: stateless over
+            // singletons.
+            services.AddScoped<AlertTemplateAdministrationService>();
 
             // The alert-administration write engine (#1500): item-level policy
             // CRUD merged into atomic full-list node updates. SINGLETON, unlike

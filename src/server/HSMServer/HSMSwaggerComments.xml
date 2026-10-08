@@ -1497,6 +1497,33 @@
         <member name="P:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto.Policy">
             <summary>The policy itself.</summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService">
+            <summary>
+            The write engine of the alert-template CRUD — the templates' twin of
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500 pattern):
+            transport-agnostic, returning <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> so
+            the REST controller and the MCP write tools render the same decision.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Create a template. A client-sent id is ignored (the server generates
+            one — the cache Add is an upsert by id, so honoring a client-chosen
+            id would let a folder-scoped token overwrite a template in a folder
+            it cannot even see); the result echoes the STORED template —
+            normalized ids, chat display names.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Update a template (upsert semantics). Moving it to another folder
+            requires the owner's write access on BOTH folders; the result
+            echoes the STORED template.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Delete a template and strip its per-sensor policies.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
             <summary>
             Alert template wire contract of the /api/v1/alertTemplates surface. The shape
