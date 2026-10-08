@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -2337,6 +2338,13 @@ namespace
             posted_registration_version_ = (std::max)(posted_registration_version_, version);
         }
 
+        // The server may not hold the registration after all (a failed post, #1515): pending again.
+        void MarkRegistrationUnposted()
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            posted_registration_version_ = 0;
+        }
+
         // Whether the server has not yet seen the current registration (a runtime create, or an
         // alert attached after the last post).
         bool RegistrationPostPending() const
@@ -2696,16 +2704,25 @@ namespace
         // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
         // queue, which batch-registers on Start). The wire registration already carries the
         // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
-        // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
-        // server is unreachable; the value queue's durable retry handles a transient outage).
+        // keys on. A failure is logged and Start proceeds; the caller queues a retryable failure for
+        // the worker (RetryRegistrations), so a server that is briefly down at Start still learns
+        // the sensors' descriptions, units, TTLs and alerts (#1515).
         // `runtime` = a sensor registered AFTER Start — a built-in lazy source (top-CPU process,
         // network interface, service-status, TCP-rate) or any sensor the host creates, or attaches
         // an alert to, while the collector runs (FlushRuntimeRegistrations) — rather than the
         // connect-time batch. It changes the log label (no "on connect") and level (Debug, so
         // per-sample registrations do not spam the log). On success each sensor records the
-        // registration version the server has seen. The outcome tells a runtime flush whether to try
-        // again: like the managed command queue, only a transport failure (no HTTP response) is
-        // retried — an HTTP error answer (4xx/5xx) is final.
+        // registration version the server has seen.
+        //
+        // The outcome tells the caller whether to try again. The managed command queue re-enqueues
+        // a package whose send failed and re-sends it after PackageCollectPeriod
+        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); its Polly pipeline
+        // only adds in-send retries for exceptions (BaseHandlers.ShouldRetry, #1096). Native retries
+        // on the worker's cycle, which is that same period: a transport failure (no HTTP response)
+        // and a 5xx (a server restarting behind its proxy answers 502/503) are retried. A 4xx is
+        // final here — managed would re-send it every period until the queue evicts it, but a
+        // rejected payload or key never succeeds on repeat, and the values carrying the same key
+        // already report it.
         enum class RegistrationPost
         {
             Accepted,
@@ -2761,8 +2778,10 @@ namespace
                 const std::string reason = response.status_code > 0
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
-                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason);
-                return response.status_code > 0 ? RegistrationPost::Rejected : RegistrationPost::Retry;
+                const bool retry = response.status_code <= 0 || response.status_code >= 500;
+                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
+                         (retry ? "; retrying on the next send cycle." : "."));
+                return retry ? RegistrationPost::Retry : RegistrationPost::Rejected;
             }
 
             for (size_t i = 0; i < sensors.size(); ++i)
@@ -2791,15 +2810,55 @@ namespace
             pending_registrations_.push_back(sensor);
         }
 
+        // Queue sensors whose registration post failed retryably for the worker's next cycle — one
+        // entry per sensor however often it fails, so a long outage costs no memory. A sensor the
+        // server had already seen (a restart re-registers every sensor) is marked unseen first, or
+        // the flush would skip it as posted. The retry is announced when it lands (rule #8).
+        void RetryRegistrations(const std::vector<std::shared_ptr<NativeSensor>>& sensors)
+        {
+            for (const auto& sensor : sensors)
+                sensor->MarkRegistrationUnposted();
+            {
+                std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
+                std::unordered_set<const NativeSensor*> queued;
+                queued.reserve(pending_registrations_.size() + sensors.size());
+                for (const auto& pending : pending_registrations_)
+                    queued.insert(pending.get());
+                for (const auto& sensor : sensors)
+                    if (queued.insert(sensor.get()).second)
+                        pending_registrations_.push_back(sensor);
+                // Set with the push, under the same lock: a flush that swaps the queue either takes
+                // these sensors and the flag together or neither.
+                registration_retry_pending_ = true;
+            }
+        }
+
+        // A direct registration post (the Start batch, a built-in source's sensor) whose retryable
+        // failure is handed to the worker instead of being dropped.
+        void PostRegistrationsOrRetry(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime)
+        {
+            if (PostRegistrationsWire(sensors, runtime) == RegistrationPost::Retry)
+                RetryRegistrations(sensors);
+        }
+
         // Post every queued registration the server has not seen (worker cycle / stop drain). A post
-        // that got no HTTP response re-queues them for the next cycle; an HTTP error answer does not
-        // (it would repeat forever). Either failure is logged (dedup'd).
+        // that got no HTTP response or a 5xx re-queues them for the next cycle; a 4xx does not (it
+        // would repeat forever). Either failure is logged (dedup'd).
         void FlushRuntimeRegistrations()
         {
             std::vector<std::shared_ptr<NativeSensor>> pending;
+            bool retrying = false;
             {
+                // Read-and-clear the flag in the same section as the swap, so it always describes
+                // the sensors taken: a retry queued by another thread (a built-in source's sampler)
+                // after the swap keeps both its sensors and its flag for the next cycle. Cleared
+                // before the empty check: a retry the next Start batch already landed leaves nothing
+                // due, and a flag kept past it would credit a later, unrelated registration with a
+                // recovery that never happened.
                 std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
                 pending.swap(pending_registrations_);
+                retrying = registration_retry_pending_;
+                registration_retry_pending_ = false;
             }
             std::vector<std::shared_ptr<NativeSensor>> due;
             for (auto& sensor : pending)
@@ -2807,9 +2866,12 @@ namespace
                     due.push_back(std::move(sensor));
             if (due.empty())
                 return;
-            if (PostRegistrationsWire(due, /*runtime=*/true) == RegistrationPost::Retry)
-                for (const auto& sensor : due)
-                    QueueRuntimeRegistration(sensor);
+            const RegistrationPost outcome = PostRegistrationsWire(due, /*runtime=*/true);
+            if (outcome == RegistrationPost::Retry)
+                RetryRegistrations(due);
+            else if (outcome == RegistrationPost::Accepted && retrying)
+                LogMessage(HSM_LOG_LEVEL_INFO,
+                           "Registered " + std::to_string(due.size()) + " sensor(s) after an earlier failed attempt.");
         }
 #endif
 
@@ -2986,9 +3048,11 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             // Register every sensor on the server (wire AddOrUpdate batch -> /commands) before the
             // worker starts dispatching values, so a real server knows the sensors first. Recording
-            // builds (conformance) never set send_wire_, so this is a no-op there.
+            // builds (conformance) never set send_wire_, so this is a no-op there. A server that is
+            // down or restarting (a 5xx from its proxy) gets the batch again on every worker cycle
+            // until it accepts it (#1515), like the managed command queue's re-enqueue.
             if (send_wire_)
-                PostRegistrationsWire(sensors_snapshot);
+                PostRegistrationsOrRetry(sensors_snapshot, /*runtime=*/false);
 #endif
 
             StartWorker();
@@ -3072,12 +3136,13 @@ namespace
             // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
             // Without the Queue overflow sensor nothing is ever folded, so the counter still holds
             // the whole run's drops at the log below, which then has to say so (#1508).
-            bool overflow_reported = false;
+            // Whether the drops have a sensor to go to is the registration state, read apart from
+            // the fold: a fold that throws (allocation failure) must not make the log below claim
+            // the sensor is not registered.
+            const bool overflow_reported = queue_overflow_registered_.load(std::memory_order_acquire);
             try
             {
-                const auto handles = SelfMonitorSnapshot();
-                overflow_reported = static_cast<bool>(handles.queue_overflow);
-                PostOverflowDelta(handles);
+                PostOverflowDelta(SelfMonitorSnapshot());
             }
             catch (...)
             {
@@ -4232,6 +4297,7 @@ namespace
             AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, time);
             AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, size);
 
+            queue_overflow_registered_.store(static_cast<bool>(overflow), std::memory_order_release);
             {
                 std::lock_guard<std::mutex> guard(self_monitor_handles_mutex_);
                 self_monitor_handles_.queue_overflow = std::move(overflow);
@@ -4722,7 +4788,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ tcp_fail_rate_sensor_ }, /*runtime=*/true);
+                PostRegistrationsOrRetry({ tcp_fail_rate_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -5010,7 +5076,7 @@ namespace
                             it = cache.emplace(iface, sensor).first;
 #if defined(HSM_COLLECTOR_HTTP)
                             if (send_wire_)
-                                PostRegistrationsWire({ sensor }, /*runtime=*/true);
+                                PostRegistrationsOrRetry({ sensor }, /*runtime=*/true);
 #endif
                         }
 
@@ -5101,7 +5167,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ service_status_sensor_ }, /*runtime=*/true);
+                PostRegistrationsOrRetry({ service_status_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -5367,7 +5433,7 @@ namespace
                                 // so the server gets the description. HttpTransport::Post is
                                 // thread-safe (per-call libcurl easy handle).
                                 if (send_wire_)
-                                    PostRegistrationsWire({ std::move(sensor) }, /*runtime=*/true);
+                                    PostRegistrationsOrRetry({ std::move(sensor) }, /*runtime=*/true);
 #endif
                             }
                             else
@@ -5879,6 +5945,9 @@ namespace
         // The two "enabled" flags only gate work, never dereference, so they are plain atomics.
         std::atomic<bool> collector_monitoring_enabled_{ false };
         std::atomic<bool> queue_diagnostics_enabled_{ false };
+        // Whether the Queue overflow sensor is registered (its handle is set). Stop reads it for
+        // its drop log, independently of whether the handle snapshot succeeds (#1515).
+        std::atomic<bool> queue_overflow_registered_{ false };
         mutable std::mutex self_monitor_handles_mutex_;
         SelfMonitorHandles self_monitor_handles_;
         // First heartbeat of the sensor's life posts `false` as a start marker (#1433). Owned by
@@ -5930,6 +5999,10 @@ namespace
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
         std::mutex pending_registrations_mutex_;
         std::vector<std::shared_ptr<NativeSensor>> pending_registrations_;
+        // Set when a registration post failed retryably (RetryRegistrations); the flush that next
+        // lands one says so at Info, closing the Error line the failure logged (#1515). Guarded by
+        // pending_registrations_mutex_, so it changes together with pending_registrations_.
+        bool registration_retry_pending_ = false;
 #endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps

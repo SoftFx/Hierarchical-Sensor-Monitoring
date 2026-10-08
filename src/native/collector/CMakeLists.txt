@@ -304,6 +304,13 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_rejected_runtime_registration_is_not_retried
         COMMAND hsm_collector_tests native_http_rejected_runtime_registration_is_not_retried
     )
+    # #1515: a 5xx on the Start registration batch is retried on the worker's cycle.
+    add_test(NAME native_http_connect_registration_is_retried_after_5xx
+        COMMAND hsm_collector_tests native_http_connect_registration_is_retried_after_5xx
+    )
+    add_test(NAME native_http_restart_registration_is_retried_after_5xx
+        COMMAND hsm_collector_tests native_http_restart_registration_is_retried_after_5xx
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params

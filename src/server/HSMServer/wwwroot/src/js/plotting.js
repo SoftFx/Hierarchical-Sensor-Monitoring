@@ -120,15 +120,17 @@ function getBarView(graphElementId) {
 }
 
 // Sensor page view switch (#1509): candlestick (default) or mean +/- sigma; redraws the bar traces.
-window.setBarView = function (view) {
-    if (!(graphData.plot instanceof BarPLot) || graphData.plot.barView === undefined)
-        return;
-
+window.setBarView = function (view, graphElementId) {
     try {
-        localStorage.setItem(getBarViewKey(graphData.graph.id), view);
+        localStorage.setItem(getBarViewKey(graphElementId), view);
     } catch {
         // the view still switches for this page
     }
+
+    // The shared graphData may still hold another sensor's graph (this one has no data yet, or is
+    // loading): then the saved choice applies when this graph is drawn, and nothing is redrawn now.
+    if (graphData.graph.id !== graphElementId || !(graphData.plot instanceof BarPLot) || graphData.plot.barView === undefined)
+        return;
 
     graphData.plot.barView = view;
 

@@ -11,7 +11,8 @@ namespace HSMCommon.Model
     /// M2 = sum(n_i * (sigma_i^2 + (mu_i - mu)^2)) and sigma = sqrt(M2 / N). It is exact for the
     /// parts as given; a part's Mean and StdDev are the collector's rounded values, and an int
     /// bar's Mean is rounded to an integer, so for int bars with a small spread the between-bar
-    /// term carries up to 0.5 of rounding per part and the merged value can come out high.
+    /// term carries up to 0.5 of rounding per part and the merged value can be off in either
+    /// direction (it is neither an upper nor a lower bound).
     /// </summary>
     public static class BarStdDev
     {

@@ -44,7 +44,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
-        public long ConfigDbSize => _settings.PathToEnvironmentDb.GetSize() + _settings.PathToServerLayoutDb.GetSize() + Snapshots.Size;
+        public long ConfigDbSize => EnvironmentDbSize + ServerLayoutDbSize + Snapshots.Size;
+
+        public long EnvironmentDbSize => _settings.PathToEnvironmentDb.GetSize();
+
+        public long ServerLayoutDbSize => _settings.PathToServerLayoutDb.GetSize();
 
         public long SensorHistoryDbSize
         {

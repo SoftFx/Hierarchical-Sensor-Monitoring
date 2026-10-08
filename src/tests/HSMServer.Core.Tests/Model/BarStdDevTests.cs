@@ -115,7 +115,10 @@ namespace HSMServer.Core.Tests.Model
 
             var compressed = Compress(new DoubleBarHistoryProcessor(), bars, TimeSpan.FromMinutes(10));
 
-            Assert.Equal(2.0, Assert.IsAssignableFrom<DoubleBarValue>(Assert.Single(compressed)).StdDev.Value, 12);
+            var bar = Assert.IsAssignableFrom<DoubleBarValue>(Assert.Single(compressed));
+            Assert.Equal(2.0, bar.StdDev.Value, 12);
+            // The band is centred on the same mean the StdDev was pooled around.
+            Assert.Equal(5.0, bar.Mean, 12);
         }
 
         [Fact]

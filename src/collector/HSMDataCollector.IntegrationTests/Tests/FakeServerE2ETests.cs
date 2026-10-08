@@ -111,6 +111,29 @@ namespace HSMDataCollector.IntegrationTests.Tests
         }
 
         [Fact]
+        public async Task StartRegistration_After5xx_IsResentUntilAccepted()
+        {
+            using var server = new FakeHsmServer();
+            // A server restarting behind its proxy answers the registration 5xx (#1515). The command
+            // pipeline does not retry a 5xx inside the send (Retry5xxParityTests), but the command
+            // queue re-enqueues the failed package and re-sends it after PackageCollectPeriod. The
+            // native collector mirrors this (native_http_connect_registration_is_retried_after_5xx).
+            server.FailNextCommandRequests(2);
+
+            using var collector = new DataCollector(OptionsFor(server));
+            collector.CreateIntSensor("e2e/registration/retried");
+            await collector.Start();
+
+            var posts = await WaitForAsync(
+                () => server.CommandRequests.Count(r => r.Body.Contains("e2e/registration/retried")),
+                count => count >= 3); // 2 injected failures + the accepted post
+
+            await collector.Stop();
+
+            Assert.True(posts >= 3, $"Expected the registration to be re-sent past 2 injected 5xx, saw {posts} posts.");
+        }
+
+        [Fact]
         public async Task TransientServerFailure_ValueEventuallyLands_ViaReEnqueue()
         {
             using var server = new FakeHsmServer();

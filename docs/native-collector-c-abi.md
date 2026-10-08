@@ -173,6 +173,19 @@ Version history:
   `hsm_collector_test_wire_bar_json` takes two more arguments (`welford_m2`, `stddev_unknown`).
   Pinned by `native_wire_*` (`NativeWireBarJsonMatchesNetByteLayout`) against `WireFormatGoldenLockTests`
   and the native-only fixture `collector/native/bar_stddev_contract.hsmtest`.
+- **0.10.3** (#1515) — behavior fixes, ABI unchanged. A registration POST to `/commands` that gets
+  no HTTP response or a 5xx is retried on the worker's send cycle (`package_collect_period_ms`)
+  until the server accepts it — the Start batch, a built-in source's runtime sensor, and a queued
+  runtime registration alike, each sensor queued once however long the outage. Before, the Start
+  batch was posted once: a server restarting behind its proxy (`HTTP 502`) at the collector's
+  start never learned the sensors' descriptions, units, TTLs or alerts until the next restart.
+  The managed command queue re-sends a failed package on the same period. The failure line gains
+  `; retrying on the next send cycle.`, and the landing retry logs `Registered N sensor(s) after
+  an earlier failed attempt.` at Info. A 4xx stays final. The Stop line about values dropped
+  from the full send queue reads whether the Queue overflow sensor is registered from its
+  registration, not from the handle snapshot, so a snapshot that throws can no longer report the
+  sensor as missing. Pinned by `native_http_connect_registration_is_retried_after_5xx` and
+  `native_http_restart_registration_is_retried_after_5xx`.
 - **0.10.2** (#1466, #1508) — behavior fixes, ABI unchanged. The Linux free-space prediction source
   samples free space in BYTES, like the Windows one and the managed `UnixDiskInfo` (both changed
   together): the comment's `Free space decreases by X Mbytes/hour` printed GiB on Linux, a number

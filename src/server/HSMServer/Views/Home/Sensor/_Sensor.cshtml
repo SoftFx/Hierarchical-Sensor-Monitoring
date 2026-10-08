@@ -48,7 +48,7 @@
 
     $('input[name="barView"]').change(function () {
         if ($(this).is(':checked'))
-            setBarView(this.value);
+            setBarView(this.value, 'graph_@sensorId');
     });
 
     $(document).ready(function () {

@@ -108,7 +108,9 @@ namespace HSMServer.BackgroundServices
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             ApiTokenUsageSensors = new ApiTokenUsageSensors(_collector);
-            BackupSensors = new BackupSensors(_collector);
+            // The backup schedule is read once, like BackupDatabaseService's timer:
+            // a period change takes effect for both on the next server start.
+            BackupSensors = new BackupSensors(_collector, TimeSpan.FromHours(config.BackupDatabase.PeriodHours));
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
             TelegramBotStatistics = new TelegramBotStatistics(_collector);
             SlackChannelStatistics = new SlackChannelStatistics(_collector);

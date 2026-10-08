@@ -52,7 +52,7 @@ tails stay visible.
   part with an unknown σ makes the merged σ unknown. The parts' Mean and σ are the collector's rounded
   values, so the result is exact for the stored parts (`BarStdDev.Combine`) — with one caveat: an int
   bar's Mean is rounded to an integer, so for int bars with a small spread the between-bar term carries
-  up to 0.5 of rounding per part and the merged σ can come out high (samples {0,1} and {1,2} store
+  up to 0.5 of rounding per part and the merged σ can be off in either direction (samples {0,1} and {1,2} store
   means 0 and 2 and merge to 1.12 instead of 0.71).
 - **Partial bars.** Same-`OpenTime` partial posts replace each other in `BarValuesStorage` (the
   collector's running σ rides on each post like Mean), so no σ merge happens on ingestion;
