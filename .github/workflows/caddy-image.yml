@@ -36,7 +36,7 @@ env:
   VERSION: 2.11.4-2
 
 jobs:
-  build-test-publish:
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,19 +53,47 @@ jobs:
       - name: Test modules, modes, validation, and secret handling
         run: sh caddy/test.sh hsm-caddy:test
 
-      - name: Refuse to overwrite an immutable version tag
+      # The publish job pushes these exact tested bytes instead of rebuilding.
+      - name: Export tested image
         if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: docker save hsm-caddy:test | gzip > hsm-caddy-test.tar.gz
+
+      - name: Upload tested image
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-caddy-test
+          path: hsm-caddy-test.tar.gz
+          retention-days: 1
+
+  publish:
+    needs: build-test
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # Docker Hub credentials are DockerHub environment secrets; a job that does not declare
+    # the environment gets them as empty strings and the login fails.
+    environment: DockerHub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to overwrite an immutable version tag
         run: python3 scripts/check-caddy-image-release.py --check-registry
 
+      - name: Download tested image
+        uses: actions/download-artifact@v4
+        with:
+          name: hsm-caddy-test
+
+      - name: Load tested image
+        run: gunzip -c hsm-caddy-test.tar.gz | docker load
+
       - name: Log in to Docker Hub
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Publish tested image
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           docker tag hsm-caddy:test "$IMAGE:$VERSION"
           docker tag hsm-caddy:test "$IMAGE:latest"
