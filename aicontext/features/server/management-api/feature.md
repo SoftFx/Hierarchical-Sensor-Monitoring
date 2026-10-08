@@ -112,7 +112,7 @@ The acceptance bar of the epic: an AI agent that starts from NOTHING but the Ope
 
 | File | Purpose |
 |---|---|
-| `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | The first `/api/v1` resource controller; the conventions reference. Write paths (POST/PUT/DELETE) live here; the read paths render `AlertReadService` (#1393) |
+| `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | The first `/api/v1` resource controller; the conventions reference. Thin: reads render `AlertReadService` (#1393), writes render `AlertTemplateAdministrationService` (extracted verbatim so the MCP write tools can delegate; the size constants stay aliased here) |
 | `src/server/HSMServer/Controllers/AlertSchedulesApiController.cs` | Schedules controller: reads render `AlertReadService` (#1393), writes render `AlertScheduleAdministrationService` |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertReadService.cs` | The alert read implementation (folder-sighted template list/get, the caller-wide schedules gate, sensor-path visibility filtering), shared with the MCP alert tools since #1393; reuses the sensor-tree-named read envelope (the area-wide one; renaming is #1398) |
 | `src/server/HSMServer/Controllers/ChatsApiController.cs` | Notification chats read-only (REST half): the destination.chats id source; thin rendering of `ChatsReadService` |
@@ -125,6 +125,7 @@ The acceptance bar of the epic: an AI agent that starts from NOTHING but the Ope
 | `src/server/HSMServer/Controllers/SensorPoliciesApiController.cs` / `ProductPoliciesApiController.cs` | Alert administration (#1500): thin REST renderings of `AlertReadService` (reads) and `PolicyAdministrationService` (writes) over sensor/product data + TTL policies — see `aicontext/features/api/alert-administration/feature.md` |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/PolicyAdministrationService.cs` | The alert-administration write engine (#1500): semantic validation (per-type condition table), item merge, one atomic full-list update |
 | `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleAdministrationService.cs` | The schedule write engine: Global-boundary authorization, name/timezone/YAML validation, detach-first delete |
+| `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateAdministrationService.cs` | The template write engine: authorize-folder ordering (both folders on a move), structural/semantic validation (400 Validation outcome), cache calls, the create-409 templateId disclosure — extracted verbatim from the controller |
 | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorTreeReadService.cs` | The sensor-tree read implementation (search, visibility, mapping, newest-N history), shared with the MCP tools since #1391; the controllers are thin REST renderings of its transport-agnostic `SensorTreeReadResult` envelope |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs` | Wire DTOs |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDtoMapper.cs` | DTO ↔ entity mapping + write-side normalizations |
