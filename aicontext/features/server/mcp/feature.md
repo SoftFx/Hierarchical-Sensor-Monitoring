@@ -1,7 +1,7 @@
 # Feature: MCP server (AI-agent tools)
 
 > Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
-> Scope: the read-only Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API read surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, and notification chats. REST stays the canonical surface; MCP is a v1 read-only adapter over the same implementation.
+> Scope: the read-only Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API read surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders. REST stays the canonical surface; MCP is a v1 read-only adapter over the same implementation.
 
 ---
 
@@ -9,7 +9,7 @@
 
 Issue #1391 exposes the sensor-tree + alert read surface (merged via #1387/#1390, epic #1347) through the Model Context Protocol, so an MCP-native agent discovers the same capabilities a REST client has without hand-writing HTTP. The server is hosted by HSMServer itself via the official `ModelContextProtocol` C# SDK (NuGet `ModelContextProtocol.AspNetCore` 2.2.0), Streamable HTTP transport, **stateless** sessions (the tools are pure reads; no session affinity needed). The tools are read-only, snake_case, camelCase parameters; item tools return the REST DTOs verbatim (same types and camelCase keys on both transports; the SDK's serializer omits null members where REST writes explicit nulls — absent ≡ null for JSON consumers, pinned by a registration test), list tools carry a `limit` (default 20, cap 200) + `totalFound` envelope plus the **effective paging echo** (`limit`, the `page` actually served, `totalPages`) — the clamps rewrite the caller's `limit` silently, so the agent must divide by the limit the server applied, never the one it asked for — and **no pagination cursors** by design: an agent narrows instead of chasing pages. Every list tool also takes a `page` (clamp semantics as REST — a page past the end serves the LAST page, and the Skip arithmetic is ClampPage-bounded so a huge page number can never wrap int into "page 1 labeled as page N"): narrowing is preferred, but not guaranteed (get_node's sensors list caps at 200 unpaged; uniformly-named sensors cannot be partitioned by search), so `page` is the guaranteed reachability past the cap.
 
-The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the same implementation the REST controllers run on since #1391 (their suites are the regression net). The alert tools render `AlertReadService` the same way since #1393, and the chat tools render `ChatsReadService` the same way — the visibility rules exist in one place, shared with the REST controllers. Expected failures surface as tool errors (`isError=true` with a text message — `McpException`), never as protocol-level crashes, so the calling agent can self-correct.
+The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the same implementation the REST controllers run on since #1391 (their suites are the regression net). The alert tools render `AlertReadService` the same way since #1393, the chat tools render `ChatsReadService` and the folder tools render `FoldersReadService` the same way — the visibility rules exist in one place, shared with the REST controllers. Expected failures surface as tool errors (`isError=true` with a text message — `McpException`), never as protocol-level crashes, so the calling agent can self-correct.
 
 ## Invariants
 
@@ -30,6 +30,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | 3 | The read-analysis scenario: `list_products` → `find_sensors` → `get_sensor_history` | AI agent |
 | 4 | Alert review: `list_alert_templates` / `get_alert_template`, `list_alert_schedules` / `get_alert_schedule` | AI agent |
 | 5 | Chat discovery for alert routing: `list_chats` / `get_chat` (the valid `destination.chats` ids) | AI agent |
+| 6 | Folder discovery for template scoping: `list_folders` / `get_folder` (the valid `folderId` values — the access-grouping entity, not the tree's nested products) | AI agent |
 
 ### The read-analysis scenario (#1391 acceptance)
 
@@ -54,6 +55,8 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `list_alert_schedules(limit?, page?)` / `get_alert_schedule(scheduleId)` | `AlertsMcpTools` | `{schedules: AlertScheduleDto[], totalFound, limit, page, totalPages}` / `AlertScheduleDto` — caller-wide gate, sensor paths filtered to the owner's sight; `page` and the echo as above |
 | `list_chats(limit?, page?)` | `ChatsMcpTools.ListChats` | `{chats: ChatDto[], totalFound, limit, page, totalPages}` — the id source for `destination.chats` when composing policies/templates; caller-wide gate, then global chats + chats bound to visible folders; webhook URLs are secrets — presence booleans only in the DTO; `page` walks past the limit (no narrowing dimension) |
 | `get_chat(chatId)` | `ChatsMcpTools.GetChat` | `ChatDto` verbatim — unknown and invisible ids answer the same error text |
+| `list_folders(limit?, page?)` | `FoldersMcpTools.ListFolders` | `{folders: FolderDto[], totalFound, limit, page, totalPages}` — the folderId source for template writes; owner-sight filter like the templates list (empty result for an unsighted owner, no caller-wide gate) |
+| `get_folder(folderId)` | `FoldersMcpTools.GetFolder` | `FolderDto` verbatim — products, chats, default-chats routing, retention defaults; unknown and invisible ids answer the same error |
 
 ## Key Files
 
@@ -64,6 +67,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/SensorTreeMcpTools.cs` | The five sensor-tree tools — rendering of `SensorTreeReadService` |
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — a thin rendering of `AlertReadService` (#1393) |
 | `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The two chat tools — a thin rendering of `ChatsReadService` (the #1393 pattern) |
+| `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
 | `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication; fail-closed policy check on matched `/mcp` endpoints |
@@ -83,8 +87,10 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                        │     failures → McpException → isError result (text message)
                        ├── AlertsMcpTools → AlertReadService → IAlertScheduleProvider / ITreeValuesCache
                        │     (folder sight / caller-wide gate, as REST)
-                       └── ChatsMcpTools → ChatsReadService → IChatsManager
-                             (caller-wide gate + global-or-visible-folder chat sight, as REST)
+                       ├── ChatsMcpTools → ChatsReadService → IChatsManager
+                       │     (caller-wide gate + global-or-visible-folder chat sight, as REST)
+                       └── FoldersMcpTools → FoldersReadService → IFolderManager
+                             (owner-sight folder filter, as REST)
 ```
 
 The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service (`CancellationToken` parameters, same abort semantics as REST `RequestAborted`).
@@ -99,7 +105,7 @@ No UI. Operators provision the same API tokens as for REST (`/api/v1/api-tokens`
 
 ## Dependencies
 
-- Depends on: api-tokens feature (scheme, management policy, evaluator), `SensorTreeReadService` + the sensor-tree/alert/chat DTOs of the management-api feature, `IAlertScheduleProvider`, `IChatsManager`, NuGet `ModelContextProtocol.AspNetCore` 2.2.0 (net8.0).
+- Depends on: api-tokens feature (scheme, management policy, evaluator), `SensorTreeReadService` + the sensor-tree/alert/chat DTOs of the management-api feature, `IAlertScheduleProvider`, `IChatsManager`, `IFolderManager`, NuGet `ModelContextProtocol.AspNetCore` 2.2.0 (net8.0).
 - Used by: MCP-native AI agents; the REST surface remains canonical for non-MCP clients.
 
 ## Tests

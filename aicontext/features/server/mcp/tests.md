@@ -56,6 +56,13 @@
 - `GetChat_Visible_MapsDto`.
 - `GetChat_UnknownId_IsToolError` / `GetChat_InvisibleFolderChat_SameToolErrorAsUnknown` — anti-enumeration carried into MCP.
 
+`FoldersMcpToolsTests` — the folder tools as renderings of `FoldersReadService` (the service itself is pinned by `FoldersApiControllerTests` — the shared regression net):
+
+- `ListFolders_OrdersByName_ReturnsFirstLimitWithTotalFound` / `ListFolders_PageServesBeyondTheLimit` / `ListFolders_HugePageNumber_ClampsToLastPage_NoOverflowWrap` — the list/clamp contracts.
+- `ListFolders_OutOfSightFolders_SilentlyAbsent` — the owner-sight filter (no caller-wide gate for folders — they are the per-item boundary).
+- `ListFolders_MemoizesVisibility_PerDistinctFolder` — Times.Exactly(3).
+- `GetFolder_Visible_MapsDto` / `GetFolder_UnknownId_IsToolError` / `GetFolder_InvisibleFolder_SameToolErrorAsUnknown` — the item contract and anti-enumeration.
+
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 
 `ApiTokenRouteGuardsTests` (`src/tests/HSMServer.Core.Tests/Authentication/ApiTokens/`) pins the two MCP guards: the bearer pass-through is case-insensitive (`/mcp` and `/MCP` — endpoint routing matches segments case-insensitively, so a mixed-case POST must not read as a misplaced token) and scoped to the exact ENDPOINT, not the prefix — a credential on any other `/mcp/...` path is a misplaced token and gets the 401 (#1392 r5); the off-SitePort uniform 404 fires before authentication, and the fail-closed policy check rejects a matched `/mcp` endpoint without `ManagementPolicy` or with `[AllowAnonymous]` while admitting the policy-carrying endpoint.
