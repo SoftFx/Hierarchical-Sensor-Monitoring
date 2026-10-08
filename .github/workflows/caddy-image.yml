@@ -64,7 +64,10 @@ jobs:
         with:
           name: hsm-caddy-test
           path: hsm-caddy-test.tar.gz
-          retention-days: 1
+          # Already gzipped; long enough to re-run a failed publish later without rebuilding.
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
 
   publish:
     needs: build-test
