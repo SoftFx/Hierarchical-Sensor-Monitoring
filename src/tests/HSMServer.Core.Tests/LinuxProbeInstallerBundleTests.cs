@@ -137,6 +137,17 @@ namespace HSMServer.Core.Tests
             Assert.DoesNotMatch(pattern, "{\"hsm\": {\"port\": 1}, \"probe\": { \"docker\": {\"exclude\": []}, \"topCpu\": {\"enabled\": true} }}");
             Assert.DoesNotMatch(pattern, "{\"a\": {\"b\": {\"c\": {\"topCpu\": {\"enabled\": true}}}}}");
 
+            // Braces inside string values are text, not structure (#1515): an exclude pattern before
+            // topCpu, at the top level and nested, with escaped quotes and backslashes around them.
+            Assert.Matches(pattern, "{\"probe\": {\"docker\": {\"exclude\": [\"web-{1,3}\", \"}\"]}}, \"topCpu\": {\"enabled\": true}}");
+            Assert.Matches(pattern, "{\"note\": \"a } b { c\", \"topCpu\": {\"enabled\": true}}");
+            Assert.Matches(pattern, "{\"note\": \"say \\\"}\\\" \\\\\", \"topCpu\": {\"enabled\": true}}");
+            Assert.DoesNotMatch(pattern, "{\"note\": \"a } b { c\", \"topCpu\": {\"enabled\": false}}");
+            // A key spelled inside a string is not a key, and a block nested under a string-bearing
+            // sibling is still nested.
+            Assert.DoesNotMatch(pattern, "{\"note\": \"\\\"topCpu\\\": {\\\"enabled\\\": true}\"}");
+            Assert.DoesNotMatch(pattern, "{\"probe\": {\"name\": \"}\", \"topCpu\": {\"enabled\": true}}}");
+
             // A top-level block after nested siblings, as in config.example.json (three levels deep).
             Assert.Matches(pattern,
                 "  {\"hsm\": {\"port\": 1}, \"probe\": {\"hostSensors\": {\"enabled\": true}, " +
