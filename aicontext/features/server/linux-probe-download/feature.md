@@ -210,7 +210,7 @@ plain `X.Y.Z` sorting above every earlier `probe-v*`, built and install-smoked i
 *Release channel*). Shipping a newer probe = merge the version bump, push the `probe-v*` tag, then
 bump `probe-release.txt` in a one-line PR. The first release, `probe-v0.8.1`, was published on
 2026-10-06 (owner decision: the download must work; the hold is lifted for the probe channel only),
-and the pin now names `probe-v0.8.2`.
+and the pin now names `probe-v0.8.3`.
 
 ## Key components
 
