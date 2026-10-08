@@ -29,6 +29,7 @@ using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Mcp;
@@ -78,6 +79,12 @@ namespace HSMServer.ServiceExtensions
             // The shared alert read implementation (#1393) — same shape: behind
             // both the REST alert controllers and the MCP alert tools.
             services.AddScoped<AlertReadService>();
+
+            // The shared chat read implementation — same shape as the two above:
+            // behind both the REST chat controller and the MCP chat tools. The
+            // id source the alert/template write endpoints validate
+            // destination.chats against.
+            services.AddScoped<ChatsReadService>();
 
             // The alert-administration write engine (#1500): item-level policy
             // CRUD merged into atomic full-list node updates. SINGLETON, unlike

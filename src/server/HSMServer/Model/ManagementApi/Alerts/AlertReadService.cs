@@ -427,10 +427,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
 
-        // The caller-wide gate's 403 body — the list and the item answers must
-        // stay the same string, single-sourced (#1395 review): the code this
-        // service replaced had one Denied() helper for exactly that reason.
-        private const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
+        // The caller-wide gate's 403 body — single-sourced in
+        // ManagementApiErrors since the chat read surface joined the gated
+        // surfaces: the list and the item answers must stay the same string
+        // (#1395 review — the code this service replaced had one Denied()
+        // helper for exactly that reason), and two surfaces must not drift.
+        private const string NoBoundarySightMessage = ManagementApiErrors.NoBoundarySightMessage;
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);

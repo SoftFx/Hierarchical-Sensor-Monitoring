@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.SensorTree;
 
 namespace HSMServer.Mcp
@@ -122,6 +123,26 @@ namespace HSMServer.Mcp
         public List<AlertScheduleDto> Schedules { get; init; }
 
         /// <summary>Total schedules, whatever the limit.</summary>
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        public int Page { get; init; }
+
+        /// <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>Result of the list_chats tool.</summary>
+    public sealed record McpChatsResult
+    {
+        /// <summary>The visible chats of the served page, ordered by name.</summary>
+        public List<ChatDto> Chats { get; init; }
+
+        /// <summary>Total visible chats, whatever the limit.</summary>
         public int TotalFound { get; init; }
 
         /// <summary>The effective page size (the clamped `limit`).</summary>

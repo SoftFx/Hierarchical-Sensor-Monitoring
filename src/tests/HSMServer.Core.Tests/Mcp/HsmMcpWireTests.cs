@@ -54,16 +54,18 @@ namespace HSMServer.Core.Tests.Mcp
     {
         private const int SitePort = 44333;
 
-        private static readonly string[] NineTools =
+        private static readonly string[] SpecTools =
         [
             "find_sensors",
             "get_alert_schedule",
             "get_alert_template",
+            "get_chat",
             "get_node",
             "get_sensor",
             "get_sensor_history",
             "list_alert_schedules",
             "list_alert_templates",
+            "list_chats",
             "list_products",
         ];
 
@@ -74,6 +76,7 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
         private readonly Mock<IAlertScheduleProvider> _schedules = new();
+        private readonly Mock<HSMServer.Notifications.Chats.IChatsManager> _chats = new();
         private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
@@ -97,6 +100,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             _schedules.Setup(s => s.GetAllSchedules())
                 .Returns(new List<Core.Model.Policies.AlertSchedule>());
+
+            _chats.Setup(c => c.GetValues())
+                .Returns(new List<HSMServer.Notifications.Chats.Chat>());
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
@@ -128,7 +134,7 @@ namespace HSMServer.Core.Tests.Mcp
             var tools = await client.ListToolsAsync();
 
             Assert.Equal(
-                NineTools.Order(StringComparer.Ordinal),
+                SpecTools.Order(StringComparer.Ordinal),
                 tools.Select(t => t.ProtocolTool.Name).Order(StringComparer.Ordinal));
 
             var result = await client.CallToolAsync("list_products", new Dictionary<string, object> { ["limit"] = 1 });
@@ -223,10 +229,12 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddHsmMcpServer();
                         services.AddScoped<SensorTreeReadService>();
                         services.AddScoped<AlertReadService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatsReadService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);
                         services.AddSingleton(_schedules.Object);
+                        services.AddSingleton(_chats.Object);
                         services.AddSingleton(_tokens.Object);
                         services.AddSingleton(_users.Object);
                         services.AddSingleton(_securityEvents.Object);

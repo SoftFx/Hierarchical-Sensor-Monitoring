@@ -15,7 +15,7 @@ using Xunit;
 namespace HSMServer.Core.Tests.Mcp
 {
     // The MCP wiring itself (#1391): the registration must surface EXACTLY the
-    // nine read-only tools the spec names (schemas built by the SDK — a bad tool
+    // read-only tools the spec names (schemas built by the SDK — a bad tool
     // signature throws at registration, so this also proves the signatures are
     // constructible), the server identity, and the camelCase wire casing shared
     // with REST. The endpoint-level authorization (MapMcp + RequireAuthorization)
@@ -24,7 +24,7 @@ namespace HSMServer.Core.Tests.Mcp
     public class HsmMcpServerRegistrationTests
     {
         [Fact]
-        public void AddHsmMcpServer_RegistersExactlyTheNineSpecTools()
+        public void AddHsmMcpServer_RegistersExactlyTheSpecTools()
         {
             using var provider = new ServiceCollection().AddHsmMcpServer().BuildServiceProvider();
 
@@ -38,11 +38,13 @@ namespace HSMServer.Core.Tests.Mcp
                 "find_sensors",
                 "get_alert_schedule",
                 "get_alert_template",
+                "get_chat",
                 "get_node",
                 "get_sensor",
                 "get_sensor_history",
                 "list_alert_schedules",
                 "list_alert_templates",
+                "list_chats",
                 "list_products",
             ], names);
         }
@@ -106,6 +108,16 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("\"sensors\"", envelope);
             Assert.Contains("\"totalFound\"", envelope);
             Assert.DoesNotContain("\"TotalFound\"", envelope);
+
+            var chats = JsonSerializer.Serialize(new McpChatsResult
+            {
+                Chats = [],
+                TotalFound = 1,
+            }, McpJsonUtilities.DefaultOptions);
+
+            Assert.Contains("\"chats\"", chats);
+            Assert.Contains("\"totalFound\"", chats);
+            Assert.DoesNotContain("\"TotalFound\"", chats);
         }
 
         [Fact]

@@ -119,6 +119,33 @@
             <summary>Delete a template and strip its per-sensor policies.</summary>
             <param name="id">Template id.</param>
         </member>
+        <member name="T:HSMServer.Controllers.ChatsApiController">
+            <summary>
+            Read-only surface for notification chats (epic #1347 follow-up): the id
+            source for the destination.chats references alert policies and alert
+            templates validate against — without it an API-only client cannot
+            discover a single valid chat id. Bearer-token authenticated only (the
+            HsmApiToken scheme); served on the web-UI port only. The token mirrors
+            its owner: the caller-wide gate applies, then a chat is visible when it
+            is global or bound to a folder the owner can see; invisible chats
+            answer the same 404 as an unknown id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.GetChats(System.Int32,System.Int32)">
+            <summary>
+            List chats visible to the token's owner, paginated, ordered by name
+            then id. Global chats (bound to no folder) and chats bound to a
+            visible folder are listed; everything else is silently absent, never
+            a per-item 403. Requires the caller-wide gate (the owner sees at
+            least one product or folder, or is an admin).
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.GetChat(System.Guid)">
+            <summary>Get one chat by id; its folders list is what policy writes validate against.</summary>
+            <param name="id">Chat id.</param>
+        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.
@@ -582,6 +609,14 @@
             a security-relevant drift risk).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.ChatsMcpTools">
+            <summary>
+            The two chat tools of the MCP surface: the id source an agent needs to
+            compose destination.chats when creating or editing alert policies and
+            alert templates — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>
+            (the #1393 pattern: one visibility rule behind both transports).
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpProductsResult">
             <summary>Result of the list_products tool.</summary>
         </member>
@@ -672,6 +707,24 @@
             <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpChatsResult">
+            <summary>Result of the list_chats tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Chats">
+            <summary>The visible chats of the served page, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.TotalFound">
+            <summary>Total visible chats, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
@@ -1520,6 +1573,91 @@
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
+            <summary>
+            A notification chat — the destination alert policies and alert templates
+            route their messages to. One chat row can carry a Telegram binding
+            (private or group via the bot), a Slack webhook and a Mattermost
+            webhook; the booleans below say which channels are configured without
+            ever exposing the webhook URLs themselves (secrets, masked even in the
+            web UI).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Id">
+            <summary>Chat id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Name">
+            <summary>Admin-owned display name (unique per server).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Description">
+            <summary>Free-form description (may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.CreationDate">
+            <summary>Chat creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Author">
+            <summary>Author display name; null when unknown (the id itself is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.SendMessages">
+            <summary>Whether this chat currently receives messages (the admin enable/disable switch).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.MessagesAggregationTimeSec">
+            <summary>Delay (seconds) messages of one sensor are aggregated for before sending.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatId">
+            <summary>Telegram chat id; null when no Telegram binding. Shown in the clear by the web UI.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramType">
+            <summary>Telegram binding kind — "direct" or "group"; null when no Telegram binding.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramAuthorizationTime">
+            <summary>When the Telegram binding was authorized via the bot; null when unbound.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatTitle">
+            <summary>Telegram chat title mirrored from the bot; null when unbound.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatDescription">
+            <summary>Telegram chat description mirrored from the bot; null when unbound.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.HasSlackWebhook">
+            <summary>Whether a Slack webhook is configured (the URL itself is a secret and is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.HasMattermostWebhook">
+            <summary>Whether a Mattermost webhook is configured (the URL itself is a secret and is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Folders">
+            <summary>
+            Ids of the folders the chat is bound to. EMPTY means a global chat —
+            available from every node's policies; otherwise the chat is usable
+            only from the folders listed here (the same rule policy/template
+            writes validate destination chats against).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService">
+            <summary>
+            The read surface for notification chats: list and item, with the
+            visibility rule that decides what a caller may see. Transport-agnostic —
+            the REST controller and the MCP chat tools both call it; the caller
+            supplies the token principal and gets DTOs or a
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never an
+            IActionResult (the shared read envelope of the management area).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatsReadService.ListChats(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Chats visible to the token's owner, ordered by name then id,
+            paginated with the area's shared clamps. Requires the caller-wide
+            gate; within it, out-of-sight chats are simply not listed, never a
+            per-item failure.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatsReadService.GetChat(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One chat by id (same caller-wide gate as the list). Unknown and
+            invisible ids answer the SAME NotFound — the area's
+            anti-enumeration rule.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
             <summary>
