@@ -24,6 +24,10 @@ namespace HSMServer.Core.DataLayer
 
         long ConfigDbSize { get; }
 
+        long EnvironmentDbSize { get; }
+
+        long ServerLayoutDbSize { get; }
+
         long BackupsSize { get; }
 
         long TotalDbSize { get; }

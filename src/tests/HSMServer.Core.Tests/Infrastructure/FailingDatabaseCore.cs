@@ -34,6 +34,10 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public long ConfigDbSize => _inner.ConfigDbSize;
 
+        public long EnvironmentDbSize => _inner.EnvironmentDbSize;
+
+        public long ServerLayoutDbSize => _inner.ServerLayoutDbSize;
+
         public long BackupsSize => _inner.BackupsSize;
 
         public long TotalDbSize => _inner.TotalDbSize;
