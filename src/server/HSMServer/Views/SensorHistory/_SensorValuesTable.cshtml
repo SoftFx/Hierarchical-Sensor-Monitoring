@@ -13,6 +13,7 @@
 
 @{
     var currentPage = Model.CurrentTablePage;
+    var hasStdDev = Model.HasStdDev;
     var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
     string olderTimeText = olderTime.HasValue ? DateTimeExtensions.ToDefaultFormat(olderTime.Value): string.Empty;
 
@@ -78,6 +79,10 @@ else
                     <th id="lastValue_header" class="d-none">Last value</th>
                     <th>Min</th>
                     <th>Mean</th>
+                    @if (hasStdDev)
+                    {
+                        <th title="Population standard deviation of the bar's samples (σ). Empty when the sender did not report it.">σ</th>
+                    }
                     <th>Max</th>
                     <th>Count</th>
                     @if (Model.IsEma)
@@ -136,6 +141,10 @@ else
                             <td id="lastValue_value@(i)" class="d-none"></td>
                             <td></td>
                             <td></td>
+                            @if (hasStdDev)
+                            {
+                                <td></td>
+                            }
                             <td></td>
                             <td></td>
                             @if (Model.IsEma)
@@ -152,6 +161,10 @@ else
                             <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
                             <td>@barValue.Min</td>
                             <td>@barValue.Mean</td>
+                            @if (hasStdDev)
+                            {
+                                <td>@barValue.StdDev</td>
+                            }
                             <td>@barValue.Max</td>
                             <td>@barValue.Count</td>
                             @if (Model.IsEma)

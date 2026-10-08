@@ -125,6 +125,9 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
   (`localStorage` key `barView_graph_<id>`). The **Bar** checkbox shows/hides the whole view. Bars with an
   unknown σ break the band (one filled polygon per run of known σ) — no band is drawn there, the mean line
   continues. Hover text: min, mean, max, σ (only when known), count, open/close time.
+- **Sensor page history table.** A `σ` column right after `Mean` appears only when at least one loaded bar
+  (any loaded page, so it does not flicker while paging) reports σ; rows with an unknown σ leave the cell empty
+  (`HistoryTableViewModel.HasStdDev`, `_SensorValuesTable.cshtml`).
 - **Dashboards.** `StdDev (σ)` is selectable for bar sources next to Min/Mean/Max/Count; bars with an
   unknown σ and timeout rows are left out of the line. When the panel downsamples several bars into one visible point, σ
   is averaged like Mean (a display approximation — a one-number line point does not keep Count/Mean);

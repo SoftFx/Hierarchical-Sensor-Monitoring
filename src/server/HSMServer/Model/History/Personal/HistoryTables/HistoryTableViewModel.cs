@@ -56,6 +56,10 @@ namespace HSMServer.Model.History
 
         public bool IsBarSensor => _model.Type.IsBar();
 
+        // Checked across all loaded pages, not only the current one, so the σ column does not
+        // appear and disappear while paging; StdDev is unknown (null) for most senders (#1509).
+        public bool HasStdDev => IsBarSensor && Pages.Any(page => page.Any(HasKnownStdDev));
+
         public bool IsAliveSensor => string.Equals(_model.DisplayName, _serviceAliveSensorName);
 
         public int LastIndex => Pages.Count - 1;
@@ -184,6 +188,13 @@ namespace HSMServer.Model.History
 
         private const string _serviceAliveSensorName = "Service alive";
 
+        private static bool HasKnownStdDev(BaseValue value) => value switch
+        {
+            BarBaseValue<int> intBar => intBar.StdDev is not null,
+            BarBaseValue<double> doubleBar => doubleBar.StdDev is not null,
+            _ => false,
+        };
+
        
 
         private SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
@@ -209,6 +220,7 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                StdDev = value.StdDev?.ToString(),
                 EmaMin = value.EmaMin?.ToString(),
                 EmaMax = value.EmaMax?.ToString(),
                 EmaMean = value.EmaMean?.ToString(),
