@@ -60,12 +60,14 @@ namespace HSMServer.Core.Tests.Mcp
             "get_alert_schedule",
             "get_alert_template",
             "get_chat",
+            "get_folder",
             "get_node",
             "get_sensor",
             "get_sensor_history",
             "list_alert_schedules",
             "list_alert_templates",
             "list_chats",
+            "list_folders",
             "list_products",
         ];
 
@@ -77,6 +79,7 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
         private readonly Mock<IAlertScheduleProvider> _schedules = new();
         private readonly Mock<HSMServer.Notifications.Chats.IChatsManager> _chats = new();
+        private readonly Mock<HSMServer.Folders.IFolderManager> _foldersManager = new();
         private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
@@ -103,6 +106,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             _chats.Setup(c => c.GetValues())
                 .Returns(new List<HSMServer.Notifications.Chats.Chat>());
+
+            _foldersManager.Setup(f => f.GetValues())
+                .Returns(new List<HSMServer.Model.Folders.FolderModel>());
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
@@ -230,11 +236,13 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddScoped<SensorTreeReadService>();
                         services.AddScoped<AlertReadService>();
                         services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatsReadService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Folders.FoldersReadService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);
                         services.AddSingleton(_schedules.Object);
                         services.AddSingleton(_chats.Object);
+                        services.AddSingleton(_foldersManager.Object);
                         services.AddSingleton(_tokens.Object);
                         services.AddSingleton(_users.Object);
                         services.AddSingleton(_securityEvents.Object);

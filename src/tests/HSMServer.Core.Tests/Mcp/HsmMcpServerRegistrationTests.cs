@@ -39,12 +39,14 @@ namespace HSMServer.Core.Tests.Mcp
                 "get_alert_schedule",
                 "get_alert_template",
                 "get_chat",
+                "get_folder",
                 "get_node",
                 "get_sensor",
                 "get_sensor_history",
                 "list_alert_schedules",
                 "list_alert_templates",
                 "list_chats",
+                "list_folders",
                 "list_products",
             ], names);
         }

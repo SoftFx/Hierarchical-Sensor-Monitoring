@@ -36,6 +36,7 @@ namespace HSMServer.Mcp
                 .WithTools<SensorTreeMcpTools>()
                 .WithTools<AlertsMcpTools>()
                 .WithTools<ChatsMcpTools>()
+                .WithTools<FoldersMcpTools>()
                 .Services;
         }
     }

@@ -30,6 +30,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Mcp;
@@ -85,6 +86,12 @@ namespace HSMServer.ServiceExtensions
             // id source the alert/template write endpoints validate
             // destination.chats against.
             services.AddScoped<ChatsReadService>();
+
+            // The shared folder read implementation — same shape: behind both
+            // the REST folder controller and the MCP folder tools. The
+            // folderId source of alert-template writes (the access-grouping
+            // Folder entity, not the tree's nested products).
+            services.AddScoped<FoldersReadService>();
 
             // The alert-administration write engine (#1500): item-level policy
             // CRUD merged into atomic full-list node updates. SINGLETON, unlike

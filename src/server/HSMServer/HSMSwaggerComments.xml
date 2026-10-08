@@ -146,6 +146,30 @@
             <summary>Get one chat by id; its folders list is what policy writes validate against.</summary>
             <param name="id">Chat id.</param>
         </member>
+        <member name="T:HSMServer.Controllers.FoldersApiController">
+            <summary>
+            Read-only surface for access-grouping folders (epic #1347 follow-up):
+            the folderId source for alert-template writes — the entity that scopes
+            templates and binds notification chats. NOT the tree's nested products
+            (`GET /api/v1/nodes` serves those). Bearer-token authenticated only
+            (the HsmApiToken scheme); served on the web-UI port only. The token
+            mirrors its owner: only folders visible to the owner are listed, and
+            an invisible folder answers the same 404 as an unknown id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.FoldersApiController.GetFolders(System.Int32,System.Int32)">
+            <summary>
+            List folders visible to the token's owner, paginated, ordered by
+            name then id. Out-of-sight folders are silently absent, never a
+            per-item 403; an owner who sees nothing gets an empty list.
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.FoldersApiController.GetFolder(System.Guid)">
+            <summary>Get one folder by id — the discovery target for template folderId references.</summary>
+            <param name="id">Folder id.</param>
+        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.
@@ -617,6 +641,15 @@
             (the #1393 pattern: one visibility rule behind both transports).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.FoldersMcpTools">
+            <summary>
+            The two folder tools of the MCP surface: the folderId source an agent
+            needs when creating or editing alert templates (the entity that scopes
+            them and binds notification chats) — a thin rendering of
+            <see cref="T:HSMServer.Model.ManagementApi.Folders.FoldersReadService"/> (the #1393 pattern: one visibility
+            rule behind both transports).
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpProductsResult">
             <summary>Result of the list_products tool.</summary>
         </member>
@@ -725,6 +758,24 @@
             <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChatsResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpFoldersResult">
+            <summary>Result of the list_folders tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Folders">
+            <summary>The visible folders of the served page, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.TotalFound">
+            <summary>Total visible folders, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
@@ -1657,6 +1708,98 @@
             One chat by id (same caller-wide gate as the list). Unknown and
             invisible ids answer the SAME NotFound — the area's
             anti-enumeration rule.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">
+            <summary>
+            An access-grouping folder — the entity alert templates are scoped to
+            (`folderId`) and notification chats bind to. NOT the "folder" of
+            `GET /api/v1/nodes` (that is a nested product in the tree's flat
+            index): this is the separate grouping entity of the web UI's Folders
+            page, and until this surface its ids were discoverable only
+            indirectly, from the templates that referenced them.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Id">
+            <summary>Folder id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Name">
+            <summary>Folder display name (unique per server).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Description">
+            <summary>Free-form description (may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Color">
+            <summary>Folder color, ARGB (the web UI's color picker value).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.CreationDate">
+            <summary>Folder creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Author">
+            <summary>Author display name; null when unknown (the id itself is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Products">
+            <summary>Products grouped into this folder (the template write path requires the folder to contain products).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Chats">
+            <summary>
+            Ids of the notification chats bound to the folder. The union of
+            these chats and the GLOBAL chats (empty `folders` on a chat) is the
+            chat set a policy or template in this folder may address.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.DefaultChats">
+            <summary>The folder's default-chats routing (what FromParent-destination policies resolve to).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Ttl">
+            <summary>Default sensor inactivity timeout for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.KeepHistory">
+            <summary>Default sensor-history retention for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.SelfDestroy">
+            <summary>Remove-sensor-after-inactivity default for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto">
+            <summary>A product grouped into a folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto.Id">
+            <summary>Product id (a root of the sensor tree).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto.Name">
+            <summary>Product display name.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto">
+            <summary>The default-chats routing of a folder: the destination a policy with a FromParent destination resolves to.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto.Mode">
+            <summary>Routing mode — "fromParent", "notInitialized", "empty" or "custom".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto.Chats">
+            <summary>Selected chat ids; meaningful for the "custom" mode (and the persisted selection of "fromParent").</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FoldersReadService">
+            <summary>
+            The read surface for access-grouping folders: list and item, with the
+            owner-sight visibility rule. Transport-agnostic — the REST controller
+            and the MCP folder tools both call it; the caller supplies the token
+            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/>
+            failure back, never an IActionResult (the shared read envelope of the
+            management area).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Folders.FoldersReadService.ListFolders(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Folders visible to the token's owner, ordered by name then id,
+            paginated with the area's shared clamps. An owner who sees nothing
+            gets an empty list: out-of-sight folders are simply not listed,
+            never a per-item failure.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Folders.FoldersReadService.GetFolder(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One folder by id. Unknown and invisible ids answer the SAME
+            NotFound (the area's anti-enumeration rule).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
