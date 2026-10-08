@@ -41,6 +41,11 @@
 	transport http {
 		tls_insecure_skip_verify
 	}
+	# Caddy >= 2.11 replaces the Host header with the upstream address ("app:44333"),
+	# which only Docker's DNS resolves; HSM builds absolute redirects (login) from the
+	# request Host, so browsers would be sent to an unreachable name. Pass the
+	# client-visible Host through.
+	header_up Host {hostport}
 	# Wait for HSM while it starts (database load) instead of answering 502.
 	lb_try_duration 30s
 }
