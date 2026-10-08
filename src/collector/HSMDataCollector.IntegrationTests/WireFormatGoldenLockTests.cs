@@ -106,6 +106,12 @@ namespace HSMDataCollector.IntegrationTests
                 nativeDoubleBar,
                 Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, StdDev = 1.5, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
 
+            // A non-finite derived Mean (its sum overflowed) is the quoted named literal on the wire —
+            // the native DoubleJson writes the same (native_wire_bar_json_matches_net_byte_layout, #1530).
+            Assert.Contains(
+                "\"Max\":1.7E+308,\"Mean\":\"Infinity\",",
+                Wire(new DoubleMonitoringBar { Path = "p/db", Min = 1.7e308, Max = 1.7e308, Mean = double.PositiveInfinity, FirstValue = 1.7e308, LastValue = 1.7e308, Count = 2, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
             Assert.Equal(
                 nativeDoubleBar.Replace("\"StdDev\":1.5,", ""),
                 Wire(new DoubleMonitoringBar { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));

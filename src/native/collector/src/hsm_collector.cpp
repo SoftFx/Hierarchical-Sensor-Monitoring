@@ -2008,11 +2008,14 @@ namespace
         }
         else
         {
-            min_text = DoubleJson(RoundAwayFromZero(bar.min, bar.precision));
-            max_text = DoubleJson(RoundAwayFromZero(bar.max, bar.precision));
-            mean_text = DoubleJson(RoundAwayFromZero(raw_mean, bar.precision));
-            first_text = DoubleJson(RoundAwayFromZero(bar.first, bar.precision));
-            last_text = DoubleJson(RoundAwayFromZero(bar.last, bar.precision));
+            // Canonical text is the .NET "R" text the C# harness prints (ToString("R")), so a
+            // non-finite derived value (a Mean whose sum overflowed) is the bare named literal here;
+            // the WIRE quotes it (DoubleJson), as System.Text.Json does.
+            min_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.min, bar.precision));
+            max_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.max, bar.precision));
+            mean_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(raw_mean, bar.precision));
+            first_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.first, bar.precision));
+            last_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.last, bar.precision));
         }
 
         std::ostringstream json;
