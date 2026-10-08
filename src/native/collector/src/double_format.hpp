@@ -11,6 +11,7 @@
 #pragma once
 
 #include <charconv>
+#include <cmath>
 #include <string>
 
 namespace hsm
@@ -19,6 +20,15 @@ namespace hsm
     {
         inline std::string DoubleToInvariantString(double value)
         {
+            // Non-finite values have no digits to reassemble (the exponent parse below would throw,
+            // and a throw must never cross the C ABI): return what .NET's invariant "R" text is —
+            // "NaN", "Infinity", "-Infinity". JSON call sites quote them (DoubleJson), as the managed
+            // serializer does under AllowNamedFloatingPointLiterals.
+            if (std::isnan(value))
+                return "NaN";
+            if (std::isinf(value))
+                return value > 0 ? "Infinity" : "-Infinity";
+
             char buffer[64];
             const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::scientific);
             const std::string scientific(buffer, result.ptr);

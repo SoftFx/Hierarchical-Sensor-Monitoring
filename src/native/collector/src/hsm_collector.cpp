@@ -956,8 +956,14 @@ namespace
 
     // .NET shortest round-trip ("R") double text. The implementation lives in double_format.hpp
     // so the prediction sensor's comment (disk_prediction.hpp) renders numbers identically (#1426).
+    // A non-finite value is written as the quoted named literal ("NaN", "Infinity", "-Infinity"),
+    // byte-for-byte what the managed serializer emits with AllowNamedFloatingPointLiterals — a bare
+    // NaN/Infinity token would not be JSON. Validated sample values are always finite; this covers
+    // derived numbers (a bar Mean whose sum overflowed near DBL_MAX).
     std::string DoubleJson(double value)
     {
+        if (!std::isfinite(value))
+            return "\"" + hsm::collector::DoubleToInvariantString(value) + "\"";
         return hsm::collector::DoubleToInvariantString(value);
     }
 
@@ -1824,6 +1830,10 @@ namespace
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
     {
+        // .NET returns the value unchanged at or above 1e16 (doubleRoundLimit): such a double has no
+        // fractional digits to round, and scaling it could overflow to infinity near DBL_MAX.
+        if (!(std::abs(value) < 1e16))
+            return value;
         const double scale = std::pow(10.0, precision);
         return std::round(value * scale) / scale;
     }
@@ -1844,6 +1854,15 @@ namespace
         double first = 0.0;
         double last = 0.0;
         int32_t count = 0;
+        // Welford moments for StdDev (#1509) — a running mean and the sum of squared deviations
+        // from it (M2), O(1) per sample, no sample storage. Kept apart from total_sum so the wire
+        // Mean is unchanged. NATIVE ONLY: the managed collector does not post StdDev (owner
+        // decision 2026-10-07, #1529; ADR 0009) — see the wire-contract doc for the operation order
+        // a future managed port must reproduce. A pre-aggregated partial carries no spread and
+        // makes the bar's StdDev unknown (null).
+        double welford_mean = 0.0;
+        double welford_m2 = 0.0;
+        bool stddev_unknown = false;
 
         void Init(int64_t now_ms)
         {
@@ -1855,6 +1874,9 @@ namespace
             first = 0.0;
             last = 0.0;
             count = 0;
+            welford_mean = 0.0;
+            welford_m2 = 0.0;
+            stddev_unknown = false;
         }
 
         void AddValue(double value)
@@ -1873,8 +1895,20 @@ namespace
                 max = std::max(max, value);
             }
 
+            // Before ++count: n is the count including this sample.
+            const double n = static_cast<double>(count + 1);
+            const double delta = value - welford_mean;
+            welford_mean += delta / n;
+            welford_m2 += delta * (value - welford_mean);
+
             last = value;
             ++count;
+        }
+
+        // Population standard deviation; 0 for a single sample.
+        double StdDev() const
+        {
+            return count <= 1 ? 0.0 : std::sqrt(welford_m2 / count);
         }
 
         void AddPartial(double partial_min, double partial_max, double partial_mean, double partial_first, double partial_last, int32_t partial_count)
@@ -1897,8 +1931,28 @@ namespace
             total_sum += partial_mean * partial_count;
             last = partial_last;
             count += partial_count;
+            stddev_unknown = true;
         }
     };
+
+    // An int bar has no precision of its own, so its StdDev is rounded to a fixed 2 digits; a
+    // double bar's follows the bar precision (half away from zero, like Mean).
+    constexpr int kIntBarStdDevDigits = 2;
+
+    // The bar's StdDev wire text: a double on both bar flavors, `null` when unknown.
+    // A spread too large for a double (M2 overflows for samples around 1e154 and up) is reported as
+    // unknown, never as a non-finite number: the server reads null as "no band".
+    std::string BarStdDevJson(const MonitoringBar& bar)
+    {
+        if (bar.stddev_unknown)
+            return "null";
+
+        const double rounded = RoundAwayFromZero(bar.StdDev(), bar.is_int ? kIntBarStdDevDigits : bar.precision);
+        if (!std::isfinite(rounded))
+            return "null";
+
+        return DoubleJson(rounded);
+    }
 
     // Strict inclusive validation for int partials (PublicBarMonitoringSensor.IsValidPartial).
     bool IsValidIntPartial(int32_t min, int32_t max, int32_t mean, int32_t first, int32_t last, int32_t count)
@@ -1954,11 +2008,14 @@ namespace
         }
         else
         {
-            min_text = DoubleJson(RoundAwayFromZero(bar.min, bar.precision));
-            max_text = DoubleJson(RoundAwayFromZero(bar.max, bar.precision));
-            mean_text = DoubleJson(RoundAwayFromZero(raw_mean, bar.precision));
-            first_text = DoubleJson(RoundAwayFromZero(bar.first, bar.precision));
-            last_text = DoubleJson(RoundAwayFromZero(bar.last, bar.precision));
+            // Canonical text is the .NET "R" text the C# harness prints (ToString("R")), so a
+            // non-finite derived value (a Mean whose sum overflowed) is the bare named literal here;
+            // the WIRE quotes it (DoubleJson), as System.Text.Json does.
+            min_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.min, bar.precision));
+            max_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.max, bar.precision));
+            mean_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(raw_mean, bar.precision));
+            first_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.first, bar.precision));
+            last_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.last, bar.precision));
         }
 
         std::ostringstream json;
@@ -1968,6 +2025,7 @@ namespace
              << "\"Min\":" << min_text << ","
              << "\"Max\":" << max_text << ","
              << "\"Mean\":" << mean_text << ","
+             << "\"StdDev\":" << BarStdDevJson(bar) << ","
              << "\"First\":" << first_text << ","
              << "\"Last\":" << last_text << ","
              << "\"Count\":" << bar.count << ","
@@ -1980,8 +2038,8 @@ namespace
         return json.str();
     }
 
-    // Real wire JSON for a bar DTO (#1096 §15): Type, Min, Max, Mean, FirstValue, LastValue,
-    // Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
+    // Real wire JSON for a bar DTO (#1096 §15): Type, StdDev (#1509), Min, Max, Mean, FirstValue,
+    // LastValue, Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
     // Field VALUES reuse the same int/double formatting as the internal MonitoringBarJson.
     std::string BuildWireBarJson(const MonitoringBar& bar, int64_t time_ms, const std::string& path)
     {
@@ -2008,6 +2066,10 @@ namespace
         std::ostringstream json;
         json << "{\"Type\":"
              << (bar.is_int ? static_cast<int>(HSM_SENSOR_TYPE_INT_BAR) : static_cast<int>(HSM_SENSOR_TYPE_DOUBLE_BAR))
+             // StdDev sits where System.Text.Json puts it for the server's IntBarSensorValue /
+             // DoubleBarSensorValue DTO (declared there, so right after Type). The managed collector's
+             // bars do not carry it: native = managed + this one field (#1509, #1529).
+             << ",\"StdDev\":" << BarStdDevJson(bar)
              << ",\"Min\":" << min_text
              << ",\"Max\":" << max_text
              << ",\"Mean\":" << mean_text
@@ -7133,6 +7195,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     double last,
     int32_t count,
     int precision,
+    double welford_m2,
+    int stddev_unknown,
     int64_t open_ms,
     int64_t close_ms,
     int64_t time_ms,
@@ -7150,6 +7214,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     bar.first = first;
     bar.last = last;
     bar.count = count;
+    bar.welford_m2 = welford_m2;
+    bar.stddev_unknown = stddev_unknown != 0;
     buffer = BuildWireBarJson(bar, time_ms, path != nullptr ? path : "");
     return buffer.c_str();
 }

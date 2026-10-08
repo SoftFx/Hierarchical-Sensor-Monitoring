@@ -93,6 +93,9 @@ namespace HSMServer.ApiObjectsConverters
             { new(nameof(IntegerBarValue.EmaCount)), ExportOptions.EmaStatistics },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple },
+            // #1509: appended LAST (header order = insertion order) so positional consumers of the
+            // existing columns are unaffected; empty when the bar's StdDev is unknown.
+            { new(nameof(IntegerBarValue.StdDev)), ExportOptions.Simple },
         };
 
         private static readonly List<Header> _fileSensorHeader = new()

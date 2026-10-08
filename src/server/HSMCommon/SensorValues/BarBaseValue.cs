@@ -40,6 +40,17 @@ namespace HSMCommon.Model
 
         public T LastValue { get; init; }
 
+        /// <summary>
+        /// Population standard deviation of the bar's samples (#1509); <c>null</c> = unknown (a
+        /// collector that does not send it, a row stored before it existed, a bar built from
+        /// pre-aggregated partials). Unknown is never 0. MemoryPack serializes members in
+        /// declaration order with a member count, so this field MUST stay the last member of the
+        /// bar records: a row written before it existed deserializes with it null. Forward-only: a
+        /// server built without this member cannot read rows written with it (MemoryPack's default
+        /// layout throws on extra members), so a rollback needs a pre-upgrade database backup.
+        /// </summary>
+        public double? StdDev { get; init; }
+
 
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, First = {FirstValue}, Last = {LastValue}.";
@@ -61,6 +72,7 @@ namespace HSMCommon.Model
                 FirstValue = currValue.FirstValue,
                 LastValue = currValue.LastValue,
                 Mean = currValue.Mean,
+                StdDev = currValue.StdDev,
             };
         }
 
@@ -79,6 +91,7 @@ namespace HSMCommon.Model
             Max = value.Max;
             Min = value.Min;
             Mean = value.Mean;
+            StdDev = value.StdDev;
             AggregatedValuesCount = value.AggregatedValuesCount;
             OpenTime = value.OpenTime;
             CloseTime = value.CloseTime;

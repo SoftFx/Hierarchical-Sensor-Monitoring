@@ -1396,6 +1396,12 @@ namespace HSMDataCollector.Tests
                     return;
             }
 
+            if (field == "stddev")
+                // CONFORMANCE-UNSUPPORTED: expect_bar_field stddev (#1529) — the managed collector does
+                // not compute a bar StdDev (owner decision 2026-10-07 on #1509); only the native-only
+                // fixture collector/native/bar_stddev_contract.hsmtest asserts it.
+                throw new NotSupportedException("CONFORMANCE-UNSUPPORTED: expect_bar_field stddev (#1529)");
+
             var actual = GetBarNumericField(bar, field);
             var expectedValue = ParseDouble(expected);
 

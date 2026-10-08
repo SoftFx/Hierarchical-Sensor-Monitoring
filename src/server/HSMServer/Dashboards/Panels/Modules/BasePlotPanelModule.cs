@@ -17,6 +17,8 @@ namespace HSMServer.Dashboards
         FirstValue = 54,
         LastValue = 55,
         Count = 56,
+        [Display(Name = "StdDev (σ)")]
+        StdDev = 57,
 
         [Display(Name = "EMA (Value)")]
         EmaValue = 200,

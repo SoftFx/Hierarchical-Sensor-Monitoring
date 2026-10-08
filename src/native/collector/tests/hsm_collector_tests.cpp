@@ -64,6 +64,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     double last,
     int32_t count,
     int precision,
+    double welford_m2,
+    int stddev_unknown,
     int64_t open_ms,
     int64_t close_ms,
     int64_t time_ms,
@@ -2053,6 +2055,17 @@ namespace
                     line.erase(time_field, end - time_field);
                 }
 
+                // A bar's canonical "StdDev" is native-only (owner decision 2026-10-07, #1529): the
+                // managed text has no such field, so drop it to keep the dumps byte-comparable.
+                const std::string stddev_key = "\"StdDev\":";
+                const auto stddev_field = line.find(stddev_key);
+                if (stddev_field != std::string::npos)
+                {
+                    const auto comma = line.find(',', stddev_field);
+                    if (comma != std::string::npos)
+                        line.erase(stddev_field, comma + 1 - stddev_field);
+                }
+
                 output << line << '\n';
             }
             return;
@@ -2530,6 +2543,7 @@ namespace
                 { "min", "Min" },
                 { "max", "Max" },
                 { "mean", "Mean" },
+                { "stddev", "StdDev" },
                 { "first", "First" },
                 { "last", "Last" },
                 { "count", "Count" },
@@ -6011,11 +6025,14 @@ namespace
     void NativeWireBarJsonMatchesNetByteLayout()
     {
         // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
+        // Samples 1..5 have M2 = 10 -> population StdDev sqrt(2) = 1.414.. -> 1.41 (int bars round
+        // StdDev to a fixed 2 digits). Cross-locked by WireFormatGoldenLockTests (#1509): these bytes
+        // are the server DTO's; the managed collector's bar is the same minus "StdDev" (#1529).
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                1, 1, 5, 15, 1, 5, 5, 2, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
-                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
-                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+                1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"StdDev\":1.41,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                                                                        "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
+                                                                        "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
 
         // int-bar Mean rounding must match C# `(int)Math.Round(_totalSum / Count)`
@@ -6023,20 +6040,53 @@ namespace
         // also half-to-even, so 2.5 -> 2 and 3.5 -> 4 on BOTH sides. (Round-away-from-zero would
         // give 3 and 4 and break parity.) Pins the half-way cases the all-integer case can't.
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
             "int bar mean 2.5 rounds half-to-even -> 2");
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
             "int bar mean 3.5 rounds half-to-even -> 4");
 
         // double bar (Type 5): sum13/count4 -> mean 3.25; min/max/first/last carry one decimal.
+        // M2 = 9 over 4 samples -> StdDev sqrt(2.25) = 1.5.
         // Cross-locked by WireFormatGoldenLockTests double-bar case.
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
-                                                                           "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
-                                                                           "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"StdDev\":1.5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
             "double bar wire layout");
+
+        // An unknown StdDev (a bar fed with pre-aggregated partials) goes on the wire as null,
+        // like the C# DTO's double? -- never as 0 (#1509).
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 1, 5, 15, 1, 5, 5, 2, 0, 1, 0, 2000, 0, "p/ib")).find("{\"Type\":4,\"StdDev\":null,\"Min\":1,") != std::string::npos,
+            "unknown StdDev is null on the wire");
+        // A single-sample bar has StdDev 0.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(0, 2.5, 2.5, 2.5, 2.5, 2.5, 1, 2, 0, 0, 0, 2000, 0, "p/db")).find("\"StdDev\":0,") != std::string::npos,
+            "single-sample StdDev is 0");
+
+        // An M2 that overflowed (samples around 1e200) is unknown, not a non-finite number, and the
+        // rest of the bar still serializes; a Mean whose sum overflowed goes out as the quoted named
+        // literal the managed serializer writes (AllowNamedFloatingPointLiterals), never a throw.
+        const std::string overflowed(hsm_collector_test_wire_bar_json(
+            0, 1e200, 2e200, 3e200, 1e200, 2e200, 2, 2, std::numeric_limits<double>::infinity(), 0, 0, 2000, 0, "p/db"));
+        Require(overflowed.find("{\"Type\":5,\"StdDev\":null,\"Min\":1E+200,\"Max\":2E+200,\"Mean\":1.5E+200,") == 0,
+                ("overflowed StdDev is null and the bar still posts: " + overflowed).c_str());
+        const std::string sum_overflow(hsm_collector_test_wire_bar_json(
+            0, 1.7e308, 1.7e308, std::numeric_limits<double>::infinity(), 1.7e308, 1.7e308, 2, 2, 0, 0, 0, 2000, 0, "p/db"));
+        Require(sum_overflow.find("\"Max\":1.7E+308,\"Mean\":\"Infinity\",") != std::string::npos,
+                ("overflowed Mean is the quoted named literal: " + sum_overflow).c_str());
+    }
+
+    void NativeDoubleFormatHandlesNonFinite()
+    {
+        // Never throws (the exponent parse used to: std::stoi on "nf"), and matches .NET's invariant
+        // "R" text for non-finite values.
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::quiet_NaN()) == "NaN", "NaN text");
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::infinity()) == "Infinity", "+inf text");
+        Require(hsm::collector::DoubleToInvariantString(-std::numeric_limits<double>::infinity()) == "-Infinity", "-inf text");
+        Require(hsm::collector::DoubleToInvariantString(1.7976931348623157e308) == "1.7976931348623157E+308", "DBL_MAX text");
     }
 
     void NativeWireFileJsonMatchesNetByteLayout()
@@ -8291,6 +8341,7 @@ namespace
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
+            { "native_double_format_handles_non_finite", [](const std::string&) { NativeDoubleFormatHandlesNonFinite(); } },
             { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
@@ -8367,6 +8418,7 @@ namespace
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_sampled_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_stddev_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },

@@ -964,7 +964,7 @@
             <param name="summary">Current summary item</param>
             <param name="IsCompressed">Current state of compression of summary</param>
         </member>
-        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMean(System.Collections.Generic.List{System.ValueTuple{`0,System.Int32}})">
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMean(System.Collections.Generic.List{System.ValueTuple{`0,System.Int32,System.Boolean}})">
             <summary>
             Count mean from the list of all means
             </summary>

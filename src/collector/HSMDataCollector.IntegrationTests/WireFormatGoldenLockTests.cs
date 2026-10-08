@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
@@ -54,10 +55,26 @@ namespace HSMDataCollector.IntegrationTests
         [Fact]
         public void Bar_and_file_dtos_match_the_native_golden_bytes()
         {
-            Assert.Equal(
-                "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+            // Bar StdDev (#1509) is NATIVE ONLY by owner decision 2026-10-07 (#1529, ADR 0009): the
+            // native bar wire is the server DTO's (IntBarSensorValue declares StdDev, so it follows
+            // Type) and the managed collector's own bar (IntMonitoringBar, which does not derive from
+            // that DTO) is the same bytes minus that one field. Pinned from both ends here.
+            const string nativeIntBar =
+                "{\"Type\":4,\"StdDev\":1.41,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
                 + "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
-                + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+                + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}";
+
+            Assert.Equal(
+                nativeIntBar,
+                Wire(new IntBarSensorValue { Path = "p/ib", Min = 1, Max = 5, Mean = 3, StdDev = 1.41, FirstValue = 1, LastValue = 5, Count = 5, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
+            Assert.Equal(
+                nativeIntBar.Replace("\"StdDev\":1.41,", ""),
+                Wire(new IntMonitoringBar { Path = "p/ib", Min = 1, Max = 5, Mean = 3, FirstValue = 1, LastValue = 5, Count = 5, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
+            // Unknown goes out as null, never as 0 (the native `unknown StdDev is null on the wire` case).
+            Assert.StartsWith(
+                "{\"Type\":4,\"StdDev\":null,\"Min\":1,",
                 Wire(new IntBarSensorValue { Path = "p/ib", Min = 1, Max = 5, Mean = 3, FirstValue = 1, LastValue = 5, Count = 5, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
 
             Assert.Equal(
@@ -79,11 +96,25 @@ namespace HSMDataCollector.IntegrationTests
                 "{\"Type\":0,\"Value\":true,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/b\"}",
                 Wire(new BoolSensorValue { Path = "p/b", Value = true, Time = Epoch, Comment = null }));
 
-            Assert.Equal(
-                "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+            // Native-only StdDev (#1529): native = server DTO bytes; managed = the same minus StdDev.
+            const string nativeDoubleBar =
+                "{\"Type\":5,\"StdDev\":1.5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
                 + "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
-                + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
-                Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+                + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}";
+
+            Assert.Equal(
+                nativeDoubleBar,
+                Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, StdDev = 1.5, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
+            // A non-finite derived Mean (its sum overflowed) is the quoted named literal on the wire —
+            // the native DoubleJson writes the same (native_wire_bar_json_matches_net_byte_layout, #1530).
+            Assert.Contains(
+                "\"Max\":1.7E+308,\"Mean\":\"Infinity\",",
+                Wire(new DoubleMonitoringBar { Path = "p/db", Min = 1.7e308, Max = 1.7e308, Mean = double.PositiveInfinity, FirstValue = 1.7e308, LastValue = 1.7e308, Count = 2, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+
+            Assert.Equal(
+                nativeDoubleBar.Replace("\"StdDev\":1.5,", ""),
+                Wire(new DoubleMonitoringBar { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
         }
 
         [Fact]

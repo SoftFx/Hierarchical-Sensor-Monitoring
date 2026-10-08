@@ -44,10 +44,57 @@ Alert enums (`SensorRequests/AddOrUpdateSensor/AlertUpdateRequest.cs`):
 | `EnumSensorValue` | int (option key) |
 | `RateSensorValue` | double |
 | `CounterSensorValue` | int |
-| `IntBarSensorValue` / `DoubleBarSensorValue` | `Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime` (+obsolete `Percentiles` — never populated, but serialized as `null` since nulls are not omitted) |
+| `IntBarSensorValue` / `DoubleBarSensorValue` | `StdDev?/Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime` (+obsolete `Percentiles` — never populated, but serialized as `null` since nulls are not omitted). `StdDev` (#1509) is declared on these two DTOs only and sent by the native collector only: see below |
 | `FileSensorValue` | `Value` = `List<byte>` → **numeric JSON array** (`[72,105,...]`, NOT base64 — System.Text.Json base64-encodes `byte[]` but not `List<byte>`), `Name`, `Extension` |
 
 There is no Counter DTO: `CounterSensorValue.cs` is a legacy file name that contains `RateSensorValue`.
+
+### Bar StdDev (#1509)
+
+**Compatible-additive wire change, sent by the native collector only** (DTO `HSMSensorDataObjects`
+3.2.0, native collector 0.11.0). By owner decision 2026-10-07 the managed .NET collector does **not**
+send it (#1529, [ADR-0009](../../../../docs/decisions/0009-bar-stddev-native-only.md) — an explicit
+exception to rules #9/#10). The server-facing DTOs `IntBarSensorValue` / `DoubleBarSensorValue` gained
+`StdDev` (`double?`); System.Text.Json serializes a property declared on the concrete DTO right after
+`Type`, and the native wire puts it there:
+
+```
+native:  {"Type":4,"StdDev":1.41,"Min":1,"Max":5,"Mean":3,"FirstValue":1,"LastValue":5,"Percentiles":null,...}
+managed: {"Type":4,"Min":1,"Max":5,"Mean":3,"FirstValue":1,"LastValue":5,"Percentiles":null,...}
+```
+
+The managed collector's bar types (`IntMonitoringBar` / `DoubleMonitoringBar`) derive from
+`BarSensorValueBase<T>`, which does not carry the field, so their bytes are unchanged; the two wires
+differ by exactly that one member (pinned by `WireFormatGoldenLockTests` ↔ `NativeWireBarJsonMatchesNetByteLayout`).
+
+- Meaning: the **population** standard deviation of the bar's samples, `sqrt(Σ(x − mean)² / Count)`;
+  `0` for a single sample. A double on **both** bar flavors (an int bar posts `1.41`, not `1`).
+- Accumulation (native; the reference for a future managed port, #1529): Welford, per sample before
+  `Count` is incremented — `n = Count + 1; delta = x − m; m += delta / n; M2 += delta * (x − m)` — and on
+  post `σ = Count <= 1 ? 0 : sqrt(M2 / Count)`. O(1) per sample, no sample storage, no cancellation for a
+  large offset with a small spread (a Σx/Σx² form would lose it). The running `m` is separate from the
+  sum behind the wire `Mean`, which is unchanged. The native build disables floating-point contraction
+  (`-ffp-contract=off` on GCC/Clang) so no compiler fuses `delta * (x − m) + M2` into an FMA; RyuJIT never
+  does, so a managed port with the same operation order would produce the same bytes.
+- Rounding: double bar — the bar precision, half away from zero (as `Mean`, the .NET
+  `Math.Round(σ, Precision, AwayFromZero)` contract); int bar — a fixed 2 digits, half away from zero (an
+  int bar has no precision of its own).
+- Partial posts carry the running σ of the bar so far, like `Mean`.
+- `null` / absent = **unknown**, never the same as 0: `null` for a bar that took a pre-aggregated partial
+  (`AddPartial` carries no spread, so the whole bar's σ becomes unknown) and for a spread too large for
+  a double (M2 overflows for samples around 1e154 and up; σ is never sent as a non-finite number);
+  absent from the managed
+  collector, older native collectors and other senders. The server stores and shows it as unknown
+  ([`server/bar-stddev/feature.md`](../../server/bar-stddev/feature.md)).
+- The server stores only a finite, non-negative σ: anything else a sender posts (negative, NaN,
+  infinity) is normalised to unknown at conversion (`BarStdDev.Normalize`).
+- Compatibility (wire only): older servers ignore the unknown property (System.Text.Json default); a
+  newer server accepts bars without it. The server's **stored** bar rows are not backward compatible —
+  a pre-#1509 server cannot read rows written after the upgrade
+  ([`server/bar-stddev/feature.md`](../../server/bar-stddev/feature.md#storage--persistence)).
+- Conformance: the native-only fixture `tests/conformance/collector/native/bar_stddev_contract.hsmtest`
+  (the managed driver marks `expect_bar_field … stddev` `CONFORMANCE-UNSUPPORTED` (#1529) and never
+  discovers that folder); the differential fuzzer strips the native-only canonical `StdDev` field.
 
 ## Registration / command DTOs
 
@@ -92,7 +139,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 
 ## Native port (C++)
 
-The native collector (`src/native/collector`, #1096) reproduces this wire **byte-for-byte** against the **net8 / Core** `System.Text.Json` output (the shortest-double runtime; net472 doubles diverge and are out of scope, as in `number_format_contract`). `BuildWire{Value,Bar,File,Registration}Json` in `hsm_collector.cpp` emit the exact property order (most-derived-first, base-last, `Type` first), `Key:null`, ISO-8601-Z time (fraction trimmed), TimeSpan ".NET c", `List<byte>` numeric array, `Percentiles:null`, and the full `AddOrUpdateSensorRequest` shape. String escaping goes through a dedicated `EscapeJsonWire` that mirrors the default `JavaScriptEncoder` (the internal-conformance `EscapeJson` keeps its own simpler `\"` convention and must not be confused with it). Parity is locked from both sides: native `native_wire_*` unit tests pin the exact bytes (including double/bool/double-bar, the `<>&'+"`/non-ASCII escaping cases, the int-bar half-to-even mean, and pre-epoch / `Int64.MinValue` time edges), and `WireFormatGoldenLockTests` (net8 IntegrationTests) asserts the **same** strings against the real `HttpRequest<T>` serializer — if .NET drifts, that test fails first and both sides update in lockstep.
+The native collector (`src/native/collector`, #1096) reproduces this wire **byte-for-byte** against the **net8 / Core** `System.Text.Json` output (the shortest-double runtime; net472 doubles diverge and are out of scope, as in `number_format_contract`). `BuildWire{Value,Bar,File,Registration}Json` in `hsm_collector.cpp` emit the exact property order (most-derived-first, base-last, `Type` first), `Key:null`, ISO-8601-Z time (fraction trimmed), TimeSpan ".NET c", `List<byte>` numeric array, the native-only bar `StdDev` right after `Type` (`null` when unknown; #1509/#1529), `Percentiles:null`, and the full `AddOrUpdateSensorRequest` shape. String escaping goes through a dedicated `EscapeJsonWire` that mirrors the default `JavaScriptEncoder` (the internal-conformance `EscapeJson` keeps its own simpler `\"` convention and must not be confused with it). Parity is locked from both sides: native `native_wire_*` unit tests pin the exact bytes (including double/bool/double-bar, the `<>&'+"`/non-ASCII escaping cases, the int-bar half-to-even mean, and pre-epoch / `Int64.MinValue` time edges), and `WireFormatGoldenLockTests` (net8 IntegrationTests) asserts the **same** strings against the real `HttpRequest<T>` serializer — if .NET drifts, that test fails first and both sides update in lockstep.
 
 ## Key Files
 

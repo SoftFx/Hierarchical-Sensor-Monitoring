@@ -1,5 +1,6 @@
 ﻿import {
     BarPLot,
+    BarView,
     BoolPlot,
     Colors,
     DoublePlot,
@@ -89,23 +90,57 @@ window.addPlot = function (name, isInit = false) {
 };
 
 window.removePlot = function (name, isInit = false) {
-    let indexToDelete = undefined;
+    // A plot can span several traces (the bar view draws a band and a mean line under one name).
+    let indexesToDelete = [];
     let plots = graphData.graph.self._fullData;
     for (let i = 0; i < plots.length; i++) {
-        if (plots[i].name === name) {
-            indexToDelete = i;
-            break;
-        }
+        if (plots[i].name === name)
+            indexesToDelete.push(i);
     }
 
-    if (indexToDelete !== undefined) {
-        Plotly.deleteTraces(graphData.graph.id, indexToDelete);
+    if (indexesToDelete.length > 0) {
+        Plotly.deleteTraces(graphData.graph.id, indexesToDelete);
         if (!isInit) {
             graphData.graph.displayedPlots.splice(graphData.graph.displayedPlots.indexOf(name), 1);
             localStorage.setItem(graphData.graph.id, graphData.graph.displayedPlots)
         }
     }
 }
+
+function getBarViewKey(graphElementId) {
+    return `barView_${graphElementId}`;
+}
+
+function getBarView(graphElementId) {
+    try {
+        return localStorage.getItem(getBarViewKey(graphElementId)) === BarView.stdDev ? BarView.stdDev : BarView.candlestick;
+    } catch {
+        return BarView.candlestick;
+    }
+}
+
+// Sensor page view switch (#1509): candlestick (default) or mean +/- sigma; redraws the bar traces.
+window.setBarView = function (view, graphElementId) {
+    try {
+        localStorage.setItem(getBarViewKey(graphElementId), view);
+    } catch {
+        // the view still switches for this page
+    }
+
+    // The shared graphData may still hold another sensor's graph (this one has no data yet, or is
+    // loading): then the saved choice applies when this graph is drawn, and nothing is redrawn now.
+    if (graphData.graph.id !== graphElementId || !(graphData.plot instanceof BarPLot) || graphData.plot.barView === undefined)
+        return;
+
+    graphData.plot.barView = view;
+
+    if (graphData.graph.self?._fullData?.some(x => x.name === 'bar')) {
+        removePlot('bar', true);
+        addPlot('bar', true);
+    }
+};
+
+window.getBarView = getBarView;
 
 window.displayGraph = async function (data, sensorInfo, graphElementId, graphName, signal) {
 
@@ -114,7 +149,7 @@ window.displayGraph = async function (data, sensorInfo, graphElementId, graphNam
     graphData.graph.id = graphElementId;
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
-    let plot = convertToGraphData(data, sensorInfo, graphName);
+    let plot = convertToGraphData(data, sensorInfo, graphName, undefined, undefined, false, undefined, getBarView(graphElementId));
 
     if (signal?.aborted) return;
     let config = {
@@ -216,7 +251,7 @@ function createLayoutFromZoomData(zoomData, layout) {
     return layout;
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined, barView = undefined) {
     let escapedData = graphData.values;
     switch (sensorInfo.plotType) {
         case 0:
@@ -227,10 +262,10 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
         case 4:
             return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape, range)
-                : new BarPLot(escapedData, graphName, sensorInfo.units, color);
+                : new BarPLot(escapedData, graphName, sensorInfo.units, color, barView);
         case 5:
             return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range)
-                : new BarPLot(escapedData, graphName, sensorInfo.units, color);
+                : new BarPLot(escapedData, graphName, sensorInfo.units, color, barView);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
         case 8:
@@ -362,7 +397,8 @@ async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
         await Plotly.update(graphId, {}, updateLayout);
     }
 
-    if (graph._fullData.length === 1)
+    // Count plots, not traces: the sensor page's bar view is several traces under one name.
+    if (new Set(graph._fullData.map(x => x.name)).size === 1)
         await Plotly.update(graphId, {}, {
             hovermode: 'closest',
             title: {}
