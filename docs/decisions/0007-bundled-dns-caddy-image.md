@@ -22,7 +22,7 @@ Expose DNS-01 through HSM_CERTIFICATE=letsencrypt-dns, HSM_DNS_PROVIDER=cloudfla
 
 - Standard deployments pull a ready-to-use image; operators do not install a local Caddy build toolchain.
 - Provider credentials remain environment variables and must be treated as secrets. Compose-rendered configuration may print interpolated values.
-- Versioned image tags are immutable. Any Caddy source, Caddyfile, or module change requires a new workflow version and matching compose tag; an existing tag cannot be overwritten. The latest tag advances only after the new version publishes.
+- Versioned image tags are immutable. Any Caddy source, Caddyfile, or module change requires a new workflow version and matching compose tag; an existing tag cannot be overwritten. The latest tag moves only when a new version publishes.
 - Repository maintainers can build the image locally for development; operator installs use the published versioned image.
 - Advanced operators may mount a custom Caddyfile, but must preserve the entrypoint-selected TLS snippet and use the entrypoint wrapper for reloads.
 - Trusted certificates can be issued using DNS validation without inbound port 80, while A/AAAA records and network routing remain operator-managed.
