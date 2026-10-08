@@ -15,7 +15,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-2 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
-Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only after a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
+Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
 Repository maintainers can use scripts/local-docker-build.ps1 to build the Caddy image locally as hsm-caddy:local for development; its generated Compose override selects that image. Normal installations use the published versioned image and do not build Caddy.
 
