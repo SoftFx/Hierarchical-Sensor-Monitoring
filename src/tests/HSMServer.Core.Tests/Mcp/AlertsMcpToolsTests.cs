@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -30,6 +31,8 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IAlertScheduleProvider> _schedules = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
+        private readonly Mock<HSMServer.Folders.IFolderManager> _foldersManager = new();
+        private readonly Mock<HSMServer.Notifications.Chats.IChatsManager> _chatsManager = new();
 
         private readonly List<AlertSchedule> _scheduleStore = [];
         private readonly List<AlertTemplateModel> _templateStore = [];
@@ -40,13 +43,28 @@ namespace HSMServer.Core.Tests.Mcp
             _schedules.Setup(s => s.GetAllSchedules()).Returns(() => _scheduleStore.ToList());
             _schedules.Setup(s => s.GetSchedule(It.IsAny<Guid>()))
                 .Returns((Guid id) => _scheduleStore.FirstOrDefault(s => s.Id == id));
+            _schedules.Setup(s => s.SaveSchedule(It.IsAny<AlertSchedule>()))
+                .Callback((AlertSchedule schedule) =>
+                {
+                    _scheduleStore.RemoveAll(s => s.Id == schedule.Id);
+                    _scheduleStore.Add(schedule);
+                });
+            _schedules.Setup(s => s.DeleteSchedule(It.IsAny<Guid>()))
+                .Callback((Guid id) => _scheduleStore.RemoveAll(s => s.Id == id));
 
             _cache.Setup(c => c.GetAlertTemplateModels()).Returns(() => _templateStore.ToList());
             _cache.Setup(c => c.GetAlertTemplate(It.IsAny<Guid>()))
                 .Returns((Guid id) => _templateStore.FirstOrDefault(t => t.Id == id));
+            _cache.Setup(c => c.GetProducts()).Returns(new List<Core.Model.ProductModel>());
+            _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<HSMCommon.Model.SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<Core.Model.BaseSensorModel>());
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>())).Returns(new List<Core.Model.BaseSensorModel>());
             _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
                 .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
+            _cache.Setup(c => c.DetachAlertScheduleFromPoliciesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.Ok);
+
+            _chatsManager.Setup(c => c.GetValues()).Returns([]);
 
             // Entitled by default; deny scenarios override the gate.
             _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
@@ -55,11 +73,23 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(ApiTokenAuthorization.Allowed);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
+            // Admin + read-write by default; write scenarios override.
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
         }
 
 
-        private AlertsMcpTools CreateTools() =>
-            new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object), AccessorOf());
+        private AlertsMcpTools CreateTools()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object);
+            var templateWriter = new AlertTemplateAdministrationService(_cache.Object, _foldersManager.Object,
+                _chatsManager.Object, _schedules.Object, _authorization.Object,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<AlertTemplateAdministrationService>.Instance);
+            var scheduleWriter = new AlertScheduleAdministrationService(_schedules.Object, _cache.Object,
+                _authorization.Object, reader);
+
+            return new AlertsMcpTools(reader, templateWriter, scheduleWriter, AccessorOf());
+        }
 
         private static IHttpContextAccessor AccessorOf() =>
             new HttpContextAccessor
@@ -366,6 +396,130 @@ namespace HSMServer.Core.Tests.Mcp
                 () => CreateTools().GetAlertSchedule(Guid.NewGuid()));
 
             Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+
+        // === The write tools (phase 2): delegation + error-text mapping ===
+
+
+        // The web editor's default sample — a VALID schedule body.
+        private const string ValidYaml = """
+            daySchedules:
+                - days: [Mon, Tue, Wed, Thu, Fri]
+                  windows:
+                    - { start: "09:00", end: "11:30" }
+            disabledDates: ["2026-02-11"]
+            """;
+
+        private static HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto TemplateDto(string name) => new()
+        {
+            Name = name ?? $"template-{Guid.NewGuid():N}",
+            SensorType = (byte)SensorType.Integer,
+            FolderId = Guid.NewGuid(),
+            Paths = ["*/cpu"],
+            Policies = [new HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto
+            {
+                SensorStatus = (byte)SensorStatus.Ok,
+            }],
+        };
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_ReturnsTheStoredTemplate()
+        {
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(((bool Ok, string Error))(true, null))
+                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+
+            var dto = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+
+            Assert.NotEqual(Guid.Empty, dto.Id);
+            Assert.Contains(_templateStore, t => t.Id == dto.Id);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_DuplicateName_FlattensFieldKeyedError()
+        {
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(((bool Ok, string Error))(true, null));
+
+            var existing = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "taken", FolderId = Guid.NewGuid() };
+            _templateStore.Add(existing);
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(TemplateDto("taken")));
+
+            Assert.Contains("name: The name must be unique.", error.Message);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task DeleteAlertTemplate_ReturnsTheDeletedId()
+        {
+            var template = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "gone", FolderId = Guid.NewGuid() };
+            _templateStore.Add(template);
+
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(((bool Ok, string Error))(true, null))
+                .Callback((Guid id, CancellationToken _) => _templateStore.RemoveAll(t => t.Id == id));
+
+            var result = await CreateTools().DeleteAlertTemplateAsync(template.Id);
+
+            Assert.Equal(template.Id, result.Id);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_ReturnsTheStoredSchedule()
+        {
+            var dto = await CreateTools().CreateAlertScheduleAsync(
+                new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                {
+                    Name = "night-shift",
+                    Timezone = "UTC",
+                    Schedule = ValidYaml,
+                });
+
+            Assert.Equal("night-shift", dto.Name);
+            Assert.Contains(_scheduleStore, s => s.Id == dto.Id);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_NonAdminOwner_IsTheNotFoundError()
+        {
+            // The Global boundary is admin-only: a non-admin owner answers the
+            // same text as an unknown id — nothing about the surface leaks.
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.NotFound);
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertScheduleAsync(
+                    new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                    {
+                        Name = "x", Timezone = "UTC", Schedule = ValidYaml,
+                    }));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+            Assert.Empty(_scheduleStore);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task DeleteAlertSchedule_IncompleteDetachNamesTheRetry()
+        {
+            var schedule = BuildSchedule("referenced");
+            _scheduleStore.Add(schedule);
+
+            _cache.Setup(c => c.DetachAlertScheduleFromPoliciesAsync(schedule.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.FromError("one policy update failed"));
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().DeleteAlertScheduleAsync(schedule.Id));
+
+            Assert.Contains("was not deleted", error.Message);
+            Assert.Contains(_scheduleStore, s => s.Id == schedule.Id);
         }
     }
 }

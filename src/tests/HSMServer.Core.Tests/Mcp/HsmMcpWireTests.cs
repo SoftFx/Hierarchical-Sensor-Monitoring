@@ -56,6 +56,14 @@ namespace HSMServer.Core.Tests.Mcp
 
         private static readonly string[] SpecTools =
         [
+            "create_alert_schedule",
+            "create_alert_template",
+            "create_sensor_policy",
+            "create_sensor_ttl_policy",
+            "delete_alert_schedule",
+            "delete_alert_template",
+            "delete_sensor_policy",
+            "delete_sensor_ttl_policy",
             "find_sensors",
             "get_alert_schedule",
             "get_alert_template",
@@ -69,6 +77,10 @@ namespace HSMServer.Core.Tests.Mcp
             "list_chats",
             "list_folders",
             "list_products",
+            "update_alert_schedule",
+            "update_alert_template",
+            "update_sensor_policy",
+            "update_sensor_ttl_policy",
         ];
 
 
@@ -213,6 +225,27 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        [Fact]
+        public async Task Wire_ReadOnlyToken_CannotReachAnyTool_NotEvenInitialize()
+        {
+            // Every MCP message (initialize included) is a POST, and the
+            // management policy's method backstop rejects a read-only token
+            // on unsafe methods — so the write surface cannot even be listed,
+            // let alone called, with a read-only credential. The loose mock's
+            // GetToken default (null) passes the backstop, so the ReadOnly
+            // flag must be stubbed explicitly here.
+            _tokens.Setup(t => t.GetToken(It.IsAny<string>()))
+                .Returns(new ApiTokenInfo { OwnerUserId = _ownerId, ReadOnly = true });
+
+            using var host = BuildHost();
+            host.Start();
+
+            await Assert.ThrowsAnyAsync<Exception>(() => ConnectAsync(host));
+
+            _cache.Verify(c => c.GetProducts(), Times.Never);
+        }
+
+
         private IHost BuildHost(int localPort = SitePort)
         {
             return Host.CreateDefaultBuilder()
@@ -237,6 +270,9 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddScoped<AlertReadService>();
                         services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatsReadService>();
                         services.AddScoped<HSMServer.Model.ManagementApi.Folders.FoldersReadService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService>();
+                        services.AddSingleton<HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);

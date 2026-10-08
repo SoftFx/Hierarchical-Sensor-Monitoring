@@ -654,11 +654,13 @@
         </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
-            The four alert tools of the read-only MCP surface (#1391): templates and
-            schedules as the REST surface serves them — a thin rendering of
-            <see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> (#1393: the per-folder sight, the
-            caller-wide gate and the sensor-path filter had existed in two copies,
-            a security-relevant drift risk).
+            The alert tools of the MCP surface — four reads (#1391) and, since the
+            phase-2 write surface, six writes: template and schedule CRUD. All ten
+            are thin renderings of the transport-agnostic services the REST
+            controllers run on (<see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> for the reads,
+            <see cref="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService"/> and
+            <see cref="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService"/> for the writes — the
+            #1393 one-decision-two-transports pattern).
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
@@ -805,6 +807,23 @@
         </member>
         <member name="P:HSMServer.Mcp.McpFoldersResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpDeletedResult">
+            <summary>
+            Result of the delete tools — MCP has no 204, so a delete answers an
+            explicit success record naming the removed id.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
+            <summary>Id of the deleted resource.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.PoliciesMcpTools">
+            <summary>
+            The six policy write tools of the MCP surface (phase 2 of AI-agent
+            access): data-policy and TTL-policy CRUD on a sensor — thin
+            delegations to <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500), the
+            same engine the REST policy controllers run on.
+            </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
             <summary>

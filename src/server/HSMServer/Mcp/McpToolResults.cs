@@ -175,4 +175,15 @@ namespace HSMServer.Mcp
         /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         public int TotalPages { get; init; }
     }
+
+
+    /// <summary>
+    /// Result of the delete tools — MCP has no 204, so a delete answers an
+    /// explicit success record naming the removed id.
+    /// </summary>
+    public sealed record McpDeletedResult
+    {
+        /// <summary>Id of the deleted resource.</summary>
+        public Guid Id { get; init; }
+    }
 }

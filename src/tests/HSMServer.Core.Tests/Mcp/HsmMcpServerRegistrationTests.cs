@@ -35,6 +35,14 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(
             [
+                "create_alert_schedule",
+                "create_alert_template",
+                "create_sensor_policy",
+                "create_sensor_ttl_policy",
+                "delete_alert_schedule",
+                "delete_alert_template",
+                "delete_sensor_policy",
+                "delete_sensor_ttl_policy",
                 "find_sensors",
                 "get_alert_schedule",
                 "get_alert_template",
@@ -48,6 +56,10 @@ namespace HSMServer.Core.Tests.Mcp
                 "list_chats",
                 "list_folders",
                 "list_products",
+                "update_alert_schedule",
+                "update_alert_template",
+                "update_sensor_policy",
+                "update_sensor_ttl_policy",
             ], names);
         }
 
@@ -120,6 +132,12 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("\"chats\"", chats);
             Assert.Contains("\"totalFound\"", chats);
             Assert.DoesNotContain("\"TotalFound\"", chats);
+
+            var deleted = JsonSerializer.Serialize(new McpDeletedResult { Id = Guid.NewGuid() },
+                McpJsonUtilities.DefaultOptions);
+
+            Assert.Contains("\"id\"", deleted);
+            Assert.DoesNotContain("\"Id\"", deleted);
         }
 
         [Fact]
