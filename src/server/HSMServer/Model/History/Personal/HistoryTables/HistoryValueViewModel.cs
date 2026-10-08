@@ -43,6 +43,9 @@ namespace HSMServer.Model.History
 
         public string Mean { get; init; }
 
+        // Population standard deviation of the bar's samples (#1509); null when the sender did not report it.
+        public string StdDev { get; init; }
+
         public string EmaMin { get; init; }
 
         public string EmaMax { get; init; }
