@@ -54,6 +54,17 @@ tails stay visible.
   bar's Mean is rounded to an integer, so for int bars with a small spread the between-bar term carries
   up to 0.5 of rounding per part and the merged σ can be off in either direction (samples {0,1} and {1,2} store
   means 0 and 2 and merge to 1.12 instead of 0.71).
+- **Compressed Mean skips timeout rows too — a behavior change for every bar sensor (#1509).** The
+  sensor page's history compression (`BarHistoryProcessor.CountMean`) used to weight every row of a
+  bucket, including timeout rows. A timeout row is the sensor's last bar repeated with `IsTimeout`
+  (`GetTimeoutValue`), so that bar was counted twice and the compressed `Mean` was pulled towards it —
+  and away from the mean the StdDev band is pooled around, which already skips timeout rows. Now, when a
+  bucket mixes timeout rows with real bars, the compressed `Mean` is the count-weighted mean of the real
+  bars only; this applies to all bar sensors, with or without StdDev, so a compressed bar next to a
+  timeout can show a different Mean than before the upgrade. Only a bucket of timeout rows alone keeps
+  the old mean (all its rows count, as before). Min/Max/Count/First/Last are unchanged. Pinned by
+  `BarStdDevTests.History_compression_ignores_timeout_rows` (Mean 5.0 and σ 2.0 with a repeated last
+  bar in the bucket).
 - **Partial bars.** Same-`OpenTime` partial posts replace each other in `BarValuesStorage` (the
   collector's running σ rides on each post like Mean), so no σ merge happens on ingestion;
   `BarBaseValue<T>.TrySetValue` and `NotCompressedValue<T>` copy σ like the other fields.
