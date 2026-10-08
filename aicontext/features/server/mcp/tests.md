@@ -1,12 +1,12 @@
 # Feature tests: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-09-15 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Mcp/`
 
 `HsmMcpWireTests` — the wire-level smoke test over a minimal in-memory host (#1392 review, round 3): the REAL `MapMcp` + `RequireAuthorization(ManagementPolicy)`, `McpSitePortOnlyMiddleware`, the real `HsmApiToken` scheme (over mocked token/user managers) and `AddHsmMcpServer`'s registrations, driven by a real SDK `McpClient` (initialize → tools/list → tools/call). Closes the three load-bearing integration assumptions at once: the ambient principal flows (a `tools/call` returns data, not the `McpToolContext` backstop error), tool instances resolve in the REQUEST scope (the host runs in Development — ValidateScopes + ValidateOnBuild), and the guard reads the metadata `MapMcp` actually emits (a mismatch fail-closes to the uniform 404). Plus: no credential → the transport is rejected before any tool, and a valid credential on the SensorPort gets the uniform 404. No Kestrel/LevelDB/fixed listeners — the in-memory TestServer assembles only the pieces `AddHsmMcpServer` already groups.
 
-`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults), and the property-KEY-SET pin of a null-valued `SensorDto` under both the SDK options and MVC's — the parity pin that keeps MCP and REST JSON shapes honest (#1392 r5; writing it exposed the SDK's `WhenWritingNull`: null members are absent on MCP, explicit `null` on REST — pinned as the actual contract rather than silently assumed identical).
+`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults), and the property-KEY-SET pin of a null-valued `SensorDto` under both the SDK options and MVC's — the parity pin that keeps MCP and REST JSON shapes honest (#1392 r5; writing it exposed the SDK's `WhenWritingNull`: null members are absent on MCP, explicit `null` on REST — pinned as the actual contract rather than silently assumed identical).
 
 `SensorTreeMcpToolsTests` and `AlertsMcpToolsTests` — the tool renderings:
 
@@ -45,6 +45,16 @@
 - `ListAlertSchedules_FiltersSensorPaths_ByProductVisibility`.
 - `GetAlertSchedule_MapsDto_AndFiltersSensorsByVisibility`.
 - `GetAlertSchedule_Absent_IsToolError`.
+
+`ChatsMcpToolsTests` — the chat tools as renderings of `ChatsReadService` (the service itself is pinned by `ChatsApiControllerTests` — the shared regression net, as with the alerts):
+
+- `ListChats_OrdersByName_ReturnsFirstLimitWithTotalFound` — the list contract with the effective-paging echo.
+- `ListChats_GlobalChatsAndVisibleFolderChats_OutOfSightAbsent` — the chat sight composition (global chats everywhere, folder-bound chats through folder sight).
+- `ListChats_PageServesBeyondTheLimit` / `ListChats_HugePageNumber_ClampsToLastPage_NoOverflowWrap` — the shared clamp pins on the chat path.
+- `ListChats_DeniedGate_IsToolError_ChatsNeverQueried` — the caller-wide gate; nothing is resolved for a denied caller.
+- `ListChats_MemoizesVisibility_PerDistinctFolder` — the evaluator is resolved once per distinct folder (Times.Exactly(2)).
+- `GetChat_Visible_MapsDto`.
+- `GetChat_UnknownId_IsToolError` / `GetChat_InvisibleFolderChat_SameToolErrorAsUnknown` — anti-enumeration carried into MCP.
 
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 
