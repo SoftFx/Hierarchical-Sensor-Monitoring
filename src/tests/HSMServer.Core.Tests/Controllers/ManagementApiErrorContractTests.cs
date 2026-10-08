@@ -12,6 +12,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
@@ -85,14 +86,20 @@ namespace HSMServer.Core.Tests.Controllers
                 },
             };
 
-        private AlertSchedulesApiController CreateSchedulesController() =>
-            new(new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object))
+        private AlertSchedulesApiController CreateSchedulesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertScheduleAdministrationService(_schedulesProvider.Object, _cache.Object,
+                _authorization.Object, reader);
+
+            return new AlertSchedulesApiController(reader, writer)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
+        }
 
         private static AlertTemplateDto BuildDto() => new()
         {

@@ -59,11 +59,14 @@
         </member>
         <member name="T:HSMServer.Controllers.AlertSchedulesApiController">
             <summary>
-            Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
-            only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
-            document); served on the web-UI port only. Readable by any token whose owner
-            is an admin or holds a role on at least one product/folder; sensor references
-            are filtered to the products the owner can see.
+            CRUD over alert schedules (epic #1347). Bearer-token authenticated
+            only (the HsmApiToken scheme — see the HsmApiToken security scheme of
+            this document); served on the web-UI port only. Reads pass the
+            caller-wide gate (the owner is an admin or holds a role on at least
+            one product/folder, sensor references filtered to the owner's sight);
+            WRITES additionally require the owner to be an ADMIN with a read-write
+            token — the evaluator's Global-boundary decision (the token-side
+            equivalent of the web UI's [AuthorizeIsAdmin] on Save/Remove).
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedules(System.Int32,System.Int32)">
@@ -78,6 +81,31 @@
         <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedule(System.Guid)">
             <summary>Get one schedule by id (same caller-wide gate as the list).</summary>
             <param name="id">Schedule id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.CreateSchedule(HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Create a schedule. A client-sent id is ignored (the server generates one —
+            the provider's Save is an upsert by id); the response echoes the STORED
+            schedule with sensor paths filtered to the owner's sight.
+            </summary>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator — the token-side equivalent of the web UI's admin gate on schedule editing).</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.UpdateSchedule(System.Guid,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Update a schedule (upsert semantics at a known id); the response echoes
+            the stored schedule. The id never travels in the body — the route owns it.
+            </summary>
+            <param name="id">Schedule id.</param>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator).</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.DeleteSchedule(System.Guid)">
+            <summary>
+            Delete a schedule. Detaches the id from every referencing policy FIRST;
+            on an incomplete detach the schedule survives and the answer is 409 —
+            retrying re-runs the idempotent detach over the survivors.
+            </summary>
+            <param name="id">Schedule id.</param>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator).</remarks>
         </member>
         <member name="T:HSMServer.Controllers.AlertTemplatesApiController">
             <summary>
@@ -1073,6 +1101,34 @@
             <param name="means"></param>
             <returns></returns>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
+            <summary>
+            The write engine of the schedule CRUD — the schedules' twin of
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500 pattern): transport-
+            agnostic, returning <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> so the REST
+            controller and the MCP write tools render the same decision.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Create a schedule. The server generates the id (a client cannot
+            choose one — the provider's Save is an upsert by id); the response
+            echoes the stored schedule.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Update a schedule (upsert semantics at a known id); the response
+            echoes the stored schedule.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+            <summary>
+            Delete a schedule. Detaches the id from every referencing policy
+            FIRST; on an incomplete detach the schedule survives and the answer
+            is a Conflict (retry re-runs the idempotent detach).
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
             <summary>
             Wire contract of the /api/v1/alertSchedules read-only surface. The four durable
@@ -1100,6 +1156,25 @@
             products the token's owner can see, so a token never learns paths outside
             its owner's sight.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto">
+            <summary>
+            The write request of the schedule CRUD: the three admin-editable
+            fields of a schedule. The id never travels in the body — POST
+            generates one server-side, PUT takes it from the route (the templates
+            id-handling rule: the provider's Save is an upsert by id, so honoring
+            a client-chosen id would let a caller overwrite a schedule it never
+            meant to touch).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Name">
+            <summary>Schedule name; unique per server, 1..200 chars.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Timezone">
+            <summary>IANA timezone id (e.g. "UTC", "Europe/Berlin"); validated server-side.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Schedule">
+            <summary>The working-time schedule as YAML text — the format the web UI's editor saves.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService">
             <summary>

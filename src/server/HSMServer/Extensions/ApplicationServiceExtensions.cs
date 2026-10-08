@@ -29,6 +29,7 @@ using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
@@ -92,6 +93,13 @@ namespace HSMServer.ServiceExtensions
             // folderId source of alert-template writes (the access-grouping
             // Folder entity, not the tree's nested products).
             services.AddScoped<FoldersReadService>();
+
+            // The schedule write engine — the schedules' twin of
+            // PolicyAdministrationService: transport-agnostic write decisions
+            // behind the REST controller and (later) the MCP write tools.
+            // Scoped like its readers: it owns no gating state (schedule
+            // writes have no full-list merge to serialize).
+            services.AddScoped<AlertScheduleAdministrationService>();
 
             // The alert-administration write engine (#1500): item-level policy
             // CRUD merged into atomic full-list node updates. SINGLETON, unlike

@@ -207,9 +207,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (schedule is null)
                 return SensorTreeReadResult<AlertScheduleDto>.Fail(SensorTreeReadOutcome.NotFound);
 
-            return SensorTreeReadResult<AlertScheduleDto>.Ok(ToDto(schedule,
-                _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(user)));
+            return SensorTreeReadResult<AlertScheduleDto>.Ok(RenderSchedule(schedule, user));
         }
+
+
+        // Renders a stored schedule through the read mapping (sensor paths
+        // filtered to the owner's sight) — the success echo of the schedule
+        // WRITE paths (AlertScheduleAdministrationService), so a write answers
+        // exactly what GET would answer afterwards.
+        internal AlertScheduleDto RenderSchedule(Core.Model.Policies.AlertSchedule schedule, ClaimsPrincipal user) =>
+            ToDto(schedule, _cache.GetSensorsByAlertSchedule(schedule.Id),
+                _authorization.MemoizedProductVisibility(user));
 
 
         // === Policy reads (#1500) ===
