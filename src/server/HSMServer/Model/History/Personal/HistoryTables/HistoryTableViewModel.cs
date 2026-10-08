@@ -56,9 +56,10 @@ namespace HSMServer.Model.History
 
         public bool IsBarSensor => _model.Type.IsBar();
 
-        // Checked across all loaded pages, not only the current one, so the σ column does not
-        // appear and disappear while paging; StdDev is unknown (null) for most senders (#1509).
-        public bool HasStdDev => IsBarSensor && Pages.Any(page => page.Any(HasKnownStdDev));
+        // Checked across all loaded pages, not only the current one: once shown, the σ column never
+        // disappears while paging (it may appear once an older page with σ is loaded). Timeout rows
+        // repeat the last bar and are rendered empty, so they do not count (#1509).
+        public bool HasStdDev => IsBarSensor && Pages.Any(page => page.Any(value => !value.IsTimeout && HasKnownStdDev(value)));
 
         public bool IsAliveSensor => string.Equals(_model.DisplayName, _serviceAliveSensorName);
 
