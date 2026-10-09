@@ -54,8 +54,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // Optional resource pointers of a Conflict resolution (e.g.
         // {"templateId": "<id>"} when the templates create-path partial-apply
         // conflict leaves a persisted template the caller must PUT to fix) —
-        // rendered into the 409 details by ToActionResult.
-        public object Details { get; init; }
+        // rendered into the 409 details by ToActionResult and disclosed in the
+        // MCP tool error text.
+        public System.Collections.Generic.Dictionary<string, string> Details { get; init; }
     }
 
 
@@ -79,7 +80,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         public static PolicyWriteResult<T> Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
-            object details = null) =>
+            System.Collections.Generic.Dictionary<string, string> details = null) =>
             new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
     }
 
@@ -95,8 +96,16 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         public static PolicyWriteResult Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
-            object details = null) =>
+            System.Collections.Generic.Dictionary<string, string> details = null) =>
             new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
+
+
+        // The single 403 message of every write denial (read-only token or the
+        // owner's missing write role) — REST rendering, MCP tool error text and
+        // the administration services all answer this one string, so it lives
+        // here beside the envelope that carries it.
+        public const string WriteDeniedMessage =
+            "The token is read-only or the token's owner cannot write at this target.";
 
 
         // The REST half of the transport split: renders the failure through the
@@ -107,10 +116,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
             failure?.Outcome switch
             {
                 PolicyWriteOutcome.Forbidden => ManagementApiErrors.Forbidden(
-                    failure.Message ?? "The token is read-only or the token's owner cannot write at this target."),
+                    failure.Message ?? WriteDeniedMessage),
                 PolicyWriteOutcome.Invalid => ManagementApiErrors.UnprocessableEntity(failure.Errors),
                 PolicyWriteOutcome.Validation => ManagementApiErrors.Validation(failure.Errors),
-                PolicyWriteOutcome.Conflict when failure.Details is not null => ManagementApiErrors.Conflict(
+                PolicyWriteOutcome.Conflict when failure.Details is { Count: > 0 } => ManagementApiErrors.Conflict(
                     failure.Message ?? "The write conflicts with the current state of the resource.", failure.Details),
                 PolicyWriteOutcome.Conflict => ManagementApiErrors.Conflict(
                     failure.Message ?? "The write conflicts with the current state of the resource."),

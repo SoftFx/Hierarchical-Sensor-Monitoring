@@ -148,7 +148,7 @@ HsmApiToken bearer tokens only (`HsmApiTokenDefaults.ManagementPolicy`), served 
 | `src/server/HSMServer/Model/ManagementApi/Alerts/PolicyDto.cs` | Wire DTOs (typed conditions, destination, notification, TTL interval/inherit) |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertPolicyConditionRules.cs` | The per-type condition table + target validation (the 422 engine) |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertPolicyDtoMapper.cs` | Model ↔ DTO mapping, write-side normalizations |
-| `src/server/HSMServer/Model/ManagementApi/Alerts/PolicyWriteResult.cs` | Transport-agnostic write envelope (REST today, MCP phase 2) |
+| `src/server/HSMServer/Model/ManagementApi/Alerts/PolicyWriteResult.cs` | Transport-agnostic write envelope, rendered by BOTH transports since the phase-2 MCP write tools: outcomes Ok/NotFound/Forbidden/Invalid(422)/Conflict plus the append-only `Validation` (400 — the template write engine's shipped pre-#1500 contract) and `WriteDeniedMessage`; failures may carry `Details` (string->string pointers, e.g. the templates create-path `templateId` disclosure) rendered into 409 details |
 | `src/tests/HSMServer.Core.Tests/Model/ManagementApi/PolicyAdministrationServiceTests.cs` | Merge semantics on the real cache |
 | `src/tests/HSMServer.Core.Tests/Controllers/SensorPoliciesApiControllerTests.cs` | Conventions, auth mapping, 422/409, round-trip |
 | `src/tests/HSMServer.Core.Tests/Controllers/ProductPoliciesApiControllerTests.cs` | Aggregate read, routed writes, product TTL round-trip |
@@ -164,4 +164,4 @@ HsmApiToken bearer tokens only (`HsmApiTokenDefaults.ManagementPolicy`), served 
 - PATCH is full-replace at item granularity (documented): there is no field-level merge. A "toggle isDisabled" PATCH carries the policy's whole content — `GET` then modify then `PATCH` round-trips cleanly.
 - The pure-toggle detection compares on the API's expression of the content; a stored policy holding fields outside the API's range never reads equal to an API-shaped body, so it answers 409 conservatively.
 - Enum-typed fields parse case-insensitively; canonical casing is what reads and the spec publish.
-- MCP write tools (phase 2), sensor-settings CRUD and schedules/templates CRUD (phase 3) are out of scope.
+- ~~MCP write tools (phase 2)~~ — RESOLVED: the sensor-policy write tools (create/update/delete + TTL twins) render `PolicyAdministrationService` through `McpToolWriteErrors` at `/mcp` (read-write tokens only). Sensor-settings CRUD (phase 3) and product-policy MCP write tools stay out of scope (REST keeps the product-policy writes; they route to the owning sensor's list anyway). Schedule/template CRUD landed on REST and MCP separately — see `aicontext/features/server/management-api/` and `aicontext/features/server/mcp/`.

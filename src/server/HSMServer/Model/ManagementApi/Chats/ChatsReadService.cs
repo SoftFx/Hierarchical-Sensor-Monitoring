@@ -64,12 +64,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             // The per-folder sight decision, memoized per DISTINCT folder within
             // one request (the evaluator re-resolves user + token on every call;
             // IsVisible records nothing, unlike per-item authorization).
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsFolderVisible(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var visible)
-                    ? visible
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
+            var isFolderVisible = _authorization.MemoizedFolderVisibility(user);
 
             var visibleChats = _chats.GetValues()
                 .Where(chat =>
@@ -78,7 +73,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                     // pass running (the sensor-tree scan's rule).
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    return IsChatVisible(chat, IsFolderVisible);
+                    return IsChatVisible(chat, isFolderVisible);
                 })
                 .OrderBy(chat => chat.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(chat => chat.Id)
@@ -121,14 +116,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             // listed exactly when GET {id} would answer it (the templates'
             // invariant). The memoization is per request; a single-item lookup
             // walks at most the chat's bound folders.
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsFolderVisible(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var visible)
-                    ? visible
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
-
-            return IsChatVisible(chat, IsFolderVisible)
+            return IsChatVisible(chat, _authorization.MemoizedFolderVisibility(user))
                 ? SensorTreeReadResult<ChatDto>.Ok(ChatDtoMapper.ToDto(chat))
                 : SensorTreeReadResult<ChatDto>.Fail(SensorTreeReadOutcome.NotFound);
         }
@@ -143,8 +131,5 @@ namespace HSMServer.Model.ManagementApi.Chats
         // folder-bound chats only inside their folders).
         private static bool IsChatVisible(Chat chat, Func<Guid, bool> isFolderVisible) =>
             chat.Folders.Count == 0 || chat.Folders.Any(isFolderVisible);
-
-        private static ApiTokenResource FolderResource(Guid folderId) =>
-            new(ApiTokenResourceKind.Folder, folderId);
     }
 }

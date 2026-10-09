@@ -15,7 +15,7 @@ using Xunit;
 namespace HSMServer.Core.Tests.Mcp
 {
     // The MCP wiring itself (#1391): the registration must surface EXACTLY the
-    // read-only tools the spec names (schemas built by the SDK — a bad tool
+    // spec tools — the read-only set plus the phase-2 write tools (schemas built by the SDK — a bad tool
     // signature throws at registration, so this also proves the signatures are
     // constructible), the server identity, and the camelCase wire casing shared
     // with REST. The endpoint-level authorization (MapMcp + RequireAuthorization)

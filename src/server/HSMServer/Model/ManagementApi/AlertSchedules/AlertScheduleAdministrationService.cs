@@ -49,11 +49,6 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     {
         public const int MaxNameLength = 200;
 
-        // The fallback strings mirror PolicyWriteResult.ToActionResult's
-        // defaults so both transports answer the same text.
-        private const string WriteDeniedMessage =
-            "The token is read-only or the token's owner cannot write at this target.";
-
         private readonly IAlertScheduleProvider _schedules;
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
@@ -146,9 +141,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         }
 
 
-        // Structural + semantic validation, then parsing inside a try (the
-        // domain parser throws on legal-looking but invalid YAML) — the
-        // templates controller's TryBuildValidatedTemplate shape.
+        // Field validation accumulates across name/timezone/schedule — the
+        // templates' structural pass shape — and the YAML parse runs inside a
+        // try (the domain parser throws on legal-looking but invalid input)
+        // whatever the other fields say, so a caller with several problems
+        // learns them all in one 422.
         private bool TryBuildValidatedSchedule(AlertScheduleUpsertDto dto, Guid? id,
             out ScheduleModel schedule, out IDictionary<string, string[]> errors)
         {
@@ -180,22 +177,20 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             schedule = null;
 
-            if (errorMap.Count == 0)
+            try
             {
-                try
-                {
-                    schedule = _parser.Parse(dto.Schedule ?? string.Empty);
+                schedule = _parser.Parse(dto.Schedule ?? string.Empty);
 
-                    // The id is server-owned: generated on create, the route
-                    // id on update — never a client-chosen value.
-                    schedule.Id = id ?? Guid.NewGuid();
-                    schedule.Name = dto.Name;
-                    schedule.Timezone = dto.Timezone;
-                }
-                catch (Exception ex)
-                {
-                    errorMap.Add("schedule", [ex.Message]);
-                }
+                // The id is server-owned: generated on create, the route id on
+                // update — never a client-chosen value. Assigned only on the
+                // success path below.
+                schedule.Id = id ?? Guid.NewGuid();
+                schedule.Name = dto.Name;
+                schedule.Timezone = dto.Timezone;
+            }
+            catch (Exception ex)
+            {
+                errorMap.Add("schedule", [ex.Message]);
             }
 
             errors = null;
@@ -219,7 +214,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 ApiTokenAuthorization.Forbidden => new PolicyWriteFailure
                 {
                     Outcome = PolicyWriteOutcome.Forbidden,
-                    Message = WriteDeniedMessage,
+                    Message = PolicyWriteResult.WriteDeniedMessage,
                 },
                 _ => new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound },
             };

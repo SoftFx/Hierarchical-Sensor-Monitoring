@@ -58,12 +58,7 @@ namespace HSMServer.Model.ManagementApi.Folders
             // decision, memoized per DISTINCT folder (the evaluator re-resolves
             // user + token on every call; IsVisible records nothing, unlike
             // per-item authorization).
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsListable(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var listable)
-                    ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
+            var isListable = _authorization.MemoizedFolderVisibility(user);
 
             var visible = _folders.GetValues()
                 .Where(folder =>
@@ -72,7 +67,7 @@ namespace HSMServer.Model.ManagementApi.Folders
                     // pass running (the sensor-tree scan's rule).
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    return IsListable(folder.Id);
+                    return isListable(folder.Id);
                 })
                 .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(folder => folder.Id)
@@ -119,7 +114,6 @@ namespace HSMServer.Model.ManagementApi.Folders
                 _ => SensorTreeReadResult<FolderDto>.Fail(SensorTreeReadOutcome.NotFound),
             };
         }
-
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);

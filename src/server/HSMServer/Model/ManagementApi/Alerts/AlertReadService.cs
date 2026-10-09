@@ -70,12 +70,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // handful of folders, and the evaluator re-resolves user + token on
             // every call); IsVisible records nothing, unlike per-item
             // authorization.
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsListable(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var listable)
-                    ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
+            var isListable = _authorization.MemoizedFolderVisibility(user);
 
             var visible = (_cache.GetAlertTemplateModels() ?? [])
                 .Where(template =>
@@ -84,7 +79,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     // pass running (the sensor-tree scan's rule).
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    return IsListable(template.FolderId);
+                    return isListable(template.FolderId);
                 })
                 .OrderBy(template => template.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(template => template.Id)

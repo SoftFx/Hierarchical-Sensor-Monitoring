@@ -40,7 +40,7 @@ namespace HSMServer.Mcp
                         : "The request is invalid.";
 
                 case PolicyWriteOutcome.Forbidden:
-                    return failure.Message ?? "The token is read-only or the token's owner cannot write at this target.";
+                    return failure.Message ?? PolicyWriteResult.WriteDeniedMessage;
 
                 case PolicyWriteOutcome.Conflict:
                 {
@@ -49,7 +49,7 @@ namespace HSMServer.Mcp
                     // REST carries conflict resolution pointers in the 409
                     // details (e.g. the templates create-path templateId);
                     // the tool error text must disclose them too.
-                    return failure.Details is System.Collections.Generic.Dictionary<string, string> pointers
+                    return failure.Details is { Count: > 0 } pointers
                         ? $"{message} {string.Join(" ", pointers.Select(pair => $"{pair.Key}: {pair.Value}"))}"
                         : message;
                 }

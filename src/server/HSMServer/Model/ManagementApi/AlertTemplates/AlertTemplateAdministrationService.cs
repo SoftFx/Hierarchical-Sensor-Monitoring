@@ -93,7 +93,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             // The authorization target is the requested folder; no validation
             // error is reported before this decision (404-first).
-            if (AuthorizeFolder(write: true, dto.FolderId, user) is { } denied)
+            if (AuthorizeFolder(dto.FolderId, user) is { } denied)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(denied.Outcome, message: denied.Message);
 
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, user, out var model, out var errors))
@@ -144,7 +144,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // BOTH folders — the current one (the move destroys the old
             // folder's per-sensor policies) and the new one (the template
             // injects policies into its sensors).
-            if (AuthorizeFolder(write: true, existing.FolderId, user) is { } deniedCurrent)
+            if (AuthorizeFolder(existing.FolderId, user) is { } deniedCurrent)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(deniedCurrent.Outcome, message: deniedCurrent.Message);
 
             // AFTER authorization (a body-shape 400 must not reveal that the
@@ -156,7 +156,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 return ValidationFailure("folderId", "The folder id is required.");
 
             if (dto.FolderId != existing.FolderId &&
-                AuthorizeFolder(write: true, dto.FolderId, user) is { } deniedTarget)
+                AuthorizeFolder(dto.FolderId, user) is { } deniedTarget)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(deniedTarget.Outcome, message: deniedTarget.Message);
 
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, user, out var model, out var errors))
@@ -184,7 +184,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (template is null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
-            if (AuthorizeFolder(write: true, template.FolderId, user) is { } denied)
+            if (AuthorizeFolder(template.FolderId, user) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             // Deliberately NOT tied to a cancellation token:
@@ -207,8 +207,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // null when allowed, Forbidden when the folder is in sight but the
         // caller cannot write there (a read-only token or the owner's Viewer
         // role), NotFound when the folder is invisible (indistinguishable
-        // from an unknown id — the area's anti-enumeration rule).
-        private PolicyWriteFailure AuthorizeFolder(bool write, Guid folderId, ClaimsPrincipal user) =>
+        // from an unknown id — the area's anti-enumeration rule). Every write
+        // path here IS a write (the read half stayed in AlertReadService), so
+        // the decision is always AuthorizeWrite.
+        private PolicyWriteFailure AuthorizeFolder(Guid folderId, ClaimsPrincipal user) =>
             _authorization.AuthorizeWrite(user, FolderResource(folderId)) switch
             {
                 ApiTokenAuthorization.Allowed => null,
