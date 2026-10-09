@@ -182,6 +182,27 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedules))] = [400, 401, 403, 500],
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedule))] = [401, 403, 404, 500],
 
+            // The schedule write path: creates/updates carry the field-keyed
+            // 422 (name uniqueness, IANA timezone, parser errors), the delete
+            // carries the incomplete-detach 409 (the schedule survives for
+            // the retry).
+            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.CreateSchedule))] = [400, 401, 403, 404, 422, 500],
+            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.UpdateSchedule))] = [400, 401, 403, 404, 422, 500],
+            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.DeleteSchedule))] = [401, 403, 404, 409, 500],
+
+            // The chat read surface (the destination.chats id source): the
+            // list carries the caller-wide gate's 403, the item the usual
+            // 404 anti-enumeration split.
+            [(typeof(ChatsApiController), nameof(ChatsApiController.GetChats))] = [400, 401, 403, 500],
+            [(typeof(ChatsApiController), nameof(ChatsApiController.GetChat))] = [401, 403, 404, 500],
+
+            // The folder read surface (the folderId source for template
+            // writes): the templates read pattern — no caller-wide gate, the
+            // list answers an empty page for an unsighted owner (no 403 path
+            // on the list), the item carries the defensive 403 arm.
+            [(typeof(FoldersApiController), nameof(FoldersApiController.GetFolders))] = [400, 401, 500],
+            [(typeof(FoldersApiController), nameof(FoldersApiController.GetFolder))] = [401, 403, 404, 500],
+
             // The sensor-tree read surface (#1386): item endpoints declare the
             // (read-unreachable) 403 because their evaluator switch carries the
             // Forbidden arm; the search list answers 404 for an unknown/invisible

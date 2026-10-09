@@ -59,11 +59,14 @@
         </member>
         <member name="T:HSMServer.Controllers.AlertSchedulesApiController">
             <summary>
-            Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
-            only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
-            document); served on the web-UI port only. Readable by any token whose owner
-            is an admin or holds a role on at least one product/folder; sensor references
-            are filtered to the products the owner can see.
+            CRUD over alert schedules (epic #1347). Bearer-token authenticated
+            only (the HsmApiToken scheme — see the HsmApiToken security scheme of
+            this document); served on the web-UI port only. Reads pass the
+            caller-wide gate (the owner is an admin or holds a role on at least
+            one product/folder, sensor references filtered to the owner's sight);
+            WRITES additionally require the owner to be an ADMIN with a read-write
+            token — the evaluator's Global-boundary decision (the token-side
+            equivalent of the web UI's [AuthorizeIsAdmin] on Save/Remove).
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedules(System.Int32,System.Int32)">
@@ -78,6 +81,31 @@
         <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedule(System.Guid)">
             <summary>Get one schedule by id (same caller-wide gate as the list).</summary>
             <param name="id">Schedule id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.CreateSchedule(HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Create a schedule. A client-sent id is ignored (the server generates one —
+            the provider's Save is an upsert by id); the response echoes the STORED
+            schedule with sensor paths filtered to the owner's sight.
+            </summary>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator — the token-side equivalent of the web UI's admin gate on schedule editing).</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.UpdateSchedule(System.Guid,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Update a schedule (upsert semantics at a known id); the response echoes
+            the stored schedule. The id never travels in the body — the route owns it.
+            </summary>
+            <param name="id">Schedule id.</param>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator).</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.DeleteSchedule(System.Guid)">
+            <summary>
+            Delete a schedule. Detaches the id from every referencing policy FIRST;
+            on an incomplete detach the schedule survives and the answer is 409 —
+            retrying re-runs the idempotent detach over the survivors.
+            </summary>
+            <param name="id">Schedule id.</param>
+            <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator).</remarks>
         </member>
         <member name="T:HSMServer.Controllers.AlertTemplatesApiController">
             <summary>
@@ -118,6 +146,57 @@
         <member name="M:HSMServer.Controllers.AlertTemplatesApiController.DeleteTemplate(System.Guid)">
             <summary>Delete a template and strip its per-sensor policies.</summary>
             <param name="id">Template id.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.ChatsApiController">
+            <summary>
+            Read-only surface for notification chats (epic #1347 follow-up): the id
+            source for the destination.chats references alert policies and alert
+            templates validate against — without it an API-only client cannot
+            discover a single valid chat id. Bearer-token authenticated only (the
+            HsmApiToken scheme); served on the web-UI port only. The token mirrors
+            its owner: the caller-wide gate applies, then a chat is visible when it
+            is global or bound to a folder the owner can see; invisible chats
+            answer the same 404 as an unknown id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.GetChats(System.Int32,System.Int32)">
+            <summary>
+            List chats visible to the token's owner, paginated, ordered by name
+            then id. Global chats (bound to no folder) and chats bound to a
+            visible folder are listed; everything else is silently absent, never
+            a per-item 403. Requires the caller-wide gate (the owner sees at
+            least one product or folder, or is an admin).
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.GetChat(System.Guid)">
+            <summary>Get one chat by id; its folders list is what policy writes validate against.</summary>
+            <param name="id">Chat id.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.FoldersApiController">
+            <summary>
+            Read-only surface for access-grouping folders (epic #1347 follow-up):
+            the folderId source for alert-template writes — the entity that scopes
+            templates and binds notification chats. NOT the tree's nested products
+            (`GET /api/v1/nodes` serves those). Bearer-token authenticated only
+            (the HsmApiToken scheme); served on the web-UI port only. The token
+            mirrors its owner: only folders visible to the owner are listed, and
+            an invisible folder answers the same 404 as an unknown id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.FoldersApiController.GetFolders(System.Int32,System.Int32)">
+            <summary>
+            List folders visible to the token's owner, paginated, ordered by
+            name then id. Out-of-sight folders are silently absent, never a
+            per-item 403; an owner who sees nothing gets an empty list.
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.FoldersApiController.GetFolder(System.Guid)">
+            <summary>Get one folder by id — the discovery target for template folderId references.</summary>
+            <param name="id">Folder id.</param>
         </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
@@ -575,11 +654,30 @@
         </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
-            The four alert tools of the read-only MCP surface (#1391): templates and
-            schedules as the REST surface serves them — a thin rendering of
-            <see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> (#1393: the per-folder sight, the
-            caller-wide gate and the sensor-path filter had existed in two copies,
-            a security-relevant drift risk).
+            The alert tools of the MCP surface — four reads (#1391) and, since the
+            phase-2 write surface, six writes: template and schedule CRUD. All ten
+            are thin renderings of the transport-agnostic services the REST
+            controllers run on (<see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> for the reads,
+            <see cref="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService"/> and
+            <see cref="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService"/> for the writes — the
+            #1393 one-decision-two-transports pattern).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.ChatsMcpTools">
+            <summary>
+            The two chat tools of the MCP surface: the id source an agent needs to
+            compose destination.chats when creating or editing alert policies and
+            alert templates — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>
+            (the #1393 pattern: one visibility rule behind both transports).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.FoldersMcpTools">
+            <summary>
+            The two folder tools of the MCP surface: the folderId source an agent
+            needs when creating or editing alert templates (the entity that scopes
+            them and binds notification chats) — a thin rendering of
+            <see cref="T:HSMServer.Model.ManagementApi.Folders.FoldersReadService"/> (the #1393 pattern: one visibility
+            rule behind both transports).
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.McpProductsResult">
@@ -672,7 +770,60 @@
             <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpChatsResult">
+            <summary>Result of the list_chats tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Chats">
+            <summary>The visible chats of the served page, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.TotalFound">
+            <summary>Total visible chats, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatsResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpFoldersResult">
+            <summary>Result of the list_folders tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Folders">
+            <summary>The visible folders of the served page, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.TotalFound">
+            <summary>Total visible folders, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpFoldersResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpDeletedResult">
+            <summary>
+            Result of the delete tools — MCP has no 204, so a delete answers an
+            explicit success record naming the removed id.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
+            <summary>Id of the deleted resource.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.PoliciesMcpTools">
+            <summary>
+            The six policy write tools of the MCP surface (phase 2 of AI-agent
+            access): data-policy and TTL-policy CRUD on a sensor — thin
+            delegations to <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500), the
+            same engine the REST policy controllers run on.
+            </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
             <summary>
@@ -971,6 +1122,34 @@
             <param name="means"></param>
             <returns></returns>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
+            <summary>
+            The write engine of the schedule CRUD — the schedules' twin of
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500 pattern): transport-
+            agnostic, returning <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> so the REST
+            controller and the MCP write tools render the same decision.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Create a schedule. The server generates the id (a client cannot
+            choose one — the provider's Save is an upsert by id); the response
+            echoes the stored schedule.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+            <summary>
+            Update a schedule (upsert semantics at a known id); the response
+            echoes the stored schedule.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+            <summary>
+            Delete a schedule. Detaches the id from every referencing policy
+            FIRST; on an incomplete detach the schedule survives and the answer
+            is a Conflict (retry re-runs the idempotent detach).
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
             <summary>
             Wire contract of the /api/v1/alertSchedules read-only surface. The four durable
@@ -998,6 +1177,25 @@
             products the token's owner can see, so a token never learns paths outside
             its owner's sight.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto">
+            <summary>
+            The write request of the schedule CRUD: the three admin-editable
+            fields of a schedule. The id never travels in the body — POST
+            generates one server-side, PUT takes it from the route (the templates
+            id-handling rule: the provider's Save is an upsert by id, so honoring
+            a client-chosen id would let a caller overwrite a schedule it never
+            meant to touch).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Name">
+            <summary>Schedule name; unique per server, 1..200 chars.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Timezone">
+            <summary>System timezone id (e.g. "UTC", "Europe/Berlin", "Eastern Standard Time" — IANA and Windows both resolve); validated server-side.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Schedule">
+            <summary>The working-time schedule as YAML text — the format the web UI's editor saves.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService">
             <summary>
@@ -1320,6 +1518,33 @@
         <member name="P:HSMServer.Model.ManagementApi.Alerts.ProductPolicyDto.Policy">
             <summary>The policy itself.</summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService">
+            <summary>
+            The write engine of the alert-template CRUD — the templates' twin of
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500 pattern):
+            transport-agnostic, returning <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> so
+            the REST controller and the MCP write tools render the same decision.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Create a template. A client-sent id is ignored (the server generates
+            one — the cache Add is an upsert by id, so honoring a client-chosen
+            id would let a folder-scoped token overwrite a template in a folder
+            it cannot even see); the result echoes the STORED template —
+            normalized ids, chat display names.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Update a template (upsert semantics). Moving it to another folder
+            requires the owner's write access on BOTH folders; the result
+            echoes the STORED template.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Delete a template and strip its per-sensor policies.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
             <summary>
             Alert template wire contract of the /api/v1/alertTemplates surface. The shape
@@ -1522,6 +1747,187 @@
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
+            <summary>
+            A notification chat — the destination alert policies and alert templates
+            route their messages to. One chat row can carry a Telegram binding
+            (private or group via the bot), a Slack webhook and a Mattermost
+            webhook; the booleans below say which channels are configured without
+            ever exposing the webhook URLs themselves (secrets, masked even in the
+            web UI).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Id">
+            <summary>Chat id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Name">
+            <summary>Admin-owned display name (unique per server).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Description">
+            <summary>Free-form description (may be empty). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.CreationDate">
+            <summary>Chat creation time (UTC). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Author">
+            <summary>Author display name (detail field: null unless the owner is an admin or a manager of a bound folder; the id itself is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.SendMessages">
+            <summary>Whether this chat currently receives messages (the admin enable/disable switch). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.MessagesAggregationTimeSec">
+            <summary>Delay (seconds) messages of one sensor are aggregated for before sending. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatId">
+            <summary>Telegram chat id (for a direct chat, the person's Telegram user id). Detail field: null unless the owner is an admin or a manager of a bound folder — the web UI shows it in the clear only to admins/PMs.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramType">
+            <summary>Telegram binding kind — "direct" or "group"; null when no Telegram binding.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramAuthorizationTime">
+            <summary>When the Telegram binding was authorized via the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatTitle">
+            <summary>Telegram chat title mirrored from the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatDescription">
+            <summary>Telegram chat description mirrored from the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.HasSlackWebhook">
+            <summary>Whether a Slack webhook is configured (the URL itself is a secret and is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.HasMattermostWebhook">
+            <summary>Whether a Mattermost webhook is configured (the URL itself is a secret and is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Folders">
+            <summary>
+            Ids of the folders the chat is bound to, FILTERED to the folders
+            the caller can see (an invisible folder id is indistinguishable
+            from an unknown one — the area's anti-enumeration rule). EMPTY
+            means a global chat — available from every node's policies;
+            otherwise the chat is usable from the folders listed here (the
+            same rule policy/template writes validate destination chats
+            against). A chat bound only to invisible folders is not visible
+            at all, so a non-empty unfiltered case cannot arise.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService">
+            <summary>
+            The read surface for notification chats: list and item, with the
+            visibility rule that decides what a caller may see. Transport-agnostic —
+            the REST controller and the MCP chat tools both call it; the caller
+            supplies the token principal and gets DTOs or a
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never an
+            IActionResult (the shared read envelope of the management area).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatsReadService.ListChats(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Chats visible to the token's owner, ordered by name then id,
+            paginated with the area's shared clamps. Requires the caller-wide
+            gate; within it, out-of-sight chats are simply not listed, never a
+            per-item failure.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatsReadService.GetChat(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One chat by id (same caller-wide gate as the list). Unknown and
+            invisible ids answer the SAME NotFound — the area's
+            anti-enumeration rule.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">
+            <summary>
+            An access-grouping folder — the entity alert templates are scoped to
+            (`folderId`) and notification chats bind to. NOT the "folder" of
+            `GET /api/v1/nodes` (that is a nested product in the tree's flat
+            index): this is the separate grouping entity of the web UI's Folders
+            page, and until this surface its ids were discoverable only
+            indirectly, from the templates that referenced them.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Id">
+            <summary>Folder id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Name">
+            <summary>Folder display name (unique per server).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Description">
+            <summary>Free-form description (may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Color">
+            <summary>Folder color, ARGB (the web UI's color picker value).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.CreationDate">
+            <summary>Folder creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Author">
+            <summary>Author display name; null when unknown (the id itself is never exposed).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Products">
+            <summary>Products grouped into this folder (the template write path requires the folder to contain products).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Chats">
+            <summary>
+            Ids of the notification chats bound to the folder. The union of
+            these chats and the GLOBAL chats (empty `folders` on a chat) is the
+            chat set a policy or template in this folder may address.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.DefaultChats">
+            <summary>The folder's default-chats routing (what FromParent-destination policies resolve to).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Ttl">
+            <summary>Default sensor inactivity timeout for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.KeepHistory">
+            <summary>Default sensor-history retention for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.SelfDestroy">
+            <summary>Remove-sensor-after-inactivity default for the folder's sensors (TimeInterval).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto">
+            <summary>A product grouped into a folder.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto.Id">
+            <summary>Product id (a root of the sensor tree).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto.Name">
+            <summary>Product display name.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto">
+            <summary>The default-chats routing of a folder: the destination a policy with a FromParent destination resolves to.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto.Mode">
+            <summary>Routing mode — "fromParent", "notInitialized", "empty" or "custom".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDefaultChatsDto.Chats">
+            <summary>Selected chat ids; meaningful for the "custom" mode (and the persisted selection of "fromParent").</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Folders.FoldersReadService">
+            <summary>
+            The read surface for access-grouping folders: list and item, with the
+            owner-sight visibility rule. Transport-agnostic — the REST controller
+            and the MCP folder tools both call it; the caller supplies the token
+            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/>
+            failure back, never an IActionResult (the shared read envelope of the
+            management area).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Folders.FoldersReadService.ListFolders(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Folders visible to the token's owner, ordered by name then id,
+            paginated with the area's shared clamps. An owner who sees nothing
+            gets an empty list: out-of-sight folders are simply not listed,
+            never a per-item failure.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Folders.FoldersReadService.GetFolder(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One folder by id. Unknown and invisible ids answer the SAME
+            NotFound (the area's anti-enumeration rule).
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
             <summary>

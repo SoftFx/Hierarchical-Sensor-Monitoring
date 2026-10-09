@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
 
 namespace HSMServer.Mcp
@@ -130,7 +132,58 @@ namespace HSMServer.Mcp
         /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         public int Page { get; init; }
 
+        /// <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>Result of the list_chats tool.</summary>
+    public sealed record McpChatsResult
+    {
+        /// <summary>The visible chats of the served page, ordered by name.</summary>
+        public List<ChatDto> Chats { get; init; }
+
+        /// <summary>Total visible chats, whatever the limit.</summary>
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        public int Page { get; init; }
+
         /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>Result of the list_folders tool.</summary>
+    public sealed record McpFoldersResult
+    {
+        /// <summary>The visible folders of the served page, ordered by name.</summary>
+        public List<FolderDto> Folders { get; init; }
+
+        /// <summary>Total visible folders, whatever the limit.</summary>
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        public int Page { get; init; }
+
+        /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>
+    /// Result of the delete tools — MCP has no 204, so a delete answers an
+    /// explicit success record naming the removed id.
+    /// </summary>
+    public sealed record McpDeletedResult
+    {
+        /// <summary>Id of the deleted resource.</summary>
+        public Guid Id { get; init; }
     }
 }

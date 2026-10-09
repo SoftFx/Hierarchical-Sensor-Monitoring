@@ -1,7 +1,7 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-07-23 | Canonical: yes
-> Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution.
+> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
+> Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution. Chat lifecycle stays web-UI (admin) only; since the chat read surface the management API (`GET /api/v1/chats`) and MCP (`list_chats`/`get_chat`) expose chats read-only — the id source for `destination.chats`, webhook URLs never exposed (presence booleans only); chat detail (Telegram identifiers, author, send settings) answers only an admin or a manager of a bound folder, the same gate the web UI's chat editor applies.
 
 ---
 

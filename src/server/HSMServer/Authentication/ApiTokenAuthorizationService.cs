@@ -45,6 +45,17 @@ namespace HSMServer.Authentication
         // 403, so it must not feed the enumeration-probe signal
         // (AuthorizationNotFound) that per-target 404s carry.
         bool CanSeeAnyBoundary(ClaimsPrincipal principal);
+
+        // Per-item body-shaping predicate of the chat read surface: the owner
+        // is an admin or currently holds the Manager role at one of the
+        // folders the chat is bound to — the token-side twin of the web UI's
+        // EditChat gate (TelegramRoleFilterById, ProductManager). A GLOBAL
+        // chat passes no folders, so its detail is admin-only, exactly like
+        // the UI gate whose folder loop finds nothing to match. Role-only by
+        // design: the token's read-only flag never constrains reads, and like
+        // IsVisible this records nothing — it shapes bodies inside an
+        // already-authorized list, it is not a probe signal.
+        bool CanSeeChatDetail(ClaimsPrincipal principal, System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds);
     }
 
 
@@ -88,6 +99,10 @@ namespace HSMServer.Authentication
 
             return allowed;
         }
+
+        public bool CanSeeChatDetail(ClaimsPrincipal principal, System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds) =>
+            TryResolveCaller(principal, out var owner, out _)
+            && (owner.IsAdmin || chatFolderIds.Any(owner.IsFolderManager));
 
         private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)
         {
