@@ -44,6 +44,13 @@
         }
     });
 
+    $(`#barView_${getBarView('graph_@sensorId')}`).prop('checked', true);
+
+    $('input[name="barView"]').change(function () {
+        if ($(this).is(':checked'))
+            setBarView(this.value, 'graph_@sensorId');
+    });
+
     $(document).ready(function () {
         hiddenColumns.clear();
 

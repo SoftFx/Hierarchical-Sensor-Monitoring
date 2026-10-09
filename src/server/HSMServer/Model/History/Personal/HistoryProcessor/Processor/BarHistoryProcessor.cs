@@ -9,7 +9,8 @@ namespace HSMServer.Model.History
 {
     internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, INumber<T>, IComparable
     {
-        private readonly List<(T, int)> _meanList = [];
+        private readonly List<(T, int, bool)> _meanList = [];
+        private readonly List<(int, double, double?)> _stdDevParts = [];
 
 
         protected abstract T DefaultMax { get; }
@@ -74,11 +75,13 @@ namespace HSMServer.Model.History
         private void AddValueFromLists(SummaryBarItem<T> summary)
         {
             summary.Mean = CountMean(_meanList);
+            summary.StdDev = BarStdDev.Combine(_stdDevParts);
         }
 
         private void ClearLists()
         {
             _meanList.Clear();
+            _stdDevParts.Clear();
         }
 
         private BarBaseValue<T> Convert(SummaryBarItem<T> summary, bool isCompressed = true)
@@ -102,7 +105,11 @@ namespace HSMServer.Model.History
         {
             IsCompressed = summary.Count != 0;
 
-            _meanList.Add((value.Mean, value.Count));
+            _meanList.Add((value.Mean, value.Count, value.IsTimeout));
+            // A timeout row is a copy of the last bar (GetTimeoutValue), not new samples: counting
+            // it would weigh that bar twice in the merged StdDev.
+            if (!value.IsTimeout)
+                _stdDevParts.Add((value.Count, double.CreateChecked(value.Mean), value.StdDev));
 
             if (!IsCompressed)
                 summary.FirstValue = value.FirstValue;
@@ -125,8 +132,14 @@ namespace HSMServer.Model.History
         /// </summary>
         /// <param name="means"></param>
         /// <returns></returns>
-        private T CountMean(List<(T mean, int count)> means)
+        private T CountMean(List<(T mean, int count, bool isTimeout)> means)
         {
+            // A timeout row repeats the last bar (GetTimeoutValue); weighing it again would pull the
+            // mean away from the samples and off the centre of the StdDev band (#1509), which skips
+            // timeout rows the same way. A bucket of timeout rows only keeps its old mean.
+            if (means.Exists(m => !m.isTimeout))
+                means = means.FindAll(m => !m.isTimeout);
+
             if (means.Count < 1)
                 return default;
 

@@ -33,19 +33,36 @@ permissions:
 
 env:
   IMAGE: hsmonitoring/hsm-caddy
-  VERSION: 2.11.4-2
+  VERSION: 2.11.4-3
 
 jobs:
-  build-test-publish:
+  build-test:
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
     steps:
+      # Full history for the publish plan; blobless, so only commits and trees are downloaded.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - name: Test image release guards
         run: python3 -m unittest tests/test_caddy_image_release.py
 
-      - name: Verify image version matches the reference compose
-        run: python3 scripts/check-caddy-image-release.py
+      # Checks that compose and workflow agree on the tag, then plans: an unpublished tag is
+      # published; a published one is skipped (compose-only pushes stay green) unless caddy/ changed
+      # after the current VERSION was introduced, which fails, on PRs already. Only master publishes.
+      - name: Plan publication
+        id: plan
+        env:
+          PUBLISH_ALLOWED: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+        run: |
+          if [ "$PUBLISH_ALLOWED" = true ]; then
+            python3 scripts/check-caddy-image-release.py --plan
+          else
+            python3 scripts/check-caddy-image-release.py --plan --no-publish
+          fi
 
       - name: Build image for runtime tests
         run: docker build --tag hsm-caddy:test caddy
@@ -53,21 +70,55 @@ jobs:
       - name: Test modules, modes, validation, and secret handling
         run: sh caddy/test.sh hsm-caddy:test
 
+      # The publish job pushes these exact tested bytes instead of rebuilding.
+      - name: Export tested image
+        if: steps.plan.outputs.publish == 'true'
+        run: docker save hsm-caddy:test | gzip > hsm-caddy-test.tar.gz
+
+      - name: Upload tested image
+        if: steps.plan.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-caddy-test
+          path: hsm-caddy-test.tar.gz
+          # Already gzipped; long enough to re-run a failed publish later without rebuilding.
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+
+  publish:
+    needs: build-test
+    if: needs.build-test.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # Docker Hub credentials are DockerHub environment secrets; a job that does not declare
+    # the environment gets them as empty strings and the login fails.
+    environment: DockerHub
+    steps:
+      - uses: actions/checkout@v4
+
+      # Repeats the plan's lookup on purpose: another run may have published the tag meanwhile.
       - name: Refuse to overwrite an immutable version tag
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: python3 scripts/check-caddy-image-release.py --check-registry
 
+      - name: Download tested image
+        uses: actions/download-artifact@v4
+        with:
+          name: hsm-caddy-test
+
+      - name: Load tested image
+        run: gunzip -c hsm-caddy-test.tar.gz | docker load
+
       - name: Log in to Docker Hub
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
+      # The version tag goes last: once it exists, later runs skip publication, so a push that
+      # fails halfway must leave it absent for the next run to finish the job.
       - name: Publish tested image
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           docker tag hsm-caddy:test "$IMAGE:$VERSION"
           docker tag hsm-caddy:test "$IMAGE:latest"
-          docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
+          docker push "$IMAGE:$VERSION"

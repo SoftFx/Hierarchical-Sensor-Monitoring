@@ -64,6 +64,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     double last,
     int32_t count,
     int precision,
+    double welford_m2,
+    int stddev_unknown,
     int64_t open_ms,
     int64_t close_ms,
     int64_t time_ms,
@@ -2053,6 +2055,17 @@ namespace
                     line.erase(time_field, end - time_field);
                 }
 
+                // A bar's canonical "StdDev" is native-only (owner decision 2026-10-07, #1529): the
+                // managed text has no such field, so drop it to keep the dumps byte-comparable.
+                const std::string stddev_key = "\"StdDev\":";
+                const auto stddev_field = line.find(stddev_key);
+                if (stddev_field != std::string::npos)
+                {
+                    const auto comma = line.find(',', stddev_field);
+                    if (comma != std::string::npos)
+                        line.erase(stddev_field, comma + 1 - stddev_field);
+                }
+
                 output << line << '\n';
             }
             return;
@@ -2530,6 +2543,7 @@ namespace
                 { "min", "Min" },
                 { "max", "Max" },
                 { "mean", "Mean" },
+                { "stddev", "StdDev" },
                 { "first", "First" },
                 { "last", "Last" },
                 { "count", "Count" },
@@ -6011,11 +6025,14 @@ namespace
     void NativeWireBarJsonMatchesNetByteLayout()
     {
         // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
+        // Samples 1..5 have M2 = 10 -> population StdDev sqrt(2) = 1.414.. -> 1.41 (int bars round
+        // StdDev to a fixed 2 digits). Cross-locked by WireFormatGoldenLockTests (#1509): these bytes
+        // are the server DTO's; the managed collector's bar is the same minus "StdDev" (#1529).
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                1, 1, 5, 15, 1, 5, 5, 2, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
-                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
-                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+                1, 1, 5, 15, 1, 5, 5, 2, 10, 0, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"StdDev\":1.41,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                                                                        "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
+                                                                        "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
 
         // int-bar Mean rounding must match C# `(int)Math.Round(_totalSum / Count)`
@@ -6023,20 +6040,53 @@ namespace
         // also half-to-even, so 2.5 -> 2 and 3.5 -> 4 on BOTH sides. (Round-away-from-zero would
         // give 3 and 4 and break parity.) Pins the half-way cases the all-integer case can't.
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
             "int bar mean 2.5 rounds half-to-even -> 2");
         Require(
-            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
+            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0.5, 0, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
             "int bar mean 3.5 rounds half-to-even -> 4");
 
         // double bar (Type 5): sum13/count4 -> mean 3.25; min/max/first/last carry one decimal.
+        // M2 = 9 over 4 samples -> StdDev sqrt(2.25) = 1.5.
         // Cross-locked by WireFormatGoldenLockTests double-bar case.
         Require(
             std::string(hsm_collector_test_wire_bar_json(
-                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
-                                                                           "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
-                                                                           "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 9, 0, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"StdDev\":1.5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
             "double bar wire layout");
+
+        // An unknown StdDev (a bar fed with pre-aggregated partials) goes on the wire as null,
+        // like the C# DTO's double? -- never as 0 (#1509).
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 1, 5, 15, 1, 5, 5, 2, 0, 1, 0, 2000, 0, "p/ib")).find("{\"Type\":4,\"StdDev\":null,\"Min\":1,") != std::string::npos,
+            "unknown StdDev is null on the wire");
+        // A single-sample bar has StdDev 0.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(0, 2.5, 2.5, 2.5, 2.5, 2.5, 1, 2, 0, 0, 0, 2000, 0, "p/db")).find("\"StdDev\":0,") != std::string::npos,
+            "single-sample StdDev is 0");
+
+        // An M2 that overflowed (samples around 1e200) is unknown, not a non-finite number, and the
+        // rest of the bar still serializes; a Mean whose sum overflowed goes out as the quoted named
+        // literal the managed serializer writes (AllowNamedFloatingPointLiterals), never a throw.
+        const std::string overflowed(hsm_collector_test_wire_bar_json(
+            0, 1e200, 2e200, 3e200, 1e200, 2e200, 2, 2, std::numeric_limits<double>::infinity(), 0, 0, 2000, 0, "p/db"));
+        Require(overflowed.find("{\"Type\":5,\"StdDev\":null,\"Min\":1E+200,\"Max\":2E+200,\"Mean\":1.5E+200,") == 0,
+                ("overflowed StdDev is null and the bar still posts: " + overflowed).c_str());
+        const std::string sum_overflow(hsm_collector_test_wire_bar_json(
+            0, 1.7e308, 1.7e308, std::numeric_limits<double>::infinity(), 1.7e308, 1.7e308, 2, 2, 0, 0, 0, 2000, 0, "p/db"));
+        Require(sum_overflow.find("\"Max\":1.7E+308,\"Mean\":\"Infinity\",") != std::string::npos,
+                ("overflowed Mean is the quoted named literal: " + sum_overflow).c_str());
+    }
+
+    void NativeDoubleFormatHandlesNonFinite()
+    {
+        // Never throws (the exponent parse used to: std::stoi on "nf"), and matches .NET's invariant
+        // "R" text for non-finite values.
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::quiet_NaN()) == "NaN", "NaN text");
+        Require(hsm::collector::DoubleToInvariantString(std::numeric_limits<double>::infinity()) == "Infinity", "+inf text");
+        Require(hsm::collector::DoubleToInvariantString(-std::numeric_limits<double>::infinity()) == "-Infinity", "-inf text");
+        Require(hsm::collector::DoubleToInvariantString(1.7976931348623157e308) == "1.7976931348623157E+308", "DBL_MAX text");
     }
 
     void NativeWireFileJsonMatchesNetByteLayout()
@@ -6172,14 +6222,42 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
 
+    // A log sink both the Start thread and the worker may write to (a retried registration logs
+    // from the worker), so it takes a lock. Declare it before the collector, which must not outlive it.
+    struct LockedLogs
+    {
+        std::mutex mutex;
+        std::vector<std::pair<hsm_log_level_t, std::string>> entries;
+
+        std::vector<std::pair<hsm_log_level_t, std::string>> Snapshot()
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            return entries;
+        }
+    };
+
+    void CaptureLockedLogs(hsm_collector_t* collector, LockedLogs& sink)
+    {
+        hsm_collector_set_logger(
+            collector,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                auto* target = static_cast<LockedLogs*>(user_data);
+                std::lock_guard<std::mutex> guard(target->mutex);
+                target->entries.emplace_back(level, message);
+            },
+            &sink);
+    }
+
     // A registration POST that gets a non-2xx response must log the HTTP status for diagnosis (parity
     // with the value send-fail log), and the Start batch keeps the "on connect" label — never the
-    // stale "on Start".
+    // stale "on Start". Every /commands post fails here; since #1515 the batch is retried, so the
+    // server must keep answering (a one-shot capture server would leave the retry hanging).
     void NativeHttpRegistrationFailureLogsStatus()
     {
-        hsm::test::HttpCaptureServer server(503);
+        hsm::test::HttpRecordingServer server;
+        server.FailNext("/api/sensors/commands", 1000);
 
-        std::vector<std::pair<hsm_log_level_t, std::string>> logs;
+        LockedLogs sink;
 
         hsm_collector_options_t options{};
         options.access_key = "reg-key";
@@ -6190,12 +6268,7 @@ namespace
         options.package_collect_period_ms = 20;
 
         CollectorHandle collector = CreateCollector(options);
-        hsm_collector_set_logger(
-            collector.value,
-            [](hsm_log_level_t level, const char* message, void* user_data) {
-                static_cast<std::vector<std::pair<hsm_log_level_t, std::string>>*>(user_data)->emplace_back(level, message);
-            },
-            &logs);
+        CaptureLockedLogs(collector.value, sink);
         hsm_collector_test_install_http_sender(collector.value);
         SensorHandle sensor = CreateIntSensor(collector.value, "reg/int");
 
@@ -6204,6 +6277,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
 
+        const auto logs = sink.Snapshot(); // the worker is joined by Stop
         const auto error_has = [&](const std::string& needle) {
             for (const auto& entry : logs)
                 if (entry.first == HSM_LOG_LEVEL_ERROR && entry.second.find(needle) != std::string::npos)
@@ -6211,7 +6285,7 @@ namespace
             return false;
         };
         Require(error_has("Failed to register"), "a failed registration must log an error");
-        Require(error_has("HTTP 503"), "the registration failure must carry the HTTP status code");
+        Require(error_has("HTTP 502"), "the registration failure must carry the HTTP status code");
         Require(error_has("on connect"), "the Start batch failure keeps the 'on connect' label");
         for (const auto& entry : logs)
             Require(entry.second.find("on Start") == std::string::npos, "the stale 'on Start' label must be gone");
@@ -6452,9 +6526,73 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
-    // A runtime registration the server answers with an HTTP error is not retried every cycle —
-    // it would repeat forever (managed commands likewise retry transport failures only). The
-    // sensor's values still flow.
+    // #1515: a server restarting behind its reverse proxy answers the Start batch 502. The batch
+    // goes again on the worker's cycle (the managed command queue re-enqueues a failed package and
+    // re-sends it after PackageCollectPeriod) until it lands, the failure and the recovery are both
+    // logged, and a landed registration is not posted again.
+    void NativeHttpConnectRegistrationIsRetriedAfter5xx()
+    {
+        hsm::test::HttpRecordingServer server;
+        server.FailNext("/api/sensors/commands", 2);
+        LockedLogs sink;
+
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        CaptureLockedLogs(collector.value, sink);
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "connect/retried");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        for (int i = 0; i < 500 && server.CountPath("/api/sensors/commands") < 3; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // Ten more worker cycles: the accepted registration is not posted again.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        const size_t posts = server.CountPath("/api/sensors/commands");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        Require(posts == 3, ("two 502s and one accepted post expected, saw " + std::to_string(posts)).c_str());
+        size_t carrying = 0;
+        for (const auto& request : server.Requests())
+            if (request.path == "/api/sensors/commands" && request.body.find("\"Path\":\"connect/retried\"") != std::string::npos)
+                ++carrying;
+        Require(carrying == 3, "every retry re-sends the sensor's registration");
+
+        const auto logs = sink.Snapshot(); // the worker is joined by Stop
+        const auto logged = [&](hsm_log_level_t level, const std::string& needle) {
+            for (const auto& entry : logs)
+                if (entry.first == level && entry.second.find(needle) != std::string::npos)
+                    return true;
+            return false;
+        };
+        Require(logged(HSM_LOG_LEVEL_ERROR, "Failed to register sensor connect/retried on connect: HTTP 502; retrying"),
+                "the connect failure is logged with its status and the retry");
+        Require(logged(HSM_LOG_LEVEL_INFO, "Registered 1 sensor(s) after an earlier failed attempt."),
+                "the landed retry is logged");
+    }
+
+    // A restart re-registers every sensor, including those the previous run already registered. A
+    // 502 on that batch must still be retried, though the sensors' registrations are unchanged.
+    void NativeHttpRestartRegistrationIsRetriedAfter5xx()
+    {
+        hsm::test::HttpRecordingServer server;
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "restart/retried");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "first start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "first stop failed");
+        Require(server.CountPath("/api/sensors/commands") == 1, "the first run registers once");
+
+        server.FailNext("/api/sensors/commands", 1);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "second start failed");
+        for (int i = 0; i < 500 && server.CountPath("/api/sensors/commands") < 3; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        Require(server.CountPath("/api/sensors/commands") == 3, "the restart's 502 batch is posted again and lands");
+    }
+
+    // A runtime registration the server answers with a 4xx is not retried every cycle — it would
+    // repeat forever (a 5xx or no response is retried, see above). The sensor's values still flow.
     void NativeHttpRejectedRuntimeRegistrationIsNotRetried()
     {
         hsm::test::HttpRecordingServer server({}, "/api/sensors/commands");
@@ -8071,6 +8209,8 @@ namespace
             { "native_http_registers_sensors_created_while_running", [](const std::string&) { NativeHttpRegistersSensorsCreatedWhileRunning(); } },
             { "native_http_alert_after_runtime_registration_reregisters", [](const std::string&) { NativeHttpAlertAttachedAfterRuntimeRegistrationReRegisters(); } },
             { "native_http_rejected_runtime_registration_is_not_retried", [](const std::string&) { NativeHttpRejectedRuntimeRegistrationIsNotRetried(); } },
+            { "native_http_connect_registration_is_retried_after_5xx", [](const std::string&) { NativeHttpConnectRegistrationIsRetriedAfter5xx(); } },
+            { "native_http_restart_registration_is_retried_after_5xx", [](const std::string&) { NativeHttpRestartRegistrationIsRetriedAfter5xx(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
@@ -8201,6 +8341,7 @@ namespace
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
+            { "native_double_format_handles_non_finite", [](const std::string&) { NativeDoubleFormatHandlesNonFinite(); } },
             { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
@@ -8277,6 +8418,7 @@ namespace
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_sampled_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_stddev_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },

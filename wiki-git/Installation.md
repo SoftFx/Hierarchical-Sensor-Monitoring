@@ -13,9 +13,9 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-2 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-3 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
-Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only after a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
+Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
 Repository maintainers can use scripts/local-docker-build.ps1 to build the Caddy image locally as hsm-caddy:local for development; its generated Compose override selects that image. Normal installations use the published versioned image and do not build Caddy.
 
@@ -327,7 +327,7 @@ services:
       - 'vlagent-data:/vlagent-data'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-2'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-3'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -371,7 +371,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-2 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-3 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
 | HSM_STRUCTURED_LOGS from .env on the app service (default false) | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs. The template sets true next to COMPOSE_PROFILES=logs; the compose default is false so an upgraded compose file with an older .env never starts writing the archive on its own. The rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
 | Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
 

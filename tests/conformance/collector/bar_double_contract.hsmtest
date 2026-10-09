@@ -99,3 +99,29 @@ double_bar_empty_bar_sends_no_payload|create_double_bar_sensor|contract/dbar/emp
 double_bar_empty_bar_sends_no_payload|start
 double_bar_empty_bar_sends_no_payload|stop
 double_bar_empty_bar_sends_no_payload|expect_sent_count|0
+
+# Derived values at the edge of the double range (#1530, shared by both collectors).
+# A Mean whose sum overflows is +Infinity in both collectors: the canonical text below is the .NET "R"
+# text (bare Infinity); on the WIRE both write the quoted named literal "Mean":"Infinity" (managed
+# System.Text.Json with AllowNamedFloatingPointLiterals; native DoubleJson) — pinned by
+# WireFormatGoldenLockTests and native_wire_bar_json_matches_net_byte_layout.
+double_bar_mean_overflow_is_infinity|create_collector
+double_bar_mean_overflow_is_infinity|create_double_bar_sensor|contract/dbar/mean-overflow|3600000|0|2
+double_bar_mean_overflow_is_infinity|start
+double_bar_mean_overflow_is_infinity|add_bar_double|0|1.7e308
+double_bar_mean_overflow_is_infinity|add_bar_double|0|1.7e308
+double_bar_mean_overflow_is_infinity|stop
+double_bar_mean_overflow_is_infinity|expect_sent_count|1
+double_bar_mean_overflow_is_infinity|expect_bar_field|0|count|2
+double_bar_mean_overflow_is_infinity|expect_payload_contains|0|"Min":1.7E+308,"Max":1.7E+308,"Mean":Infinity,
+
+# Rounding leaves |value| >= 1e16 unchanged (.NET Math.Round's limit): scaling 1e307 by 10^2 would
+# overflow to infinity. A one-digit mantissa keeps the case clear of the 16-17-digit "R" divergence
+# between net48 and .NET Core excluded in number_format_contract.
+double_bar_rounding_leaves_huge_values_unchanged|create_collector
+double_bar_rounding_leaves_huge_values_unchanged|create_double_bar_sensor|contract/dbar/huge|3600000|0|2
+double_bar_rounding_leaves_huge_values_unchanged|start
+double_bar_rounding_leaves_huge_values_unchanged|add_bar_double|0|1e307
+double_bar_rounding_leaves_huge_values_unchanged|stop
+double_bar_rounding_leaves_huge_values_unchanged|expect_sent_count|1
+double_bar_rounding_leaves_huge_values_unchanged|expect_payload_contains|0|"Min":1E+307,"Max":1E+307,"Mean":1E+307,

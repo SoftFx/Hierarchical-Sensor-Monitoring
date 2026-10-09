@@ -146,12 +146,13 @@ jobs:
       # --latest=false above is not reliable: the bootstrap agent-v0.5.28 release grabbed the repo's
       # "Latest" badge despite it (observed 2026-07-21; GET /releases/latest returned the agent
       # release until the newest server release was re-marked by hand). Clients discover the server
-      # zip through that badge, so the badge is re-asserted on the newest full server-v* release and
-      # verified. Unconditionally, not "repair if this release holds it": GitHub can move the badge a
+      # zip through that badge, so the step watches it for ~30 s and, whenever it sits on a release
+      # that is not a server-v* one (an agent-v*/probe-v* release, this one included), re-asserts it
+      # on the newest full server-v* release. Watched, not read once: GitHub can move the badge a
       # moment AFTER `gh release create` returns — probe-v0.8.1 (probe-release.yml, run 37447780251)
       # read it 0.5 s later, still saw the server release, logged "nothing to repair", and the badge
-      # moved to the probe release afterwards (#1507). The verification polls ~30 s and re-asserts
-      # on a move.
+      # moved to the probe release afterwards (#1507). A badge on any server-v* release is left
+      # alone: an operator may have placed it on an older server release on purpose (#1515).
       - name: Keep the Latest badge on server releases
         shell: bash
         env:
@@ -167,21 +168,30 @@ jobs:
             exit 0
           fi
           server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
-          # Verify for ~30 s: a late move by GitHub lands inside the window and is re-asserted. A repo
-          # without a Latest release answers 404 here, read as "none" rather than failing the step.
+          # Watch for ~30 s: a late move by GitHub lands inside the window and is repaired. Only a
+          # badge on a non-server release is moved; one on any server-v* release stays where it is.
+          # An unreadable answer (a 404 or a failed call) is "none": not repaired, since where the
+          # badge sits is unknown, and a failure if it is still the verdict.
           latest=""
           for attempt in 1 2 3 4 5 6 7; do
             sleep 5
             latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || true)
-            if [ "$latest" != "$server_tag" ] && [ "$attempt" -lt 7 ]; then
-              echo "check $attempt: Latest is ${latest:-none}; re-asserting it on $server_tag"
-              gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
-            fi
+            case "$latest" in
+              server-v* | "") ;;
+              *)
+                if [ "$attempt" -lt 7 ]; then
+                  echo "check $attempt: Latest is on $latest; re-asserting it on $server_tag"
+                  gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
+                fi
+                ;;
+            esac
           done
           # The 7th read is the verdict: it follows the last re-assert by a full interval.
-          if [ "$latest" != "$server_tag" ]; then
-            echo "::error::failed to keep the Latest badge on $server_tag (last seen: ${latest:-none})"
-            exit 1
-          fi
-          echo "Latest badge kept on $server_tag"
+          case "$latest" in
+            server-v*) ;;
+            *)
+              echo "::error::the Latest badge is not on a server release (last seen: ${latest:-none}; newest full server release: $server_tag)"
+              exit 1
+              ;;
+          esac
+          echo "Latest badge on $latest (newest full server release: $server_tag)"

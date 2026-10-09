@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -955,8 +956,14 @@ namespace
 
     // .NET shortest round-trip ("R") double text. The implementation lives in double_format.hpp
     // so the prediction sensor's comment (disk_prediction.hpp) renders numbers identically (#1426).
+    // A non-finite value is written as the quoted named literal ("NaN", "Infinity", "-Infinity"),
+    // byte-for-byte what the managed serializer emits with AllowNamedFloatingPointLiterals — a bare
+    // NaN/Infinity token would not be JSON. Validated sample values are always finite; this covers
+    // derived numbers (a bar Mean whose sum overflowed near DBL_MAX).
     std::string DoubleJson(double value)
     {
+        if (!std::isfinite(value))
+            return "\"" + hsm::collector::DoubleToInvariantString(value) + "\"";
         return hsm::collector::DoubleToInvariantString(value);
     }
 
@@ -1823,6 +1830,10 @@ namespace
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
     {
+        // .NET returns the value unchanged at or above 1e16 (doubleRoundLimit): such a double has no
+        // fractional digits to round, and scaling it could overflow to infinity near DBL_MAX.
+        if (!(std::abs(value) < 1e16))
+            return value;
         const double scale = std::pow(10.0, precision);
         return std::round(value * scale) / scale;
     }
@@ -1843,6 +1854,15 @@ namespace
         double first = 0.0;
         double last = 0.0;
         int32_t count = 0;
+        // Welford moments for StdDev (#1509) — a running mean and the sum of squared deviations
+        // from it (M2), O(1) per sample, no sample storage. Kept apart from total_sum so the wire
+        // Mean is unchanged. NATIVE ONLY: the managed collector does not post StdDev (owner
+        // decision 2026-10-07, #1529; ADR 0009) — see the wire-contract doc for the operation order
+        // a future managed port must reproduce. A pre-aggregated partial carries no spread and
+        // makes the bar's StdDev unknown (null).
+        double welford_mean = 0.0;
+        double welford_m2 = 0.0;
+        bool stddev_unknown = false;
 
         void Init(int64_t now_ms)
         {
@@ -1854,6 +1874,9 @@ namespace
             first = 0.0;
             last = 0.0;
             count = 0;
+            welford_mean = 0.0;
+            welford_m2 = 0.0;
+            stddev_unknown = false;
         }
 
         void AddValue(double value)
@@ -1872,8 +1895,20 @@ namespace
                 max = std::max(max, value);
             }
 
+            // Before ++count: n is the count including this sample.
+            const double n = static_cast<double>(count + 1);
+            const double delta = value - welford_mean;
+            welford_mean += delta / n;
+            welford_m2 += delta * (value - welford_mean);
+
             last = value;
             ++count;
+        }
+
+        // Population standard deviation; 0 for a single sample.
+        double StdDev() const
+        {
+            return count <= 1 ? 0.0 : std::sqrt(welford_m2 / count);
         }
 
         void AddPartial(double partial_min, double partial_max, double partial_mean, double partial_first, double partial_last, int32_t partial_count)
@@ -1896,8 +1931,28 @@ namespace
             total_sum += partial_mean * partial_count;
             last = partial_last;
             count += partial_count;
+            stddev_unknown = true;
         }
     };
+
+    // An int bar has no precision of its own, so its StdDev is rounded to a fixed 2 digits; a
+    // double bar's follows the bar precision (half away from zero, like Mean).
+    constexpr int kIntBarStdDevDigits = 2;
+
+    // The bar's StdDev wire text: a double on both bar flavors, `null` when unknown.
+    // A spread too large for a double (M2 overflows for samples around 1e154 and up) is reported as
+    // unknown, never as a non-finite number: the server reads null as "no band".
+    std::string BarStdDevJson(const MonitoringBar& bar)
+    {
+        if (bar.stddev_unknown)
+            return "null";
+
+        const double rounded = RoundAwayFromZero(bar.StdDev(), bar.is_int ? kIntBarStdDevDigits : bar.precision);
+        if (!std::isfinite(rounded))
+            return "null";
+
+        return DoubleJson(rounded);
+    }
 
     // Strict inclusive validation for int partials (PublicBarMonitoringSensor.IsValidPartial).
     bool IsValidIntPartial(int32_t min, int32_t max, int32_t mean, int32_t first, int32_t last, int32_t count)
@@ -1953,11 +2008,14 @@ namespace
         }
         else
         {
-            min_text = DoubleJson(RoundAwayFromZero(bar.min, bar.precision));
-            max_text = DoubleJson(RoundAwayFromZero(bar.max, bar.precision));
-            mean_text = DoubleJson(RoundAwayFromZero(raw_mean, bar.precision));
-            first_text = DoubleJson(RoundAwayFromZero(bar.first, bar.precision));
-            last_text = DoubleJson(RoundAwayFromZero(bar.last, bar.precision));
+            // Canonical text is the .NET "R" text the C# harness prints (ToString("R")), so a
+            // non-finite derived value (a Mean whose sum overflowed) is the bare named literal here;
+            // the WIRE quotes it (DoubleJson), as System.Text.Json does.
+            min_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.min, bar.precision));
+            max_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.max, bar.precision));
+            mean_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(raw_mean, bar.precision));
+            first_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.first, bar.precision));
+            last_text = hsm::collector::DoubleToInvariantString(RoundAwayFromZero(bar.last, bar.precision));
         }
 
         std::ostringstream json;
@@ -1967,6 +2025,7 @@ namespace
              << "\"Min\":" << min_text << ","
              << "\"Max\":" << max_text << ","
              << "\"Mean\":" << mean_text << ","
+             << "\"StdDev\":" << BarStdDevJson(bar) << ","
              << "\"First\":" << first_text << ","
              << "\"Last\":" << last_text << ","
              << "\"Count\":" << bar.count << ","
@@ -1979,8 +2038,8 @@ namespace
         return json.str();
     }
 
-    // Real wire JSON for a bar DTO (#1096 §15): Type, Min, Max, Mean, FirstValue, LastValue,
-    // Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
+    // Real wire JSON for a bar DTO (#1096 §15): Type, StdDev (#1509), Min, Max, Mean, FirstValue,
+    // LastValue, Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
     // Field VALUES reuse the same int/double formatting as the internal MonitoringBarJson.
     std::string BuildWireBarJson(const MonitoringBar& bar, int64_t time_ms, const std::string& path)
     {
@@ -2007,6 +2066,10 @@ namespace
         std::ostringstream json;
         json << "{\"Type\":"
              << (bar.is_int ? static_cast<int>(HSM_SENSOR_TYPE_INT_BAR) : static_cast<int>(HSM_SENSOR_TYPE_DOUBLE_BAR))
+             // StdDev sits where System.Text.Json puts it for the server's IntBarSensorValue /
+             // DoubleBarSensorValue DTO (declared there, so right after Type). The managed collector's
+             // bars do not carry it: native = managed + this one field (#1509, #1529).
+             << ",\"StdDev\":" << BarStdDevJson(bar)
              << ",\"Min\":" << min_text
              << ",\"Max\":" << max_text
              << ",\"Mean\":" << mean_text
@@ -2276,6 +2339,13 @@ namespace
         {
             std::lock_guard<std::mutex> guard(registration_mutex_);
             posted_registration_version_ = (std::max)(posted_registration_version_, version);
+        }
+
+        // The server may not hold the registration after all (a failed post, #1515): pending again.
+        void MarkRegistrationUnposted()
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            posted_registration_version_ = 0;
         }
 
         // Whether the server has not yet seen the current registration (a runtime create, or an
@@ -2637,16 +2707,25 @@ namespace
         // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
         // queue, which batch-registers on Start). The wire registration already carries the
         // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
-        // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
-        // server is unreachable; the value queue's durable retry handles a transient outage).
+        // keys on. A failure is logged and Start proceeds; the caller queues a retryable failure for
+        // the worker (RetryRegistrations), so a server that is briefly down at Start still learns
+        // the sensors' descriptions, units, TTLs and alerts (#1515).
         // `runtime` = a sensor registered AFTER Start — a built-in lazy source (top-CPU process,
         // network interface, service-status, TCP-rate) or any sensor the host creates, or attaches
         // an alert to, while the collector runs (FlushRuntimeRegistrations) — rather than the
         // connect-time batch. It changes the log label (no "on connect") and level (Debug, so
         // per-sample registrations do not spam the log). On success each sensor records the
-        // registration version the server has seen. The outcome tells a runtime flush whether to try
-        // again: like the managed command queue, only a transport failure (no HTTP response) is
-        // retried — an HTTP error answer (4xx/5xx) is final.
+        // registration version the server has seen.
+        //
+        // The outcome tells the caller whether to try again. The managed command queue re-enqueues
+        // a package whose send failed and re-sends it after PackageCollectPeriod
+        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); its Polly pipeline
+        // only adds in-send retries for exceptions (BaseHandlers.ShouldRetry, #1096). Native retries
+        // on the worker's cycle, which is that same period: a transport failure (no HTTP response)
+        // and a 5xx (a server restarting behind its proxy answers 502/503) are retried. A 4xx is
+        // final here — managed would re-send it every period until the queue evicts it, but a
+        // rejected payload or key never succeeds on repeat, and the values carrying the same key
+        // already report it.
         enum class RegistrationPost
         {
             Accepted,
@@ -2702,8 +2781,10 @@ namespace
                 const std::string reason = response.status_code > 0
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
-                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason);
-                return response.status_code > 0 ? RegistrationPost::Rejected : RegistrationPost::Retry;
+                const bool retry = response.status_code <= 0 || response.status_code >= 500;
+                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
+                         (retry ? "; retrying on the next send cycle." : "."));
+                return retry ? RegistrationPost::Retry : RegistrationPost::Rejected;
             }
 
             for (size_t i = 0; i < sensors.size(); ++i)
@@ -2732,15 +2813,55 @@ namespace
             pending_registrations_.push_back(sensor);
         }
 
+        // Queue sensors whose registration post failed retryably for the worker's next cycle — one
+        // entry per sensor however often it fails, so a long outage costs no memory. A sensor the
+        // server had already seen (a restart re-registers every sensor) is marked unseen first, or
+        // the flush would skip it as posted. The retry is announced when it lands (rule #8).
+        void RetryRegistrations(const std::vector<std::shared_ptr<NativeSensor>>& sensors)
+        {
+            for (const auto& sensor : sensors)
+                sensor->MarkRegistrationUnposted();
+            {
+                std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
+                std::unordered_set<const NativeSensor*> queued;
+                queued.reserve(pending_registrations_.size() + sensors.size());
+                for (const auto& pending : pending_registrations_)
+                    queued.insert(pending.get());
+                for (const auto& sensor : sensors)
+                    if (queued.insert(sensor.get()).second)
+                        pending_registrations_.push_back(sensor);
+                // Set with the push, under the same lock: a flush that swaps the queue either takes
+                // these sensors and the flag together or neither.
+                registration_retry_pending_ = true;
+            }
+        }
+
+        // A direct registration post (the Start batch, a built-in source's sensor) whose retryable
+        // failure is handed to the worker instead of being dropped.
+        void PostRegistrationsOrRetry(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime)
+        {
+            if (PostRegistrationsWire(sensors, runtime) == RegistrationPost::Retry)
+                RetryRegistrations(sensors);
+        }
+
         // Post every queued registration the server has not seen (worker cycle / stop drain). A post
-        // that got no HTTP response re-queues them for the next cycle; an HTTP error answer does not
-        // (it would repeat forever). Either failure is logged (dedup'd).
+        // that got no HTTP response or a 5xx re-queues them for the next cycle; a 4xx does not (it
+        // would repeat forever). Either failure is logged (dedup'd).
         void FlushRuntimeRegistrations()
         {
             std::vector<std::shared_ptr<NativeSensor>> pending;
+            bool retrying = false;
             {
+                // Read-and-clear the flag in the same section as the swap, so it always describes
+                // the sensors taken: a retry queued by another thread (a built-in source's sampler)
+                // after the swap keeps both its sensors and its flag for the next cycle. Cleared
+                // before the empty check: a retry the next Start batch already landed leaves nothing
+                // due, and a flag kept past it would credit a later, unrelated registration with a
+                // recovery that never happened.
                 std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
                 pending.swap(pending_registrations_);
+                retrying = registration_retry_pending_;
+                registration_retry_pending_ = false;
             }
             std::vector<std::shared_ptr<NativeSensor>> due;
             for (auto& sensor : pending)
@@ -2748,9 +2869,12 @@ namespace
                     due.push_back(std::move(sensor));
             if (due.empty())
                 return;
-            if (PostRegistrationsWire(due, /*runtime=*/true) == RegistrationPost::Retry)
-                for (const auto& sensor : due)
-                    QueueRuntimeRegistration(sensor);
+            const RegistrationPost outcome = PostRegistrationsWire(due, /*runtime=*/true);
+            if (outcome == RegistrationPost::Retry)
+                RetryRegistrations(due);
+            else if (outcome == RegistrationPost::Accepted && retrying)
+                LogMessage(HSM_LOG_LEVEL_INFO,
+                           "Registered " + std::to_string(due.size()) + " sensor(s) after an earlier failed attempt.");
         }
 #endif
 
@@ -2927,9 +3051,11 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             // Register every sensor on the server (wire AddOrUpdate batch -> /commands) before the
             // worker starts dispatching values, so a real server knows the sensors first. Recording
-            // builds (conformance) never set send_wire_, so this is a no-op there.
+            // builds (conformance) never set send_wire_, so this is a no-op there. A server that is
+            // down or restarting (a 5xx from its proxy) gets the batch again on every worker cycle
+            // until it accepts it (#1515), like the managed command queue's re-enqueue.
             if (send_wire_)
-                PostRegistrationsWire(sensors_snapshot);
+                PostRegistrationsOrRetry(sensors_snapshot, /*runtime=*/false);
 #endif
 
             StartWorker();
@@ -3013,12 +3139,13 @@ namespace
             // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
             // Without the Queue overflow sensor nothing is ever folded, so the counter still holds
             // the whole run's drops at the log below, which then has to say so (#1508).
-            bool overflow_reported = false;
+            // Whether the drops have a sensor to go to is the registration state, read apart from
+            // the fold: a fold that throws (allocation failure) must not make the log below claim
+            // the sensor is not registered.
+            const bool overflow_reported = queue_overflow_registered_.load(std::memory_order_acquire);
             try
             {
-                const auto handles = SelfMonitorSnapshot();
-                overflow_reported = static_cast<bool>(handles.queue_overflow);
-                PostOverflowDelta(handles);
+                PostOverflowDelta(SelfMonitorSnapshot());
             }
             catch (...)
             {
@@ -4173,6 +4300,7 @@ namespace
             AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, time);
             AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, size);
 
+            queue_overflow_registered_.store(static_cast<bool>(overflow), std::memory_order_release);
             {
                 std::lock_guard<std::mutex> guard(self_monitor_handles_mutex_);
                 self_monitor_handles_.queue_overflow = std::move(overflow);
@@ -4663,7 +4791,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ tcp_fail_rate_sensor_ }, /*runtime=*/true);
+                PostRegistrationsOrRetry({ tcp_fail_rate_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -4951,7 +5079,7 @@ namespace
                             it = cache.emplace(iface, sensor).first;
 #if defined(HSM_COLLECTOR_HTTP)
                             if (send_wire_)
-                                PostRegistrationsWire({ sensor }, /*runtime=*/true);
+                                PostRegistrationsOrRetry({ sensor }, /*runtime=*/true);
 #endif
                         }
 
@@ -5042,7 +5170,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ service_status_sensor_ }, /*runtime=*/true);
+                PostRegistrationsOrRetry({ service_status_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -5308,7 +5436,7 @@ namespace
                                 // so the server gets the description. HttpTransport::Post is
                                 // thread-safe (per-call libcurl easy handle).
                                 if (send_wire_)
-                                    PostRegistrationsWire({ std::move(sensor) }, /*runtime=*/true);
+                                    PostRegistrationsOrRetry({ std::move(sensor) }, /*runtime=*/true);
 #endif
                             }
                             else
@@ -5820,6 +5948,9 @@ namespace
         // The two "enabled" flags only gate work, never dereference, so they are plain atomics.
         std::atomic<bool> collector_monitoring_enabled_{ false };
         std::atomic<bool> queue_diagnostics_enabled_{ false };
+        // Whether the Queue overflow sensor is registered (its handle is set). Stop reads it for
+        // its drop log, independently of whether the handle snapshot succeeds (#1515).
+        std::atomic<bool> queue_overflow_registered_{ false };
         mutable std::mutex self_monitor_handles_mutex_;
         SelfMonitorHandles self_monitor_handles_;
         // First heartbeat of the sensor's life posts `false` as a start marker (#1433). Owned by
@@ -5871,6 +6002,10 @@ namespace
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
         std::mutex pending_registrations_mutex_;
         std::vector<std::shared_ptr<NativeSensor>> pending_registrations_;
+        // Set when a registration post failed retryably (RetryRegistrations); the flush that next
+        // lands one says so at Info, closing the Error line the failure logged (#1515). Guarded by
+        // pending_registrations_mutex_, so it changes together with pending_registrations_.
+        bool registration_retry_pending_ = false;
 #endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
@@ -7060,6 +7195,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     double last,
     int32_t count,
     int precision,
+    double welford_m2,
+    int stddev_unknown,
     int64_t open_ms,
     int64_t close_ms,
     int64_t time_ms,
@@ -7077,6 +7214,8 @@ extern "C" const char* hsm_collector_test_wire_bar_json(
     bar.first = first;
     bar.last = last;
     bar.count = count;
+    bar.welford_m2 = welford_m2;
+    bar.stddev_unknown = stddev_unknown != 0;
     buffer = BuildWireBarJson(bar, time_ms, path != nullptr ? path : "");
     return buffer.c_str();
 }

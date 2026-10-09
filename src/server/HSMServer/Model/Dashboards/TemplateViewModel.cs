@@ -19,6 +19,7 @@ namespace HSMServer.Model.Dashboards
             PlottedProperty.Min,
             PlottedProperty.Mean,
             PlottedProperty.Max,
+            PlottedProperty.StdDev,
             PlottedProperty.Count,
             PlottedProperty.EmaMin,
             PlottedProperty.EmaMean,

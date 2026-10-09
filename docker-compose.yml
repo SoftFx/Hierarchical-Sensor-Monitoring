@@ -144,7 +144,7 @@ services:
       - 'vlagent-data:/vlagent-data'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-2'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-3'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:

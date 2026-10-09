@@ -118,6 +118,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                StdDev = BarStdDev.Normalize(value.StdDev),
                 FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
             };
@@ -135,6 +136,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                StdDev = BarStdDev.Normalize(value.StdDev),
                 FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
             };
@@ -239,6 +241,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                StdDev = value.StdDev?.ToString(),
                 FirstValue = value.FirstValue?.ToString(),
                 LastValue = value.LastValue.ToString(),
             };

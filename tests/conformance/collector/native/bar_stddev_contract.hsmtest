@@ -1,0 +1,163 @@
+# HSM collector conformance v1 — bar StdDev contract (#1509). NATIVE-ONLY fixture.
+# Format: case|action|arg1|arg2|...
+# By owner decision 2026-10-07 the managed .NET collector does not compute a bar StdDev (#1529,
+# docs/decisions/0009-bar-stddev-native-only.md). This fixture therefore lives in collector/native/,
+# which the managed driver's discovery (collector/*.hsmtest, non-recursive) never reads; the native
+# driver registers it in CMake like every other fixture. The managed driver marks the field
+# `expect_bar_field ... stddev` CONFORMANCE-UNSUPPORTED (#1529). When the managed collector gains
+# StdDev, these cases move back into the shared bar fixtures.
+# Actions used: the regular bar verbs plus expect_bar_field|payload_index|stddev|expected and
+# expect_payload_contains on the canonical "StdDev" field (a double, or null when unknown).
+# Contract:
+# - population standard deviation of the bar's samples via Welford (running mean + M2, O(1) per
+#   sample, no sample storage); 0 for a single sample;
+# - rounded half away from zero to the bar precision (double bar) or a fixed 2 digits (int bar);
+# - a bar that took a pre-aggregated partial reports null (unknown), never 0;
+# - partial posts carry the running value.
+
+# StdDev (#1509): the population standard deviation of the bar's samples, accumulated with
+# Welford's running mean + M2 (O(1) per sample, no sample storage), rounded like Mean to the bar
+# precision (half away from zero), 0 for a single sample. Canonical text and wire carry it right
+# after Mean. The series below is the textbook one: mean 5, StdDev exactly 2.
+double_bar_stddev_population|create_collector
+double_bar_stddev_population|create_double_bar_sensor|contract/dbar/stddev|3600000|0|2
+double_bar_stddev_population|start
+double_bar_stddev_population|add_bar_double|0|2
+double_bar_stddev_population|add_bar_double|0|4
+double_bar_stddev_population|add_bar_double|0|4
+double_bar_stddev_population|add_bar_double|0|4
+double_bar_stddev_population|add_bar_double|0|5
+double_bar_stddev_population|add_bar_double|0|5
+double_bar_stddev_population|add_bar_double|0|7
+double_bar_stddev_population|add_bar_double|0|9
+double_bar_stddev_population|stop
+double_bar_stddev_population|expect_sent_count|1
+double_bar_stddev_population|expect_bar_field|0|mean|5
+double_bar_stddev_population|expect_bar_field|0|stddev|2
+double_bar_stddev_population|expect_payload_contains|0|"Mean":5,"StdDev":2,"First":2,
+
+# sqrt(1.25) = 1.1180.. -> 1.12 at precision 2, 1 at precision 0.
+double_bar_stddev_rounded_to_precision|create_collector
+double_bar_stddev_rounded_to_precision|create_double_bar_sensor|contract/dbar/stddev-round|3600000|0|2
+double_bar_stddev_rounded_to_precision|start
+double_bar_stddev_rounded_to_precision|add_bar_double|0|1
+double_bar_stddev_rounded_to_precision|add_bar_double|0|2
+double_bar_stddev_rounded_to_precision|add_bar_double|0|3
+double_bar_stddev_rounded_to_precision|add_bar_double|0|4
+double_bar_stddev_rounded_to_precision|stop
+double_bar_stddev_rounded_to_precision|expect_sent_count|1
+double_bar_stddev_rounded_to_precision|expect_bar_field|0|stddev|1.12
+double_bar_stddev_rounded_to_precision|expect_payload_contains|0|"Mean":2.5,"StdDev":1.12,
+
+double_bar_stddev_precision_zero|create_collector
+double_bar_stddev_precision_zero|create_double_bar_sensor|contract/dbar/stddev-round0|3600000|0|0
+double_bar_stddev_precision_zero|start
+double_bar_stddev_precision_zero|add_bar_double|0|1
+double_bar_stddev_precision_zero|add_bar_double|0|2
+double_bar_stddev_precision_zero|add_bar_double|0|3
+double_bar_stddev_precision_zero|add_bar_double|0|4
+double_bar_stddev_precision_zero|stop
+double_bar_stddev_precision_zero|expect_sent_count|1
+double_bar_stddev_precision_zero|expect_payload_contains|0|"StdDev":1,
+
+double_bar_stddev_single_sample_is_zero|create_collector
+double_bar_stddev_single_sample_is_zero|create_double_bar_sensor|contract/dbar/stddev-one|3600000|0|2
+double_bar_stddev_single_sample_is_zero|start
+double_bar_stddev_single_sample_is_zero|add_bar_double|0|3.5
+double_bar_stddev_single_sample_is_zero|stop
+double_bar_stddev_single_sample_is_zero|expect_sent_count|1
+double_bar_stddev_single_sample_is_zero|expect_payload_contains|0|"Mean":3.5,"StdDev":0,
+
+# A skipped NaN does not enter the moments: {1.5, 2.5} -> 0.5.
+double_bar_stddev_skips_nan|create_collector
+double_bar_stddev_skips_nan|create_double_bar_sensor|contract/dbar/stddev-nan|3600000|0|2
+double_bar_stddev_skips_nan|start
+double_bar_stddev_skips_nan|add_bar_double|0|1.5
+double_bar_stddev_skips_nan|add_bar_double|0|NaN
+double_bar_stddev_skips_nan|add_bar_double|0|2.5
+double_bar_stddev_skips_nan|stop
+double_bar_stddev_skips_nan|expect_sent_count|1
+double_bar_stddev_skips_nan|expect_payload_contains|0|"StdDev":0.5,
+
+# A large offset with a small spread: a sum of squares would cancel catastrophically here (x^2 ~
+# 1e18 leaves no bits for a variance of 2/3); Welford keeps it exact. sqrt(2/3) = 0.8164.. -> 0.82.
+double_bar_stddev_large_offset_is_stable|create_collector
+double_bar_stddev_large_offset_is_stable|create_double_bar_sensor|contract/dbar/stddev-offset|3600000|0|2
+double_bar_stddev_large_offset_is_stable|start
+double_bar_stddev_large_offset_is_stable|add_bar_double|0|1000000001
+double_bar_stddev_large_offset_is_stable|add_bar_double|0|1000000002
+double_bar_stddev_large_offset_is_stable|add_bar_double|0|1000000003
+double_bar_stddev_large_offset_is_stable|stop
+double_bar_stddev_large_offset_is_stable|expect_sent_count|1
+double_bar_stddev_large_offset_is_stable|expect_payload_contains|0|"Mean":1000000002,"StdDev":0.82,
+
+# StdDev (#1509) on an int bar is a double (population, Welford), rounded to a fixed 2 digits:
+# an int bar has no precision of its own. Samples 1..5: sqrt(2) = 1.4142.. -> 1.41.
+int_bar_stddev_is_a_double|create_collector
+int_bar_stddev_is_a_double|create_int_bar_sensor|contract/bar/stddev|3600000|0
+int_bar_stddev_is_a_double|start
+int_bar_stddev_is_a_double|add_bar_int_sequence|0|5|1|1
+int_bar_stddev_is_a_double|stop
+int_bar_stddev_is_a_double|expect_sent_count|1
+int_bar_stddev_is_a_double|expect_bar_field|0|stddev|1.41
+int_bar_stddev_is_a_double|expect_payload_contains|0|"Mean":3,"StdDev":1.41,"First":1,
+
+int_bar_stddev_single_value_is_zero|create_collector
+int_bar_stddev_single_value_is_zero|create_int_bar_sensor|contract/bar/stddev-one|3600000|0
+int_bar_stddev_single_value_is_zero|start
+int_bar_stddev_single_value_is_zero|add_bar_int|0|7
+int_bar_stddev_single_value_is_zero|stop
+int_bar_stddev_single_value_is_zero|expect_sent_count|1
+int_bar_stddev_single_value_is_zero|expect_payload_contains|0|"Mean":7,"StdDev":0,
+
+# StdDev (#1509): a pre-aggregated partial carries no spread, so a bar that took one reports its
+# StdDev as unknown (null), never 0 and never a guess, while Min/Max/Mean/Count merge as above.
+int_partial_makes_stddev_unknown|create_collector
+int_partial_makes_stddev_unknown|create_int_bar_sensor|contract/partial/stddev|3600000|0
+int_partial_makes_stddev_unknown|start
+int_partial_makes_stddev_unknown|add_bar_int|0|1
+int_partial_makes_stddev_unknown|add_bar_int|0|3
+int_partial_makes_stddev_unknown|add_int_bar_partial|0|1|5|3|1|5|4
+int_partial_makes_stddev_unknown|add_bar_int|0|2
+int_partial_makes_stddev_unknown|stop
+int_partial_makes_stddev_unknown|expect_sent_count|1
+int_partial_makes_stddev_unknown|expect_bar_field|0|count|7
+int_partial_makes_stddev_unknown|expect_payload_contains|0|"StdDev":null,
+
+double_partial_only_stddev_unknown|create_collector
+double_partial_only_stddev_unknown|create_double_bar_sensor|contract/partial/stddev-only|3600000|0|2
+double_partial_only_stddev_unknown|start
+double_partial_only_stddev_unknown|add_double_bar_partial|0|1.5|5.5|3.5|1.5|5.5|2
+double_partial_only_stddev_unknown|stop
+double_partial_only_stddev_unknown|expect_sent_count|1
+double_partial_only_stddev_unknown|expect_payload_contains|0|"Mean":3.5,"StdDev":null,
+
+# A push-fed bar's last post (a partial snapshot or the stop flush) carries the running StdDev of
+# {1, 2, 3} = sqrt(2/3) -> 0.82. Wall-clock like bar_sampled_partial_contract: only the last payload
+# (Count 3, timing-immune) is asserted.
+push_bar_partial_posts_carry_running_stddev|create_collector
+push_bar_partial_posts_carry_running_stddev|create_int_bar_sensor_with_partial_posts|contract/push/stddev|86400000|100|500
+push_bar_partial_posts_carry_running_stddev|start
+push_bar_partial_posts_carry_running_stddev|add_bar_int|0|1
+push_bar_partial_posts_carry_running_stddev|add_bar_int|0|2
+push_bar_partial_posts_carry_running_stddev|sleep_ms|1200
+push_bar_partial_posts_carry_running_stddev|add_bar_int|0|3
+push_bar_partial_posts_carry_running_stddev|sleep_ms|1200
+push_bar_partial_posts_carry_running_stddev|stop
+push_bar_partial_posts_carry_running_stddev|expect_bar_field|-1|count|3
+push_bar_partial_posts_carry_running_stddev|expect_bar_field|-1|stddev|0.82
+
+# A spread too large for a double: M2 of {1e200, 2e200} overflows, so StdDev is unknown (null) — never
+# a non-finite number, never a throw across the C ABI — and the bar still posts Min/Max/Mean.
+double_bar_stddev_overflow_is_unknown|create_collector
+double_bar_stddev_overflow_is_unknown|create_double_bar_sensor|contract/dbar/stddev-overflow|3600000|0|2
+double_bar_stddev_overflow_is_unknown|start
+double_bar_stddev_overflow_is_unknown|add_bar_double|0|1e200
+double_bar_stddev_overflow_is_unknown|add_bar_double|0|2e200
+double_bar_stddev_overflow_is_unknown|stop
+double_bar_stddev_overflow_is_unknown|expect_sent_count|1
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|count|2
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|min|1e200
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|max|2e200
+double_bar_stddev_overflow_is_unknown|expect_bar_field|0|mean|1.5e200
+double_bar_stddev_overflow_is_unknown|expect_payload_contains|0|"Mean":1.5E+200,"StdDev":null,

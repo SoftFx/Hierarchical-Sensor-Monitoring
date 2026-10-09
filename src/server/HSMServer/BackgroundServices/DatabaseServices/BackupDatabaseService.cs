@@ -7,6 +7,8 @@ using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using HSMServer.Sftp;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -19,7 +21,7 @@ namespace HSMServer.BackgroundServices
 {
     public class BackupDatabaseService : BaseDelayedBackgroundService
     {
-        private readonly IDatabaseSettings _dbSettings = new DatabaseSettings();
+        private readonly IDatabaseSettings _dbSettings;
         private readonly IDatabaseCore _database;
         private readonly IServerConfig _config;
 
@@ -37,10 +39,15 @@ namespace HSMServer.BackgroundServices
 
 
         public BackupDatabaseService(IDatabaseCore database, IServerConfig config, DataCollectorWrapper datacollectorWrapper)
+            : this(database, config, datacollectorWrapper.BackupSensors, new DatabaseSettings()) { }
+
+        // Test seam: the self-monitoring sensors and the backups folder are injected.
+        internal BackupDatabaseService(IDatabaseCore database, IServerConfig config, BackupSensors backupSensors, IDatabaseSettings dbSettings)
         {
             _config = config;
             _database = database;
-            _backupSensors = datacollectorWrapper.BackupSensors;
+            _backupSensors = backupSensors;
+            _dbSettings = dbSettings;
         }
 
         public async Task<string> CheckSftpWritePermisionAsync(SftpConnectionConfig connection)
@@ -90,31 +97,53 @@ namespace HSMServer.BackgroundServices
                 {
                     bool hasError = false;
                     _sb.Clear();
+
+                    var writtenFiles = new List<string>(2);
+                    var errors = new List<string>(2);
+                    var stopwatch = Stopwatch.StartNew();
+
                     var enviromentBackupResult = Backup(_dbSettings.EnvironmentDatabaseName, _database.BackupEnvironment);
                     if (enviromentBackupResult.IsOk)
                     {
                         _sb.AppendLine(enviromentBackupResult.Value);
+                        writtenFiles.Add(enviromentBackupResult.Value);
                         DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
                     }
                     else
                     {
                         hasError = true;
                         _sb.AppendLine(enviromentBackupResult.Error);
+                        errors.Add(FirstLine(enviromentBackupResult.Error));
                     }
 
                     var dashboardBackupResult = Backup(_dbSettings.ServerLayoutDatabaseName, _database.Dashboards.Backup);
                     if (dashboardBackupResult.IsOk)
                     {
-                        _sb.AppendLine(enviromentBackupResult.Value);
+                        _sb.AppendLine(dashboardBackupResult.Value);
+                        writtenFiles.Add(dashboardBackupResult.Value);
                         DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
                     }
                     else
                     {
                         hasError = true;
                         _sb.AppendLine(dashboardBackupResult.Error);
+                        errors.Add(FirstLine(dashboardBackupResult.Error));
                     }
 
+                    stopwatch.Stop();
+
                     _backupSensors.AddLocalValue(_database.BackupsSize, hasError, _sb.ToString());
+
+                    if (enviromentBackupResult.IsOk && TryGetFileSize(enviromentBackupResult.Value, out var environmentSize))
+                        _backupSensors.AddEnvironmentBackupSize(environmentSize, Path.GetFileName(enviromentBackupResult.Value));
+
+                    if (dashboardBackupResult.IsOk && TryGetFileSize(dashboardBackupResult.Value, out var dashboardsSize))
+                        _backupSensors.AddDashboardsBackupSize(dashboardsSize, Path.GetFileName(dashboardBackupResult.Value));
+
+                    _backupSensors.AddDuration(stopwatch.Elapsed);
+                    _backupSensors.AddResult(!hasError, hasError
+                        ? string.Join("; ", errors)
+                        : $"Written: {string.Join(", ", writtenFiles.Select(Path.GetFileName))}");
 
                     if (_config.BackupDatabase.SftpConnectionConfig.IsEnabled)
                         await SynchronizeSftpFolderAsync();
@@ -136,14 +165,41 @@ namespace HSMServer.BackgroundServices
             {
                 var directoryInfo = new DirectoryInfo(Path.Combine(_dbSettings.DatabaseBackupsFolder, $"{dbName}_{DateTime.UtcNow.ToWindowsFormat()}"));
 
-                return backupAction(directoryInfo.FullName);
+                return backupAction(directoryInfo.FullName) ?? TaskResult<string>.FromError($"{dbName} database backup returned no result");
 
             }
             catch (Exception ex)
             {
                 _logger.Error($"{dbName} database backup error: {ex}");
-                return null;
+                return TaskResult<string>.FromError($"{dbName} database backup error: {ex.Message}");
             }
+        }
+
+        private bool TryGetFileSize(string path, out long size)
+        {
+            try
+            {
+                size = new FileInfo(path).Length;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Reading backup file size '{path}' error: {ex.Message}");
+                size = 0;
+                return false;
+            }
+        }
+
+        // Database backup errors carry the full exception text (stack included);
+        // the sensor comment keeps only its first line: the type and the message.
+        private static string FirstLine(string error)
+        {
+            if (string.IsNullOrEmpty(error))
+                return string.Empty;
+
+            var end = error.IndexOfAny(['\r', '\n']);
+
+            return end < 0 ? error : error[..end];
         }
 
         private void DeleteOldBackups(string dbName)

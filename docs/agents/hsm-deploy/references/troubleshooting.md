@@ -69,12 +69,12 @@ ssh -p <port> <ssh> 'docker logs hsm-server --tail 30'
 
 ## curl from the Windows workstation fails on port 443
 
-Observed on the dev workstation: Git Bash's `curl.exe` (Windows build, schannel TLS)
-fails the handshake against Caddy on port 443 — `schannel: failed to receive handshake`,
-HTTP code `000` — while port 44330 of the same Caddy answers `200`. Treat a
-workstation-side `000` as a client-side quirk first: verify from the machine itself
-(the skills' verify commands already run there over ssh) or from a browser before
-investigating the server.
+Git Bash's `curl.exe` (Windows build, schannel TLS) reports a plain connection refused
+as `schannel: failed to receive handshake` with HTTP code `000` — observed on the dev
+workstation where nothing listens on 443 at all (the local-dev compose override,
+docker-compose.local.yml, publishes only loopback 44330/44333). So a workstation-side
+`000` says little about the server: verify from the machine itself (the skills' verify
+commands already run there over ssh) or from a browser before investigating the server.
 
 ## Certificate problems after switching modes
 
