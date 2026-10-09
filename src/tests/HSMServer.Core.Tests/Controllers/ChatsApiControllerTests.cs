@@ -48,6 +48,10 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(true);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
+            // Detail-entitled by default; the Viewer scenarios override.
+            _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
+                .Returns(true);
         }
 
 
@@ -299,6 +303,126 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(false);
 
             Assert.Equal(404, StatusCodeOf(CreateController().GetChat(chat.Id)));
+        }
+
+
+        [Fact]
+        public void GetChat_ViewerOwner_GetsDiscoveryFieldsOnly_DetailIsNull()
+        {
+            // The two-tier body (the web UI's model): a gated caller whose
+            // owner is NOT an admin and NOT a manager of a bound folder still
+            // discovers ids — but never the Telegram identifiers, author or
+            // send settings. For a direct chat telegramChatId is the person's
+            // Telegram user id; the web UI shows it only to admins/PMs.
+            var chat = BuildChat("ops-channel", entity =>
+            {
+                entity.TelegramType = (byte)ConnectedChatType.TelegramPrivate;
+                entity.TelegramChatId = 4242L;
+                entity.TelegramChatTitle = "Ops";
+                entity.AuthorizationTime = DateTime.UtcNow.Ticks;
+                entity.SlackWebhookUrl = SlackSecret;
+            }, Guid.NewGuid());
+            _store.Add(chat);
+
+            _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
+                .Returns(false);
+
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetChat(chat.Id)).Value as ChatDto;
+
+            Assert.NotNull(dto);
+            // The discovery half answers: id, name, type, channel flags, folders.
+            Assert.Equal(chat.Id, dto.Id);
+            Assert.Equal("ops-channel", dto.Name);
+            Assert.Equal("direct", dto.TelegramType);
+            Assert.True(dto.HasSlackWebhook);
+            Assert.False(dto.HasMattermostWebhook);
+            Assert.Equal(chat.Folders.ToList(), dto.Folders);
+            // The detail half is null for a non-entitled owner.
+            Assert.Null(dto.TelegramChatId);
+            Assert.Null(dto.TelegramChatTitle);
+            Assert.Null(dto.TelegramChatDescription);
+            Assert.Null(dto.TelegramAuthorizationTime);
+            Assert.Null(dto.Author);
+            Assert.Null(dto.Description);
+            Assert.Null(dto.CreationDate);
+            Assert.Null(dto.SendMessages);
+            Assert.Null(dto.MessagesAggregationTimeSec);
+        }
+
+
+        [Fact]
+        public void GetChat_DetailDecision_ReceivesTheChatsBoundFolders()
+        {
+            // The service hands the chat's BOUND folder ids to the detail
+            // predicate (so the evaluator can apply the manager-of-a-bound-
+            // folder rule); a global chat passes an empty collection, which
+            // the evaluator resolves to admin-only detail.
+            var folderId = Guid.NewGuid();
+            _store.AddRange([BuildChat("bound", folders: folderId), BuildChat("global")]);
+
+            System.Collections.Generic.IReadOnlyCollection<Guid> receivedForBound = null;
+            System.Collections.Generic.IReadOnlyCollection<Guid> receivedForGlobal = null;
+            _authorization
+                .Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
+                .Callback((ClaimsPrincipal _, System.Collections.Generic.IReadOnlyCollection<Guid> folders) =>
+                {
+                    if (receivedForBound is null)
+                        receivedForBound = folders;
+                    else
+                        receivedForGlobal = folders;
+                })
+                .Returns(true);
+
+            Assert.IsType<OkObjectResult>(CreateController().GetChat(_store[0].Id));
+            Assert.IsType<OkObjectResult>(CreateController().GetChat(_store[1].Id));
+
+            Assert.Equal([folderId], receivedForBound);
+            Assert.NotNull(receivedForGlobal);
+            Assert.Empty(receivedForGlobal);
+        }
+
+
+        [Fact]
+        public void GetChats_ViewerOwner_ListsChats_WithDetailFieldsNulled()
+        {
+            _store.Add(BuildChat("global-chat"));
+
+            _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
+                .Returns(false);
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetChats()).Value as ApiPageDto<ChatDto>;
+
+            Assert.NotNull(page);
+            var dto = Assert.Single(page.Items);
+            Assert.Equal("global-chat", dto.Name);
+            Assert.Null(dto.TelegramChatId);
+            Assert.Null(dto.Author);
+            Assert.Null(dto.SendMessages);
+        }
+
+
+        [Fact]
+        public void GetChats_FoldersListCarriesOnlyVisibleFolderIds()
+        {
+            // The chat is visible through EITHER bound folder, but the DTO
+            // must not disclose the id of the folder the caller cannot see —
+            // an invisible folder id stays indistinguishable from an unknown
+            // one (the area's anti-enumeration rule).
+            var visibleFolder = Guid.NewGuid();
+            _store.Add(BuildChat("multi-bound", null, visibleFolder, Guid.NewGuid()));
+
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) =>
+                    resource.Kind == ApiTokenResourceKind.Folder && resource.Id == visibleFolder);
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetChats()).Value as ApiPageDto<ChatDto>;
+
+            Assert.NotNull(page);
+            var dto = Assert.Single(page.Items);
+            Assert.Equal([visibleFolder], dto.Folders);
         }
     }
 }

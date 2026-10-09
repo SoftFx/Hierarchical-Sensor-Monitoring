@@ -139,6 +139,14 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (failure is not null)
                 return PolicyWriteResult<PolicyDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
 
+            // A JSON-null body reaches here only from MCP (REST's
+            // [ApiController] binding rejects it with a 400 before the
+            // service runs): answer the field-keyed shape the tool contract
+            // promises, never a NullReferenceException.
+            if (dto is null)
+                return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["policy"] = ["The policy body is required."] });
+
             if (!TryValidateDataDto(dto, sensor.Type, sensorId, AvailableChats(sensor),
                     out var conditions, out var errors))
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
@@ -172,6 +180,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             if (failure is not null)
                 return PolicyWriteResult<PolicyDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            // A JSON-null body (MCP-only; REST binding rejects it first)
+            // answers the field-keyed shape, never a NullReferenceException.
+            if (dto is null)
+                return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["policy"] = ["The policy body is required."] });
 
             var existing = sensor.Policies.FirstOrDefault(p => p.Id == policyId);
 
@@ -271,6 +285,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (failure is not null)
                 return PolicyWriteResult<TtlPolicyDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
 
+            // A JSON-null body reaches here only from MCP (REST binding
+            // rejects it first): the field-keyed shape, never an NRE.
+            if (dto is null)
+                return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["policy"] = ["The policy body is required."] });
+
             if (!TryValidateTtlDto(dto, AvailableChats(sensor), out var ttlTicks, out var errors))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
@@ -298,6 +318,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             if (failure is not null)
                 return PolicyWriteResult<TtlPolicyDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            // A JSON-null body (MCP-only; REST binding rejects it first)
+            // answers the field-keyed shape, never a NullReferenceException.
+            if (dto is null)
+                return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["policy"] = ["The policy body is required."] });
 
             var existing = sensor.Policies.TTLPolicies.FirstOrDefault(p => p.Id == policyId);
 

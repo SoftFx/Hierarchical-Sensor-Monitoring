@@ -11,29 +11,38 @@ namespace HSMServer.Model.ManagementApi.Folders
     // visibility decision lives in FoldersReadService, not here.
     public static class FolderDtoMapper
     {
-        public static FolderDto ToDto(FolderModel folder) => new()
+        public static FolderDto ToDto(FolderModel folder)
         {
-            Id = folder.Id,
-            Name = folder.Name,
-            Description = folder.Description,
-            Color = folder.Color.ToArgb(),
-            CreationDate = folder.CreationDate,
-            Author = folder.Author,
-            Products = folder.Products.Values
-                .OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(product => product.Id)
-                .Select(product => new FolderProductRefDto { Id = product.Id, Name = product.Name })
-                .ToList(),
-            Chats = [.. folder.Chats],
-            DefaultChats = new FolderDefaultChatsDto
+            // The product/chat/default-chats collections mutate from web-UI
+            // edits without a lock — snapshot them (StableCopy) before the
+            // mapping enumerates; DefaultChats is captured to a local because
+            // folder updates replace the reference wholesale.
+            var defaultChats = folder.DefaultChats;
+
+            return new FolderDto
             {
-                Mode = ModeName(folder.DefaultChats?.ChatMode),
-                Chats = [.. (folder.DefaultChats?.SelectedChats ?? [])],
-            },
-            Ttl = ToIntervalDto(folder.TTL),
-            KeepHistory = ToIntervalDto(folder.KeepHistory),
-            SelfDestroy = ToIntervalDto(folder.SelfDestroy),
-        };
+                Id = folder.Id,
+                Name = folder.Name,
+                Description = folder.Description,
+                Color = folder.Color.ToArgb(),
+                CreationDate = folder.CreationDate,
+                Author = folder.Author,
+                Products = StableCopy.Of(() => folder.Products.Values)
+                    .OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(product => product.Id)
+                    .Select(product => new FolderProductRefDto { Id = product.Id, Name = product.Name })
+                    .ToList(),
+                Chats = StableCopy.Of(() => folder.Chats),
+                DefaultChats = new FolderDefaultChatsDto
+                {
+                    Mode = ModeName(defaultChats?.ChatMode),
+                    Chats = [.. (defaultChats is null ? [] : StableCopy.Of(() => defaultChats.SelectedChats))],
+                },
+                Ttl = ToIntervalDto(folder.TTL),
+                KeepHistory = ToIntervalDto(folder.KeepHistory),
+                SelfDestroy = ToIntervalDto(folder.SelfDestroy),
+            };
+        }
 
 
         // The same sparse-enum contract the template TTL intervals use (see

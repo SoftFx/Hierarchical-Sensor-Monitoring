@@ -34,7 +34,7 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_chats", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Lists notification chats visible to the token's owner, ordered by name — the valid destination chat ids for alert policies and templates. A chat with an empty `folders` list is global (usable everywhere); a chat bound to folders is usable only from those folders. Webhook URLs are secrets and never exposed, only hasSlackWebhook/hasMattermostWebhook flags. Chats have no narrowing dimension, so `page` walks beyond the limit.")]
+        [Description("Lists notification chats visible to the token's owner, ordered by name — the valid destination chat ids for alert policies and templates. A chat with an empty `folders` list is global (usable everywhere); a chat bound to folders is usable only from the folders listed (invisible folders are omitted). Webhook URLs are secrets and never exposed, only hasSlackWebhook/hasMattermostWebhook flags; Telegram/author detail fields are null unless the owner is an admin or a manager of a bound folder. Chats have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpChatsResult ListChats(
             [Description("Maximum chats to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
             [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1,

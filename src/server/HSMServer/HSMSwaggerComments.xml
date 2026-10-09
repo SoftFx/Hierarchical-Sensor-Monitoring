@@ -1192,7 +1192,7 @@
             <summary>Schedule name; unique per server, 1..200 chars.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Timezone">
-            <summary>IANA timezone id (e.g. "UTC", "Europe/Berlin"); validated server-side.</summary>
+            <summary>System timezone id (e.g. "UTC", "Europe/Berlin", "Eastern Standard Time" — IANA and Windows both resolve); validated server-side.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto.Schedule">
             <summary>The working-time schedule as YAML text — the format the web UI's editor saves.</summary>
@@ -1765,34 +1765,34 @@
             <summary>Admin-owned display name (unique per server).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Description">
-            <summary>Free-form description (may be empty).</summary>
+            <summary>Free-form description (may be empty). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.CreationDate">
-            <summary>Chat creation time (UTC).</summary>
+            <summary>Chat creation time (UTC). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Author">
-            <summary>Author display name; null when unknown (the id itself is never exposed).</summary>
+            <summary>Author display name (detail field: null unless the owner is an admin or a manager of a bound folder; the id itself is never exposed).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.SendMessages">
-            <summary>Whether this chat currently receives messages (the admin enable/disable switch).</summary>
+            <summary>Whether this chat currently receives messages (the admin enable/disable switch). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.MessagesAggregationTimeSec">
-            <summary>Delay (seconds) messages of one sensor are aggregated for before sending.</summary>
+            <summary>Delay (seconds) messages of one sensor are aggregated for before sending. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatId">
-            <summary>Telegram chat id; null when no Telegram binding. Shown in the clear by the web UI.</summary>
+            <summary>Telegram chat id (for a direct chat, the person's Telegram user id). Detail field: null unless the owner is an admin or a manager of a bound folder — the web UI shows it in the clear only to admins/PMs.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramType">
             <summary>Telegram binding kind — "direct" or "group"; null when no Telegram binding.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramAuthorizationTime">
-            <summary>When the Telegram binding was authorized via the bot; null when unbound.</summary>
+            <summary>When the Telegram binding was authorized via the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatTitle">
-            <summary>Telegram chat title mirrored from the bot; null when unbound.</summary>
+            <summary>Telegram chat title mirrored from the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatDescription">
-            <summary>Telegram chat description mirrored from the bot; null when unbound.</summary>
+            <summary>Telegram chat description mirrored from the bot. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.HasSlackWebhook">
             <summary>Whether a Slack webhook is configured (the URL itself is a secret and is never exposed).</summary>
@@ -1802,10 +1802,14 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.Folders">
             <summary>
-            Ids of the folders the chat is bound to. EMPTY means a global chat —
-            available from every node's policies; otherwise the chat is usable
-            only from the folders listed here (the same rule policy/template
-            writes validate destination chats against).
+            Ids of the folders the chat is bound to, FILTERED to the folders
+            the caller can see (an invisible folder id is indistinguishable
+            from an unknown one — the area's anti-enumeration rule). EMPTY
+            means a global chat — available from every node's policies;
+            otherwise the chat is usable from the folders listed here (the
+            same rule policy/template writes validate destination chats
+            against). A chat bound only to invisible folders is not visible
+            at all, so a non-empty unfiltered case cannot arise.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService">

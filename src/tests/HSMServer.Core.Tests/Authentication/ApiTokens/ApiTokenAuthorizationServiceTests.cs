@@ -537,6 +537,80 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
+        // ---- chat detail (the two-tier chat body) --------------------------------------
+
+        [Fact]
+        public void CanSeeChatDetail_AdminOwner_TrueForBoundAndGlobal()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            var service = CreateService();
+
+            Assert.True(service.CanSeeChatDetail(Principal(), [FolderF]));
+            Assert.True(service.CanSeeChatDetail(Principal(), []));
+        }
+
+        [Fact]
+        public void CanSeeChatDetail_ManagerOfABoundFolder_True()
+        {
+            _owner.FoldersRoles.Add(FolderG, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            // Any ONE of the chat's bound folders is enough (the web UI's
+            // EditChat gate loops the bound folders too).
+            Assert.True(CreateService().CanSeeChatDetail(Principal(), [FolderF, FolderG]));
+        }
+
+        [Fact]
+        public void CanSeeChatDetail_ViewerOwner_FalseEvenForOwnFolder()
+        {
+            // The P2 rule: a Viewer-role owner past the caller-wide gate still
+            // gets only the id-discovery fields — never the Telegram
+            // identifiers (for a direct chat, a personal user id).
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductViewer);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.False(CreateService().CanSeeChatDetail(Principal(), [FolderF]));
+        }
+
+        [Fact]
+        public void CanSeeChatDetail_ManagerOfAnotherFolder_False()
+        {
+            _owner.FoldersRoles.Add(FolderG, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.False(CreateService().CanSeeChatDetail(Principal(), [FolderF]));
+        }
+
+        [Fact]
+        public void CanSeeChatDetail_GlobalChat_NonAdmin_False()
+        {
+            // A global chat has no bound folder, so the manager half has
+            // nothing to match — admin-only detail, exactly like the web
+            // gate whose folder loop finds nothing for a global chat.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.False(CreateService().CanSeeChatDetail(Principal(), []));
+        }
+
+        [Fact]
+        public void CanSeeChatDetail_ReadOnlyToken_OfManagerOwner_True_RecordsNothing()
+        {
+            // Role-only by design (reads never consult the token's write
+            // flag), and like IsVisible it records nothing — body shaping
+            // inside an already-authorized list is not a probe signal.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: true);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.True(service.CanSeeChatDetail(Principal(), [FolderF]));
+            Assert.Empty(events);
+        }
+
+
         // ---- audit trail ---------------------------------------------------------------
 
         [Fact]

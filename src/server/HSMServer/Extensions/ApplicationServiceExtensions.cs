@@ -97,7 +97,7 @@ namespace HSMServer.ServiceExtensions
 
             // The schedule write engine — the schedules' twin of
             // PolicyAdministrationService: transport-agnostic write decisions
-            // behind the REST controller and (later) the MCP write tools.
+            // behind the REST controller and the MCP write tools.
             // Scoped like its readers: it owns no gating state (schedule
             // writes have no full-list merge to serialize).
             services.AddScoped<AlertScheduleAdministrationService>();

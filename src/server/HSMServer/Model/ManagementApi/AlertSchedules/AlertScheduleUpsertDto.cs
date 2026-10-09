@@ -13,7 +13,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// <summary>Schedule name; unique per server, 1..200 chars.</summary>
         public string Name { get; init; }
 
-        /// <summary>IANA timezone id (e.g. "UTC", "Europe/Berlin"); validated server-side.</summary>
+        /// <summary>System timezone id (e.g. "UTC", "Europe/Berlin", "Eastern Standard Time" — IANA and Windows both resolve); validated server-side.</summary>
         public string Timezone { get; init; }
 
         /// <summary>The working-time schedule as YAML text — the format the web UI's editor saves.</summary>

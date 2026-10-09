@@ -124,7 +124,7 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "create_alert_schedule", ReadOnly = false, Idempotent = false, OpenWorld = false)]
-        [Description("Creates an alert schedule (working-time window). The id is server-generated; the response echoes the stored schedule. Requires an ADMIN owner and a read-write token (the Global boundary is admin-only). Name must be globally unique; the YAML body must satisfy the parser's window rules; the timezone is a validated IANA id.")]
+        [Description("Creates an alert schedule (working-time window). The id is server-generated; the response echoes the stored schedule. Requires an ADMIN owner and a read-write token (the Global boundary is admin-only). Name must be globally unique; the YAML body must satisfy the parser's window rules; the timezone is a validated system timezone id (IANA or Windows).")]
         public async System.Threading.Tasks.Task<AlertScheduleDto> CreateAlertScheduleAsync(
             [Description("The schedule — name, timezone, schedule (YAML).")] AlertScheduleUpsertDto schedule) =>
             McpToolWriteErrors.Unwrap(await _scheduleWriter.CreateScheduleAsync(User, schedule));

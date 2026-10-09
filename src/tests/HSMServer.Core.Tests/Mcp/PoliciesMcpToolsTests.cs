@@ -201,5 +201,33 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal("00:30:00", dto.Interval);
         }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateSensorPolicy_NullBody_IsTheFieldKeyedToolError()
+        {
+            // A JSON-null argument passes straight to the service on MCP (REST's
+            // [ApiController] binding rejects it first): the tool contract
+            // promises a field-keyed error the agent can self-correct from —
+            // never a NullReferenceException.
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateSensorPolicyAsync(sensor.Id, null));
+
+            Assert.Equal("policy: The policy body is required.", error.Message);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateSensorTtlPolicy_NullBody_IsTheFieldKeyedToolError()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, null));
+
+            Assert.Equal("policy: The policy body is required.", error.Message);
+        }
     }
 }

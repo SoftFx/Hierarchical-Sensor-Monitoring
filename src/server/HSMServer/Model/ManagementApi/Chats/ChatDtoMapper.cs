@@ -1,31 +1,39 @@
 using System;
+using System.Linq;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 
 namespace HSMServer.Model.ManagementApi.Chats
 {
-    // Entity -> DTO for the chat read surface. Credential-free: the visibility
-    // decision lives in ChatsReadService, not here, so the mapper stays usable
-    // from any context (the AlertSchedules mapper follows the same split).
+    // Entity -> DTO for the chat read surface. Credential-free: the
+    // visibility and detail decisions live in ChatsReadService, not here —
+    // the service passes the folder-sight predicate and the detail flag in,
+    // so the mapper stays usable from any context (the AlertSchedules mapper
+    // follows the same split).
     public static class ChatDtoMapper
     {
-        public static ChatDto ToDto(Chat chat) => new()
+        public static ChatDto ToDto(Chat chat, Func<Guid, bool> isFolderVisible, bool includeDetail) => new()
         {
             Id = chat.Id,
             Name = chat.Name,
-            Description = chat.Description,
-            CreationDate = chat.CreationDate,
-            Author = chat.Author,
-            SendMessages = chat.SendMessages,
-            MessagesAggregationTimeSec = chat.MessagesAggregationTimeSec,
-            TelegramChatId = chat.TelegramChatId?.Identifier,
             TelegramType = TelegramTypeName(chat.TelegramType),
-            TelegramAuthorizationTime = chat.AuthorizationTime,
-            TelegramChatTitle = chat.TelegramChatTitle,
-            TelegramChatDescription = chat.TelegramChatDescription,
+            Folders = [.. StableCopy.Of(() => chat.Folders).Where(isFolderVisible)],
             HasSlackWebhook = !string.IsNullOrEmpty(chat.SlackWebhookUrl),
             HasMattermostWebhook = !string.IsNullOrEmpty(chat.MattermostWebhookUrl),
-            Folders = [.. chat.Folders],
+
+            // Detail fields — null unless the owner is an admin or a manager
+            // of a bound folder (the web UI's EditChat gate); the fields every
+            // gated caller gets are the id-discovery half the write endpoints
+            // validate against.
+            Description = includeDetail ? chat.Description : null,
+            CreationDate = includeDetail ? chat.CreationDate : null,
+            Author = includeDetail ? chat.Author : null,
+            SendMessages = includeDetail ? chat.SendMessages : null,
+            MessagesAggregationTimeSec = includeDetail ? chat.MessagesAggregationTimeSec : null,
+            TelegramChatId = includeDetail ? chat.TelegramChatId?.Identifier : null,
+            TelegramAuthorizationTime = includeDetail ? chat.AuthorizationTime : null,
+            TelegramChatTitle = includeDetail ? chat.TelegramChatTitle : null,
+            TelegramChatDescription = includeDetail ? chat.TelegramChatDescription : null,
         };
 
 

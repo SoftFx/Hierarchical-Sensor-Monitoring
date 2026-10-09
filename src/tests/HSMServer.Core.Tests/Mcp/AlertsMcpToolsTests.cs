@@ -507,6 +507,31 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_NullBody_IsTheFieldKeyedToolError()
+        {
+            // A JSON-null argument passes straight to the service on MCP (REST's
+            // [ApiController] binding rejects it first): the field-keyed shape the
+            // tool errors promise, never a NullReferenceException.
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertScheduleAsync(null));
+
+            Assert.Equal("schedule: The schedule body is required.", error.Message);
+            Assert.Empty(_scheduleStore);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_NullBody_IsTheFieldKeyedToolError()
+        {
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(null));
+
+            Assert.Equal("template: The template body is required.", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+
+        [Fact]
         public async System.Threading.Tasks.Task DeleteAlertSchedule_IncompleteDetachNamesTheRetry()
         {
             var schedule = BuildSchedule("referenced");

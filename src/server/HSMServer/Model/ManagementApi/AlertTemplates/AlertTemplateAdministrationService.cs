@@ -85,6 +85,14 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         public async Task<PolicyWriteResult<AlertTemplateDto>> CreateTemplateAsync(ClaimsPrincipal user,
             AlertTemplateDto dto)
         {
+            // A JSON-null body reaches here only from MCP (REST's
+            // [ApiController] binding rejects it with a 400 before the
+            // service runs). It follows the folderId structural-check
+            // precedent below — a null references no folder, so the 400
+            // leaks nothing.
+            if (dto is null)
+                return ValidationFailure("template", "The template body is required.");
+
             // An all-zero folder id references no folder, so a 400 leaks
             // nothing — and it keeps the folderId structural check reachable
             // instead of shadowed by the evaluator's 404 for Guid.Empty.
@@ -151,7 +159,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // template exists to a caller outside its reach): an absent
             // folderId is a 400, not a 404 — Guid.Empty would otherwise fail
             // boundary resolution in the move-check below and shadow the
-            // structural check.
+            // structural check. A JSON-null body (MCP-only; REST binding
+            // rejects it first) answers the same field-keyed shape.
+            if (dto is null)
+                return ValidationFailure("template", "The template body is required.");
+
             if (dto.FolderId == Guid.Empty)
                 return ValidationFailure("folderId", "The folder id is required.");
 

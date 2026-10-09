@@ -38,6 +38,12 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(true);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
+            // Detail-entitled by default (an admin-like caller); the two-tier
+            // body matrix lives in ChatsApiControllerTests and
+            // ApiTokenAuthorizationServiceTests.
+            _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
+                .Returns(true);
         }
 
 

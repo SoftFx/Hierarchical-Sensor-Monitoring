@@ -38,7 +38,9 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     //    (windows >= 1 min, non-overlapping, start < end, dates 2000..2100)
     //    — the message becomes the field-keyed 422 detail;
     //  - timezone validation is NEW server-side (the web UI relies on its
-    //    dropdown; the API validates IANA ids through TimeZoneInfo);
+    //    dropdown; the API validates system timezone ids — IANA and Windows
+    //    both resolve — through TimeZoneInfo, the same lookup AlertSchedule
+    //    uses at evaluation, so anything accepted resolves at runtime);
     //  - delete detaches FIRST: on any incomplete detach the schedule
     //    SURVIVES (409) so the retry re-runs the idempotent detach over the
     //    survivors — deleting it would strand the surviving references
@@ -129,6 +131,14 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             if (id is not null && _schedules.GetSchedule(id.Value) is null)
                 return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.NotFound);
 
+            // A JSON-null body reaches here only from MCP (REST's
+            // [ApiController] binding rejects it with a 400 before the
+            // service runs): answer the field-keyed shape the tool contract
+            // promises, never a NullReferenceException.
+            if (dto is null)
+                return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["schedule"] = ["The schedule body is required."] });
+
             if (!TryBuildValidatedSchedule(dto, id, out var schedule, out var errors))
                 return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
@@ -171,7 +181,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 }
                 catch (Exception)
                 {
-                    errorMap.Add("timezone", [$"The timezone '{dto.Timezone}' is not a known IANA timezone id."]);
+                    errorMap.Add("timezone",
+                        [$"The timezone '{dto.Timezone}' is not a known system timezone id (IANA or Windows)."]);
                 }
             }
 

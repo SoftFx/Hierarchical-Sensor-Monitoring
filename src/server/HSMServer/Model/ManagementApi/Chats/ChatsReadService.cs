@@ -33,7 +33,14 @@ namespace HSMServer.Model.ManagementApi.Chats
     //    attachable from every node's policies, and the web UI's alert editor
     //    offers such chats to every manager) or bound to at least one folder
     //    the owner can see; out-of-sight chats are silently absent from the
-    //    list, and an invisible id answers the SAME NotFound as an unknown one.
+    //    list, and an invisible id answers the SAME NotFound as an unknown one;
+    //  - within that sight rule the body is two-tier (the web UI's model,
+    //    which shows chat detail only to admins and PMs of a bound folder):
+    //    the id-discovery fields answer every gated caller, the detail
+    //    fields (Telegram identifiers, author, description, send settings)
+    //    only an admin or a manager of a bound folder (CanSeeChatDetail);
+    //    and the DTO's folders list carries only VISIBLE folder ids — an
+    //    invisible folder id stays indistinguishable from an unknown one.
     public sealed class ChatsReadService
     {
         private readonly IChatsManager _chats;
@@ -84,7 +91,8 @@ namespace HSMServer.Model.ManagementApi.Chats
 
             return SensorTreeReadResult<ApiPageDto<ChatDto>>.Ok(new ApiPageDto<ChatDto>
             {
-                Items = [.. visibleChats.Skip((page - 1) * pageSize).Take(pageSize).Select(ChatDtoMapper.ToDto)],
+                Items = [.. visibleChats.Skip((page - 1) * pageSize).Take(pageSize)
+                    .Select(chat => ChatDtoMapper.ToDto(chat, isFolderVisible, CanSeeDetail(user, chat)))],
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = visibleChats.Count,
@@ -116,11 +124,22 @@ namespace HSMServer.Model.ManagementApi.Chats
             // listed exactly when GET {id} would answer it (the templates'
             // invariant). The memoization is per request; a single-item lookup
             // walks at most the chat's bound folders.
-            return IsChatVisible(chat, _authorization.MemoizedFolderVisibility(user))
-                ? SensorTreeReadResult<ChatDto>.Ok(ChatDtoMapper.ToDto(chat))
+            var isFolderVisible = _authorization.MemoizedFolderVisibility(user);
+
+            return IsChatVisible(chat, isFolderVisible)
+                ? SensorTreeReadResult<ChatDto>.Ok(ChatDtoMapper.ToDto(chat, isFolderVisible, CanSeeDetail(user, chat)))
                 : SensorTreeReadResult<ChatDto>.Fail(SensorTreeReadOutcome.NotFound);
         }
 
+
+        // The detail half of the read (the web UI's EditChat gate,
+        // TelegramRoleFilterById): discovery fields answer every gated
+        // caller, the detail fields answer only an admin or a manager of a
+        // bound folder. The evaluator owns the decision; a GLOBAL chat
+        // passes no folders, so its detail is admin-only exactly like the
+        // UI gate whose folder loop finds nothing to match.
+        private bool CanSeeDetail(ClaimsPrincipal user, Chat chat) =>
+            _authorization.CanSeeChatDetail(user, StableCopy.Of(() => chat.Folders));
 
         // A chat is visible when it is GLOBAL (bound to no folder) or bound to
         // at least one folder the token's owner can see. Chats carry no
@@ -129,7 +148,13 @@ namespace HSMServer.Model.ManagementApi.Chats
         // sight rule, and it matches the availability rule policy/template
         // writes validate destination chats against (global chats everywhere,
         // folder-bound chats only inside their folders).
-        private static bool IsChatVisible(Chat chat, Func<Guid, bool> isFolderVisible) =>
-            chat.Folders.Count == 0 || chat.Folders.Any(isFolderVisible);
+        private static bool IsChatVisible(Chat chat, Func<Guid, bool> isFolderVisible)
+        {
+            // chat.Folders mutates from web-UI folder-binding edits without a
+            // lock — snapshot before asking the sight question (StableCopy).
+            var folders = StableCopy.Of(() => chat.Folders);
+
+            return folders.Count == 0 || folders.Any(isFolderVisible);
+        }
     }
 }
