@@ -70,12 +70,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // handful of folders, and the evaluator re-resolves user + token on
             // every call); IsVisible records nothing, unlike per-item
             // authorization.
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsListable(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var listable)
-                    ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
+            var isListable = _authorization.MemoizedFolderVisibility(user);
 
             var visible = (_cache.GetAlertTemplateModels() ?? [])
                 .Where(template =>
@@ -84,7 +79,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     // pass running (the sensor-tree scan's rule).
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    return IsListable(template.FolderId);
+                    return isListable(template.FolderId);
                 })
                 .OrderBy(template => template.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(template => template.Id)
@@ -207,9 +202,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (schedule is null)
                 return SensorTreeReadResult<AlertScheduleDto>.Fail(SensorTreeReadOutcome.NotFound);
 
-            return SensorTreeReadResult<AlertScheduleDto>.Ok(ToDto(schedule,
-                _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(user)));
+            return SensorTreeReadResult<AlertScheduleDto>.Ok(RenderSchedule(schedule, user));
         }
+
+
+        // Renders a stored schedule through the read mapping (sensor paths
+        // filtered to the owner's sight) — the success echo of the schedule
+        // WRITE paths (AlertScheduleAdministrationService), so a write answers
+        // exactly what GET would answer afterwards.
+        internal AlertScheduleDto RenderSchedule(Core.Model.Policies.AlertSchedule schedule, ClaimsPrincipal user) =>
+            ToDto(schedule, _cache.GetSensorsByAlertSchedule(schedule.Id),
+                _authorization.MemoizedProductVisibility(user));
 
 
         // === Policy reads (#1500) ===
@@ -427,10 +430,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
 
-        // The caller-wide gate's 403 body — the list and the item answers must
-        // stay the same string, single-sourced (#1395 review): the code this
-        // service replaced had one Denied() helper for exactly that reason.
-        private const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
+        // The caller-wide gate's 403 body — single-sourced in
+        // ManagementApiErrors since the chat read surface joined the gated
+        // surfaces: the list and the item answers must stay the same string
+        // (#1395 review — the code this service replaced had one Denied()
+        // helper for exactly that reason), and two surfaces must not drift.
+        private const string NoBoundarySightMessage = ManagementApiErrors.NoBoundarySightMessage;
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);

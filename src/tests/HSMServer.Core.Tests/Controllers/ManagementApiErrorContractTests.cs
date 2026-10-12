@@ -12,6 +12,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
@@ -74,25 +75,36 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private AlertTemplatesApiController CreateTemplatesController() =>
-            new(_cache.Object, _folders.Object, _chats.Object, _schedulesProvider.Object, _authorization.Object,
-                new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object),
-                NullLogger<AlertTemplatesApiController>.Instance)
-            {
-                ControllerContext = new ControllerContext
-                {
-                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
-                },
-            };
+        private AlertTemplatesApiController CreateTemplatesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertTemplateAdministrationService(_cache.Object, _folders.Object, _chats.Object,
+                _schedulesProvider.Object, _authorization.Object,
+                NullLogger<AlertTemplateAdministrationService>.Instance);
 
-        private AlertSchedulesApiController CreateSchedulesController() =>
-            new(new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object))
+            return new AlertTemplatesApiController(reader, writer)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
+        }
+
+        private AlertSchedulesApiController CreateSchedulesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertScheduleAdministrationService(_schedulesProvider.Object, _cache.Object,
+                _authorization.Object, reader);
+
+            return new AlertSchedulesApiController(reader, writer)
+            {
+                ControllerContext = new ControllerContext
+                {
+                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
+                },
+            };
+        }
 
         private static AlertTemplateDto BuildDto() => new()
         {

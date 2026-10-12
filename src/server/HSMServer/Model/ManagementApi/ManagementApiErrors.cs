@@ -54,6 +54,13 @@ namespace HSMServer.Model.ManagementApi
         // about resource existence or reachability may leak from it.
         public const string NotFoundMessage = "The requested resource was not found.";
 
+        // The 403 body of every caller-wide read gate (schedules since #1393,
+        // chats since the chat read surface): the owner is neither an admin nor
+        // currently holding a role on any product/folder, so the whole surface is
+        // out of reach. Single-sourced for the same reason as NotFoundMessage —
+        // the list and the item answers of one surface must stay the same string.
+        public const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
+
 
         public static ObjectResult NotFound() =>
             new(new ManagementApiErrorDto { Error = NotFoundCode, Message = NotFoundMessage })

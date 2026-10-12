@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -41,16 +43,29 @@ namespace HSMServer.Core.Tests.Controllers
             _schedules.Setup(s => s.GetAllSchedules()).Returns(() => _store.ToList());
             _schedules.Setup(s => s.GetSchedule(It.IsAny<Guid>()))
                 .Returns((Guid id) => _store.FirstOrDefault(s => s.Id == id));
+            _schedules.Setup(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()))
+                .Callback((Core.Model.Policies.AlertSchedule schedule) =>
+                {
+                    _store.RemoveAll(s => s.Id == schedule.Id);
+                    _store.Add(schedule);
+                });
+            _schedules.Setup(s => s.DeleteSchedule(It.IsAny<Guid>()))
+                .Callback((Guid id) => _store.RemoveAll(s => s.Id == id));
 
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>())).Returns(new List<Core.Model.BaseSensorModel>());
             _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
                 .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
+            _cache.Setup(c => c.DetachAlertScheduleFromPoliciesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.Ok);
 
             // Entitled by default; deny scenarios override the gate.
             _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(true);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
+            // Admin + read-write token by default; write scenarios override.
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
         }
 
 
@@ -61,14 +76,30 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private AlertSchedulesApiController CreateController() =>
-            new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object))
+        private AlertSchedulesApiController CreateController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object);
+            var writer = new AlertScheduleAdministrationService(_schedules.Object, _cache.Object,
+                _authorization.Object, reader);
+
+            return new AlertSchedulesApiController(reader, writer)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
+        }
+
+        // The web editor's default sample — a VALID schedule body.
+        private const string ValidYaml = """
+            daySchedules:
+                - days: [Mon, Tue, Wed, Thu, Fri]
+                  windows:
+                    - { start: "09:00", end: "11:30" }
+                    - { start: "12:30", end: "15:00" }
+            disabledDates: ["2026-02-11"]
+            """;
 
         private static AlertSchedule BuildSchedule(string name) => new()
         {
@@ -328,6 +359,191 @@ namespace HSMServer.Core.Tests.Controllers
         public void GetSchedule_Absent_Is404_ForAnEntitledCaller()
         {
             Assert.Equal(404, StatusCodeOf(CreateController().GetSchedule(Guid.NewGuid())));
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_Valid_PersistsWithServerId_AndEchoes201()
+        {
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "night-shift",
+                Timezone = "UTC",
+                Schedule = ValidYaml,
+            });
+
+            var created = Assert.IsType<CreatedAtActionResult>(result);
+            var dto = Assert.IsType<AlertScheduleDto>(created.Value);
+
+            Assert.Equal("night-shift", dto.Name);
+            Assert.Equal("UTC", dto.Timezone);
+
+            var stored = Assert.Single(_store);
+            Assert.Equal(dto.Id, stored.Id);
+            Assert.Equal("night-shift", stored.Name);
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_NonAdminOwner_Is404_NothingPersisted()
+        {
+            // The Global boundary is admin-only in the evaluator: a non-admin
+            // owner answers the SAME 404 as an unknown id — nothing about the
+            // write surface's existence leaks (the direction management-api
+            // feature.md fixed for schedule writes).
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.NotFound);
+
+            Assert.Equal(404, StatusCodeOf(await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "x", Timezone = "UTC", Schedule = ValidYaml,
+            })));
+
+            _schedules.Verify(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_ReadOnlyTokenDecision_Is403()
+        {
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            Assert.Equal(403, StatusCodeOf(await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "x", Timezone = "UTC", Schedule = ValidYaml,
+            })));
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_DuplicateName_Is422()
+        {
+            _store.Add(BuildSchedule("taken"));
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "taken", Timezone = "UTC", Schedule = ValidYaml,
+            });
+
+            // The name-uniqueness violation is a semantic 422 (the #1500
+            // Invalid class), not a 400; the field-keyed details contract is
+            // pinned by ManagementApiErrorContractTests.
+            Assert.Equal(422, StatusCodeOf(result));
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_InvalidYaml_Is422OnSchedule()
+        {
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "broken", Timezone = "UTC", Schedule = "daySchedules: [ not yaml",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_SemanticallyInvalidWindows_Is422OnSchedule()
+        {
+            // Windows must have start < end — the parser's validation rules.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "inverted",
+                Timezone = "UTC",
+                Schedule = """
+                    daySchedules:
+                        - days: [Mon]
+                          windows:
+                            - { start: "15:00", end: "09:00" }
+                    """,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_UnknownTimezone_Is422OnTimezone()
+        {
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "tz", Timezone = "Mars/Olympus", Schedule = ValidYaml,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+        }
+
+
+        [Fact]
+        public async Task UpdateSchedule_UnknownId_Is404()
+        {
+            Assert.Equal(404, StatusCodeOf(await CreateController().UpdateSchedule(Guid.NewGuid(),
+                new AlertScheduleUpsertDto { Name = "x", Timezone = "UTC", Schedule = ValidYaml })));
+        }
+
+
+        [Fact]
+        public async Task UpdateSchedule_RenamesAndEchoes()
+        {
+            var schedule = BuildSchedule("old-name");
+            _store.Add(schedule);
+
+            var result = await CreateController().UpdateSchedule(schedule.Id, new AlertScheduleUpsertDto
+            {
+                Name = "new-name", Timezone = "Europe/Berlin", Schedule = ValidYaml,
+            });
+
+            var dto = Assert.IsType<AlertScheduleDto>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.Equal(schedule.Id, dto.Id);
+            Assert.Equal("new-name", dto.Name);
+            Assert.Equal("Europe/Berlin", dto.Timezone);
+
+            var stored = Assert.Single(_store);
+            Assert.Equal("new-name", stored.Name);
+        }
+
+
+        [Fact]
+        public async Task DeleteSchedule_UnknownId_Is404_DetachNeverRuns()
+        {
+            Assert.Equal(404, StatusCodeOf(await CreateController().DeleteSchedule(Guid.NewGuid())));
+
+            _cache.Verify(c => c.DetachAlertScheduleFromPoliciesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task DeleteSchedule_DetachesFirst_ThenDeletes_204()
+        {
+            var schedule = BuildSchedule("doomed");
+            _store.Add(schedule);
+
+            Assert.Equal(204, StatusCodeOf(await CreateController().DeleteSchedule(schedule.Id)));
+
+            _cache.Verify(c => c.DetachAlertScheduleFromPoliciesAsync(schedule.Id, It.IsAny<CancellationToken>()), Times.Once);
+            Assert.Empty(_store);
+        }
+
+
+        [Fact]
+        public async Task DeleteSchedule_IncompleteDetach_Is409_ScheduleSurvivesForRetry()
+        {
+            // Deleting on an incomplete detach would strand the surviving
+            // policy references permanently; the live schedule keeps the
+            // retry meaningful (#1409 rationale, carried into the API).
+            var schedule = BuildSchedule("referenced");
+            _store.Add(schedule);
+
+            _cache.Setup(c => c.DetachAlertScheduleFromPoliciesAsync(schedule.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.FromError("one policy update failed"));
+
+            Assert.Equal(409, StatusCodeOf(await CreateController().DeleteSchedule(schedule.Id)));
+
+            _schedules.Verify(s => s.DeleteSchedule(It.IsAny<Guid>()), Times.Never);
+            Assert.Contains(_store, s => s.Id == schedule.Id);
         }
     }
 }

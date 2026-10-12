@@ -26,6 +26,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // interval/inherit contradiction. Errors carries the field-keyed messages.
         Invalid,
 
+        // Request-shape/structural validation failure of a PRE-#1500 write
+        // surface whose shipped contract answers 400 (the templates CRUD).
+        // Append-only addition: post-#1500 surfaces keep using Invalid (422);
+        // Errors carries the field-keyed messages like a 422.
+        Validation,
+
         // The write conflicts with server-side state in a way validation cannot
         // see: a template-owned policy edited beyond its disable toggle, a
         // template-owned policy deletion, or the cache rejecting the full-list
@@ -38,11 +44,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
     {
         public PolicyWriteOutcome Outcome { get; init; }
 
-        // Field-keyed messages of the Invalid outcome (the 422 details map).
+        // Field-keyed messages of the Invalid/Validation outcomes (the 422/400
+        // details map).
         public System.Collections.Generic.IDictionary<string, string[]> Errors { get; init; }
 
         // Human-readable message of the Forbidden/Conflict outcomes.
         public string Message { get; init; }
+
+        // Optional resource pointers of a Conflict resolution (e.g.
+        // {"templateId": "<id>"} when the templates create-path partial-apply
+        // conflict leaves a persisted template the caller must PUT to fix) —
+        // rendered into the 409 details by ToActionResult and disclosed in the
+        // MCP tool error text.
+        public System.Collections.Generic.Dictionary<string, string> Details { get; init; }
     }
 
 
@@ -65,8 +79,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         public static PolicyWriteResult<T> Ok(T value) => new(value, null);
 
         public static PolicyWriteResult<T> Fail(PolicyWriteOutcome outcome,
-            System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null) =>
-            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message });
+            System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
+            System.Collections.Generic.Dictionary<string, string> details = null) =>
+            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
     }
 
     public sealed class PolicyWriteResult
@@ -80,8 +95,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
         public static PolicyWriteResult Ok() => new(null);
 
         public static PolicyWriteResult Fail(PolicyWriteOutcome outcome,
-            System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null) =>
-            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message });
+            System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
+            System.Collections.Generic.Dictionary<string, string> details = null) =>
+            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
+
+
+        // The single 403 message of every write denial (read-only token or the
+        // owner's missing write role) — REST rendering, MCP tool error text and
+        // the administration services all answer this one string, so it lives
+        // here beside the envelope that carries it.
+        public const string WriteDeniedMessage =
+            "The token is read-only or the token's owner cannot write at this target.";
 
 
         // The REST half of the transport split: renders the failure through the
@@ -92,8 +116,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
             failure?.Outcome switch
             {
                 PolicyWriteOutcome.Forbidden => ManagementApiErrors.Forbidden(
-                    failure.Message ?? "The token is read-only or the token's owner cannot write at this target."),
+                    failure.Message ?? WriteDeniedMessage),
                 PolicyWriteOutcome.Invalid => ManagementApiErrors.UnprocessableEntity(failure.Errors),
+                PolicyWriteOutcome.Validation => ManagementApiErrors.Validation(failure.Errors),
+                PolicyWriteOutcome.Conflict when failure.Details is { Count: > 0 } => ManagementApiErrors.Conflict(
+                    failure.Message ?? "The write conflicts with the current state of the resource.", failure.Details),
                 PolicyWriteOutcome.Conflict => ManagementApiErrors.Conflict(
                     failure.Message ?? "The write conflicts with the current state of the resource."),
                 _ => ManagementApiErrors.NotFound(),
