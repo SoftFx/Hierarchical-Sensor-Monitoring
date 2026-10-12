@@ -15,7 +15,12 @@ namespace HSMServer.Model.ManagementApi.Chats
     // shows chat detail only to admins and managers of a bound folder):
     //  - id-discovery fields — id, name, telegramType, the channel flags and
     //    folders — answer every caller past the caller-wide gate; they are
-    //    what the write endpoints validate destination.chats against;
+    //    what the write endpoints validate destination.chats against. The
+    //    hasSlackWebhook/hasMattermostWebhook flags are DELIBERATELY
+    //    discovery-tier — the one exception to the detail gate: presence
+    //    tells a caller which delivery channels a chat offers when composing
+    //    destination.chats, and a boolean carries no secret (the URLs are
+    //    never serialized at all);
     //  - detail fields (marked below) — null unless the token's owner is an
     //    admin or a manager of a folder the chat is bound to; for a direct
     //    chat telegramChatId is the person's Telegram user id, so it never

@@ -27,11 +27,15 @@ namespace HSMServer.Mcp
                         Version = ServerConfig.Version,
                     };
                 })
-                // Statelessly hosted Streamable HTTP: the tools are pure reads, so
-                // no session affinity is needed. Set explicitly (the 2.2.0 default
-                // is stateless since the 2026-07-28 protocol revision, but an SDK
-                // default change would otherwise silently degrade every tool
-                // call); pinned by HsmMcpServerRegistrationTests.
+                // Statelessly hosted Streamable HTTP: every tool call runs
+                // inline in its own POST and holds no session state (read
+                // tools render from the live managers; write tools delegate
+                // to the same administration services as REST), so no
+                // session affinity is needed. Set explicitly (the 2.2.0
+                // default is stateless since the 2026-07-28 protocol
+                // revision, but an SDK default change would otherwise
+                // silently degrade every tool call); pinned by
+                // HsmMcpServerRegistrationTests.
                 .WithHttpTransport(options => options.Stateless = true)
                 .WithTools<SensorTreeMcpTools>()
                 .WithTools<AlertsMcpTools>()

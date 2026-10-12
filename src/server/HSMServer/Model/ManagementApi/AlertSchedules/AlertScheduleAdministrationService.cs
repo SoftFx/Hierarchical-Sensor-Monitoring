@@ -60,6 +60,16 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // not DI-registered anywhere today.
         private readonly AlertScheduleParser _parser = new();
 
+        // The name-uniqueness check and the save must run as ONE atomic step:
+        // the service is Scoped, so the gate is STATIC — every request's
+        // check-then-save pair executes under the same process-wide lock.
+        // Without it two concurrent creates with one name both pass the check
+        // and both persist (the web controller shares the gap, but scripted
+        // REST/MCP clients that retry on timeout make the race realistic
+        // here). Safe to hold across SaveSchedule: the provider takes only
+        // its own inner lock, and nobody takes that lock and then ours.
+        private static readonly object NameUniquenessGate = new();
+
         public AlertScheduleAdministrationService(IAlertScheduleProvider schedules, ITreeValuesCache cache,
             IApiTokenAuthorizationService authorization, AlertReadService reader)
         {
@@ -92,6 +102,14 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// FIRST; on an incomplete detach the schedule survives and the answer
         /// is a Conflict (retry re-runs the idempotent detach).
         /// </summary>
+        // Known limitation (accepted, round-2 review): a policy/template write
+        // concurrently in flight can pass its scheduleId existence check while
+        // this delete detaches, then persist a dangling reference — the
+        // evaluator then treats the missing schedule as working time (#1409's
+        // throttled error log is the only trace). Nothing serializes the two
+        // write paths (the web UI has the same gap); closing it would mean a
+        // shared gate inside the core cache update paths. See
+        // management-api/feature.md.
         public async Task<PolicyWriteResult> DeleteScheduleAsync(Guid id, ClaimsPrincipal user,
             CancellationToken cancellationToken = default)
         {
@@ -139,11 +157,16 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid,
                     new Dictionary<string, string[]> { ["schedule"] = ["The schedule body is required."] });
 
-            if (!TryBuildValidatedSchedule(dto, id, out var schedule, out var errors))
-                return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid, errors);
+            ScheduleModel schedule;
 
-            // The provider's Save is an idempotent upsert (cache + LevelDB row).
-            _schedules.SaveSchedule(schedule);
+            lock (NameUniquenessGate)
+            {
+                if (!TryBuildValidatedSchedule(dto, id, out schedule, out var errors))
+                    return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid, errors);
+
+                // The provider's Save is an idempotent upsert (cache + LevelDB row).
+                _schedules.SaveSchedule(schedule);
+            }
 
             // Echo the STORED schedule through the read mapping — sensor
             // references filtered to the owner's sight, exactly as GET does.

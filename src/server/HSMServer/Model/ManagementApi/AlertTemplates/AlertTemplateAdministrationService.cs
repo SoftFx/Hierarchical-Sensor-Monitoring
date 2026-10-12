@@ -104,7 +104,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (AuthorizeFolder(dto.FolderId, user) is { } denied)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(denied.Outcome, message: denied.Message);
 
-            if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, user, out var model, out var errors))
+            if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
             // Deliberately NOT tied to a cancellation token (see DeleteTemplateAsync
@@ -171,7 +171,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 AuthorizeFolder(dto.FolderId, user) is { } deniedTarget)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(deniedTarget.Outcome, message: deniedTarget.Message);
 
-            if (!TryBuildValidatedTemplate(dto, id, isCreate: false, user, out var model, out var errors))
+            if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
             var (success, error) = await _cache.AddAlertTemplateAsync(model);
@@ -246,7 +246,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // domain throws on legal-looking but unsupported input), then the
         // semantic checks ported from the web UI controller. Any accumulated
         // error fails the request.
-        private bool TryBuildValidatedTemplate(AlertTemplateDto dto, Guid id, bool isCreate, ClaimsPrincipal user,
+        private bool TryBuildValidatedTemplate(AlertTemplateDto dto, Guid id, bool isCreate,
             out AlertTemplateModel model, out Dictionary<string, string[]> errors)
         {
             var errorMap = new Dictionary<string, List<string>>();

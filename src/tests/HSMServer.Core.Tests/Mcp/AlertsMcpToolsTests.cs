@@ -521,6 +521,40 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_ConcurrentSameName_OnlyOnePersists()
+        {
+            // Round-2 review: the name-uniqueness check and the save must run as
+            // ONE atomic step (the service's static gate) — two concurrent creates
+            // with one name cannot both pass the check and both persist.
+            System.Threading.Tasks.Task<(AlertScheduleDto Saved, string Error)> Run() =>
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var dto = await CreateTools().CreateAlertScheduleAsync(
+                            new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                            {
+                                Name = "same-name", Timezone = "UTC", Schedule = ValidYaml,
+                            });
+
+                        return (dto, (string)null);
+                    }
+                    catch (ModelContextProtocol.McpException ex)
+                    {
+                        return ((AlertScheduleDto)null, ex.Message);
+                    }
+                });
+
+            var runs = await System.Threading.Tasks.Task.WhenAll(Run(), Run());
+
+            Assert.Single(runs, r => r.Saved is not null);
+            var failed = Assert.Single(runs, r => r.Error is not null);
+            Assert.Contains("must be unique", failed.Error);
+            Assert.Single(_scheduleStore, s => s.Name == "same-name");
+        }
+
+
+        [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_NullBody_IsTheFieldKeyedToolError()
         {
             var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
