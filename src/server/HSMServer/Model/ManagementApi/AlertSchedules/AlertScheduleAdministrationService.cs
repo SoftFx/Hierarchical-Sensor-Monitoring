@@ -130,7 +130,20 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                     "The schedule was not deleted — not every policy reference could be cleared. Delete it again to retry. " +
                     detach.Error);
 
-            _schedules.DeleteSchedule(id);
+            // The detach is async, so it ran OUTSIDE the gate; re-validate and
+            // remove under the same NameUniquenessGate the write path's
+            // check-then-save pair holds (round-3 review): an update that
+            // passed its existence check while this delete was detaching must
+            // not resurrect the row by saving between the detach and the
+            // remove. Both sides decide under the gate, so one of them loses
+            // cleanly — the delete answers 204 only when the row is gone.
+            lock (NameUniquenessGate)
+            {
+                if (_schedules.GetSchedule(id) is null)
+                    return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+                _schedules.DeleteSchedule(id);
+            }
 
             return PolicyWriteResult.Ok();
         }
@@ -146,9 +159,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // rule): a body-shape error must not reveal anything to a caller
             // outside the surface's reach. On update, an unknown id is a
             // plain 404 for an entitled caller.
-            if (id is not null && _schedules.GetSchedule(id.Value) is null)
-                return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.NotFound);
-
+            //
             // A JSON-null body reaches here only from MCP (REST's
             // [ApiController] binding rejects it with a 400 before the
             // service runs): answer the field-keyed shape the tool contract
@@ -161,6 +172,15 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             lock (NameUniquenessGate)
             {
+                // The existence check lives INSIDE the gate (round-3 review):
+                // SaveSchedule is an upsert, so an update that passed an
+                // UNLOCKED check while a concurrent delete finished would
+                // resurrect the deleted schedule. With the check and the save
+                // under the same gate DeleteScheduleAsync takes around its
+                // final remove, one of the two loses cleanly instead.
+                if (id is not null && _schedules.GetSchedule(id.Value) is null)
+                    return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.NotFound);
+
                 if (!TryBuildValidatedSchedule(dto, id, out schedule, out var errors))
                     return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 

@@ -38,6 +38,11 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(true);
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
+            // Detail-entitled by default (an admin-like caller); the two-tier
+            // matrix lives in FoldersApiControllerTests and
+            // ApiTokenAuthorizationServiceTests.
+            _authorization.Setup(a => a.CanSeeFolderDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>()))
+                .Returns(true);
         }
 
 

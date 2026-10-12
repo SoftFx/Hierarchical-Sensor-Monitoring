@@ -611,6 +611,61 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
+        // ---- folder detail (the two-tier folder body) ----------------------------------
+
+        [Fact]
+        public void CanSeeFolderDetail_AdminOwner_True()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.True(CreateService().CanSeeFolderDetail(Principal(), FolderF));
+        }
+
+        [Fact]
+        public void CanSeeFolderDetail_FolderManager_True()
+        {
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.True(CreateService().CanSeeFolderDetail(Principal(), FolderF));
+        }
+
+        [Fact]
+        public void CanSeeFolderDetail_FolderViewer_False()
+        {
+            // The web UI gates the whole folder page at the folder Manager;
+            // a Viewer-role owner gets only the id-discovery fields.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductViewer);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.False(CreateService().CanSeeFolderDetail(Principal(), FolderF));
+        }
+
+        [Fact]
+        public void CanSeeFolderDetail_ManagerOfAnotherFolder_False()
+        {
+            _owner.FoldersRoles.Add(FolderG, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            Assert.False(CreateService().CanSeeFolderDetail(Principal(), FolderF));
+        }
+
+        [Fact]
+        public void CanSeeFolderDetail_ReadOnlyToken_OfManagerOwner_True_RecordsNothing()
+        {
+            // Role-only (reads never consult the write flag) and audit-silent,
+            // exactly like CanSeeChatDetail.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: true);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.True(service.CanSeeFolderDetail(Principal(), FolderF));
+            Assert.Empty(events);
+        }
+
+
         // ---- audit trail ---------------------------------------------------------------
 
         [Fact]

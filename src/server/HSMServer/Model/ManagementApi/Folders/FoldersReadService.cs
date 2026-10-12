@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading;
 using HSMServer.Authentication;
 using HSMServer.Folders;
+using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
 
 namespace HSMServer.Model.ManagementApi.Folders
@@ -30,7 +31,17 @@ namespace HSMServer.Model.ManagementApi.Folders
     //    boundary), memoized per distinct folder within one request;
     //    out-of-sight folders are silently absent, never a per-item 403;
     //  - unknown and invisible ids answer the SAME NotFound — the area's
-    //    anti-enumeration rule.
+    //    anti-enumeration rule;
+    //  - within that sight rule the body is two-tier like the chats (the
+    //    web UI gates the whole folder page at the folder Manager): the
+    //    id-discovery fields (id, name, products) answer every sighted
+    //    caller — with products FILTERED to the caller's own product sight,
+    //    because a folder role must not grant product sight (per-product
+    //    narrowing edits ProductsRoles only; the tree lists just
+    //    GetUserProducts) — and the detail fields (description, color,
+    //    dates/author, bound chats, default-chats routing, retention
+    //    defaults) answer only an admin or the folder's Manager
+    //    (CanSeeFolderDetail).
     public sealed class FoldersReadService
     {
         private readonly IFolderManager _folders;
@@ -57,8 +68,11 @@ namespace HSMServer.Model.ManagementApi.Folders
             // The list predicate is the owner-sight half of the item read
             // decision, memoized per DISTINCT folder (the evaluator re-resolves
             // user + token on every call; IsVisible records nothing, unlike
-            // per-item authorization).
+            // per-item authorization). The product-sight twin below feeds the
+            // products filter: a folder role must not grant product sight
+            // (the tree lists only GetUserProducts — the same rule).
             var isListable = _authorization.MemoizedFolderVisibility(user);
+            var isProductVisible = _authorization.MemoizedProductVisibility(user);
 
             var visible = _folders.GetValues()
                 .Where(folder =>
@@ -78,7 +92,8 @@ namespace HSMServer.Model.ManagementApi.Folders
 
             return new ApiPageDto<FolderDto>
             {
-                Items = [.. visible.Skip((page - 1) * pageSize).Take(pageSize).Select(FolderDtoMapper.ToDto)],
+                Items = [.. visible.Skip((page - 1) * pageSize).Take(pageSize)
+                    .Select(folder => FolderDtoMapper.ToDto(folder, isProductVisible, CanSeeDetail(user, folder)))],
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = visible.Count,
@@ -108,12 +123,21 @@ namespace HSMServer.Model.ManagementApi.Folders
             return _authorization.AuthorizeRead(user, FolderResource(id)) switch
             {
                 ApiTokenAuthorization.Allowed =>
-                    SensorTreeReadResult<FolderDto>.Ok(FolderDtoMapper.ToDto(folder)),
+                    SensorTreeReadResult<FolderDto>.Ok(FolderDtoMapper.ToDto(folder,
+                        _authorization.MemoizedProductVisibility(user), CanSeeDetail(user, folder))),
                 ApiTokenAuthorization.Forbidden => SensorTreeReadResult<FolderDto>.Fail(
                     SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see this folder."),
                 _ => SensorTreeReadResult<FolderDto>.Fail(SensorTreeReadOutcome.NotFound),
             };
         }
+
+
+        // The detail half of the read (the web UI's folder-page gate,
+        // FoldersController's FolderRoleFilterByFolderId): discovery fields
+        // answer every sighted caller, the detail fields only an admin or
+        // the folder's Manager. The evaluator owns the decision.
+        private bool CanSeeDetail(ClaimsPrincipal user, FolderModel folder) =>
+            _authorization.CanSeeFolderDetail(user, folder.Id);
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);

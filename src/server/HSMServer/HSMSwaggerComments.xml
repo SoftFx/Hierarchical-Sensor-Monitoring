@@ -1854,38 +1854,39 @@
             <summary>Folder display name (unique per server).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Description">
-            <summary>Free-form description (may be empty).</summary>
+            <summary>Free-form description (may be empty). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Color">
-            <summary>Folder color, ARGB (the web UI's color picker value).</summary>
+            <summary>Folder color, ARGB (the web UI's color picker value). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.CreationDate">
-            <summary>Folder creation time (UTC).</summary>
+            <summary>Folder creation time (UTC). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Author">
-            <summary>Author display name; null when unknown (the id itself is never exposed).</summary>
+            <summary>Author display name (detail field: null unless the owner is an admin or the folder's manager; the id itself is never exposed).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Products">
-            <summary>Products grouped into this folder (the template write path requires the folder to contain products).</summary>
-        </member>
-        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Chats">
             <summary>
-            Ids of the notification chats bound to the folder. The union of
-            these chats and the GLOBAL chats (empty `folders` on a chat) is the
-            chat set a policy or template in this folder may address.
+            Products grouped into this folder that the CALLER CAN SEE (the
+            template write path requires the folder to contain products). A
+            product the owner was explicitly revoked from stays absent — a
+            folder role never grants product sight.
             </summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Chats">
+            <summary>Ids of the notification chats bound to the folder. Detail field: null unless the owner is an admin or the folder's manager.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.DefaultChats">
-            <summary>The folder's default-chats routing (what FromParent-destination policies resolve to).</summary>
+            <summary>The folder's default-chats routing (what FromParent-destination policies resolve to). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.Ttl">
-            <summary>Default sensor inactivity timeout for the folder's sensors (TimeInterval).</summary>
+            <summary>Default sensor inactivity timeout for the folder's sensors (TimeInterval). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.KeepHistory">
-            <summary>Default sensor-history retention for the folder's sensors (TimeInterval).</summary>
+            <summary>Default sensor-history retention for the folder's sensors (TimeInterval). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Folders.FolderDto.SelfDestroy">
-            <summary>Remove-sensor-after-inactivity default for the folder's sensors (TimeInterval).</summary>
+            <summary>Remove-sensor-after-inactivity default for the folder's sensors (TimeInterval). Detail field: null unless the owner is an admin or the folder's manager.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Folders.FolderProductRefDto">
             <summary>A product grouped into a folder.</summary>

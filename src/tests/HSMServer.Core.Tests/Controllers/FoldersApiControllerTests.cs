@@ -12,6 +12,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Folders;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +46,9 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(true);
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
+            // Detail-entitled by default; the Viewer scenarios override.
+            _authorization.Setup(a => a.CanSeeFolderDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>()))
+                .Returns(true);
         }
 
 
@@ -229,6 +233,84 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(ApiTokenAuthorization.NotFound);
 
             Assert.Equal(404, StatusCodeOf(CreateController().GetFolder(folder.Id)));
+        }
+
+        // Folders and their products both seed through internal surface
+        // (InternalsVisibleTo); products join the folder's dictionary the way
+        // FolderManager's grouping does. The view model's Name is populated
+        // by Update (the tree's initialization order), not the constructor.
+        private static ProductNodeViewModel AddProduct(FolderModel folder, string name)
+        {
+            var model = new HSMServer.Core.Model.ProductModel(
+                EntitiesFactory.BuildProductEntity(name: name) with { Id = Guid.NewGuid().ToString() });
+            var product = new ProductNodeViewModel(model, parent: null, folder: null);
+
+            product.Update(model);
+            folder.Products.Add(product.Id, product);
+
+            return product;
+        }
+
+
+        [Fact]
+        public void GetFolder_ProductRevokedFromOwner_StaysAbsentForFolderViewer()
+        {
+            // The round-3 P2: a folder role must NOT grant product sight. The
+            // owner (a Viewer on this folder) was explicitly revoked from one
+            // of the folder's products — the tree would not list it, and the
+            // folder body must not either.
+            var folder = BuildFolder("ops");
+            var kept = AddProduct(folder, "kept");
+            var revoked = AddProduct(folder, "revoked");
+            _store.Add(folder);
+
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id == folder.Id || resource.Id == kept.Id);
+
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetFolder(folder.Id)).Value as FolderDto;
+
+            Assert.NotNull(dto);
+            Assert.Equal([kept.Id], dto.Products.Select(p => p.Id).ToArray());
+            Assert.Equal(["kept"], dto.Products.Select(p => p.Name).ToArray());
+            Assert.DoesNotContain(dto.Products, p => p.Id == revoked.Id);
+        }
+
+
+        [Fact]
+        public void GetFolder_ViewerOwner_GetsDiscoveryFieldsOnly_DetailIsNull()
+        {
+            // The two-tier body (the web UI gates the whole folder page at
+            // the folder Manager): a Viewer-role owner still discovers the
+            // folder and its visible products, but never the detail fields.
+            var folder = BuildFolder("ops", entity => entity with
+            {
+                Color = unchecked((int)0xFF112233),
+                Description = "operations group",
+                Chats = [Guid.NewGuid().ToByteArray()],
+            });
+            var kept = AddProduct(folder, "kept");
+            _store.Add(folder);
+
+            _authorization.Setup(a => a.CanSeeFolderDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>()))
+                .Returns(false);
+
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetFolder(folder.Id)).Value as FolderDto;
+
+            Assert.NotNull(dto);
+            // The discovery half answers: id, name, sight-filtered products.
+            Assert.Equal(folder.Id, dto.Id);
+            Assert.Equal("ops", dto.Name);
+            Assert.Equal([kept.Id], dto.Products.Select(p => p.Id).ToArray());
+            // The detail half is null for a non-entitled owner.
+            Assert.Null(dto.Description);
+            Assert.Null(dto.Color);
+            Assert.Null(dto.CreationDate);
+            Assert.Null(dto.Author);
+            Assert.Null(dto.Chats);
+            Assert.Null(dto.DefaultChats);
+            Assert.Null(dto.Ttl);
+            Assert.Null(dto.KeepHistory);
+            Assert.Null(dto.SelfDestroy);
         }
     }
 }

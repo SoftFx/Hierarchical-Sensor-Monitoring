@@ -56,6 +56,13 @@ namespace HSMServer.Authentication
         // IsVisible this records nothing — it shapes bodies inside an
         // already-authorized list, it is not a probe signal.
         bool CanSeeChatDetail(ClaimsPrincipal principal, System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds);
+
+        // The folder twin of CanSeeChatDetail: the owner is an admin or
+        // currently holds the Manager role at the folder — the token-side
+        // twin of the web UI's folder-detail gate (FoldersController's
+        // FolderRoleFilterByFolderId, ProductManager). Same properties:
+        // role-only (reads never consult the write flag) and audit-silent.
+        bool CanSeeFolderDetail(ClaimsPrincipal principal, Guid folderId);
     }
 
 
@@ -103,6 +110,10 @@ namespace HSMServer.Authentication
         public bool CanSeeChatDetail(ClaimsPrincipal principal, System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds) =>
             TryResolveCaller(principal, out var owner, out _)
             && (owner.IsAdmin || chatFolderIds.Any(owner.IsFolderManager));
+
+        public bool CanSeeFolderDetail(ClaimsPrincipal principal, Guid folderId) =>
+            TryResolveCaller(principal, out var owner, out _)
+            && owner.IsFolderManager(folderId);
 
         private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)
         {

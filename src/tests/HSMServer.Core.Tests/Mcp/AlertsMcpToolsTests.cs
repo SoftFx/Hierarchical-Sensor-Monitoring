@@ -555,6 +555,52 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async System.Threading.Tasks.Task UpdateVersusDelete_TheDeletedScheduleNeverComesBack()
+        {
+            // Round-3 review: SaveSchedule is an upsert, so an update whose
+            // existence check passed while a concurrent delete finished used to
+            // RESURRECT the deleted row (the delete had already answered 204).
+            // Both sides now decide under the same gate — whichever way the race
+            // resolves (update saves first and the delete removes it, or the
+            // delete wins and the update answers not-found), the id is GONE.
+            var schedule = BuildSchedule("victim");
+            _scheduleStore.Add(schedule);
+
+            var update = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    await CreateTools().UpdateAlertScheduleAsync(schedule.Id,
+                        new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                        {
+                            Name = "victim", Timezone = "UTC", Schedule = ValidYaml,
+                        });
+                }
+                catch (ModelContextProtocol.McpException)
+                {
+                    // The delete won the gate: the update answers not-found.
+                }
+            });
+
+            var delete = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    await CreateTools().DeleteAlertScheduleAsync(schedule.Id);
+                }
+                catch (ModelContextProtocol.McpException)
+                {
+                    // Only reachable if another delete already removed it.
+                }
+            });
+
+            await System.Threading.Tasks.Task.WhenAll(update, delete);
+
+            Assert.DoesNotContain(_scheduleStore, s => s.Id == schedule.Id);
+        }
+
+
+        [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_NullBody_IsTheFieldKeyedToolError()
         {
             var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
