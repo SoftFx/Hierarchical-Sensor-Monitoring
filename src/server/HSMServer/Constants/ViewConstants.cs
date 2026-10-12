@@ -5,6 +5,9 @@
         //ToDo: get from configuration
         public const string ApiSwagger = "/api/swagger/index.html";
 
+        // Client-onboarding docs for the /mcp endpoint, linked from the token dialog.
+        public const string McpWikiUrl = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/MCP";
+
         public const string HomeController = "Home";
         public const string DashboardsController = "Dashboards";
         public const string AlertsController = "Alerts";
