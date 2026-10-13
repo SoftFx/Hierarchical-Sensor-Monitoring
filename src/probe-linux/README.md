@@ -136,7 +136,7 @@ turns the sensor to Timeout on the server instead of leaving its last value look
 not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
 eleven times every 5 seconds on garage-server (one stats call per running container); the disk
 counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
-also drives the daily write/read totals), as do top-CPU (60 s), the shared collector's own bars,
+also drives the daily write/read totals), as do top-CPU and top disk I/O (60 s), the shared collector's own bars,
 the heartbeat and the dispatch, which this decision did not touch.
 
 ### Host (#1476)
@@ -533,6 +533,112 @@ the baseline saw.
 at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
 is one read of `/proc/stat` plus one small read per process per minute.
 
+### Top disk I/O processes (#1547)
+
+Which **process** writes and reads the disks the most — now, and over a day. The disk sensors
+report a whole disk (`Average disk write speed on <name> disk`, `Written per day on <name> disk`)
+and Docker reports per container; these four families report per process name. **Off unless the
+top-level `topDiskIo` block enables it** (not under `probe`, like `topCpu`); the server has no
+switch for it — enable it in the host's config (below).
+
+| Sensor | Type · unit | Posted |
+|---|---|---|
+| `.computer/Top disk writers/<name>` | Double · `MBytes_sec` (1 MB = 1024² bytes, as the disk speed sensors) | every `periodMs` (60 s): the names at or above `minBytesPerSec` (1 MiB/s), the fastest `count` (10), ties by name |
+| `.computer/Top disk readers/<name>` | the same | the same reads, for the bytes read |
+| `.computer/Written per day by process/<name>` | Double · GB (decimal, 10⁹ bytes, three decimals) | once a day, in its last 30 s: the top `count` names by the day's total |
+| `.computer/Read per day by process/<name>` | the same | posted with it |
+
+The speeds carry a 5-minute TTL (or three periods, when longer) and `EnableGrafana`, and a name
+that drops out of the top is simply not posted (as top CPU: it turns to Timeout); the per-day
+sensors carry 26 h, so a missing day shows. No alerts, no statistics. Every sensor registers at
+runtime, when its name first makes a top; at most `max(count × 8, 64)` names per family ever get
+one (then one WARN line; the tracked ones keep reporting). Probe-only: per-process I/O is not in
+the shared default-sensor catalog, so there is no Windows counterpart, no wire contract to copy
+and no conformance scenario (root `CLAUDE.md` rules #9/#10 concern shared sensors).
+
+**Source.** The process table exactly as top CPU reads it (`top_cpu::procfs::read_processes`,
+one `/proc/<pid>/stat` per process: name, parent, start time) and each process's
+`/proc/<pid>/io` — its **`write_bytes` / `read_bytes`**, the bytes the process caused to be sent
+to or fetched from the block layer, not `wchar`/`rchar` (every `write(2)`/`read(2)`, sockets and
+page-cache hits included). `write_bytes` is charged when the process dirties a page, so data the
+kernel flushes later still counts for the writer; `cancelled_write_bytes` (dirty pages truncated
+before reaching a disk — a temp file deleted at once) is **not** subtracted, as `iotop` and
+`pidstat -d` do not either. Nothing outside `/proc` is read: a sleeping disk is never asked.
+
+**Names and deltas** are top CPU's: the same `comm`-based name rule (normalized to the
+template-wildcard characters, kernel threads by kind: `kworker`, `jbd2`), processes of one name
+summed, a process is `(pid, starttime)` — a reused pid never inherits its predecessor's counters —
+and the first read after start only takes the baseline. One difference, so the daily totals miss
+nothing: a process that **started since the previous read** is credited with its whole counters
+(the kernel starts a new task's at 0), where top CPU skips its first interval. The description of
+a speed sensor names the busiest process's executable, with top CPU's path line.
+
+**Reaped children.** The kernel adds a reaped child's whole counters to its parent's
+(`wait_task_zombie`), so when a process the probe has been measuring exits, its reaper's counter
+jumps by the child's whole-life total — `tar` writing 100 GB for an hour would reappear as 100 GB
+under `bash`, `cron`, `systemd` or `containerd-shim`. The sampler therefore subtracts, from the
+reaper's delta, what the previous read had already credited to each vanished process. The reaper
+is the vanished process's parent at the previous read when that parent is still alive; when the
+parent vanished too (a job tree `cron → sh → tar` exiting at once), the walk goes up the previous
+read's parents to the first one still alive. **What a process does between its last read and its
+exit is therefore not lost but counted under its reaper** — the kernel moved it there. Limits: a
+process too short-lived to be read at all (a `gzip` run from `cron` within one minute) is counted
+under its reaper in full; an orphan whose parent died before it, both within one interval, is
+taken back from its grandparent although `init` or a subreaper reaped it (that one is cut by too
+much — never below 0 — and the reaper shows the orphan's whole-life total).
+
+**Schedule.** The source ticks every 5 s and reads `/proc` only when a sample is due: every
+`periodMs` on the tick grid, plus one **final reading** in the day's last 30 seconds, after which
+the day's totals are posted — the window `Written per day on <disk>` uses. A tick that is not due
+reads nothing.
+
+**The day** follows `Written per day on <disk>` (#1498/#1506): every read adds each name's delta
+since the previous read to the current local day (the host's timezone); after the day's post, what
+is moved before midnight counts towards the next day; the first read, a clock stepped backwards
+and a gap longer than three periods across midnight add nothing; a day with no measured interval
+is not posted (never an invented 0), and a name whose total rounds to 0.000 GB is left out; a day
+whose window was missed (a suspended host, a stalled source) is never posted late and is logged
+once at WARN. **Unlike the disk ledger, nothing is persisted**: a probe restart starts the day
+afresh from the restart, and that day's values say `measured since HH:MM local time (writes
+before that are not counted)`. A day keeps at most 4 096 names (one WARN line past that).
+
+**Privileges — the drop-in.** `/proc/<pid>/io` of another user's process needs
+`CAP_SYS_PTRACE` (`ptrace_may_access(PTRACE_MODE_READ_FSCREDS)`), which the unit drops
+(`CapabilityBoundingSet=`, `AmbientCapabilities=`), and the unit's `ProtectProc=invisible` hides
+the other processes altogether. With `topDiskIo` on:
+
+```ini
+# /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
+[Service]
+ProtectProc=default
+CapabilityBoundingSet=CAP_SYS_PTRACE
+AmbientCapabilities=CAP_SYS_PTRACE
+```
+
+then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server
+bundle's `install.sh` writes exactly this file when the config it leaves on the host enables the
+**top-level** `topDiskIo` block (the same top-level-only check as for `topCpu`; a block nested under
+`probe` is ignored by the probe and by the check alike) and removes it when that config does not;
+`uninstall.sh` and the package's `postrm` (remove/purge) delete it. The trade-off is real:
+`CAP_SYS_PTRACE` would also let the process read other processes' memory (`/proc/<pid>/mem`,
+`process_vm_readv`); the probe reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline`, and
+`ptrace(2)` itself stays refused by the unit's `SystemCallFilter=@system-service`. With the
+capability, top CPU's path lines name every process's executable (`/proc/<pid>/exe` becomes
+readable).
+
+**Without it** the source keeps measuring what it can read: under `ProtectProc=invisible` only the
+probe's own processes are visible (one WARN line at start naming `hidepid` and the drop-in); with
+`ProtectProc=default` but no capability, every refused `io` read (`EACCES`) is counted and **one
+WARN line** says how many of how many processes are not counted and how to fix it — then sampling
+goes on. A kernel without task I/O accounting (no readable `io` at all) is one ERROR until it
+recovers; an unlistable `/proc` likewise.
+
+**Cost** (measured on garage-server, 2026-10-13): 203 processes; reading every `/proc/<pid>/io`
+costs 2.9 ms of CPU and every `/proc/<pid>/stat` 3.5 ms (Python) — at the 60 s cadence ≈ 0.005 % of
+one core, against the probe's 0.2 % CPU / 21 MB RSS. procfs only: no disk access. Records: one per
+minute per name in a top — at most `2 × count` × 1 440 ≈ 28 800/day at the defaults, in practice
+only the few processes above 1 MiB/s — plus at most `2 × count` per day.
+
 ## Crate layout
 
 ```
@@ -540,7 +646,7 @@ src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/) and their per-source threads
+    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/, top_disk_io/) and their threads
     fixtures/docker/   Engine API captures from garage-server
   packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
                        smoke-deb.sh (install smoke), docker-access.sh (Docker socket drop-in),
@@ -772,6 +878,12 @@ Placeholders only — **no secrets**:
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See
   [Top CPU processes](#top-cpu-processes-1479); it also needs the `top-cpu.conf` drop-in.
+* `topDiskIo` (optional, **top level** like `topCpu`; one under `probe` is ignored): `enabled`
+  (`false`), `periodMs` (`60000`), `minBytesPerSec` (`1048576` = 1 MiB/s, for the writers and the
+  readers separately), `count` (`10`, for the speeds and the per-day totals alike) — validated only
+  when enabled: `periodMs > 0`, `count > 0`, `minBytesPerSec` a number `>= 0` (`0` = every process
+  that moved a byte). See [Top disk I/O processes](#top-disk-io-processes-1547); it also needs the
+  `top-disk-io.conf` drop-in (`CAP_SYS_PTRACE`). The server bundle never writes this block.
 
 ## Running
 
@@ -793,4 +905,6 @@ the collector's own file logger, so the two line up; the journal adds local time
 `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `StateDirectory`, empty capability bounding
 set, `LoadCredential`) and the §5 budget (`MemoryMax=64M`, `CPUQuota=5%`). Docker socket access is
 not in the unit but in a drop-in written only where a docker group exists — see
-[Socket access](#docker-compose-services-1416).
+[Socket access](#docker-compose-services-1416). Likewise the only capability the probe can ever
+hold, `CAP_SYS_PTRACE`, comes from the `top-disk-io.conf` drop-in, written only where the host
+config enables `topDiskIo` — see [Top disk I/O processes](#top-disk-io-processes-1547).

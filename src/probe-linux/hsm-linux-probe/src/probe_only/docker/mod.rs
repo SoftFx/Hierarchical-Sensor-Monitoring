@@ -38,7 +38,7 @@ use hsm_collector::{Collector, SensorStatus};
 
 use crate::config::DockerConfig;
 use crate::logging::{Level, Logger};
-use crate::probe_only::Source;
+use crate::probe_only::{on_tick_grid, Source};
 
 use engine::{ApiVersion, EngineApi, EngineError};
 use identity::{Membership, Naming, ServiceKey};
@@ -1076,17 +1076,6 @@ fn report_problems(logger: &Logger, log_once: &mut LogOnce, problems: &[String])
             logger.error(format!("docker: sensor {problem}"));
         }
     }
-}
-
-/// The deadline for "`wait` after the tick that started at `from`": the tick on the grid nearest
-/// to `from + wait` meets it. Ticks come on a fixed-rate grid (`run_source`) but each starts a
-/// little late (wake-up latency), and by a different amount each time, so a deadline of exactly
-/// `from + wait` is missed whenever the later tick starts earlier within its slot than this one
-/// did, and the action slips by a whole period: at the 60 s default the state poll would run every
-/// 2 minutes and the retry after an outage would wait 2 minutes. Half a period of slack absorbs
-/// that jitter (a 5 s period still polls every 60 s, a 7 s one every 63 s).
-fn on_tick_grid(from: Instant, wait: Duration, period: Duration) -> Instant {
-    from + wait.saturating_sub(period / 2)
 }
 
 fn short_id(id: &str) -> &str {

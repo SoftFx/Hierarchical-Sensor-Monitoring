@@ -117,6 +117,27 @@ The probe registers **two separately pinned sets**:
    `top-cpu.conf` drop-in (`ProtectProc=default`) to see other processes; without it, or under any
    `hidepid`, it runs on what it sees and says so in one INFO line. Cost: ≈ 1 440 records/day per
    name that stays ≥ 1 %. Details: README "Top CPU processes".
+5. **Top disk I/O processes** (#1547, probe-only set; `probe_only/top_disk_io/`) —
+   `.computer/Top disk writers/<name>` and `Top disk readers/<name>` (Double, `MBytes_sec`, 1 MB =
+   1024², every `periodMs` 60 s: names at or above `minBytesPerSec` 1 MiB/s, the fastest `count` 10,
+   TTL 5 min, `EnableGrafana`) and `Written per day by process/<name>` / `Read per day by
+   process/<name>` (Double, decimal GB, the top `count` names by the day's total, posted once in the
+   day's last 30 s from a final reading, TTL 26 h). Source: `/proc/<pid>/io` `write_bytes` /
+   `read_bytes` (block I/O, not `wchar`/`rchar`; `cancelled_write_bytes` not subtracted) over top
+   CPU's process table and name rule (`read_processes`, `sensor_name`), identity `(pid, starttime)`;
+   unlike top CPU a process started since the previous read is credited with its whole counters (they
+   start at 0). The kernel adds a reaped child's whole counters to its parent's, so each vanished
+   process's last-read counters are subtracted from its reaper (its parent at the previous read if
+   alive, else the first live ancestor up the previous read's chain): nothing is counted twice, and a
+   process's last partial interval is counted under its reaper. The day follows `Written per day on
+   <disk>` (post window, after-post bytes to the next day, missed day logged once, never an invented
+   0) but is **in memory only**: a restart starts the day afresh (the comment says since when).
+   **Off unless the top-level `topDiskIo` block enables it**; no server switch. Needs the
+   `top-disk-io.conf` drop-in (`ProtectProc=default` + `CAP_SYS_PTRACE`), which `install.sh` writes
+   only from an enabling host config; without it the source measures what it can and logs one WARN
+   (`hidepid`, or the `EACCES` count with the remedy). Every sensor registers at runtime. Not in the
+   shared catalog, so no Windows counterpart and no conformance scenario. Details: README "Top disk
+   I/O processes".
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
@@ -144,7 +165,9 @@ on. The host switches covered the disk sensor before 0.4.0, so while `probe.disk
 (an upgrade never switches them back on); an explicit `probe.disks.enabled` wins.
 `topCpu.{enabled, periodMs, minPercent, count}` sits at the **top level**, not under `probe` — HsmAgent's
 block, keys, defaults (`false`, 60000, 1.0, 10) and checks — so the server writes one block for both
-bundles (#1479).
+bundles (#1479). `topDiskIo.{enabled, periodMs, minBytesPerSec, count}` (#1547; `false`, 60000,
+1048576, 10; checked only when enabled) sits at the top level too; one under `probe` is ignored, as the
+install bundle's top-level-only check ignores it.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
 `debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the skeleton at
@@ -209,6 +232,12 @@ Linux is the only supported target. The initiative is
   `uninstall.sh` and `postrm` remove it. Top-CPU reads only `/proc/stat`,
   `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
   argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
+- **The unit holds no capability unless top disk I/O is on.** Only the `top-disk-io.conf` drop-in
+  (`install.sh`, from a host config enabling the top-level `topDiskIo`; removed otherwise, by
+  `uninstall.sh` and by `postrm`) grants `CAP_SYS_PTRACE` (bounding + ambient) and sets
+  `ProtectProc=default`. The capability would also allow reading other processes' memory; the probe
+  reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline`, and `ptrace(2)` stays refused by
+  `SystemCallFilter=@system-service`.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.

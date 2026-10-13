@@ -196,6 +196,71 @@ namespace HSMServer.Core.Tests
             Assert.Contains("rm -f \"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", LinuxProbeInstallerBundle.BuildUninstallScript());
         }
 
+        /// <summary>
+        /// The top disk I/O check (#1547) is the top-CPU one for the "topDiskIo" key: only an enabled
+        /// TOP-LEVEL block lifts the unit's restrictions, the only one the probe reads.
+        /// </summary>
+        [Fact]
+        public void TopDiskIo_InstallScriptPatternMatchesTopLevelBlockOnly()
+        {
+            Assert.DoesNotContain("'", LinuxProbeInstallerBundle.TopDiskIoEnabledPattern); // embedded in '...'
+            var pattern = new System.Text.RegularExpressions.Regex(
+                LinuxProbeInstallerBundle.TopDiskIoEnabledPattern.Replace("[[:space:]]", @"\s"));
+            string Flatten(string json) => json.Replace("\r", "").Replace("\n", "");
+
+            // The bundle never enables it: there is no server switch, the operator does.
+            Assert.DoesNotMatch(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options)));
+            Assert.DoesNotMatch(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true })));
+
+            Assert.Matches(pattern, "{\"topDiskIo\":{\"count\":10, \"enabled\" :\ttrue}}");
+            Assert.DoesNotMatch(pattern, "{\"topDiskIo\": {\"enabled\": false, \"count\": 10}}");
+            Assert.DoesNotMatch(pattern, "{\"topDiskIo\": {\"enabled\": false}, \"x\": {\"enabled\": true}}");
+            // topCpu enabled does not switch on top disk I/O, nor the reverse.
+            Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": true}, \"topDiskIo\": {\"enabled\": false}}");
+            Assert.DoesNotMatch(
+                new System.Text.RegularExpressions.Regex(LinuxProbeInstallerBundle.TopCpuEnabledPattern.Replace("[[:space:]]", @"\s")),
+                "{\"topCpu\": {\"enabled\": false}, \"topDiskIo\": {\"enabled\": true}}");
+
+            // Nested one level too deep, spelled inside a string, or after a brace inside a string.
+            Assert.DoesNotMatch(pattern, "{\"probe\": {\"topDiskIo\": {\"enabled\": true}}}");
+            Assert.DoesNotMatch(pattern, "{\"note\": \"\\\"topDiskIo\\\": {\\\"enabled\\\": true}\"}");
+            Assert.Matches(pattern, "{\"note\": \"a } b { c\", \"topDiskIo\": {\"enabled\": true}}");
+
+            // The shape of config.example.json with both blocks, top disk I/O switched on by hand.
+            Assert.Matches(pattern,
+                "  {\"hsm\": {\"port\": 1}, \"probe\": {\"hostSensors\": {\"enabled\": true}, " +
+                "\"docker\": {\"exclude\": [], \"enabled\": true}}, \"topCpu\": {\"enabled\": false, \"count\": 10}, " +
+                "\"topDiskIo\": {\"enabled\": true, \"periodMs\": 60000, \"minBytesPerSec\": 1048576, \"count\": 10}, " +
+                "\"shutdownTimeoutSec\": 10}");
+        }
+
+        [Fact]
+        public void TopDiskIo_InstallScriptGrantsPtraceOnlyWhenTheHostConfigEnablesIt()
+        {
+            // The step does not depend on the bundle's top-CPU switch.
+            foreach (var script in new[] { LinuxProbeInstallerBundle.BuildInstallScript(), LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true) })
+            {
+                Assert.Contains("TOP_DISK_IO_DROPIN=\"/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf\"", script);
+                Assert.Contains("if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/config.json\" \\\n" +
+                                "  | grep -E '" + LinuxProbeInstallerBundle.TopDiskIoEnabledPattern + "' >/dev/null; then\n" +
+                                "  top_disk_io_on=1\n", script);
+                Assert.Contains("  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'", script);
+                Assert.Contains("\n[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_SYS_PTRACE\nAmbientCapabilities=CAP_SYS_PTRACE\nEOF\n", script);
+                // Anything else removes it: the unit's empty capability sets and ProtectProc=invisible again.
+                Assert.Contains("elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then\n  rm -f \"$TOP_DISK_IO_DROPIN\"", script);
+                // Decided after the config is placed and before systemd is reloaded and the unit (re)started.
+                var check = script.IndexOf("top_disk_io_on=0", System.StringComparison.Ordinal);
+                Assert.True(script.IndexOf("install -m 0644 -o root -g root config.json", System.StringComparison.Ordinal) < check);
+                Assert.True(check < script.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+                Assert.DoesNotContain("grep -Eq", script);
+            }
+
+            // No warning branch: the bundle never asks for it, so a kept config cannot contradict it.
+            Assert.DoesNotContain("WARNING: this bundle enables top disk", LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true));
+
+            Assert.Contains("rm -f \"/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf\"", LinuxProbeInstallerBundle.BuildUninstallScript());
+        }
+
         [Fact]
         public void TarEntries_HaveExpectedModesAndRootOwnership()
         {

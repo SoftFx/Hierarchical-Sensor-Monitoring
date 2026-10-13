@@ -36,6 +36,84 @@ pub struct Config {
     /// `enabled`.
     #[serde(default)]
     pub top_cpu: TopCpuConfig,
+    /// The per-process disk I/O sensors (#1547), at the top level next to `topCpu`. Off unless
+    /// `enabled`. A `topDiskIo` under `probe` is not read (an unknown key, ignored), so the
+    /// install bundle's top-level-only check and the probe agree on when the feature is on.
+    #[serde(default)]
+    pub top_disk_io: TopDiskIoConfig,
+}
+
+/// `topDiskIo { enabled, periodMs, minBytesPerSec, count }` (#1547): off, 60000 ms, 1 MiB/s, 10.
+/// Like `topCpu`, checked only when enabled: `periodMs > 0`, `count > 0`, `minBytesPerSec` a
+/// finite number `>= 0`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopDiskIoConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_top_disk_io_period_ms")]
+    pub period_ms: i64,
+    /// The speed a name must reach in an interval (write or read, separately) to be posted, in
+    /// bytes per second.
+    #[serde(default = "default_top_disk_io_min_bytes_per_sec")]
+    pub min_bytes_per_sec: f64,
+    #[serde(default = "default_top_disk_io_count")]
+    pub count: i64,
+}
+
+impl Default for TopDiskIoConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            period_ms: default_top_disk_io_period_ms(),
+            min_bytes_per_sec: default_top_disk_io_min_bytes_per_sec(),
+            count: default_top_disk_io_count(),
+        }
+    }
+}
+
+impl TopDiskIoConfig {
+    /// Valid only after validation (`period_ms > 0`).
+    pub fn period(&self) -> Duration {
+        Duration::from_millis(u64::try_from(self.period_ms).unwrap_or(1).max(1))
+    }
+
+    /// Valid only after validation (`count > 0`).
+    pub fn count(&self) -> usize {
+        usize::try_from(self.count).unwrap_or(1).max(1)
+    }
+
+    fn validate(&self) -> Result<(), ConfigError> {
+        if !self.enabled {
+            return Ok(());
+        }
+        if self.period_ms <= 0 {
+            return Err(ConfigError::invalid(
+                "topDiskIo.periodMs must be greater than 0",
+            ));
+        }
+        if self.count <= 0 {
+            return Err(ConfigError::invalid(
+                "topDiskIo.count must be greater than 0",
+            ));
+        }
+        if !self.min_bytes_per_sec.is_finite() || self.min_bytes_per_sec < 0.0 {
+            return Err(ConfigError::invalid(
+                "topDiskIo.minBytesPerSec must be a number >= 0",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn default_top_disk_io_period_ms() -> i64 {
+    60_000
+}
+fn default_top_disk_io_min_bytes_per_sec() -> f64 {
+    1_048_576.0
+}
+fn default_top_disk_io_count() -> i64 {
+    10
 }
 
 /// `topCpu { enabled, periodMs, minPercent, count }` — HsmAgent's `AgentConfig` fields
@@ -385,6 +463,7 @@ impl Config {
         self.probe.docker.validate()?;
         self.probe.disks.validate()?;
         self.top_cpu.validate()?;
+        self.top_disk_io.validate()?;
         Ok(())
     }
 
@@ -570,6 +649,19 @@ mod tests {
         assert_eq!(
             (top.period_ms, top.min_percent, top.count),
             (defaults.period_ms, defaults.min_percent, defaults.count)
+        );
+        // So is the topDiskIo block (#1547).
+        assert!(example.contains("\"topDiskIo\""));
+        let io = &config.top_disk_io;
+        let defaults = TopDiskIoConfig::default();
+        assert!(!io.enabled);
+        assert_eq!(
+            (io.period_ms, io.min_bytes_per_sec, io.count),
+            (
+                defaults.period_ms,
+                defaults.min_bytes_per_sec,
+                defaults.count
+            )
         );
     }
 
@@ -872,6 +964,51 @@ mod tests {
         // Like the agent, a disabled block is not validated.
         let off = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
              "topCpu": { "enabled": false, "periodMs": 0, "count": 0 } }"#;
+        assert!(Config::parse(off).is_ok());
+    }
+
+    #[test]
+    fn top_disk_io_is_a_top_level_block_off_unless_enabled() {
+        let io = Config::parse(MINIMAL).expect("parse").top_disk_io;
+        assert!(!io.enabled);
+        assert_eq!(
+            (io.period_ms, io.min_bytes_per_sec, io.count),
+            (60_000, 1_048_576.0, 10)
+        );
+
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "topDiskIo": { "enabled": true, "periodMs": 30000, "minBytesPerSec": 0,
+                            "count": 5 } }"#;
+        let io = Config::parse(text).expect("parse").top_disk_io;
+        assert!(io.enabled);
+        assert_eq!(io.period(), Duration::from_secs(30));
+        assert_eq!(io.count(), 5);
+        assert_eq!(io.min_bytes_per_sec, 0.0);
+
+        // Only the top-level block is read: the install bundle lifts the unit's restrictions only
+        // for that one, so a block nested under `probe` must not switch the source on either.
+        let nested = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "topDiskIo": { "enabled": true } } }"#;
+        assert!(!Config::parse(nested).expect("parse").top_disk_io.enabled);
+
+        for bad in [
+            r#"{ "enabled": true, "periodMs": 0 }"#,
+            r#"{ "enabled": true, "periodMs": -5 }"#,
+            r#"{ "enabled": true, "count": 0 }"#,
+            r#"{ "enabled": true, "minBytesPerSec": -1 }"#,
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "topDiskIo": {bad} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
+        // A disabled block is not validated.
+        let off = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "topDiskIo": { "enabled": false, "periodMs": 0, "count": 0 } }"#;
         assert!(Config::parse(off).is_ok());
     }
 

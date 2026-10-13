@@ -938,6 +938,9 @@
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.DropInDirectory">
             <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
         </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropIn">
+            <summary>The drop-in install.sh writes when the host config enables top disk I/O (#1547).</summary>
+        </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern">
             <summary>
             The POSIX extended regular expression install.sh applies to the installed config with its
@@ -949,6 +952,13 @@
             inside a string is not a key (#1515); the block itself holds no nested object. One source
             of truth: the tests apply it to what <see cref="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)"/> emits. Contains no single
             quote (it is embedded in '...').
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern">
+            <summary>
+            The same check as <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern"/> for the top-level <c>topDiskIo</c> block
+            (#1547), the only one the probe reads (<c>Config::top_disk_io</c>): install.sh writes
+            <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropIn"/> only when it matches.
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
@@ -1025,6 +1035,20 @@
             no <c>--force-config</c>) and does not enable top-CPU prints a WARNING naming the way out.
             The check is plain POSIX tools over the config with its newlines removed (the block holds no
             nested object); a config it cannot read or recognise counts as "off" — the safe side.
+            uninstall.sh and the package's postrm remove the drop-in too.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropInScript">
+            <summary>
+            The install.sh step for top disk I/O processes (#1547). Reading another user's
+            <c>/proc/&lt;pid&gt;/io</c> needs <c>CAP_SYS_PTRACE</c>, which the unit drops (empty
+            <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>), and the unit's
+            <c>ProtectProc=invisible</c> hides the other processes altogether — so the step grants that one
+            capability and lifts that one setting with a drop-in, <b>only when the config installed on the
+            host enables the top-level <c>topDiskIo</c> block</b> (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>), and
+            removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
+            server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
+            "Top disk I/O processes"). A config it cannot read or recognise counts as "off" — the safe side.
             uninstall.sh and the package's postrm remove the drop-in too.
             </summary>
         </member>

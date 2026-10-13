@@ -121,9 +121,12 @@ if ls /etc/hsm-linux-probe/*.dpkg-* >/dev/null 2>&1; then
 fi
 
 echo "==> purge"
-# The top-CPU drop-in the server bundle's install.sh writes (#1479): postrm must remove it.
+# The top-CPU (#1479) and top disk I/O (#1547) drop-ins the server bundle's install.sh writes:
+# postrm must remove both.
 mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
 printf '[Service]\nProtectProc=default\n' >/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_SYS_PTRACE\nAmbientCapabilities=CAP_SYS_PTRACE\n' \
+    >/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
 apt-get purge -y -qq hsm-linux-probe >/dev/null
 [[ ! -e /usr/bin/hsm-linux-probe ]] || fail "purge left /usr/bin/hsm-linux-probe"
 [[ ! -e /etc/systemd/system/hsm-linux-probe.service.d ]] ||

@@ -23,6 +23,10 @@
 //! * [`top_cpu`] — `.computer/Top CPU processes/<name>` (#1479), the Windows agents' sensor family
 //!   from `/proc`; off unless the top-level `topCpu` block enables it; every sensor registers at
 //!   runtime. Registered by the probe next to [`register`], since its switch is not under `probe`.
+//! * [`top_disk_io`] — `.computer/Top disk writers/<name>`, `Top disk readers/<name>` and the
+//!   per-day `Written per day by process/<name>` / `Read per day by process/<name>` (#1547), from
+//!   `/proc/<pid>/io`; off unless the top-level `topDiskIo` block enables it, registered like
+//!   [`top_cpu`], with which it shares the process table and the name rule.
 //!
 //! # Failure isolation (root rules #6 and #8)
 //!
@@ -36,6 +40,7 @@ pub mod disks;
 pub mod docker;
 pub mod host;
 pub mod top_cpu;
+pub mod top_disk_io;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
@@ -267,6 +272,18 @@ pub fn run_source(source: &mut dyn Source, stop: &StopSignal, logger: &Logger) {
             return;
         }
     }
+}
+
+/// The deadline for "`wait` after the tick that started at `from`": the tick on the grid nearest
+/// to `from + wait` meets it. Ticks come on a fixed-rate grid ([`run_source`]) but each starts a
+/// little late (wake-up latency), and by a different amount each time, so a deadline of exactly
+/// `from + wait` is missed whenever the later tick starts earlier within its slot than this one
+/// did, and the action slips by a whole period: at the 60 s default the Docker state poll would
+/// run every 2 minutes and the retry after an outage would wait 2 minutes. Half a period of slack
+/// absorbs that jitter (a 5 s period still polls every 60 s, a 7 s one every 63 s). Used by the
+/// Docker source and by top disk I/O, whose 5-s ticks sample every `periodMs`.
+pub(crate) fn on_tick_grid(from: Instant, wait: Duration, period: Duration) -> Instant {
+    from + wait.saturating_sub(period / 2)
 }
 
 /// Deduplicated read-failure logging: the first failure (or a different one) is logged at ERROR,

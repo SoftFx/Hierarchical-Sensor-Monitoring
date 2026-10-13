@@ -41,6 +41,9 @@ namespace HSMServer.Model.Agent
         public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
         public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
+        /// <summary>The drop-in install.sh writes when the host config enables top disk I/O (#1547).</summary>
+        public const string TopDiskIoDropIn = DropInDirectory + "/top-disk-io.conf";
+
         // A JSON string with any characters, escaped quotes included (#1515): a brace inside one
         // (an exclude pattern, say) is text, not structure. Inside a POSIX bracket expression the
         // backslash is literal, so [^"\\] is "neither a quote nor a backslash", as in .NET.
@@ -67,9 +70,20 @@ namespace HSMServer.Model.Agent
         /// of truth: the tests apply it to what <see cref="BuildConfigJson"/> emits. Contains no single
         /// quote (it is embedded in '...').
         /// </summary>
-        public const string TopCpuEnabledPattern =
-            "^[[:space:]]*\\{(" + TextPattern + "|" + ThreeLevelObjectPattern + ")*" +
-            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{(" + TextPattern + ")*\"enabled\"[[:space:]]*:[[:space:]]*true";
+        public const string TopCpuEnabledPattern = TopLevelKeyPattern + "\"topCpu\"" + EnabledBlockPattern;
+
+        /// <summary>
+        /// The same check as <see cref="TopCpuEnabledPattern"/> for the top-level <c>topDiskIo</c> block
+        /// (#1547), the only one the probe reads (<c>Config::top_disk_io</c>): install.sh writes
+        /// <see cref="TopDiskIoDropIn"/> only when it matches.
+        /// </summary>
+        public const string TopDiskIoEnabledPattern = TopLevelKeyPattern + "\"topDiskIo\"" + EnabledBlockPattern;
+
+        // The root object's own text up to a top-level key: whole strings or balanced nested objects.
+        private const string TopLevelKeyPattern = "^[[:space:]]*\\{(" + TextPattern + "|" + ThreeLevelObjectPattern + ")*";
+
+        // A key's value: a flat object holding "enabled": true.
+        private const string EnabledBlockPattern = "[[:space:]]*:[[:space:]]*\\{(" + TextPattern + ")*\"enabled\"[[:space:]]*:[[:space:]]*true";
 
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
@@ -275,6 +289,8 @@ namespace HSMServer.Model.Agent
                 "",
                 TopCpuDropInScript(enableTopCpu),
                 "",
+                TopDiskIoDropInScript(),
+                "",
                 "systemctl daemon-reload",
                 "# A failed start is judged by the status check below, which prints the diagnostics.",
                 "systemctl enable --now \"$UNIT\" || true",
@@ -328,8 +344,10 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "rm -f \"$CONFIG_DIR/" + ConfigName + "\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-dist\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-old\"",
                 "rmdir \"$CONFIG_DIR\" 2>/dev/null || true",
-                "# The top-CPU drop-in install.sh may have written (a package older than 0.7.0 does not remove it).",
+                "# The top-CPU and top disk I/O drop-ins install.sh may have written (a package older than 0.7.0",
+                "# does not remove the first, one older than 0.9.0 not the second).",
                 "rm -f \"" + TopCpuDropIn + "\"",
+                "rm -f \"" + TopDiskIoDropIn + "\"",
                 "rmdir \"" + DropInDirectory + "\" 2>/dev/null || true",
                 "",
                 "if [ -f \"$CA_TARGET\" ]; then",
@@ -453,6 +471,54 @@ namespace HSMServer.Model.Agent
 
             lines.Add("fi");
             return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// The install.sh step for top disk I/O processes (#1547). Reading another user's
+        /// <c>/proc/&lt;pid&gt;/io</c> needs <c>CAP_SYS_PTRACE</c>, which the unit drops (empty
+        /// <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>), and the unit's
+        /// <c>ProtectProc=invisible</c> hides the other processes altogether — so the step grants that one
+        /// capability and lifts that one setting with a drop-in, <b>only when the config installed on the
+        /// host enables the top-level <c>topDiskIo</c> block</b> (<see cref="TopDiskIoEnabledPattern"/>), and
+        /// removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
+        /// server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
+        /// "Top disk I/O processes"). A config it cannot read or recognise counts as "off" — the safe side.
+        /// uninstall.sh and the package's postrm remove the drop-in too.
+        /// </summary>
+        private static string TopDiskIoDropInScript()
+        {
+            return string.Join("\n",
+                "# Top disk I/O processes (#1547): the drop-in follows the config installed above, as for top CPU.",
+                "# An enabled top-level topDiskIo block lets the probe see every process in /proc and read its",
+                "# /proc/<pid>/io, which needs CAP_SYS_PTRACE; anything else keeps the unit's ProtectProc=invisible",
+                "# and its empty capability sets.",
+                "TOP_DISK_IO_DROPIN=\"" + TopDiskIoDropIn + "\"",
+                "top_disk_io_on=0",
+                "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
+                "  | grep -E '" + TopDiskIoEnabledPattern + "' >/dev/null; then",
+                "  top_disk_io_on=1",
+                "fi",
+                "if [ \"$top_disk_io_on\" -eq 1 ]; then",
+                "  install -d -m 0755 -o root -g root \"$(dirname \"$TOP_DISK_IO_DROPIN\")\"",
+                "  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'",
+                "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topDiskIo.",
+                "# The top disk I/O sensors read /proc/<pid>/io of every process: another user's needs CAP_SYS_PTRACE,",
+                "# and the unit's ProtectProc=invisible hides the other processes. The capability would also allow reading",
+                "# other processes' memory; the probe only reads /proc/<pid>/stat, io, exe and cmdline (ptrace(2) itself stays",
+                "# refused by the unit's SystemCallFilter). Delete this file, then",
+                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capability again.",
+                "[Service]",
+                "ProtectProc=default",
+                "CapabilityBoundingSet=CAP_SYS_PTRACE",
+                "AmbientCapabilities=CAP_SYS_PTRACE",
+                "EOF",
+                "  chmod 0644 \"$TOP_DISK_IO_DROPIN\"",
+                "  echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry and I/O counters (CAP_SYS_PTRACE, $TOP_DISK_IO_DROPIN).\"",
+                "elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then",
+                "  rm -f \"$TOP_DISK_IO_DROPIN\"",
+                "  rmdir \"$(dirname \"$TOP_DISK_IO_DROPIN\")\" 2>/dev/null || true",
+                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_DISK_IO_DROPIN (no CAP_SYS_PTRACE again).\"",
+                "fi");
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.
