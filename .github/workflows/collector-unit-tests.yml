@@ -29,6 +29,7 @@ env:
     tests/conformance/**
     src/Directory.Build.*
     global.json
+    .gitattributes
     .github/workflows/collector-unit-tests.yml
 
 jobs:

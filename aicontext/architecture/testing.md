@@ -109,7 +109,8 @@ cd src/tests/Autotests && npx playwright test
 
 The collector/native lanes are required checks, so their `pull_request:` triggers carry no
 `paths:` filter (a filtered required check never reports on an unrelated PR and blocks the merge)
-and their jobs carry no change-based job-level `if:` (a skipped job is not a passing check).
+and their jobs carry no change-based job-level `if:` (a matrix job skipped at job level reports
+under its unexpanded name, so the per-OS required checks stay pending).
 Instead `native-collector-conformance.yml`, `collector-unit-tests.yml` and
 `collector-integration-tests.yml` gate at the step level: every gated job checks out with
 `fetch-depth: 2`, runs `.github/actions/detect-lane-changes` (diff of the PR merge commit against

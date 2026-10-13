@@ -19,8 +19,9 @@ name: Native collector conformance
 # check always reports a status, but a first "Detect relevant changes" step decides whether the
 # expensive steps run. A PR touching none of LANE_PATHS (and nothing under .github/) gets every
 # build/test step skipped and the check reports success in seconds; the final "Lane summary" step
-# says which way it went. Gating is step-level on purpose: a job skipped through a job-level `if:`
-# does not count as a passing required check. push and workflow_dispatch always run the full lane.
+# says which way it went. Gating is step-level on purpose: a matrix job skipped through a job-level
+# `if:` reports under its unexpanded name, so the per-OS required checks would stay pending.
+# push and workflow_dispatch always run the full lane.
 # Deliberately NOT gated: format-check (pip + clang-format, seconds) and checklist-gate (text
 # checks over docs/initiatives, scripts and the corpus — docs-only PRs are exactly what it guards).
 
@@ -43,9 +44,9 @@ on:
 
 env:
   # Paths whose change on a PR runs the full native matrix (glob, '*' also matches '/').
-  # Mirrors the push filter plus the vcpkg registry (ports/, versions/), root-level package
-  # manifests, and the scripts this workflow invokes. '.github/**' is always included by the
-  # detection action.
+  # Mirrors the push filter plus the vcpkg registry (ports/, versions/) and root-level package
+  # manifests (the gated jobs read src/native and tests/conformance; the extra patterns only ever
+  # cause an extra run, never a missed one). '.github/**' is always included by the detection action.
   LANE_PATHS: |
     src/native/**
     tests/conformance/**
@@ -55,6 +56,7 @@ env:
     conanfile*
     vcpkg*.json
     scripts/conformance-*
+    .gitattributes
     .github/workflows/native-collector-conformance.yml
 
 jobs:

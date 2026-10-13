@@ -92,6 +92,9 @@ runs:
         echo "::endgroup::"
 
         if [ "${#matched[@]}" -gt 0 ]; then
-          decide true "${#matched[@]} of $total changed file(s) match this lane's paths (first: ${matched[0]})"
+          # The file name goes into $GITHUB_OUTPUT: strip line breaks so an odd name cannot inject
+          # a second "run=" line.
+          first="$(printf '%s' "${matched[0]}" | tr -d '\r\n' )"
+          decide true "${#matched[@]} of $total changed file(s) match this lane's paths (first: $first)"
         fi
         decide false "none of the $total changed file(s) match this lane's paths"
