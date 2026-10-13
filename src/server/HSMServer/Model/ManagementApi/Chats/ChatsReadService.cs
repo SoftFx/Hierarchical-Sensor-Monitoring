@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using HSMServer.Authentication;
-using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Notifications.Chats;
 
 namespace HSMServer.Model.ManagementApi.Chats
@@ -14,7 +13,7 @@ namespace HSMServer.Model.ManagementApi.Chats
     /// visibility rule that decides what a caller may see. Transport-agnostic —
     /// the REST controller and the MCP chat tools both call it; the caller
     /// supplies the token principal and gets DTOs or a
-    /// <see cref="SensorTreeReadResult{T}"/> failure back, never an
+    /// <see cref="ManagementReadResult{T}"/> failure back, never an
     /// IActionResult (the shared read envelope of the management area).
     /// </summary>
     // Chats are the id source the alert/template write endpoints validate
@@ -59,12 +58,12 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// gate; within it, out-of-sight chats are simply not listed, never a
         /// per-item failure.
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<ChatDto>> ListChats(ClaimsPrincipal user, int page, int pageSize,
+        public ManagementReadResult<ApiPageDto<ChatDto>> ListChats(ClaimsPrincipal user, int page, int pageSize,
             CancellationToken cancellationToken = default)
         {
             if (!_authorization.CanSeeAnyBoundary(user))
-                return SensorTreeReadResult<ApiPageDto<ChatDto>>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: ManagementApiErrors.NoBoundarySightMessage);
+                return ManagementReadResult<ApiPageDto<ChatDto>>.Fail(
+                    ManagementReadOutcome.Forbidden, message: ManagementApiErrors.NoBoundarySightMessage);
 
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -89,7 +88,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             var totalPages = ApiPagination.TotalPagesOf(visibleChats.Count, pageSize);
             page = ApiPagination.ClampPage(page, totalPages);
 
-            return SensorTreeReadResult<ApiPageDto<ChatDto>>.Ok(new ApiPageDto<ChatDto>
+            return ManagementReadResult<ApiPageDto<ChatDto>>.Ok(new ApiPageDto<ChatDto>
             {
                 Items = [.. visibleChats.Skip((page - 1) * pageSize).Take(pageSize)
                     .Select(chat => ChatDtoMapper.ToDto(chat, isFolderVisible, CanSeeDetail(user, chat)))],
@@ -106,11 +105,11 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// invisible ids answer the SAME NotFound — the area's
         /// anti-enumeration rule.
         /// </summary>
-        public SensorTreeReadResult<ChatDto> GetChat(Guid id, ClaimsPrincipal user)
+        public ManagementReadResult<ChatDto> GetChat(Guid id, ClaimsPrincipal user)
         {
             if (!_authorization.CanSeeAnyBoundary(user))
-                return SensorTreeReadResult<ChatDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: ManagementApiErrors.NoBoundarySightMessage);
+                return ManagementReadResult<ChatDto>.Fail(
+                    ManagementReadOutcome.Forbidden, message: ManagementApiErrors.NoBoundarySightMessage);
 
             // The storage indexer answers null for an unknown id (the area's
             // dictionary semantics) — the same lookup shape AlertReadService
@@ -118,7 +117,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             var chat = _chats[id];
 
             if (chat is null)
-                return SensorTreeReadResult<ChatDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<ChatDto>.Fail(ManagementReadOutcome.NotFound);
 
             // The list predicate is the item read decision, so an item is
             // listed exactly when GET {id} would answer it (the templates'
@@ -127,8 +126,8 @@ namespace HSMServer.Model.ManagementApi.Chats
             var isFolderVisible = _authorization.MemoizedFolderVisibility(user);
 
             return IsChatVisible(chat, isFolderVisible)
-                ? SensorTreeReadResult<ChatDto>.Ok(ChatDtoMapper.ToDto(chat, isFolderVisible, CanSeeDetail(user, chat)))
-                : SensorTreeReadResult<ChatDto>.Fail(SensorTreeReadOutcome.NotFound);
+                ? ManagementReadResult<ChatDto>.Ok(ChatDtoMapper.ToDto(chat, isFolderVisible, CanSeeDetail(user, chat)))
+                : ManagementReadResult<ChatDto>.Fail(ManagementReadOutcome.NotFound);
         }
 
 
