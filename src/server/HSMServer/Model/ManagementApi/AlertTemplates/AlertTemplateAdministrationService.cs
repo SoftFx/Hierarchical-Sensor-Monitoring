@@ -112,7 +112,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // client-triggered cancellation mid-reconcile would leave
             // half-applied state. The web UI passes no token either — the
             // write completes once accepted.
-            var (success, error) = await _cache.AddAlertTemplateAsync(model);
+            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
             {
@@ -130,7 +130,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                         details: new Dictionary<string, string> { ["templateId"] = model.Id.ToString() });
             }
 
-            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(model));
+            // #1401: a persisting save with per-policy rejections is a
+            // SUCCESS — the warnings name the sensors whose alerts were not
+            // created and ride the echoed DTO (rendered by REST and MCP with
+            // the same strings).
+            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(model, warnings));
         }
 
 
@@ -174,17 +178,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
-            var (success, error) = await _cache.AddAlertTemplateAsync(model);
+            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Conflict, message: error);
 
             // Echo the STORED template, not the request: the write normalizes
             // ids and chat names, and the caller must see the canonical
-            // result.
+            // result. The #1401 warnings ride the echo (see CreateTemplateAsync).
             var stored = _cache.GetAlertTemplate(id) ?? model;
 
-            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored));
+            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings));
         }
 
 

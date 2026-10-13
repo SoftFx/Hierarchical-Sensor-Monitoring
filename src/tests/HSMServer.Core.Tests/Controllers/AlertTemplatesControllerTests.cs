@@ -53,7 +53,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
             _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.FromResult((true, (string)null)));
+                .Returns(Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null)));
 
             _userManagerMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
             _folderManagerMock.Setup(f => f.GetUserFolders(It.IsAny<User>())).Returns(new List<FolderModel>());
@@ -248,6 +248,40 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<OkResult>(result);
         }
 
+        // #1401: a save that persisted while a matching sensor rejected an
+        // individual policy is neither the empty Ok() of a clean save nor the
+        // {success:false} of a failed one — the warnings ride the JSON and the
+        // page shows them in a post-save modal.
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public async Task AlertTemplate_SaveWithPolicyWarnings_ReturnsSuccessWithWarningLines()
+        {
+            _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<BaseSensorModel>());
+
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
+                {
+                    new("Root/Product A/cpu bar", "Not supported property Value for IntegerBarPolicy"),
+                })));
+
+            var controller = CreateController();
+            var data = BuildData((byte)SensorType.Integer, "*/intSensor");
+
+            var result = await controller.AlertTemplate(data);
+
+            Assert.True(controller.ModelState.IsValid);
+            var json = Assert.IsType<JsonResult>(result);
+
+            using var doc = JsonDocument.Parse(JsonSerializer.Serialize(json.Value));
+            Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+
+            var warnings = doc.RootElement.GetProperty("warnings").EnumerateArray().ToList();
+            Assert.Single(warnings);
+            Assert.Equal("Root/Product A/cpu bar: Not supported property Value for IntegerBarPolicy",
+                warnings[0].GetString());
+        }
+
         [Fact]
         [Trait("Category", "Alert Template authoring")]
         public async Task AnyTypeTemplate_SkipsMismatchCheck()
@@ -328,7 +362,7 @@ namespace HSMServer.Core.Tests.Controllers
             AlertTemplateModel captured = null;
             _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
                 .Callback<AlertTemplateModel, CancellationToken>((m, _) => captured = m)
-                .Returns(Task.FromResult((true, (string)null)));
+                .Returns(Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null)));
 
             var controller = CreateController();
             var data = BuildData((byte)SensorType.Integer, "*/intSensor");

@@ -99,7 +99,7 @@ namespace HSMServer.Controllers
         /// Create a template. A client-sent id is ignored (the server generates one);
         /// the response echoes the STORED template — normalized ids, chat display names.
         /// </summary>
-        /// <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
+        /// <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products. The 201 body carries `warnings` when some matching sensors REJECTED individual policies at apply time — the save persisted, but each warned alert was not created on its sensor.</remarks>
         [HttpPost]
         [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
@@ -122,6 +122,7 @@ namespace HSMServer.Controllers
         /// the owner's write access on BOTH folders; the response echoes the stored template.
         /// </summary>
         /// <param name="id">Template id; must equal the body id when the body carries one.</param>
+        /// <remarks>Like create, the 200 body carries `warnings` when some matching sensors REJECTED individual policies at apply time (the save persisted; each warned alert was not created on its sensor).</remarks>
         [HttpPut("{id:guid}")]
         [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]

@@ -295,23 +295,27 @@ namespace HSMServer.Core.Restore
             try
             {
                 var existsBefore = _cache.GetAlertTemplate(item.Id) != null;
-                var (success, error) = await _cache.AddAlertTemplateAsync(model, cancellationToken);
+                var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model, cancellationToken);
 
                 if (!success)
                 {
                     outcome = $"error: {error}";
                 }
-                else if (!keepId)
-                {
-                    outcome = $"duplicated as {model.Id}";
-                }
-                else if (existsBefore)
-                {
-                    outcome = "overwritten";
-                }
                 else
                 {
-                    outcome = "inserted";
+                    outcome = !keepId
+                        ? $"duplicated as {model.Id}"
+                        : existsBefore ? "overwritten" : "inserted";
+
+                    // #1401: the restore applied the template, but some
+                    // matching sensors refused individual policies (per-policy
+                    // validation noise). The save persisted, so it is not an
+                    // error — the warnings name the sensors whose alerts were
+                    // not created, capped the way the schedule-detach flash is
+                    // (first five + "and N more"; the journal holds every
+                    // record).
+                    if (warnings is { Count: > 0 })
+                        outcome += $"; {warnings.Count} alert(s) not applied: {SummarizeWarnings(warnings)}";
                 }
             }
             catch (OperationCanceledException)
@@ -331,6 +335,22 @@ namespace HSMServer.Core.Restore
                 Resolution = item.Resolution,
                 Outcome = outcome,
             };
+        }
+
+        // #1401: compact "sensor: reason" list for the restore outcome column
+        // — first five entries, then "and N more" (the #1409 flash pattern;
+        // a template matching thousands of rejecting sensors must not build
+        // an unbounded outcome string).
+        private const int MaxWarningsInOutcome = 5;
+
+        private static string SummarizeWarnings(IReadOnlyList<TemplateApplyWarning> warnings)
+        {
+            var shown = warnings.Take(MaxWarningsInOutcome)
+                .Select(w => $"{w.SensorPath}: {w.Reason}");
+
+            return warnings.Count > MaxWarningsInOutcome
+                ? $"{string.Join("; ", shown)}; and {warnings.Count - MaxWarningsInOutcome} more"
+                : string.Join("; ", shown);
         }
 
         private BackupSession GetSessionOrThrow(Guid session)

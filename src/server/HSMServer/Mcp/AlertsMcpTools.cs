@@ -100,13 +100,13 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "create_alert_template", ReadOnly = false, Idempotent = false, OpenWorld = false)]
-        [Description("Creates an alert template and applies its policies to every matching sensor tree-wide. The template id is server-generated; the response echoes the STORED template (normalized ids, canonical chat names). Requires the owner's write access at the target folder; use list_folders to discover valid folderId values and list_chats for destination chat ids.")]
+        [Description("Creates an alert template and applies its policies to every matching sensor tree-wide. The template id is server-generated; the response echoes the STORED template (normalized ids, canonical chat names). Requires the owner's write access at the target folder; use list_folders to discover valid folderId values and list_chats for destination chat ids. The response carries `warnings` when some matching sensors rejected individual policies at apply time — the save persisted, but each warned alert was not created on its sensor (check the sensor types against the conditions).")]
         public async System.Threading.Tasks.Task<AlertTemplateDto> CreateAlertTemplateAsync(
             [Description("The template — name (globally unique), folderId, sensor type, path patterns, policies and TTL entries.")] AlertTemplateDto template) =>
             McpToolWriteErrors.Unwrap(await _templateWriter.CreateTemplateAsync(User, template));
 
         [McpServerTool(Name = "update_alert_template", ReadOnly = false, Idempotent = true, OpenWorld = false)]
-        [Description("Updates an alert template (upsert semantics; the route id is the identity). Moving it to another folder requires the owner's write access on BOTH folders. Re-applies policies to matching sensors; the response echoes the stored template.")]
+        [Description("Updates an alert template (upsert semantics; the route id is the identity). Moving it to another folder requires the owner's write access on BOTH folders. Re-applies policies to matching sensors; the response echoes the stored template, carrying `warnings` when some matching sensors rejected individual policies at apply time (the save persisted; each warned alert was not created on its sensor).")]
         public async System.Threading.Tasks.Task<AlertTemplateDto> UpdateAlertTemplateAsync(
             [Description("Template id.")] Guid templateId,
             [Description("The new template content; the body id, when carried, must equal templateId.")] AlertTemplateDto template) =>

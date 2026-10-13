@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
@@ -60,7 +61,7 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((AlertTemplateModel model, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
-                    return Task.FromResult((true, (string)null));
+                    return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
                 });
             _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .Returns((Guid id, CancellationToken token) =>
@@ -474,7 +475,7 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((AlertTemplateModel model, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
-                    return Task.FromResult((true, (string)null));
+                    return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
                 });
 
             Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(BuildDto())));
@@ -780,7 +781,7 @@ namespace HSMServer.Core.Tests.Controllers
         public async Task Create_FolderWithoutProducts_Is409()
         {
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.FromResult((false, "No products found in the selected folder.")));
+                .Returns(Task.FromResult((false, "No products found in the selected folder.", (List<TemplateApplyWarning>)null)));
 
             var result = await CreateController().CreateTemplate(BuildDto());
 
@@ -803,7 +804,7 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((AlertTemplateModel model, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
-                    return Task.FromResult((false, "failed to apply to some products"));
+                    return Task.FromResult((false, "failed to apply to some products", (List<TemplateApplyWarning>)null));
                 });
 
             var result = await CreateController().CreateTemplate(BuildDto());
@@ -813,6 +814,93 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(ManagementApiErrors.ConflictCode, body.Error);
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
             Assert.Equal(_store.Single().Key.ToString(), details["templateId"]);
+        }
+
+
+        // #1401: a save that PERSISTS while a matching sensor rejects an
+        // individual policy is a SUCCESS — the 201/200 body carries an
+        // additive `warnings` list (sensor + reason per rejected policy)
+        // instead of the 409 the DB-failure channel answers.
+        [Fact]
+        public async Task Create_PolicyRejectionsOnPersistingSave_Answers201WithWarnings()
+        {
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, CancellationToken _) =>
+                {
+                    _store[model.Id] = model;
+                    return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
+                    {
+                        new("Root/Product A/cpu bar", "Not supported property Value for IntegerBarPolicy"),
+                    }));
+                });
+
+            var result = await CreateController().CreateTemplate(BuildDto());
+
+            Assert.Equal(201, StatusCodeOf(result));
+            var created = Assert.IsType<CreatedAtActionResult>(result);
+            var body = Assert.IsType<AlertTemplateDto>(created.Value);
+
+            var warning = Assert.Single(body.Warnings);
+            Assert.Equal("Root/Product A/cpu bar", warning.Sensor);
+            Assert.Equal("Not supported property Value for IntegerBarPolicy", warning.Reason);
+        }
+
+        [Fact]
+        public async Task Create_CleanSave_CarriesNoWarnings()
+        {
+            // The additive-wire pin: a warning-free save's response is the
+            // canonical echo exactly as before — Warnings stays NULL, not an
+            // empty list.
+            var result = await CreateController().CreateTemplate(BuildDto());
+
+            Assert.Equal(201, StatusCodeOf(result));
+            var body = Assert.IsType<AlertTemplateDto>(Assert.IsType<CreatedAtActionResult>(result).Value);
+            Assert.Null(body.Warnings);
+
+            // And on the WIRE the null is ABSENT (WhenWritingNull, web-default
+            // camelCase like MVC): the response body never grows a `warnings`
+            // key, so a clean save stays byte-identical to pre-#1401.
+            var json = JsonSerializer.Serialize(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.DoesNotContain("warnings", json);
+        }
+
+        [Fact]
+        public async Task Update_PolicyRejectionsOnPersistingSave_Answers200WithWarnings()
+        {
+            var stored = new AlertTemplateModel { Name = "warned", FolderId = Guid.NewGuid() };
+            _store[stored.Id] = stored;
+
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, CancellationToken _) =>
+                {
+                    _store[model.Id] = model;
+                    return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
+                    {
+                        new("Root/Product B/ram bar", "Not supported property Value for DoubleBarPolicy"),
+                    }));
+                });
+
+            var result = await CreateController().UpdateTemplate(stored.Id, BuildDto());
+
+            Assert.Equal(200, StatusCodeOf(result));
+            var body = Assert.IsType<AlertTemplateDto>(Assert.IsType<OkObjectResult>(result).Value);
+
+            var warning = Assert.Single(body.Warnings);
+            Assert.Equal("Root/Product B/ram bar", warning.Sensor);
+            Assert.Equal("Not supported property Value for DoubleBarPolicy", warning.Reason);
+        }
+
+        [Fact]
+        public async Task Update_CleanSave_CarriesNoWarnings()
+        {
+            var stored = new AlertTemplateModel { Name = "silent", FolderId = Guid.NewGuid() };
+            _store[stored.Id] = stored;
+
+            var result = await CreateController().UpdateTemplate(stored.Id, BuildDto());
+
+            Assert.Equal(200, StatusCodeOf(result));
+            var body = Assert.IsType<AlertTemplateDto>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.Null(body.Warnings);
         }
 
 

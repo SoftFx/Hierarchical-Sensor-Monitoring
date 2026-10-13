@@ -41,7 +41,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = [$"*/{sensorAPath}", $"*/{sensorBPath}"];
             Assert.True(template.TryApplyPathTemplates(out _));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var valueA = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorAPath, DateTime.UtcNow);

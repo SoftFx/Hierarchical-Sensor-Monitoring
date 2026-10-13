@@ -201,10 +201,21 @@ namespace HSMServer.Core.Model.Policies
                     return condition;
                 }
 
+                Sensor ??= sensor;
+
+                // Build the new conditions BEFORE mutating any field: BuildCondition
+                // throws for a property the sensor type does not offer, and a throw
+                // after the mutations below left the policy half updated (new
+                // destination/schedule/template over an empty Conditions list) while
+                // the caller reported the update as rejected. A rejected update must
+                // leave the previous version intact (#1542 review).
+                var newConditions = new List<PolicyCondition>(update.Conditions?.Count ?? 0);
+                if (update.Conditions?.Count > 0)
+                    foreach (var conditionUpdate in update.Conditions)
+                        newConditions.Add(Update(conditionUpdate));
+
                 if (update.Id != Guid.Empty)
                     Id = update.Id;
-
-                Sensor ??= sensor;
 
                 Destination.Update(update.Destination);
                 ConfirmationPeriod = update.ConfirmationPeriod;
@@ -217,7 +228,15 @@ namespace HSMServer.Core.Model.Policies
                 ScheduleId = update.ScheduleId;
                 TemplateAlertId = update.TemplateAlertId;
 
-                UpdateConditions(update.Conditions, Update);
+                if (newConditions.Count > 0)
+                {
+                    Conditions.Clear();
+
+                    foreach (var condition in newConditions)
+                        Conditions.Add(condition);
+                }
+
+                RebuildState();
             }
             catch (Exception ex)
             {

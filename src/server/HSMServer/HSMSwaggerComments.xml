@@ -134,7 +134,7 @@
             Create a template. A client-sent id is ignored (the server generates one);
             the response echoes the STORED template — normalized ids, chat display names.
             </summary>
-            <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
+            <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products. The 201 body carries `warnings` when some matching sensors REJECTED individual policies at apply time — the save persisted, but each warned alert was not created on its sensor.</remarks>
         </member>
         <member name="M:HSMServer.Controllers.AlertTemplatesApiController.UpdateTemplate(System.Guid,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
             <summary>
@@ -142,6 +142,7 @@
             the owner's write access on BOTH folders; the response echoes the stored template.
             </summary>
             <param name="id">Template id; must equal the body id when the body carries one.</param>
+            <remarks>Like create, the 200 body carries `warnings` when some matching sensors REJECTED individual policies at apply time (the save persisted; each warned alert was not created on its sensor).</remarks>
         </member>
         <member name="M:HSMServer.Controllers.AlertTemplatesApiController.DeleteTemplate(System.Guid)">
             <summary>Delete a template and strip its per-sensor policies.</summary>
@@ -1558,7 +1559,8 @@
             policy ids are regenerated server-side on every write; destination chat display
             names are overwritten with the manager's current names. `destination`/`schedule`
             null means "omitted" (defaults apply). TTL policies and intervals are parallel
-            lists matched by position.
+            lists matched by position. `warnings` is output-only (apply diagnostics of the
+            create/update response; ignored on writes, absent on reads).
             </remarks>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Id">
@@ -1588,6 +1590,25 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Policies">
             <summary>Regular (non-TTL) alert policies applied to every matching sensor.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Warnings">
+            <summary>
+            Output-only apply diagnostics of THIS write: template policies that matching
+            sensors REJECTED at apply time — the save persisted, but each listed alert was
+            NOT created on that sensor (e.g. a Value condition that a bar sensor's type
+            does not offer). Set only on create/update responses with rejections; absent
+            on reads and on clean writes (WhenWritingNull — a warning-free response keeps
+            its pre-warnings byte shape); ignored when sent by a client.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto">
+            <summary>One apply warning: the alert was not created on this sensor.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto.Sensor">
+            <summary>Full path of the sensor that rejected the policy.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto.Reason">
+            <summary>Why the sensor refused the policy (the validation reason).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto">
             <summary>

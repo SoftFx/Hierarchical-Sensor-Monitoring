@@ -42,7 +42,18 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
 
-        internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error);
+        internal bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error) =>
+            TryUpdate(updates, initiator, out error, null);
+
+        // #1401: the same update carrying a per-policy rejection collector.
+        // The aggregate `error` string cannot name the individual policies a
+        // sensor refused, and the template-apply path must tell the CALLER
+        // which alerts were not (re)created on which sensor. The collector is
+        // passed PER CALL (a fresh list by the apply path) — never shared
+        // mutable state; null callers (every other update path) collect
+        // nothing, and the aggregate error string keeps its exact shape.
+        internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error,
+            List<string> rejectedPolicies);
 
         internal abstract void RemovePolicy(Guid policyId, InitiatorInfo initiator = null);
 
@@ -262,7 +273,8 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
-        internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error)
+        internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error,
+            List<string> rejectedPolicies)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
             var errors = new StringBuilder(1 << 5);
@@ -283,7 +295,10 @@ namespace HSMServer.Core.Model.Policies
                                 Uploaded?.Invoke(ActionType.Update, existingPolicy);
                             }
                             else
+                            {
                                 errors.AppendLine(err);
+                                rejectedPolicies?.Add(err);
+                            }
                         }
                         else
                         {
@@ -298,7 +313,14 @@ namespace HSMServer.Core.Model.Policies
                                 Uploaded?.Invoke(ActionType.Add, policy);
                             }
                             else
+                            {
+                                // The rejected policy is never created — not in
+                                // memory, not in the DB — while the template
+                                // save reports success. The collector (#1401)
+                                // names it for the caller's warnings channel.
                                 errors.AppendLine(err);
+                                rejectedPolicies?.Add(err);
+                            }
                         }
                     }
                 }

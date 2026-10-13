@@ -48,7 +48,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<System.Threading.CancellationToken>()))
-                .ReturnsAsync((true, (string)null));
+                .ReturnsAsync((true, (string)null, (List<TemplateApplyWarning>)null));
             _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((true, (string)null));
 
