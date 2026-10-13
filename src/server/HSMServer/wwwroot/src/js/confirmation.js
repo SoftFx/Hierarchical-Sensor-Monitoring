@@ -41,8 +41,21 @@ function setConfirmationModalOkButton(okButtonAction, name) {
 }
 
 function setConfirmationModalCancelButton(cancelButtonAction, name) {
-    $(`#${modalCancelButton}`).html(name);
-    $(`#${modalCancelButton}`).off('click').on('click', () => {
+    var $cancelButton = $(`#${modalCancelButton}`);
+    $cancelButton.off('click');
+
+    // A falsy label HIDES the button — acknowledgment-only dialogs (#1401:
+    // the "saved with warnings" modal has nothing to cancel, the save already
+    // persisted, and a visible Cancel would strand the user on the edit form
+    // of a stored template). Every other caller keeps its label.
+    if (!name) {
+        $cancelButton.addClass('d-none');
+        return;
+    }
+
+    $cancelButton.removeClass('d-none');
+    $cancelButton.html(name);
+    $cancelButton.on('click', () => {
         hideConfirmationModal();
 
         if (cancelButtonAction != undefined)

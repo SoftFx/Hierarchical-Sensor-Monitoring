@@ -1,12 +1,12 @@
 # Feature tests: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-09-15 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Mcp/`
 
 `HsmMcpWireTests` — the wire-level smoke test over a minimal in-memory host (#1392 review, round 3): the REAL `MapMcp` + `RequireAuthorization(ManagementPolicy)`, `McpSitePortOnlyMiddleware`, the real `HsmApiToken` scheme (over mocked token/user managers) and `AddHsmMcpServer`'s registrations, driven by a real SDK `McpClient` (initialize → tools/list → tools/call). Closes the three load-bearing integration assumptions at once: the ambient principal flows (a `tools/call` returns data, not the `McpToolContext` backstop error), tool instances resolve in the REQUEST scope (the host runs in Development — ValidateScopes + ValidateOnBuild), and the guard reads the metadata `MapMcp` actually emits (a mismatch fail-closes to the uniform 404). Plus: no credential → the transport is rejected before any tool, and a valid credential on the SensorPort gets the uniform 404. No Kestrel/LevelDB/fixed listeners — the in-memory TestServer assembles only the pieces `AddHsmMcpServer` already groups.
 
-`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults), and the property-KEY-SET pin of a null-valued `SensorDto` under both the SDK options and MVC's — the parity pin that keeps MCP and REST JSON shapes honest (#1392 r5; writing it exposed the SDK's `WhenWritingNull`: null members are absent on MCP, explicit `null` on REST — pinned as the actual contract rather than silently assumed identical).
+`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults), and the property-KEY-SET pin of a null-valued `SensorDto` under both the SDK options and MVC's — the parity pin that keeps MCP and REST JSON shapes honest (#1392 r5; writing it exposed the SDK's `WhenWritingNull`: null members are absent on MCP, explicit `null` on REST — pinned as the actual contract rather than silently assumed identical).
 
 `SensorTreeMcpToolsTests` and `AlertsMcpToolsTests` — the tool renderings:
 
@@ -45,6 +45,29 @@
 - `ListAlertSchedules_FiltersSensorPaths_ByProductVisibility`.
 - `GetAlertSchedule_MapsDto_AndFiltersSensorsByVisibility`.
 - `GetAlertSchedule_Absent_IsToolError`.
+
+`ChatsMcpToolsTests` — the chat tools as renderings of `ChatsReadService` (the service itself is pinned by `ChatsApiControllerTests` — the shared regression net, as with the alerts):
+
+- `ListChats_OrdersByName_ReturnsFirstLimitWithTotalFound` — the list contract with the effective-paging echo.
+- `ListChats_GlobalChatsAndVisibleFolderChats_OutOfSightAbsent` — the chat sight composition (global chats everywhere, folder-bound chats through folder sight).
+- `ListChats_PageServesBeyondTheLimit` / `ListChats_HugePageNumber_ClampsToLastPage_NoOverflowWrap` — the shared clamp pins on the chat path.
+- `ListChats_DeniedGate_IsToolError_ChatsNeverQueried` — the caller-wide gate; nothing is resolved for a denied caller.
+- `ListChats_MemoizesVisibility_PerDistinctFolder` — the evaluator is resolved once per distinct folder (Times.Exactly(2)).
+- `GetChat_Visible_MapsDto`.
+- `GetChat_UnknownId_IsToolError` / `GetChat_InvisibleFolderChat_SameToolErrorAsUnknown` — anti-enumeration carried into MCP.
+
+`FoldersMcpToolsTests` — the folder tools as renderings of `FoldersReadService` (the service itself is pinned by `FoldersApiControllerTests` — the shared regression net):
+
+- `ListFolders_OrdersByName_ReturnsFirstLimitWithTotalFound` / `ListFolders_PageServesBeyondTheLimit` / `ListFolders_HugePageNumber_ClampsToLastPage_NoOverflowWrap` — the list/clamp contracts.
+- `ListFolders_OutOfSightFolders_SilentlyAbsent` — the owner-sight filter (no caller-wide gate for folders — they are the per-item boundary).
+- `ListFolders_MemoizesVisibility_PerDistinctFolder` — Times.Exactly(3).
+- `GetFolder_Visible_MapsDto` / `GetFolder_UnknownId_IsToolError` / `GetFolder_InvisibleFolder_SameToolErrorAsUnknown` — the item contract and anti-enumeration.
+
+`PoliciesMcpToolsTests` — the six policy write tools as delegations to the REAL `PolicyAdministrationService` over the `SensorPoliciesApiControllerTests` harness (a mocked cache whose `UpdateSensorAsync` dispatches onto the live sensor model — the round-trip runs the actual merge): create returns the stored policy, unknown sensor and the read-only/Forbidden decision answer the exact REST error texts, update replaces and echoes, delete returns `McpDeletedResult {id}` and a second delete is the uniform not-found, the TTL create round-trips the interval.
+
+`AlertsMcpToolsTests` (write half) — the template/schedule write tools over the REAL administration services: template create echoes the stored model (and a duplicate name flattens `name: The name must be unique.`), template delete returns the deleted id, schedule create echoes and persists, a non-admin owner answers the not-found text with nothing persisted (the admin-only Global boundary), and an incomplete schedule detach names the retry in the error text while the schedule survives. The write semantics themselves are the services' — pinned by the REST controller suites.
+
+`HsmMcpWireTests` additionally pins `Wire_ReadOnlyToken_CannotReachAnyTool_NotEvenInitialize`: a read-only token (stubbed via `IApiTokenManager.GetToken`) cannot initialize against `/mcp` — every MCP message is a POST and the policy's method backstop rejects it before any tool runs (the loose mock's null `GetToken` passes, so the flag is stubbed explicitly).
 
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 

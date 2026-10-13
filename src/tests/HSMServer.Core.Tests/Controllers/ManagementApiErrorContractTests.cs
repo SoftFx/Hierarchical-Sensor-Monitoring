@@ -12,6 +12,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
@@ -47,7 +48,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<System.Threading.CancellationToken>()))
-                .ReturnsAsync((true, (string)null));
+                .ReturnsAsync((true, (string)null, (List<TemplateApplyWarning>)null));
             _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((true, (string)null));
 
@@ -74,25 +75,36 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private AlertTemplatesApiController CreateTemplatesController() =>
-            new(_cache.Object, _folders.Object, _chats.Object, _schedulesProvider.Object, _authorization.Object,
-                new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object),
-                NullLogger<AlertTemplatesApiController>.Instance)
-            {
-                ControllerContext = new ControllerContext
-                {
-                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
-                },
-            };
+        private AlertTemplatesApiController CreateTemplatesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertTemplateAdministrationService(_cache.Object, _folders.Object, _chats.Object,
+                _schedulesProvider.Object, _authorization.Object,
+                NullLogger<AlertTemplateAdministrationService>.Instance);
 
-        private AlertSchedulesApiController CreateSchedulesController() =>
-            new(new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object))
+            return new AlertTemplatesApiController(reader, writer)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
+        }
+
+        private AlertSchedulesApiController CreateSchedulesController()
+        {
+            var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
+            var writer = new AlertScheduleAdministrationService(_schedulesProvider.Object, _cache.Object,
+                _authorization.Object, reader);
+
+            return new AlertSchedulesApiController(reader, writer)
+            {
+                ControllerContext = new ControllerContext
+                {
+                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
+                },
+            };
+        }
 
         private static AlertTemplateDto BuildDto() => new()
         {
@@ -168,8 +180,10 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
             Assert.NotNull(body.Details);
 
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.NotEmpty(details["folderId"]);
+            // The typed details map (#1371): values are still the field's message
+            // ARRAY — the wire JSON is unchanged, only the published schema moved.
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.NotEmpty(Assert.IsType<string[]>(details["folderId"]));
         }
 
         [Fact]
@@ -181,9 +195,9 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(400, status);
             Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
 
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.NotEmpty(details["name"]);
-            Assert.NotEmpty(details["paths"]);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.NotEmpty(Assert.IsType<string[]>(details["name"]));
+            Assert.NotEmpty(Assert.IsType<string[]>(details["paths"]));
         }
 
         [Fact]

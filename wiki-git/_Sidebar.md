@@ -6,6 +6,7 @@
  - [Core Concepts](Core-Concepts)
  - [Server Configuration](Server-Configuration)
  - [REST API](REST-API)
+ - [MCP (AI agents)](MCP)
  - [Server Self-Monitoring](HSM-Server-Monitoring)
 
 **🔔 Alerts**

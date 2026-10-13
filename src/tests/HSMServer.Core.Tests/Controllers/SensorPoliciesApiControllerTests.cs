@@ -20,7 +20,6 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
-using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Notifications.Chats;
 using HSMServer.Model.Folders;
 using HSMServer.ServerConfiguration;
@@ -153,8 +152,9 @@ namespace HSMServer.Core.Tests.Controllers
         private static ManagementApiErrorDto ErrorBodyOf(IActionResult result) =>
             Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
 
-        private static IDictionary<string, string[]> DetailsOf(ManagementApiErrorDto error) =>
-            Assert.IsAssignableFrom<IDictionary<string, string[]>>(error.Details);
+        // The typed details map (#1371): string keys, per-field message-array values.
+        private static Dictionary<string, object> DetailsOf(ManagementApiErrorDto error) =>
+            Assert.IsType<Dictionary<string, object>>(error.Details);
 
 
         // === Area conventions ===

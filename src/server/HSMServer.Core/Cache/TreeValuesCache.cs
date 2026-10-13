@@ -837,7 +837,11 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private bool TryUpdateSensor(SensorUpdate update, out string error)
+        // rejectedPolicies (#1401): optional per-policy rejection collector of
+        // the template-apply path — one entry per update the sensor's policy
+        // collection refused while the update otherwise applied and persisted.
+        // Null for every other caller.
+        private bool TryUpdateSensor(SensorUpdate update, out string error, List<string> rejectedPolicies = null)
         {
             try
             {
@@ -847,7 +851,7 @@ namespace HSMServer.Core.Cache
                     return false;
                 }
 
-                sensor.TryUpdate(update, out error);
+                sensor.TryUpdate(update, out error, rejectedPolicies);
                 _database.UpdateSensor(sensor.ToEntity());
 
                 SensorUpdateView(sensor);
@@ -2194,7 +2198,9 @@ namespace HSMServer.Core.Cache
                 // succeeded); escalating it would turn, e.g., an AnyType
                 // template's Value condition on a bar sensor into a PERMANENT
                 // 409 on every save while everything persisted.
-                if (!TryUpdateSensor(update, out var error))
+                var rejectedPolicyReasons = new List<string>();
+
+                if (!TryUpdateSensor(update, out var error, rejectedPolicyReasons))
                 {
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
                     _logger.Error(request.Error);
@@ -2203,9 +2209,27 @@ namespace HSMServer.Core.Cache
                 {
                     // Not purely cosmetic noise: a REJECTED policy is never
                     // created — not on the sensor, not in the DB — while the
-                    // save reports success. Surfacing it without failing the
-                    // persisted save is tracked by #1401.
+                    // save reports success. Since #1401 each rejection rides
+                    // the warnings channel to the caller (rendered by every
+                    // transport of AddAlertTemplateAsync) and leaves a journal
+                    // record naming the sensor and the reason — the same
+                    // "Alert" record shape the #1394 removal records use —
+                    // without failing the save that persisted.
                     _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
+
+                    foreach (var reason in rejectedPolicyReasons)
+                    {
+                        request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath, reason));
+
+                        _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.AlertTemplate)
+                        {
+                            Enviroment = "Alert collection",
+                            PropertyName = "Alert",
+                            OldValue = string.Empty,
+                            NewValue = $"not applied: {reason}",
+                            Path = sensor.FullPath,
+                        });
+                    }
                 }
             }
         }
@@ -2236,12 +2260,19 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public async Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
+        // Result of a template save: Success/Error keep the #1394 contract
+        // (false + products-naming error → the 409 with failed products);
+        // Warnings (#1401) carry the per-policy VALIDATION rejections of an
+        // apply that PERSISTED — one entry per rejected policy, ordered
+        // deterministically (sensor path, then reason) so every transport
+        // renders the same list. Warnings never flip Success: a save that
+        // persisted is not failed over validation noise.
+        public async Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
         {
             var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
 
             if (products.Count == 0)
-                return (false, "No products found in the selected folder.");
+                return (false, "No products found in the selected folder.", []);
 
             // Persist the template once before dispatching per-sensor applications.
             // This makes it visible to concurrent AddSensor calls and removes the previous
@@ -2263,6 +2294,11 @@ namespace HSMServer.Core.Cache
             // TaskResult.FromError, while the apply path reports contained
             // TryUpdateSensor failures through request.Error — both land here.
             var failedProducts = new ConcurrentDictionary<Guid, string>();
+
+            // #1401: per-policy validation rejections of PERSISTED applies
+            // (request.Warnings, one entry per rejected policy). Concurrent:
+            // applies run on per-product queue threads in parallel.
+            var warnings = new ConcurrentBag<TemplateApplyWarning>();
 
             try
             {
@@ -2315,6 +2351,9 @@ namespace HSMServer.Core.Cache
 
                     if (!result.IsOk || !string.IsNullOrEmpty(request.Error))
                         failedProducts.TryAdd(sensor.Root.Id, sensor.RootProductName);
+                    else
+                        foreach (var warning in request.Warnings)
+                            warnings.Add(warning);
                 });
 
                 await Parallel.ForEachAsync(staleSensors, new ParallelOptions
@@ -2344,22 +2383,31 @@ namespace HSMServer.Core.Cache
                 // management-API 409 body, which keeps internals (DB paths,
                 // key names, type details) out of responses — the exception
                 // stays in the log line above.
-                return (false, "Failed to apply the template to the folder's sensors; see server logs.");
+                return (false, "Failed to apply the template to the folder's sensors; see server logs.", []);
             }
 
             // The partial-failure answer the DELETE side has always given
             // (#1394): a per-sensor apply failure must not read as success —
             // the template IS persisted and will keep retrying on edits, but
             // the caller needs to know some sensors did not get their alerts.
+            // Warnings are NOT rendered on this arm: the 409 body keeps its
+            // exact shape (#1401 renders warnings on the success answer only).
             if (failedProducts is { IsEmpty: false })
             {
                 var names = string.Join(", ", failedProducts.Values.OrderBy(n => n));
                 var error = $"Failed to apply template to products: {names}";
                 _logger.Error($"Partial failure applying template {alertTemplateModel.Id}: {error}");
-                return (false, error);
+                return (false, error, []);
             }
 
-            return (true, null);
+            // Deterministic order (sensor path, then reason) so REST, MCP,
+            // the cookie UI and RestoreService all render the same list.
+            var orderedWarnings = warnings
+                .OrderBy(w => w.SensorPath, StringComparer.Ordinal)
+                .ThenBy(w => w.Reason, StringComparer.Ordinal)
+                .ToList();
+
+            return (true, null, orderedWarnings);
         }
 
 

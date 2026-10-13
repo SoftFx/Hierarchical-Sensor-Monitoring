@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Notifications.Chats;
 
@@ -29,6 +30,28 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Ttls = [.. (entity.TTLs ?? []).Select(ToDto)],
                 Policies = [.. (entity.Policies ?? []).Select(ToDto)],
             };
+        }
+
+        // #1401: the write echo — the stored template plus the apply
+        // diagnostics of THIS write. Warnings ride the SAME DTO (one shape,
+        // one transport story: REST answers it in the 201/200 body, MCP in
+        // the tool result) and stay ABSENT (null) on a clean write, so the
+        // response of a warning-free save is byte-identical to before.
+        internal static AlertTemplateDto ToDto(AlertTemplateModel model,
+            IReadOnlyList<TemplateApplyWarning> warnings)
+        {
+            var dto = ToDto(model);
+
+            return warnings is { Count: > 0 }
+                ? dto with
+                {
+                    Warnings = [.. warnings.Select(w => new AlertTemplateWarningDto
+                    {
+                        Sensor = w.SensorPath,
+                        Reason = w.Reason,
+                    })],
+                }
+                : dto;
         }
 
         internal static AlertTemplateEntity ToEntity(AlertTemplateDto dto, Guid id,

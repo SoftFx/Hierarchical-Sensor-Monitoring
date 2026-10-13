@@ -46,7 +46,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = ["*/sensorA", "*/sensorB"];
             Assert.True(template.TryApplyPathTemplates(out _));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var seedA = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorAPath, DateTime.UtcNow);
@@ -93,7 +93,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = ["*/sensorChatsA", "*/sensorChatsB"];
             Assert.True(template.TryApplyPathTemplates(out _));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var valueA = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorAPath, DateTime.UtcNow);
@@ -127,7 +127,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = ["ProductA_concurrency/SubProductA_concurrency/*"];
             Assert.True(template.TryApplyPathTemplates(out _));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorSubPath, DateTime.UtcNow);
@@ -162,7 +162,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = [$"*/{sensorPath}"];
             Assert.True(template.TryApplyPathTemplates(out _));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);

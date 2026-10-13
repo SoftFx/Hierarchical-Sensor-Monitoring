@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
@@ -15,7 +16,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     /// policy ids are regenerated server-side on every write; destination chat display
     /// names are overwritten with the manager's current names. `destination`/`schedule`
     /// null means "omitted" (defaults apply). TTL policies and intervals are parallel
-    /// lists matched by position.
+    /// lists matched by position. `warnings` is output-only (apply diagnostics of the
+    /// create/update response; ignored on writes, absent on reads).
     /// </remarks>
     public sealed record AlertTemplateDto
     {
@@ -46,6 +48,27 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>Regular (non-TTL) alert policies applied to every matching sensor.</summary>
         public List<AlertPolicyDto> Policies { get; init; } = [];
+
+        /// <summary>
+        /// Output-only apply diagnostics of THIS write: template policies that matching
+        /// sensors REJECTED at apply time — the save persisted, but each listed alert was
+        /// NOT created on that sensor (e.g. a Value condition that a bar sensor's type
+        /// does not offer). Set only on create/update responses with rejections; absent
+        /// on reads and on clean writes (WhenWritingNull — a warning-free response keeps
+        /// its pre-warnings byte shape); ignored when sent by a client.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<AlertTemplateWarningDto> Warnings { get; init; }
+    }
+
+    /// <summary>One apply warning: the alert was not created on this sensor.</summary>
+    public sealed record AlertTemplateWarningDto
+    {
+        /// <summary>Full path of the sensor that rejected the policy.</summary>
+        public string Sensor { get; init; }
+
+        /// <summary>Why the sensor refused the policy (the validation reason).</summary>
+        public string Reason { get; init; }
     }
 
     /// <summary>

@@ -10,6 +10,12 @@
     var userInitials = AvatarHelper.InitialsOf(userName);
     var avatarColor = AvatarHelper.ColorOf(Model.UserId);
     var quotaFull = Model.QuotaUsed >= Model.QuotaMax;
+
+    // The dialog runs on the SitePort, so the page's own host is the correct
+    // host for the management API, Swagger and /mcp examples.
+    var siteHost = Context.Request.Host.Value;
+    var apiExampleUrl = $"https://{siteHost}/api/v1/products";
+    var mcpEndpoint = $"https://{siteHost}/mcp";
 }
 
 <script>
@@ -41,6 +47,8 @@
     .list-header { display: flex; gap: 1rem; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
     .token-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
     .token-secret { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; word-break: break-all; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.75rem; user-select: all; }
+    .token-usage-list { margin: 0.25rem 0 0; padding-left: 1.1rem; display: grid; row-gap: 0.25rem; }
+    .token-usage-list code { word-break: break-all; user-select: all; }
     .status-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 9999px; border: 1px solid #d1d5db; }
     .status-badge.active { color: #15803d; border-color: #a7f3d0; background-color: #ecfdf5; }
     .status-badge.revoked { color: #6b7280; background-color: #f3f4f6; }
@@ -90,21 +98,21 @@
         A token acts with your own rights — everything you can see and change, everywhere you can. A read-only token can only read. Tokens do not expire; revoke them when no longer needed.
     </div>
 
-    @if (!Model.TokensEnabled)
-    {
-        if (!Model.GenerationStateHealthy)
+        @if (!Model.TokensEnabled)
         {
-            <div class="alert alert-warning py-2">
-                Token state is unreliable after a storage problem; lifecycle operations are unavailable. Contact an administrator.
-            </div>
+            if (!Model.GenerationStateHealthy)
+            {
+                <div class="alert alert-danger py-2">
+                    Token state is unreliable after a storage problem; lifecycle operations are unavailable. Contact an administrator.
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning py-2">
+                    API tokens are turned off — every existing token has stopped authenticating right now. Re-enable them in Configuration → Server, or revoke tokens you no longer need below.
+                </div>
+            }
         }
-        else
-        {
-            <div class="alert alert-info py-2">
-                API tokens are disabled by the server configuration; existing tokens no longer authenticate. Listing and revocation remain available.
-            </div>
-        }
-    }
 
     <div class="token-list">
         <div class="list-header">
@@ -122,7 +130,8 @@
             <div class="token-row d-flex align-items-center @(dead ? "dead" : "")"
                  data-entity-id="@token.EntityId"
                  data-status="@token.Status"
-                 data-name="@token.Name">
+                 data-name="@token.Name"
+                 data-readonly="@(token.ReadOnly ? "true" : "false")">
                 <div style="flex: 2; min-width: 0;">
                     <div class="fw-medium text-truncate">@token.Name</div>
                     <div class="text-secondary font-monospace text-truncate" style="font-size: 0.72rem;"
@@ -172,6 +181,28 @@
                     Copy the token now — it is shown <strong>only once</strong> and cannot be recovered. Store it like a password.
                 </div>
                 <div class="token-secret" id="secretValue"></div>
+
+                @* Usage pointer (#1463): part of the same one-time dialog, but with the
+                   <token> placeholder only — the real secret exists exactly once (the
+                   element above) and must not be embedded a second time, so a copied
+                   example cannot leak the credential into shell histories or configs. *@
+                <div class="mt-3">
+                    <div class="fw-semibold" style="font-size: 0.875rem;">How to use this token</div>
+                    <ul class="token-usage-list text-secondary" style="font-size: 0.8125rem;">
+                        <li>
+                            <span class="fw-medium text-body">Management API</span> — send it as
+                            <code>Authorization: Bearer &lt;token&gt;</code>, e.g.
+                            <code>curl -H "Authorization: Bearer &lt;token&gt;" @apiExampleUrl</code>.
+                            Full reference: <a href="https://@(siteHost + ViewConstants.ApiSwagger)" target="_blank">/api/swagger</a>
+                        </li>
+                        <li>
+                            <span class="fw-medium text-body">AI agents (MCP)</span> —
+                            <span id="mcpReadWriteUsage">the same token authenticates MCP clients
+                                at <code>@mcpEndpoint</code>. <a href="@ViewConstants.McpWikiUrl" target="_blank">Client setup</a></span><span id="mcpReadOnlyUsage" style="display: none;">not available to this token:
+                                MCP requires a read/write token, and this one is read-only.</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" id="copySecretButton"><i class="fas fa-copy me-1"></i>Copy</button>
@@ -284,6 +315,7 @@
 
     var renameEntityId = null;
     var rotateEntityId = null;
+    var rotateReadOnly = false;
     var revokeEntityId = null;
 
     function antiForgeryToken() {
@@ -293,6 +325,22 @@
 
     function showModal(id) { bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show(); }
     function hideModal(id) { bootstrap.Modal.getInstance(document.getElementById(id))?.hide(); }
+
+    // Bootstrap handles Escape only when focus is inside the dialog element
+    // (its keydown listener lives on the .modal div). These dialogs are opened
+    // from page buttons and focus can still sit on body when Escape is pressed,
+    // leaving the modal stuck; close the open dialog at the document level.
+    // The one-time secret modal is deliberately absent: it is Esc-proof by design.
+    var escDismissibleModals = ['createModal', 'renameModal', 'rotateModal', 'revokeModal'];
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        var open = escDismissibleModals
+            .map(function (id) { return document.getElementById(id); })
+            .filter(function (el) { return el && el.classList.contains('show'); });
+        if (open.length === 0) return;
+        event.preventDefault();
+        open.forEach(function (el) { hideModal(el.id); });
+    });
 
     function showError(elementId, message) {
         var el = document.getElementById(elementId);
@@ -348,12 +396,17 @@
         // off to the secret modal.
         saveButton.disabled = true;
 
+        // Snapshot the flag with the request: the checkbox stays togglable while
+        // the create is in flight, and the dialog's usage block must describe the
+        // token that was actually minted, not the box's later state.
+        var readOnly = document.getElementById('tokenReadOnlyInput').checked;
+
         postMutation(createTokenUrl, {
             name: document.getElementById('tokenNameInput').value.trim(),
-            readOnly: document.getElementById('tokenReadOnlyInput').checked
+            readOnly: readOnly
         }).then(function (answer) {
             if (answer.ok) {
-                chainToSecret('createModal', answer.token, 'Token created');
+                chainToSecret('createModal', answer.token, 'Token created', readOnly);
             } else {
                 saveButton.disabled = false;
                 showError('createModalError', answer.message || 'Creation failed.');
@@ -389,9 +442,13 @@
 
     // ---- one-time secret ---------------------------------------------------------
 
-    function showSecret(token, title) {
+    function showSecret(token, title, readOnly) {
         document.getElementById('secretModalTitle').textContent = title || 'Token created';
         document.getElementById('secretValue').textContent = token;
+        // The usage block must not promise more than the token can do: MCP rejects
+        // a read-only credential outright, so the MCP line adapts to the flag.
+        document.getElementById('mcpReadWriteUsage').style.display = readOnly ? 'none' : '';
+        document.getElementById('mcpReadOnlyUsage').style.display = readOnly ? '' : 'none';
         showModal('secretModal');
     }
 
@@ -401,16 +458,16 @@
     // ALREADY hidden (the user dismissed it while the request was in flight — hide()
     // fires no event then), show immediately: the one-time secret must never be
     // dropped on the floor.
-    function chainToSecret(fromModalId, token, title) {
+    function chainToSecret(fromModalId, token, title, readOnly) {
         var element = document.getElementById(fromModalId);
 
         if (!element.classList.contains('show')) {
-            showSecret(token, title);
+            showSecret(token, title, readOnly);
             return;
         }
 
         element.addEventListener('hidden.bs.modal', function () {
-            showSecret(token, title);
+            showSecret(token, title, readOnly);
         }, { once: true });
 
         hideModal(fromModalId);
@@ -436,6 +493,7 @@
         button.addEventListener('click', function () {
             var row = button.closest('.token-row');
             rotateEntityId = row.getAttribute('data-entity-id');
+            rotateReadOnly = row.getAttribute('data-readonly') === 'true';
             document.getElementById('rotateText').textContent = 'Rotate "' + (row.getAttribute('data-name') || 'token') + '"?';
             showError('rotateModalError', null);
             showModal('rotateModal');
@@ -455,7 +513,7 @@
             entityId: rotateEntityId
         }).then(function (answer) {
             if (answer.ok) {
-                chainToSecret('rotateModal', answer.token, 'Token rotated');
+                chainToSecret('rotateModal', answer.token, 'Token rotated', rotateReadOnly);
             } else {
                 confirmButton.disabled = false;
                 showError('rotateModalError', answer.message || 'Rotation failed.');

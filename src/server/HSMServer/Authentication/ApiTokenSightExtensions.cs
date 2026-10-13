@@ -23,5 +23,24 @@ namespace HSMServer.Authentication
                     : visibilityByProduct[productId] = authorization.IsVisible(principal,
                         ApiTokenResource.Product(productId));
         }
+
+
+        // The folder twin of the product memoization (the templates' list
+        // pattern): templates, chats and folders cluster into a handful of
+        // folders, and the evaluator re-resolves caller + token on every
+        // call — one list request must not pay that per item. Shared by the
+        // template, chat and folder read surfaces so the memoization cannot
+        // drift between them.
+        public static Func<Guid, bool> MemoizedFolderVisibility(this IApiTokenAuthorizationService authorization,
+            ClaimsPrincipal principal)
+        {
+            var visibilityByFolder = new Dictionary<Guid, bool>();
+
+            return folderId =>
+                visibilityByFolder.TryGetValue(folderId, out var visible)
+                    ? visible
+                    : visibilityByFolder[folderId] = authorization.IsVisible(principal,
+                        new ApiTokenResource(ApiTokenResourceKind.Folder, folderId));
+        }
     }
 }

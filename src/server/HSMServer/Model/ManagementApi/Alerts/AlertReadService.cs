@@ -9,7 +9,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
-using HSMServer.Model.ManagementApi.SensorTree;
 
 namespace HSMServer.Model.ManagementApi.Alerts
 {
@@ -18,7 +17,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
     /// and schedules, list and item, with the visibility rules that decide what
     /// a caller may see. Transport-agnostic — the REST controllers and the MCP
     /// alert tools both call it; the caller supplies the token principal and
-    /// gets DTOs or a <see cref="SensorTreeReadResult{T}"/> failure back, never
+    /// gets DTOs or a <see cref="ManagementReadResult{T}"/> failure back, never
     /// an IActionResult (the shared read envelope of the management area).
     /// </summary>
     // Extracted from AlertTemplatesApiController/AlertSchedulesApiController
@@ -70,12 +69,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // handful of folders, and the evaluator re-resolves user + token on
             // every call); IsVisible records nothing, unlike per-item
             // authorization.
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsListable(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var listable)
-                    ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
+            var isListable = _authorization.MemoizedFolderVisibility(user);
 
             var visible = (_cache.GetAlertTemplateModels() ?? [])
                 .Where(template =>
@@ -84,7 +78,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     // pass running (the sensor-tree scan's rule).
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    return IsListable(template.FolderId);
+                    return isListable(template.FolderId);
                 })
                 .OrderBy(template => template.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(template => template.Id)
@@ -108,12 +102,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// One template by id. Unknown and invisible ids answer the SAME
         /// NotFound (the area's anti-enumeration rule).
         /// </summary>
-        public SensorTreeReadResult<AlertTemplateDto> GetTemplate(Guid id, ClaimsPrincipal user)
+        public ManagementReadResult<AlertTemplateDto> GetTemplate(Guid id, ClaimsPrincipal user)
         {
             var template = _cache.GetAlertTemplate(id);
 
             if (template is null)
-                return SensorTreeReadResult<AlertTemplateDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<AlertTemplateDto>.Fail(ManagementReadOutcome.NotFound);
 
             // Reads authorize at the template's FOLDER through the Product
             // boundary: the evaluator's 404 arm keeps invisible
@@ -123,10 +117,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
             return _authorization.AuthorizeRead(user, FolderResource(template.FolderId)) switch
             {
                 ApiTokenAuthorization.Allowed =>
-                    SensorTreeReadResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(template)),
-                ApiTokenAuthorization.Forbidden => SensorTreeReadResult<AlertTemplateDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see this template."),
-                _ => SensorTreeReadResult<AlertTemplateDto>.Fail(SensorTreeReadOutcome.NotFound),
+                    ManagementReadResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(template)),
+                ApiTokenAuthorization.Forbidden => ManagementReadResult<AlertTemplateDto>.Fail(
+                    ManagementReadOutcome.Forbidden, message: "The token's owner cannot see this template."),
+                _ => ManagementReadResult<AlertTemplateDto>.Fail(ManagementReadOutcome.NotFound),
             };
         }
 
@@ -138,7 +132,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// sees no boundary at all gets Forbidden for every id, and the
         /// provider is never queried.
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<AlertScheduleDto>> ListSchedules(ClaimsPrincipal user, int page,
+        public ManagementReadResult<ApiPageDto<AlertScheduleDto>> ListSchedules(ClaimsPrincipal user, int page,
             int pageSize, CancellationToken cancellationToken = default)
         {
             // The caller-wide gate lives in the evaluator: the owner is an admin
@@ -148,8 +142,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // schedule existence is per-caller scoped, so the denial says
             // nothing about any concrete id.
             if (!_authorization.CanSeeAnyBoundary(user))
-                return SensorTreeReadResult<ApiPageDto<AlertScheduleDto>>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: NoBoundarySightMessage);
+                return ManagementReadResult<ApiPageDto<AlertScheduleDto>>.Fail(
+                    ManagementReadOutcome.Forbidden, message: NoBoundarySightMessage);
 
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -174,7 +168,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             var sensorsBySchedule = _cache.GetSensorsByAlertSchedules([.. pageItems.Select(s => s.Id)]) ?? [];
             var isProductVisible = _authorization.MemoizedProductVisibility(user);
 
-            return SensorTreeReadResult<ApiPageDto<AlertScheduleDto>>.Ok(new ApiPageDto<AlertScheduleDto>
+            return ManagementReadResult<ApiPageDto<AlertScheduleDto>>.Ok(new ApiPageDto<AlertScheduleDto>
             {
                 Items = [.. pageItems.Select(schedule =>
                 {
@@ -196,20 +190,28 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// One schedule by id (same caller-wide gate as the list); its sensor
         /// list carries only paths the token's owner may see.
         /// </summary>
-        public SensorTreeReadResult<AlertScheduleDto> GetSchedule(Guid id, ClaimsPrincipal user)
+        public ManagementReadResult<AlertScheduleDto> GetSchedule(Guid id, ClaimsPrincipal user)
         {
             if (!_authorization.CanSeeAnyBoundary(user))
-                return SensorTreeReadResult<AlertScheduleDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: NoBoundarySightMessage);
+                return ManagementReadResult<AlertScheduleDto>.Fail(
+                    ManagementReadOutcome.Forbidden, message: NoBoundarySightMessage);
 
             var schedule = _schedules.GetSchedule(id);
 
             if (schedule is null)
-                return SensorTreeReadResult<AlertScheduleDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<AlertScheduleDto>.Fail(ManagementReadOutcome.NotFound);
 
-            return SensorTreeReadResult<AlertScheduleDto>.Ok(ToDto(schedule,
-                _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(user)));
+            return ManagementReadResult<AlertScheduleDto>.Ok(RenderSchedule(schedule, user));
         }
+
+
+        // Renders a stored schedule through the read mapping (sensor paths
+        // filtered to the owner's sight) — the success echo of the schedule
+        // WRITE paths (AlertScheduleAdministrationService), so a write answers
+        // exactly what GET would answer afterwards.
+        internal AlertScheduleDto RenderSchedule(Core.Model.Policies.AlertSchedule schedule, ClaimsPrincipal user) =>
+            ToDto(schedule, _cache.GetSensorsByAlertSchedule(schedule.Id),
+                _authorization.MemoizedProductVisibility(user));
 
 
         // === Policy reads (#1500) ===
@@ -223,64 +225,64 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// area's shared clamps. The token's owner sees the sensor exactly when
         /// the sensor-tree item endpoint would answer it.
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<PolicyDto>> ListSensorPolicies(ClaimsPrincipal user, Guid sensorId,
+        public ManagementReadResult<ApiPageDto<PolicyDto>> ListSensorPolicies(ClaimsPrincipal user, Guid sensorId,
             int page, int pageSize)
         {
             var resolution = ResolveSensor(user, sensorId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<ApiPageDto<PolicyDto>>.FromFailure(resolution.Failure);
+                return ManagementReadResult<ApiPageDto<PolicyDto>>.FromFailure(resolution.Failure);
 
             var policies = resolution.Sensor.Policies
                 .OrderBy(p => p.Id)
                 .Select(p => AlertPolicyDtoMapper.ToDto(p, resolution.Sensor.Type))
                 .ToList();
 
-            return SensorTreeReadResult<ApiPageDto<PolicyDto>>.Ok(Page(policies, page, pageSize));
+            return ManagementReadResult<ApiPageDto<PolicyDto>>.Ok(Page(policies, page, pageSize));
         }
 
         /// <summary>One data policy of the sensor by id (unknown and invisible answer the SAME 404).</summary>
-        public SensorTreeReadResult<PolicyDto> GetSensorPolicy(ClaimsPrincipal user, Guid sensorId, Guid policyId)
+        public ManagementReadResult<PolicyDto> GetSensorPolicy(ClaimsPrincipal user, Guid sensorId, Guid policyId)
         {
             var resolution = ResolveSensor(user, sensorId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<PolicyDto>.FromFailure(resolution.Failure);
+                return ManagementReadResult<PolicyDto>.FromFailure(resolution.Failure);
 
             return resolution.Sensor.Policies.FirstOrDefault(p => p.Id == policyId) is { } policy
-                ? SensorTreeReadResult<PolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy, resolution.Sensor.Type))
-                : SensorTreeReadResult<PolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+                ? ManagementReadResult<PolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy, resolution.Sensor.Type))
+                : ManagementReadResult<PolicyDto>.Fail(ManagementReadOutcome.NotFound);
         }
 
         /// <summary>The sensor's TTL policies, ordered by policy id, paginated.</summary>
-        public SensorTreeReadResult<ApiPageDto<TtlPolicyDto>> ListSensorTtlPolicies(ClaimsPrincipal user,
+        public ManagementReadResult<ApiPageDto<TtlPolicyDto>> ListSensorTtlPolicies(ClaimsPrincipal user,
             Guid sensorId, int page, int pageSize)
         {
             var resolution = ResolveSensor(user, sensorId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
+                return ManagementReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
 
             var policies = resolution.Sensor.Policies.TTLPolicies
                 .OrderBy(p => p.Id)
                 .Select(AlertPolicyDtoMapper.ToDto)
                 .ToList();
 
-            return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
+            return ManagementReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
         }
 
         /// <summary>One TTL policy of the sensor by id.</summary>
-        public SensorTreeReadResult<TtlPolicyDto> GetSensorTtlPolicy(ClaimsPrincipal user, Guid sensorId,
+        public ManagementReadResult<TtlPolicyDto> GetSensorTtlPolicy(ClaimsPrincipal user, Guid sensorId,
             Guid policyId)
         {
             var resolution = ResolveSensor(user, sensorId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
+                return ManagementReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
 
             return resolution.Sensor.Policies.TTLPolicies.FirstOrDefault(p => p.Id == policyId) is { } policy
-                ? SensorTreeReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
-                : SensorTreeReadResult<TtlPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+                ? ManagementReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
+                : ManagementReadResult<TtlPolicyDto>.Fail(ManagementReadOutcome.NotFound);
         }
 
         /// <summary>
@@ -290,13 +292,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// data policies of its own — this is the read side of the aggregate
         /// the write surface routes through.
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<ProductPolicyDto>> ListProductPolicies(ClaimsPrincipal user,
+        public ManagementReadResult<ApiPageDto<ProductPolicyDto>> ListProductPolicies(ClaimsPrincipal user,
             Guid productId, int page, int pageSize)
         {
             var resolution = ResolveProduct(user, productId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<ApiPageDto<ProductPolicyDto>>.FromFailure(resolution.Failure);
+                return ManagementReadResult<ApiPageDto<ProductPolicyDto>>.FromFailure(resolution.Failure);
 
             var policies = resolution.Product.GetAllSensors()
                 .Where(sensor => sensor.Parent?.Root is not null)
@@ -306,62 +308,62 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .Select(entry => AlertPolicyDtoMapper.ToProductDto(entry.p, entry.sensor))
                 .ToList();
 
-            return SensorTreeReadResult<ApiPageDto<ProductPolicyDto>>.Ok(Page(policies, page, pageSize));
+            return ManagementReadResult<ApiPageDto<ProductPolicyDto>>.Ok(Page(policies, page, pageSize));
         }
 
         /// <summary>One data policy of the product's subtree by id, with its owning sensor.</summary>
-        public SensorTreeReadResult<ProductPolicyDto> GetProductPolicy(ClaimsPrincipal user, Guid productId,
+        public ManagementReadResult<ProductPolicyDto> GetProductPolicy(ClaimsPrincipal user, Guid productId,
             Guid policyId)
         {
             var resolution = ResolveProduct(user, productId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<ProductPolicyDto>.FromFailure(resolution.Failure);
+                return ManagementReadResult<ProductPolicyDto>.FromFailure(resolution.Failure);
 
             foreach (var sensor in resolution.Product.GetAllSensors())
                 if (sensor.Policies.FirstOrDefault(p => p.Id == policyId) is { } policy)
-                    return SensorTreeReadResult<ProductPolicyDto>.Ok(
+                    return ManagementReadResult<ProductPolicyDto>.Ok(
                         AlertPolicyDtoMapper.ToProductDto(policy, sensor));
 
-            return SensorTreeReadResult<ProductPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+            return ManagementReadResult<ProductPolicyDto>.Fail(ManagementReadOutcome.NotFound);
         }
 
         /// <summary>The product's own TTL policies, ordered by policy id, paginated.</summary>
-        public SensorTreeReadResult<ApiPageDto<TtlPolicyDto>> ListProductTtlPolicies(ClaimsPrincipal user,
+        public ManagementReadResult<ApiPageDto<TtlPolicyDto>> ListProductTtlPolicies(ClaimsPrincipal user,
             Guid productId, int page, int pageSize)
         {
             var resolution = ResolveProduct(user, productId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
+                return ManagementReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
 
             var policies = resolution.Product.Policies.TTLPolicies
                 .OrderBy(p => p.Id)
                 .Select(AlertPolicyDtoMapper.ToDto)
                 .ToList();
 
-            return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
+            return ManagementReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
         }
 
         /// <summary>One TTL policy of the product by id.</summary>
-        public SensorTreeReadResult<TtlPolicyDto> GetProductTtlPolicy(ClaimsPrincipal user, Guid productId,
+        public ManagementReadResult<TtlPolicyDto> GetProductTtlPolicy(ClaimsPrincipal user, Guid productId,
             Guid policyId)
         {
             var resolution = ResolveProduct(user, productId);
 
             if (resolution.Failure is not null)
-                return SensorTreeReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
+                return ManagementReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
 
             return resolution.Product.Policies.TTLPolicies.FirstOrDefault(p => p.Id == policyId) is { } policy
-                ? SensorTreeReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
-                : SensorTreeReadResult<TtlPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+                ? ManagementReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
+                : ManagementReadResult<TtlPolicyDto>.Fail(ManagementReadOutcome.NotFound);
         }
 
 
         // The read-side resolution shared by every policy read: authorize at the
         // target's own boundary (the evaluator's 404/403 split), then the live
         // model lookup — an unknown id is the same 404 as an invisible one.
-        private (BaseSensorModel Sensor, SensorTreeReadFailure Failure) ResolveSensor(
+        private (BaseSensorModel Sensor, ManagementReadFailure Failure) ResolveSensor(
             ClaimsPrincipal user, Guid sensorId)
         {
             var failure = AuthorizeSensorRead(user, sensorId);
@@ -371,10 +373,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             return _cache.GetSensor(sensorId) is { } sensor
                 ? (sensor, null)
-                : (null, new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound });
+                : (null, new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound });
         }
 
-        private (ProductModel Product, SensorTreeReadFailure Failure) ResolveProduct(
+        private (ProductModel Product, ManagementReadFailure Failure) ResolveProduct(
             ClaimsPrincipal user, Guid productId)
         {
             var failure = AuthorizeProductRead(user, productId);
@@ -384,29 +386,29 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             return _cache.TryGetProduct(productId, out var product) && product is not null
                 ? (product, null)
-                : (null, new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound });
+                : (null, new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound });
         }
 
-        private SensorTreeReadFailure AuthorizeSensorRead(ClaimsPrincipal user, Guid sensorId) =>
+        private ManagementReadFailure AuthorizeSensorRead(ClaimsPrincipal user, Guid sensorId) =>
             ToReadFailure(_authorization.AuthorizeRead(user,
                 new ApiTokenResource(ApiTokenResourceKind.Sensor, sensorId)));
 
-        private SensorTreeReadFailure AuthorizeProductRead(ClaimsPrincipal user, Guid productId) =>
+        private ManagementReadFailure AuthorizeProductRead(ClaimsPrincipal user, Guid productId) =>
             ToReadFailure(_authorization.AuthorizeRead(user,
                 new ApiTokenResource(ApiTokenResourceKind.Product, productId)));
 
         // The read model's evaluator mapping: the Forbidden arm is defensive in
         // the owner-mirror read model (an in-sight target never 403s a read) but
         // kept so the evaluator's full decision surface maps to a response.
-        private static SensorTreeReadFailure ToReadFailure(ApiTokenAuthorization decision) => decision switch
+        private static ManagementReadFailure ToReadFailure(ApiTokenAuthorization decision) => decision switch
         {
             ApiTokenAuthorization.Allowed => null,
             ApiTokenAuthorization.Forbidden => new()
             {
-                Outcome = SensorTreeReadOutcome.Forbidden,
+                Outcome = ManagementReadOutcome.Forbidden,
                 Message = "The token's owner cannot see this resource.",
             },
-            _ => new() { Outcome = SensorTreeReadOutcome.NotFound },
+            _ => new() { Outcome = ManagementReadOutcome.NotFound },
         };
 
         private static ApiPageDto<TItem> Page<TItem>(List<TItem> items, int page, int pageSize)
@@ -427,10 +429,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
 
-        // The caller-wide gate's 403 body — the list and the item answers must
-        // stay the same string, single-sourced (#1395 review): the code this
-        // service replaced had one Denied() helper for exactly that reason.
-        private const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
+        // The caller-wide gate's 403 body — single-sourced in
+        // ManagementApiErrors since the chat read surface joined the gated
+        // surfaces: the list and the item answers must stay the same string
+        // (#1395 review — the code this service replaced had one Denied()
+        // helper for exactly that reason), and two surfaces must not drift.
+        private const string NoBoundarySightMessage = ManagementApiErrors.NoBoundarySightMessage;
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);

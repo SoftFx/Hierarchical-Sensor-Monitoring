@@ -54,6 +54,13 @@ namespace HSMServer.Model.ManagementApi
         // about resource existence or reachability may leak from it.
         public const string NotFoundMessage = "The requested resource was not found.";
 
+        // The 403 body of every caller-wide read gate (schedules since #1393,
+        // chats since the chat read surface): the owner is neither an admin nor
+        // currently holding a role on any product/folder, so the whole surface is
+        // out of reach. Single-sourced for the same reason as NotFoundMessage —
+        // the list and the item answers of one surface must stay the same string.
+        public const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
+
 
         public static ObjectResult NotFound() =>
             new(new ManagementApiErrorDto { Error = NotFoundCode, Message = NotFoundMessage })
@@ -77,8 +84,16 @@ namespace HSMServer.Model.ManagementApi
         // carries a resource pointer map (e.g. {"templateId": "<id>"} when the
         // create-path partial-apply conflict leaves a persisted template the
         // caller must PUT to fix — a re-POST would trip name uniqueness).
-        public static ObjectResult Conflict(string message, object details) =>
-            new(new ManagementApiErrorDto { Error = ConflictCode, Message = message, Details = details })
+        // The pointers are the typed Dictionary<string, string> the write results
+        // carry (PolicyWriteFailure.Details) — narrowing the parameter from object
+        // keeps a caller from stuffing anything else into the published schema.
+        public static ObjectResult Conflict(string message, Dictionary<string, string> details) =>
+            new(new ManagementApiErrorDto
+            {
+                Error = ConflictCode,
+                Message = message,
+                Details = details is null ? null : details.ToDictionary(pair => pair.Key, pair => (object)pair.Value),
+            })
             {
                 StatusCode = StatusCodes.Status409Conflict,
             };
@@ -92,7 +107,7 @@ namespace HSMServer.Model.ManagementApi
             {
                 Error = UnprocessableEntityCode,
                 Message = "The request contradicts the current state of the resource.",
-                Details = errors is { Count: > 0 } ? errors : null,
+                Details = ToDetailsMap(errors),
             })
             {
                 StatusCode = StatusCodes.Status422UnprocessableEntity,
@@ -104,15 +119,16 @@ namespace HSMServer.Model.ManagementApi
                 StatusCode = StatusCodes.Status503ServiceUnavailable,
             };
 
-        // Renders the shared sensor-tree read service's failure (#1391) through
-        // the uniform contract — the REST half of the transport split; the MCP
-        // tools translate the same failure into tool error text instead.
-        public static IActionResult FromReadFailure(SensorTree.SensorTreeReadFailure failure) =>
+        // Renders the management read services' failure (the area's shared
+        // read envelope) through the uniform contract — the REST half of the
+        // transport split; the MCP tools translate the same failure into tool
+        // error text instead.
+        public static IActionResult FromReadFailure(ManagementReadFailure failure) =>
             failure.Outcome switch
             {
-                SensorTree.SensorTreeReadOutcome.Forbidden => Forbidden(failure.Message),
-                SensorTree.SensorTreeReadOutcome.ValidationFailed => Validation(failure.Errors),
-                SensorTree.SensorTreeReadOutcome.Unavailable => Unavailable(failure.Message),
+                ManagementReadOutcome.Forbidden => Forbidden(failure.Message),
+                ManagementReadOutcome.ValidationFailed => Validation(failure.Errors),
+                ManagementReadOutcome.Unavailable => Unavailable(failure.Message),
                 _ => NotFound(),
             };
 
@@ -122,7 +138,7 @@ namespace HSMServer.Model.ManagementApi
             {
                 Error = ValidationFailedCode,
                 Message = "The request is invalid.",
-                Details = errors is { Count: > 0 } ? errors : null,
+                Details = ToDetailsMap(errors),
             })
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -139,11 +155,18 @@ namespace HSMServer.Model.ManagementApi
         // CAPTURED framework default verbatim — the sensor-data and Grafana APIs keep
         // their exact previous wire shape (problem+json content types, type, traceId),
         // not a reimplementation of it.
+        // The default is guarded AT CAPTURE TIME (fail fast at startup wiring): a null
+        // here would otherwise NRE per non-management binding failure, turning every
+        // sensor-data 400 into a 500.
         public static Func<ActionContext, IActionResult> WrapBindingFailureFactory(
-            Func<ActionContext, IActionResult> frameworkDefault) =>
-            context => IsManagementAction(context)
+            Func<ActionContext, IActionResult> frameworkDefault)
+        {
+            ArgumentNullException.ThrowIfNull(frameworkDefault);
+
+            return context => IsManagementAction(context)
                 ? BindingFailureResponse(context)
                 : frameworkDefault(context);
+        }
 
         // The area-membership check of the binding-failure factory: the controller
         // carries [ManagementApi] — the same marker the area guard admits endpoints
@@ -170,5 +193,14 @@ namespace HSMServer.Model.ManagementApi
                             ? "The input was not valid."
                             : error.ErrorMessage)
                         .ToArray());
+
+        // Field-keyed messages -> the DTO's typed details map (#1371): the values
+        // (string arrays) serialize by runtime type exactly as they did when Details
+        // was declared object, so the wire JSON is unchanged; an empty error map is
+        // not a validation failure and answers an explicit null.
+        private static Dictionary<string, object> ToDetailsMap(IDictionary<string, string[]> errors) =>
+            errors is { Count: > 0 }
+                ? errors.ToDictionary(pair => pair.Key, pair => (object)pair.Value)
+                : null;
     }
 }
