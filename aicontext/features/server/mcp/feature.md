@@ -1,6 +1,6 @@
 # Feature: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-12 | Canonical: yes
 > Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders (reads), plus the phase-2 WRITE tools for sensor policies, alert templates and alert schedules. REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
@@ -119,7 +119,7 @@ The read tools persist nothing. The write tools persist through the shared servi
 
 ## UI / Operator Visibility
 
-No UI. Operators provision the same API tokens as for REST (`/api/v1/api-tokens` family); an agent config entry needs the server URL + the credential.
+No dedicated UI. Operators provision the same personal API tokens as for REST (Profile page, cookie flow); an agent config entry needs the server URL + the credential. Since #1463 the token-creation dialog's one-time-secret modal carries a "How to use this token" block that points MCP clients at `https://<site-host>/mcp` with the same-token note and a link to the wiki `MCP` client-setup page — for a read-only token the MCP line is swapped for the read/write requirement note (a read-only credential cannot reach `/mcp` at all), so the dialog never points a credential at an endpoint it would reject.
 
 ## Dependencies
 
