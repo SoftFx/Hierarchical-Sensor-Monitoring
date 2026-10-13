@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
@@ -854,6 +855,12 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(201, StatusCodeOf(result));
             var body = Assert.IsType<AlertTemplateDto>(Assert.IsType<CreatedAtActionResult>(result).Value);
             Assert.Null(body.Warnings);
+
+            // And on the WIRE the null is ABSENT (WhenWritingNull, web-default
+            // camelCase like MVC): the response body never grows a `warnings`
+            // key, so a clean save stays byte-identical to pre-#1401.
+            var json = JsonSerializer.Serialize(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.DoesNotContain("warnings", json);
         }
 
         [Fact]

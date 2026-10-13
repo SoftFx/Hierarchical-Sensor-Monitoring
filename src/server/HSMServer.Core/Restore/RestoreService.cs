@@ -353,7 +353,8 @@ namespace HSMServer.Core.Restore
                 : string.Join("; ", shown);
         }
 
-        private BackupSession GetSessionOrThrow(Guid session)        {
+        private BackupSession GetSessionOrThrow(Guid session)
+        {
             if (!_sessions.TryGetValue(session, out var backup))
                 throw new InvalidOperationException($"Restore session {session} not found. It may have expired (idle timeout {SessionIdleTimeout.TotalMinutes:F0} min) — reopen the backup and try again.");
 

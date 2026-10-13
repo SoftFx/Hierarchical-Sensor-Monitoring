@@ -216,16 +216,23 @@
                         // lines are built as text nodes (never raw HTML): sensor paths
                         // and rejection reasons are user-influenced strings.
                         var $list = $('<ul class="mb-0">');
-                        viewData.warnings.forEach(function (warning) {
+                        // First five + "and N more" (the RestoreService outcome
+                        // pattern): a save where every matching sensor rejects
+                        // renders one line per sensor, unbounded.
+                        viewData.warnings.slice(0, 5).forEach(function (warning) {
                             $('<li>').text(warning).appendTo($list);
                         });
+
+                        if (viewData.warnings.length > 5)
+                            $('<li>').text('and ' + (viewData.warnings.length - 5) + ' more').appendTo($list);
 
                         showConfirmationModal(
                             'Template saved with warnings',
                             $list,
                             () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
                             undefined,
-                            'Continue'
+                            'Continue',
+                            null // acknowledgment-only: no Cancel — the save already persisted
                         );
                     }
                     else {

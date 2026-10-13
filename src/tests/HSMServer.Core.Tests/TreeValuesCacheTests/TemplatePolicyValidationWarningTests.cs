@@ -189,6 +189,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var applied = Assert.Single(sensor.Policies, p => p.TemplateId == template.Id);
 
+            // Snapshot the applied shape BEFORE the edit: the UPDATE arm
+            // mutates the live policy in place, so only a captured string can
+            // prove a rejection left it intact.
+            var appliedShape = applied.ToString();
+
             // Edit the SAME template id and policy id to a Value condition
             // the bar sensor's type does not offer: the update arm rejects it.
             var edited = BuildAnyTypeTemplate([$"*/{barPath}"], policyId);
@@ -207,8 +212,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Contains(barPath, warning.SensorPath);
             Assert.Contains("Value", warning.Reason);
 
-            // The sensor keeps the previously-applied alert (the old shape).
+            // The sensor keeps the previously-applied alert EXACTLY as it was:
+            // a rejection must not half-overwrite the live policy (new fields,
+            // emptied conditions) while reporting "not applied" — the update
+            // is all-or-nothing (#1542 review).
             Assert.Contains(sensor.Policies, p => p.Id == applied.Id);
+            Assert.Equal(appliedShape, applied.ToString());
+
+            var keptCondition = Assert.Single(applied.Conditions);
+            Assert.Equal(PolicyProperty.Min, keptCondition.Property);
+            Assert.Equal(PolicyOperation.GreaterThan, keptCondition.Operation);
 
             Assert.Contains(records, r => r.Key.Id == sensor.Id
                                           && r.PropertyName == "Alert"

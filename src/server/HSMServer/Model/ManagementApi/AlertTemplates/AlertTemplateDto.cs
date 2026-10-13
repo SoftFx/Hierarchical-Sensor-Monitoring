@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
@@ -52,9 +53,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// Output-only apply diagnostics of THIS write: template policies that matching
         /// sensors REJECTED at apply time — the save persisted, but each listed alert was
         /// NOT created on that sensor (e.g. a Value condition that a bar sensor's type
-        /// does not offer). Set only on create/update responses with rejections; null on
-        /// reads and on clean writes; ignored when sent by a client.
+        /// does not offer). Set only on create/update responses with rejections; absent
+        /// on reads and on clean writes (WhenWritingNull — a warning-free response keeps
+        /// its pre-warnings byte shape); ignored when sent by a client.
         /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AlertTemplateWarningDto> Warnings { get; init; }
     }
 

@@ -215,7 +215,7 @@ Coverage for the #1401 warnings channel lives in `src/tests/HSMServer.Core.Tests
 - `UpdateTemplate_PolicyRejectedOnExistingPolicy_WarnsAndJournals` — the UPDATE arm: a re-save whose new condition the sensor's type refuses warns (the sensor keeps the previously-applied alert) and journals.
 - `AddTemplate_DbApplyFailure_WarningsDoNotRideTheConflict` — the HARD channel is untouched: the DB failure answers `(false, products-naming error)` with an EMPTY warnings list, pinning that the 409 body keeps its exact shape.
 
-The REST/MCP/cookie-UI renderings are pinned in their controller suites: `AlertTemplatesApiControllerTests` (201/200 with `warnings` on the echo; a clean write's `Warnings` is NULL — the response of a warning-free save is byte-identical to before), `AlertsMcpToolsTests` (the create/update tool results carry the SAME warning strings as REST), and `AlertTemplatesControllerTests` (the cookie-UI save answers `success: true` + warnings lines; a clean save keeps the empty `Ok`).
+The REST/MCP/cookie-UI renderings are pinned in their controller suites: `AlertTemplatesApiControllerTests` (201/200 with `warnings` on the echo; a clean write's `Warnings` is null and therefore omitted from the JSON — the response of a warning-free save is byte-identical to before), `AlertsMcpToolsTests` (the create/update tool results carry the SAME warning strings as REST), and `AlertTemplatesControllerTests` (the cookie-UI save answers `success: true` + warnings lines; a clean save keeps the empty `Ok`).
 
 Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionViewModelTests/ConditionViewModelPropertiesTests.cs`:
 
