@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.11.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.11.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -311,6 +311,10 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_restart_registration_is_retried_after_5xx
         COMMAND hsm_collector_tests native_http_restart_registration_is_retried_after_5xx
     )
+    # #1528: the recovery Info line counts only registrations that were actually retried.
+    add_test(NAME native_http_recovery_log_credits_only_retried_registrations
+        COMMAND hsm_collector_tests native_http_recovery_log_credits_only_retried_registrations
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
@@ -385,6 +389,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_value_json_matches_net_byte_layout
     native_wire_bar_json_matches_net_byte_layout
     native_double_format_handles_non_finite
+    native_double_format_matches_net_core_layout
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout

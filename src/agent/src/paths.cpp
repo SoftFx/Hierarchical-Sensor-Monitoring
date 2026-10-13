@@ -5,6 +5,8 @@
 
 #include "agent/paths.hpp"
 
+#include "agent/dir_acl.hpp"
+
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -33,11 +35,41 @@ namespace hsm::agent
         return ProgramDataAgentDir() + L"\\logs\\hsm-agent.log";
     }
 
-    bool EnsureDirectories()
+    bool EnsureDirectories(std::vector<std::string>* acl_errors)
     {
         const std::wstring dir = ProgramDataAgentDir();
+        const std::wstring logs = dir + L"\\logs";
+
+        // Harden on every start, not only when creating: agents installed before #1279 already have a
+        // data dir that inherits BUILTIN\Users read from %ProgramData%, and this is what repairs them —
+        // the re-propagation tightens the existing config.json and log files in place.
+        const auto harden = [acl_errors](const std::wstring& path) {
+            std::string error;
+            if (!ApplyAgentDirectoryDacl(path, error) && acl_errors != nullptr)
+                acl_errors->push_back(error);
+        };
+
         CreateDirectoryW(dir.c_str(), nullptr); // ignore "already exists"
-        CreateDirectoryW((dir + L"\\logs").c_str(), nullptr);
+
+        // A data dir that is a junction / symlink (a non-admin may have pre-created one) is not ours:
+        // do not create logs\ through it and do not harden anything behind it. ApplyAgentDirectoryDacl
+        // refuses the reparse point and its error is what gets reported.
+        const DWORD dir_attributes = GetFileAttributesW(dir.c_str());
+        if (dir_attributes != INVALID_FILE_ATTRIBUTES && (dir_attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        {
+            harden(dir);
+            return true;
+        }
+
+        // Create logs\ before hardening: once the data dir is hardened, a non-elevated console run could
+        // no longer create it.
+        CreateDirectoryW(logs.c_str(), nullptr);
+        harden(dir);
+        // logs\ gets the same protected DACL (decision documented in aicontext/features/agent): the
+        // log never holds the access key but does carry host / process / service names, and a
+        // protected DACL of its own keeps it closed even if the parent's ACL is later loosened by hand.
+        harden(logs);
+
         return GetFileAttributesW(dir.c_str()) != INVALID_FILE_ATTRIBUTES;
     }
 

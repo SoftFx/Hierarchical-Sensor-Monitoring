@@ -13,6 +13,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -82,9 +83,19 @@ namespace hsm::agent
 
             SetState(SERVICE_START_PENDING, NO_ERROR, 5000);
 
-            EnsureDirectories();
+            std::vector<std::string> acl_errors;
+            EnsureDirectories(&acl_errors);
             FileLogger file(LogFilePath());
             EventLogSink event_log;
+
+            // #1279: a data dir that could not be restricted leaves the access key readable by local
+            // users — report it loudly (file + Event Log), but keep starting: the config must still be
+            // read and the agent must still run.
+            {
+                const auto startup_log = MakeAgentLogger(&file, &event_log, false);
+                for (const auto& acl_error : acl_errors)
+                    startup_log(hsm::collector::LogLevel::Error, acl_error);
+            }
 
             std::string text;
             if (!ReadTextFileWide(g_config_path, text))

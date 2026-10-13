@@ -15,9 +15,11 @@
 # Notes:
 # - The heartbeat period is the SENSOR's own post period (PostDataPeriod, 15 s) in BOTH collectors
 #   (#1437; the native beat used to follow the collector's package-collect period instead). Every
-#   case therefore relies ONLY on the beat that fires immediately on Start; a second beat is
-#   provoked by RESTARTING, never by waiting one out. The same long period keeps everything
-#   queued until the graceful stop flushes it, so every assertion runs after a stop.
+#   case but one therefore relies ONLY on the beat that fires immediately on Start; a second beat is
+#   provoked by RESTARTING, never by waiting one out. The exception is the cadence case
+#   (service_alive_keeps_beating_with_a_long_collect_period, #1443), which waits one beat period out
+#   on purpose and costs ~20 s per driver. The same long period keeps everything queued until the
+#   graceful stop flushes it, so every assertion runs after a stop.
 # - `sleep_ms` after each Start is the one wall-clock dependency, and it is NOT symmetric. Too many
 #   beats is impossible (1.5 s is 10x below the 15 s beat period), but too FEW is possible: the
 #   immediate beat is published from a scheduler callback, and a Stop landing mid-callback drops it
@@ -54,6 +56,24 @@ service_alive_beats_on_the_sensor_period|stop
 service_alive_beats_on_the_sensor_period|expect_sent_count|3
 service_alive_beats_on_the_sensor_period|expect_payload_type_counts|1|0|0|0|0
 service_alive_beats_on_the_sensor_period|expect_eventually_payload_contains|/Service alive","Value":false|5
+
+# The other direction of #1437, and the CADENCE #1443 asked to pin: with the collect period raised
+# far above the beat (60 s here; an operator may raise it past the sensor's 1 min TTL), the beat
+# still comes back every 15 s instead of starving until the next collect cycle. Both collectors beat
+# immediately on Start and then on a plain 15 s period from that instant (managed: TimerDueTime 0 +
+# PostDataPeriod, no wall-clock alignment; native: the self-monitor loop's own deadline), so a 20 s
+# window holds exactly two beats: 5 s of slack for a late second beat on a loaded agent, 10 s before
+# a third could appear. A collector that beat on the collect period would show only the Start beat.
+# Two beats + the version sensor's Start: and Stop: posts = 4 payloads, all flushed by the stop.
+service_alive_keeps_beating_with_a_long_collect_period|create_collector_with_limits|20000|50|60000
+service_alive_keeps_beating_with_a_long_collect_period|add_collector_monitoring_sensors
+service_alive_keeps_beating_with_a_long_collect_period|start
+service_alive_keeps_beating_with_a_long_collect_period|sleep_ms|20000
+service_alive_keeps_beating_with_a_long_collect_period|stop
+service_alive_keeps_beating_with_a_long_collect_period|expect_sent_count|4
+service_alive_keeps_beating_with_a_long_collect_period|expect_payload_type_counts|2|0|0|0|0
+service_alive_keeps_beating_with_a_long_collect_period|expect_eventually_payload_contains|/Service alive","Value":false|5
+service_alive_keeps_beating_with_a_long_collect_period|expect_eventually_payload_contains|/Service alive","Value":true|5
 
 # Registering the collector-monitoring group on an ALREADY RUNNING collector must beat, not sit
 # registered-but-empty (#1453 follow-up). Managed starts a sensor added during Starting/Running

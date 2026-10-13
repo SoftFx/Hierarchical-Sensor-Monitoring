@@ -1,7 +1,8 @@
 // HSM Agent — entry point. Dispatches on argv:
 //   (no args) / --service   run as an SCM service (StartServiceCtrlDispatcher)
 //   --console               run AgentRuntime in the foreground (Ctrl-C to stop) for debugging
-//   --install / --uninstall register/remove the auto-start service (requires elevation)
+//   --install / --uninstall register/remove the auto-start service (requires elevation); --install
+//                           also creates the data dir with its admin-only DACL (#1279)
 //   --apply-update          detached helper: waits for service to stop, swaps binaries, restarts
 //                           with health gate (epic #1174)
 //   --restart-service       detached helper: waits for service to stop, then restarts it (no swap) —
@@ -26,6 +27,7 @@ namespace hsm { namespace agent { const char* BuildTimestamp(); } }
 #include <atomic>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -73,7 +75,12 @@ namespace
     {
         using namespace hsm::agent;
 
-        EnsureDirectories();
+        // #1279: hardening failures are reported but never stop the run. An unelevated console run hits
+        // ACCESS_DENIED on an installed data dir — expected, that dir is already admin-only.
+        std::vector<std::string> acl_errors;
+        EnsureDirectories(&acl_errors);
+        for (const auto& acl_error : acl_errors)
+            std::cerr << "hsm-agent: warning: " << acl_error << '\n';
 
         std::string text;
         if (!ReadTextFileWide(config_path, text))
@@ -92,6 +99,8 @@ namespace
 
         FileLogger file(LogFilePath());
         EventLogSink event_log;
+        for (const auto& acl_error : acl_errors)
+            file.Write(hsm::collector::LogLevel::Error, acl_error); // already echoed to stderr above
         auto logger = MakeAgentLogger(&file, &event_log, /*also_stderr=*/true);
 
         AgentRuntime runtime(std::move(config), std::move(logger));
@@ -143,7 +152,15 @@ int wmain(int argc, wchar_t** argv)
     }
 
     if (mode == L"--install")
+    {
+        // #1279: create + restrict the data dir at install time as well, so it is admin-only before
+        // the first service start. Not fatal — the service re-applies the DACL on every start.
+        std::vector<std::string> acl_errors;
+        EnsureDirectories(&acl_errors);
+        for (const auto& acl_error : acl_errors)
+            std::cerr << "hsm-agent: warning: " << acl_error << '\n';
         return InstallService();
+    }
     if (mode == L"--uninstall")
         return UninstallService();
     if (mode == L"--apply-update")

@@ -4,7 +4,9 @@
 # Target topology:
 #   hsm_agent_config  STATIC  the platform-agnostic config.json parser. Built on EVERY platform so
 #                             the parser unit tests run in any CI lane (no collector / Win32 dep).
-#   hsm_agent_tests   EXE     name-dispatched config unit tests.
+#   hsm_agent_paths   STATIC  agent paths + the protected data-dir DACL (#1279; WIN32 only), shared
+#                             by the exe and the Windows-only ACL tests.
+#   hsm_agent_tests   EXE     name-dispatched config unit tests (+ the ACL tests on Windows).
 #   hsm-agent         EXE     the Windows service executable (WIN32 only). Pulls the collector with
 #                             the libcurl HTTP transport (HSM_COLLECTOR_HTTP).
 cmake_minimum_required(VERSION 3.21)
@@ -18,7 +20,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.5.43 LANGUAGES CXX)
+project(HsmAgent VERSION 0.5.44 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
@@ -51,6 +53,16 @@ target_include_directories(hsm_agent_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/i
 target_compile_features(hsm_agent_config PUBLIC cxx_std_17)
 hsm_agent_set_warnings(hsm_agent_config)
 
+# Agent paths + the protected data-dir DACL (#1279). Win32-only; a library of its own so the ACL tests
+# drive the real EnsureDirectories() rather than a copy of it.
+if(WIN32)
+    add_library(hsm_agent_paths STATIC src/paths.cpp src/dir_acl.cpp)
+    target_include_directories(hsm_agent_paths PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_features(hsm_agent_paths PUBLIC cxx_std_17)
+    target_link_libraries(hsm_agent_paths PUBLIC advapi32)
+    hsm_agent_set_warnings(hsm_agent_paths)
+endif()
+
 if(HSM_AGENT_BUILD_TESTS)
     enable_testing()
     add_executable(hsm_agent_tests tests/agent_tests.cpp)
@@ -75,6 +87,21 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_sensor_group_flag_maps_names)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
+
+    # Data-dir DACL tests (#1279) — Win32 security APIs, so Windows only. The read/rewrite test needs
+    # an elevated (admin) process because the DACL admits only SYSTEM + Administrators; unelevated it
+    # exits 77 and CTest reports it as skipped. GitHub's windows runners are elevated, so CI runs it.
+    if(WIN32)
+        target_link_libraries(hsm_agent_tests PRIVATE hsm_agent_paths)
+        foreach(name IN ITEMS
+                agent_dir_acl_is_protected_system_and_admins_only
+                agent_dir_acl_admin_reads_and_rewrites_config
+                agent_config_rewrite_replaces_planted_temp_file
+                agent_dir_acl_refuses_reparse_points)
+            add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
+            set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
+        endforeach()
+    endif()
 endif()
 
 # --- Windows service executable ------------------------------------------------------------------
@@ -104,7 +131,6 @@ if(WIN32)
         src/main.cpp
         src/agent_runtime.cpp
         src/apply_update.cpp
-        src/paths.cpp
         src/update_checker.cpp
         src/logging/file_logger.cpp
         src/logging/agent_logger.cpp
@@ -115,7 +141,7 @@ if(WIN32)
     )
     add_dependencies(hsm-agent hsm_agent_timestamp)
     # winhttp: WinHTTP for self-update HTTP (epic #1174); bcrypt: SHA-256 via Windows CNG
-    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32 winhttp bcrypt)
+    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_agent_paths hsm_collector_cpp advapi32 winhttp bcrypt)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")
     hsm_agent_set_warnings(hsm-agent)

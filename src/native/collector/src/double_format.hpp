@@ -1,12 +1,17 @@
-// .NET shortest round-trip ("R") double text — the canonical payload contract
-// (tests/conformance/README.md). Extracted from hsm_collector.cpp unchanged (#1426) so the
-// prediction sensor's comment, built in disk_prediction.hpp, renders its speed exactly the way a
-// payload value does; the number-format conformance fixture pins the behavior for both.
+// .NET Core 3.0+ shortest round-trip double text (double.ToString("R") / System.Text.Json on
+// .NET 8) — the canonical payload contract (tests/conformance/README.md). Extracted from
+// hsm_collector.cpp (#1426) so the prediction sensor's comment, built in disk_prediction.hpp,
+// renders its speed exactly the way a payload value does; the number-format conformance fixture
+// pins the behavior for both.
 //
 // std::to_chars produces the shortest digits, but its fixed/scientific choice differs from .NET
 // (e.g. 1e5: to_chars "1e+05", .NET "100000"), so the digits are extracted from the scientific form
-// and reassembled with .NET rules: fixed notation iff the decimal exponent is in [-4, 14],
-// otherwise "dE±XX" with an uppercase 'E' and a sign-prefixed exponent of at least two digits.
+// and reassembled with the .NET Core rules: fixed notation iff the decimal exponent is in [-4, 16]
+// (every value below 1e17 down to 0.0001), otherwise "dE±XX" with an uppercase 'E' and a
+// sign-prefixed exponent of at least two digits (1E+17, 1E-05). Until 0.11.1 the upper bound was
+// 14, which is .NET Framework's "R" layout: 1e15 came out "1E+15" where .NET 8 and the managed
+// collector's System.Text.Json wire (on net472 too) write "1000000000000000" (#1528).
+// Negative zero is written "0" (.NET Core prints "-0"); the conformance corpus excludes it.
 
 #pragma once
 
@@ -46,7 +51,7 @@ namespace hsm
             if (negative && value != 0.0)
                 text.push_back('-');
 
-            if (exponent >= -4 && exponent <= 14)
+            if (exponent >= -4 && exponent <= 16)
             {
                 if (exponent < 0)
                 {

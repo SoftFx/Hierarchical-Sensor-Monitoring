@@ -1868,11 +1868,11 @@ namespace HSMDataCollector.Tests
             }
             else if (bar is BarSensorValueBase<double> doubleBar)
             {
-                min = doubleBar.Min.ToString("R", CultureInfo.InvariantCulture);
-                max = doubleBar.Max.ToString("R", CultureInfo.InvariantCulture);
-                mean = doubleBar.Mean.ToString("R", CultureInfo.InvariantCulture);
-                first = doubleBar.FirstValue?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
-                last = doubleBar.LastValue.ToString("R", CultureInfo.InvariantCulture);
+                min = CanonicalDoubleText(doubleBar.Min);
+                max = CanonicalDoubleText(doubleBar.Max);
+                mean = CanonicalDoubleText(doubleBar.Mean);
+                first = doubleBar.FirstValue.HasValue ? CanonicalDoubleText(doubleBar.FirstValue.Value) : "null";
+                last = CanonicalDoubleText(doubleBar.LastValue);
             }
             else
             {
@@ -1917,7 +1917,7 @@ namespace HSMDataCollector.Tests
                 return boolValue.Value ? "true" : "false";
 
             if (value is RateSensorValue rateValue)
-                return rateValue.Value.ToString("R", CultureInfo.InvariantCulture);
+                return CanonicalDoubleText(rateValue.Value);
 
             if (value is IntSensorValue intValue)
                 return intValue.Value.ToString(CultureInfo.InvariantCulture);
@@ -1926,7 +1926,7 @@ namespace HSMDataCollector.Tests
                 return enumValue.Value.ToString(CultureInfo.InvariantCulture);
 
             if (value is DoubleSensorValue doubleValue)
-                return doubleValue.Value.ToString("R", CultureInfo.InvariantCulture);
+                return CanonicalDoubleText(doubleValue.Value);
 
             if (value is StringSensorValue stringValue)
                 return "\"" + EscapeJson(stringValue.Value) + "\"";
@@ -1983,6 +1983,75 @@ namespace HSMDataCollector.Tests
             }
 
             return builder.ToString();
+        }
+
+        // Canonical double text: the .NET Core 3.0+ shortest round-trip form, which is what
+        // double.ToString("R") and System.Text.Json print on .NET 8 and what the native formatter
+        // (double_format.hpp) writes. This driver runs on net48, whose "R" differs in two ways: it
+        // falls back to 17 digits when 15 do not round-trip (0.3333333333333333 -> "0.33333333333333331")
+        // and it switches to scientific notation from 1e15 ("1E+15"; .NET Core waits until 1e17). The
+        // collector's own net472 wire (System.Text.Json "G17") cannot serve as the reference either:
+        // it prints 0.1 as "0.10000000000000001". So the shortest digits are found here directly —
+        // the first precision from 1 to 17 that parses back to the same double — and laid out with
+        // the .NET Core rule: fixed for decimal exponents -4..16, otherwise d.dddE±XX (#1528).
+        // Negative zero is written "0", as net48 and the native formatter do (.NET Core prints "-0";
+        // number_format_contract excludes it). Caveat: net48's "E{p}" formatting and double.Parse
+        // mis-round about 1% of arbitrary 16-17 digit doubles (measured against .NET 8 "R"), so this
+        // is exact for the corpus values, which are all verified to round-trip on net48, not for any
+        // computed double; a new 16-17 digit case must be checked on both drivers.
+        private static string CanonicalDoubleText(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return value.ToString("R", CultureInfo.InvariantCulture);
+            if (value == 0)
+                return "0";
+
+            string scientific = null;
+            for (var precision = 1; precision <= 17; precision++)
+            {
+                scientific = value.ToString("E" + (precision - 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+                double parsed;
+                try
+                {
+                    parsed = double.Parse(scientific, NumberStyles.Float, CultureInfo.InvariantCulture);
+                }
+                catch (OverflowException)
+                {
+                    continue; // net48 throws where .NET Core returns Infinity (DBL_MAX rounded up)
+                }
+
+                if (parsed == value)
+                    break;
+            }
+
+            var negative = scientific[0] == '-';
+            var marker = scientific.IndexOf('E');
+            var exponent = int.Parse(scientific.Substring(marker + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            var mantissaStart = negative ? 1 : 0;
+            var digits = scientific.Substring(mantissaStart, marker - mantissaStart).Replace(".", string.Empty).TrimEnd('0');
+
+            var text = new StringBuilder();
+            if (negative)
+                text.Append('-');
+
+            if (exponent >= -4 && exponent <= 16)
+            {
+                if (exponent < 0)
+                    text.Append("0.").Append('0', -exponent - 1).Append(digits);
+                else if (exponent + 1 >= digits.Length)
+                    text.Append(digits).Append('0', exponent + 1 - digits.Length);
+                else
+                    text.Append(digits, 0, exponent + 1).Append('.').Append(digits, exponent + 1, digits.Length - exponent - 1);
+            }
+            else
+            {
+                text.Append(digits[0]);
+                if (digits.Length > 1)
+                    text.Append('.').Append(digits, 1, digits.Length - 1);
+                text.Append('E').Append(exponent < 0 ? '-' : '+').Append(Math.Abs(exponent).ToString("00", CultureInfo.InvariantCulture));
+            }
+
+            return text.ToString();
         }
 
         private static double ParseDouble(string value)

@@ -58,9 +58,18 @@ Args are literal text except these tokens, expanded by every driver:
 ## Canonical payload text
 
 Expectations match against a **canonical serialized text** of each captured
-payload — fixed field order, invariant culture, doubles in .NET `"R"`
-(shortest round-trip) format. Both drivers emit the identical shape; it is
-part of the contract:
+payload — fixed field order, invariant culture, doubles in the .NET Core 3.0+
+shortest round-trip format (what `double.ToString("R")` and System.Text.Json
+print on .NET 8: shortest digits, fixed notation for decimal exponents -4..16,
+otherwise `dE±XX` — `1E+17`, `1E-05`). The managed driver runs on net48, whose
+own `"R"` differs (17-digit fallback, scientific from 1e15), so it computes that
+text itself (`CanonicalDoubleText`, #1528); the native formatter writes it
+directly. Caveat: the managed driver finds the shortest digits with net48's own
+`ToString("E..")`/`double.Parse`, which mis-round about 1% of arbitrary 16-17 digit
+doubles (a computed bar mean, an unrounded rate); every corpus value is checked
+to round-trip exactly on net48, so a new 16-17 digit case must be verified on
+BOTH drivers before it lands. Both drivers emit the identical shape; it is part
+of the contract:
 
 ```
 instant:  {"Type":N,"Path":"...","Value":V,"Status":N,"Comment":"..."}
@@ -126,7 +135,7 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_enum_sensor_full_options\|path\|ttl_ms\|keep_history_ms\|aggregate\|grafana\|is_computer\|description\|key:value:color:desc[;...]` | enum sensor carrying its `EnumOptions` AND the SensorOptions surface (the `ServiceStatusPrototype` shape); tri-states -1=null/0/1; consumes the staged alert builders. C#: `CreateEnumSensor(path, new EnumSensorOptions { … })`; native: `hsm_collector_create_enum_sensor_with_sensor_options` (0.9.0) + `hsm_sensor_attach_alert` |
 | `create_service_commands_sensor` | service-commands sensor (string, fixed `.module/Service commands`, implicit received-new-value alert) |
 | `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET), except for the four `.module/Collector queue stats` rows (#1480), whose text is composed only from the collector options and is pinned byte-exact (both harnesses create the collector with the same options); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
-| `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start |
+| `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start (the one exception, `module_markers_contract:service_alive_keeps_beating_with_a_long_collect_period`, waits a beat period out on purpose to pin the cadence, #1443) |
 | `add_queue_diagnostic_sensors` | (#1480) register the `.module/Collector queue stats` group — Queue overflow, Items count in package, Package process time, Package content size (priority sensors). C# calls `AddAllQueueDiagnosticSensors` on the host's collection; native calls `hsm_collector_add_all_queue_diagnostic_sensors`. Their bars post a partial every 15 s, so keep a case well inside that or assert after `stop` (which flushes them) |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
 | `set_sensor_description\|sensor_index\|description` | (#1482) replace a created sensor's registration description; `sensor_index` is the flat creation order (like `dispose_sensor`), `token:null` passes a null text. Native `hsm_sensor_set_description`; C# `IDescribableSensor.SetDescription`. Before Start the text is what Start registers; while stopped nothing is sent until the next Start; while running the sensor is re-registered — native replaces the run's recorded registration in place, C# records the re-sent AddOrUpdate as a new entry, so after a change made while running address the latest registration with index `-1` and do not pin the count (`registration_contract:set_description_*`) |

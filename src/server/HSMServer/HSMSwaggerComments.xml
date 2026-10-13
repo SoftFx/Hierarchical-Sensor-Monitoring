@@ -878,8 +878,9 @@
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildInstallScript">
             <summary>
-            Installer script: stops any running service, copies the exe, copies config on first install
-            only (never overwrites a user-customised config), registers and starts the service.
+            Installer script: stops any running service, copies the exe, restricts the data dir to
+            SYSTEM + Administrators (#1279, before the key-bearing config lands in it), copies config on
+            first install only (never overwrites a user-customised config), registers and starts the service.
             Requires Administrator (prints an error and pauses if not elevated).
             </summary>
         </member>
