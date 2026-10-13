@@ -41,8 +41,11 @@ namespace HSMServer.Model.Agent
         public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
         public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
-        /// <summary>The drop-in install.sh writes when the host config enables top disk I/O (#1547).</summary>
-        public const string TopDiskIoDropIn = DropInDirectory + "/top-disk-io.conf";
+        /// <summary>
+        /// The root helper of top disk I/O (#1547), shipped disabled in the package: install.sh enables it
+        /// when the host config enables <c>topDiskIo</c> and disables it otherwise.
+        /// </summary>
+        public const string TopDiskIoUnit = "hsm-linux-probe-io.service";
 
         // A JSON string with any characters, escaped quotes included (#1515): a brace inside one
         // (an exclude pattern, say) is text, not structure. Inside a POSIX bracket expression the
@@ -74,8 +77,8 @@ namespace HSMServer.Model.Agent
 
         /// <summary>
         /// The same check as <see cref="TopCpuEnabledPattern"/> for the top-level <c>topDiskIo</c> block
-        /// (#1547), the only one the probe reads (<c>Config::top_disk_io</c>): install.sh writes
-        /// <see cref="TopDiskIoDropIn"/> only when it matches.
+        /// (#1547), the only one the probe and its helper read (<c>Config::top_disk_io</c>): install.sh
+        /// enables <see cref="TopDiskIoUnit"/> only when it matches.
         /// </summary>
         public const string TopDiskIoEnabledPattern = TopLevelKeyPattern + "\"topDiskIo\"" + EnabledBlockPattern;
 
@@ -289,9 +292,10 @@ namespace HSMServer.Model.Agent
                 "",
                 TopCpuDropInScript(enableTopCpu),
                 "",
-                TopDiskIoDropInScript(),
-                "",
                 "systemctl daemon-reload",
+                "",
+                TopDiskIoServiceScript(),
+                "",
                 "# A failed start is judged by the status check below, which prints the diagnostics.",
                 "systemctl enable --now \"$UNIT\" || true",
                 "# Also restart an already running probe so a reinstall picks up the new key, config and CA.",
@@ -333,6 +337,8 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "systemctl disable --now \"$UNIT\" 2>/dev/null || true",
+                "# The top disk I/O helper install.sh may have enabled (#1547).",
+                "systemctl disable --now " + TopDiskIoUnit + " 2>/dev/null || true",
                 "",
                 "if dpkg -s \"$PACKAGE\" >/dev/null 2>&1; then",
                 "  DEBIAN_FRONTEND=noninteractive apt-get purge -y \"$PACKAGE\"",
@@ -344,10 +350,8 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "rm -f \"$CONFIG_DIR/" + ConfigName + "\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-dist\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-old\"",
                 "rmdir \"$CONFIG_DIR\" 2>/dev/null || true",
-                "# The top-CPU and top disk I/O drop-ins install.sh may have written (a package older than 0.7.0",
-                "# does not remove the first, one older than 0.9.0 not the second).",
+                "# The top-CPU drop-in install.sh may have written (a package older than 0.7.0 does not remove it).",
                 "rm -f \"" + TopCpuDropIn + "\"",
-                "rm -f \"" + TopDiskIoDropIn + "\"",
                 "rmdir \"" + DropInDirectory + "\" 2>/dev/null || true",
                 "",
                 "if [ -f \"$CA_TARGET\" ]; then",
@@ -474,67 +478,40 @@ namespace HSMServer.Model.Agent
         }
 
         /// <summary>
-        /// The install.sh step for top disk I/O processes (#1547). Reading another user's
-        /// <c>/proc/&lt;pid&gt;/io</c> needs two capabilities, both dropped by the unit (empty
-        /// <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>): the file is mode 0400 and owned
-        /// by the process's user, so opening it needs <c>CAP_DAC_READ_SEARCH</c>, and the kernel then
-        /// checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
-        /// still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
-        /// altogether. So the step grants those two capabilities and lifts that one setting with a
-        /// drop-in. With it the probe can read the whole host filesystem and every container's (through
-        /// <c>/proc/&lt;pid&gt;/root</c> of any process, past <c>ProtectHome=</c>/<c>PrivateTmp=</c>) and other
-        /// processes' environ, open files and memory; the drop-in's deny list (<c>open_by_handle_at</c>,
-        /// <c>process_vm_readv</c>/<c>writev</c>, <c>ptrace</c>) narrows that but does not restore those
-        /// protections. Only a root-run helper printing the counters would keep the probe unprivileged
-        /// (not implemented). The drop-in is written <b>only when the config installed on the
-        /// host enables the top-level <c>topDiskIo</c> block</b> (<see cref="TopDiskIoEnabledPattern"/>), and
-        /// removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
-        /// server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
-        /// "Top disk I/O processes"). A config it cannot read or recognise counts as "off" — the safe side.
-        /// uninstall.sh and the package's postrm remove the drop-in too.
+        /// The install.sh step for top disk I/O processes (#1547), run after <c>daemon-reload</c> so the
+        /// package's units are known. Reading another user's <c>/proc/&lt;pid&gt;/io</c> needs
+        /// <c>CAP_DAC_READ_SEARCH</c> and <c>CAP_SYS_PTRACE</c>, which would let their holder read the whole
+        /// host filesystem through <c>/proc/&lt;pid&gt;/root</c>; so the probe holds neither and the package
+        /// ships a separate root helper, <see cref="TopDiskIoUnit"/> (disabled), that reads only
+        /// <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
+        /// installed on the host enables the top-level <c>topDiskIo</c> block</b>
+        /// (<see cref="TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
+        /// the config; otherwise it disables and stops a helper that is enabled or running, and says so. A
+        /// package older than 0.9.0 has no such unit: enabling prints a WARNING, disabling stays quiet. The
+        /// bundle never enables <c>topDiskIo</c> itself (there is no server switch): an operator enables it in
+        /// the host config and re-runs install.sh (RUNBOOK "Top disk I/O processes"). A config it cannot read
+        /// or recognise counts as "off" — the safe side. uninstall.sh and the package's prerm disable it too.
         /// </summary>
-        private static string TopDiskIoDropInScript()
+        private static string TopDiskIoServiceScript()
         {
             return string.Join("\n",
-                "# Top disk I/O processes (#1547): the drop-in follows the config installed above, as for top CPU.",
-                "# An enabled top-level topDiskIo block lets the probe see every process in /proc and read its",
-                "# /proc/<pid>/io (CAP_DAC_READ_SEARCH + CAP_SYS_PTRACE); anything else keeps the unit's",
-                "# ProtectProc=invisible and its empty capability sets.",
-                "TOP_DISK_IO_DROPIN=\"" + TopDiskIoDropIn + "\"",
+                "# Top disk I/O processes (#1547): the root helper that reads /proc/<pid>/io for the unprivileged probe",
+                "# runs when, and only when, the config installed above enables the top-level topDiskIo block.",
+                "IO_UNIT=" + TopDiskIoUnit,
                 "top_disk_io_on=0",
                 "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
                 "  | grep -E '" + TopDiskIoEnabledPattern + "' >/dev/null; then",
                 "  top_disk_io_on=1",
                 "fi",
                 "if [ \"$top_disk_io_on\" -eq 1 ]; then",
-                "  install -d -m 0755 -o root -g root \"$(dirname \"$TOP_DISK_IO_DROPIN\")\"",
-                "  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'",
-                "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topDiskIo.",
-                "# The top disk I/O sensors read /proc/<pid>/io of every process. Another user's is a 0400 file whose read",
-                "# the kernel also gates on ptrace access, so it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE; the unit's",
-                "# ProtectProc=invisible hides the other processes.",
-                "# WARNING: with this file the probe process can READ THE ENTIRE HOST FILESYSTEM and every container's",
-                "# filesystem: /proc/<pid>/root of any process (PID 1's has no ProtectHome=/PrivateTmp=) leads into that",
-                "# process's mount namespace, and CAP_DAC_READ_SEARCH bypasses file permissions there (/root/.ssh,",
-                "# /etc/shadow, the real /tmp). It can also read other processes' environ, open files (/proc/<pid>/fd/*)",
-                "# and memory. ProtectHome=, ProtectSystem= and PrivateTmp= no longer contain it. The probe itself only",
-                "# reads /proc/<pid>/stat, io, exe, cmdline and status. The deny list below still refuses open_by_handle_at,",
-                "# process_vm_readv/writev and ptrace, but it does not restore those protections. Keeping the probe",
-                "# unprivileged would need a root-run helper that only prints pid, start time and the two counters (not",
-                "# implemented). Delete this file, then",
-                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capabilities again.",
-                "[Service]",
-                "ProtectProc=default",
-                "CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
-                "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
-                "SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace",
-                "EOF",
-                "  chmod 0644 \"$TOP_DISK_IO_DROPIN\"",
-                "  echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry and I/O counters (CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE: $TOP_DISK_IO_DROPIN).\"",
-                "elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then",
-                "  rm -f \"$TOP_DISK_IO_DROPIN\"",
-                "  rmdir \"$(dirname \"$TOP_DISK_IO_DROPIN\")\" 2>/dev/null || true",
-                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_DISK_IO_DROPIN (no capabilities again).\"",
+                "  if systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; then",
+                "    echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; started $IO_UNIT (the root helper; the probe itself stays unprivileged).\"",
+                "  else",
+                "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/" + ConfigName + ", but $IO_UNIT could not be enabled and started (a package older than 0.9.0?); see: journalctl -u $IO_UNIT\" >&2",
+                "  fi",
+                "elif systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
+                "  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
+                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; stopped and disabled $IO_UNIT.\"",
                 "fi");
         }
 

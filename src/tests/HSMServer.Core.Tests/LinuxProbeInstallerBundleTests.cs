@@ -235,36 +235,41 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void TopDiskIo_InstallScriptGrantsTheCapabilitiesOnlyWhenTheHostConfigEnablesIt()
+        public void TopDiskIo_InstallScriptRunsTheRootHelperOnlyWhenTheHostConfigEnablesIt()
         {
             // The step does not depend on the bundle's top-CPU switch.
             foreach (var script in new[] { LinuxProbeInstallerBundle.BuildInstallScript(), LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true) })
             {
-                Assert.Contains("TOP_DISK_IO_DROPIN=\"/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf\"", script);
+                Assert.Contains("IO_UNIT=hsm-linux-probe-io.service\n", script);
                 Assert.Contains("if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/config.json\" \\\n" +
                                 "  | grep -E '" + LinuxProbeInstallerBundle.TopDiskIoEnabledPattern + "' >/dev/null; then\n" +
                                 "  top_disk_io_on=1\n", script);
-                Assert.Contains("  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'", script);
-                // Both: the io file is 0400 (CAP_DAC_READ_SEARCH opens it) and its read is gated on
-                // ptrace access (CAP_SYS_PTRACE); either alone still reads EACCES. The deny list keeps
-                // what remains: no open_by_handle_at, no process_vm_*, no ptrace (it does not restore
-                // ProtectHome=: /proc/<pid>/root still reaches the host filesystem).
-                Assert.Contains("\n[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n" +
-                                "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n" +
-                                "SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace\nEOF\n", script);
-                // Anything else removes it: the unit's empty capability sets and ProtectProc=invisible again.
-                Assert.Contains("elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then\n  rm -f \"$TOP_DISK_IO_DROPIN\"", script);
-                // Decided after the config is placed and before systemd is reloaded and the unit (re)started.
+                // On: enabled and (re)started, so a changed periodMs applies; a missing unit (an old
+                // package) is a WARNING, not a failed install.
+                Assert.Contains("  if systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; then", script);
+                Assert.Contains("WARNING: topDiskIo is on in $CONFIG_DIR/config.json, but $IO_UNIT could not be enabled", script);
+                // Off: stopped and disabled when it is enabled or running, quiet otherwise.
+                Assert.Contains("elif systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then\n" +
+                                "  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true\n", script);
+                // One mechanism: the probe gets no drop-in and no capability for it.
+                Assert.DoesNotContain("top-disk-io.conf", script);
+                Assert.DoesNotContain("CAP_SYS_PTRACE", script);
+                Assert.DoesNotContain("CAP_DAC_READ_SEARCH", script);
+                // Decided from the config placed above, after systemd learned the package's units and
+                // before the probe is (re)started.
                 var check = script.IndexOf("top_disk_io_on=0", System.StringComparison.Ordinal);
                 Assert.True(script.IndexOf("install -m 0644 -o root -g root config.json", System.StringComparison.Ordinal) < check);
-                Assert.True(check < script.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+                Assert.True(script.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal) < check);
+                Assert.True(check < script.IndexOf("systemctl enable --now \"$UNIT\"", System.StringComparison.Ordinal));
                 Assert.DoesNotContain("grep -Eq", script);
             }
 
-            // No warning branch: the bundle never asks for it, so a kept config cannot contradict it.
+            // No bundle-switch warning: the bundle never asks for it, so a kept config cannot contradict it.
             Assert.DoesNotContain("WARNING: this bundle enables top disk", LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true));
 
-            Assert.Contains("rm -f \"/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf\"", LinuxProbeInstallerBundle.BuildUninstallScript());
+            var uninstall = LinuxProbeInstallerBundle.BuildUninstallScript();
+            Assert.Contains("systemctl disable --now hsm-linux-probe-io.service 2>/dev/null || true", uninstall);
+            Assert.DoesNotContain("top-disk-io.conf", uninstall);
         }
 
         [Fact]

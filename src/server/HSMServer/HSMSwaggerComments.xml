@@ -938,8 +938,11 @@
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.DropInDirectory">
             <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
         </member>
-        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropIn">
-            <summary>The drop-in install.sh writes when the host config enables top disk I/O (#1547).</summary>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoUnit">
+            <summary>
+            The root helper of top disk I/O (#1547), shipped disabled in the package: install.sh enables it
+            when the host config enables <c>topDiskIo</c> and disables it otherwise.
+            </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern">
             <summary>
@@ -957,8 +960,8 @@
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern">
             <summary>
             The same check as <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern"/> for the top-level <c>topDiskIo</c> block
-            (#1547), the only one the probe reads (<c>Config::top_disk_io</c>): install.sh writes
-            <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropIn"/> only when it matches.
+            (#1547), the only one the probe and its helper read (<c>Config::top_disk_io</c>): install.sh
+            enables <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoUnit"/> only when it matches.
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
@@ -1038,26 +1041,21 @@
             uninstall.sh and the package's postrm remove the drop-in too.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropInScript">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoServiceScript">
             <summary>
-            The install.sh step for top disk I/O processes (#1547). Reading another user's
-            <c>/proc/&lt;pid&gt;/io</c> needs two capabilities, both dropped by the unit (empty
-            <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>): the file is mode 0400 and owned
-            by the process's user, so opening it needs <c>CAP_DAC_READ_SEARCH</c>, and the kernel then
-            checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
-            still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
-            altogether. So the step grants those two capabilities and lifts that one setting with a
-            drop-in. With it the probe can read the whole host filesystem and every container's (through
-            <c>/proc/&lt;pid&gt;/root</c> of any process, past <c>ProtectHome=</c>/<c>PrivateTmp=</c>) and other
-            processes' environ, open files and memory; the drop-in's deny list (<c>open_by_handle_at</c>,
-            <c>process_vm_readv</c>/<c>writev</c>, <c>ptrace</c>) narrows that but does not restore those
-            protections. Only a root-run helper printing the counters would keep the probe unprivileged
-            (not implemented). The drop-in is written <b>only when the config installed on the
-            host enables the top-level <c>topDiskIo</c> block</b> (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>), and
-            removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
-            server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
-            "Top disk I/O processes"). A config it cannot read or recognise counts as "off" — the safe side.
-            uninstall.sh and the package's postrm remove the drop-in too.
+            The install.sh step for top disk I/O processes (#1547), run after <c>daemon-reload</c> so the
+            package's units are known. Reading another user's <c>/proc/&lt;pid&gt;/io</c> needs
+            <c>CAP_DAC_READ_SEARCH</c> and <c>CAP_SYS_PTRACE</c>, which would let their holder read the whole
+            host filesystem through <c>/proc/&lt;pid&gt;/root</c>; so the probe holds neither and the package
+            ships a separate root helper, <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoUnit"/> (disabled), that reads only
+            <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
+            installed on the host enables the top-level <c>topDiskIo</c> block</b>
+            (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
+            the config; otherwise it disables and stops a helper that is enabled or running, and says so. A
+            package older than 0.9.0 has no such unit: enabling prints a WARNING, disabling stays quiet. The
+            bundle never enables <c>topDiskIo</c> itself (there is no server switch): an operator enables it in
+            the host config and re-runs install.sh (RUNBOOK "Top disk I/O processes"). A config it cannot read
+            or recognise counts as "off" — the safe side. uninstall.sh and the package's prerm disable it too.
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Omit">
