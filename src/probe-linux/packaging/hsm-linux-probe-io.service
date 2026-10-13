@@ -1,0 +1,74 @@
+# systemd unit for hsm-linux-probe-io, the root-run helper of top disk I/O (#1547).
+#
+# WHY IT EXISTS. Another user's /proc/<pid>/io is a 0400 file whose read the kernel also gates on
+# ptrace access: reading it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE. A process holding both can
+# read the whole host filesystem through /proc/<pid>/root, so the probe (hsm-linux-probe.service)
+# must not hold them. This helper does instead, and it is the ONLY privileged piece: it reads
+# /proc/<pid>/stat and /proc/<pid>/io of every process (and its own config's topDiskIo block) and
+# writes ONE file, /run/hsm-linux-probe-io/snapshot (root:hsm-probe 0640), which the unprivileged
+# probe reads. It opens no socket and runs no other program.
+#
+# The .deb installs it disabled. The server bundle's install.sh enables it (enable + restart) when
+# /etc/hsm-linux-probe/config.json enables the top-level topDiskIo block, and disables it otherwise;
+# uninstall.sh and the package's prerm (remove) disable it. Started without that block it exits 0.
+
+[Unit]
+Description=HSM Linux probe: per-process disk I/O reader (root helper)
+Documentation=https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/probe-linux/README.md
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/hsm-linux-probe-io --config /etc/hsm-linux-probe/config.json --output /run/hsm-linux-probe-io/snapshot
+# A disabled topDiskIo block is a clean exit, not a failure to restart from.
+Restart=on-failure
+RestartSec=5
+
+# Root for the two capabilities below; the group lets the probe (Group=hsm-probe) read the snapshot.
+User=root
+Group=hsm-probe
+RuntimeDirectory=hsm-linux-probe-io
+RuntimeDirectoryMode=0750
+# The snapshot is 0640 root:hsm-probe.
+UMask=0027
+
+# Exactly what reading every /proc/<pid>/io needs, nothing else (no CAP_DAC_OVERRIDE, no
+# CAP_SYS_ADMIN): CAP_DAC_READ_SEARCH opens the 0400 file, CAP_SYS_PTRACE passes the kernel's
+# ptrace-access check in do_io_accounting.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+NoNewPrivileges=yes
+# It must see every pid.
+ProtectProc=default
+
+# --- Hardening ----------------------------------------------------------------------------------
+PrivateNetwork=yes
+RestrictAddressFamilies=none
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadOnlyPaths=-/etc/hsm-linux-probe/config.json
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# open_by_handle_at would open files by handle past the mount namespace; process_vm_* and ptrace
+# would touch other processes' memory: none is needed to read stat and io.
+SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace @privileged @resources
+SystemCallErrorNumber=EPERM
+
+# A scan of ~200 processes takes ~6 ms of CPU a minute; the snapshot is ~10 KB.
+MemoryMax=16M
+CPUQuota=5%
+TasksMax=4
+
+[Install]
+WantedBy=multi-user.target

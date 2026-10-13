@@ -3,14 +3,14 @@ set -e
 # The Docker socket drop-in postinst wrote (docker-access.sh install). Removed here rather than by
 # the script, which is already gone by the time postrm runs. Kept across upgrades: the new
 # postinst rewrites it. Likewise the top-CPU drop-in (ProtectProc=default) the server bundle's
-# install.sh writes when "Report top processes by CPU" is on (#1479), and the top disk I/O one
-# (ProtectProc=default + CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE) it writes when the host config
-# enables topDiskIo (#1547); upgrades keep both.
+# install.sh writes when "Report top processes by CPU" is on (#1479); upgrades keep it.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
-    rm -f /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
     rmdir /etc/systemd/system/hsm-linux-probe.service.d 2>/dev/null || true
+    # The top disk I/O helper's enablement link (#1547), when prerm could not disable it (no
+    # running systemd): its unit file is gone with the package.
+    rm -f /etc/systemd/system/multi-user.target.wants/hsm-linux-probe-io.service
 fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
