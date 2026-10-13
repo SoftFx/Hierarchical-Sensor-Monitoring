@@ -1,6 +1,6 @@
 # Feature: Per-product HSM Agent download (server side)
 
-> Owner: server | Last reviewed: 2026-07-21 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-13 | Canonical: yes
 > Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
 > bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
 > The Linux sibling (**Download Linux probe**, `.tar.gz` + `install.sh`, #1424) is `../linux-probe-download/feature.md`.
@@ -29,6 +29,16 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 - **The baked key is the product's access-key GUID.** The agent sends it in the `Key` header. Selection
   prefers the product **DefaultKey** (full permissions, never expires), else any valid key with
   send-data + add-node/add-sensor permissions.
+- **Security: the key at rest on the client is admin-only (#1279).** The key sits in cleartext in
+  `%ProgramData%\HSM Agent\config.json`. The generated `install-hsmagent-service.cmd` restricts that
+  directory to SYSTEM + Administrators **before** copying `config.json` in (`icacls … /inheritance:r
+  /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F`, by SID so it works on localized
+  Windows). The agent re-applies the same protected DACL on every start, which also repairs installs
+  made before #1279. Full rules: `../../agent/feature.md` → *Data directory access*. The generated
+  script must stay identical to `src/agent/packaging/install-hsmagent-service.cmd`
+  (`StaticInstallScript_MatchesGenerated`). `InstallScript_RestrictsDataDirBeforeCopyingConfig` pins
+  the icacls-before-copy order. The key is still not encrypted (DPAPI is out of scope: the service
+  must read it unattended).
 
 ## Key components
 
@@ -41,7 +51,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` + `version.txt` (gitignored; staged by `server-build.yml` — see *Packaging*) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
-| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (7: incl. topCpu on/off) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
+| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (10: incl. topCpu on/off, static-script drift, data-dir ACL before config copy) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
 
 `AgentConfig.EnableTopCpuProcesses` (admin toggle, Configuration → Agent) makes `BuildConfigJson` add a
 `topCpu` block (`enabled:true, periodMs:60000, minPercent:1.0, count:10`) to the generated `config.json`,
