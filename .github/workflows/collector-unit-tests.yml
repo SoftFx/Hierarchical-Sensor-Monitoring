@@ -12,7 +12,24 @@ on:
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
     # No paths filter — this is a required check and must always report status.
+    # Instead the job always runs and gates its expensive steps on the change
+    # detection below (#1278): a PR touching none of LANE_PATHS reports green in
+    # seconds without building or testing.
   workflow_dispatch:
+
+env:
+  # Paths whose change on a PR runs the full lane (glob, '*' also matches '/').
+  # Mirrors the push filter plus everything the test build consumes: the
+  # conformance corpus (CollectorConformanceTests) and the shared MSBuild/SDK
+  # inputs. '.github/**' is always included by the detection action, and
+  # push/workflow_dispatch always run the full lane.
+  LANE_PATHS: |
+    src/collector/**
+    src/api/**
+    tests/conformance/**
+    src/Directory.Build.*
+    global.json
+    .github/workflows/collector-unit-tests.yml
 
 jobs:
   collector-unit-tests:
@@ -25,8 +42,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - uses: actions/setup-dotnet@v4
+        if: steps.changes.outputs.run == 'true'
         with:
           dotnet-version: 8.0.x
 
@@ -35,6 +62,7 @@ jobs:
       # - CollectorAdversarialTests host-callback matrix
       # - ProcessEventListenerTests malformed EventCounters matrix
       - name: Run collector unit tests
+        if: steps.changes.outputs.run == 'true'
         run: >
           dotnet test src/collector/HSMDataCollector.Tests/HSMDataCollector.Tests.csproj
           --logger "console;verbosity=minimal"
@@ -51,3 +79,10 @@ jobs:
           name: collector-unit-test-results
           path: ${{ runner.temp }}/test-results
           if-no-files-found: ignore
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}

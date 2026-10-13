@@ -12,9 +12,29 @@ on:
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
     # No paths filter — this is a required check and must always report status.
+    # Instead the job always runs and gates its expensive steps on the change
+    # detection below (#1278): a PR touching none of LANE_PATHS reports green in
+    # seconds without building or testing.
   workflow_dispatch:
   schedule:
     - cron: '3 6 * * 1-5'
+
+env:
+  # Paths whose change on a PR runs the full lane (glob, '*' also matches '/').
+  # Wider than the push filter on purpose: the lane builds the server container
+  # from branch source, so server, database and bundled-lib changes are part of
+  # what it tests (today every PR runs it, so narrowing to the push filter would
+  # drop that coverage). '.github/**' is always included by the detection
+  # action, and push/schedule/workflow_dispatch always run the full lane.
+  LANE_PATHS: |
+    src/collector/**
+    src/api/**
+    src/server/**
+    src/database/**
+    src/lib/**
+    src/Directory.Build.*
+    global.json
+    .github/workflows/collector-integration-tests.yml
 
 jobs:
   integration-tests:
@@ -30,8 +50,18 @@ jobs:
       SERVER_REPOSITORY: hsmonitoring/hierarchical_sensor_monitoring
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - uses: actions/setup-dotnet@v4
+        if: steps.changes.outputs.run == 'true'
         with:
           dotnet-version: 8.0.x
 
@@ -47,7 +77,16 @@ jobs:
       # `-p:ContainerImageName=...` for exactly this reason. We do NOT set ContainerImageTag — the
       # csproj already supplies `ContainerImageTags` and the two are mutually exclusive (CONTAINER2008).
       - name: Build server container image from branch source
+        if: steps.changes.outputs.run == 'true'
         run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerImageName=${{ env.SERVER_REPOSITORY }}
 
       - name: Run Integration Tests
+        if: steps.changes.outputs.run == 'true'
         run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}

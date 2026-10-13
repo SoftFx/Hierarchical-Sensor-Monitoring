@@ -14,6 +14,15 @@ name: Native collector conformance
 # - install-consume (#1100) : install the package, then build+run the standalone find_package
 #   consumer against it (the clean-machine consumability proof).
 # - doxygen (#1100) : generate the public C++ API reference warning-clean and upload it.
+#
+# Change gating on pull requests (#1278): every job still runs on every PR, so each required
+# check always reports a status, but a first "Detect relevant changes" step decides whether the
+# expensive steps run. A PR touching none of LANE_PATHS (and nothing under .github/) gets every
+# build/test step skipped and the check reports success in seconds; the final "Lane summary" step
+# says which way it went. Gating is step-level on purpose: a job skipped through a job-level `if:`
+# does not count as a passing required check. push and workflow_dispatch always run the full lane.
+# Deliberately NOT gated: format-check (pip + clang-format, seconds) and checklist-gate (text
+# checks over docs/initiatives, scripts and the corpus — docs-only PRs are exactly what it guards).
 
 on:
   push:
@@ -28,8 +37,25 @@ on:
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
     # No paths filter — this lane is intended as a required check and must
-    # always report status. The build is two translation units; it is cheap.
+    # always report status. Expensive steps are gated on change detection
+    # instead (see the header and LANE_PATHS).
   workflow_dispatch:
+
+env:
+  # Paths whose change on a PR runs the full native matrix (glob, '*' also matches '/').
+  # Mirrors the push filter plus the vcpkg registry (ports/, versions/), root-level package
+  # manifests, and the scripts this workflow invokes. '.github/**' is always included by the
+  # detection action.
+  LANE_PATHS: |
+    src/native/**
+    tests/conformance/**
+    docs/native-collector/**
+    ports/**
+    versions/**
+    conanfile*
+    vcpkg*.json
+    scripts/conformance-*
+    .github/workflows/native-collector-conformance.yml
 
 jobs:
   format-check:
@@ -62,17 +88,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - name: Configure
+        if: steps.changes.outputs.run == 'true'
         run: cmake -S src/native/collector -B build/native-collector -DHSM_COLLECTOR_WERROR=ON
 
       - name: Build
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-collector --config Release --parallel
 
       # Runs both lanes registered in the native CMakeLists:
       # - native_* regression tests (C ABI / validation / JSON escaping)
       # - conformance_* fixtures — the shared .hsmtest corpus
       - name: Test
+        if: steps.changes.outputs.run == 'true'
         run: ctest --test-dir build/native-collector -C Release --output-on-failure
 
       # Parity-gate diagnostics (#1101): on a red conformance run, keep the ctest logs
@@ -85,6 +123,13 @@ jobs:
           path: build/native-collector/Testing
           if-no-files-found: ignore
 
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
+
   native-conformance-clang:
     # The toolchain matrix's clang leg (the default ubuntu lane above uses gcc).
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -94,12 +139,31 @@ jobs:
       CXX: clang++
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
       - name: Configure
+        if: steps.changes.outputs.run == 'true'
         run: cmake -S src/native/collector -B build/native-clang -DHSM_COLLECTOR_WERROR=ON
       - name: Build
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-clang --parallel
       - name: Test
+        if: steps.changes.outputs.run == 'true'
         run: ctest --test-dir build/native-clang --output-on-failure
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   http-transport:
     # Builds the optional libcurl HTTP transport (HSM_COLLECTOR_HTTP=ON) and runs the
@@ -117,18 +181,29 @@ jobs:
       VCPKG_DISABLE_METRICS: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - name: Install Linux build deps for vcpkg curl
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.changes.outputs.run == 'true'
         run: sudo apt-get update && sudo apt-get install -y nasm
 
       # Pinned to the vcpkg.json builtin-baseline so the manifest resolves deterministically.
       - name: Set up vcpkg
+        if: steps.changes.outputs.run == 'true'
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Configure (HTTP transport on)
+        if: steps.changes.outputs.run == 'true'
         # vcpkg manifest install runs here (cmake project() triggers it). run-vcpkg defaults
         # VCPKG_BINARY_SOURCES to "clear;x-gha,readwrite", whose GHA backend needs
         # ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL that aren't reliably exported — failing the
@@ -142,10 +217,12 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-http --config Release --parallel
 
       # Transport E2E (real libcurl against a loopback capture server), route table, retry policy.
       - name: Test (HTTP lane)
+        if: steps.changes.outputs.run == 'true'
         run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http"
 
       - name: Upload HTTP transport logs on failure
@@ -155,6 +232,13 @@ jobs:
           name: native-http-logs-${{ matrix.os }}
           path: build/native-http/Testing
           if-no-files-found: ignore
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   install-consume:
     # Clean-machine consumability proof (#1100 "Done when"): build + install the package to a
@@ -168,20 +252,33 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - name: Configure
+        if: steps.changes.outputs.run == 'true'
         # CMAKE_BUILD_TYPE is explicit so the single-config (Makefiles) Linux build exports a
         # per-config targets file (hsm_collectorTargets-release.cmake) with IMPORTED_LOCATION set;
         # it is harmless on the multi-config (VS) Windows generator.
         run: cmake -S src/native/collector -B build/native-install -DHSM_COLLECTOR_WERROR=ON -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-install --config Release --parallel
 
       - name: Install to staging prefix
+        if: steps.changes.outputs.run == 'true'
         run: cmake --install build/native-install --config Release --prefix "${{ runner.temp }}/hsm-prefix"
 
       - name: Configure standalone consumer (find_package)
+        if: steps.changes.outputs.run == 'true'
         run: >
           cmake -S src/native/collector/examples/console/standalone
           -B build/native-standalone
@@ -189,14 +286,23 @@ jobs:
           -DCMAKE_PREFIX_PATH="${{ runner.temp }}/hsm-prefix"
 
       - name: Build standalone consumer
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-standalone --config Release --parallel
 
       - name: Run standalone consumer
+        if: steps.changes.outputs.run == 'true'
         shell: bash
         run: |
           bin=$(find build/native-standalone \( -name 'hsm_console_standalone' -o -name 'hsm_console_standalone.exe' \) -type f | head -1)
           echo "running $bin"
           "$bin"
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   doxygen:
     # Generate the public C++ API reference; WARN_AS_ERROR in the Doxyfile fails the lane on a
@@ -205,19 +311,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
       - name: Install doxygen
+        if: steps.changes.outputs.run == 'true'
         run: sudo apt-get update && sudo apt-get install -y doxygen
       - name: Generate API reference (warning-clean)
+        if: steps.changes.outputs.run == 'true'
         # Pre-create the nested OUTPUT_DIRECTORY: doxygen won't create a multi-level path, and
         # WARN_AS_ERROR turns that into a hard failure.
         run: |
           mkdir -p build/doxygen
           doxygen docs/native-collector/Doxyfile
       - name: Upload API reference
+        if: steps.changes.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: native-collector-api-docs
           path: build/doxygen/html
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   sanitizers:
     # ASan+UBSan and TSan on Linux clang. These exercise the multi-threaded
@@ -230,13 +355,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
       - name: Configure
+        if: steps.changes.outputs.run == 'true'
         run: cmake --preset ${{ matrix.preset }}
         working-directory: src/native/collector
       - name: Build
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build --preset ${{ matrix.preset }}
         working-directory: src/native/collector
       - name: Test
+        if: steps.changes.outputs.run == 'true'
         run: ctest --preset ${{ matrix.preset }}
         working-directory: src/native/collector
 
@@ -247,6 +384,13 @@ jobs:
           name: native-sanitizer-logs-${{ matrix.preset }}
           path: src/native/collector/build/${{ matrix.preset }}/Testing
           if-no-files-found: ignore
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   conan-consume:
     # Packaging proof (#1100): `conan create` builds the package from this branch's source and runs
@@ -259,15 +403,35 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
       - uses: actions/setup-python@v5
+        if: steps.changes.outputs.run == 'true'
         with:
           python-version: '3.x'
       - name: Install Conan
+        if: steps.changes.outputs.run == 'true'
         run: pip install "conan>=2.0"
       - name: Detect Conan profile
+        if: steps.changes.outputs.run == 'true'
         run: conan profile detect --force
       - name: conan create + test_package
+        if: steps.changes.outputs.run == 'true'
         run: conan create src/native/collector --build=missing
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   vcpkg-consume:
     # Packaging proof (#1100): build the overlay port from this branch's source, then build + run a
@@ -282,13 +446,24 @@ jobs:
       VCPKG_DISABLE_METRICS: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Depth 2 fetches the PR merge commit's base parent for the change detection.
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: ./.github/actions/detect-lane-changes
+        with:
+          paths: ${{ env.LANE_PATHS }}
 
       - name: Set up vcpkg
+        if: steps.changes.outputs.run == 'true'
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Install the overlay port from branch source
+        if: steps.changes.outputs.run == 'true'
         shell: bash
         # run-vcpkg defaults VCPKG_BINARY_SOURCES to "clear;x-gha,readwrite", whose GHA backend needs
         # ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL that aren't reliably exported here — failing the
@@ -300,6 +475,7 @@ jobs:
           "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=src/native/collector/vcpkg-port
 
       - name: Configure consumer against the vcpkg package
+        if: steps.changes.outputs.run == 'true'
         shell: bash
         run: >
           cmake -S src/native/collector/examples/console/standalone -B build/vcpkg-consume
@@ -307,14 +483,23 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build consumer
+        if: steps.changes.outputs.run == 'true'
         run: cmake --build build/vcpkg-consume --config Release --parallel
 
       - name: Run consumer
+        if: steps.changes.outputs.run == 'true'
         shell: bash
         run: |
           bin=$(find build/vcpkg-consume \( -name 'hsm_console_standalone' -o -name 'hsm_console_standalone.exe' \) -type f | head -1)
           echo "running $bin"
           "$bin"
+
+      - name: Lane summary
+        if: always()
+        uses: ./.github/actions/lane-summary
+        with:
+          run: ${{ steps.changes.outputs.run }}
+          reason: ${{ steps.changes.outputs.reason }}
 
   checklist-gate:
     # Frozen functional-checklist gate (#1101). The inventory
