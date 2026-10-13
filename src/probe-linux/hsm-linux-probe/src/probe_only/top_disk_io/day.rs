@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use super::procfs::{Direction, NameIo};
+use super::sampler::{Direction, NameIo};
 use crate::probe_only::disks::written::{LocalTime, BYTES_PER_GB};
 
 /// The most names one day keeps. The table only grows with distinct process names (a few hundred

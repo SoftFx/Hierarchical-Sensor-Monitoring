@@ -15,59 +15,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-/// `PF_KTHREAD` (include/linux/sched.h): the task is a kernel thread.
-const PF_KTHREAD: u64 = 0x0020_0000;
-
-/// The fields of `/proc/<pid>/stat` the sampler uses.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PidStat {
-    pub pid: u32,
-    /// Field 2 without its parentheses (`task->comm`, ≤ 15 bytes, lossily decoded).
-    pub comm: String,
-    /// Field 4, the parent's pid (0 for the kernel's own roots, `init` and `kthreadd`). The top
-    /// disk I/O sampler follows it to the process a vanished child's I/O counters were added to
-    /// when it was reaped (#1547).
-    pub ppid: u32,
-    /// Field 9, the `PF_*` flags.
-    pub flags: u64,
-    /// Fields 14 + 15, `utime + stime`, in clock ticks (USER_HZ). For a thread-group leader the
-    /// kernel sums every thread, live and exited, so this is the whole process.
-    pub cpu_ticks: u64,
-    /// Field 22, the start time in clock ticks after boot: with the pid it identifies a process,
-    /// so a reused pid is never credited with its predecessor's time.
-    pub start_ticks: u64,
-}
-
-impl PidStat {
-    pub fn is_kernel_thread(&self) -> bool {
-        self.flags & PF_KTHREAD != 0
-    }
-}
-
-/// Parse `/proc/<pid>/stat`. The name (field 2) is in parentheses and may itself contain spaces,
-/// parentheses and `)` — a process can name itself anything — so the fields after it are split
-/// at the **last** `)` (the same rule as the collector's `ParseProcSelfStat`). `None` for
-/// anything malformed or short.
-pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
-    let open = text.find('(')?;
-    let close = text.rfind(')')?;
-    if close < open {
-        return None;
-    }
-    let pid = text[..open].trim().parse().ok()?;
-    let comm = text[open + 1..close].to_string();
-    // rest[0] is field 3 (state), so field N is rest[N - 3].
-    let rest: Vec<&str> = text[close + 1..].split_whitespace().collect();
-    let field = |n: usize| -> Option<u64> { rest.get(n - 3)?.parse().ok() };
-    Some(PidStat {
-        pid,
-        comm,
-        ppid: u32::try_from(field(4)?).ok()?,
-        flags: field(9)?,
-        cpu_ticks: field(14)?.checked_add(field(15)?)?,
-        start_ticks: field(22)?,
-    })
-}
+#[cfg(test)]
+pub use hsm_linux_probe_io::procstat::{parse_pid_stat, PF_KTHREAD};
+/// The process table and the stat parser live in the top disk I/O helper crate, which reads the
+/// same processes (#1547); re-exported so both samplers name them alike.
+pub use hsm_linux_probe_io::procstat::{read_processes, PidStat};
 
 /// The host's total CPU time from the aggregate `cpu` line of `/proc/stat`, in clock ticks:
 /// every field except `guest`/`guest_nice` (already counted in `user`/`nice`). The same total the
@@ -145,35 +97,6 @@ pub struct Usage {
 pub struct Visibility {
     /// Processes whose `stat` was read.
     pub processes: usize,
-}
-
-/// Every process in `<proc>`: one `<proc>/<pid>/stat` read per numeric entry (thread-group
-/// leaders only; threads live under `<pid>/task`). A `<proc>/<pid>` that vanishes between the
-/// listing and the read, or whose `stat` is malformed or names another pid, is skipped silently;
-/// that is normal. Only an unlistable `<proc>` is an error. Shared by the top-CPU and the top disk
-/// I/O samplers (#1547), so both see the same processes and name them alike.
-pub fn read_processes(proc_root: &Path) -> Result<Vec<PidStat>, String> {
-    let entries = std::fs::read_dir(proc_root)
-        .map_err(|error| format!("cannot list {}: {error}", proc_root.display()))?;
-    let mut processes = Vec::new();
-    for entry in entries.flatten() {
-        let file_name = entry.file_name();
-        let Some(pid) = file_name.to_str().and_then(|name| name.parse::<u32>().ok()) else {
-            continue;
-        };
-        // Gone between the listing and the read, or a pid directory being torn down: normal.
-        let Ok(bytes) = std::fs::read(entry.path().join("stat")) else {
-            continue;
-        };
-        let Some(stat) = parse_pid_stat(&String::from_utf8_lossy(&bytes)) else {
-            continue;
-        };
-        if stat.pid != pid {
-            continue;
-        }
-        processes.push(stat);
-    }
-    Ok(processes)
 }
 
 /// Samples per-process CPU between successive calls. The first call only sets the baseline.

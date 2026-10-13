@@ -4,7 +4,7 @@
 //! | Sensor | Type · unit | When |
 //! |---|---|---|
 //! | `.computer/Top disk writers/<name>` | Double · MBytes_sec | every `periodMs` (60 s): names at or above `minBytesPerSec`, the fastest `count` |
-//! | `.computer/Top disk readers/<name>` | the same, for the reads | the same reads |
+//! | `.computer/Top disk readers/<name>` | the same, for the reads | the same snapshots |
 //! | `.computer/Written per day by process/<name>` | Double · GB (decimal) | once a day, in its last 30 s: the top `count` names by the day's total |
 //! | `.computer/Read per day by process/<name>` | the same, for the reads | posted with it |
 //!
@@ -14,54 +14,55 @@
 //! so there is no Windows or managed counterpart and no conformance scenario (root rules #9/#10
 //! apply when a sensor is shared, which this one is not).
 //!
+//! # Two processes: the unprivileged probe and a root helper
+//!
+//! Another user's `/proc/<pid>/io` needs `CAP_DAC_READ_SEARCH` (the file is 0400) and
+//! `CAP_SYS_PTRACE` (the kernel's ptrace-access check) — and a process holding both can read the
+//! whole host filesystem through `/proc/<pid>/root`. So the probe holds neither: the root-run
+//! helper `hsm-linux-probe-io` (crate `hsm-linux-probe-io`, unit `hsm-linux-probe-io.service`)
+//! reads every process's `stat` and `io` every `periodMs`, plus once in the day's last 30 seconds,
+//! and replaces [`SNAPSHOT`] atomically; this source reads that file. `install.sh` enables the
+//! helper when the host config enables `topDiskIo`.
+//!
 //! # Mirrors top CPU
 //!
-//! The same process table ([`top_cpu::procfs::read_processes`]), the same name rule
+//! The same process table (the helper uses the stat parser top CPU uses), the same name rule
 //! ([`top_cpu::procfs::sensor_name`]: `comm`, normalized; kernel threads by kind), processes of
-//! one name summed, `(pid, starttime)` identity, a first read that only sets the baseline, sensors
-//! registered at runtime for the names that make the top, the same name cap
+//! one name summed, `(pid, starttime)` identity, a first snapshot that only sets the baseline,
+//! sensors registered at runtime for the names that make the top, the same name cap
 //! ([`top_cpu::max_tracked_names`]) and the same path line in the speed sensors' descriptions
-//! ([`top_cpu::path_line`]). Values are MB/s (1 MB = 1024² bytes), the unit of the disk speed
-//! sensors (`Average disk write speed on <name> disk`).
+//! ([`top_cpu::path_line`], as far as the unprivileged probe can see the process). Values are
+//! MB/s (1 MB = 1024² bytes), the unit of the disk speed sensors.
 //!
 //! # Schedule
 //!
-//! The source ticks every 5 s (or every `periodMs` when that is shorter) and reads `/proc` only
-//! when a sample is due: every `periodMs` on the tick grid ([`on_tick_grid`]), plus one **final
-//! reading** in the day's last 30 seconds, after which the day's totals are posted — the window
-//! `Written per day on <disk>` posts in. A tick that is not due costs a clock read.
+//! The source ticks every 5 s and consumes each new snapshot once (the helper owns the cadence): a
+//! `regular` one posts the speeds over the interval since the previous regular one (the helper's
+//! monotonic timestamps), and a snapshot in the day's last 30 seconds posts the day's totals. A
+//! snapshot that is missing, unreadable or older than three periods is one WARN for the probe's
+//! lifetime naming the helper's unit, and nothing is posted; the first good one after it is one
+//! INFO.
 //!
-//! # Privileges
-//!
-//! `/proc/<pid>/io` of another user's process needs two capabilities: the file is mode 0400 and
-//! owned by that user (`CAP_DAC_READ_SEARCH` opens it), and the kernel checks
-//! `ptrace_may_access` before answering (`CAP_SYS_PTRACE`); either alone still reads `EACCES`
-//! (measured in a systemd container, 2026-10-13). Under the unit's `ProtectProc=invisible` other
-//! processes are not visible at all. The bundle's `install.sh`
-//! writes [`DROP_IN`] when the host config enables `topDiskIo`. Without it the source keeps
-//! measuring what it can read and says once, at WARN, what it cannot and how to fix it.
-//!
-//! [`top_cpu`]: super::top_cpu
-//! [`top_cpu::procfs::read_processes`]: super::top_cpu::procfs::read_processes
 //! [`top_cpu::procfs::sensor_name`]: super::top_cpu::procfs::sensor_name
 //! [`top_cpu::max_tracked_names`]: super::top_cpu::max_tracked_names
 //! [`top_cpu::path_line`]: super::top_cpu::path_line
 
 pub mod day;
-pub mod procfs;
+pub mod sampler;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use hsm_collector::{Collector, DoubleSensor, SensorOptions, SensorStatus};
+use hsm_linux_probe_io::clock::monotonic_ns;
+use hsm_linux_probe_io::snapshot::{Kind, Snapshot};
 
 use self::day::DayLedger;
-use self::procfs::{Direction, IoRead, IoSampler, NameIo};
+use self::sampler::{Direction, IoRead, IoSampler, NameIo};
 use super::disks::written::{day_label, local_time, LocalTime};
-use super::top_cpu::procfs::hidepid_option;
-use super::top_cpu::{max_tracked_names, path_line, Episode, Tally};
-use super::{on_tick_grid, FailureLog, Source};
+use super::top_cpu::{max_tracked_names, path_line, Episode, Tally, PROC_ROOT};
+use super::{FailureLog, Source};
 use crate::config::TopDiskIoConfig;
 use crate::logging::{Level, Logger};
 
@@ -70,9 +71,10 @@ pub const READERS: &str = ".computer/Top disk readers";
 pub const WRITTEN_PER_DAY: &str = ".computer/Written per day by process";
 pub const READ_PER_DAY: &str = ".computer/Read per day by process";
 
-/// The unit drop-in that lets the probe read every process's `io`, written by the bundle's
-/// `install.sh` when the host config enables `topDiskIo`.
-pub const DROP_IN: &str = "/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf";
+/// The helper's snapshot (`hsm_linux_probe_io::snapshot`).
+pub const SNAPSHOT: &str = hsm_linux_probe_io::snapshot::DEFAULT_PATH;
+/// The helper's unit.
+pub const HELPER_UNIT: &str = "hsm-linux-probe-io.service";
 
 /// Codes of the managed `Unit` enum.
 const UNIT_MBYTES_SEC: i32 = 2103;
@@ -84,10 +86,12 @@ const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
 const SPEED_TTL: Duration = Duration::from_secs(5 * 60);
 /// The per-day sensors' TTL, as `Written per day on <disk>`: one missed day shows as Timeout.
 const PER_DAY_TTL: Duration = Duration::from_secs(26 * 3600);
-/// The tick: the final reading lands in a 30-s window, which six 5-s ticks always hit.
+/// How often the snapshot is looked at: a new one is consumed within 5 s.
 const TICK: Duration = Duration::from_secs(5);
-/// The day's totals are posted in its last this many seconds.
+/// The day's totals are posted from a snapshot taken in its last this many seconds.
 const FINAL_WINDOW_SECONDS: i64 = 30;
+/// A snapshot older than this many periods is stale (the helper stopped).
+const STALE_PERIODS: u32 = 3;
 
 const WHAT: &str = "top disk I/O";
 
@@ -96,36 +100,25 @@ const WHAT: &str = "top disk I/O";
 pub fn register<'c>(
     collector: &'c Collector,
     config: &TopDiskIoConfig,
-    proc_root: &Path,
+    snapshot: &Path,
     logger: &Logger,
 ) -> Option<Box<dyn Source + 'c>> {
     if !config.enabled {
         logger.info("top disk I/O: off (topDiskIo.enabled = false)");
         return None;
     }
-    let source = TopDiskIo::new(collector, config, proc_root);
+    let source = TopDiskIo::new(collector, config, snapshot);
     logger.info(format!(
-        "top disk I/O: every {} s, the {} fastest process names at or above {} under \
-         {WRITERS}/<name> and {READERS}/<name>; the day's top {} under {WRITTEN_PER_DAY}/<name> \
-         and {READ_PER_DAY}/<name>, posted in the day's last {FINAL_WINDOW_SECONDS} s",
+        "top disk I/O: from {} ({HELPER_UNIT}, every {} s): the {} fastest process names at or \
+         above {} under {WRITERS}/<name> and {READERS}/<name>; the day's top {} under \
+         {WRITTEN_PER_DAY}/<name> and {READ_PER_DAY}/<name>, posted in the day's last \
+         {FINAL_WINDOW_SECONDS} s",
+        snapshot.display(),
         source.sample_period.as_secs_f64(),
         source.count,
         speed_label(source.min_bytes_per_sec),
         source.count
     ));
-    // Degrades, never fails: with hidepid only the probe's own processes are visible.
-    let mountinfo = std::fs::read_to_string(proc_root.join("self/mountinfo")).unwrap_or_default();
-    if let Some(option) = hidepid_option(&mountinfo, &proc_root.to_string_lossy()) {
-        logger.warn(format!(
-            "top disk I/O: {} is mounted with {option} (systemd ProtectProc=), so only this \
-             service's own processes are visible and the sensors cannot show the host's disk I/O; \
-             the drop-in {DROP_IN} (ProtectProc=default, CAP_DAC_READ_SEARCH and \
-             CAP_SYS_PTRACE) lifts it: the bundle's \
-             install.sh writes it when the top-level topDiskIo block is enabled (README, Top disk \
-             I/O processes)",
-            proc_root.display()
-        ));
-    }
     Some(Box::new(source))
 }
 
@@ -244,120 +237,151 @@ impl<'c> Family<'c> {
 
 struct TopDiskIo<'c> {
     collector: &'c Collector,
+    snapshot_path: PathBuf,
+    /// Where the path lines of the speed sensors look the processes up.
+    proc_root: PathBuf,
     sampler: IoSampler,
     count: usize,
     min_bytes_per_sec: f64,
     sample_period: Duration,
-    tick_period: Duration,
-    /// When the next regular sample is due; `None`: the next tick samples (right after Start).
-    next_sample: Option<Instant>,
-    /// The wall clock of the previous successful read, which the day's accounting measures from.
-    last_read_ms: Option<i64>,
-    /// Bytes per name since the last speed post, and since when (the speeds' interval). A final
-    /// reading in between adds to it, so its bytes reach the next speed post too.
+    /// The monotonic time of the last snapshot consumed (each is consumed once).
+    last_mono_ns: Option<u64>,
+    /// The wall clock of the last snapshot consumed, which the day's accounting measures from.
+    last_wall_ms: Option<i64>,
+    /// Bytes per name since the last speed post, and the helper's monotonic time of the regular
+    /// snapshot it started at. A final snapshot in between adds to it.
     pending: BTreeMap<String, NameIo>,
-    pending_since: Option<Instant>,
+    pending_since_ns: Option<u64>,
+    /// The day of the last snapshot taken in a day's last seconds, until its totals are posted
+    /// (a post that failed entirely is tried again on the next ticks).
+    day_to_post: Option<(i64, i64)>,
     ledger: DayLedger,
     writers: Family<'c>,
     readers: Family<'c>,
     written_per_day: Family<'c>,
     read_per_day: Family<'c>,
-    /// Unix time in ms; injectable for tests.
-    clock: fn() -> i64,
     local: LocalTime,
+    /// The probe's monotonic time at its first tick: a missing snapshot is a problem only once
+    /// the helper has had three periods to write one.
+    started_ns: Option<u64>,
+    stale_warned: bool,
+    recovered_logged: bool,
     baseline_logged: bool,
-    denied_logged: bool,
     /// The day whose name cap was logged: once per day, so a later day is not silent.
     day_cap_logged: Option<i64>,
-    failures: FailureLog,
     accounting: FailureLog,
 }
 
 impl<'c> TopDiskIo<'c> {
-    fn new(collector: &'c Collector, config: &TopDiskIoConfig, proc_root: &Path) -> Self {
-        Self::with_sampler(collector, config, IoSampler::new(proc_root))
-    }
-
-    fn with_sampler(
-        collector: &'c Collector,
-        config: &TopDiskIoConfig,
-        sampler: IoSampler,
-    ) -> Self {
-        let (count, period) = (config.count(), config.period());
+    fn new(collector: &'c Collector, config: &TopDiskIoConfig, snapshot: &Path) -> Self {
+        let count = config.count();
         let max_tracked = max_tracked_names(count);
         Self {
             collector,
-            sampler,
+            snapshot_path: snapshot.to_path_buf(),
+            proc_root: PathBuf::from(PROC_ROOT),
+            sampler: IoSampler::new(),
             count,
             min_bytes_per_sec: config.min_bytes_per_sec,
-            sample_period: period,
-            tick_period: TICK.min(period),
-            next_sample: None,
-            last_read_ms: None,
+            sample_period: config.period(),
+            last_mono_ns: None,
+            last_wall_ms: None,
             pending: BTreeMap::new(),
-            pending_since: None,
+            pending_since_ns: None,
+            day_to_post: None,
             ledger: DayLedger::default(),
             writers: Family::new(WRITERS, max_tracked),
             readers: Family::new(READERS, max_tracked),
             written_per_day: Family::new(WRITTEN_PER_DAY, max_tracked),
             read_per_day: Family::new(READ_PER_DAY, max_tracked),
-            clock: unix_now_ms,
             local: local_time,
+            started_ns: None,
+            stale_warned: false,
+            recovered_logged: false,
             baseline_logged: false,
-            denied_logged: false,
             day_cap_logged: None,
-            failures: FailureLog::default(),
             accounting: FailureLog::default(),
         }
     }
 
-    fn proc_root(&self) -> PathBuf {
-        self.sampler.proc_root().to_path_buf()
+    /// One tick at `now_ns` (`CLOCK_MONOTONIC`, the helper's clock too): consume the snapshot if
+    /// it is new, check it is fresh, retry a failed day post.
+    fn tick(&mut self, now_ns: u64, logger: &Logger) {
+        let started = *self.started_ns.get_or_insert(now_ns);
+        let stale_after =
+            u64::try_from((self.sample_period * STALE_PERIODS).as_nanos()).unwrap_or(u64::MAX);
+        let snapshot = std::fs::read_to_string(&self.snapshot_path)
+            .map_err(|error| format!("cannot read {}: {error}", self.snapshot_path.display()))
+            .and_then(|text| Snapshot::parse(&text));
+        let problem = match &snapshot {
+            Err(reason) => Some(reason.clone()),
+            Ok(snapshot) if snapshot.mono_ns.saturating_add(stale_after) < now_ns => Some(format!(
+                "{} is {} s old",
+                self.snapshot_path.display(),
+                (now_ns - snapshot.mono_ns) / 1_000_000_000
+            )),
+            Ok(_) => None,
+        };
+        match problem {
+            // The helper gets three periods to write its first snapshot.
+            Some(reason) if now_ns.saturating_sub(started) >= stale_after => {
+                if !self.stale_warned {
+                    logger.warn(format!(
+                        "{WHAT}: no fresh snapshot from the helper ({reason}); nothing is posted \
+                         until {HELPER_UNIT} writes one again. It runs where the top-level \
+                         topDiskIo block of /etc/hsm-linux-probe/config.json is enabled and the \
+                         bundle's install.sh was re-run (it enables the unit); check `systemctl \
+                         status {HELPER_UNIT}` (README, Top disk I/O processes). Logged once."
+                    ));
+                    self.stale_warned = true;
+                }
+            }
+            Some(_) => {}
+            None => {
+                if self.stale_warned && !self.recovered_logged {
+                    logger.info(format!("{WHAT}: the helper's snapshots are fresh again"));
+                    self.recovered_logged = true;
+                }
+            }
+        }
+        if let Ok(snapshot) = snapshot {
+            let fresh = problem_is_none(&snapshot, now_ns, stale_after);
+            if fresh && self.last_mono_ns != Some(snapshot.mono_ns) {
+                self.last_mono_ns = Some(snapshot.mono_ns);
+                self.consume(&snapshot, logger);
+            }
+        }
+        if let Some((day, wall_ms)) = self.day_to_post {
+            if self.ledger.posted_day.is_none_or(|posted| posted < day) {
+                self.post_day(day, wall_ms, logger);
+            } else {
+                self.day_to_post = None;
+            }
+        }
     }
 
-    /// One tick at `now` (monotonic) / `now_ms` (wall clock): a regular sample when due, a final
-    /// reading in the day's last seconds until the day is posted, nothing otherwise.
-    fn tick(&mut self, now: Instant, now_ms: i64, logger: &Logger) {
-        let (day, second) = (self.local)(now_ms);
-        let regular = self.next_sample.is_none_or(|due| now >= due);
-        let window = second + FINAL_WINDOW_SECONDS >= 86_400
-            && self.ledger.posted_day.is_none_or(|posted| posted < day);
-        if !regular && !window {
-            return;
-        }
-        if regular {
-            self.next_sample = Some(on_tick_grid(now, self.sample_period, self.tick_period));
-        }
-        let read = match self.sampler.read() {
-            Ok(read) => {
-                self.failures.succeeded(logger, WHAT);
-                read
-            }
-            // The sampler keeps its baseline: the next read measures the longer interval.
-            Err(reason) => {
-                self.failures.failed(logger, WHAT, &reason);
-                return;
-            }
-        };
-        self.report_visibility(&read, logger);
+    fn consume(&mut self, snapshot: &Snapshot, logger: &Logger) {
+        let read = self.sampler.consume(snapshot);
+        self.report(&read, logger);
         for note in &read.notes {
             logger.log(Level::Debug, &format!("{WHAT}: {note}"));
         }
-        let previous_ms = self.last_read_ms.replace(now_ms);
-        match previous_ms.filter(|_| !read.baseline) {
-            None => self.pending_since = Some(now),
-            Some(previous_ms) => {
-                self.count_day(&read.deltas, previous_ms, now_ms, logger);
+        let previous_wall = self.last_wall_ms.replace(snapshot.wall_ms);
+        match previous_wall.filter(|_| !read.baseline) {
+            None => self.pending_since_ns = Some(snapshot.mono_ns),
+            Some(previous_wall) => {
+                self.count_day(&read.deltas, previous_wall, snapshot.wall_ms, logger);
                 for (name, io) in &read.deltas {
                     self.pending.entry(name.clone()).or_default().merge(io);
                 }
-                if regular {
-                    self.post_speeds(now, logger);
+                if snapshot.kind == Kind::Regular {
+                    self.post_speeds(snapshot.mono_ns, logger);
                 }
             }
         }
-        if window {
-            self.post_day(day, now_ms, logger);
+        let (day, second) = (self.local)(snapshot.wall_ms);
+        if second + FINAL_WINDOW_SECONDS >= 86_400 {
+            self.day_to_post = Some((day, snapshot.wall_ms));
         }
     }
 
@@ -390,61 +414,47 @@ impl<'c> TopDiskIo<'c> {
         }
         for missed in std::mem::take(&mut self.ledger.missed) {
             logger.warn(format!(
-                "{WHAT}: the per-day totals of {} are not posted: no sample landed in the day's \
-                 last {FINAL_WINDOW_SECONDS} s (a suspended host or a stalled source); they are \
-                 never posted late",
+                "{WHAT}: the per-day totals of {} are not posted: no snapshot was taken in the \
+                 day's last {FINAL_WINDOW_SECONDS} s (a suspended host or a stopped helper); they \
+                 are never posted late",
                 day_label(missed)
             ));
         }
     }
 
-    /// Once, at WARN, what cannot be read and the remedy; once, as an episode, a table with no
-    /// readable `io` at all.
-    fn report_visibility(&mut self, read: &IoRead, logger: &Logger) {
+    /// The baseline once; a snapshot with no readable counters at all as an error episode.
+    fn report(&mut self, read: &IoRead, logger: &Logger) {
         if read.baseline && !self.baseline_logged {
             logger.info(format!(
-                "{WHAT}: baseline over {} visible processes, {} with readable I/O counters",
+                "{WHAT}: baseline over {} processes, {} with readable I/O counters",
                 read.processes, read.readable
             ));
             self.baseline_logged = true;
         }
-        if read.denied > 0 && !self.denied_logged {
-            logger.warn(format!(
-                "{WHAT}: /proc/<pid>/io of {} of {} processes is not readable (EACCES: another \
-                 user's process needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE, which the unit does \
-                 not grant); their disk I/O is not counted, the others' is. The drop-in {DROP_IN} \
-                 grants them (ProtectProc=default, CapabilityBoundingSet= and \
-                 AmbientCapabilities= CAP_DAC_READ_SEARCH CAP_SYS_PTRACE): the bundle's install.sh \
-                 writes it when the top-level topDiskIo block in the host config is enabled; then \
-                 systemctl daemon-reload && systemctl restart hsm-linux-probe (README, Top disk \
-                 I/O processes). Logged once.",
-                read.denied, read.processes
-            ));
-            self.denied_logged = true;
-        }
-        if read.processes > 0 && read.readable == 0 && read.denied == 0 {
+        if read.processes > 0 && read.readable == 0 {
             self.accounting.failed(
                 logger,
                 WHAT,
-                "no /proc/<pid>/io can be read, not even the probe's own (a kernel without task \
-                 I/O accounting, CONFIG_TASK_IO_ACCOUNTING?)",
+                "the helper read no /proc/<pid>/io at all (a kernel without task I/O accounting, \
+                 CONFIG_TASK_IO_ACCOUNTING? or the helper lost its capabilities: journalctl -u \
+                 hsm-linux-probe-io)",
             );
         } else if read.readable > 0 {
             self.accounting.succeeded(logger, WHAT);
         }
     }
 
-    /// Post the speeds over the interval since the previous speed post.
-    fn post_speeds(&mut self, now: Instant, logger: &Logger) {
-        let Some(since) = self.pending_since.replace(now) else {
+    /// Post the speeds over the interval since the previous regular snapshot.
+    fn post_speeds(&mut self, mono_ns: u64, logger: &Logger) {
+        let Some(since) = self.pending_since_ns.replace(mono_ns) else {
             return;
         };
-        let seconds = now.saturating_duration_since(since).as_secs_f64();
+        let seconds = mono_ns.saturating_sub(since) as f64 / 1e9;
         let pending = std::mem::take(&mut self.pending);
-        let proc_root = self.proc_root();
+        let proc_root = self.proc_root.clone();
         let (count, period, min) = (self.count, self.sample_period, self.min_bytes_per_sec);
         for direction in [Direction::Write, Direction::Read] {
-            let posts: Vec<Post> = procfs::select_top(&pending, direction, seconds, min, count)
+            let posts: Vec<Post> = sampler::select_top(&pending, direction, seconds, min, count)
                 .into_iter()
                 .map(|rate| Post {
                     value: megabytes_per_second(rate.bytes_per_sec),
@@ -468,7 +478,7 @@ impl<'c> TopDiskIo<'c> {
     }
 
     /// Post the day's totals (its only post). The day counts as posted when something went out or
-    /// there was nothing to post; when every post failed, the next tick in the window tries again.
+    /// there was nothing to post; when every post failed, the next tick tries again.
     fn post_day(&mut self, day: i64, now_ms: i64, logger: &Logger) {
         let (count, period) = (self.count, self.sample_period);
         let (mut attempted, mut sent) = (0, 0);
@@ -500,6 +510,7 @@ impl<'c> TopDiskIo<'c> {
         }
         if attempted == 0 || sent > 0 {
             self.ledger.posted_day = Some(day);
+            self.day_to_post = None;
             logger.log(
                 Level::Debug,
                 &format!(
@@ -511,17 +522,21 @@ impl<'c> TopDiskIo<'c> {
     }
 }
 
+fn problem_is_none(snapshot: &Snapshot, now_ns: u64, stale_after: u64) -> bool {
+    snapshot.mono_ns.saturating_add(stale_after) >= now_ns
+}
+
 impl Source for TopDiskIo<'_> {
     fn name(&self) -> &'static str {
         "top disk io"
     }
 
     fn period(&self) -> Duration {
-        self.tick_period
+        TICK
     }
 
     fn sample(&mut self, logger: &Logger) {
-        self.tick(Instant::now(), (self.clock)(), logger);
+        self.tick(monotonic_ns(), logger);
     }
 }
 
@@ -584,24 +599,17 @@ fn per_day_options(direction: Direction, count: usize, period: Duration) -> Sens
         ))
 }
 
-fn unix_now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::procfs::tests::{gone, process, refusing_reader, DENIED};
+    use super::sampler::tests::{entry, MB};
     use super::*;
-    use crate::logging::Level;
     use crate::probe_only::disks::written::tests::{utc, MIDNIGHT};
     use crate::probe_only::docker::tests::test_collector;
     use crate::probe_only::host::tests::FakeTree;
+    use hsm_linux_probe_io::snapshot::{write_atomic, Entry};
     use std::sync::{Arc, Mutex};
 
-    const MB: u64 = 1_048_576;
+    const SEC: u64 = 1_000_000_000;
     const MIN_MS: i64 = 60_000;
 
     fn enabled() -> TopDiskIoConfig {
@@ -620,6 +628,15 @@ mod tests {
         (logger, lines)
     }
 
+    fn count(lines: &Arc<Mutex<Vec<String>>>, needle: &str) -> usize {
+        lines
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.contains(needle))
+            .count()
+    }
+
     fn registrations(collector: &Collector, category: &str) -> Vec<String> {
         collector
             .registrations()
@@ -628,15 +645,23 @@ mod tests {
             .collect()
     }
 
-    /// The source on a UTC "local" calendar, reading `tree`.
+    /// The source on a UTC "local" calendar, reading `<tree>/snapshot`.
     fn source<'c>(collector: &'c Collector, tree: &FakeTree) -> TopDiskIo<'c> {
-        let mut source = TopDiskIo::with_sampler(
-            collector,
-            &enabled(),
-            IoSampler::with_reader(&tree.0, refusing_reader),
-        );
+        let mut source = TopDiskIo::new(collector, &enabled(), &tree.0.join("snapshot"));
         source.local = utc;
         source
+    }
+
+    /// What the helper would write: a snapshot taken at `mono_s` (monotonic) / `wall_ms`.
+    fn helper_writes(tree: &FakeTree, mono_s: u64, wall_ms: i64, kind: Kind, entries: Vec<Entry>) {
+        let snapshot = Snapshot {
+            seq: mono_s,
+            mono_ns: mono_s * SEC,
+            wall_ms,
+            kind,
+            entries,
+        };
+        write_atomic(&tree.0.join("snapshot"), &snapshot.render()).expect("write");
     }
 
     fn sent(family: &Family<'_>) -> Vec<(String, f64)> {
@@ -652,42 +677,53 @@ mod tests {
         let collector = test_collector();
         let (logger, lines) = capture();
         let tree = FakeTree::new("topio-off");
-        assert!(register(&collector, &TopDiskIoConfig::default(), &tree.0, &logger).is_none());
-        assert!(lines.lock().unwrap().iter().any(|l| l.contains("off")));
+        let snapshot = tree.0.join("snapshot");
+        assert!(register(&collector, &TopDiskIoConfig::default(), &snapshot, &logger).is_none());
+        assert_eq!(count(&lines, "off"), 1);
+        let source = register(&collector, &enabled(), &snapshot, &logger).expect("on");
+        assert_eq!(source.period(), TICK);
     }
 
     #[test]
     fn the_speeds_register_at_runtime_for_the_top_names_only() {
         let tree = FakeTree::new("topio-wire");
-        process(&tree, 100, "postgres", 1, 50, 0, 0);
-        process(&tree, 101, "postgres", 1, 51, 0, 0);
-        process(&tree, 200, "quiet", 1, 60, 0, 0);
         let collector = test_collector();
         let (logger, _) = capture();
-        let registered = register(&collector, &enabled(), &tree.0, &logger).expect("source");
-        assert_eq!(registered.period(), TICK);
-        drop(registered);
         let mut source = source(&collector, &tree);
         collector.start().expect("start");
-
-        let start = Instant::now();
         let noon = MIDNIGHT + 12 * 3600 * 1000;
-        source.tick(start, noon, &logger);
+        helper_writes(
+            &tree,
+            100,
+            noon,
+            Kind::Regular,
+            vec![
+                entry(100, "postgres", 1, 50, 0, 0),
+                entry(101, "postgres", 1, 51, 0, 0),
+                entry(200, "quiet", 1, 60, 0, 0),
+            ],
+        );
+        source.tick(101 * SEC, &logger);
         assert!(
             registrations(&collector, WRITERS).is_empty(),
             "the baseline"
         );
 
-        // Not due 5 s later: no read at all.
-        process(&tree, 100, "postgres", 1, 50, 0, 600 * MB);
-        source.tick(start + TICK, noon + 5_000, &logger);
-        assert!(source.writers.sent.is_empty());
-
-        // 60 s: postgres wrote 90 MB (1.5 MB/s), read 120 MB; "quiet" 59 MB is under 1 MB/s.
-        process(&tree, 100, "postgres", 1, 50, 120 * MB, 60 * MB);
-        process(&tree, 101, "postgres", 1, 51, 0, 30 * MB);
-        process(&tree, 200, "quiet", 1, 60, 0, 59 * MB);
-        source.tick(start + Duration::from_secs(60), noon + MIN_MS, &logger);
+        // 60 s later: postgres wrote 90 MB (1.5 MB/s), read 120 MB; "quiet" 59 MB is under 1 MB/s.
+        helper_writes(
+            &tree,
+            160,
+            noon + MIN_MS,
+            Kind::Regular,
+            vec![
+                entry(100, "postgres", 1, 50, 120 * MB, 60 * MB),
+                entry(101, "postgres", 1, 51, 0, 30 * MB),
+                entry(200, "quiet", 1, 60, 0, 59 * MB),
+            ],
+        );
+        source.tick(161 * SEC, &logger);
+        // The same snapshot again: consumed once.
+        source.tick(166 * SEC, &logger);
         assert_eq!(
             sent(&source.writers),
             [(format!("{WRITERS}/postgres"), 1.5)]
@@ -716,41 +752,47 @@ mod tests {
         }
     }
 
-    /// The day: counted from every read, posted once in its last 30 s from a final reading, then
-    /// the next day starts — and a process that exits between two samples is credited to its
-    /// reaper for its last partial interval, never counted twice.
+    /// The day: counted from every snapshot, posted once from the one in its last 30 s, then the
+    /// next day starts — and a process that exits between two snapshots is credited to its reaper
+    /// for its last partial interval, never counted twice.
     #[test]
     fn the_day_is_posted_once_in_its_last_seconds_and_rolls_over() {
         let tree = FakeTree::new("topio-day");
-        process(&tree, 10, "bash", 1, 5, 0, 0);
-        process(&tree, 11, "dd", 10, 6, 0, 0);
-        process(&tree, 20, "rsync", 1, 7, 0, 0);
         let collector = test_collector();
         let (logger, lines) = capture();
         let mut source = source(&collector, &tree);
         collector.start().expect("start");
         let day = utc(MIDNIGHT).0;
-        let t0 = Instant::now();
-        let at = |seconds: u64| t0 + Duration::from_secs(seconds);
-        // 23:57:00 baseline, 23:58:00 and 23:59:00 regular, 23:59:35 the final reading.
+        // 23:57:00 baseline, 23:58:00 and 23:59:00 regular, 23:59:35 the final scan.
         let base_ms = MIDNIGHT + 24 * 3600 * 1000 - 3 * MIN_MS;
-        source.tick(at(0), base_ms, &logger);
-
-        process(&tree, 11, "dd", 10, 6, 0, 2_000 * MB);
-        process(&tree, 20, "rsync", 1, 7, 500 * MB, 100 * MB);
-        source.tick(at(60), base_ms + MIN_MS, &logger);
-        process(&tree, 11, "dd", 10, 6, 0, 3_000 * MB);
-        source.tick(at(120), base_ms + 2 * MIN_MS, &logger);
-        assert!(
-            source.written_per_day.sent.is_empty(),
-            "not in the window yet"
+        let bash = |write| entry(10, "bash", 1, 5, 0, write);
+        let dd = |write| entry(11, "dd", 10, 6, 0, write);
+        let rsync = |read, write| entry(20, "rsync", 1, 7, read, write);
+        let mut step = |mono: u64, wall: i64, kind: Kind, entries: Vec<Entry>| {
+            helper_writes(&tree, mono, wall, kind, entries);
+            source.tick((mono + 1) * SEC, &logger);
+        };
+        step(0, base_ms, Kind::Regular, vec![bash(0), dd(0), rsync(0, 0)]);
+        step(
+            60,
+            base_ms + MIN_MS,
+            Kind::Regular,
+            vec![bash(0), dd(2_000 * MB), rsync(500 * MB, 100 * MB)],
         );
-
+        step(
+            120,
+            base_ms + 2 * MIN_MS,
+            Kind::Regular,
+            vec![bash(0), dd(3_000 * MB), rsync(500 * MB, 100 * MB)],
+        );
         // dd wrote 500 MB more, exited and was reaped by bash: bash's counter jumps by dd's whole
         // 3 500 MB; bash itself wrote 10 MB.
-        gone(&tree, 11);
-        process(&tree, 10, "bash", 1, 5, 0, 10 * MB + 3_500 * MB);
-        source.tick(at(155), base_ms + 2 * MIN_MS + 35_000, &logger);
+        step(
+            155,
+            base_ms + 2 * MIN_MS + 35_000,
+            Kind::Final,
+            vec![bash(10 * MB + 3_500 * MB), rsync(500 * MB, 100 * MB)],
+        );
         let written = sent(&source.written_per_day);
         assert_eq!(
             written,
@@ -778,39 +820,49 @@ mod tests {
                 per_day[0]
             );
         }
+        // dd and rsync at 23:58, dd at 23:59; the final scan posts no speeds.
+        assert_eq!(sent(&source.writers).len(), 3);
 
-        // Later ticks in the window post nothing more; what is written after the post counts
-        // towards the next day.
-        process(&tree, 20, "rsync", 1, 7, 500 * MB, 100 * MB + 2_000 * MB);
-        source.tick(at(160), base_ms + 2 * MIN_MS + 40_000, &logger);
-        source.tick(at(180), base_ms + 3 * MIN_MS, &logger);
+        // A later tick re-reads the same final snapshot: nothing more. What is written after the
+        // post counts towards the next day.
+        source.tick(160 * SEC, &logger);
+        helper_writes(
+            &tree,
+            180,
+            base_ms + 3 * MIN_MS,
+            Kind::Regular,
+            vec![bash(10 * MB + 3_500 * MB), rsync(500 * MB, 2_100 * MB)],
+        );
+        source.tick(181 * SEC, &logger);
         assert_eq!(source.written_per_day.sent.len(), 3);
         assert_eq!(source.ledger.day, Some(day + 1));
         assert_eq!(source.ledger.names["rsync"].written, 2_000 * MB);
-        assert!(!lines
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|l| l.contains("|WARN|") || l.contains("|ERROR|")));
+        assert_eq!(count(&lines, "|WARN|") + count(&lines, "|ERROR|"), 0);
         collector.stop().expect("stop");
     }
 
     #[test]
     fn a_missed_window_is_logged_once_and_never_posted_late() {
         let tree = FakeTree::new("topio-missed");
-        process(&tree, 20, "rsync", 1, 7, 0, 0);
         let collector = test_collector();
         let (logger, lines) = capture();
         let mut source = source(&collector, &tree);
         collector.start().expect("start");
-        let t0 = Instant::now();
         let evening = MIDNIGHT + 24 * 3600 * 1000 - 2 * MIN_MS;
-        source.tick(t0, evening, &logger);
-        process(&tree, 20, "rsync", 1, 7, 0, 100 * MB);
-        source.tick(t0 + Duration::from_secs(60), evening + MIN_MS, &logger);
-        // The tick in the window never came: the next one is after midnight.
-        process(&tree, 20, "rsync", 1, 7, 0, 200 * MB);
-        source.tick(t0 + Duration::from_secs(150), evening + 150_000, &logger);
+        let rsync = |write| vec![entry(20, "rsync", 1, 7, 0, write)];
+        helper_writes(&tree, 0, evening, Kind::Regular, rsync(0));
+        source.tick(SEC, &logger);
+        helper_writes(&tree, 60, evening + MIN_MS, Kind::Regular, rsync(100 * MB));
+        source.tick(61 * SEC, &logger);
+        // No scan in the window: the next one is after midnight.
+        helper_writes(
+            &tree,
+            150,
+            evening + 150_000,
+            Kind::Regular,
+            rsync(200 * MB),
+        );
+        source.tick(151 * SEC, &logger);
         assert!(source.written_per_day.sent.is_empty());
         let warned: Vec<String> = lines
             .lock()
@@ -824,95 +876,64 @@ mod tests {
         collector.stop().expect("stop");
     }
 
-    /// Without the capabilities another user's `io` is refused: one WARN line naming the remedy,
-    /// and the readable processes keep being measured.
+    /// No snapshot (the helper is not running), then a stale one: one WARN for the probe's
+    /// lifetime, after the helper had three periods; nothing posted; one INFO on recovery.
     #[test]
-    fn a_refused_io_is_one_warning_with_the_remedy_and_sampling_goes_on() {
-        let tree = FakeTree::new("topio-denied");
-        process(&tree, 1, "systemd", 0, 1, 0, 0);
-        tree.file("1/io", DENIED);
-        process(&tree, 50, "mine", 1, 5, 0, 0);
+    fn a_missing_or_stale_snapshot_is_one_warning_and_posts_nothing() {
+        let tree = FakeTree::new("topio-stale");
         let collector = test_collector();
         let (logger, lines) = capture();
         let mut source = source(&collector, &tree);
-        collector.start().expect("start");
-        let t0 = Instant::now();
         let noon = MIDNIGHT + 12 * 3600 * 1000;
-        source.tick(t0, noon, &logger);
-        for minute in 1..=3 {
-            process(&tree, 50, "mine", 1, 5, 0, minute * 120 * MB);
-            source.tick(
-                t0 + Duration::from_secs(60 * minute),
-                noon + MIN_MS * minute as i64,
-                &logger,
-            );
-        }
-        collector.stop().expect("stop");
-        let lines = lines.lock().unwrap();
-        let warnings: Vec<&String> = lines.iter().filter(|l| l.contains("|WARN|")).collect();
-        assert_eq!(warnings.len(), 1, "{lines:#?}");
-        for part in [
-            "of 1 of 2 processes is not readable (EACCES",
-            "needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE",
-            DROP_IN,
-            "install.sh",
-        ] {
-            assert!(
-                warnings[0].contains(part),
-                "missing {part} in {}",
-                warnings[0]
-            );
-        }
-        assert_eq!(
-            source.writers.sent.len(),
-            3,
-            "the readable one keeps posting"
-        );
-        assert!(!lines.iter().any(|l| l.contains("|ERROR|")), "{lines:#?}");
-    }
+        source.tick(1_000 * SEC, &logger);
+        source.tick(1_100 * SEC, &logger);
+        assert_eq!(count(&lines, "|WARN|"), 0, "the helper gets three periods");
+        source.tick(1_180 * SEC, &logger);
+        source.tick(1_300 * SEC, &logger);
+        assert_eq!(count(&lines, "|WARN|"), 1);
+        assert!(count(&lines, HELPER_UNIT) >= 1);
 
-    #[test]
-    fn hidepid_is_one_warning_and_no_io_at_all_is_an_error_episode() {
-        let tree = FakeTree::new("topio-hidepid");
-        let proc_root = tree.0.to_string_lossy().to_string();
-        tree.file(
-            "self/mountinfo",
-            &format!("812 22 0:77 / {proc_root} rw,nosuid - proc proc rw,hidepid=invisible\n"),
+        // A stale snapshot is not consumed.
+        helper_writes(
+            &tree,
+            1_000,
+            noon,
+            Kind::Regular,
+            vec![entry(1, "x", 0, 1, 0, 0)],
         );
-        // A kernel without task I/O accounting: no io file anywhere.
-        process(&tree, 50, "mine", 1, 5, 0, 0);
-        std::fs::remove_file(tree.0.join("50/io")).expect("rm");
-        let collector = test_collector();
-        let (logger, lines) = capture();
-        let mut source = register(&collector, &enabled(), &tree.0, &logger).expect("source");
-        source.sample(&logger);
-        source.sample(&logger);
-        let lines = lines.lock().unwrap();
-        let hidepid: Vec<&String> = lines.iter().filter(|l| l.contains("hidepid")).collect();
-        assert_eq!(hidepid.len(), 1, "{lines:#?}");
-        assert!(hidepid[0].contains("|WARN|") && hidepid[0].contains(DROP_IN));
-        let errors: Vec<&String> = lines.iter().filter(|l| l.contains("|ERROR|")).collect();
-        assert_eq!(errors.len(), 1, "{lines:#?}");
-        assert!(errors[0].contains("CONFIG_TASK_IO_ACCOUNTING"));
-    }
+        source.tick(1_400 * SEC, &logger);
+        assert_eq!(source.last_mono_ns, None);
 
-    #[test]
-    fn an_unreadable_proc_is_logged_once_and_posts_nothing() {
-        let tree = FakeTree::new("topio-broken");
-        let collector = test_collector();
-        let (logger, lines) = capture();
-        let mut source =
-            register(&collector, &enabled(), &tree.0.join("absent"), &logger).expect("source");
-        source.sample(&logger);
-        source.sample(&logger);
-        let errors = lines
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|l| l.contains("|ERROR|"))
-            .count();
-        assert_eq!(errors, 1);
+        // Fresh again: consumed, one INFO; a second outage does not warn again.
+        helper_writes(
+            &tree,
+            1_400,
+            noon,
+            Kind::Regular,
+            vec![entry(1, "x", 0, 1, 0, 0)],
+        );
+        source.tick(1_401 * SEC, &logger);
+        assert_eq!(source.last_mono_ns, Some(1_400 * SEC));
+        assert_eq!(count(&lines, "fresh again"), 1);
+        source.tick(2_000 * SEC, &logger);
+        assert_eq!(count(&lines, "|WARN|"), 1);
         assert!(registrations(&collector, WRITERS).is_empty());
+    }
+
+    #[test]
+    fn a_snapshot_without_any_counters_is_an_error_episode() {
+        let tree = FakeTree::new("topio-noio");
+        let collector = test_collector();
+        let (logger, lines) = capture();
+        let mut source = source(&collector, &tree);
+        let mut blind = entry(1, "init", 0, 1, 0, 0);
+        blind.counters = None;
+        for mono in [0, 60] {
+            helper_writes(&tree, mono, MIDNIGHT, Kind::Regular, vec![blind.clone()]);
+            source.tick((mono + 1) * SEC, &logger);
+        }
+        assert_eq!(count(&lines, "|ERROR|"), 1);
+        assert_eq!(count(&lines, "CONFIG_TASK_IO_ACCOUNTING"), 1);
     }
 
     /// The per-day name cap is reported once a day, not once per probe run.
@@ -939,18 +960,11 @@ mod tests {
             source.count_day(&many, at, at + MIN_MS, &logger);
             source.count_day(&many, at + MIN_MS, at + 2 * MIN_MS, &logger);
         }
-        let warned = lines
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|l| l.contains("the cap"))
-            .count();
-        assert_eq!(warned, 2, "one per day");
+        assert_eq!(count(&lines, "the cap"), 2, "one per day");
     }
 
     #[test]
     fn new_names_stop_at_the_cap() {
-        let tree = FakeTree::new("topio-cap");
         let collector = test_collector();
         let (logger, lines) = capture();
         collector.start().expect("start");
@@ -965,15 +979,8 @@ mod tests {
             family.post_all(&collector, &[post], None, &options, &logger);
         }
         collector.stop().expect("stop");
-        drop(tree);
         assert_eq!(family.sensors.len(), 2);
         assert_eq!(family.sent.len(), 3, "a, b and a again");
-        let warned = lines
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|l| l.contains("the cap"))
-            .count();
-        assert_eq!(warned, 1);
+        assert_eq!(count(&lines, "the cap"), 1);
     }
 }
