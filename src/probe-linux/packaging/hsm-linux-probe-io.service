@@ -19,15 +19,20 @@ Documentation=https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/mast
 [Service]
 Type=simple
 ExecStart=/usr/bin/hsm-linux-probe-io --config /etc/hsm-linux-probe/config.json --output /run/hsm-linux-probe-io/snapshot
-# A disabled topDiskIo block is a clean exit, not a failure to restart from.
+# A disabled topDiskIo block is a clean exit, not a failure to restart from. Exit 1 and 2 are only
+# an unreadable or invalid config and bad arguments: restarting cannot fix them, so it does not.
 Restart=on-failure
 RestartSec=5
+RestartPreventExitStatus=1 2
 
 # Root for the two capabilities below; the group lets the probe (Group=hsm-probe) read the snapshot.
 User=root
 Group=hsm-probe
 RuntimeDirectory=hsm-linux-probe-io
 RuntimeDirectoryMode=0750
+# Kept across a stop or restart, so the probe still finds the last snapshot meanwhile and judges the
+# helper by the snapshot's age, not by a file that comes and goes (/run is gone at reboot anyway).
+RuntimeDirectoryPreserve=yes
 # The snapshot is 0640 root:hsm-probe.
 UMask=0027
 

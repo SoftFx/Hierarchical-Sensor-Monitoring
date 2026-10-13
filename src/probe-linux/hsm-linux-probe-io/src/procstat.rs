@@ -32,7 +32,7 @@ pub struct PidStat {
     /// Field 22, the start time in clock ticks after boot: with the pid it identifies a process,
     /// so a reused pid is never credited with its predecessor's time.
     pub start_ticks: u64,
-    /// Field 34, the ignored signals (the low 31 bits; `SIGCHLD` is among them); 0 when absent.
+    /// Field 33, `sigignore`: the ignored signals (the low 31 bits; `SIGCHLD` is among them); 0 when absent.
     pub sigignore: u64,
 }
 
@@ -70,7 +70,7 @@ pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
         flags: field(9)?,
         cpu_ticks: field(14)?.checked_add(field(15)?)?,
         start_ticks: field(22)?,
-        sigignore: field(34).unwrap_or(0),
+        sigignore: field(33).unwrap_or(0),
     })
 }
 
@@ -102,16 +102,31 @@ pub fn read_processes(proc_root: &Path) -> Result<Vec<PidStat>, String> {
 mod tests {
     use super::*;
 
+    /// Fields 31..34 are `signal blocked sigignore sigcatch` (proc(5)). A shell, `cron`, `nginx` or
+    /// any Go program CATCHES `SIGCHLD` (field 34) and reaps with `wait` — its children's counters
+    /// are added to it; only one that IGNORES it (field 33) autoreaps.
     #[test]
-    fn sigignore_is_field_34_and_optional() {
-        let mut line =
-            String::from("7 (cron) S 1 7 7 0 -1 4194560 1 0 0 0 1 2 0 0 20 0 1 0 99 1 1 1");
-        assert_eq!(parse_pid_stat(&line).expect("short").sigignore, 0);
-        // Fields 26..33, then sigignore with SIGCHLD.
-        line.push_str(" 0 0 0 0 0 0 0 0 65536 0");
-        let stat = parse_pid_stat(&line).expect("parse");
+    fn sigignore_is_field_33_not_sigcatch() {
+        let short = "7 (cron) S 1 7 7 0 -1 4194560 1 0 0 0 1 2 0 0 20 0 1 0 99 1 1 1";
+        assert_eq!(parse_pid_stat(short).expect("short").sigignore, 0);
+
+        // bash as the kernel renders it: blocked 65536, sigignore 3670020, sigcatch 1266777851
+        // (SIGCHLD caught, not ignored).
+        let bash = "4242 (bash) S 4241 4242 4242 34816 4250 4194560 1480 6812 0 0 3 2 9 6 20 0 1 \
+                    0 9120 8970240 1312 18446744073709551615 94 95 140 0 0 0 65536 3670020 \
+                    1266777851 1 0 0 17 2 0 0 0 0 0 96 97 98 140 141 141 141 0";
+        let stat = parse_pid_stat(bash).expect("bash");
+        assert_eq!((stat.start_ticks, stat.sigignore), (9120, 3_670_020));
+        assert!(
+            !stat.ignores_sigchld(),
+            "catching SIGCHLD is not ignoring it"
+        );
+
+        // A daemon with SIGCHLD = SIG_IGN: bit 16 in sigignore, nothing caught.
+        let autoreap = "500 (daemon) S 1 500 500 0 -1 4194624 9 0 0 0 1 1 0 0 20 0 1 0 77 1 1 \
+                        18446744073709551615 1 1 1 0 0 0 0 65536 0 0 0 0 17 0 0 0 0 0 0";
+        let stat = parse_pid_stat(autoreap).expect("daemon");
         assert_eq!(stat.sigignore, SIGCHLD_MASK);
         assert!(stat.ignores_sigchld());
-        assert_eq!(stat.start_ticks, 99);
     }
 }

@@ -133,9 +133,6 @@ fn run(args: &Args, period: Duration) -> ExitCode {
                     next_regular = now.saturating_add(period_ns);
                 }
             }
-            if in_window {
-                final_day = Some(day);
-            }
             seq += 1;
             let kind = if regular { Kind::Regular } else { Kind::Final };
             let outcome = scanner.scan().and_then(|scan| {
@@ -159,6 +156,11 @@ fn run(args: &Args, period: Duration) -> ExitCode {
             });
             match outcome {
                 Ok(()) => {
+                    // Only a written snapshot counts as the day's final one: a failed scan in the
+                    // window is tried again on the next tick.
+                    if in_window {
+                        final_day = Some(day);
+                    }
                     if last_error.take().is_some() {
                         eprintln!("hsm-linux-probe-io: recovered");
                     }

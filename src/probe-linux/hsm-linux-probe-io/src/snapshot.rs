@@ -220,11 +220,11 @@ pub fn write_atomic(path: &Path, text: &str) -> io::Result<()> {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
     let temp: PathBuf = path.with_file_name(name);
-    {
-        let mut out = std::fs::File::create(&temp)?;
-        out.write_all(text.as_bytes())?;
-    }
-    std::fs::rename(&temp, path).inspect_err(|_| {
+    let written = std::fs::File::create(&temp)
+        .and_then(|mut out| out.write_all(text.as_bytes()))
+        .and_then(|()| std::fs::rename(&temp, path));
+    // A failed write (a full tmpfs) or rename leaves no temp file behind.
+    written.inspect_err(|_| {
         let _ = std::fs::remove_file(&temp);
     })
 }

@@ -8,7 +8,10 @@
 //! **again**: that value holds every such jump, whatever order the scan read the two in. A
 //! process whose `stat` was read but whose `io` is gone by the time it is read (reaped in between)
 //! counts as vanished in this scan; one whose `io` read fails while it is still there is written
-//! with unknown counters (the probe keeps its previous ones).
+//! with unknown counters (the probe keeps its previous ones). A child read **before** its parent (a
+//! parent with a higher pid: after a pid wrap, or a late subreaper) may be reaped before the
+//! parent is read, so it would be listed and in the parent's value at once: after the scan every
+//! such child is looked up again, and one that is gone is dropped and its receiver read again.
 
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
@@ -120,6 +123,28 @@ impl Scanner {
             });
         }
 
+        // A child read BEFORE its parent (a higher parent pid: after a pid wrap, or a subreaper
+        // started late) and reaped before the parent was read is listed AND already in the
+        // parent's value. So every such child is looked at again now: gone, it is dropped and its
+        // receiver read again below, like a child that vanished before the scan.
+        let in_scan: HashMap<u32, (u64, u32)> = scan
+            .entries
+            .iter()
+            .map(|entry| (entry.pid, (entry.start_ticks, entry.ppid)))
+            .collect();
+        let reaped_in_scan: Vec<u32> = scan
+            .entries
+            .iter()
+            .filter(|entry| entry.ppid > entry.pid)
+            .filter(|entry| {
+                read_pid_stat(&self.proc_root, entry.pid)
+                    .is_none_or(|now| now.start_ticks != entry.start_ticks)
+            })
+            .map(|entry| entry.pid)
+            .collect();
+        scan.entries
+            .retain(|entry| !reaped_in_scan.contains(&entry.pid));
+
         let index: HashMap<u32, usize> = scan
             .entries
             .iter()
@@ -132,6 +157,12 @@ impl Scanner {
                 .is_some_and(|&i| scan.entries[i].start_ticks == start)
         };
         let mut receivers = HashSet::new();
+        for &pid in &reaped_in_scan {
+            let lookup = |p: u32| in_scan.get(&p).copied();
+            if let Some(to) = receiver(pid, lookup, alive, in_scan.len()) {
+                receivers.insert(to);
+            }
+        }
         if let Some(previous) = &self.previous {
             for (&pid, &(start, _)) in previous {
                 if alive(pid, start) {
@@ -243,6 +274,13 @@ pub mod tests {
             std::fs::write(path, io_text(n[1]))?;
             return Ok(io.to_string());
         }
+        if let Some(rest) = text.strip_prefix("READ-THEN-REAPED ") {
+            let (first, io) = rest.split_once('\n').expect("two parts");
+            let n = numbers(first);
+            std::fs::write(root.join(n[0].to_string()).join("io"), io_text(n[1]))?;
+            std::fs::remove_dir_all(dir)?;
+            return Ok(io.to_string());
+        }
         Ok(text)
     }
 
@@ -305,6 +343,26 @@ pub mod tests {
         assert_eq!(scan.entries.len(), 1);
     }
 
+    /// The inverse race: the child (lower pid) is read in full, THEN reaped, then its parent (higher
+    /// pid) is read with the jump in it. Listing both would count the child twice; the child is
+    /// looked at again after the scan and dropped, and its parent read again.
+    #[test]
+    fn a_child_read_then_reaped_before_its_higher_pid_parent_is_dropped() {
+        let (tree, mut scanner) = bash_and_tar("race-inverse", 900);
+        tree.process(900, "bash", 1, 5, 3 * MB);
+        tree.file(
+            "11/io",
+            &format!("READ-THEN-REAPED 900 {AFTER_REAP}\n{}", io_text(120 * MB)),
+        );
+        let scan = scanner.scan().expect("scan");
+        assert!(
+            scan.entries.iter().all(|entry| entry.pid != 11),
+            "tar dropped"
+        );
+        assert_eq!(written(&scan, 900), Some(AFTER_REAP));
+        assert_eq!(scan.reread, 1);
+    }
+
     /// An `io` read failing while the process is still there: unknown counters, still listed.
     #[test]
     fn an_io_read_failing_for_a_live_process_writes_unknown_counters() {
@@ -323,8 +381,9 @@ pub mod tests {
         tree.process(2, "kthreadd", 0, 1, 0);
         tree.file(
             "2/stat",
-            "2 (kthreadd) S 0 0 0 0 -1 2129984 0 0 0 0 0 0 0 0 20 0 1 0 1 0 0 1 0 0 0 0 0 0 0 0 \
-             2147483647 0 0\n",
+            // sigignore (field 33) all ones, as the kernel shows kthreadd; sigcatch 0.
+            "2 (kthreadd) S 0 0 0 0 -1 2129984 0 0 0 0 0 0 0 0 20 0 1 0 1 0 0 1 0 0 0 0 0 0 0 \
+             2147483647 0 0 0\n",
         );
         tree.file(
             "self/stat",
