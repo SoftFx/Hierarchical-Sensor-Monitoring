@@ -156,6 +156,14 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.1** (#1528) — logging fix, ABI unchanged. `Registered N sensor(s) after an earlier failed
+  attempt.` counts only the sensors whose earlier registration post failed: a runtime registration
+  that shares the flush, or follows a retry the next Start batch already landed, is no longer
+  credited with a recovery (it used to be, because one flag stood for the whole queue). Pinned by
+  `native_http_recovery_log_credits_only_retried_registrations`. The corpus also pins the
+  `.module/Service alive` cadence with a long collect period
+  (`module_markers_contract:service_alive_keeps_beating_with_a_long_collect_period`, #1443) — no
+  behavior change there, the beat has followed the sensor's period since 0.8.2 (#1437).
 - **0.11.0** (#1509) — wire addition, ABI unchanged (no new exported `hsm_*` function; MINOR because the
   bar payload gains a field consumers may start relying on). Every bar posts `StdDev` right after `Type`
   (where the server DTO declares it): the population standard deviation of its samples via Welford

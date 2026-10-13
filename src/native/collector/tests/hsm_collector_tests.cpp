@@ -6542,31 +6542,81 @@ namespace
         SensorHandle sensor = CreateIntSensor(collector.value, "connect/retried");
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
-        for (int i = 0; i < 500 && server.CountPath("/api/sensors/commands") < 3; ++i)
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        // Ten more worker cycles: the accepted registration is not posted again.
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        const size_t posts = server.CountPath("/api/sensors/commands");
-        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
-
-        Require(posts == 3, ("two 502s and one accepted post expected, saw " + std::to_string(posts)).c_str());
-        size_t carrying = 0;
-        for (const auto& request : server.Requests())
-            if (request.path == "/api/sensors/commands" && request.body.find("\"Path\":\"connect/retried\"") != std::string::npos)
-                ++carrying;
-        Require(carrying == 3, "every retry re-sends the sensor's registration");
-
-        const auto logs = sink.Snapshot(); // the worker is joined by Stop
         const auto logged = [&](hsm_log_level_t level, const std::string& needle) {
-            for (const auto& entry : logs)
+            for (const auto& entry : sink.Snapshot())
                 if (entry.first == level && entry.second.find(needle) != std::string::npos)
                     return true;
             return false;
         };
+        // Wait for the recovery line, not for a time window: it is logged after the accepted post
+        // marked the sensor posted. Stop's drain then flushes the registration queue once more, so a
+        // landed registration that was wrongly queued again would show up as a fourth post (#1528).
+        for (int i = 0; i < 500 && !logged(HSM_LOG_LEVEL_INFO, "after an earlier failed attempt."); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        size_t carrying = 0;
+        for (const auto& request : server.Requests())
+            if (request.path == "/api/sensors/commands" && request.body.find("\"Path\":\"connect/retried\"") != std::string::npos)
+                ++carrying;
+        Require(carrying == 3,
+                ("two 502s and one accepted post carry the sensor, and it is not posted again; saw " + std::to_string(carrying)).c_str());
+        Require(server.CountPath("/api/sensors/commands") >= 3, "every registration post reaches the server");
+
         Require(logged(HSM_LOG_LEVEL_ERROR, "Failed to register sensor connect/retried on connect: HTTP 502; retrying"),
                 "the connect failure is logged with its status and the retry");
         Require(logged(HSM_LOG_LEVEL_INFO, "Registered 1 sensor(s) after an earlier failed attempt."),
                 "the landed retry is logged");
+    }
+
+    // #1528: the recovery line counts only the registrations that were actually retried. A runtime
+    // registration that shares the flush with a retry, or follows a retry another path already
+    // landed, is not credited with a recovery. A 60 s collect period keeps the worker idle, so every
+    // flush here is a Stop drain: deterministic, no time window.
+    void NativeHttpRecoveryLogCreditsOnlyRetriedRegistrations()
+    {
+        hsm::test::HttpRecordingServer server;
+        LockedLogs sink;
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 60000));
+        CaptureLockedLogs(collector.value, sink);
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle old_sensor = CreateIntSensor(collector.value, "credit/old");
+        const auto recoveries = [&]() {
+            std::vector<std::string> lines;
+            for (const auto& entry : sink.Snapshot())
+                if (entry.first == HSM_LOG_LEVEL_INFO && entry.second.find("after an earlier failed attempt.") != std::string::npos)
+                    lines.push_back(entry.second);
+            return lines;
+        };
+
+        // The Start batch and the Stop drain's retry both get a 502: the sensor stays queued for a
+        // retry. The next Start batch lands it, so the queued retry is no longer due.
+        server.FailNext("/api/sensors/commands", 2);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "first start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "first stop failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "second start failed");
+        Require(server.CountPath("/api/sensors/commands") == 3, "two 502s, then the second Start batch lands");
+
+        // An unrelated runtime registration shares the next flush with the stale retry entry.
+        SensorHandle runtime_sensor = CreateIntSensor(collector.value, "credit/runtime");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+        Require(FirstRequestWith(server, "/api/sensors/commands", { "\"Path\":\"credit/runtime\"" }) >= 0,
+                "the runtime sensor is registered by the Stop drain");
+        Require(recoveries().empty(), "a registration that never failed must not be announced as a recovery");
+
+        // A failed Start batch (two sensors) and a runtime sensor land in one flush: only the two
+        // retried registrations are counted.
+        server.FailNext("/api/sensors/commands", 1);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "third start failed");
+        SensorHandle late_sensor = CreateIntSensor(collector.value, "credit/late");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "third stop failed");
+        Require(FirstRequestWith(server, "/api/sensors/commands",
+                                 { "\"Path\":\"credit/old\"", "\"Path\":\"credit/runtime\"", "\"Path\":\"credit/late\"" }) >= 0,
+                "the retried batch and the runtime sensor are posted together");
+        const auto lines = recoveries();
+        Require(lines.size() == 1, "one recovery line");
+        Require(lines.front().find("Registered 2 sensor(s) after an earlier failed attempt.") != std::string::npos,
+                ("the recovery counts the two retried sensors only: " + lines.front()).c_str());
     }
 
     // A restart re-registers every sensor, including those the previous run already registered. A
@@ -8211,6 +8261,7 @@ namespace
             { "native_http_rejected_runtime_registration_is_not_retried", [](const std::string&) { NativeHttpRejectedRuntimeRegistrationIsNotRetried(); } },
             { "native_http_connect_registration_is_retried_after_5xx", [](const std::string&) { NativeHttpConnectRegistrationIsRetriedAfter5xx(); } },
             { "native_http_restart_registration_is_retried_after_5xx", [](const std::string&) { NativeHttpRestartRegistrationIsRetriedAfter5xx(); } },
+            { "native_http_recovery_log_credits_only_retried_registrations", [](const std::string&) { NativeHttpRecoveryLogCreditsOnlyRetriedRegistrations(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

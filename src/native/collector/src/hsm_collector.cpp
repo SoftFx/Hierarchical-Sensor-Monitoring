@@ -2828,11 +2828,13 @@ namespace
                 for (const auto& pending : pending_registrations_)
                     queued.insert(pending.get());
                 for (const auto& sensor : sensors)
+                {
                     if (queued.insert(sensor.get()).second)
                         pending_registrations_.push_back(sensor);
-                // Set with the push, under the same lock: a flush that swaps the queue either takes
-                // these sensors and the flag together or neither.
-                registration_retry_pending_ = true;
+                    // Marked with the push, under the same lock: a flush that swaps the queue either
+                    // takes these sensors and their marks together or neither.
+                    retried_registrations_.insert(sensor.get());
+                }
             }
         }
 
@@ -2850,31 +2852,37 @@ namespace
         void FlushRuntimeRegistrations()
         {
             std::vector<std::shared_ptr<NativeSensor>> pending;
-            bool retrying = false;
+            std::unordered_set<const NativeSensor*> retried;
             {
-                // Read-and-clear the flag in the same section as the swap, so it always describes
-                // the sensors taken: a retry queued by another thread (a built-in source's sampler)
-                // after the swap keeps both its sensors and its flag for the next cycle. Cleared
-                // before the empty check: a retry the next Start batch already landed leaves nothing
-                // due, and a flag kept past it would credit a later, unrelated registration with a
-                // recovery that never happened.
+                // Take the retry marks in the same section as the swap, so they always describe the
+                // sensors taken: a retry queued by another thread (a built-in source's sampler) after
+                // the swap keeps both its sensors and its marks for the next cycle. A retried sensor
+                // that is no longer due (the next Start batch landed it) drops its mark here, so a
+                // later or concurrent post is never credited with a recovery that did not happen.
                 std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
                 pending.swap(pending_registrations_);
-                retrying = registration_retry_pending_;
-                registration_retry_pending_ = false;
+                retried.swap(retried_registrations_);
             }
             std::vector<std::shared_ptr<NativeSensor>> due;
+            size_t due_retried = 0;
             for (auto& sensor : pending)
-                if (sensor->RegistrationPostPending())
-                    due.push_back(std::move(sensor));
+            {
+                if (!sensor->RegistrationPostPending())
+                    continue;
+                if (retried.count(sensor.get()) != 0)
+                    ++due_retried;
+                due.push_back(std::move(sensor));
+            }
             if (due.empty())
                 return;
             const RegistrationPost outcome = PostRegistrationsWire(due, /*runtime=*/true);
             if (outcome == RegistrationPost::Retry)
                 RetryRegistrations(due);
-            else if (outcome == RegistrationPost::Accepted && retrying)
+            // The recovery line counts only the sensors whose earlier post failed, not a runtime
+            // registration that happened to share this flush (#1528).
+            else if (outcome == RegistrationPost::Accepted && due_retried != 0)
                 LogMessage(HSM_LOG_LEVEL_INFO,
-                           "Registered " + std::to_string(due.size()) + " sensor(s) after an earlier failed attempt.");
+                           "Registered " + std::to_string(due_retried) + " sensor(s) after an earlier failed attempt.");
         }
 #endif
 
@@ -6002,10 +6010,11 @@ namespace
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
         std::mutex pending_registrations_mutex_;
         std::vector<std::shared_ptr<NativeSensor>> pending_registrations_;
-        // Set when a registration post failed retryably (RetryRegistrations); the flush that next
-        // lands one says so at Info, closing the Error line the failure logged (#1515). Guarded by
-        // pending_registrations_mutex_, so it changes together with pending_registrations_.
-        bool registration_retry_pending_ = false;
+        // The queued sensors whose registration post failed retryably (RetryRegistrations); the
+        // flush that lands them says so at Info, closing the Error line the failure logged (#1515),
+        // and counts only these (#1528). Guarded by pending_registrations_mutex_ and swapped out
+        // with pending_registrations_, so every entry names a sensor that queue keeps alive.
+        std::unordered_set<const NativeSensor*> retried_registrations_;
 #endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
