@@ -122,29 +122,43 @@ The probe registers **two separately pinned sets**:
    1024², every `periodMs` 60 s: names at or above `minBytesPerSec` 1 MiB/s, the fastest `count` 10,
    TTL 5 min, `EnableGrafana`) and `Written per day by process/<name>` / `Read per day by
    process/<name>` (Double, decimal GB, the top `count` names by the day's total, posted once in the
-   day's last 30 s from a final reading, TTL 26 h). Source: `/proc/<pid>/io` `write_bytes` /
-   `read_bytes` (block I/O, not `wchar`/`rchar`; `cancelled_write_bytes` not subtracted) over top
-   CPU's process table and name rule (`read_processes`, `sensor_name`), identity `(pid, starttime)`;
-   unlike top CPU a process started since the previous read — and younger than every process that
-   read saw — is credited with its whole counters (they start at 0). The kernel adds a reaped child's
-   whole counters to its parent's before it removes the pid, so each vanished process's last-read
-   counters are subtracted from its reaper (its parent at the previous read if alive, else the first
-   live ancestor up the previous read's chain), whose `io` is read again after the scan so the jump is
-   in it whatever the read order; a process reaped between its `stat` and `io` reads counts as
-   vanished; a remainder that does not fit is tried once more, then dropped (debug line); a reaper
-   ignoring `SIGCHLD` (`SigIgn` in its `status`) autoreaps and is not corrected. A process's last
+   day's last 30 s, TTL 26 h). **Two processes:** reading another user's `/proc/<pid>/io` needs
+   `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` (a 0400 file whose read is also ptrace-gated; either
+   alone reads `EACCES` — measured), and a holder of both can read the whole host filesystem via
+   `/proc/<pid>/root`, so the probe holds neither. The root helper **`hsm-linux-probe-io`** (crate
+   `src/probe-linux/hsm-linux-probe-io`, unit `hsm-linux-probe-io.service`, in the same `.deb`,
+   disabled; `User=root Group=hsm-probe`, only those two capabilities, `PrivateNetwork`, no address
+   families, `ProtectProc=default`, syscall filter without `ptrace`/`process_vm_*`/
+   `open_by_handle_at`/`@privileged`/`@resources`) reads `topDiskIo.enabled/periodMs` from the
+   config (exits 0 when off) and every `periodMs`, plus once in the day's last 30 s, reads every
+   `/proc/<pid>/{stat,io}` and replaces `/run/hsm-linux-probe-io/snapshot` atomically (`0640
+   root:hsm-probe`; header `hsm-linux-probe-io 1 seq= mono_ns= wall_ms= kind=regular|final`, lines
+   `pid start ppid kthread sigchld_ignored read write comm`, comm percent-escaped). The probe ticks
+   every 5 s and consumes each new snapshot once: regular → speeds (interval from the snapshots'
+   monotonic times), any in the day's last 30 s → the day's post. A missing/unreadable/stale (> 3
+   periods) snapshot is one WARN per probe lifetime naming the unit, nothing posted; recovery one
+   INFO. Counters: `write_bytes` / `read_bytes` (block I/O, not `wchar`/`rchar`;
+   `cancelled_write_bytes` not subtracted) over top CPU's process table and name rule (the stat
+   parser and `read_processes` live in the helper crate, re-exported; `sensor_name`), identity
+   `(pid, starttime)`; unlike top CPU a process started since the previous snapshot — and younger
+   than every process it held — is credited with its whole counters (they start at 0); unknown
+   counters keep the previous ones. The kernel adds a reaped child's whole counters to its parent's
+   before it removes the pid, so each vanished process's last-seen counters are subtracted from its
+   reaper (its parent at the previous snapshot if alive, else the first live ancestor up the chain;
+   `hsm_linux_probe_io::scan::receiver`, shared); the helper re-reads every such receiver's `io`
+   after its scan so the jump is in the same snapshot whatever the read order, and a process reaped
+   between its `stat` and `io` reads counts as vanished; a remainder that does not fit is tried once
+   more, then dropped (debug line); a reaper ignoring `SIGCHLD` (stat field 34) autoreaps and is not
+   corrected. A process's last
    partial interval is counted under its reaper. Known limits (README "Limits"): a process too
    short-lived to be read is counted under its reaper in full; an orphan whose parent died first in
    the same interval is taken back from its grandparent (the real reaper shows it a second time);
    an `SA_NOCLDWAIT` reaper is cut by its children's counters. The day follows `Written per day on
    <disk>` (post window, after-post bytes to the next day, missed day logged once, never an invented
    0) but is **in memory only**: a restart starts the day afresh (the comment says since when).
-   **Off unless the top-level `topDiskIo` block enables it**; no server switch. Needs the
-   `top-disk-io.conf` drop-in (`ProtectProc=default` + `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`:
-   another user's `io` is a 0400 file whose read the kernel also gates on ptrace access, so either
-   capability alone reads `EACCES` — measured), which `install.sh` writes
-   only from an enabling host config; without it the source measures what it can and logs one WARN
-   (`hidepid`, or the `EACCES` count with the remedy). Every sensor registers at runtime. Not in the
+   **Off unless the top-level `topDiskIo` block enables it**; no server switch; `install.sh` enables
+   and restarts the helper from an enabling host config and stops/disables it otherwise
+   (`uninstall.sh` and `prerm` disable it). Every sensor registers at runtime. Not in the
    shared catalog, so no Windows counterpart and no conformance scenario. Details: README "Top disk
    I/O processes".
 
@@ -241,23 +255,17 @@ Linux is the only supported target. The initiative is
   `uninstall.sh` and `postrm` remove it. Top-CPU reads only `/proc/stat`,
   `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
   argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
-- **The unit holds no capability unless top disk I/O is on.** Only the `top-disk-io.conf` drop-in
-  (`install.sh`, from a host config enabling the top-level `topDiskIo`; removed otherwise, by
-  `uninstall.sh` and by `postrm`) grants `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` (bounding +
-  ambient) and sets `ProtectProc=default`. **With it the probe process has read-only access to the
-  entire host filesystem and every container's filesystem**: `/proc/<pid>/root` (and `cwd`) of any
-  process becomes followable and leads into that process's mount namespace (PID 1's has no
-  `ProtectHome=`/`PrivateTmp=`/`ProtectSystem=`), where `CAP_DAC_READ_SEARCH` bypasses file
-  permissions (`/proc/1/root/root/.ssh/id_*`, the real `/tmp`, container rootfs); it can also read
-  other processes' `environ`, `fd/*` and memory. `ProtectHome=`, `ProtectSystem=` and
-  `PrivateTmp=` no longer contain it. The probe's code reads only `/proc/<pid>/stat`, `io`, `exe`,
-  `cmdline` and `status` — a property of the code, not an enforced boundary. The drop-in also adds
-  `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace` (merged into the
-  unit's `@system-service` allow list; `process_vm_readv`/`writev` are in it via `@ipc`, `ptrace`
-  and `open_by_handle_at` are not — `systemd-analyze syscall-filter`, debian:13, systemd 257): still
-  useful against a compromised probe, but it does **not** restore those protections. The only way
-  to keep the probe unprivileged is a root-run helper that prints only
-  `pid starttime read_bytes write_bytes` — not implemented; the owner's decision.
+- **The probe holds no capability, ever.** Top disk I/O (#1547) does not change that: the only
+  privileged piece of the package is the root helper `hsm-linux-probe-io.service`, which holds
+  `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` (bounding set; nothing else), reads only
+  `/proc/<pid>/{stat,io}` and the config's `topDiskIo` block, has no network, and writes one file,
+  `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which the probe reads as a member of
+  `hsm-probe`. It runs only where `install.sh` enabled it from an enabling host config. With both
+  capabilities a process could read the whole host filesystem via `/proc/<pid>/root`; that is why
+  they stay with the helper and its narrow job. Its syscall filter is `@system-service` minus
+  `open_by_handle_at process_vm_readv process_vm_writev ptrace @privileged @resources`
+  (`process_vm_*` are in `@system-service` via `@ipc`, `ptrace` and `open_by_handle_at` are not —
+  `systemd-analyze syscall-filter`, debian:13, systemd 257).
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.
