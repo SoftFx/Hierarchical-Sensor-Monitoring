@@ -24,16 +24,21 @@ env:
   # Wider than the push filter on purpose: the lane builds the server container
   # from branch source, so server, database and bundled-lib changes are part of
   # what it tests (today every PR runs it, so narrowing to the push filter would
-  # drop that coverage). '.github/**' is always included by the detection
-  # action, and push/schedule/workflow_dispatch always run the full lane.
+  # drop that coverage). tests/conformance/** and .gitattributes are inputs too:
+  # WireFormatGoldenLockTests reads tests/conformance/collector/golden/*.golden
+  # byte for byte, so a PR that regenerates a golden must re-run the .NET side.
+  # '.github/**' is always included by the detection action, and
+  # push/schedule/workflow_dispatch always run the full lane.
   LANE_PATHS: |
     src/collector/**
     src/api/**
     src/server/**
     src/database/**
     src/lib/**
+    tests/conformance/**
     src/Directory.Build.*
     global.json
+    .gitattributes
     .github/workflows/collector-integration-tests.yml
 
 jobs:

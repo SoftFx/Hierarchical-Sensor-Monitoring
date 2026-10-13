@@ -121,10 +121,12 @@ therefore gets these checks green in seconds; a PR touching a lane's paths runs 
 
 - `LANE_PATHS` per workflow: native — `src/native/**`, `tests/conformance/**`,
   `docs/native-collector/**`, `ports/**`, `versions/**`, root `conanfile*` / `vcpkg*.json`,
-  `scripts/conformance-*`; collector unit — `src/collector/**`, `src/api/**`,
-  `tests/conformance/**`, `src/Directory.Build.*`, `global.json`; collector integration — the
-  collector set plus `src/server/**`, `src/database/**`, `src/lib/**` (the lane builds the server
-  image from branch source). Each also lists its own workflow file.
+  `scripts/conformance-*`, `.gitattributes`; collector unit — `src/collector/**`, `src/api/**`,
+  `tests/conformance/**`, `src/Directory.Build.*`, `global.json`, `.gitattributes`; collector
+  integration — the collector unit set (incl. `tests/conformance/**`: `WireFormatGoldenLockTests`
+  reads the golden files there byte for byte, and `.gitattributes` fixes their line endings) plus
+  `src/server/**`, `src/database/**`, `src/lib/**` (the lane builds the server image from branch
+  source). Each also lists its own workflow file.
 - Always the full lane: any change under `.github/**`, every `push` / `workflow_dispatch` /
   `schedule` run, and any doubt (HEAD not a two-parent merge commit, `git diff` failure) —
   detection fails open.
