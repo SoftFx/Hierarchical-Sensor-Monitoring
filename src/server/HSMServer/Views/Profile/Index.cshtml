@@ -98,21 +98,21 @@
         A token acts with your own rights — everything you can see and change, everywhere you can. A read-only token can only read. Tokens do not expire; revoke them when no longer needed.
     </div>
 
-    @if (!Model.TokensEnabled)
-    {
-        if (!Model.GenerationStateHealthy)
+        @if (!Model.TokensEnabled)
         {
-            <div class="alert alert-warning py-2">
-                Token state is unreliable after a storage problem; lifecycle operations are unavailable. Contact an administrator.
-            </div>
+            if (!Model.GenerationStateHealthy)
+            {
+                <div class="alert alert-danger py-2">
+                    Token state is unreliable after a storage problem; lifecycle operations are unavailable. Contact an administrator.
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning py-2">
+                    API tokens are turned off — every existing token has stopped authenticating right now. Re-enable them in Configuration → Server, or revoke tokens you no longer need below.
+                </div>
+            }
         }
-        else
-        {
-            <div class="alert alert-info py-2">
-                API tokens are disabled by the server configuration; existing tokens no longer authenticate. Listing and revocation remain available.
-            </div>
-        }
-    }
 
     <div class="token-list">
         <div class="list-header">
@@ -325,6 +325,22 @@
 
     function showModal(id) { bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show(); }
     function hideModal(id) { bootstrap.Modal.getInstance(document.getElementById(id))?.hide(); }
+
+    // Bootstrap handles Escape only when focus is inside the dialog element
+    // (its keydown listener lives on the .modal div). These dialogs are opened
+    // from page buttons and focus can still sit on body when Escape is pressed,
+    // leaving the modal stuck; close the open dialog at the document level.
+    // The one-time secret modal is deliberately absent: it is Esc-proof by design.
+    var escDismissibleModals = ['createModal', 'renameModal', 'rotateModal', 'revokeModal'];
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        var open = escDismissibleModals
+            .map(function (id) { return document.getElementById(id); })
+            .filter(function (el) { return el && el.classList.contains('show'); });
+        if (open.length === 0) return;
+        event.preventDefault();
+        open.forEach(function (el) { hideModal(el.id); });
+    });
 
     function showError(elementId, message) {
         var el = document.getElementById(elementId);

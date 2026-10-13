@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HSMServer.Model.ManagementApi.Alerts
 {
     // Transport-agnostic outcome of an alert-administration WRITE (#1500) — the
-    // write-side twin of SensorTreeReadResult: the REST controllers render a
+    // write-side twin of ManagementReadResult: the REST controllers render a
     // failure through the area's uniform JSON error contract (ToActionResult
     // below), and the future MCP write tools render the same failure as tool
     // error text. One authorization and validation decision, two transports.

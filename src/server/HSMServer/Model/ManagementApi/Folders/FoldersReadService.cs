@@ -6,7 +6,6 @@ using System.Threading;
 using HSMServer.Authentication;
 using HSMServer.Folders;
 using HSMServer.Model.Folders;
-using HSMServer.Model.ManagementApi.SensorTree;
 
 namespace HSMServer.Model.ManagementApi.Folders
 {
@@ -14,7 +13,7 @@ namespace HSMServer.Model.ManagementApi.Folders
     /// The read surface for access-grouping folders: list and item, with the
     /// owner-sight visibility rule. Transport-agnostic — the REST controller
     /// and the MCP folder tools both call it; the caller supplies the token
-    /// principal and gets DTOs or a <see cref="SensorTreeReadResult{T}"/>
+    /// principal and gets DTOs or a <see cref="ManagementReadResult{T}"/>
     /// failure back, never an IActionResult (the shared read envelope of the
     /// management area).
     /// </summary>
@@ -106,14 +105,14 @@ namespace HSMServer.Model.ManagementApi.Folders
         /// One folder by id. Unknown and invisible ids answer the SAME
         /// NotFound (the area's anti-enumeration rule).
         /// </summary>
-        public SensorTreeReadResult<FolderDto> GetFolder(Guid id, ClaimsPrincipal user)
+        public ManagementReadResult<FolderDto> GetFolder(Guid id, ClaimsPrincipal user)
         {
             // The storage indexer answers null for an unknown id (the area's
             // dictionary semantics).
             var folder = _folders[id];
 
             if (folder is null)
-                return SensorTreeReadResult<FolderDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<FolderDto>.Fail(ManagementReadOutcome.NotFound);
 
             // Reads authorize at the folder's OWN boundary: the evaluator's
             // 404 arm keeps invisible indistinguishable from unknown; the
@@ -123,11 +122,11 @@ namespace HSMServer.Model.ManagementApi.Folders
             return _authorization.AuthorizeRead(user, FolderResource(id)) switch
             {
                 ApiTokenAuthorization.Allowed =>
-                    SensorTreeReadResult<FolderDto>.Ok(FolderDtoMapper.ToDto(folder,
+                    ManagementReadResult<FolderDto>.Ok(FolderDtoMapper.ToDto(folder,
                         _authorization.MemoizedProductVisibility(user), CanSeeDetail(user, folder))),
-                ApiTokenAuthorization.Forbidden => SensorTreeReadResult<FolderDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see this folder."),
-                _ => SensorTreeReadResult<FolderDto>.Fail(SensorTreeReadOutcome.NotFound),
+                ApiTokenAuthorization.Forbidden => ManagementReadResult<FolderDto>.Fail(
+                    ManagementReadOutcome.Forbidden, message: "The token's owner cannot see this folder."),
+                _ => ManagementReadResult<FolderDto>.Fail(ManagementReadOutcome.NotFound),
             };
         }
 

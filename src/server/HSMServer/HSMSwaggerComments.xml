@@ -1204,7 +1204,7 @@
             and schedules, list and item, with the visibility rules that decide what
             a caller may see. Transport-agnostic — the REST controllers and the MCP
             alert tools both call it; the caller supplies the token principal and
-            gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never
+            gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/> failure back, never
             an IActionResult (the shared read envelope of the management area).
             </summary>
         </member>
@@ -1839,7 +1839,7 @@
             visibility rule that decides what a caller may see. Transport-agnostic —
             the REST controller and the MCP chat tools both call it; the caller
             supplies the token principal and gets DTOs or a
-            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never an
+            <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/> failure back, never an
             IActionResult (the shared read envelope of the management area).
             </summary>
         </member>
@@ -1932,7 +1932,7 @@
             The read surface for access-grouping folders: list and item, with the
             owner-sight visibility rule. Transport-agnostic — the REST controller
             and the MCP folder tools both call it; the caller supplies the token
-            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/>
+            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/>
             failure back, never an IActionResult (the shared read envelope of the
             management area).
             </summary>
@@ -1971,7 +1971,15 @@
             <summary>Human-readable summary; 404 bodies are generic by design (anti-enumeration).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Details">
-            <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s and 422s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
+            <summary>
+            The typed details map (#1371): string keys with per-status value shapes —
+            field-keyed message arrays ({"field": ["msg"]}) on 400s and 422s,
+            scalar resource pointers ({"traceId": "..."} on 500s, {"templateId": "..."}
+            on create-path 409s); null otherwise. Declared Dictionary&lt;string, object&gt;
+            rather than object so the published schema is a string-keyed map (values
+            serialize by runtime type — the union is published explicitly by
+            ManagementApiErrorDetailsSchemaFilter); the three fields are always present.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto">
             <summary>
@@ -2209,7 +2217,7 @@
             sensor search, one sensor with its current value, and the newest-N history.
             Transport-agnostic — the REST controllers and the MCP tools both call it;
             the caller supplies the token principal and a cancellation token, and gets
-            DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadFailure"/> back, never an IActionResult.
+            DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadFailure"/> back, never an IActionResult.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">

@@ -21,7 +21,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// sensor search, one sensor with its current value, and the newest-N history.
     /// Transport-agnostic — the REST controllers and the MCP tools both call it;
     /// the caller supplies the token principal and a cancellation token, and gets
-    /// DTOs or a <see cref="SensorTreeReadFailure"/> back, never an IActionResult.
+    /// DTOs or a <see cref="ManagementReadFailure"/> back, never an IActionResult.
     /// </summary>
     // Extracted verbatim from the three sensor-tree controllers (#1391) so MCP
     // tools and REST endpoints share ONE implementation of search, visibility and
@@ -107,14 +107,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// children, folders paginated, sensors capped. Unknown and invisible ids
         /// answer the SAME NotFound.
         /// </summary>
-        public SensorTreeReadResult<NodeDto> GetNode(Guid id, ClaimsPrincipal user,
+        public ManagementReadResult<NodeDto> GetNode(Guid id, ClaimsPrincipal user,
             int foldersPage, int foldersPageSize)
         {
             // Unknown id: the plain area 404, issued BEFORE the evaluator call —
             // the area rule that keeps unknown and invisible indistinguishable
             // without paying a security event for every random id.
             if (!_cache.TryGetProduct(id, out var node) || node is null)
-                return SensorTreeReadResult<NodeDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<NodeDto>.Fail(ManagementReadOutcome.NotFound);
 
             // Sight is keyed on the node's ROOT product (ProductsRoles holds root
             // ids; folder roles materialize per root) — authorizing the folder id
@@ -139,10 +139,10 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             return decision switch
             {
                 ApiTokenAuthorization.Allowed =>
-                    SensorTreeReadResult<NodeDto>.Ok(SensorTreeDtoMapper.ToNodeDto(node, foldersPage, foldersPageSize)),
-                ApiTokenAuthorization.Forbidden => SensorTreeReadResult<NodeDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see this node."),
-                _ => SensorTreeReadResult<NodeDto>.Fail(SensorTreeReadOutcome.NotFound),
+                    ManagementReadResult<NodeDto>.Ok(SensorTreeDtoMapper.ToNodeDto(node, foldersPage, foldersPageSize)),
+                ApiTokenAuthorization.Forbidden => ManagementReadResult<NodeDto>.Fail(
+                    ManagementReadOutcome.Forbidden, message: "The token's owner cannot see this node."),
+                _ => ManagementReadResult<NodeDto>.Fail(ManagementReadOutcome.NotFound),
             };
         }
 
@@ -158,7 +158,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// (instead of narrowing a heavy DTO afterwards) keeps a compact caller
         /// from materializing current-value payloads it discards (#1392 review).
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<TItem>> FindSensors<TItem>(Guid? product, string search, string searchMode,
+        public ManagementReadResult<ApiPageDto<TItem>> FindSensors<TItem>(Guid? product, string search, string searchMode,
             string type, int page, int pageSize, ClaimsPrincipal user, Func<BaseSensorModel, TItem> mapper,
             CancellationToken cancellation)
         {
@@ -173,19 +173,19 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 if (!_cache.TryGetProduct(productId, out var node) || node is null ||
                     _authorization.AuthorizeRead(user, ApiTokenResource.Product(node.Root.Id)) != ApiTokenAuthorization.Allowed)
                 {
-                    return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(SensorTreeReadOutcome.NotFound);
+                    return ManagementReadResult<ApiPageDto<TItem>>.Fail(ManagementReadOutcome.NotFound);
                 }
 
                 subtree = node;
             }
 
             if (!SensorSearchMatcher.TryBuild(search, searchMode, out var predicate, out var regexMode, out var searchErrors))
-                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(
-                    SensorTreeReadOutcome.ValidationFailed, errors: searchErrors);
+                return ManagementReadResult<ApiPageDto<TItem>>.Fail(
+                    ManagementReadOutcome.ValidationFailed, errors: searchErrors);
 
             if (!TryResolveTypeFilter(type, out var typeFilter, out var typeErrors))
-                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(
-                    SensorTreeReadOutcome.ValidationFailed, errors: typeErrors);
+                return ManagementReadResult<ApiPageDto<TItem>>.Fail(
+                    ManagementReadOutcome.ValidationFailed, errors: typeErrors);
 
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -207,13 +207,13 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                         ? $"The search pattern is too complex to evaluate (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms); simplify it or narrow the listing to a single product."
                         : "The search exceeded the evaluation budget; narrow it to a single product or a more specific text.";
 
-                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(SensorTreeReadOutcome.Unavailable, message: message);
+                return ManagementReadResult<ApiPageDto<TItem>>.Fail(ManagementReadOutcome.Unavailable, message: message);
             }
 
             var totalPages = ApiPagination.TotalPagesOf(all.Count, pageSize);
             page = ApiPagination.ClampPage(page, totalPages);
 
-            return SensorTreeReadResult<ApiPageDto<TItem>>.Ok(new ApiPageDto<TItem>
+            return ManagementReadResult<ApiPageDto<TItem>>.Ok(new ApiPageDto<TItem>
             {
                 Items = [.. all.Skip((page - 1) * pageSize).Take(pageSize).Select(mapper)],
                 Page = page,
@@ -228,12 +228,12 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// One sensor by id: metadata plus its current value — the same shape the
         /// search list returns.
         /// </summary>
-        public SensorTreeReadResult<SensorDto> GetSensor(Guid id, ClaimsPrincipal user)
+        public ManagementReadResult<SensorDto> GetSensor(Guid id, ClaimsPrincipal user)
         {
             if (!TryGetVisibleSensor(id, user, out var sensor, out var failure))
-                return SensorTreeReadResult<SensorDto>.FromFailure(failure);
+                return ManagementReadResult<SensorDto>.FromFailure(failure);
 
-            return SensorTreeReadResult<SensorDto>.Ok(SensorTreeDtoMapper.ToSensorDto(sensor));
+            return ManagementReadResult<SensorDto>.Ok(SensorTreeDtoMapper.ToSensorDto(sensor));
         }
 
 
@@ -251,11 +251,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// under-full response: a full one drops the border first, and dropping
         /// it alone never sets <c>truncated</c> — it is outside the window).
         /// </summary>
-        public async Task<SensorTreeReadResult<SensorHistoryDto>> GetSensorHistoryAsync(Guid id, DateTime? from,
+        public async Task<ManagementReadResult<SensorHistoryDto>> GetSensorHistoryAsync(Guid id, DateTime? from,
             DateTime? to, int maxPoints, ClaimsPrincipal user, CancellationToken cancellation)
         {
             if (!TryGetVisibleSensor(id, user, out var sensor, out var failure))
-                return SensorTreeReadResult<SensorHistoryDto>.FromFailure(failure);
+                return ManagementReadResult<SensorHistoryDto>.FromFailure(failure);
 
             // The sensor may have been deleted between the sight check and the
             // stream — the page read would dereference a null deep in the cache
@@ -263,13 +263,13 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             // on the 404 path; the residual race (deleted after the re-check)
             // is the cache's own, see feature.md Known Issues.
             if (_cache.GetSensor(id) is null)
-                return SensorTreeReadResult<SensorHistoryDto>.Fail(SensorTreeReadOutcome.NotFound);
+                return ManagementReadResult<SensorHistoryDto>.Fail(ManagementReadOutcome.NotFound);
 
             var toUtc = (to ?? DateTime.UtcNow).ToUtcInstant();
             var fromUtc = (from ?? toUtc - DefaultHistoryWindow).ToUtcInstant();
 
             if (fromUtc > toUtc)
-                return SensorTreeReadResult<SensorHistoryDto>.Fail(SensorTreeReadOutcome.ValidationFailed,
+                return ManagementReadResult<SensorHistoryDto>.Fail(ManagementReadOutcome.ValidationFailed,
                     errors: new Dictionary<string, string[]>
                     {
                         ["from"] = ["'from' must not be later than 'to'."],
@@ -339,7 +339,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             points.Reverse();
 
-            return SensorTreeReadResult<SensorHistoryDto>.Ok(new SensorHistoryDto
+            return ManagementReadResult<SensorHistoryDto>.Ok(new SensorHistoryDto
             {
                 Points = points,
                 From = fromUtc,
@@ -477,14 +477,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // is unreachable and kept only so the evaluator's full decision surface
         // maps to a response.
         private bool TryGetVisibleSensor(Guid id, ClaimsPrincipal user,
-            out BaseSensorModel sensor, out SensorTreeReadFailure failure)
+            out BaseSensorModel sensor, out ManagementReadFailure failure)
         {
             sensor = _cache.GetSensor(id);
             failure = null;
 
             if (sensor is null)
             {
-                failure = new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound };
+                failure = new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound };
                 return false;
             }
 
@@ -494,15 +494,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     return true;
 
                 case ApiTokenAuthorization.Forbidden:
-                    failure = new SensorTreeReadFailure
+                    failure = new ManagementReadFailure
                     {
-                        Outcome = SensorTreeReadOutcome.Forbidden,
+                        Outcome = ManagementReadOutcome.Forbidden,
                         Message = "The token's owner cannot see this sensor.",
                     };
                     return false;
 
                 default:
-                    failure = new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound };
+                    failure = new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound };
                     return false;
             }
         }

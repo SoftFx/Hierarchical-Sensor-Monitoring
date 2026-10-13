@@ -180,8 +180,10 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
             Assert.NotNull(body.Details);
 
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.NotEmpty(details["folderId"]);
+            // The typed details map (#1371): values are still the field's message
+            // ARRAY — the wire JSON is unchanged, only the published schema moved.
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.NotEmpty(Assert.IsType<string[]>(details["folderId"]));
         }
 
         [Fact]
@@ -193,9 +195,9 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(400, status);
             Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
 
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.NotEmpty(details["name"]);
-            Assert.NotEmpty(details["paths"]);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.NotEmpty(Assert.IsType<string[]>(details["name"]));
+            Assert.NotEmpty(Assert.IsType<string[]>(details["paths"]));
         }
 
         [Fact]
