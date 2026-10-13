@@ -1,6 +1,5 @@
 using System.Linq;
 using HSMServer.Model.ManagementApi;
-using HSMServer.Model.ManagementApi.SensorTree;
 using ModelContextProtocol;
 
 namespace HSMServer.Mcp
@@ -17,17 +16,17 @@ namespace HSMServer.Mcp
         // an agent consumes better). The 404 text is the area's shared
         // constant: unknown and invisible must answer the SAME string, and a
         // private copy could drift from it silently.
-        public static T Unwrap<T>(SensorTreeReadResult<T> result) =>
+        public static T Unwrap<T>(ManagementReadResult<T> result) =>
             result.Failure is { } failure
                 ? throw new McpException(failure.Outcome switch
                 {
-                    SensorTreeReadOutcome.ValidationFailed => failure.Errors is { Count: > 0 } errors
+                    ManagementReadOutcome.ValidationFailed => failure.Errors is { Count: > 0 } errors
                         ? string.Join(" ", errors.Select(pair => $"{pair.Key}: {string.Join("; ", pair.Value)}"))
                         : "The request is invalid.",
                     // The guard keeps the self-correction contract: a future
                     // Fail(Forbidden) without a message must not produce an
                     // EMPTY tool error (#1395 review).
-                    SensorTreeReadOutcome.Forbidden or SensorTreeReadOutcome.Unavailable =>
+                    ManagementReadOutcome.Forbidden or ManagementReadOutcome.Unavailable =>
                         failure.Message ?? "The request failed.",
                     _ => ManagementApiErrors.NotFoundMessage,
                 })

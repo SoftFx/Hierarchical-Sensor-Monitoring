@@ -19,7 +19,6 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
-using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;

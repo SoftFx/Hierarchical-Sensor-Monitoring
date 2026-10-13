@@ -1203,7 +1203,7 @@
             and schedules, list and item, with the visibility rules that decide what
             a caller may see. Transport-agnostic — the REST controllers and the MCP
             alert tools both call it; the caller supplies the token principal and
-            gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never
+            gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/> failure back, never
             an IActionResult (the shared read envelope of the management area).
             </summary>
         </member>
@@ -1818,7 +1818,7 @@
             visibility rule that decides what a caller may see. Transport-agnostic —
             the REST controller and the MCP chat tools both call it; the caller
             supplies the token principal and gets DTOs or a
-            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never an
+            <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/> failure back, never an
             IActionResult (the shared read envelope of the management area).
             </summary>
         </member>
@@ -1911,7 +1911,7 @@
             The read surface for access-grouping folders: list and item, with the
             owner-sight visibility rule. Transport-agnostic — the REST controller
             and the MCP folder tools both call it; the caller supplies the token
-            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/>
+            principal and gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadResult`1"/>
             failure back, never an IActionResult (the shared read envelope of the
             management area).
             </summary>
@@ -2188,7 +2188,7 @@
             sensor search, one sensor with its current value, and the newest-N history.
             Transport-agnostic — the REST controllers and the MCP tools both call it;
             the caller supplies the token principal and a cancellation token, and gets
-            DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadFailure"/> back, never an IActionResult.
+            DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadFailure"/> back, never an IActionResult.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
