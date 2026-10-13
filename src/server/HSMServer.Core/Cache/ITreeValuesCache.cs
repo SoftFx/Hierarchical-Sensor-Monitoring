@@ -128,7 +128,11 @@ namespace HSMServer.Core.Cache
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 
-        Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
+        // Success/Error keep the #1394 contract (false + products-naming error
+        // is the partial-apply/DB-failure channel the 409 renders). Warnings
+        // (#1401) carry the per-policy VALIDATION rejections of an apply that
+        // PERSISTED — one entry per rejected policy; they never flip Success.
+        Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 

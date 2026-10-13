@@ -428,7 +428,7 @@ namespace HSMServer.Core.Tests.Mcp
         public async System.Threading.Tasks.Task CreateAlertTemplate_ReturnsTheStoredTemplate()
         {
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(((bool Ok, string Error))(true, null))
+                .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
                 .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
 
             var dto = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
@@ -438,11 +438,51 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        // #1401: the create/update tool results carry the SAME warning strings
+        // the REST 201/200 body carries — one decision (the administration
+        // service), two transports.
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_PolicyRejections_RenderTheRestWarningStrings()
+        {
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((true, (string)null, new List<TemplateApplyWarning>
+                {
+                    new("Root/Product A/cpu bar", "Not supported property Value for IntegerBarPolicy"),
+                }))
+                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+
+            var dto = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+
+            var warning = Assert.Single(dto.Warnings);
+            Assert.Equal("Root/Product A/cpu bar", warning.Sensor);
+            Assert.Equal("Not supported property Value for IntegerBarPolicy", warning.Reason);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task UpdateAlertTemplate_PolicyRejections_RenderTheRestWarningStrings()
+        {
+            var template = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "warned", FolderId = Guid.NewGuid() };
+            _templateStore.Add(template);
+
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((true, (string)null, new List<TemplateApplyWarning>
+                {
+                    new("Root/Product B/ram bar", "Not supported property Value for DoubleBarPolicy"),
+                }));
+
+            var dto = await CreateTools().UpdateAlertTemplateAsync(template.Id, TemplateDto("warned"));
+
+            var warning = Assert.Single(dto.Warnings);
+            Assert.Equal("Root/Product B/ram bar", warning.Sensor);
+            Assert.Equal("Not supported property Value for DoubleBarPolicy", warning.Reason);
+        }
+
+
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_DuplicateName_FlattensFieldKeyedError()
         {
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(((bool Ok, string Error))(true, null));
+                .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null));
 
             var existing = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "taken", FolderId = Guid.NewGuid() };
             _templateStore.Add(existing);

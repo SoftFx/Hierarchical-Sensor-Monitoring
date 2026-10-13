@@ -81,7 +81,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensorPath = "sensorTtlJournal";
             var template = BuildTtlTemplate(TimeSpan.FromMinutes(5), [$"*/{sensorPath}"]);
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
@@ -245,7 +245,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // the stale TTL in the entity forever (the #1127 lesson).
             _failProductId = _fixture.ProductAId;
 
-            var (failed, error) = await _valuesCache.AddAlertTemplateAsync(emptied);
+            var (failed, error, _) = await _valuesCache.AddAlertTemplateAsync(emptied);
             await Task.Delay(300);
 
             Assert.False(failed);
@@ -280,7 +280,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // partial-failure contract RemoveAlertTemplateAsync already gives.
             _failProductId = _fixture.ProductBId;
 
-            var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (success, error, _) = await _valuesCache.AddAlertTemplateAsync(template);
 
             Assert.False(success);
             Assert.Contains("ProductB_concurrency", error);

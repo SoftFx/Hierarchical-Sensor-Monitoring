@@ -69,7 +69,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // The template-owned TTL alert: applies on sensor creation and
             // carries TemplateId + TemplateAlertId.
             var template = BuildIntegerTemplate(TimeSpan.FromMinutes(10), sensorPath);
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             await CreateSensor(sensorPath);
@@ -288,7 +288,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // A template-minted TTL alert: the binding this PR keeps alive,
             // which is what makes the ownership release dangerous.
             var template = BuildIntegerTemplate(TimeSpan.FromMinutes(10), sensorPath);
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             await CreateSensor(sensorPath);
@@ -414,7 +414,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensorPath = "sensorChatRemovalRegularOwnership";
 
             var template = BuildIntegerTemplate(TimeSpan.FromMinutes(10), sensorPath);
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             await CreateSensor(sensorPath);

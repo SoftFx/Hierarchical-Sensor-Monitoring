@@ -208,6 +208,26 @@
                             'Discard'
                         );
                     }
+                    else if (typeof viewData === 'object' && viewData.success === true && viewData.warnings && viewData.warnings.length) {
+                        // #1401: the save PERSISTED but some matching sensors rejected
+                        // individual policies — each listed alert was not created on its
+                        // sensor. Not a failure: the template is stored, so the only
+                        // action left is acknowledging and returning to the list. The
+                        // lines are built as text nodes (never raw HTML): sensor paths
+                        // and rejection reasons are user-influenced strings.
+                        var $list = $('<ul class="mb-0">');
+                        viewData.warnings.forEach(function (warning) {
+                            $('<li>').text(warning).appendTo($list);
+                        });
+
+                        showConfirmationModal(
+                            'Template saved with warnings',
+                            $list,
+                            () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
+                            undefined,
+                            'Continue'
+                        );
+                    }
                     else {
                         // _AlertTemplate.cshtml wraps its content in <form id="addAlertTemplate_form">.
                         // Setting that as the existing form's innerHTML nests the new form inside the

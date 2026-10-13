@@ -38,7 +38,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/testIntegerSensor",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
-            var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (success, error, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(success, $"Failed to add template: {error}");
 
             // Act: add a sensor value that creates a new sensor
@@ -72,7 +72,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Double, "*/testIntegerSensor_noMatch",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
-            var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (success, error, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(success, $"Failed to add template: {error}");
 
             // Act: add an Integer sensor (type mismatch)
@@ -103,9 +103,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template2 = BuildTemplate(SensorType.Integer, "*/testIntegerSensor_multi",
                 ttlInterval: TimeSpan.FromMinutes(10));
 
-            var (s1, e1) = await _valuesCache.AddAlertTemplateAsync(template1);
+            var (s1, e1, _) = await _valuesCache.AddAlertTemplateAsync(template1);
             Assert.True(s1, $"Failed to add template 1: {e1}");
-            var (s2, e2) = await _valuesCache.AddAlertTemplateAsync(template2);
+            var (s2, e2, _) = await _valuesCache.AddAlertTemplateAsync(template2);
             Assert.True(s2, $"Failed to add template 2: {e2}");
 
             // Act
@@ -147,7 +147,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
-            var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (success, error, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(success, $"Failed to add template: {error}");
 
             // Act: sensor path matches the pattern
@@ -177,7 +177,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
-            var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (success, error, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(success, $"Failed to add template: {error}");
 
             // Act: sensor path does NOT match (disjoint segments under the product)
@@ -209,7 +209,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/sensorEditType",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var sensorPath = "sensorEditType";
@@ -230,7 +230,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.SensorType = (byte)SensorType.Double;
             template.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
             await Task.Delay(300);
 
@@ -249,7 +249,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/sensorEditPath",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var sensorPath = "sensorEditPath";
@@ -270,7 +270,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.Paths = ["*/sensorDifferentPath"];
             template.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
             await Task.Delay(300);
 
@@ -289,7 +289,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplate(SensorType.Integer, "*/sensorEditManual",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var sensorPath = "sensorEditManual";
@@ -312,7 +312,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.SensorType = (byte)SensorType.Double;
             template.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
             await Task.Delay(300);
 
@@ -335,9 +335,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var templateB = BuildTemplate(SensorType.Integer, "*/sensorEditOther",
                 ttlInterval: TimeSpan.FromMinutes(10));
 
-            var (addA, errA) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            var (addA, errA, _) = await _valuesCache.AddAlertTemplateAsync(templateA);
             Assert.True(addA, $"Failed to add template A: {errA}");
-            var (addB, errB) = await _valuesCache.AddAlertTemplateAsync(templateB);
+            var (addB, errB, _) = await _valuesCache.AddAlertTemplateAsync(templateB);
             Assert.True(addB, $"Failed to add template B: {errB}");
 
             var sensorPath = "sensorEditOther";
@@ -362,7 +362,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             templateA.SensorType = (byte)SensorType.Double;
             templateA.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(templateA);
             Assert.True(editOk, $"Failed to edit template A: {editError}");
             await Task.Delay(300);
 
@@ -385,7 +385,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ttlInterval: TimeSpan.FromMinutes(5));
             template.FolderId = _fixture.FolderId;
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var sensorPath = "sensorFolderChange";
@@ -415,7 +415,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
             edited.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(edited);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(edited);
             Assert.True(editOk, $"Failed to edit template: {editError}");
             await Task.Delay(300);
 
@@ -434,7 +434,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorRegularPolicy");
             template.FolderId = _fixture.FolderId;
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             var sensorPath = "sensorRegularPolicy";
@@ -453,7 +453,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.SensorType = (byte)SensorType.Double;
             template.TryApplyPathTemplates(out _);
 
-            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
             await Task.Delay(300);
 

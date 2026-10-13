@@ -757,7 +757,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
             template.TryApplyPathTemplates(out _);
 
-            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
 
             return template;

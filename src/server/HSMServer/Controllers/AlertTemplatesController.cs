@@ -249,10 +249,22 @@ namespace HSMServer.Controllers
 
             if (ModelState.IsValid)
             {
-                var (success, error) = await _cache.AddAlertTemplateAsync(model);
+                var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
                     return Json(new { success = false, error = error });
+
+                // #1401: a persisting save with per-policy validation
+                // rejections is NOT a failure — the warnings name the sensors
+                // whose alerts were not (re)created and are surfaced in a
+                // post-save modal. A clean save keeps answering the empty Ok
+                // the page has always consumed.
+                if (warnings is { Count: > 0 })
+                    return Json(new
+                    {
+                        success = true,
+                        warnings = warnings.Select(w => $"{w.SensorPath}: {w.Reason}").ToList(),
+                    });
 
                 return Ok();
             }
