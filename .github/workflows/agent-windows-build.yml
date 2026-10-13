@@ -64,8 +64,9 @@ jobs:
       # --install registers an auto-start service, --uninstall removes it — and a short --console run
       # proves the worker survives an unreachable server (no crash) instead of exiting.
       # Data-dir ACL (#1279): the runner first gets a pre-#1279 data dir (plain mkdir, so it inherits
-      # BUILTIN\Users read from %ProgramData%) holding a config.json; --install must tighten it in place
-      # to SYSTEM + Administrators, keep the config byte-identical, and a wide ACE fails the lane.
+      # BUILTIN\Users read from %ProgramData%, owner set to a non-admin) holding a config.json; --install
+      # must tighten it in place to SYSTEM + Administrators, owned by Administrators, keep the config
+      # byte-identical, and a wide ACE fails the lane. agent-release.yml runs the same step body.
       - name: Service install / console smoke
         shell: pwsh
         run: |
@@ -81,6 +82,10 @@ jobs:
             if ($acl -match $wide) { throw "'$path' grants a wide principal ($($Matches[0])) — the access key would be readable by local users" }
             if ($acl -notmatch 'NT AUTHORITY\\SYSTEM:' -or $acl -notmatch 'BUILTIN\\Administrators:') { throw "'$path' lacks the SYSTEM / Administrators ACE" }
             if ($isDir) {
+              # The owner keeps an implicit WRITE_DAC, so it must not be a regular user.
+              $owner = (Get-Acl -Path $path).Owner
+              Write-Host "owner: $owner"
+              if ($owner -notin @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM')) { throw "'$path' is owned by '$owner', expected BUILTIN\Administrators" }
               if ($acl -match '\(I\)') { throw "'$path' still inherits ACEs — inheritance from the parent must be disabled" }
               if ($acl -notmatch 'NT AUTHORITY\\SYSTEM:\(OI\)\(CI\)\(F\)' -or $acl -notmatch 'BUILTIN\\Administrators:\(OI\)\(CI\)\(F\)') {
                 throw "'$path' must grant SYSTEM and Administrators (OI)(CI)(F)"
@@ -96,6 +101,10 @@ jobs:
           $legacyAcl = (icacls $config | Out-String)
           Write-Host "pre-#1279 config ACL:`n$legacyAcl"
           if ($legacyAcl -notmatch $wide) { throw "setup: the seeded config.json should inherit a wide ACE from %ProgramData%, else the upgrade check is vacuous" }
+          # A dir pre-created by someone else keeps its owner's implicit WRITE_DAC; NETWORK SERVICE stands
+          # in for that non-admin owner, which --install must replace with Administrators.
+          icacls $dataDir /setowner '*S-1-5-20' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "setup: could not seed a non-admin owner on the data dir" }
 
           & $exe --install
           if ($LASTEXITCODE -ne 0) { throw "--install failed ($LASTEXITCODE)" }

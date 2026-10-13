@@ -686,6 +686,22 @@ namespace hsm::agent
         // power loss mid-write then leaves only the temp file — the live config.json is never observed
         // truncated/partial (which would brick the agent on its next parse).
         const std::string tmp_path = path + ".tmp";
+
+        // Never write the config (and its access key) into a pre-existing temp file: opening it with
+        // trunc would keep that file's owner and security descriptor, which a rename then carries onto
+        // config.json. Before #1279 any local user could plant config.json.tmp in the data dir and stay
+        // its owner (implicit WRITE_DAC). Delete it so the temp file is created fresh under the
+        // directory's inheritable ACEs; if it cannot be deleted, fail loudly rather than write into it.
+        {
+            std::error_code stale;
+            std::filesystem::remove(tmp_path, stale); // false + no error when it does not exist
+            if (stale)
+            {
+                error = "cannot remove stale temp config file '" + tmp_path + "' (refusing to write the config into it): " + stale.message();
+                return false;
+            }
+        }
+
         {
             std::ofstream stream(tmp_path, std::ios::binary | std::ios::trunc);
             if (!stream)

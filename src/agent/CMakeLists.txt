@@ -95,7 +95,8 @@ if(HSM_AGENT_BUILD_TESTS)
         target_link_libraries(hsm_agent_tests PRIVATE hsm_agent_paths)
         foreach(name IN ITEMS
                 agent_dir_acl_is_protected_system_and_admins_only
-                agent_dir_acl_admin_reads_and_rewrites_config)
+                agent_dir_acl_admin_reads_and_rewrites_config
+                agent_config_rewrite_replaces_planted_temp_file)
             add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
             set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
         endforeach()

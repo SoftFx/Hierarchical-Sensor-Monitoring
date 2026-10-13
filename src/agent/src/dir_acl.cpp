@@ -75,15 +75,32 @@ namespace hsm::agent
         // down (BUILTIN\Users read, CREATOR OWNER, ...) are no longer inherited. The call also
         // re-propagates the new inheritable ACEs to existing children (config.json, logs\), which is
         // what repairs an install made before #1279.
-        const DWORD set = SetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()), SE_FILE_OBJECT,
-                                                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                                                nullptr, nullptr, dacl, nullptr);
-        LocalFree(dacl);
-        if (set != ERROR_SUCCESS)
+        //
+        // The owner is reset to BUILTIN\Administrators in the same call: an owner keeps an implicit
+        // WRITE_DAC whatever the DACL says, so a directory pre-created by a non-admin (Users may create
+        // folders in %ProgramData%) could otherwise be re-opened by that user. LocalSystem and an
+        // elevated admin both hold Administrators as an owner-eligible group.
+        constexpr SECURITY_INFORMATION kDacl = DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION;
+        LPWSTR native_path = const_cast<LPWSTR>(path.c_str());
+        const DWORD with_owner = SetNamedSecurityInfoW(native_path, SE_FILE_OBJECT, kDacl | OWNER_SECURITY_INFORMATION,
+                                                       admins_sid, nullptr, dacl, nullptr);
+        if (with_owner == ERROR_SUCCESS)
         {
-            error = Failure(path, "SetNamedSecurityInfoW", set);
+            LocalFree(dacl);
+            return true;
+        }
+
+        // Owner change refused (e.g. an unelevated console run: Administrators is deny-only in its
+        // token, ERROR_INVALID_OWNER). Still restrict the DACL — that is what keeps the key from local
+        // users — and report the owner failure.
+        const DWORD dacl_only = SetNamedSecurityInfoW(native_path, SE_FILE_OBJECT, kDacl, nullptr, nullptr, dacl, nullptr);
+        LocalFree(dacl);
+        if (dacl_only != ERROR_SUCCESS)
+        {
+            error = Failure(path, "SetNamedSecurityInfoW", dacl_only);
             return false;
         }
-        return true;
+        error = "restricted access to '" + Narrow(path) + "' to SYSTEM + Administrators, but could not make BUILTIN\\Administrators its owner: SetNamedSecurityInfoW failed (Win32 error " + std::to_string(with_owner) + ")";
+        return false;
     }
 } // namespace hsm::agent

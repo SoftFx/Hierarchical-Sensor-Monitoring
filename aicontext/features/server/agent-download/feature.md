@@ -30,15 +30,18 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
   prefers the product **DefaultKey** (full permissions, never expires), else any valid key with
   send-data + add-node/add-sensor permissions.
 - **Security: the key at rest on the client is admin-only (#1279).** The key sits in cleartext in
-  `%ProgramData%\HSM Agent\config.json`. The generated `install-hsmagent-service.cmd` restricts that
-  directory to SYSTEM + Administrators **before** copying `config.json` in (`icacls … /inheritance:r
-  /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F`, by SID so it works on localized
-  Windows). The agent re-applies the same protected DACL on every start, which also repairs installs
-  made before #1279. Full rules: `../../agent/feature.md` → *Data directory access*. The generated
-  script must stay identical to `src/agent/packaging/install-hsmagent-service.cmd`
-  (`StaticInstallScript_MatchesGenerated`). `InstallScript_RestrictsDataDirBeforeCopyingConfig` pins
-  the icacls-before-copy order. The key is still not encrypted (DPAPI is out of scope: the service
-  must read it unattended).
+  `%ProgramData%\HSM Agent\config.json`. The generated `install-hsmagent-service.cmd` makes
+  Administrators the directory's owner (`icacls … /setowner *S-1-5-32-544`) and restricts it to
+  SYSTEM + Administrators (`icacls … /inheritance:r /grant *S-1-5-18:(OI)(CI)F /grant
+  *S-1-5-32-544:(OI)(CI)F`, by SID so it works on localized Windows) **before** copying `config.json`
+  in, which removes the inherited `Users` read. Explicit ACEs someone added by hand survive `/grant`
+  until `--install` and every service start re-apply the exact owner + DACL; that re-apply also
+  repairs installs made before #1279. Full rules: `../../agent/feature.md` → *Data directory access*.
+  The generated script must stay identical to `src/agent/packaging/install-hsmagent-service.cmd`
+  (`StaticInstallScript_MatchesGenerated`); `InstallScript_RestrictsDataDirBeforeCopyingConfig` pins
+  the setowner → icacls → copy order. **Keys baked into bundles installed before #1279 were readable
+  by every local user on those hosts: rotate the product access key once they run the fixed agent.**
+  The key is still not encrypted (DPAPI is out of scope: the service must read it unattended).
 
 ## Key components
 

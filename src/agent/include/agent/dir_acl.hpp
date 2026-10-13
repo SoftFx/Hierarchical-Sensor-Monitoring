@@ -19,7 +19,11 @@ namespace hsm::agent
     /// to existing children, so files that inherited a wide ACL (agents installed before #1279) are
     /// tightened by the same call; a child's own explicit ACEs are left alone.
     ///
+    /// The directory's owner is set to `BUILTIN\Administrators` in the same call (an owner keeps an
+    /// implicit WRITE_DAC, so a non-admin owner could re-open the DACL). If the owner change is refused
+    /// the DACL is still applied, and the call returns false with `error` naming the owner failure.
+    ///
     /// Idempotent: re-applying to an already-hardened directory changes nothing. Returns false and
-    /// fills `error` (UTF-8, includes the Win32 error code) on failure; never throws.
+    /// fills `error` (UTF-8, includes the Win32 error code) on any failure; never throws.
     bool ApplyAgentDirectoryDacl(const std::wstring& path, std::string& error);
 } // namespace hsm::agent

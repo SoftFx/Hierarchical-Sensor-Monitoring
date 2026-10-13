@@ -411,7 +411,8 @@ namespace
         }
     }
 
-    void SetDacl(const std::filesystem::path& path, std::vector<BYTE>& sid, DWORD permissions, ACCESS_MODE mode, SECURITY_INFORMATION extra)
+    void SetDacl(const std::filesystem::path& path, std::vector<BYTE>& sid, DWORD permissions, ACCESS_MODE mode, SECURITY_INFORMATION extra,
+                 DWORD inheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT)
     {
         PACL old_dacl = nullptr;
         PSECURITY_DESCRIPTOR sd = nullptr;
@@ -420,7 +421,7 @@ namespace
         EXPLICIT_ACCESS_W entry = {};
         entry.grfAccessPermissions = permissions;
         entry.grfAccessMode = mode;
-        entry.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        entry.grfInheritance = inheritance;
         entry.Trustee.TrusteeForm = TRUSTEE_IS_SID;
         entry.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid.data());
         PACL dacl = nullptr;
@@ -431,6 +432,45 @@ namespace
         }
         if (sd != nullptr)
             LocalFree(sd);
+    }
+
+    void WriteFileBytes(const std::filesystem::path& path, const std::string& text);
+
+    std::string ReadOwnerSid(const std::filesystem::path& path)
+    {
+        PSID owner = nullptr;
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        std::string text;
+        if (GetNamedSecurityInfoW(path.c_str(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, &owner, nullptr, nullptr, nullptr, &sd) == ERROR_SUCCESS)
+        {
+            LPSTR raw = nullptr;
+            if (owner != nullptr && ConvertSidToStringSidA(owner, &raw))
+            {
+                text = raw;
+                LocalFree(raw);
+            }
+            LocalFree(sd);
+        }
+        return text;
+    }
+
+    // An owner keeps an implicit WRITE_DAC, so anything the agent hardens or writes must be owned by
+    // Administrators (or SYSTEM), never by the user who happened to create it.
+    void CheckAdminOwned(const std::filesystem::path& path, const std::string& what)
+    {
+        const std::string owner = ReadOwnerSid(path);
+        Check(owner == kAdminsSid || owner == kSystemSid, what + ": owned by Administrators or SYSTEM (got '" + owner + "')");
+    }
+
+    // Plant `path` the way a local user could before #1279 and mark it with an explicit (non-inherited)
+    // Everyone read ACE: if the agent ever writes into this file instead of a fresh one, the marker ACE
+    // (standing in for the planter's own descriptor) ends up on config.json.
+    void PlantMarkedFile(const std::filesystem::path& path)
+    {
+        WriteFileBytes(path, "planted");
+        std::vector<BYTE> everyone = WellKnownSid(WinWorldSid);
+        SetDacl(path, everyone, FILE_GENERIC_READ, GRANT_ACCESS, 0, NO_INHERITANCE);
+        Check(HasAceFor(ReadDacl(path), kEveryoneSid), "setup: planted temp file carries the Everyone marker ACE");
     }
 
     std::vector<BYTE> CurrentUserSid()
@@ -550,14 +590,31 @@ namespace
     void DirAclIsProtectedSystemAndAdminsOnly()
     {
         LegacyDataDir dir("protected", kLegacyConfig);
+        const bool elevated = IsElevatedAdmin();
 
         for (int start = 1; start <= 2; ++start)
         {
             const std::string run = "start #" + std::to_string(start) + ": ";
             std::vector<std::string> acl_errors;
             Check(hsm::agent::EnsureDirectories(&acl_errors), run + "EnsureDirectories reports the data dir present");
-            for (const auto& error : acl_errors)
-                Check(false, run + "unexpected ACL error: " + error);
+            if (elevated)
+            {
+                // SYSTEM / an elevated admin can hand ownership to Administrators: no error at all.
+                for (const auto& error : acl_errors)
+                    Check(false, run + "unexpected ACL error: " + error);
+                CheckAdminOwned(dir.data(), run + "data dir");
+                CheckAdminOwned(dir.logs(), run + "logs dir");
+            }
+            else
+            {
+                // An unelevated token holds Administrators deny-only, so the owner change is refused
+                // (ERROR_INVALID_OWNER). The DACL must still be applied (checked below) and the owner
+                // failure reported: once per directory, nothing else.
+                CheckEq(acl_errors.size(), std::size_t{ 2 }, run + "one owner error per directory when unelevated");
+                for (const auto& error : acl_errors)
+                    Check(error.find("could not make BUILTIN\\Administrators its owner") != std::string::npos,
+                          run + "unelevated error is the owner fallback, not a DACL failure: " + error);
+            }
 
             Check(hsm::agent::ProgramDataAgentDir() == dir.data().wstring(), run + "agent paths follow the redirected %ProgramData%");
             CheckHardenedDirectory(dir.data(), run + "data dir");
@@ -580,10 +637,18 @@ namespace
         }
 
         LegacyDataDir dir("rewrite", kLegacyConfig);
+        // The pre-#1279 attack: a local user plants config.json.tmp. Hardening only replaces inherited
+        // ACEs, so the planted file keeps its own explicit ones (and, for a real planter, its owner).
+        const auto planted = dir.data() / "config.json.tmp";
+        PlantMarkedFile(planted);
+
         std::vector<std::string> acl_errors;
         Check(hsm::agent::EnsureDirectories(&acl_errors), "EnsureDirectories reports the data dir present");
         for (const auto& error : acl_errors)
             Check(false, "unexpected ACL error: " + error);
+        CheckAdminOwned(dir.data(), "data dir");
+        CheckAdminOwned(dir.logs(), "logs dir");
+        Check(HasAceFor(ReadDacl(planted), kEveryoneSid), "setup: hardening alone leaves the planted temp file's explicit ACE");
 
         const std::string before = ReadFileBytes(dir.config());
         CheckEq(before, std::string{ kLegacyConfig }, "upgrade keeps config.json byte-identical");
@@ -603,6 +668,49 @@ namespace
         CheckOnlySystemAndAdmins(rewritten, "rewritten config.json");
         for (const auto& ace : rewritten.aces)
             Check((ace.flags & INHERITED_ACE) != 0, "rewritten config.json ACE for " + ace.sid + " is inherited from the hardened dir");
+        CheckAdminOwned(dir.config(), "rewritten config.json");
+    }
+
+    // WriteAgentConfig must never write the key into a pre-existing config.json.tmp (trunc keeps that
+    // file's owner + descriptor and the rename carries them onto config.json): it deletes the stale
+    // file and creates a fresh one, or fails loudly when the stale file cannot be deleted. Runs
+    // unelevated in a plain scratch dir: only the temp-file handling is under test here.
+    void ConfigRewriteReplacesPlantedTempFile()
+    {
+        const auto dir = std::filesystem::temp_directory_path() / ("hsm_agent_planted_tmp_" + std::to_string(GetCurrentProcessId()));
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+        std::filesystem::create_directories(dir);
+        const auto config_path = dir / "config.json";
+        const auto planted = dir / "config.json.tmp";
+
+        AgentConfig config = ParseOk(kLegacyConfig);
+        std::string error;
+        Check(hsm::agent::WriteAgentConfig(config_path.string(), config, error), "initial write: " + error);
+
+        // A planted temp file is replaced, not reused: its marker ACE must not reach config.json.
+        PlantMarkedFile(planted);
+        config.sensors_disk = false;
+        Check(hsm::agent::WriteAgentConfig(config_path.string(), config, error), "rewrite over a planted temp file succeeds: " + error);
+        Check(!HasAceFor(ReadDacl(config_path), kEveryoneSid), "config.json does not carry the planted temp file's descriptor");
+        Check(!ParseOk(ReadFileBytes(config_path)).sensors_disk, "rewrite content landed");
+        Check(!std::filesystem::exists(planted, ec), "no config.json.tmp left behind");
+
+        // A stale temp file that cannot be deleted (held open without FILE_SHARE_DELETE) fails the
+        // rewrite loudly and leaves config.json untouched.
+        WriteFileBytes(planted, "planted");
+        const std::string before = ReadFileBytes(config_path);
+        HANDLE held = CreateFileW(planted.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        Check(held != INVALID_HANDLE_VALUE, "setup: hold the stale temp file open");
+        config.sensors_disk = true;
+        error.clear();
+        Check(!hsm::agent::WriteAgentConfig(config_path.string(), config, error), "rewrite refuses an undeletable stale temp file");
+        Check(error.find("stale temp config") != std::string::npos, "the refusal names the stale temp file: " + error);
+        CheckEq(ReadFileBytes(config_path), before, "config.json untouched when the rewrite is refused");
+        if (held != INVALID_HANDLE_VALUE)
+            CloseHandle(held);
+
+        std::filesystem::remove_all(dir, ec);
     }
 #endif // _WIN32
 
@@ -627,6 +735,7 @@ namespace
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
+            { "agent_config_rewrite_replaces_planted_temp_file", ConfigRewriteReplacesPlantedTempFile },
 #endif
         };
         return tests;
