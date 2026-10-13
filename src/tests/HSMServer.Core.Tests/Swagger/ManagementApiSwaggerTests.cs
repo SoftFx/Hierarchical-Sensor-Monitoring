@@ -166,6 +166,68 @@ namespace HSMServer.Core.Tests.Swagger
             Assert.Empty(operation.Security);
         }
 
+        [Fact]
+        public void ErrorDetailsFilter_PublishesTheTypedUnion()
+        {
+            // Details is declared Dictionary<string, object> (#1371) — the values
+            // serialize by runtime type, which keeps the wire contract unchanged —
+            // so the schema must be assembled EXPLICITLY, exactly like the sensor
+            // value union: an agent reading only the document learns that 400/422
+            // details map fields to message arrays, while 500/409 details map keys
+            // to scalar strings (traceId, templateId).
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["details"] = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Type = "object",
+                AdditionalProperties = new Microsoft.OpenApi.Models.OpenApiSchema(),
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var details = schema.Properties["details"];
+
+            Assert.Null(details.Type);
+            Assert.True(details.Nullable);
+            Assert.Equal(2, details.OneOf.Count);
+
+            // 400/422 arm: field -> message ARRAY.
+            var fieldMessages = details.OneOf[0];
+            Assert.Equal("object", fieldMessages.Type);
+            Assert.Equal("array", fieldMessages.AdditionalProperties.Type);
+            Assert.Equal("string", fieldMessages.AdditionalProperties.Items.Type);
+
+            // 500/409 arm: pointer key -> scalar STRING.
+            var pointers = details.OneOf[1];
+            Assert.Equal("object", pointers.Type);
+            Assert.Equal("string", pointers.AdditionalProperties.Type);
+        }
+
+        [Fact]
+        public void ErrorDetailsFilter_LeavesOtherSchemasUntouched()
+        {
+            // Scoped to the error DTO's details property alone — nothing else in the
+            // document may be reshaped by it.
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Properties = { ["value"] = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" } },
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(string), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            Assert.Equal("string", schema.Properties["value"].Type);
+            Assert.Empty(schema.Properties["value"].OneOf);
+        }
+
 
         // The per-action error-response sets of the area, from
         // aicontext/features/server/management-api/feature.md — 500 on every action:

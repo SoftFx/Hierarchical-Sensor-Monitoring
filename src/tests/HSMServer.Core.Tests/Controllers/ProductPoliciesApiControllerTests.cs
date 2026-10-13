@@ -224,7 +224,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(422, StatusCodeOf(result));
             Assert.Equal(ManagementApiErrors.UnprocessableEntityCode, ErrorBodyOf(result).Error);
-            Assert.Contains("sensor", Assert.IsAssignableFrom<System.Collections.Generic.IDictionary<string, string[]>>(ErrorBodyOf(result).Details)["policies"].Single());
+            Assert.Contains("sensor", Assert.IsType<string[]>(Assert.IsType<System.Collections.Generic.Dictionary<string, object>>(ErrorBodyOf(result).Details)["policies"]).Single());
         }
 
 

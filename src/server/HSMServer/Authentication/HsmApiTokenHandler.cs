@@ -2,7 +2,6 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.ManagementApi;
 using HSMServer.Middleware;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -143,8 +142,8 @@ namespace HSMServer.Authentication
         // implementation would return a bare 403 with an empty body, the one shape the
         // error contract promises never happens.
         protected override Task HandleForbiddenAsync(AuthenticationProperties properties) =>
-            ManagementApiErrorResponses.WriteAsync(Context, StatusCodes.Status403Forbidden,
-                ManagementApiErrors.ForbiddenCode, "The token is not permitted to use the management API.");
+            ManagementApiErrorResponses.WriteForbidden(Context,
+                "The token is not permitted to use the management API.");
 
 
         private void RecordFailure(string tokenId, Guid? ownerId)

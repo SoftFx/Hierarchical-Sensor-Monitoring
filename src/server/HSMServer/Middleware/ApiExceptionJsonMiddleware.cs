@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using HSMServer.Mcp;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Net.Http.Headers;
 
 namespace HSMServer.Middleware
 {
@@ -21,12 +22,17 @@ namespace HSMServer.Middleware
             {
                 await next(context);
             }
-            // Cancellation is not a server error: an aborted request surfaces as
-            // OperationCanceledException from the framework's body/abort plumbing, and
-            // writing a 500 to a dead connection would only throw again and REPLACE the
-            // original exception in the outer handler's logging. Let cancellations flow
-            // to the global handlers untouched.
-            catch (Exception exception) when (exception is not OperationCanceledException &&
+            // Cancellation is not a server error ONLY when the CLIENT is gone: an
+            // aborted request surfaces as OperationCanceledException from the
+            // framework's body/abort plumbing, and writing a 500 to a dead
+            // connection would only throw again and REPLACE the original exception
+            // in the outer handler's logging. A server-side cancel — e.g. an
+            // HttpClient timeout inside a handler throws OperationCanceledException
+            // while RequestAborted is NOT set — is an ordinary failure of a live
+            // request: it must render the JSON error on /api paths, not fall
+            // through to the Razor error page (#1371).
+            catch (Exception exception) when (!(exception is OperationCanceledException &&
+                                                context.RequestAborted.IsCancellationRequested) &&
                                               IsApiPath(context.Request.Path) &&
                                               !context.Response.HasStarted)
             {
@@ -37,10 +43,11 @@ namespace HSMServer.Middleware
                 //
                 // NOT Response.Clear(): headers set by outer middleware on the way in
                 // (HSTS above all) must survive the 500; only the aborted response's
-                // content staging is discarded, and the writer restages it.
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                context.Response.Headers.ContentLength = default;
-                context.Response.Headers.ContentType = default;
+                // representation is discarded, and the writer restages its content
+                // headers (#1371: a staged Content-Encoding — br over the
+                // uncompressed JSON — or a validator — ETag — describing the OLD
+                // body would corrupt or mis-validate the rewritten one).
+                ResetAbortedResponse(context.Response);
 
                 // /mcp speaks JSON-RPC, not the area's uniform contract: whatever
                 // escapes the SDK handler answers a JSON-RPC INTERNAL ERROR object
@@ -58,6 +65,29 @@ namespace HSMServer.Middleware
 
                 await ManagementApiErrorResponses.WriteInternalError(context, context.TraceIdentifier);
             }
+        }
+
+        // The staged representation of the aborted response is discarded wholesale:
+        // the 500 replaces the body's bytes, so every header DESCRIBING those bytes
+        // goes with them — the two the JSON writer restages (Content-Length,
+        // Content-Type), the content metadata that would corrupt the new body's
+        // decoding (a staged Content-Encoding: br would label the uncompressed JSON
+        // as compressed), and the validators of the old representation (ETag,
+        // Last-Modified — they would "validate" bytes that no longer exist).
+        // Headers describing the transaction rather than the bytes (HSTS, Server,
+        // Cache-Control, …) survive — the same reason this is not Response.Clear().
+        private static void ResetAbortedResponse(HttpResponse response)
+        {
+            response.StatusCode = StatusCodes.Status500InternalServerError;
+
+            response.Headers.ContentLength = default;
+            response.Headers.ContentType = default;
+            response.Headers.Remove(HeaderNames.ContentEncoding);
+            response.Headers.Remove(HeaderNames.ContentLanguage);
+            response.Headers.Remove(HeaderNames.ContentLocation);
+            response.Headers.Remove(HeaderNames.ContentRange);
+            response.Headers.Remove(HeaderNames.ETag);
+            response.Headers.Remove(HeaderNames.LastModified);
         }
 
         // The JSON-RPC 2.0 error envelope (code -32603 "Internal error"). The id

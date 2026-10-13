@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Middleware
@@ -61,21 +62,41 @@ namespace HSMServer.Core.Tests.Middleware
         [Fact]
         public async Task Writer_WireShape_IsCamelCaseJsonWithDetails()
         {
+            // Through the pre-assembled helpers — the raw writer is private (#1371),
+            // so a mismatched code↔status pair cannot be composed by any caller.
+            // WriteInternalError is the helper that carries a details map.
             var context = new DefaultHttpContext { Response = { Body = new MemoryStream() } };
 
-            await ManagementApiErrorResponses.WriteAsync(context, StatusCodes.Status403Forbidden,
-                ManagementApiErrors.ForbiddenCode, "no grant",
-                new Dictionary<string, string[]> { ["folderId"] = ["required"] });
+            await ManagementApiErrorResponses.WriteInternalError(context, "trace-1");
 
-            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+            Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
             Assert.StartsWith("application/json", context.Response.ContentType);
 
-            var body = await BodyAsync(context);
-            var root = body.RootElement;
+            var root = (await BodyAsync(context)).RootElement;
+
+            Assert.Equal(ManagementApiErrors.InternalErrorCode, root.GetProperty("error").GetString());
+            Assert.Equal("An unexpected error occurred.", root.GetProperty("message").GetString());
+            Assert.Equal("trace-1", root.GetProperty("details").GetProperty("traceId").GetString());
+        }
+
+        [Fact]
+        public async Task Writer_Forbidden_IsUniformJsonWithExplicitNullDetails()
+        {
+            // The bearer scheme's Forbid twin renders through the shared writer —
+            // never the cookie scheme's redirect, never a bare 403.
+            var context = new DefaultHttpContext { Response = { Body = new MemoryStream() } };
+
+            await ManagementApiErrorResponses.WriteForbidden(context, "no grant");
+
+            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+
+            var root = (await BodyAsync(context)).RootElement;
 
             Assert.Equal(ManagementApiErrors.ForbiddenCode, root.GetProperty("error").GetString());
             Assert.Equal("no grant", root.GetProperty("message").GetString());
-            Assert.Equal("required", root.GetProperty("details").GetProperty("folderId")[0].GetString());
+            // The three fields are ALWAYS present — an agent must never guess which
+            // keys exist; absent details is an explicit null.
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("details").ValueKind);
         }
 
         [Fact]
@@ -83,8 +104,7 @@ namespace HSMServer.Core.Tests.Middleware
         {
             var context = new DefaultHttpContext { Response = { Body = new MemoryStream() } };
 
-            await ManagementApiErrorResponses.WriteAsync(context, StatusCodes.Status404NotFound,
-                ManagementApiErrors.NotFoundCode, ManagementApiErrors.NotFoundMessage);
+            await ManagementApiErrorResponses.WriteNotFound(context);
 
             var root = (await BodyAsync(context)).RootElement;
 
@@ -93,6 +113,29 @@ namespace HSMServer.Core.Tests.Middleware
             // The three fields are ALWAYS present — an agent must never guess which
             // keys exist; absent details is an explicit null.
             Assert.Equal(JsonValueKind.Null, root.GetProperty("details").ValueKind);
+        }
+
+        [Fact]
+        public async Task Details_TypedMap_SerializesTheUnchangedWireShape()
+        {
+            // #1371: Details moved from object to Dictionary<string, object>; the
+            // wire JSON must stay byte-shape-identical — field keys with message
+            // ARRAYS on 400/422 (serialized by runtime type through the same
+            // WriteAsJsonAsync the pipeline writer uses), scalar pointer values on
+            // 500/409 (pinned by the traceId tests above).
+            var context = new DefaultHttpContext { Response = { Body = new MemoryStream() } };
+
+            await context.Response.WriteAsJsonAsync(new ManagementApiErrorDto
+            {
+                Error = ManagementApiErrors.ValidationFailedCode,
+                Message = "The request is invalid.",
+                Details = new Dictionary<string, object> { ["folderId"] = new[] { "required" } },
+            });
+
+            var root = (await BodyAsync(context)).RootElement;
+
+            Assert.Equal(ManagementApiErrors.ValidationFailedCode, root.GetProperty("error").GetString());
+            Assert.Equal("required", root.GetProperty("details").GetProperty("folderId")[0].GetString());
         }
 
         [Fact]
@@ -186,9 +229,12 @@ namespace HSMServer.Core.Tests.Middleware
             Assert.Equal(400, Assert.IsType<ObjectResult>(result).StatusCode);
             Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
 
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.Contains("The name field is required.", details["name"]);
-            Assert.Contains("JSON syntax error.", details["$.policies[1]"]);
+            // The typed details map (#1371): values stay the field's message ARRAY —
+            // the wire JSON ({"field": ["msg"]}) is unchanged from the object-typed
+            // era, only the published schema moved.
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("The name field is required.", Assert.IsType<string[]>(details["name"]));
+            Assert.Contains("JSON syntax error.", Assert.IsType<string[]>(details["$.policies[1]"]));
         }
 
         [Fact]
@@ -216,6 +262,17 @@ namespace HSMServer.Core.Tests.Middleware
             var factory = ManagementApiErrors.WrapBindingFailureFactory(_ => fromDefault);
 
             Assert.Same(fromDefault, factory(BindingContext(typeof(HSMServer.Controllers.SensorsController))));
+        }
+
+        [Fact]
+        public void BindingFailures_NullFrameworkDefault_ThrowsAtCaptureTime()
+        {
+            // The captured default is startup wiring, not a per-request input: a
+            // null would otherwise NRE on every NON-management binding failure,
+            // turning each sensor-data 400 into a 500. Fail fast where it is wired
+            // (#1371), not per request.
+            Assert.Throws<ArgumentNullException>(
+                () => ManagementApiErrors.WrapBindingFailureFactory(null));
         }
 
         [Fact]
@@ -307,8 +364,11 @@ namespace HSMServer.Core.Tests.Middleware
         {
             // An aborted request is not a 500: writing to a dead connection would throw
             // again and REPLACE the original cancellation in the outer handler's
-            // logging. The middleware must not touch the response at all.
+            // logging. The middleware must not touch the response at all. The client
+            // abort is what makes it a cancellation-not-a-failure: RequestAborted IS
+            // set (the connection is gone), unlike the server-side variant below.
             var context = BuildContext("/api/v1/alertTemplates");
+            context.RequestAborted = new CancellationToken(canceled: true);
 
             static Task Cancel(HttpContext _) => throw new OperationCanceledException();
 
@@ -317,6 +377,79 @@ namespace HSMServer.Core.Tests.Middleware
 
             Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
             Assert.Equal(0, context.Response.Body.Length);
+        }
+
+        [Fact]
+        public static async Task ExceptionMiddleware_ServerSideCancellation_IsUniformJson500()
+        {
+            // The other OperationCanceledException shape (#1371): a server-side
+            // cancel — an HttpClient timeout inside a handler throws OCE while
+            // RequestAborted is NOT set — is a failure of a LIVE request. It must
+            // render the uniform JSON error on /api paths, not fall through to the
+            // global handler and answer the Razor error page.
+            var context = BuildContext("/api/v1/alertTemplates");
+
+            static Task Timeout(HttpContext _) => throw new OperationCanceledException();
+
+            await new ApiExceptionJsonMiddleware(Timeout).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+
+            var root = (await BodyAsync(context)).RootElement;
+
+            Assert.Equal(ManagementApiErrors.InternalErrorCode, root.GetProperty("error").GetString());
+            Assert.Equal(context.TraceIdentifier, root.GetProperty("details").GetProperty("traceId").GetString());
+        }
+
+        [Fact]
+        public static async Task ExceptionMiddleware_ServerSideCancellation_NonApiPath_Rethrows()
+        {
+            // The JSON rendering is scoped to API paths: a server-side cancel on a
+            // browser path keeps the Razor pipeline, exactly like any other exception.
+            var context = BuildContext("/Home/Index");
+
+            static Task Timeout(HttpContext _) => throw new OperationCanceledException();
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                new ApiExceptionJsonMiddleware(Timeout).InvokeAsync(context));
+        }
+
+        [Fact]
+        public static async Task ExceptionMiddleware_StagedContentHeaders_AreResetOnTheRewritten500()
+        {
+            // The 500 replaces the aborted response's representation, so the headers
+            // DESCRIBING those bytes must not survive onto the JSON body (#1371): a
+            // staged Content-Encoding: br would label the uncompressed JSON as
+            // compressed and corrupt what the client tries to decode; ETag would
+            // validate a representation that no longer exists. Transaction headers
+            // (HSTS) survive — that is why this is not Response.Clear().
+            var context = BuildContext("/api/v1/alertTemplates");
+            context.Response.Headers[HeaderNames.ContentEncoding] = "br";
+            context.Response.Headers[HeaderNames.ETag] = "\"staged-etag\"";
+            context.Response.Headers[HeaderNames.LastModified] = "Mon, 12 Oct 2026 00:00:00 GMT";
+            context.Response.Headers[HeaderNames.ContentLanguage] = "en";
+            context.Response.Headers[HeaderNames.ContentLocation] = "/api/v1/alertTemplates/staged";
+            context.Response.Headers[HeaderNames.ContentRange] = "bytes 0-9/100";
+            context.Response.Headers[HeaderNames.StrictTransportSecurity] = "max-age=31536000";
+
+            static Task Throw(HttpContext _) => throw new InvalidOperationException("boom");
+
+            await new ApiExceptionJsonMiddleware(Throw).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.ContentEncoding));
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.ETag));
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.LastModified));
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.ContentLanguage));
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.ContentLocation));
+            Assert.False(context.Response.Headers.ContainsKey(HeaderNames.ContentRange));
+
+            // Headers describing the transaction, not the body, survive.
+            Assert.Equal("max-age=31536000", context.Response.Headers[HeaderNames.StrictTransportSecurity].ToString());
+
+            var root = (await BodyAsync(context)).RootElement;
+            Assert.Equal(ManagementApiErrors.InternalErrorCode, root.GetProperty("error").GetString());
         }
 
         [Fact]
