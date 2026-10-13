@@ -985,7 +985,7 @@ mod tests {
         assert_eq!(io.count(), 5);
         assert_eq!(io.min_bytes_per_sec, 0.0);
 
-        // Only the top-level block is read: the install bundle lifts the unit's restrictions only
+        // Only the top-level block is read: the install bundle starts the helper only
         // for that one, so a block nested under `probe` must not switch the source on either.
         let nested = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
              "probe": { "topDiskIo": { "enabled": true } } }"#;

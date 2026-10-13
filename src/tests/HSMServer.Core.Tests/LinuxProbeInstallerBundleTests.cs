@@ -198,7 +198,7 @@ namespace HSMServer.Core.Tests
 
         /// <summary>
         /// The top disk I/O check (#1547) is the top-CPU one for the "topDiskIo" key: only an enabled
-        /// TOP-LEVEL block lifts the unit's restrictions, the only one the probe reads.
+        /// TOP-LEVEL block starts the root helper, the only one the probe and the helper read.
         /// </summary>
         [Fact]
         public void TopDiskIo_InstallScriptPatternMatchesTopLevelBlockOnly()

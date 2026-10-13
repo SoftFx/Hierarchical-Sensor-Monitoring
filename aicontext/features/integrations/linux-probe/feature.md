@@ -136,7 +136,7 @@ The probe registers **two separately pinned sets**:
    `pid start ppid kthread sigchld_ignored read write comm`, comm percent-escaped). The probe ticks
    every 5 s and consumes each new snapshot once: regular → speeds (interval from the snapshots'
    monotonic times), any in the day's last 30 s → the day's post. A missing/unreadable/stale (> 3
-   periods) snapshot is one WARN per probe lifetime naming the unit, nothing posted; recovery one
+   periods) snapshot (judged by the age of the last good one; the helper unit keeps it across restarts with `RuntimeDirectoryPreserve=yes`) is one WARN per outage naming the unit, nothing posted; recovery one
    INFO. Counters: `write_bytes` / `read_bytes` (block I/O, not `wchar`/`rchar`;
    `cancelled_write_bytes` not subtracted) over top CPU's process table and name rule (the stat
    parser and `read_processes` live in the helper crate, re-exported; `sensor_name`), identity
@@ -148,7 +148,7 @@ The probe registers **two separately pinned sets**:
    `hsm_linux_probe_io::scan::receiver`, shared); the helper re-reads every such receiver's `io`
    after its scan so the jump is in the same snapshot whatever the read order, and a process reaped
    between its `stat` and `io` reads counts as vanished; a remainder that does not fit is tried once
-   more, then dropped (debug line); a reaper ignoring `SIGCHLD` (stat field 34) autoreaps and is not
+   more, then dropped (debug line); a reaper ignoring `SIGCHLD` (stat field 33, `sigignore`) autoreaps and is not
    corrected. A process's last
    partial interval is counted under its reaper. Known limits (README "Limits"): a process too
    short-lived to be read is counted under its reaper in full; an orphan whose parent died first in

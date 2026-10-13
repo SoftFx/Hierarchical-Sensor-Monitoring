@@ -587,7 +587,7 @@ wall_ms=<Unix ms> kind=regular|final`, then one line per process `pid start_tick
 kernel_thread sigchld_ignored read_bytes write_bytes comm` — the counters `-` when unreadable,
 `comm` last and percent-escaped (bytes outside `!`..`~`, and `%`, as `%XX`), so a name holding spaces
 or newlines cannot break a line. `kernel_thread` is `PF_KTHREAD`; `sigchld_ignored` is bit 16 of the
-stat line's ignored-signal mask (field 34).
+stat line's ignored-signal mask (field 33, `sigignore`; not field 34, `sigcatch`: a shell or a Go program catches `SIGCHLD`, which is no autoreap).
 
 **Enable / disable.** The server bundle's `install.sh` enables and (re)starts the helper when the
 config it leaves on the host enables the **top-level** `topDiskIo` block (the same top-level-only
@@ -668,11 +668,15 @@ persisted**: a probe restart starts the day afresh, and that day's values say `m
 HH:MM local time (writes before that are not counted)`. A day keeps at most 4 096 names (one WARN
 line per day past that).
 
-**When it goes wrong.** A snapshot that is missing, unreadable or older than three periods — the
-helper is not enabled, stopped or crashed (`RuntimeDirectory` is removed with it) — is **one WARN
-line for the probe's lifetime**, naming `hsm-linux-probe-io.service` and how `install.sh` enables
-it, once the helper has had three periods to write one; nothing is posted meanwhile; the first fresh
-snapshot after it is one INFO line. Check `systemctl status hsm-linux-probe-io` and `journalctl -u
+**When it goes wrong.** An outage is judged by the age of the last good snapshot (before the first
+one, of the probe: the helper gets three periods), not by the file being there at one tick — so a
+helper restart is not an outage; the unit keeps its runtime directory across a stop or restart
+(`RuntimeDirectoryPreserve=yes`), so the last snapshot stays and simply ages. No fresh snapshot for
+three periods — the helper is not enabled, stopped or crashed — is **one WARN line per outage**,
+naming `hsm-linux-probe-io.service` and how `install.sh` enables it, with the reason (missing,
+unreadable, `… is N s old`); nothing is posted meanwhile; the first fresh snapshot after it is one
+INFO line, and the next outage warns again. The helper does not restart on a bad config or bad
+arguments (exit 1 or 2, `RestartPreventExitStatus=1 2`); it restarts after anything else. Check `systemctl status hsm-linux-probe-io` and `journalctl -u
 hsm-linux-probe-io`, and `ls -l /run/hsm-linux-probe-io/` (the snapshot's age: `head -1` shows its
 `wall_ms`). A snapshot with no readable counters at all (a kernel without task I/O accounting, or a
 helper stripped of its capabilities — it logs that itself once) is one ERROR until it recovers.

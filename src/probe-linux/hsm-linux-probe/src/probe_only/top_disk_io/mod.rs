@@ -39,9 +39,9 @@
 //! The source ticks every 5 s and consumes each new snapshot once (the helper owns the cadence): a
 //! `regular` one posts the speeds over the interval since the previous regular one (the helper's
 //! monotonic timestamps), and a snapshot in the day's last 30 seconds posts the day's totals. A
-//! snapshot that is missing, unreadable or older than three periods is one WARN for the probe's
-//! lifetime naming the helper's unit, and nothing is posted; the first good one after it is one
-//! INFO.
+//! snapshot that is missing, unreadable or older than three periods — measured from the last good
+//! one, so a helper restart is no outage — is one WARN per outage naming the helper's unit, and
+//! nothing is posted; the first good one after it is one INFO.
 //!
 //! [`top_cpu::procfs::sensor_name`]: super::top_cpu::procfs::sensor_name
 //! [`top_cpu::max_tracked_names`]: super::top_cpu::max_tracked_names
@@ -264,8 +264,10 @@ struct TopDiskIo<'c> {
     /// The probe's monotonic time at its first tick: a missing snapshot is a problem only once
     /// the helper has had three periods to write one.
     started_ns: Option<u64>,
-    stale_warned: bool,
-    recovered_logged: bool,
+    /// The monotonic time of the newest fresh snapshot seen: what an outage is measured from.
+    last_good_ns: Option<u64>,
+    /// An outage was reported (WARN) and has not ended (INFO) yet.
+    in_outage: bool,
     baseline_logged: bool,
     /// The day whose name cap was logged: once per day, so a later day is not silent.
     day_cap_logged: Option<i64>,
@@ -296,8 +298,8 @@ impl<'c> TopDiskIo<'c> {
             read_per_day: Family::new(READ_PER_DAY, max_tracked),
             local: local_time,
             started_ns: None,
-            stale_warned: false,
-            recovered_logged: false,
+            last_good_ns: None,
+            in_outage: false,
             baseline_logged: false,
             day_cap_logged: None,
             accounting: FailureLog::default(),
@@ -305,7 +307,7 @@ impl<'c> TopDiskIo<'c> {
     }
 
     /// One tick at `now_ns` (`CLOCK_MONOTONIC`, the helper's clock too): consume the snapshot if
-    /// it is new, check it is fresh, retry a failed day post.
+    /// it is new and fresh, report an outage of the helper, retry a failed day post.
     fn tick(&mut self, now_ns: u64, logger: &Logger) {
         let started = *self.started_ns.get_or_insert(now_ns);
         let stale_after =
@@ -313,49 +315,54 @@ impl<'c> TopDiskIo<'c> {
         let snapshot = std::fs::read_to_string(&self.snapshot_path)
             .map_err(|error| format!("cannot read {}: {error}", self.snapshot_path.display()))
             .and_then(|text| Snapshot::parse(&text));
-        let problem = match &snapshot {
-            Err(reason) => Some(reason.clone()),
-            Ok(snapshot) if snapshot.mono_ns.saturating_add(stale_after) < now_ns => Some(format!(
+        let fresh = |snapshot: &Snapshot| snapshot.mono_ns.saturating_add(stale_after) >= now_ns;
+        let reason = match &snapshot {
+            Ok(snapshot) if fresh(snapshot) => {
+                self.last_good_ns = Some(
+                    self.last_good_ns
+                        .map_or(snapshot.mono_ns, |good| good.max(snapshot.mono_ns)),
+                );
+                None
+            }
+            Ok(snapshot) => Some(format!(
                 "{} is {} s old",
                 self.snapshot_path.display(),
-                (now_ns - snapshot.mono_ns) / 1_000_000_000
+                now_ns.saturating_sub(snapshot.mono_ns) / 1_000_000_000
             )),
-            Ok(_) => None,
+            Err(reason) => Some(reason.clone()),
         };
-        match problem {
-            // The helper gets three periods to write its first snapshot.
-            Some(reason) if now_ns.saturating_sub(started) >= stale_after => {
-                if !self.stale_warned {
-                    logger.warn(format!(
-                        "{WHAT}: no fresh snapshot from the helper ({reason}); nothing is posted \
-                         until {HELPER_UNIT} writes one again. It runs where the top-level \
-                         topDiskIo block of /etc/hsm-linux-probe/config.json is enabled and the \
-                         bundle's install.sh was re-run (it enables the unit); check `systemctl \
-                         status {HELPER_UNIT}` (README, Top disk I/O processes). Logged once."
-                    ));
-                    self.stale_warned = true;
-                }
-            }
-            Some(_) => {}
-            None => {
-                if self.stale_warned && !self.recovered_logged {
-                    logger.info(format!("{WHAT}: the helper's snapshots are fresh again"));
-                    self.recovered_logged = true;
-                }
-            }
+        // An outage is judged by the age of the last good snapshot (before the first one, of the
+        // probe itself: the helper gets three periods), not by whether the file is there at this
+        // very tick — a helper restarting is not an outage. One WARN per outage, one INFO at its
+        // end.
+        let outage = now_ns.saturating_sub(self.last_good_ns.unwrap_or(started)) >= stale_after;
+        if outage && !self.in_outage {
+            logger.warn(format!(
+                "{WHAT}: no fresh snapshot from the helper ({}); nothing is posted until \
+                 {HELPER_UNIT} writes one again. It runs where the top-level topDiskIo block of \
+                 /etc/hsm-linux-probe/config.json is enabled and the bundle's install.sh was re-run \
+                 (it enables the unit); check `systemctl status {HELPER_UNIT}` (README, Top disk \
+                 I/O processes). Logged once per outage.",
+                reason.as_deref().unwrap_or("none for three periods")
+            ));
+            self.in_outage = true;
+        } else if !outage && self.in_outage {
+            logger.info(format!("{WHAT}: the helper's snapshots are fresh again"));
+            self.in_outage = false;
         }
         if let Ok(snapshot) = snapshot {
-            let fresh = problem_is_none(&snapshot, now_ns, stale_after);
-            if fresh && self.last_mono_ns != Some(snapshot.mono_ns) {
+            if fresh(&snapshot) && self.last_mono_ns != Some(snapshot.mono_ns) {
                 self.last_mono_ns = Some(snapshot.mono_ns);
                 self.consume(&snapshot, logger);
             }
         }
         if let Some((day, wall_ms)) = self.day_to_post {
-            if self.ledger.posted_day.is_none_or(|posted| posted < day) {
-                self.post_day(day, wall_ms, logger);
-            } else {
+            // Retried only while the ledger still counts that day: once a snapshot after midnight
+            // turned it (and the missed day was logged), the totals are another day's.
+            if self.ledger.day != Some(day) || self.ledger.posted_day.is_some_and(|p| p >= day) {
                 self.day_to_post = None;
+            } else {
+                self.post_day(day, wall_ms, logger);
             }
         }
     }
@@ -520,10 +527,6 @@ impl<'c> TopDiskIo<'c> {
             );
         }
     }
-}
-
-fn problem_is_none(snapshot: &Snapshot, now_ns: u64, stale_after: u64) -> bool {
-    snapshot.mono_ns.saturating_add(stale_after) >= now_ns
 }
 
 impl Source for TopDiskIo<'_> {
@@ -876,10 +879,10 @@ mod tests {
         collector.stop().expect("stop");
     }
 
-    /// No snapshot (the helper is not running), then a stale one: one WARN for the probe's
-    /// lifetime, after the helper had three periods; nothing posted; one INFO on recovery.
+    /// No snapshot (the helper is not running), then a stale one: one WARN per outage, after the
+    /// helper had three periods; nothing posted; one INFO at its end; a second outage warns again.
     #[test]
-    fn a_missing_or_stale_snapshot_is_one_warning_and_posts_nothing() {
+    fn a_missing_or_stale_snapshot_is_one_warning_per_outage_and_posts_nothing() {
         let tree = FakeTree::new("topio-stale");
         let collector = test_collector();
         let (logger, lines) = capture();
@@ -904,7 +907,7 @@ mod tests {
         source.tick(1_400 * SEC, &logger);
         assert_eq!(source.last_mono_ns, None);
 
-        // Fresh again: consumed, one INFO; a second outage does not warn again.
+        // Fresh again: consumed, one INFO.
         helper_writes(
             &tree,
             1_400,
@@ -915,9 +918,84 @@ mod tests {
         source.tick(1_401 * SEC, &logger);
         assert_eq!(source.last_mono_ns, Some(1_400 * SEC));
         assert_eq!(count(&lines, "fresh again"), 1);
-        source.tick(2_000 * SEC, &logger);
+
+        // The helper restarts: the file is gone for a moment — not an outage.
+        std::fs::remove_file(tree.0.join("snapshot")).expect("rm");
+        source.tick(1_410 * SEC, &logger);
+        helper_writes(
+            &tree,
+            1_415,
+            noon,
+            Kind::Regular,
+            vec![entry(1, "x", 0, 1, 0, 0)],
+        );
+        source.tick(1_416 * SEC, &logger);
         assert_eq!(count(&lines, "|WARN|"), 1);
+
+        // The helper stops for good (its last snapshot stays): a second outage, a second WARN
+        // three periods after the last good snapshot, and a second INFO when it is back.
+        source.tick(1_590 * SEC, &logger);
+        assert_eq!(count(&lines, "|WARN|"), 1, "not yet three periods");
+        source.tick(1_596 * SEC, &logger);
+        source.tick(1_700 * SEC, &logger);
+        assert_eq!(count(&lines, "|WARN|"), 2);
+        assert!(count(&lines, "s old") >= 1, "the reason names the age");
+        helper_writes(
+            &tree,
+            1_800,
+            noon,
+            Kind::Regular,
+            vec![entry(1, "x", 0, 1, 0, 0)],
+        );
+        source.tick(1_801 * SEC, &logger);
+        assert_eq!(count(&lines, "fresh again"), 2);
         assert!(registrations(&collector, WRITERS).is_empty());
+    }
+
+    /// A day post that failed entirely is retried only while the ledger still counts that day:
+    /// after a snapshot past midnight it would post the next day's first minutes as this day.
+    #[test]
+    fn a_failed_day_post_is_not_retried_with_the_next_days_totals() {
+        let tree = FakeTree::new("topio-retry");
+        let collector = test_collector();
+        let (logger, lines) = capture();
+        let mut source = source(&collector, &tree);
+        let day = utc(MIDNIGHT).0;
+        let evening = MIDNIGHT + 24 * 3600 * 1000 - 2 * MIN_MS;
+        let rsync = |write| vec![entry(20, "rsync", 1, 7, 0, write)];
+        helper_writes(&tree, 0, evening, Kind::Regular, rsync(0));
+        source.tick(SEC, &logger);
+        helper_writes(&tree, 60, evening + MIN_MS, Kind::Regular, rsync(100 * MB));
+        source.tick(61 * SEC, &logger);
+        // Every post fails (the collector is gone): the final snapshot cannot post the day.
+        collector.dispose();
+        helper_writes(&tree, 95, evening + 95_000, Kind::Final, rsync(150 * MB));
+        source.tick(96 * SEC, &logger);
+        assert_eq!(
+            source.day_to_post.map(|(d, _)| d),
+            Some(day),
+            "kept for a retry"
+        );
+        source.tick(101 * SEC, &logger);
+        assert_eq!(
+            source.day_to_post.map(|(d, _)| d),
+            Some(day),
+            "still that day: retried"
+        );
+        // Past midnight the ledger counts the next day: the retry is dropped, the day is
+        // reported as missed, never posted with the next day's bytes.
+        helper_writes(
+            &tree,
+            125,
+            evening + 125_000,
+            Kind::Regular,
+            rsync(160 * MB),
+        );
+        source.tick(126 * SEC, &logger);
+        assert_eq!(source.ledger.day, Some(day + 1));
+        assert_eq!(source.day_to_post, None);
+        assert_eq!(count(&lines, "are not posted"), 1);
+        assert!(source.written_per_day.sent.is_empty());
     }
 
     #[test]
