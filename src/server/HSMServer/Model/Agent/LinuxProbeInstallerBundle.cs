@@ -481,8 +481,12 @@ namespace HSMServer.Model.Agent
         /// checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
         /// still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
         /// altogether. So the step grants those two capabilities and lifts that one setting with a
-        /// drop-in — which also denies <c>open_by_handle_at</c>, <c>process_vm_readv</c>/<c>writev</c> and
-        /// <c>ptrace</c>, the calls that would turn the capabilities into more than reading — <b>only when the config installed on the
+        /// drop-in. With it the probe can read the whole host filesystem and every container's (through
+        /// <c>/proc/&lt;pid&gt;/root</c> of any process, past <c>ProtectHome=</c>/<c>PrivateTmp=</c>) and other
+        /// processes' environ, open files and memory; the drop-in's deny list (<c>open_by_handle_at</c>,
+        /// <c>process_vm_readv</c>/<c>writev</c>, <c>ptrace</c>) narrows that but does not restore those
+        /// protections. Only a root-run helper printing the counters would keep the probe unprivileged
+        /// (not implemented). The drop-in is written <b>only when the config installed on the
         /// host enables the top-level <c>topDiskIo</c> block</b> (<see cref="TopDiskIoEnabledPattern"/>), and
         /// removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
         /// server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
@@ -508,12 +512,16 @@ namespace HSMServer.Model.Agent
                 "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topDiskIo.",
                 "# The top disk I/O sensors read /proc/<pid>/io of every process. Another user's is a 0400 file whose read",
                 "# the kernel also gates on ptrace access, so it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE; the unit's",
-                "# ProtectProc=invisible hides the other processes. These capabilities would also allow reading any file",
-                "# the unit can see, other processes' /proc/<pid>/environ and open files (/proc/<pid>/fd/*), and their",
-                "# memory; the probe only reads /proc/<pid>/stat, io, exe, cmdline and status. The deny list below refuses",
-                "# the calls that would widen this further: open_by_handle_at (with CAP_DAC_READ_SEARCH it opens files by",
-                "# handle past ProtectHome= and the other hidden paths), process_vm_readv/writev (other processes' memory)",
-                "# and ptrace. Delete this file, then",
+                "# ProtectProc=invisible hides the other processes.",
+                "# WARNING: with this file the probe process can READ THE ENTIRE HOST FILESYSTEM and every container's",
+                "# filesystem: /proc/<pid>/root of any process (PID 1's has no ProtectHome=/PrivateTmp=) leads into that",
+                "# process's mount namespace, and CAP_DAC_READ_SEARCH bypasses file permissions there (/root/.ssh,",
+                "# /etc/shadow, the real /tmp). It can also read other processes' environ, open files (/proc/<pid>/fd/*)",
+                "# and memory. ProtectHome=, ProtectSystem= and PrivateTmp= no longer contain it. The probe itself only",
+                "# reads /proc/<pid>/stat, io, exe, cmdline and status. The deny list below still refuses open_by_handle_at,",
+                "# process_vm_readv/writev and ptrace, but it does not restore those protections. Keeping the probe",
+                "# unprivileged would need a root-run helper that only prints pid, start time and the two counters (not",
+                "# implemented). Delete this file, then",
                 "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capabilities again.",
                 "[Service]",
                 "ProtectProc=default",

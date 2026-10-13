@@ -647,22 +647,35 @@ then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. T
 bundle's `install.sh` writes exactly this file when the config it leaves on the host enables the
 **top-level** `topDiskIo` block (the same top-level-only check as for `topCpu`; a block nested under
 `probe` is ignored by the probe and by the check alike) and removes it when that config does not;
-`uninstall.sh` and the package's `postrm` (remove/purge) delete it. The trade-off is real. With
-both capabilities the process could read **any file** the unit's namespace shows (`/etc/shadow`,
-host keys), other processes' `/proc/<pid>/environ` (secrets in environment variables), their open
-files through `/proc/<pid>/fd/*`, and their memory through `/proc/<pid>/mem`. The probe opens only
-`/proc/<pid>/stat`, `io`, `exe`, `cmdline` and `status` (and the files it read before). The
-drop-in's deny list refuses the system calls that would go further: `open_by_handle_at`, which
-with `CAP_DAC_READ_SEARCH` opens a file by handle **past** the unit's hidden paths (the "shocker"
-bypass) — so `/home` and `/root` stay hidden by `ProtectHome=yes` **because** it is denied;
+`uninstall.sh` and the package's `postrm` (remove/purge) delete it.
+
+**What the drop-in really grants — read this before enabling it.** With `topDiskIo` enabled the
+probe process has **read-only access to the entire host filesystem and to every container's
+filesystem**, plus other processes' `/proc/<pid>/environ` (secrets in environment variables), their
+open files (`/proc/<pid>/fd/*`) and their memory (`/proc/<pid>/mem`). The reason: with
+`ProtectProc=default` and `CAP_SYS_PTRACE`, every process's `/proc/<pid>/root` and
+`/proc/<pid>/cwd` can be followed, and they lead into **that** process's mount namespace — PID 1's
+has no `ProtectHome=`, `PrivateTmp=` or `ProtectSystem=` — and `CAP_DAC_READ_SEARCH` then lets a
+plain `openat`/`read` through them bypass file permissions: `/proc/1/root/root/.ssh/id_*`,
+`/proc/1/root/etc/shadow`, the host's real `/tmp`, any container's rootfs. **`ProtectHome=`,
+`ProtectSystem=` and `PrivateTmp=` no longer contain the probe**; nothing in the unit can restore
+them while it holds both capabilities. The probe itself opens only `/proc/<pid>/stat`, `io`, `exe`,
+`cmdline` and `status` (and the files it read before), but that is a property of its code, not an
+enforced boundary.
+
+The drop-in's deny list is still worth having, as it narrows what a compromised probe could do
+beyond reading: `open_by_handle_at` (opens files by handle; refused by `@system-service` already),
 `process_vm_readv`/`process_vm_writev`, which `@system-service` allows (via `@ipc`; checked with
-`systemd-analyze syscall-filter` on debian:13, systemd 257); and `ptrace`, which `@system-service`
-already refuses, as it does `open_by_handle_at` — both are denied again explicitly. systemd merges
-the deny list into the unit's `SystemCallFilter=@system-service` allow list. The feature is off by
-default for this reason, and the owner decides per host. A stronger design — a tiny privileged
-helper that only returns the counters, with the probe keeping no capability — is a possible
-follow-up, not implemented. With the capabilities, top CPU's path lines name every process's
-executable (`/proc/<pid>/exe` becomes readable).
+`systemd-analyze syscall-filter` on debian:13, systemd 257), and `ptrace` (refused by
+`@system-service` already) — systemd merges the deny list into the unit's
+`SystemCallFilter=@system-service` allow list. It does **not** restore the protections above.
+
+The only way to keep the probe unprivileged is a **privileged helper**: a tiny root-run program
+whose only output is `pid starttime read_bytes write_bytes` per process, with the probe keeping no
+capability. It is **not implemented** in this PR; whether to build it, or to accept the trade-off
+above per host, is the owner's decision. The feature is off by default for this reason. With the
+capabilities, top CPU's path lines name every process's executable (`/proc/<pid>/exe` becomes
+readable).
 
 **Without it** the source keeps measuring what it can read: under `ProtectProc=invisible` only the
 probe's own processes are visible (one WARN line at start naming `hidepid` and the drop-in); with

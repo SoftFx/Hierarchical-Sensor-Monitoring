@@ -244,16 +244,20 @@ Linux is the only supported target. The initiative is
 - **The unit holds no capability unless top disk I/O is on.** Only the `top-disk-io.conf` drop-in
   (`install.sh`, from a host config enabling the top-level `topDiskIo`; removed otherwise, by
   `uninstall.sh` and by `postrm`) grants `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` (bounding +
-  ambient) and sets `ProtectProc=default`. The capabilities would also allow reading any file the
-  unit's namespace shows and other processes' `/proc/<pid>/environ`, `/proc/<pid>/fd/*` and memory;
-  the probe reads only `/proc/<pid>/stat`, `io`, `exe`, `cmdline` and `status`. The drop-in adds
+  ambient) and sets `ProtectProc=default`. **With it the probe process has read-only access to the
+  entire host filesystem and every container's filesystem**: `/proc/<pid>/root` (and `cwd`) of any
+  process becomes followable and leads into that process's mount namespace (PID 1's has no
+  `ProtectHome=`/`PrivateTmp=`/`ProtectSystem=`), where `CAP_DAC_READ_SEARCH` bypasses file
+  permissions (`/proc/1/root/root/.ssh/id_*`, the real `/tmp`, container rootfs); it can also read
+  other processes' `environ`, `fd/*` and memory. `ProtectHome=`, `ProtectSystem=` and
+  `PrivateTmp=` no longer contain it. The probe's code reads only `/proc/<pid>/stat`, `io`, `exe`,
+  `cmdline` and `status` — a property of the code, not an enforced boundary. The drop-in also adds
   `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace` (merged into the
-  unit's `@system-service` allow list): `open_by_handle_at` with `CAP_DAC_READ_SEARCH` would open
-  files past `ProtectHome=` (so `/home`, `/root` stay hidden only because it is denied);
-  `process_vm_readv`/`writev` are in `@system-service` (via `@ipc`), `ptrace` and
-  `open_by_handle_at` are not (`systemd-analyze syscall-filter`, debian:13, systemd 257) and are
-  denied again explicitly. A privileged helper returning only the counters would avoid the
-  capabilities altogether — a possible follow-up.
+  unit's `@system-service` allow list; `process_vm_readv`/`writev` are in it via `@ipc`, `ptrace`
+  and `open_by_handle_at` are not — `systemd-analyze syscall-filter`, debian:13, systemd 257): still
+  useful against a compromised probe, but it does **not** restore those protections. The only way
+  to keep the probe unprivileged is a root-run helper that prints only
+  `pid starttime read_bytes write_bytes` — not implemented; the owner's decision.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.

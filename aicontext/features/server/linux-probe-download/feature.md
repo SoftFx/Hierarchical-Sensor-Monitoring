@@ -152,14 +152,18 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    `/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf`
    (`[Service] ProtectProc=default`, `CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`,
    `AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`,
-   `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace` — the calls that would
-   turn the capabilities into more than reading: `open_by_handle_at` past `ProtectHome=`, other
-   processes' memory, ptrace) is written **only when the config installed
+   `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace`) is written **only when the config installed
    on the host enables the top-level `topDiskIo` block**, and removed (said so) otherwise. Reading another
    user's `/proc/<pid>/io` needs both capabilities, which the unit drops — the file is 0400
    (`CAP_DAC_READ_SEARCH` opens it) and the kernel checks ptrace access before answering
    (`CAP_SYS_PTRACE`); either alone reads `EACCES` (measured, systemd container, 2026-10-13) — and
-   `ProtectProc=invisible` hides the other processes. The check is the top-CPU one for the key `"topDiskIo"`
+   `ProtectProc=invisible` hides the other processes. **With the drop-in the probe can read the whole
+   host filesystem and every container's** (through `/proc/<pid>/root` of any process, past
+   `ProtectHome=`/`PrivateTmp=`/`ProtectSystem=`) and other processes' environ, open files and memory;
+   the deny list narrows what a compromised probe could do but does not restore those protections.
+   Only a root-run helper printing `pid starttime read_bytes write_bytes` would keep the probe
+   unprivileged — not implemented, the owner's decision (README "Top disk I/O processes").
+   The check is the top-CPU one for the key `"topDiskIo"`
    (`LinuxProbeInstallerBundle.TopDiskIoEnabledPattern`, sharing the top-level prefix and the
    enabled-block suffix with `TopCpuEnabledPattern`): top level only, strings as tokens, nested deeper
    than three levels = off. There is **no server switch**: the bundle's `config.json` never carries

@@ -129,13 +129,17 @@ EOF
 sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
 ```
 
-The drop-in grants the probe two capabilities that would also allow reading any file its
-namespace shows (`/etc/shadow`, host keys) and other processes' `/proc/<pid>/environ`, open files
-(`/proc/<pid>/fd/*`) and memory (`/proc/<pid>/mem`); the probe reads only `/proc/<pid>/stat`,
-`io`, `exe`, `cmdline` and `status`. Its `SystemCallFilter=~…` line refuses the calls that would
-go further: `open_by_handle_at` (with `CAP_DAC_READ_SEARCH` it opens files by handle past
-`ProtectHome=` — the "shocker" bypass), `process_vm_readv`/`writev` and `ptrace`. Enable it only
-where that trade-off is accepted. To switch the feature off, set
+**Before enabling it:** with this drop-in the probe process has **read-only access to the entire
+host filesystem and every container's filesystem** — `/proc/<pid>/root` of any process (PID 1's
+has no `ProtectHome=`/`PrivateTmp=`) leads into that process's mount namespace, and
+`CAP_DAC_READ_SEARCH` bypasses file permissions there (`/proc/1/root/root/.ssh/id_*`,
+`/proc/1/root/etc/shadow`, the real `/tmp`) — and to other processes' `/proc/<pid>/environ`, open
+files (`/proc/<pid>/fd/*`) and memory. The unit's `ProtectHome=`, `ProtectSystem=` and
+`PrivateTmp=` no longer contain it. The probe itself reads only `/proc/<pid>/stat`, `io`, `exe`,
+`cmdline` and `status`, but nothing enforces that. The `SystemCallFilter=~…` line still refuses
+`open_by_handle_at`, `process_vm_readv`/`writev` and `ptrace`; it does **not** restore those
+protections. Keeping the probe unprivileged would need a root-run helper that only prints the
+counters (not implemented; the owner's decision). Enable it only where that trade-off is accepted. To switch the feature off, set
 `"enabled": false` and re-run `install.sh`, or delete the file, `daemon-reload` and restart.
 **Check:** `grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status` shows
 `0000000000080004` with the drop-in (`CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`) and all zeros

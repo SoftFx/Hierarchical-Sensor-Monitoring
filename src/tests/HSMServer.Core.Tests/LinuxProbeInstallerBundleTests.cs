@@ -247,7 +247,8 @@ namespace HSMServer.Core.Tests
                 Assert.Contains("  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'", script);
                 // Both: the io file is 0400 (CAP_DAC_READ_SEARCH opens it) and its read is gated on
                 // ptrace access (CAP_SYS_PTRACE); either alone still reads EACCES. The deny list keeps
-                // them to reading: no open_by_handle_at (past ProtectHome=), no process_vm_*, no ptrace.
+                // what remains: no open_by_handle_at, no process_vm_*, no ptrace (it does not restore
+                // ProtectHome=: /proc/<pid>/root still reaches the host filesystem).
                 Assert.Contains("\n[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n" +
                                 "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n" +
                                 "SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace\nEOF\n", script);
