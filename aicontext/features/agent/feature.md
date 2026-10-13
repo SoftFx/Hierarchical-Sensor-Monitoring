@@ -1,6 +1,6 @@
 # Feature: HSM Agent (Windows service)
 
-> Owner: agent | Last reviewed: 2026-06-25 | Canonical: yes
+> Owner: agent | Last reviewed: 2026-10-13 | Canonical: yes
 > Scope: The standalone **HSM Agent** product (`src/agent/`) — an always-on Windows service that hosts the native collector and streams this computer's metrics to an HSM server with zero client-side configuration. This feature owns the service host, config, and logging; it owns NO wire behavior (that all lives in `collector/` + `integrations/native-collector`).
 
 ---
@@ -69,6 +69,74 @@ server image + the install→data→stop run). A plugin system is **not** planne
 - On-disk layout: exe at `C:\Program Files\HSM Agent\` (placed by the installer, W7); config at
   `%ProgramData%\HSM Agent\config.json`; logs at `%ProgramData%\HSM Agent\logs\hsm-agent.log` + the
   Windows Application Event Log (source `HSMAgent`, registered at install).
+
+## Data directory access (issue #1279)
+
+`config.json` holds the product access key in cleartext — a bearer credential (the `Key` header) that
+is enough to post data as the product and to pull `GET /api/agent/exe`. `%ProgramData%` hands every new
+subfolder an inheritable `BUILTIN\Users` read ACE, so before #1279 any local user could read the key.
+
+- **Admin-only DACL, Administrators as owner.** `%ProgramData%\HSM Agent` carries a **protected**
+  DACL (`SE_DACL_PROTECTED`, inheritance from `%ProgramData%` blocked) with exactly two ACEs:
+  `NT AUTHORITY\SYSTEM` and `BUILTIN\Administrators`, full control, `(OI)(CI)` — `icacls` shows
+  nothing else. No `Users`, `Authenticated Users`, `Everyone` or `CREATOR OWNER`. The same call
+  makes `BUILTIN\Administrators` the **owner**: an owner keeps an implicit `WRITE_DAC` whatever the
+  DACL says, and `Users` may create folders in `%ProgramData%`, so a dir pre-created by a non-admin
+  could otherwise be re-opened by that user. Built from well-known SIDs (`CreateWellKnownSid`), never
+  account names, so it works on localized Windows. Helper: `ApplyAgentDirectoryDacl`
+  (`src/agent/src/dir_acl.cpp`, `SetNamedSecurityInfoW` with `OWNER_SECURITY_INFORMATION` +
+  `PROTECTED_DACL_SECURITY_INFORMATION`). If the owner change is refused (e.g. an unelevated
+  `--console` run: `ERROR_INVALID_OWNER`), the DACL is still applied and the owner failure is
+  reported.
+- **The directory is hardened, not the file.** Files get their rights by inheritance from the data dir.
+  The directive-driven config rewrite (`WriteAgentConfig`: write `config.json.tmp` in the same dir,
+  then `std::filesystem::rename` = `MoveFileExW(REPLACE_EXISTING)` over `config.json`) keeps the
+  tightened rights: the temp file is created inside the hardened dir, so it inherits SYSTEM +
+  Administrators, and a same-volume rename keeps the moved file's security descriptor. A per-file ACE
+  would have been dropped by that rewrite; the inherited ones cannot be.
+- **The temp file is always created fresh.** Before #1279 `Users` could add files to the data dir, so
+  any local user could plant `config.json.tmp` and stay its owner. Hardening replaces only inherited
+  ACEs, so such a file would keep its owner and explicit ACEs; opening it with `trunc` and renaming it
+  would carry that descriptor onto `config.json` together with the key. `WriteAgentConfig` therefore
+  deletes any existing `config.json.tmp` first, and **fails the rewrite** (logged, no restart) if it
+  cannot, rather than write the key into a file it did not create.
+- **`logs\` gets the same treatment.** The log never contains the key, but it does carry host,
+  process and service names. `logs\` receives its own protected copy of the same DACL and owner, so it
+  stays closed even if someone later loosens the data dir by hand.
+- **Self-heal on every start.** `EnsureDirectories()` creates both dirs and re-applies the owner + DACL
+  on every service start (and on `--console` and `--install`). It is idempotent. The agent owns these
+  ACLs: an operator-added ACE on either dir is removed at the next start. **Upgrade path:** an agent
+  installed before #1279 (0.5.x, data dir and `config.json` inheriting `Users` read) is repaired on the
+  first start of the new binary, whether it arrives by self-update (`--apply-update` restarts the
+  service) or by `update-hsmagent-service.cmd`. `SetNamedSecurityInfoW` re-propagates the new
+  inheritable ACEs to existing children, so `config.json` and the log files are tightened in place and
+  their contents are untouched. Only inherited ACEs are replaced; the owner of existing child files is
+  not reset. An explicit ACE someone put on `config.json` itself survives (out of scope).
+- **Rotate the key after upgrading a pre-#1279 host.** The repair closes the hole from that start on,
+  but on every host that ran a pre-#1279 agent the key was already readable by every local user,
+  possibly for months. Operators should **rotate the product access key** (issue a new key,
+  re-download the bundle, update `config.json` on each machine) once the fleet runs the fixed agent.
+- **Failure is loud, never fatal (rule #6).** If the owner or DACL cannot be applied, each failure is
+  logged at Error level to the file log and the Event Log (service) or to stderr + the file log
+  (`--console`, `--install`). The service still starts, because it must still read its config. A
+  non-elevated `--console` run cannot hand ownership to Administrators and, against an installed data
+  dir, also hits `ACCESS_DENIED` on the DACL (and can no longer read the default config — by design).
+  Run console mode elevated.
+- **Install scripts.** `install-hsmagent-service.cmd` (the static copy in `src/agent/packaging/` and
+  the server-generated copy in the download bundle, which must stay identical) runs
+  `icacls "%DATA_DIR%" /setowner *S-1-5-32-544` and then
+  `icacls "%DATA_DIR%" /inheritance:r /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F`
+  (icacls cannot combine `/setowner` with `/grant`) **before** copying `config.json` in. That removes
+  the inherited `Users` read, so a fresh config is not readable by users. It is not airtight on its
+  own: `/grant` adds to the DACL rather than replacing it, so an explicit ACE someone added to the dir
+  by hand survives until `--install` (later in the same script) and every service start re-apply the
+  exact DACL; and on a reinstall the existing `config.json` keeps any explicit ACE of its own.
+- **Out of scope:** DPAPI/CNG encryption of the key at rest (the service must read it unattended, so
+  machine-scoped encryption only moves the secret away from non-admins, which the ACL already does);
+  per-download revocable agent keys; `%ProgramFiles%\HSM Agent` rights (admin-write / user-read by
+  default, the binary is not a secret); resetting the owner of files already inside the data dir (the
+  only one the agent writes into, `config.json.tmp`, is recreated instead); a dir **and** `config.json`
+  both planted by a non-admin before the very first install (the script keeps an existing config).
 
 ## Config schema (`config.json`)
 
@@ -196,14 +264,38 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 - Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 15 cases — config parser + topCpu/update
   config + the sensor-group directive name↔field map) — run on every platform, registered in `ctest`.
+- Windows-only data-dir ACL tests (#1279, same exe, 3 cases).
+  - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
+    a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to
+    `config.json` and `logs\`). Across two consecutive "starts" it checks: protected DACL, exactly
+    SYSTEM + Administrators `(OI)(CI)(F)` explicit on both dirs, and no wide ACE left on the existing
+    files. Elevated, it also checks that both dirs are owned by Administrators (or SYSTEM) with no
+    error; unelevated, it checks that the owner change is refused with exactly one owner error per dir
+    while the DACL is still applied (the fallback path).
+  - `agent_dir_acl_admin_reads_and_rewrites_config` needs an elevated process and exits 77
+    (CTest *skipped*) otherwise. Same seeded dir plus a planted `config.json.tmp` carrying an explicit
+    marker ACE. It checks that the existing config survives byte-identical, the agent can still read
+    it, and a `WriteAgentConfig` rewrite succeeds and lands with only the inherited SYSTEM +
+    Administrators ACEs, owned by Administrators. It runs on the elevated GitHub runner.
+  - `agent_config_rewrite_replaces_planted_temp_file` (unelevated, plain scratch dir): a planted
+    `config.json.tmp` with an explicit marker ACE is replaced, not reused (the marker never reaches
+    `config.json`); a stale temp file that cannot be deleted (held open) fails the rewrite and leaves
+    `config.json` untouched.
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
   the bundle payload (`hsm-agent.exe` + `config.json` template + `install.cmd`/`uninstall.cmd`) as an
   artifact.
 - **Service smoke (W9):** the same lane then exercises the real SCM lifecycle on the admin runner —
   `--install` → `sc qc HSMAgent` shows `AUTO_START` → a `--console` run survives an unreachable server
-  (no crash) → `--uninstall`. The exe is also staged into the server image by `server-build.yml`
-  (copied into `wwwroot/agent/` before publish) so the download serves a real bundle.
+  (no crash) → `--uninstall`. The lane first seeds a pre-#1279 data dir (plain `mkdir` + a
+  `config.json`, inheriting `Users` read, owner set to NETWORK SERVICE as a stand-in for a non-admin
+  owner). After `--install` and again after the console run it runs `icacls` on the data dir, `logs\`,
+  `config.json` and the log file. It fails on any `BUILTIN\Users` / `Everyone` / `Authenticated Users`
+  ACE (by name or SID `S-1-5-32-545` / `S-1-1-0` / `S-1-5-11`), on an inherited `(I)` ACE or a
+  non-Administrators/SYSTEM owner on either dir, or if `config.json`'s contents changed. The release
+  lane (`agent-release.yml`) runs the identical smoke step. The exe is also staged into the server
+  image by `server-build.yml` (copied into `wwwroot/agent/` before publish) so the download serves a
+  real bundle.
 - Live E2E mirrors the already-proven collector recipe (#1166): against a Dockerized
   `hsmonitoring/hierarchical_sensor_monitoring:latest`, the host sensors land in the tree under
   `<computer>/.computer/...` for the key's product. In HTTP mode `SentCount()` stays 0 (in-memory
