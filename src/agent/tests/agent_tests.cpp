@@ -5,6 +5,7 @@
 #include "agent/config.hpp"
 
 #ifdef _WIN32
+#include "agent/dir_acl.hpp"
 #include "agent/paths.hpp"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -712,6 +713,112 @@ namespace
 
         std::filesystem::remove_all(dir, ec);
     }
+
+    // Owner + DACL of `path` as SDDL, to prove a refused call left the target untouched.
+    std::string SecuritySddl(const std::filesystem::path& path)
+    {
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        std::string text;
+        constexpr SECURITY_INFORMATION kWhat = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+        if (GetNamedSecurityInfoW(path.c_str(), SE_FILE_OBJECT, kWhat, nullptr, nullptr, nullptr, nullptr, &sd) == ERROR_SUCCESS)
+        {
+            LPSTR raw = nullptr;
+            if (ConvertSecurityDescriptorToStringSecurityDescriptorA(sd, SDDL_REVISION_1, kWhat, &raw, nullptr))
+            {
+                text = raw;
+                LocalFree(raw);
+            }
+            LocalFree(sd);
+        }
+        return text;
+    }
+
+    bool IsReparsePoint(const std::filesystem::path& path)
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+    }
+
+    // A directory junction needs no privilege (unlike a symlink), so this runs unelevated.
+    bool MakeJunction(const std::filesystem::path& link, const std::filesystem::path& target)
+    {
+        const std::wstring command = L"mklink /J \"" + link.wstring() + L"\" \"" + target.wstring() + L"\" >nul";
+        return _wsystem(command.c_str()) == 0 && IsReparsePoint(link);
+    }
+
+    bool MentionsReparsePoint(const std::vector<std::string>& errors)
+    {
+        for (const auto& error : errors)
+            if (error.find("reparse point") != std::string::npos)
+                return true;
+        return false;
+    }
+
+    // A non-admin could pre-create the data dir or logs\ as a junction to a directory of their choice
+    // (legacy dirs let Users create entries). Running as SYSTEM, the agent must refuse to retarget
+    // owner + DACL through it: the call fails with a reparse-point error and the target is untouched.
+    void DirAclRefusesReparsePoints()
+    {
+        const auto root = std::filesystem::temp_directory_path() / ("hsm_agent_reparse_" + std::to_string(GetCurrentProcessId()));
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        const auto target = root / "victim";
+        std::filesystem::create_directories(target, ec);
+        const std::string target_before = SecuritySddl(target);
+        Check(!target_before.empty(), "setup: target security descriptor readable");
+
+        // 1. The helper itself, on a junction.
+        const auto link = root / "link";
+        Check(MakeJunction(link, target), "setup: mklink /J created a junction");
+        std::string error;
+        Check(!hsm::agent::ApplyAgentDirectoryDacl(link.wstring(), error), "ApplyAgentDirectoryDacl refuses a junction");
+        Check(error.find("reparse point") != std::string::npos, "the refusal names the reparse point: " + error);
+        CheckEq(SecuritySddl(target), target_before, "junction target's owner + DACL unchanged");
+        Check(IsReparsePoint(link), "the junction itself is left in place");
+
+        // 2. EnsureDirectories with the data dir itself planted as a junction: nothing is created or
+        //    hardened behind it, and the refusal is reported.
+        const auto program_data = root / "pd";
+        std::filesystem::create_directories(program_data, ec);
+        Check(MakeJunction(program_data / "HSM Agent", target), "setup: data dir planted as a junction");
+        wchar_t* old = nullptr;
+        std::size_t old_length = 0;
+        const bool had_old = _wdupenv_s(&old, &old_length, L"ProgramData") == 0 && old != nullptr;
+        const std::wstring old_value = had_old ? old : L"";
+        free(old);
+        _wputenv_s(L"ProgramData", program_data.c_str());
+
+        std::vector<std::string> acl_errors;
+        hsm::agent::EnsureDirectories(&acl_errors);
+        CheckEq(acl_errors.size(), std::size_t{ 1 }, "one error: the refused data dir");
+        Check(MentionsReparsePoint(acl_errors), "data-dir junction reported as a reparse point");
+        Check(!std::filesystem::exists(target / "logs", ec), "logs\\ not created through the junction");
+        CheckEq(SecuritySddl(target), target_before, "data-dir junction target unchanged");
+
+        // 3. A real data dir whose logs\ was planted as a junction: the data dir is still hardened,
+        //    logs\ is refused and its target untouched.
+        RemoveDirectoryW((program_data / "HSM Agent").c_str()); // removes the junction, not the target
+        std::filesystem::create_directories(program_data / "HSM Agent", ec);
+        Check(MakeJunction(program_data / "HSM Agent" / "logs", target), "setup: logs\\ planted as a junction");
+        acl_errors.clear();
+        hsm::agent::EnsureDirectories(&acl_errors);
+        Check(MentionsReparsePoint(acl_errors), "logs junction reported as a reparse point");
+        CheckHardenedDirectory(program_data / "HSM Agent", "data dir next to a planted logs junction");
+        CheckEq(SecuritySddl(target), target_before, "logs junction target unchanged");
+
+        _wputenv_s(L"ProgramData", had_old ? old_value.c_str() : L"");
+
+        // Cleanup: re-grant the (owning) runner access to the hardened data dir, drop the junctions
+        // without touching their target, then delete the scratch tree.
+        std::vector<BYTE> me = CurrentUserSid();
+        if (!me.empty())
+            SetDacl(program_data / "HSM Agent", me, FILE_ALL_ACCESS, SET_ACCESS, PROTECTED_DACL_SECURITY_INFORMATION);
+        RemoveDirectoryW((program_data / "HSM Agent" / "logs").c_str());
+        RemoveDirectoryW(link.c_str());
+        std::filesystem::remove_all(root, ec);
+        if (ec)
+            std::cerr << "  note: could not remove scratch dir " << root.string() << ": " << ec.message() << '\n';
+    }
 #endif // _WIN32
 
     const std::map<std::string, std::function<void()>>& Tests()
@@ -736,6 +843,7 @@ namespace
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
             { "agent_config_rewrite_replaces_planted_temp_file", ConfigRewriteReplacesPlantedTempFile },
+            { "agent_dir_acl_refuses_reparse_points", DirAclRefusesReparsePoints },
 #endif
         };
         return tests;

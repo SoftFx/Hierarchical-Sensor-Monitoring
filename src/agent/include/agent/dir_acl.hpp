@@ -23,6 +23,10 @@ namespace hsm::agent
     /// implicit WRITE_DAC, so a non-admin owner could re-open the DACL). If the owner change is refused
     /// the DACL is still applied, and the call returns false with `error` naming the owner failure.
     ///
+    /// A `path` that is a reparse point (junction / symlink — possibly planted by a non-admin) is left
+    /// untouched: the call returns false with an error saying so, rather than change the security of
+    /// whatever the link points at.
+    ///
     /// Idempotent: re-applying to an already-hardened directory changes nothing. Returns false and
     /// fills `error` (UTF-8, includes the Win32 error code) on any failure; never throws.
     bool ApplyAgentDirectoryDacl(const std::wstring& path, std::string& error);

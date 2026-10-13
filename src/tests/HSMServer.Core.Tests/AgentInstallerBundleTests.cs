@@ -122,12 +122,18 @@ namespace HSMServer.Core.Tests
         {
             var script = AgentInstallerBundle.BuildInstallScript();
 
+            const string reparseCheck = "if not \"%DATA_DIR_ATTR:l=%\"==\"%DATA_DIR_ATTR%\" (";
             const string setOwner = "icacls \"%DATA_DIR%\" /setowner *S-1-5-32-544";
+            var mkdirAt = script.IndexOf("mkdir \"%DATA_DIR%\"", StringComparison.Ordinal);
+            var reparseCheckAt = script.IndexOf(reparseCheck, StringComparison.Ordinal);
             const string harden = "icacls \"%DATA_DIR%\" /inheritance:r /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F";
             var setOwnerAt = script.IndexOf(setOwner, StringComparison.Ordinal);
             var hardenAt = script.IndexOf(harden, StringComparison.Ordinal);
             var copyConfigAt = script.IndexOf("copy /Y \"%~dp0" + AgentInstallerBundle.ConfigName + "\"", StringComparison.Ordinal);
 
+            Assert.True(reparseCheckAt >= 0, "install script must refuse a data dir that is a junction / symlink");
+            Assert.True(mkdirAt >= 0 && mkdirAt < reparseCheckAt, "the reparse-point check runs on the dir the script just ensured");
+            Assert.True(reparseCheckAt < setOwnerAt, "a junction / symlink is refused BEFORE icacls touches it");
             Assert.True(setOwnerAt >= 0, "install script must make Administrators the data dir's owner");
             Assert.True(hardenAt >= 0, "install script must restrict the data dir with icacls");
             Assert.True(copyConfigAt >= 0, "install script must copy config.json");

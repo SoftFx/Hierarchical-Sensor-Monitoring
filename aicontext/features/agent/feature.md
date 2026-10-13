@@ -103,6 +103,11 @@ subfolder an inheritable `BUILTIN\Users` read ACE, so before #1279 any local use
 - **`logs\` gets the same treatment.** The log never contains the key, but it does carry host,
   process and service names. `logs\` receives its own protected copy of the same DACL and owner, so it
   stays closed even if someone later loosens the data dir by hand.
+- **Junctions and symlinks are refused.** If the data dir or `logs\` is a reparse point (a non-admin
+  could pre-create either as a link to a directory of their choosing), `ApplyAgentDirectoryDacl`
+  changes nothing and reports "refusing to change the security of … it is a reparse point", and
+  `EnsureDirectories` does not create `logs\` through a linked data dir. The install script aborts
+  before `icacls` when `%DATA_DIR%` is one. The fix is to remove the link and reinstall.
 - **Self-heal on every start.** `EnsureDirectories()` creates both dirs and re-applies the owner + DACL
   on every service start (and on `--console` and `--install`). It is idempotent. The agent owns these
   ACLs: an operator-added ACE on either dir is removed at the next start. **Upgrade path:** an agent
@@ -264,7 +269,7 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 - Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 15 cases — config parser + topCpu/update
   config + the sensor-group directive name↔field map) — run on every platform, registered in `ctest`.
-- Windows-only data-dir ACL tests (#1279, same exe, 3 cases).
+- Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
     a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to
     `config.json` and `logs\`). Across two consecutive "starts" it checks: protected DACL, exactly
@@ -281,6 +286,11 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
     `config.json.tmp` with an explicit marker ACE is replaced, not reused (the marker never reaches
     `config.json`); a stale temp file that cannot be deleted (held open) fails the rewrite and leaves
     `config.json` untouched.
+  - `agent_dir_acl_refuses_reparse_points` (unelevated: junctions need no privilege). It runs on a
+    `mklink /J` junction and checks that `ApplyAgentDirectoryDacl` refuses it with the reparse-point
+    error. `EnsureDirectories` with the data dir planted as a junction reports that one error and
+    creates no `logs\` behind it. With `logs\` planted as a junction, the data dir is still hardened
+    and `logs\` is refused. Each time the target's owner + DACL (SDDL) stay unchanged.
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
   the bundle payload (`hsm-agent.exe` + `config.json` template + `install.cmd`/`uninstall.cmd`) as an

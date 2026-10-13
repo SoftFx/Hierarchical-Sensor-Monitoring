@@ -42,6 +42,18 @@ namespace hsm::agent
 
     bool ApplyAgentDirectoryDacl(const std::wstring& path, std::string& error)
     {
+        // Refuse a junction / symlink: before #1279 Users could create entries under the data dir (and
+        // anyone can create folders in %ProgramData%), so a non-admin could have pre-created the data
+        // dir or logs\ as a link to a directory of their choosing. This code runs as SYSTEM, so never
+        // retarget an owner + DACL through such a link — leave it alone and report it.
+        // GetFileAttributesW describes the link itself, not its target.
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        {
+            error = "refusing to change the security of '" + Narrow(path) + "': it is a reparse point (junction/symlink); remove it and reinstall";
+            return false;
+        }
+
         // Well-known SIDs, never names: "BUILTIN\Administrators" is localized on non-English Windows.
         BYTE system_sid[SECURITY_MAX_SID_SIZE];
         BYTE admins_sid[SECURITY_MAX_SID_SIZE];
