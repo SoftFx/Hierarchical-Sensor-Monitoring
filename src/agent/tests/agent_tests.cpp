@@ -1,8 +1,26 @@
 // HSM Agent unit tests. Name-dispatched like the collector driver: `hsm_agent_tests <test_name>`
-// exits 0 on pass, non-zero on failure. Portable (config parser only) so every CI lane can run it.
+// exits 0 on pass, 77 on skip, any other non-zero on failure. The config-parser tests are portable so
+// every CI lane can run them; the data-dir DACL tests (#1279) are compiled on Windows only.
 
 #include "agent/config.hpp"
 
+#ifdef _WIN32
+#include "agent/paths.hpp"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <aclapi.h>
+#include <sddl.h>
+#include <vector>
+#endif
+
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -15,6 +33,7 @@
 namespace
 {
     int g_failures = 0;
+    bool g_skipped = false; // a test whose precondition is absent sets this; main() exits 77 (CTest SKIP_RETURN_CODE)
 
     void Check(bool condition, const std::string& message)
     {
@@ -278,6 +297,315 @@ namespace
         Check(c.sensors_process, "writing via the pointer flips the right field");
     }
 
+#ifdef _WIN32
+    // --- Data-dir DACL (#1279) ---------------------------------------------------------------------
+    //
+    // Drive the real EnsureDirectories() against a scratch %ProgramData% (the env var is redirected),
+    // seeded with the pre-#1279 state: a data dir that hands BUILTIN\Users read down to config.json and
+    // logs\, exactly what %ProgramData% gives every subfolder.
+
+    constexpr const char* kSystemSid = "S-1-5-18";
+    constexpr const char* kAdminsSid = "S-1-5-32-544";
+    constexpr const char* kUsersSid = "S-1-5-32-545";
+    constexpr const char* kEveryoneSid = "S-1-1-0";
+    constexpr const char* kAuthenticatedUsersSid = "S-1-5-11";
+
+    struct AceInfo
+    {
+        std::string sid;
+        BYTE type = 0;
+        BYTE flags = 0;
+        ACCESS_MASK mask = 0;
+    };
+
+    struct DaclInfo
+    {
+        bool read = false;
+        bool is_protected = false;
+        std::vector<AceInfo> aces;
+    };
+
+    std::vector<BYTE> WellKnownSid(WELL_KNOWN_SID_TYPE type)
+    {
+        std::vector<BYTE> sid(SECURITY_MAX_SID_SIZE);
+        DWORD size = static_cast<DWORD>(sid.size());
+        if (!CreateWellKnownSid(type, nullptr, sid.data(), &size))
+            sid.clear();
+        return sid;
+    }
+
+    DaclInfo ReadDacl(const std::filesystem::path& path)
+    {
+        DaclInfo info;
+        PACL dacl = nullptr;
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        if (GetNamedSecurityInfoW(path.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl, nullptr, &sd) != ERROR_SUCCESS)
+            return info;
+        info.read = true;
+
+        SECURITY_DESCRIPTOR_CONTROL control = 0;
+        DWORD revision = 0;
+        if (GetSecurityDescriptorControl(sd, &control, &revision))
+            info.is_protected = (control & SE_DACL_PROTECTED) != 0;
+
+        for (DWORD i = 0; dacl != nullptr && i < dacl->AceCount; ++i)
+        {
+            void* raw = nullptr;
+            if (!GetAce(dacl, i, &raw))
+                continue;
+            const auto* header = static_cast<const ACE_HEADER*>(raw);
+            AceInfo ace;
+            ace.type = header->AceType;
+            ace.flags = header->AceFlags;
+            // ACCESS_ALLOWED_ACE and ACCESS_DENIED_ACE share the {Header, Mask, SidStart} layout.
+            const auto* allowed = static_cast<const ACCESS_ALLOWED_ACE*>(raw);
+            ace.mask = allowed->Mask;
+            LPSTR text = nullptr;
+            if (ConvertSidToStringSidA(const_cast<DWORD*>(&allowed->SidStart), &text))
+            {
+                ace.sid = text;
+                LocalFree(text);
+            }
+            info.aces.push_back(ace);
+        }
+        LocalFree(sd);
+        return info;
+    }
+
+    bool HasAceFor(const DaclInfo& info, const std::string& sid)
+    {
+        for (const auto& ace : info.aces)
+            if (ace.sid == sid)
+                return true;
+        return false;
+    }
+
+    // No ACE may name Users / Everyone / Authenticated Users, and only SYSTEM + Administrators may be
+    // granted anything at all (that also rules out the test runner's own user SID inherited from %TEMP%).
+    void CheckOnlySystemAndAdmins(const DaclInfo& info, const std::string& what)
+    {
+        Check(info.read, what + ": DACL readable");
+        for (const char* wide : { kUsersSid, kEveryoneSid, kAuthenticatedUsersSid })
+            Check(!HasAceFor(info, wide), what + ": no ACE for wide principal " + wide);
+        for (const auto& ace : info.aces)
+            Check(ace.sid == kSystemSid || ace.sid == kAdminsSid, what + ": unexpected ACE for " + ace.sid);
+        Check(HasAceFor(info, kSystemSid), what + ": SYSTEM has an ACE");
+        Check(HasAceFor(info, kAdminsSid), what + ": Administrators has an ACE");
+    }
+
+    // A hardened directory: protected, exactly SYSTEM + Administrators, explicit full control that
+    // sub-folders and files inherit — icacls shows `(OI)(CI)(F)` and no `(I)`.
+    void CheckHardenedDirectory(const std::filesystem::path& path, const std::string& what)
+    {
+        const DaclInfo info = ReadDacl(path);
+        CheckOnlySystemAndAdmins(info, what);
+        Check(info.is_protected, what + ": DACL is protected (inheritance from the parent disabled)");
+        CheckEq(info.aces.size(), std::size_t{ 2 }, what + ": exactly two ACEs");
+        for (const auto& ace : info.aces)
+        {
+            Check(ace.type == ACCESS_ALLOWED_ACE_TYPE, what + ": allow ACE for " + ace.sid);
+            Check(ace.mask == FILE_ALL_ACCESS, what + ": full control for " + ace.sid);
+            Check((ace.flags & (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE)) == (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE),
+                  what + ": (OI)(CI) for " + ace.sid);
+            Check((ace.flags & INHERITED_ACE) == 0, what + ": explicit (not inherited) ACE for " + ace.sid);
+        }
+    }
+
+    void SetDacl(const std::filesystem::path& path, std::vector<BYTE>& sid, DWORD permissions, ACCESS_MODE mode, SECURITY_INFORMATION extra)
+    {
+        PACL old_dacl = nullptr;
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        if (mode == GRANT_ACCESS)
+            GetNamedSecurityInfoW(path.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &old_dacl, nullptr, &sd);
+        EXPLICIT_ACCESS_W entry = {};
+        entry.grfAccessPermissions = permissions;
+        entry.grfAccessMode = mode;
+        entry.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        entry.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        entry.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid.data());
+        PACL dacl = nullptr;
+        if (SetEntriesInAclW(1, &entry, old_dacl, &dacl) == ERROR_SUCCESS)
+        {
+            SetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | extra, nullptr, nullptr, dacl, nullptr);
+            LocalFree(dacl);
+        }
+        if (sd != nullptr)
+            LocalFree(sd);
+    }
+
+    std::vector<BYTE> CurrentUserSid()
+    {
+        std::vector<BYTE> sid;
+        HANDLE token = nullptr;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+            return sid;
+        DWORD size = 0;
+        GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+        std::vector<BYTE> buffer(size);
+        if (size != 0 && GetTokenInformation(token, TokenUser, buffer.data(), size, &size))
+        {
+            const auto* user = reinterpret_cast<const TOKEN_USER*>(buffer.data());
+            const DWORD length = GetLengthSid(user->User.Sid);
+            sid.assign(static_cast<const BYTE*>(user->User.Sid), static_cast<const BYTE*>(user->User.Sid) + length);
+        }
+        CloseHandle(token);
+        return sid;
+    }
+
+    // True when the token can use BUILTIN\Administrators (elevated admin or SYSTEM). An unelevated UAC
+    // token carries the group deny-only, so the hardened DACL locks it out of the files.
+    bool IsElevatedAdmin()
+    {
+        std::vector<BYTE> admins = WellKnownSid(WinBuiltinAdministratorsSid);
+        BOOL member = FALSE;
+        return !admins.empty() && CheckTokenMembership(nullptr, admins.data(), &member) && member;
+    }
+
+    void WriteFileBytes(const std::filesystem::path& path, const std::string& text)
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << text;
+    }
+
+    std::string ReadFileBytes(const std::filesystem::path& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        return ss.str();
+    }
+
+    // Scratch %ProgramData% with a pre-#1279 agent data dir in it; restores the env var and removes
+    // the tree on exit (re-granting the runner access first, since an unelevated runner is locked out).
+    class LegacyDataDir
+    {
+    public:
+        explicit LegacyDataDir(const char* tag, const std::string& config_text)
+        {
+            root_ = std::filesystem::temp_directory_path() / (std::string("hsm_agent_acl_") + tag + "_" + std::to_string(GetCurrentProcessId()));
+            Remove();
+            std::filesystem::create_directories(logs());
+
+            wchar_t* old = nullptr;
+            std::size_t old_length = 0;
+            if (_wdupenv_s(&old, &old_length, L"ProgramData") == 0 && old != nullptr)
+            {
+                had_old_ = true;
+                old_program_data_ = old;
+            }
+            free(old);
+            _wputenv_s(L"ProgramData", root_.c_str());
+
+            // What %ProgramData% hands every subfolder: an inheritable BUILTIN\Users read + execute ACE.
+            std::vector<BYTE> users = WellKnownSid(WinBuiltinUsersSid);
+            SetDacl(data(), users, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE, GRANT_ACCESS, UNPROTECTED_DACL_SECURITY_INFORMATION);
+            WriteFileBytes(config(), config_text);
+            WriteFileBytes(logs() / "hsm-agent.log", "2026-01-01 INFO pre-#1279 log line\n");
+
+            Check(HasAceFor(ReadDacl(config()), kUsersSid), "setup: legacy config.json inherits a BUILTIN\\Users ACE (else the test is vacuous)");
+            Check(HasAceFor(ReadDacl(logs() / "hsm-agent.log"), kUsersSid), "setup: legacy log inherits a BUILTIN\\Users ACE");
+        }
+
+        ~LegacyDataDir()
+        {
+            _wputenv_s(L"ProgramData", had_old_ ? old_program_data_.c_str() : L"");
+            Remove();
+        }
+
+        LegacyDataDir(const LegacyDataDir&) = delete;
+        LegacyDataDir& operator=(const LegacyDataDir&) = delete;
+
+        std::filesystem::path data() const { return root_ / "HSM Agent"; }
+        std::filesystem::path logs() const { return data() / "logs"; }
+        std::filesystem::path config() const { return data() / "config.json"; }
+
+    private:
+        void Remove()
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(root_, ec))
+                return;
+            // The runner owns everything it created, so it keeps WRITE_DAC even when the hardened DACL
+            // denies it everything else: re-grant itself full control, then delete.
+            std::vector<BYTE> me = CurrentUserSid();
+            if (!me.empty() && std::filesystem::exists(data(), ec))
+            {
+                SetDacl(data(), me, FILE_ALL_ACCESS, SET_ACCESS, PROTECTED_DACL_SECURITY_INFORMATION);
+                SetDacl(logs(), me, FILE_ALL_ACCESS, SET_ACCESS, UNPROTECTED_DACL_SECURITY_INFORMATION);
+            }
+            std::filesystem::remove_all(root_, ec);
+            if (ec)
+                std::cerr << "  note: could not remove scratch dir " << root_.string() << ": " << ec.message() << '\n';
+        }
+
+        std::filesystem::path root_;
+        bool had_old_ = false;
+        std::wstring old_program_data_;
+    };
+
+    constexpr const char* kLegacyConfig = R"({ "server": { "address": "https://hsm.example.com", "accessKey": "legacy-key-1279" }, "sensors": { "disk": true } })";
+
+    // The effective DACLs after EnsureDirectories(): data dir + logs\ hardened, the files that inherited
+    // the wide ACL tightened in place, and a second call (the next service start) is a clean no-op.
+    void DirAclIsProtectedSystemAndAdminsOnly()
+    {
+        LegacyDataDir dir("protected", kLegacyConfig);
+
+        for (int start = 1; start <= 2; ++start)
+        {
+            const std::string run = "start #" + std::to_string(start) + ": ";
+            std::vector<std::string> acl_errors;
+            Check(hsm::agent::EnsureDirectories(&acl_errors), run + "EnsureDirectories reports the data dir present");
+            for (const auto& error : acl_errors)
+                Check(false, run + "unexpected ACL error: " + error);
+
+            Check(hsm::agent::ProgramDataAgentDir() == dir.data().wstring(), run + "agent paths follow the redirected %ProgramData%");
+            CheckHardenedDirectory(dir.data(), run + "data dir");
+            CheckHardenedDirectory(dir.logs(), run + "logs dir");
+            CheckOnlySystemAndAdmins(ReadDacl(dir.config()), run + "existing config.json");
+            CheckOnlySystemAndAdmins(ReadDacl(dir.logs() / "hsm-agent.log"), run + "existing log file");
+        }
+    }
+
+    // The agent itself (SYSTEM / an elevated admin) keeps working inside the hardened dir: an existing
+    // config survives the upgrade intact, and the directive rewrite (WriteAgentConfig: write
+    // config.json.tmp + rename over config.json) succeeds and lands with the same narrow inherited DACL.
+    void DirAclAdminReadsAndRewritesConfig()
+    {
+        if (!IsElevatedAdmin())
+        {
+            std::cout << "skipped: needs an elevated (admin) process — the hardened DACL admits only SYSTEM + Administrators\n";
+            g_skipped = true;
+            return;
+        }
+
+        LegacyDataDir dir("rewrite", kLegacyConfig);
+        std::vector<std::string> acl_errors;
+        Check(hsm::agent::EnsureDirectories(&acl_errors), "EnsureDirectories reports the data dir present");
+        for (const auto& error : acl_errors)
+            Check(false, "unexpected ACL error: " + error);
+
+        const std::string before = ReadFileBytes(dir.config());
+        CheckEq(before, std::string{ kLegacyConfig }, "upgrade keeps config.json byte-identical");
+        AgentConfig config = ParseOk(before);
+        CheckEq(config.access_key, std::string{ "legacy-key-1279" }, "access key still readable by the agent");
+
+        config.sensors_disk = false; // what a sensor-group directive does
+        std::string error;
+        Check(hsm::agent::WriteAgentConfig(dir.config().string(), config, error), "directive rewrite succeeds: " + error);
+        const AgentConfig reparsed = ParseOk(ReadFileBytes(dir.config()));
+        Check(!reparsed.sensors_disk, "rewritten flag persisted");
+        CheckEq(reparsed.access_key, std::string{ "legacy-key-1279" }, "rewrite keeps the access key");
+        std::error_code ec;
+        Check(!std::filesystem::exists(dir.data() / "config.json.tmp", ec), "no config.json.tmp left behind");
+
+        const DaclInfo rewritten = ReadDacl(dir.config());
+        CheckOnlySystemAndAdmins(rewritten, "rewritten config.json");
+        for (const auto& ace : rewritten.aces)
+            Check((ace.flags & INHERITED_ACE) != 0, "rewritten config.json ACE for " + ace.sid + " is inherited from the hardened dir");
+    }
+#endif // _WIN32
+
     const std::map<std::string, std::function<void()>>& Tests()
     {
         static const std::map<std::string, std::function<void()>> tests = {
@@ -296,6 +624,10 @@ namespace
             { "agent_update_config_parses_and_defaults", UpdateConfigParsesAndDefaults },
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
             { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
+#ifdef _WIN32
+            { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
+            { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
+#endif
         };
         return tests;
     }
@@ -325,6 +657,11 @@ int main(int argc, char** argv)
     {
         std::cerr << name << ": " << g_failures << " check(s) failed\n";
         return 1;
+    }
+    if (g_skipped)
+    {
+        std::cout << name << ": skipped\n";
+        return 77;
     }
     std::cout << name << ": ok\n";
     return 0;

@@ -63,11 +63,39 @@ jobs:
       # Service smoke (W9): the GitHub windows runner is admin, so exercise the real SCM lifecycle —
       # --install registers an auto-start service, --uninstall removes it — and a short --console run
       # proves the worker survives an unreachable server (no crash) instead of exiting.
+      # Data-dir ACL (#1279): the runner first gets a pre-#1279 data dir (plain mkdir, so it inherits
+      # BUILTIN\Users read from %ProgramData%) holding a config.json; --install must tighten it in place
+      # to SYSTEM + Administrators, keep the config byte-identical, and a wide ACE fails the lane.
       - name: Service install / console smoke
         shell: pwsh
         run: |
           $exe = (Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1).FullName
           Write-Host "smoke exe: $exe"
+
+          # Wide principals by name (English runner) and by SID: Users, Everyone, Authenticated Users.
+          $wide = 'BUILTIN\\Users|\bEveryone\b|Authenticated Users|S-1-5-32-545(?!\d)|S-1-1-0(?!\d)|S-1-5-11(?!\d)'
+          function Assert-AdminOnly([string] $path, [bool] $isDir) {
+            $acl = (icacls $path | Out-String)
+            if ($LASTEXITCODE -ne 0) { throw "icacls '$path' failed ($LASTEXITCODE)" }
+            Write-Host $acl
+            if ($acl -match $wide) { throw "'$path' grants a wide principal ($($Matches[0])) — the access key would be readable by local users" }
+            if ($acl -notmatch 'NT AUTHORITY\\SYSTEM:' -or $acl -notmatch 'BUILTIN\\Administrators:') { throw "'$path' lacks the SYSTEM / Administrators ACE" }
+            if ($isDir) {
+              if ($acl -match '\(I\)') { throw "'$path' still inherits ACEs — inheritance from the parent must be disabled" }
+              if ($acl -notmatch 'NT AUTHORITY\\SYSTEM:\(OI\)\(CI\)\(F\)' -or $acl -notmatch 'BUILTIN\\Administrators:\(OI\)\(CI\)\(F\)') {
+                throw "'$path' must grant SYSTEM and Administrators (OI)(CI)(F)"
+              }
+            }
+          }
+
+          $dataDir = Join-Path $env:ProgramData 'HSM Agent'
+          $config = Join-Path $dataDir 'config.json'
+          $legacyConfig = '{ "server": { "address": "https://127.0.0.1", "port": 65530, "accessKey": "legacy-1279" } }'
+          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+          Set-Content -Path $config -Value $legacyConfig -Encoding ascii -NoNewline
+          $legacyAcl = (icacls $config | Out-String)
+          Write-Host "pre-#1279 config ACL:`n$legacyAcl"
+          if ($legacyAcl -notmatch $wide) { throw "setup: the seeded config.json should inherit a wide ACE from %ProgramData%, else the upgrade check is vacuous" }
 
           & $exe --install
           if ($LASTEXITCODE -ne 0) { throw "--install failed ($LASTEXITCODE)" }
@@ -75,12 +103,21 @@ jobs:
           Write-Host $qc
           if ($qc -notmatch 'AUTO_START') { throw "service is not auto-start" }
 
+          Assert-AdminOnly $dataDir $true
+          Assert-AdminOnly (Join-Path $dataDir 'logs') $true
+          Assert-AdminOnly $config $false
+          if ((Get-Content -Raw -Path $config) -ne $legacyConfig) { throw "the existing config.json changed while its ACL was tightened" }
+
           '{ "server": { "address": "https://127.0.0.1", "port": 65530, "accessKey": "smoke" }, "periods": { "collectMs": 1000 } }' |
             Out-File -Encoding ascii cfg.json
           $p = Start-Process -FilePath $exe -ArgumentList '--console','--config','cfg.json' -PassThru
           Start-Sleep -Seconds 5
           if ($p.HasExited) { throw "console run exited early (exit $($p.ExitCode)) — should survive an unreachable server" }
           Stop-Process -Id $p.Id -Force
+
+          # The console run re-applied the DACL (idempotent, as on every service start) and wrote its log.
+          Assert-AdminOnly $dataDir $true
+          Assert-AdminOnly (Join-Path $dataDir 'logs\hsm-agent.log') $false
 
           & $exe --uninstall
           if ($LASTEXITCODE -ne 0) { throw "--uninstall failed ($LASTEXITCODE)" }

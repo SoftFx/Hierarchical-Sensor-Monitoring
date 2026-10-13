@@ -73,8 +73,9 @@ namespace HSMServer.Model.Agent
         };
 
         /// <summary>
-        /// Installer script: stops any running service, copies the exe, copies config on first install
-        /// only (never overwrites a user-customised config), registers and starts the service.
+        /// Installer script: stops any running service, copies the exe, restricts the data dir to
+        /// SYSTEM + Administrators (#1279, before the key-bearing config lands in it), copies config on
+        /// first install only (never overwrites a user-customised config), registers and starts the service.
         /// Requires Administrator (prints an error and pauses if not elevated).
         /// </summary>
         public static string BuildInstallScript()
@@ -118,6 +119,16 @@ namespace HSMServer.Model.Agent
                 "",
                 "if not exist \"%INSTALL_DIR%\" mkdir \"%INSTALL_DIR%\"",
                 "if not exist \"%DATA_DIR%\"  mkdir \"%DATA_DIR%\"",
+                "",
+                ":: config.json holds the product access key (#1279): make the data dir SYSTEM + Administrators only,",
+                ":: inheritance from %ProgramData% (BUILTIN\\Users read) removed, BEFORE the config is copied in. The",
+                ":: service re-applies the same DACL on every start. SIDs, not names (localized Windows):",
+                ":: S-1-5-18 = NT AUTHORITY\\SYSTEM, S-1-5-32-544 = BUILTIN\\Administrators.",
+                "icacls \"%DATA_DIR%\" /inheritance:r /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F >nul",
+                "if %errorlevel% neq 0 (",
+                "  echo ERROR: could not restrict access to %DATA_DIR% ^(icacls failed^). Config not installed.",
+                "  pause & exit /b 1",
+                ")",
                 "",
                 "echo Installing version:",
                 "\"%~dp0" + ExeName + "\" --version",

@@ -115,6 +115,22 @@ namespace HSMServer.Core.Tests
             Assert.Contains("HSMAgent", script);
         }
 
+        // #1279: the config carries the access key, so the data dir must be admin-only (by SID, not a
+        // localized name, inheritance from %ProgramData% removed) before the config is copied into it.
+        [Fact]
+        public void InstallScript_RestrictsDataDirBeforeCopyingConfig()
+        {
+            var script = AgentInstallerBundle.BuildInstallScript();
+
+            const string harden = "icacls \"%DATA_DIR%\" /inheritance:r /grant *S-1-5-18:(OI)(CI)F /grant *S-1-5-32-544:(OI)(CI)F";
+            var hardenAt = script.IndexOf(harden, StringComparison.Ordinal);
+            var copyConfigAt = script.IndexOf("copy /Y \"%~dp0" + AgentInstallerBundle.ConfigName + "\"", StringComparison.Ordinal);
+
+            Assert.True(hardenAt >= 0, "install script must restrict the data dir with icacls");
+            Assert.True(copyConfigAt >= 0, "install script must copy config.json");
+            Assert.True(hardenAt < copyConfigAt, "the data dir must be restricted BEFORE config.json is copied in");
+        }
+
         // The static packaging scripts (src/agent/packaging/*.cmd, used for the manual-artifact install)
         // must stay identical to what the server generates for the download, so they can't drift.
         // Compared with line endings normalized (the static files' CRLF is an eol-policy concern).
