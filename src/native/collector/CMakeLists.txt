@@ -389,6 +389,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_value_json_matches_net_byte_layout
     native_wire_bar_json_matches_net_byte_layout
     native_double_format_handles_non_finite
+    native_double_format_matches_net_core_layout
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout

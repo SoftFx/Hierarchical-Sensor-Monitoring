@@ -156,11 +156,17 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
-- **0.11.1** (#1528) — logging fix, ABI unchanged. `Registered N sensor(s) after an earlier failed
+- **0.11.1** (#1528) — logging and wire-text fixes, ABI unchanged. `Registered N sensor(s) after an earlier failed
   attempt.` counts only the sensors whose earlier registration post failed: a runtime registration
   that shares the flush, or follows a retry the next Start batch already landed, is no longer
   credited with a recovery (it used to be, because one flag stood for the whole queue). Pinned by
-  `native_http_recovery_log_credits_only_retried_registrations`. The corpus also pins the
+  `native_http_recovery_log_credits_only_retried_registrations`. Payload doubles use the .NET Core
+  layout (fixed notation for decimal exponents -4..16, as `double.ToString("R")` / System.Text.Json
+  on .NET 8): a value from 1e15 up to 1e17 used to be written in scientific notation (`1E+15`,
+  `1.2345678901234568E+16`) and is now fixed (`1000000000000000`, `12345678901234568`), the bytes
+  the managed collector's serializer sends. The server parses both to the same double. Pinned by
+  `number_format_contract:double_wire_text_matrix` and `native_double_format_matches_net_core_layout`.
+  The corpus also pins the
   `.module/Service alive` cadence with a long collect period
   (`module_markers_contract:service_alive_keeps_beating_with_a_long_collect_period`, #1443) — no
   behavior change there, the beat has followed the sensor's period since 0.8.2 (#1437).

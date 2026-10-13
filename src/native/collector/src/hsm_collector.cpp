@@ -954,7 +954,7 @@ namespace
         std::thread worker_;
     };
 
-    // .NET shortest round-trip ("R") double text. The implementation lives in double_format.hpp
+    // .NET Core shortest round-trip double text. The implementation lives in double_format.hpp
     // so the prediction sensor's comment (disk_prediction.hpp) renders numbers identically (#1426).
     // A non-finite value is written as the quoted named literal ("NaN", "Infinity", "-Infinity"),
     // byte-for-byte what the managed serializer emits with AllowNamedFloatingPointLiterals — a bare

@@ -6089,6 +6089,34 @@ namespace
         Require(hsm::collector::DoubleToInvariantString(1.7976931348623157e308) == "1.7976931348623157E+308", "DBL_MAX text");
     }
 
+    // .NET 8 double.ToString("R") (= System.Text.Json) layout around both notation switches (#1528):
+    // fixed for decimal exponents -4..16, scientific outside. Expected strings observed on .NET 8.
+    void NativeDoubleFormatMatchesNetCoreLayout()
+    {
+        const std::pair<double, const char*> cases[] = {
+            { 1e14, "100000000000000" },
+            { 1e15, "1000000000000000" },
+            { 1.5e15, "1500000000000000" },
+            { 1234567890123456.8, "1234567890123456.8" },
+            { 12345678901234568.0, "12345678901234568" },
+            { 1e16, "10000000000000000" },
+            { 9.999999999999998e16, "99999999999999980" },
+            { 1e17, "1E+17" },
+            { 123456789012345680.0, "1.2345678901234568E+17" },
+            { -1e16, "-10000000000000000" },
+            { 0.0001, "0.0001" },
+            { 0.00012345678901234567, "0.00012345678901234567" },
+            { 0.00001, "1E-05" },
+            { 5e-324, "5E-324" },
+            { 0.30000000000000004, "0.30000000000000004" },
+        };
+        for (const auto& entry : cases)
+        {
+            const std::string text = hsm::collector::DoubleToInvariantString(entry.first);
+            Require(text == entry.second, ("expected " + std::string(entry.second) + ", got " + text).c_str());
+        }
+    }
+
     void NativeWireFileJsonMatchesNetByteLayout()
     {
         // "hi" serializes as the byte array [104,105]; Extension/Name precede Value.
@@ -8393,6 +8421,7 @@ namespace
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
             { "native_double_format_handles_non_finite", [](const std::string&) { NativeDoubleFormatHandlesNonFinite(); } },
+            { "native_double_format_matches_net_core_layout", [](const std::string&) { NativeDoubleFormatMatchesNetCoreLayout(); } },
             { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },

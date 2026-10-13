@@ -58,9 +58,13 @@ Args are literal text except these tokens, expanded by every driver:
 ## Canonical payload text
 
 Expectations match against a **canonical serialized text** of each captured
-payload — fixed field order, invariant culture, doubles in .NET `"R"`
-(shortest round-trip) format. Both drivers emit the identical shape; it is
-part of the contract:
+payload — fixed field order, invariant culture, doubles in the .NET Core 3.0+
+shortest round-trip format (what `double.ToString("R")` and System.Text.Json
+print on .NET 8: shortest digits, fixed notation for decimal exponents -4..16,
+otherwise `dE±XX` — `1E+17`, `1E-05`). The managed driver runs on net48, whose
+own `"R"` differs (17-digit fallback, scientific from 1e15), so it computes that
+text itself (`CanonicalDoubleText`, #1528); the native formatter writes it
+directly. Both drivers emit the identical shape; it is part of the contract:
 
 ```
 instant:  {"Type":N,"Path":"...","Value":V,"Status":N,"Comment":"..."}
