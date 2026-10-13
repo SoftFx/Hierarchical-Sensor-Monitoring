@@ -110,7 +110,8 @@ never enables it: add it **at the top level** of `/etc/hsm-linux-probe/config.js
 ```
 
 and re-run the bundle's `sudo ./install.sh` (without `--force-config`, so the edited config is
-kept). Reading another user's `/proc/<pid>/io` needs `CAP_SYS_PTRACE`, which the unit drops, so
+kept). Reading another user's `/proc/<pid>/io` needs `CAP_DAC_READ_SEARCH` (the file is 0400) and
+`CAP_SYS_PTRACE` (the kernel's ptrace-access check), both dropped by the unit, so
 `install.sh` writes the **capability drop-in** `/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf`
 when — and only when — the config on the host enables the block, and removes it otherwise (prints
 `Top disk I/O processes: on in …` / `… off in …; removed …`). It restarts the probe itself. By hand
@@ -118,17 +119,20 @@ when — and only when — the config on the host enables the block, and removes
 
 ```bash
 sudo mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
-printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_SYS_PTRACE\nAmbientCapabilities=CAP_SYS_PTRACE\n' \
+printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\nAmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n' \
   | sudo tee /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
 sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
 ```
 
-The drop-in grants the probe one capability, which would also allow reading other processes'
-memory; the probe reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline` (`ptrace(2)` stays
-refused by the unit's syscall filter). To switch the feature off, set `"enabled": false` and re-run
-`install.sh`, or delete the file, `daemon-reload` and restart. **Check:** `grep CapEff
-/proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status` shows `0000000000080000` with the
-drop-in (`CAP_SYS_PTRACE` alone) and all zeros without it. Without the drop-in the probe keeps
+The drop-in grants the probe two capabilities that would also allow reading any file its
+namespace shows (`/etc/shadow`, host keys) and other processes' memory; the probe reads only
+`/proc/<pid>/stat`, `io`, `exe` and `cmdline` (`ptrace(2)` stays refused by the unit's syscall
+filter). Enable it only where that trade-off is accepted. To switch the feature off, set
+`"enabled": false` and re-run `install.sh`, or delete the file, `daemon-reload` and restart.
+**Check:** `grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status` shows
+`0000000000080004` with the drop-in (`CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`) and all zeros
+without it, and the start log says `baseline over N visible processes, N with readable I/O
+counters`. Without the drop-in the probe keeps
 running and logs **one WARN line**: `hidepid` at start (only its own processes are visible), or
 `/proc/<pid>/io of N of M processes is not readable (EACCES …)` naming this drop-in.
 
@@ -182,7 +186,7 @@ puts the sensors back under the older paths. Below 0.7.0 the `topCpu` block is i
 are), its sensors time out, and a `top-cpu.conf` drop-in only relaxes `ProtectProc` for nothing:
 delete it (`sudo rm /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf && sudo systemctl
 daemon-reload`) before the restart. Likewise below 0.9.0 for `topDiskIo` and its `top-disk-io.conf`,
-which would grant `CAP_SYS_PTRACE` for nothing: delete it the same way. To make the server's bundles serve the older package
+which would grant `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` for nothing: delete it the same way. To make the server's bundles serve the older package
 too, set `src/server/HSMServer/probe-release.txt` back to it and release the server.
 
 ## Remove
@@ -215,7 +219,7 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Docker state | `/var/lib/hsm-linux-probe/docker-state.json` | on change (last-seen at most hourly; the hourly write total at most every 5 min, per hour and on stop) | per Compose service; a service that disappeared is reported `Stopped` and kept for **7 days** after last seen, then forgotten; an OOM latch lasts `probe.docker.oomLatchHours` (24 h) |
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |
-| Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, while the config on the host enables top-CPU), `top-disk-io.conf` (`install.sh`, while it enables `topDiskIo`: `ProtectProc=default` + `CAP_SYS_PTRACE`) | at install | until `uninstall.sh` or remove/purge |
+| Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, while the config on the host enables top-CPU), `top-disk-io.conf` (`install.sh`, while it enables `topDiskIo`: `ProtectProc=default` + `CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`) | at install | until `uninstall.sh` or remove/purge |
 
 Nothing else is written: `ProtectSystem=strict` leaves the state and log directories as the unit's
 only writable paths. Top CPU processes (#1479) and top disk I/O (#1547) keep nothing on the host:

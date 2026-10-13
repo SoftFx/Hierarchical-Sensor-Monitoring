@@ -126,8 +126,9 @@ pub struct IoRead {
     pub processes: usize,
     /// Of those, the ones whose `io` was read.
     pub readable: usize,
-    /// Of those, the ones whose `io` was refused (`EACCES`): another user's process, which needs
-    /// `CAP_SYS_PTRACE` (kernel: `ptrace_may_access(PTRACE_MODE_READ_FSCREDS)`).
+    /// Of those, the ones whose `io` was refused (`EACCES`): another user's process, whose 0400 `io`
+    /// needs `CAP_DAC_READ_SEARCH` to open and `CAP_SYS_PTRACE` to read (kernel:
+    /// `ptrace_may_access(PTRACE_MODE_READ_FSCREDS)` in `do_io_accounting`).
     pub denied: usize,
 }
 
@@ -572,7 +573,7 @@ pub mod tests {
         );
     }
 
-    /// What the kernel answers for another user's `io` without `CAP_SYS_PTRACE`: an `io` file
+    /// What the kernel answers for another user's `io` without the capabilities: an `io` file
     /// holding `EACCES` reads as a refusal (a chmod would not do: the tests may run as root).
     pub fn refusing_reader(path: &Path) -> std::io::Result<String> {
         let text = std::fs::read_to_string(path)?;

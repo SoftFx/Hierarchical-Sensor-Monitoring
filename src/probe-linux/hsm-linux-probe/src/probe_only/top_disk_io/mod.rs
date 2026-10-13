@@ -33,8 +33,11 @@
 //!
 //! # Privileges
 //!
-//! `/proc/<pid>/io` of another user's process needs `CAP_SYS_PTRACE` (and, under the unit's
-//! `ProtectProc=invisible`, other processes are not visible at all). The bundle's `install.sh`
+//! `/proc/<pid>/io` of another user's process needs two capabilities: the file is mode 0400 and
+//! owned by that user (`CAP_DAC_READ_SEARCH` opens it), and the kernel checks
+//! `ptrace_may_access` before answering (`CAP_SYS_PTRACE`); either alone still reads `EACCES`
+//! (measured in a systemd container, 2026-10-13). Under the unit's `ProtectProc=invisible` other
+//! processes are not visible at all. The bundle's `install.sh`
 //! writes [`DROP_IN`] when the host config enables `topDiskIo`. Without it the source keeps
 //! measuring what it can read and says once, at WARN, what it cannot and how to fix it.
 //!
@@ -116,7 +119,8 @@ pub fn register<'c>(
         logger.warn(format!(
             "top disk I/O: {} is mounted with {option} (systemd ProtectProc=), so only this \
              service's own processes are visible and the sensors cannot show the host's disk I/O; \
-             the drop-in {DROP_IN} (ProtectProc=default, CAP_SYS_PTRACE) lifts it: the bundle's \
+             the drop-in {DROP_IN} (ProtectProc=default, CAP_DAC_READ_SEARCH and \
+             CAP_SYS_PTRACE) lifts it: the bundle's \
              install.sh writes it when the top-level topDiskIo block is enabled (README, Top disk \
              I/O processes)",
             proc_root.display()
@@ -403,12 +407,13 @@ impl<'c> TopDiskIo<'c> {
         if read.denied > 0 && !self.denied_logged {
             logger.warn(format!(
                 "{WHAT}: /proc/<pid>/io of {} of {} processes is not readable (EACCES: another \
-                 user's process needs CAP_SYS_PTRACE, which the unit does not grant); their disk \
-                 I/O is not counted, the others' is. The drop-in {DROP_IN} grants it \
-                 (ProtectProc=default, CapabilityBoundingSet= and AmbientCapabilities= \
-                 CAP_SYS_PTRACE): the bundle's install.sh writes it when the top-level topDiskIo \
-                 block in the host config is enabled; then systemctl daemon-reload && systemctl \
-                 restart hsm-linux-probe (README, Top disk I/O processes). Logged once.",
+                 user's process needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE, which the unit does \
+                 not grant); their disk I/O is not counted, the others' is. The drop-in {DROP_IN} \
+                 grants them (ProtectProc=default, CapabilityBoundingSet= and \
+                 AmbientCapabilities= CAP_DAC_READ_SEARCH CAP_SYS_PTRACE): the bundle's install.sh \
+                 writes it when the top-level topDiskIo block in the host config is enabled; then \
+                 systemctl daemon-reload && systemctl restart hsm-linux-probe (README, Top disk \
+                 I/O processes). Logged once.",
                 read.denied, read.processes
             ));
             self.denied_logged = true;
@@ -815,7 +820,7 @@ mod tests {
         collector.stop().expect("stop");
     }
 
-    /// Without CAP_SYS_PTRACE another user's `io` is refused: one WARN line naming the remedy,
+    /// Without the capabilities another user's `io` is refused: one WARN line naming the remedy,
     /// and the readable processes keep being measured.
     #[test]
     fn a_refused_io_is_one_warning_with_the_remedy_and_sampling_goes_on() {
@@ -844,7 +849,7 @@ mod tests {
         assert_eq!(warnings.len(), 1, "{lines:#?}");
         for part in [
             "of 1 of 2 processes is not readable (EACCES",
-            "CAP_SYS_PTRACE",
+            "needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE",
             DROP_IN,
             "install.sh",
         ] {

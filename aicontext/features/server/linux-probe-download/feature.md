@@ -150,11 +150,13 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
 
    **Top disk I/O processes (#1547), every bundle:** the drop-in
    `/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf`
-   (`[Service] ProtectProc=default`, `CapabilityBoundingSet=CAP_SYS_PTRACE`,
-   `AmbientCapabilities=CAP_SYS_PTRACE`) is written **only when the config installed on the host enables
-   the top-level `topDiskIo` block**, and removed (said so) otherwise. Reading another user's
-   `/proc/<pid>/io` needs `CAP_SYS_PTRACE`, which the unit drops, and `ProtectProc=invisible` hides the
-   other processes. The check is the top-CPU one for the key `"topDiskIo"`
+   (`[Service] ProtectProc=default`, `CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`,
+   `AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`) is written **only when the config installed
+   on the host enables the top-level `topDiskIo` block**, and removed (said so) otherwise. Reading another
+   user's `/proc/<pid>/io` needs both capabilities, which the unit drops — the file is 0400
+   (`CAP_DAC_READ_SEARCH` opens it) and the kernel checks ptrace access before answering
+   (`CAP_SYS_PTRACE`); either alone reads `EACCES` (measured, systemd container, 2026-10-13) — and
+   `ProtectProc=invisible` hides the other processes. The check is the top-CPU one for the key `"topDiskIo"`
    (`LinuxProbeInstallerBundle.TopDiskIoEnabledPattern`, sharing the top-level prefix and the
    enabled-block suffix with `TopCpuEnabledPattern`): top level only, strings as tokens, nested deeper
    than three levels = off. There is **no server switch**: the bundle's `config.json` never carries
@@ -236,7 +238,7 @@ and the pin now names `probe-v0.8.4`.
 | Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
-| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the `top-disk-io.conf` step (top-level-only `topDiskIo` pattern, never matched by a generated config; the `CAP_SYS_PTRACE` drop-in written only from an enabling host config, removed otherwise and by uninstall), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
+| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the `top-disk-io.conf` step (top-level-only `topDiskIo` pattern, never matched by a generated config; the `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` drop-in written only from an enabling host config, removed otherwise and by uninstall), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
 
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key
@@ -257,7 +259,7 @@ re-verified against probe 0.8.1 before the first non-empty `probe-release.txt` (
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
 | Top-level `topCpu { enabled, periodMs, minPercent, count }` (#1479) | `BuildConfigJson` (`AgentInstallerBundle.TopCpuBlock`) | `config.rs` `TopCpuConfig` |
 | Drop-in `hsm-linux-probe.service.d/top-cpu.conf` lifting `ProtectProc=invisible` | `install.sh` (decides from `"topCpu": { … "enabled": true }` in the installed config) / `uninstall.sh` (`TopCpuDropIn`) | the unit's `ProtectProc=invisible`, `deb/postrm`; the key names in `config.rs` `TopCpuConfig` |
-| Drop-in `hsm-linux-probe.service.d/top-disk-io.conf` (`ProtectProc=default`, `CAP_SYS_PTRACE` bounding + ambient) for the top-level `topDiskIo { enabled, periodMs, minBytesPerSec, count }` block (#1547) | `install.sh` (decides from `"topDiskIo": { … "enabled": true }` in the installed config; the bundle never writes the block) / `uninstall.sh` (`TopDiskIoDropIn`) | the unit's empty `CapabilityBoundingSet=` / `AmbientCapabilities=` and `ProtectProc=invisible`, `deb/postrm`; `config.rs` `TopDiskIoConfig` |
+| Drop-in `hsm-linux-probe.service.d/top-disk-io.conf` (`ProtectProc=default`, `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` bounding + ambient) for the top-level `topDiskIo { enabled, periodMs, minBytesPerSec, count }` block (#1547) | `install.sh` (decides from `"topDiskIo": { … "enabled": true }` in the installed config; the bundle never writes the block) / `uninstall.sh` (`TopDiskIoDropIn`) | the unit's empty `CapabilityBoundingSet=` / `AmbientCapabilities=` and `ProtectProc=invisible`, `deb/postrm`; `config.rs` `TopDiskIoConfig` |
 
 **Verified on a real host since.** The `debian:13` smoke test of #1424 ran against a dummy `.deb` in a Docker
 Desktop container, where systemd applied no per-unit mount namespacing, so `LoadCredential=` never

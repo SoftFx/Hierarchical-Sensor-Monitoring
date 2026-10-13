@@ -125,7 +125,7 @@ echo "==> purge"
 # postrm must remove both.
 mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
 printf '[Service]\nProtectProc=default\n' >/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
-printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_SYS_PTRACE\nAmbientCapabilities=CAP_SYS_PTRACE\n' \
+printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\nAmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n' \
     >/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
 apt-get purge -y -qq hsm-linux-probe >/dev/null
 [[ ! -e /usr/bin/hsm-linux-probe ]] || fail "purge left /usr/bin/hsm-linux-probe"

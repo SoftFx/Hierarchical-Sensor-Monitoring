@@ -1041,10 +1041,13 @@
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoDropInScript">
             <summary>
             The install.sh step for top disk I/O processes (#1547). Reading another user's
-            <c>/proc/&lt;pid&gt;/io</c> needs <c>CAP_SYS_PTRACE</c>, which the unit drops (empty
-            <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>), and the unit's
-            <c>ProtectProc=invisible</c> hides the other processes altogether — so the step grants that one
-            capability and lifts that one setting with a drop-in, <b>only when the config installed on the
+            <c>/proc/&lt;pid&gt;/io</c> needs two capabilities, both dropped by the unit (empty
+            <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>): the file is mode 0400 and owned
+            by the process's user, so opening it needs <c>CAP_DAC_READ_SEARCH</c>, and the kernel then
+            checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
+            still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
+            altogether. So the step grants those two capabilities and lifts that one setting with a
+            drop-in, <b>only when the config installed on the
             host enables the top-level <c>topDiskIo</c> block</b> (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>), and
             removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
             server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK

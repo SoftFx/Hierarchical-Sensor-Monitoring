@@ -133,7 +133,9 @@ The probe registers **two separately pinned sets**:
    <disk>` (post window, after-post bytes to the next day, missed day logged once, never an invented
    0) but is **in memory only**: a restart starts the day afresh (the comment says since when).
    **Off unless the top-level `topDiskIo` block enables it**; no server switch. Needs the
-   `top-disk-io.conf` drop-in (`ProtectProc=default` + `CAP_SYS_PTRACE`), which `install.sh` writes
+   `top-disk-io.conf` drop-in (`ProtectProc=default` + `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`:
+   another user's `io` is a 0400 file whose read the kernel also gates on ptrace access, so either
+   capability alone reads `EACCES` — measured), which `install.sh` writes
    only from an enabling host config; without it the source measures what it can and logs one WARN
    (`hidepid`, or the `EACCES` count with the remedy). Every sensor registers at runtime. Not in the
    shared catalog, so no Windows counterpart and no conformance scenario. Details: README "Top disk
@@ -234,8 +236,9 @@ Linux is the only supported target. The initiative is
   argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
 - **The unit holds no capability unless top disk I/O is on.** Only the `top-disk-io.conf` drop-in
   (`install.sh`, from a host config enabling the top-level `topDiskIo`; removed otherwise, by
-  `uninstall.sh` and by `postrm`) grants `CAP_SYS_PTRACE` (bounding + ambient) and sets
-  `ProtectProc=default`. The capability would also allow reading other processes' memory; the probe
+  `uninstall.sh` and by `postrm`) grants `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` (bounding +
+  ambient) and sets `ProtectProc=default`. The capabilities would also allow reading any file the
+  unit's namespace shows and other processes' memory; the probe
   reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline`, and `ptrace(2)` stays refused by
   `SystemCallFilter=@system-service`.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at

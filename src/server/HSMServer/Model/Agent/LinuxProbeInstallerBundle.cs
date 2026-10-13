@@ -475,10 +475,13 @@ namespace HSMServer.Model.Agent
 
         /// <summary>
         /// The install.sh step for top disk I/O processes (#1547). Reading another user's
-        /// <c>/proc/&lt;pid&gt;/io</c> needs <c>CAP_SYS_PTRACE</c>, which the unit drops (empty
-        /// <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>), and the unit's
-        /// <c>ProtectProc=invisible</c> hides the other processes altogether — so the step grants that one
-        /// capability and lifts that one setting with a drop-in, <b>only when the config installed on the
+        /// <c>/proc/&lt;pid&gt;/io</c> needs two capabilities, both dropped by the unit (empty
+        /// <c>CapabilityBoundingSet=</c> and <c>AmbientCapabilities=</c>): the file is mode 0400 and owned
+        /// by the process's user, so opening it needs <c>CAP_DAC_READ_SEARCH</c>, and the kernel then
+        /// checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
+        /// still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
+        /// altogether. So the step grants those two capabilities and lifts that one setting with a
+        /// drop-in, <b>only when the config installed on the
         /// host enables the top-level <c>topDiskIo</c> block</b> (<see cref="TopDiskIoEnabledPattern"/>), and
         /// removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
         /// server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
@@ -490,8 +493,8 @@ namespace HSMServer.Model.Agent
             return string.Join("\n",
                 "# Top disk I/O processes (#1547): the drop-in follows the config installed above, as for top CPU.",
                 "# An enabled top-level topDiskIo block lets the probe see every process in /proc and read its",
-                "# /proc/<pid>/io, which needs CAP_SYS_PTRACE; anything else keeps the unit's ProtectProc=invisible",
-                "# and its empty capability sets.",
+                "# /proc/<pid>/io (CAP_DAC_READ_SEARCH + CAP_SYS_PTRACE); anything else keeps the unit's",
+                "# ProtectProc=invisible and its empty capability sets.",
                 "TOP_DISK_IO_DROPIN=\"" + TopDiskIoDropIn + "\"",
                 "top_disk_io_on=0",
                 "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
@@ -502,22 +505,23 @@ namespace HSMServer.Model.Agent
                 "  install -d -m 0755 -o root -g root \"$(dirname \"$TOP_DISK_IO_DROPIN\")\"",
                 "  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'",
                 "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topDiskIo.",
-                "# The top disk I/O sensors read /proc/<pid>/io of every process: another user's needs CAP_SYS_PTRACE,",
-                "# and the unit's ProtectProc=invisible hides the other processes. The capability would also allow reading",
-                "# other processes' memory; the probe only reads /proc/<pid>/stat, io, exe and cmdline (ptrace(2) itself stays",
-                "# refused by the unit's SystemCallFilter). Delete this file, then",
-                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capability again.",
+                "# The top disk I/O sensors read /proc/<pid>/io of every process. Another user's is a 0400 file whose read",
+                "# the kernel also gates on ptrace access, so it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE; the unit's",
+                "# ProtectProc=invisible hides the other processes. These capabilities would also allow reading any file",
+                "# and other processes' memory; the probe only reads /proc/<pid>/stat, io, exe and cmdline (ptrace(2) itself",
+                "# stays refused by the unit's SystemCallFilter). Delete this file, then",
+                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capabilities again.",
                 "[Service]",
                 "ProtectProc=default",
-                "CapabilityBoundingSet=CAP_SYS_PTRACE",
-                "AmbientCapabilities=CAP_SYS_PTRACE",
+                "CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
+                "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
                 "EOF",
                 "  chmod 0644 \"$TOP_DISK_IO_DROPIN\"",
-                "  echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry and I/O counters (CAP_SYS_PTRACE, $TOP_DISK_IO_DROPIN).\"",
+                "  echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry and I/O counters (CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE: $TOP_DISK_IO_DROPIN).\"",
                 "elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then",
                 "  rm -f \"$TOP_DISK_IO_DROPIN\"",
                 "  rmdir \"$(dirname \"$TOP_DISK_IO_DROPIN\")\" 2>/dev/null || true",
-                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_DISK_IO_DROPIN (no CAP_SYS_PTRACE again).\"",
+                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_DISK_IO_DROPIN (no capabilities again).\"",
                 "fi");
         }
 

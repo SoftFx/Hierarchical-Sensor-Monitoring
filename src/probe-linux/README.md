@@ -602,17 +602,22 @@ once at WARN. **Unlike the disk ledger, nothing is persisted**: a probe restart 
 afresh from the restart, and that day's values say `measured since HH:MM local time (writes
 before that are not counted)`. A day keeps at most 4 096 names (one WARN line past that).
 
-**Privileges — the drop-in.** `/proc/<pid>/io` of another user's process needs
-`CAP_SYS_PTRACE` (`ptrace_may_access(PTRACE_MODE_READ_FSCREDS)`), which the unit drops
-(`CapabilityBoundingSet=`, `AmbientCapabilities=`), and the unit's `ProtectProc=invisible` hides
-the other processes altogether. With `topDiskIo` on:
+**Privileges — the drop-in.** `/proc/<pid>/io` of another user's process needs **two**
+capabilities, both dropped by the unit (`CapabilityBoundingSet=`, `AmbientCapabilities=`): the
+file is mode `0400` and owned by that process's user, so opening it needs `CAP_DAC_READ_SEARCH`;
+the kernel then checks `ptrace_may_access(PTRACE_MODE_READ_FSCREDS)` before answering, which needs
+`CAP_SYS_PTRACE`. **Either one alone still reads `EACCES`** — measured in a systemd-booted
+`debian:13` container (2026-10-13) against a root `dd` loop: with `CAP_SYS_PTRACE` only, 10 of 11
+processes refused; with `CAP_DAC_READ_SEARCH` only, the same; with both, all 11 read. (The issue
+planned `CAP_SYS_PTRACE` alone; that would have shipped a feature that sees no foreign process.)
+The unit's `ProtectProc=invisible` hides the other processes altogether. With `topDiskIo` on:
 
 ```ini
 # /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
 [Service]
 ProtectProc=default
-CapabilityBoundingSet=CAP_SYS_PTRACE
-AmbientCapabilities=CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
 ```
 
 then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server
@@ -620,15 +625,17 @@ bundle's `install.sh` writes exactly this file when the config it leaves on the 
 **top-level** `topDiskIo` block (the same top-level-only check as for `topCpu`; a block nested under
 `probe` is ignored by the probe and by the check alike) and removes it when that config does not;
 `uninstall.sh` and the package's `postrm` (remove/purge) delete it. The trade-off is real:
-`CAP_SYS_PTRACE` would also let the process read other processes' memory (`/proc/<pid>/mem`,
-`process_vm_readv`); the probe reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline`, and
-`ptrace(2)` itself stays refused by the unit's `SystemCallFilter=@system-service`. With the
-capability, top CPU's path lines name every process's executable (`/proc/<pid>/exe` becomes
-readable).
+`CAP_DAC_READ_SEARCH` would let the process read **any file** the unit's namespace shows
+(`/etc/shadow`, host keys; `/home` and `/root` stay hidden by `ProtectHome=yes`), and
+`CAP_SYS_PTRACE` other processes' memory (`/proc/<pid>/mem`, `process_vm_readv`). The probe opens
+only `/proc/<pid>/stat`, `io`, `exe` and `cmdline` (and the files it read before), and `ptrace(2)`
+itself stays refused by the unit's `SystemCallFilter=@system-service`; the feature is off by
+default for this reason, and the owner decides per host. With the capabilities, top CPU's path
+lines name every process's executable (`/proc/<pid>/exe` becomes readable).
 
 **Without it** the source keeps measuring what it can read: under `ProtectProc=invisible` only the
 probe's own processes are visible (one WARN line at start naming `hidepid` and the drop-in); with
-`ProtectProc=default` but no capability, every refused `io` read (`EACCES`) is counted and **one
+`ProtectProc=default` but not both capabilities, every refused `io` read (`EACCES`) is counted and **one
 WARN line** says how many of how many processes are not counted and how to fix it — then sampling
 goes on. A kernel without task I/O accounting (no readable `io` at all) is one ERROR until it
 recovers; an unlistable `/proc` likewise.
@@ -883,7 +890,7 @@ Placeholders only — **no secrets**:
   readers separately), `count` (`10`, for the speeds and the per-day totals alike) — validated only
   when enabled: `periodMs > 0`, `count > 0`, `minBytesPerSec` a number `>= 0` (`0` = every process
   that moved a byte). See [Top disk I/O processes](#top-disk-io-processes-1547); it also needs the
-  `top-disk-io.conf` drop-in (`CAP_SYS_PTRACE`). The server bundle never writes this block.
+  `top-disk-io.conf` drop-in (`CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`). The server bundle never writes this block.
 
 ## Running
 
@@ -905,6 +912,7 @@ the collector's own file logger, so the two line up; the journal adds local time
 `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `StateDirectory`, empty capability bounding
 set, `LoadCredential`) and the §5 budget (`MemoryMax=64M`, `CPUQuota=5%`). Docker socket access is
 not in the unit but in a drop-in written only where a docker group exists — see
-[Socket access](#docker-compose-services-1416). Likewise the only capability the probe can ever
-hold, `CAP_SYS_PTRACE`, comes from the `top-disk-io.conf` drop-in, written only where the host
-config enables `topDiskIo` — see [Top disk I/O processes](#top-disk-io-processes-1547).
+[Socket access](#docker-compose-services-1416). Likewise the only capabilities the probe can ever
+hold, `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE`, come from the `top-disk-io.conf` drop-in, written
+only where the host config enables `topDiskIo` — see
+[Top disk I/O processes](#top-disk-io-processes-1547).

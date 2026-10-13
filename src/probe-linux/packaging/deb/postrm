@@ -4,8 +4,8 @@ set -e
 # the script, which is already gone by the time postrm runs. Kept across upgrades: the new
 # postinst rewrites it. Likewise the top-CPU drop-in (ProtectProc=default) the server bundle's
 # install.sh writes when "Report top processes by CPU" is on (#1479), and the top disk I/O one
-# (ProtectProc=default + CAP_SYS_PTRACE) it writes when the host config enables topDiskIo (#1547);
-# upgrades keep both.
+# (ProtectProc=default + CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE) it writes when the host config
+# enables topDiskIo (#1547); upgrades keep both.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf

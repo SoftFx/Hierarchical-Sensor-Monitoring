@@ -73,8 +73,9 @@ ProtectHostname=yes
 # (topCpu, #1479) need every process's /proc/<pid>/stat: where they are on, the drop-in
 # hsm-linux-probe.service.d/top-cpu.conf sets ProtectProc=default (the server bundle's install.sh
 # writes it; README "Top CPU processes"). The top disk I/O sensors (topDiskIo, #1547) also need
-# CAP_SYS_PTRACE to read other users' /proc/<pid>/io: their drop-in top-disk-io.conf sets
-# ProtectProc=default and grants that one capability below (README "Top disk I/O processes").
+# CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE to read other users' /proc/<pid>/io: their drop-in
+# top-disk-io.conf sets ProtectProc=default and grants those two below (README "Top disk I/O
+# processes").
 ProtectProc=invisible
 RestrictSUIDSGID=yes
 RestrictRealtime=yes
@@ -86,7 +87,8 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 # The probe never listens; it only makes outbound HTTPS connections to the HSM server. No
-# capability, except CAP_SYS_PTRACE where the top-disk-io.conf drop-in adds it (#1547).
+# capability, except CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE where the top-disk-io.conf drop-in
+# adds them (#1547).
 CapabilityBoundingSet=
 AmbientCapabilities=
 

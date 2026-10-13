@@ -235,7 +235,7 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void TopDiskIo_InstallScriptGrantsPtraceOnlyWhenTheHostConfigEnablesIt()
+        public void TopDiskIo_InstallScriptGrantsTheCapabilitiesOnlyWhenTheHostConfigEnablesIt()
         {
             // The step does not depend on the bundle's top-CPU switch.
             foreach (var script in new[] { LinuxProbeInstallerBundle.BuildInstallScript(), LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true) })
@@ -245,7 +245,10 @@ namespace HSMServer.Core.Tests
                                 "  | grep -E '" + LinuxProbeInstallerBundle.TopDiskIoEnabledPattern + "' >/dev/null; then\n" +
                                 "  top_disk_io_on=1\n", script);
                 Assert.Contains("  cat > \"$TOP_DISK_IO_DROPIN\" <<'EOF'", script);
-                Assert.Contains("\n[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_SYS_PTRACE\nAmbientCapabilities=CAP_SYS_PTRACE\nEOF\n", script);
+                // Both: the io file is 0400 (CAP_DAC_READ_SEARCH opens it) and its read is gated on
+                // ptrace access (CAP_SYS_PTRACE); either alone still reads EACCES.
+                Assert.Contains("\n[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n" +
+                                "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\nEOF\n", script);
                 // Anything else removes it: the unit's empty capability sets and ProtectProc=invisible again.
                 Assert.Contains("elif [ -f \"$TOP_DISK_IO_DROPIN\" ]; then\n  rm -f \"$TOP_DISK_IO_DROPIN\"", script);
                 // Decided after the config is placed and before systemd is reloaded and the unit (re)started.
