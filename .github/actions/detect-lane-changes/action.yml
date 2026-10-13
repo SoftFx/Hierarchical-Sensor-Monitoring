@@ -1,0 +1,100 @@
+name: Detect lane changes
+description: >
+  Decides whether a required CI lane must run its expensive build/test steps (#1278).
+  The lane's workflow keeps triggering on every pull request and its job always runs, so the
+  required check always reports a status; only the steps gated on this action's `run` output are
+  skipped when the pull request touches none of the lane's paths. Fail-open: any event other than
+  pull_request, any change under .github/, and any doubt (unexpected checkout shape, git error)
+  yields run=true.
+  Requires a prior actions/checkout with fetch-depth >= 2. On pull_request, HEAD is the
+  refs/pull/N/merge commit whose first parent is the base branch tip, so HEAD^1..HEAD is exactly
+  what the PR changes against the current base (the same set as origin/<base>...<head>) without
+  fetching the full history.
+
+inputs:
+  paths:
+    description: >
+      Newline-separated glob patterns relative to the repo root; blank lines and lines starting
+      with '#' are ignored. Matched with bash [[ == ]] semantics, so '*' also matches '/'
+      ('src/native/**' covers the whole subtree). '.github/**' is always included.
+    required: true
+
+outputs:
+  run:
+    description: "'true' when the lane must run its expensive steps, 'false' when it may skip them."
+    value: ${{ steps.detect.outputs.run }}
+  reason:
+    description: One-line human-readable explanation of the decision.
+    value: ${{ steps.detect.outputs.reason }}
+
+runs:
+  using: composite
+  steps:
+    - id: detect
+      shell: bash
+      env:
+        LANE_PATHS: ${{ inputs.paths }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        set -u
+        decide() {
+          echo "run=$1" >> "$GITHUB_OUTPUT"
+          echo "reason=$2" >> "$GITHUB_OUTPUT"
+          echo "Lane decision: run=$1 ($2)"
+          exit 0
+        }
+
+        if [ "$EVENT_NAME" != "pull_request" ]; then
+          decide true "event '$EVENT_NAME' always runs the full lane"
+        fi
+
+        # Expect the PR merge commit (three hashes: itself + two parents). Anything else means the
+        # checkout is not what this action assumes, so run everything rather than guess.
+        parents=$(git rev-list --parents -n 1 HEAD 2>/dev/null | wc -w | tr -d '[:space:]')
+        if [ "$parents" != "3" ]; then
+          decide true "HEAD is not a PR merge commit with a fetched base parent; cannot diff safely"
+        fi
+
+        list="${RUNNER_TEMP:-/tmp}/lane-changed-files.z"
+        # --no-renames: a file moved out of a lane's paths must count as a change there too.
+        # -z: no path quoting, so non-ASCII or unusual names still match the patterns.
+        if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$list"; then
+          decide true "git diff against the base parent failed"
+        fi
+
+        patterns=('.github/*')
+        while IFS= read -r line; do
+          line="${line%$'\r'}"
+          line="${line#"${line%%[![:space:]]*}"}"
+          line="${line%"${line##*[![:space:]]}"}"
+          [ -z "$line" ] && continue
+          [ "${line:0:1}" = "#" ] && continue
+          patterns+=("$line")
+        done <<< "$LANE_PATHS"
+
+        total=0
+        matched=()
+        while IFS= read -r -d '' f; do
+          total=$((total + 1))
+          for p in "${patterns[@]}"; do
+            # Unquoted RHS on purpose: glob match, where '*' also matches '/'.
+            if [[ "$f" == $p ]]; then
+              matched+=("$f")
+              break
+            fi
+          done
+        done < "$list"
+
+        echo "::group::Changed files ($total) and lane patterns"
+        tr '\0' '\n' < "$list"
+        echo "--- patterns:"
+        printf '  %s\n' "${patterns[@]}"
+        echo "::endgroup::"
+
+        if [ "${#matched[@]}" -gt 0 ]; then
+          # The file name goes into $GITHUB_OUTPUT: strip line breaks so an odd name cannot inject
+          # a second "run=" line.
+          first="$(printf '%s' "${matched[0]}" | tr -d '\r\n' )"
+          decide true "${#matched[@]} of $total changed file(s) match this lane's paths (first: $first)"
+        fi
+        decide false "none of the $total changed file(s) match this lane's paths"

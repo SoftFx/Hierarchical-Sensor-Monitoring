@@ -1,0 +1,31 @@
+name: Lane summary
+description: >
+  Final always-run step of a change-gated lane (#1278): prints, to the log and the job summary,
+  whether the lane ran its expensive steps or skipped them, so a fast green check says why it is
+  green. Pair with ./.github/actions/detect-lane-changes.
+
+inputs:
+  run:
+    description: The `run` output of the detect-lane-changes step (empty if it never completed).
+    required: false
+    default: ''
+  reason:
+    description: The `reason` output of the detect-lane-changes step.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LANE_RUN: ${{ inputs.run }}
+        LANE_REASON: ${{ inputs.reason }}
+      run: |
+        case "$LANE_RUN" in
+          true)  msg="Lane RAN: $LANE_REASON" ;;
+          false) msg="Lane SKIPPED (green without building or testing): $LANE_REASON" ;;
+          *)     msg="Change detection did not complete; see the steps above" ;;
+        esac
+        echo "$msg"
+        echo "$msg" >> "$GITHUB_STEP_SUMMARY"
