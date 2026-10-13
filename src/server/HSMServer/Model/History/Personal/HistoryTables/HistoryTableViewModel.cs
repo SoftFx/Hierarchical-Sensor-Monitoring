@@ -56,6 +56,11 @@ namespace HSMServer.Model.History
 
         public bool IsBarSensor => _model.Type.IsBar();
 
+        // Checked across all loaded pages, not only the current one: once shown, the σ column never
+        // disappears while paging (it may appear once an older page with σ is loaded). Timeout rows
+        // repeat the last bar and are rendered empty, so they do not count (#1509).
+        public bool HasStdDev => IsBarSensor && Pages.Any(page => page.Any(value => !value.IsTimeout && HasKnownStdDev(value)));
+
         public bool IsAliveSensor => string.Equals(_model.DisplayName, _serviceAliveSensorName);
 
         public int LastIndex => Pages.Count - 1;
@@ -184,6 +189,13 @@ namespace HSMServer.Model.History
 
         private const string _serviceAliveSensorName = "Service alive";
 
+        private static bool HasKnownStdDev(BaseValue value) => value switch
+        {
+            BarBaseValue<int> intBar => intBar.StdDev is not null,
+            BarBaseValue<double> doubleBar => doubleBar.StdDev is not null,
+            _ => false,
+        };
+
        
 
         private SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
@@ -209,6 +221,7 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                StdDev = value.StdDev?.ToString(),
                 EmaMin = value.EmaMin?.ToString(),
                 EmaMax = value.EmaMax?.ToString(),
                 EmaMean = value.EmaMean?.ToString(),
