@@ -32,6 +32,7 @@ RuntimeDirectory=hsm-linux-probe-io
 RuntimeDirectoryMode=0750
 # Kept across a stop or restart, so the probe still finds the last snapshot meanwhile and judges the
 # helper by the snapshot's age, not by a file that comes and goes (/run is gone at reboot anyway).
+# It lists every process, so install.sh (topDiskIo off), uninstall.sh and postrm delete it.
 RuntimeDirectoryPreserve=yes
 # The snapshot is 0640 root:hsm-probe.
 UMask=0027

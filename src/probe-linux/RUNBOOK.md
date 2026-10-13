@@ -230,7 +230,7 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |
 | Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, while the config on the host enables top-CPU) | at install | until `uninstall.sh` or remove/purge |
-| Top disk I/O snapshot | `/run/hsm-linux-probe-io/snapshot` (tmpfs, `0640 root:hsm-probe`, the helper's `RuntimeDirectory=`) | by `hsm-linux-probe-io` every `periodMs` while `topDiskIo` is on | replaced each time; kept when the helper stops or restarts (`RuntimeDirectoryPreserve=yes`), gone at reboot |
+| Top disk I/O snapshot | `/run/hsm-linux-probe-io/snapshot` (tmpfs, `0640 root:hsm-probe`, the helper's `RuntimeDirectory=`) | by `hsm-linux-probe-io` every `periodMs` while `topDiskIo` is on | replaced each time; kept when the helper stops or restarts (`RuntimeDirectoryPreserve=yes`); removed by `install.sh` with `topDiskIo` off, by `uninstall.sh` and by remove/purge; gone at reboot |
 
 Nothing else is written: `ProtectSystem=strict` leaves the state and log directories as the unit's
 only writable paths. Top CPU processes (#1479) and top disk I/O (#1547) keep nothing on the host:

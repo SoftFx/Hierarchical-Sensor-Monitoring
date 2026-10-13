@@ -147,7 +147,11 @@ echo "==> purge"
 # The top-CPU drop-in the server bundle's install.sh writes (#1479): postrm must remove it.
 mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
 printf '[Service]\nProtectProc=default\n' >/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+# The top disk I/O helper's preserved snapshot (#1547): postrm must remove it too.
+mkdir -p /run/hsm-linux-probe-io
+printf 'hsm-linux-probe-io 1 seq=1 mono_ns=1 wall_ms=1 kind=regular\n' >/run/hsm-linux-probe-io/snapshot
 apt-get purge -y -qq hsm-linux-probe >/dev/null
+[[ ! -e /run/hsm-linux-probe-io ]] || fail "purge left the helper's snapshot: $(ls -A /run/hsm-linux-probe-io)"
 [[ ! -e /usr/bin/hsm-linux-probe ]] || fail "purge left /usr/bin/hsm-linux-probe"
 [[ ! -e /usr/bin/hsm-linux-probe-io ]] || fail "purge left /usr/bin/hsm-linux-probe-io"
 [[ ! -e /lib/systemd/system/hsm-linux-probe-io.service ]] || fail "purge left the helper's unit"

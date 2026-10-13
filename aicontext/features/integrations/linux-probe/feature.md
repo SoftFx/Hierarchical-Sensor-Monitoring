@@ -136,7 +136,7 @@ The probe registers **two separately pinned sets**:
    `pid start ppid kthread sigchld_ignored read write comm`, comm percent-escaped). The probe ticks
    every 5 s and consumes each new snapshot once: regular → speeds (interval from the snapshots'
    monotonic times), any in the day's last 30 s → the day's post. A missing/unreadable/stale (> 3
-   periods) snapshot (judged by the age of the last good one; the helper unit keeps it across restarts with `RuntimeDirectoryPreserve=yes`) is one WARN per outage naming the unit, nothing posted; recovery one
+   periods) snapshot (judged by the age of the last good one; the helper unit keeps it across restarts with `RuntimeDirectoryPreserve=yes`; `install.sh` with the block off, `uninstall.sh` and `postrm` delete it, since it lists every process) is one WARN per outage naming the unit, nothing posted; recovery one
    INFO. Counters: `write_bytes` / `read_bytes` (block I/O, not `wchar`/`rchar`;
    `cancelled_write_bytes` not subtracted) over top CPU's process table and name rule (the stat
    parser and `read_processes` live in the helper crate, re-exported; `sensor_name`), identity

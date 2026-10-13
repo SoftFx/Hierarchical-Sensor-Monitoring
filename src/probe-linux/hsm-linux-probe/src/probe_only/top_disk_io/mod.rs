@@ -255,6 +255,9 @@ struct TopDiskIo<'c> {
     /// The day of the last snapshot taken in a day's last seconds, until its totals are posted
     /// (a post that failed entirely is tried again on the next ticks).
     day_to_post: Option<(i64, i64)>,
+    /// The last day a snapshot in its last seconds was consumed for: a day that ends unposted
+    /// although it had one failed to post, rather than missed its window.
+    window_day: Option<i64>,
     ledger: DayLedger,
     writers: Family<'c>,
     readers: Family<'c>,
@@ -291,6 +294,7 @@ impl<'c> TopDiskIo<'c> {
             pending: BTreeMap::new(),
             pending_since_ns: None,
             day_to_post: None,
+            window_day: None,
             ledger: DayLedger::default(),
             writers: Family::new(WRITERS, max_tracked),
             readers: Family::new(READERS, max_tracked),
@@ -389,6 +393,7 @@ impl<'c> TopDiskIo<'c> {
         let (day, second) = (self.local)(snapshot.wall_ms);
         if second + FINAL_WINDOW_SECONDS >= 86_400 {
             self.day_to_post = Some((day, snapshot.wall_ms));
+            self.window_day = Some(day);
         }
     }
 
@@ -420,10 +425,20 @@ impl<'c> TopDiskIo<'c> {
             ),
         }
         for missed in std::mem::take(&mut self.ledger.missed) {
+            let cause = if self.window_day == Some(missed) {
+                format!(
+                    "a snapshot was taken in the day's last {FINAL_WINDOW_SECONDS} s, but every \
+                     post of its totals failed (the post errors are logged above)"
+                )
+            } else {
+                format!(
+                    "no snapshot was taken in the day's last {FINAL_WINDOW_SECONDS} s (a suspended \
+                     host or a stopped helper)"
+                )
+            };
             logger.warn(format!(
-                "{WHAT}: the per-day totals of {} are not posted: no snapshot was taken in the \
-                 day's last {FINAL_WINDOW_SECONDS} s (a suspended host or a stopped helper); they \
-                 are never posted late",
+                "{WHAT}: the per-day totals of {} are not posted: {cause}; they are never posted \
+                 late",
                 day_label(missed)
             ));
         }
@@ -876,6 +891,7 @@ mod tests {
             .collect();
         assert_eq!(warned.len(), 1, "{warned:#?}");
         assert!(warned[0].contains("|WARN|") && warned[0].contains("2026-09-29"));
+        assert!(warned[0].contains("no snapshot was taken"), "{}", warned[0]);
         collector.stop().expect("stop");
     }
 
@@ -995,6 +1011,9 @@ mod tests {
         assert_eq!(source.ledger.day, Some(day + 1));
         assert_eq!(source.day_to_post, None);
         assert_eq!(count(&lines, "are not posted"), 1);
+        // A window snapshot was there: the warning names the failed posts, not a missing scan.
+        assert_eq!(count(&lines, "every post of its totals failed"), 1);
+        assert_eq!(count(&lines, "no snapshot was taken"), 0);
         assert!(source.written_per_day.sent.is_empty());
     }
 

@@ -944,6 +944,12 @@
             when the host config enables <c>topDiskIo</c> and disables it otherwise.
             </summary>
         </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoRuntimeDirectory">
+            <summary>
+            The helper's runtime directory: kept across its stops (<c>RuntimeDirectoryPreserve=yes</c>) and
+            holding every process's pid, name and I/O counters, so install.sh ("off") and uninstall.sh remove it.
+            </summary>
+        </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern">
             <summary>
             The POSIX extended regular expression install.sh applies to the installed config with its

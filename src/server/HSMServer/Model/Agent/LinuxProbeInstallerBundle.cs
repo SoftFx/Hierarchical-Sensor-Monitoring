@@ -47,6 +47,12 @@ namespace HSMServer.Model.Agent
         /// </summary>
         public const string TopDiskIoUnit = "hsm-linux-probe-io.service";
 
+        /// <summary>
+        /// The helper's runtime directory: kept across its stops (<c>RuntimeDirectoryPreserve=yes</c>) and
+        /// holding every process's pid, name and I/O counters, so install.sh ("off") and uninstall.sh remove it.
+        /// </summary>
+        public const string TopDiskIoRuntimeDirectory = "/run/hsm-linux-probe-io";
+
         // A JSON string with any characters, escaped quotes included (#1515): a brace inside one
         // (an exclude pattern, say) is text, not structure. Inside a POSIX bracket expression the
         // backslash is literal, so [^"\\] is "neither a quote nor a backslash", as in .NET.
@@ -339,6 +345,7 @@ namespace HSMServer.Model.Agent
                 "systemctl disable --now \"$UNIT\" 2>/dev/null || true",
                 "# The top disk I/O helper install.sh may have enabled (#1547).",
                 "systemctl disable --now " + TopDiskIoUnit + " 2>/dev/null || true",
+                "rm -rf " + TopDiskIoRuntimeDirectory,
                 "",
                 "if dpkg -s \"$PACKAGE\" >/dev/null 2>&1; then",
                 "  DEBIAN_FRONTEND=noninteractive apt-get purge -y \"$PACKAGE\"",
@@ -509,9 +516,13 @@ namespace HSMServer.Model.Agent
                 "  else",
                 "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/" + ConfigName + ", but $IO_UNIT could not be enabled and started (a package older than 0.9.0?); see: journalctl -u $IO_UNIT\" >&2",
                 "  fi",
-                "elif systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
-                "  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
-                "  echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; stopped and disabled $IO_UNIT.\"",
+                "else",
+                "  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
+                "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
+                "    echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; stopped and disabled $IO_UNIT.\"",
+                "  fi",
+                "  # Its last snapshot outlives a stop (RuntimeDirectoryPreserve) and lists every process: removed with it.",
+                "  rm -rf " + TopDiskIoRuntimeDirectory,
                 "fi");
         }
 

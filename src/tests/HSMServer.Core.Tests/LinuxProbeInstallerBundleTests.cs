@@ -248,9 +248,12 @@ namespace HSMServer.Core.Tests
                 // package) is a WARNING, not a failed install.
                 Assert.Contains("  if systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; then", script);
                 Assert.Contains("WARNING: topDiskIo is on in $CONFIG_DIR/config.json, but $IO_UNIT could not be enabled", script);
-                // Off: stopped and disabled when it is enabled or running, quiet otherwise.
-                Assert.Contains("elif systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then\n" +
-                                "  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true\n", script);
+                // Off: stopped and disabled when it is enabled or running, quiet otherwise; its preserved
+                // snapshot (every process's pid, name and counters) is removed either way.
+                Assert.Contains("else\n  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then\n" +
+                                "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true\n", script);
+                Assert.Contains("  fi\n  # Its last snapshot outlives a stop (RuntimeDirectoryPreserve) and lists every process: removed with it.\n" +
+                                "  rm -rf /run/hsm-linux-probe-io\nfi\n", script);
                 // One mechanism: the probe gets no drop-in and no capability for it.
                 Assert.DoesNotContain("top-disk-io.conf", script);
                 Assert.DoesNotContain("CAP_SYS_PTRACE", script);
@@ -268,7 +271,7 @@ namespace HSMServer.Core.Tests
             Assert.DoesNotContain("WARNING: this bundle enables top disk", LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true));
 
             var uninstall = LinuxProbeInstallerBundle.BuildUninstallScript();
-            Assert.Contains("systemctl disable --now hsm-linux-probe-io.service 2>/dev/null || true", uninstall);
+            Assert.Contains("systemctl disable --now hsm-linux-probe-io.service 2>/dev/null || true\nrm -rf /run/hsm-linux-probe-io\n", uninstall);
             Assert.DoesNotContain("top-disk-io.conf", uninstall);
         }
 

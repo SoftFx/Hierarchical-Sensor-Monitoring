@@ -671,7 +671,7 @@ line per day past that).
 **When it goes wrong.** An outage is judged by the age of the last good snapshot (before the first
 one, of the probe: the helper gets three periods), not by the file being there at one tick — so a
 helper restart is not an outage; the unit keeps its runtime directory across a stop or restart
-(`RuntimeDirectoryPreserve=yes`), so the last snapshot stays and simply ages. No fresh snapshot for
+(`RuntimeDirectoryPreserve=yes`), so the last snapshot stays and simply ages (it lists every process, so `install.sh` with the block off, `uninstall.sh` and the package's `postrm` delete the directory; a reboot does anyway). No fresh snapshot for
 three periods — the helper is not enabled, stopped or crashed — is **one WARN line per outage**,
 naming `hsm-linux-probe-io.service` and how `install.sh` enables it, with the reason (missing,
 unreadable, `… is N s old`); nothing is posted meanwhile; the first fresh snapshot after it is one
