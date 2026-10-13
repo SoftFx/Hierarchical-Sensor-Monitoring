@@ -208,6 +208,45 @@ namespace HSMServer.Core.Tests.Swagger
         }
 
         [Fact]
+        public void ErrorDetailsFilter_PublishedSchema_AllowsRealPayloads()
+        {
+            // The in-memory union above must stay VALID once SERIALIZED: an
+            // "additionalProperties": false as a sibling of oneOf — the outer
+            // schema declares no properties — would forbid every key, so every
+            // real details payload ({"traceId": "..."}, {"folderId": ["..."]})
+            // would fail validation against the published document. Only the
+            // union arms may carry additionalProperties; the outer schema must
+            // omit the keyword entirely.
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["details"] = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Type = "object",
+                AdditionalProperties = new Microsoft.OpenApi.Models.OpenApiSchema(),
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var writer = new StringWriter();
+            schema.Properties["details"].SerializeAsV3(
+                new Microsoft.OpenApi.Writers.OpenApiJsonWriter(writer));
+
+            using var document = System.Text.Json.JsonDocument.Parse(writer.ToString());
+            var details = document.RootElement;
+
+            Assert.False(details.TryGetProperty("additionalProperties", out _));
+
+            var arms = details.GetProperty("oneOf");
+            Assert.Equal(2, arms.GetArrayLength());
+            Assert.Equal("array", arms[0].GetProperty("additionalProperties").GetProperty("type").GetString());
+            Assert.Equal("string", arms[1].GetProperty("additionalProperties").GetProperty("type").GetString());
+        }
+
+        [Fact]
         public void ErrorDetailsFilter_LeavesOtherSchemasUntouched()
         {
             // Scoped to the error DTO's details property alone — nothing else in the

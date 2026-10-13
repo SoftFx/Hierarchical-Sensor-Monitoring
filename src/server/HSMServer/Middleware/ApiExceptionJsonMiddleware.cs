@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using HSMServer.Mcp;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
@@ -26,13 +27,20 @@ namespace HSMServer.Middleware
             // aborted request surfaces as OperationCanceledException from the
             // framework's body/abort plumbing, and writing a 500 to a dead
             // connection would only throw again and REPLACE the original exception
-            // in the outer handler's logging. A server-side cancel — e.g. an
-            // HttpClient timeout inside a handler throws OperationCanceledException
-            // while RequestAborted is NOT set — is an ordinary failure of a live
-            // request: it must render the JSON error on /api paths, not fall
-            // through to the Razor error page (#1371).
+            // in the outer handler's logging. Kestrel does not cancel
+            // RequestAborted inline — the callback is queued to the thread pool —
+            // so a body read can throw ConnectionAbortedException (an OCE
+            // subclass) while the token still reports not-cancelled; that
+            // exception IS the transport reporting the dead connection, so it
+            // counts as a client abort regardless of the token state. A
+            // server-side cancel — e.g. an HttpClient timeout inside a handler
+            // throws OperationCanceledException while RequestAborted is NOT set —
+            // is an ordinary failure of a live request: it must render the JSON
+            // error on /api paths, not fall through to the Razor error page
+            // (#1371).
             catch (Exception exception) when (!(exception is OperationCanceledException &&
-                                                context.RequestAborted.IsCancellationRequested) &&
+                                                (context.RequestAborted.IsCancellationRequested ||
+                                                 exception is ConnectionAbortedException)) &&
                                               IsApiPath(context.Request.Path) &&
                                               !context.Response.HasStarted)
             {

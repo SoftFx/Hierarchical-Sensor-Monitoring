@@ -27,10 +27,14 @@ namespace HSMServer.Filters
 
             // Null on 401/403/404/409-without-pointers/503 — the field is always
             // present on the wire, but half the statuses answer an explicit null.
+            //
+            // AdditionalProperties stays null and the ALLOWED flag stays unset:
+            // "additionalProperties": false as a SIBLING of oneOf (with no
+            // properties declared here) would reject every key of every payload —
+            // the union arms below carry their own additionalProperties maps.
             detailsSchema.Nullable = true;
             detailsSchema.Type = null;
             detailsSchema.AdditionalProperties = null;
-            detailsSchema.AdditionalPropertiesAllowed = false;
 
             detailsSchema.OneOf =
             [

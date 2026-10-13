@@ -12,6 +12,7 @@ using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -374,6 +375,28 @@ namespace HSMServer.Core.Tests.Middleware
 
             await Assert.ThrowsAsync<OperationCanceledException>(() =>
                 new ApiExceptionJsonMiddleware(Cancel).InvokeAsync(context));
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+            Assert.Equal(0, context.Response.Body.Length);
+        }
+
+        [Fact]
+        public static async Task ExceptionMiddleware_ConnectionAbortBeforeTokenIsSet_RethrowsUntouched()
+        {
+            // Kestrel does not cancel RequestAborted inline on abort — the
+            // cancellation callback is queued — so a body read can throw
+            // ConnectionAbortedException while the token still reports
+            // not-cancelled. That window is still a CLIENT abort: rendering the
+            // JSON 500 to the dead connection would show up in request logs and
+            // metrics as a server failure, the exact misclassification the
+            // rethrow exists to prevent. The token-cancelled arm above cannot
+            // see this window — it sets RequestAborted synchronously.
+            var context = BuildContext("/api/v1/alertTemplates");
+
+            static Task Abort(HttpContext _) => throw new ConnectionAbortedException();
+
+            await Assert.ThrowsAsync<ConnectionAbortedException>(() =>
+                new ApiExceptionJsonMiddleware(Abort).InvokeAsync(context));
 
             Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
             Assert.Equal(0, context.Response.Body.Length);
