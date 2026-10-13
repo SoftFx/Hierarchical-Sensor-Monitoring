@@ -64,7 +64,12 @@ print on .NET 8: shortest digits, fixed notation for decimal exponents -4..16,
 otherwise `dE±XX` — `1E+17`, `1E-05`). The managed driver runs on net48, whose
 own `"R"` differs (17-digit fallback, scientific from 1e15), so it computes that
 text itself (`CanonicalDoubleText`, #1528); the native formatter writes it
-directly. Both drivers emit the identical shape; it is part of the contract:
+directly. Caveat: the managed driver finds the shortest digits with net48's own
+`ToString("E..")`/`double.Parse`, which mis-round about 1% of arbitrary 16-17 digit
+doubles (a computed bar mean, an unrounded rate); every corpus value is checked
+to round-trip exactly on net48, so a new 16-17 digit case must be verified on
+BOTH drivers before it lands. Both drivers emit the identical shape; it is part
+of the contract:
 
 ```
 instant:  {"Type":N,"Path":"...","Value":V,"Status":N,"Comment":"..."}

@@ -1995,7 +1995,10 @@ namespace HSMDataCollector.Tests
         // the first precision from 1 to 17 that parses back to the same double — and laid out with
         // the .NET Core rule: fixed for decimal exponents -4..16, otherwise d.dddE±XX (#1528).
         // Negative zero is written "0", as net48 and the native formatter do (.NET Core prints "-0";
-        // number_format_contract excludes it).
+        // number_format_contract excludes it). Caveat: net48's "E{p}" formatting and double.Parse
+        // mis-round about 1% of arbitrary 16-17 digit doubles (measured against .NET 8 "R"), so this
+        // is exact for the corpus values, which are all verified to round-trip on net48, not for any
+        // computed double; a new 16-17 digit case must be checked on both drivers.
         private static string CanonicalDoubleText(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value))
