@@ -84,8 +84,16 @@ namespace HSMServer.Model.ManagementApi
         // carries a resource pointer map (e.g. {"templateId": "<id>"} when the
         // create-path partial-apply conflict leaves a persisted template the
         // caller must PUT to fix — a re-POST would trip name uniqueness).
-        public static ObjectResult Conflict(string message, object details) =>
-            new(new ManagementApiErrorDto { Error = ConflictCode, Message = message, Details = details })
+        // The pointers are the typed Dictionary<string, string> the write results
+        // carry (PolicyWriteFailure.Details) — narrowing the parameter from object
+        // keeps a caller from stuffing anything else into the published schema.
+        public static ObjectResult Conflict(string message, Dictionary<string, string> details) =>
+            new(new ManagementApiErrorDto
+            {
+                Error = ConflictCode,
+                Message = message,
+                Details = details is null ? null : details.ToDictionary(pair => pair.Key, pair => (object)pair.Value),
+            })
             {
                 StatusCode = StatusCodes.Status409Conflict,
             };
@@ -99,7 +107,7 @@ namespace HSMServer.Model.ManagementApi
             {
                 Error = UnprocessableEntityCode,
                 Message = "The request contradicts the current state of the resource.",
-                Details = errors is { Count: > 0 } ? errors : null,
+                Details = ToDetailsMap(errors),
             })
             {
                 StatusCode = StatusCodes.Status422UnprocessableEntity,
@@ -130,7 +138,7 @@ namespace HSMServer.Model.ManagementApi
             {
                 Error = ValidationFailedCode,
                 Message = "The request is invalid.",
-                Details = errors is { Count: > 0 } ? errors : null,
+                Details = ToDetailsMap(errors),
             })
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -147,11 +155,18 @@ namespace HSMServer.Model.ManagementApi
         // CAPTURED framework default verbatim — the sensor-data and Grafana APIs keep
         // their exact previous wire shape (problem+json content types, type, traceId),
         // not a reimplementation of it.
+        // The default is guarded AT CAPTURE TIME (fail fast at startup wiring): a null
+        // here would otherwise NRE per non-management binding failure, turning every
+        // sensor-data 400 into a 500.
         public static Func<ActionContext, IActionResult> WrapBindingFailureFactory(
-            Func<ActionContext, IActionResult> frameworkDefault) =>
-            context => IsManagementAction(context)
+            Func<ActionContext, IActionResult> frameworkDefault)
+        {
+            ArgumentNullException.ThrowIfNull(frameworkDefault);
+
+            return context => IsManagementAction(context)
                 ? BindingFailureResponse(context)
                 : frameworkDefault(context);
+        }
 
         // The area-membership check of the binding-failure factory: the controller
         // carries [ManagementApi] — the same marker the area guard admits endpoints
@@ -178,5 +193,14 @@ namespace HSMServer.Model.ManagementApi
                             ? "The input was not valid."
                             : error.ErrorMessage)
                         .ToArray());
+
+        // Field-keyed messages -> the DTO's typed details map (#1371): the values
+        // (string arrays) serialize by runtime type exactly as they did when Details
+        // was declared object, so the wire JSON is unchanged; an empty error map is
+        // not a validation failure and answers an explicit null.
+        private static Dictionary<string, object> ToDetailsMap(IDictionary<string, string[]> errors) =>
+            errors is { Count: > 0 }
+                ? errors.ToDictionary(pair => pair.Key, pair => (object)pair.Value)
+                : null;
     }
 }

@@ -121,8 +121,9 @@ namespace HSMServer.Core.Tests.Controllers
         private static ManagementApiErrorDto ErrorOf(IActionResult result) =>
             Assert.IsType<ObjectResult>(result).Value as ManagementApiErrorDto;
 
-        private static IDictionary<string, string[]> DetailsOf(ManagementApiErrorDto error) =>
-            Assert.IsAssignableFrom<IDictionary<string, string[]>>(error.Details);
+        // The typed details map (#1371): string keys, per-field message-array values.
+        private static Dictionary<string, object> DetailsOf(ManagementApiErrorDto error) =>
+            Assert.IsType<Dictionary<string, object>>(error.Details);
 
 
         [Fact]
@@ -327,7 +328,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var details = DetailsOf(ErrorOf(invalid));
             Assert.Contains("type", details.Keys);
-            Assert.Contains("IntegerBar", details["type"].Single());
+            Assert.Contains("IntegerBar", Assert.IsType<string[]>(details["type"]).Single());
 
             // Numeric input is NOT a name: Enum.TryParse would happily resolve
             // "5" to IntegerBar, quietly diverging from the documented

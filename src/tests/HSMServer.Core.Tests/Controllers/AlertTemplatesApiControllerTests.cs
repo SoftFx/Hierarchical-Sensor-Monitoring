@@ -616,8 +616,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(400, StatusCodeOf(result));
             var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
-            var details = Assert.IsType<Dictionary<string, string[]>>(body.Details);
-            Assert.Contains("Byte[]", details["policies"].Single());
+            // The typed details map (#1371): values stay message arrays.
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("Byte[]", Assert.IsType<string[]>(details["policies"]).Single());
         }
 
         [Fact]
@@ -810,7 +811,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(409, StatusCodeOf(result));
             var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
             Assert.Equal(ManagementApiErrors.ConflictCode, body.Error);
-            var details = Assert.IsType<Dictionary<string, string>>(body.Details);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
             Assert.Equal(_store.Single().Key.ToString(), details["templateId"]);
         }
 

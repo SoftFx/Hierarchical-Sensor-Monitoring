@@ -166,6 +166,197 @@ namespace HSMServer.Core.Tests.Swagger
             Assert.Empty(operation.Security);
         }
 
+        [Fact]
+        public void ErrorDetailsFilter_PublishesTheTypedUnion()
+        {
+            // Details is declared Dictionary<string, object> (#1371) — the values
+            // serialize by runtime type, which keeps the wire contract unchanged —
+            // so the schema must be assembled EXPLICITLY, exactly like the sensor
+            // value union: an agent reading only the document learns that 400/422
+            // details map fields to message arrays, while 500/409 details map keys
+            // to scalar strings (traceId, templateId).
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["details"] = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Type = "object",
+                AdditionalProperties = new Microsoft.OpenApi.Models.OpenApiSchema(),
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var details = schema.Properties["details"];
+
+            Assert.Null(details.Type);
+            Assert.True(details.Nullable);
+            // anyOf, not oneOf — the arms overlap for null and the empty map;
+            // see the payload test below for why exactly-one would regress.
+            Assert.Equal(2, details.AnyOf.Count);
+
+            // 400/422 arm: field -> message ARRAY.
+            var fieldMessages = details.AnyOf[0];
+            Assert.Equal("object", fieldMessages.Type);
+            Assert.Equal("array", fieldMessages.AdditionalProperties.Type);
+            Assert.Equal("string", fieldMessages.AdditionalProperties.Items.Type);
+
+            // 500/409 arm: pointer key -> scalar STRING.
+            var pointers = details.AnyOf[1];
+            Assert.Equal("object", pointers.Type);
+            Assert.Equal("string", pointers.AdditionalProperties.Type);
+        }
+
+        [Fact]
+        public void ErrorDetailsFilter_PublishedSchema_AllowsRealPayloads()
+        {
+            // The in-memory union above must stay VALID once SERIALIZED, for
+            // every payload shape the contract actually sends — checked against
+            // the SERIALIZED document, not the object model, because that is
+            // what a strict validator reads. Historically pinned here:
+            // "additionalProperties": false beside the union would forbid every
+            // key; oneOf with both arms nullable fails exactly-one on null (the
+            // most common error body).
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["details"] = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Type = "object",
+                AdditionalProperties = new Microsoft.OpenApi.Models.OpenApiSchema(),
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var writer = new StringWriter();
+            schema.Properties["details"].SerializeAsV3(
+                new Microsoft.OpenApi.Writers.OpenApiJsonWriter(writer));
+
+            using var document = System.Text.Json.JsonDocument.Parse(writer.ToString());
+            var details = document.RootElement;
+
+            Assert.False(details.TryGetProperty("additionalProperties", out _));
+
+            var arms = details.GetProperty("anyOf");
+            Assert.Equal(2, arms.GetArrayLength());
+            Assert.Equal("array", arms[0].GetProperty("additionalProperties").GetProperty("type").GetString());
+            Assert.Equal("string", arms[1].GetProperty("additionalProperties").GetProperty("type").GetString());
+
+            // OpenAPI 3.0.3 ignores a nullable that sits beside the union with
+            // no type — nullability must ride the arms themselves, or the
+            // explicit null of 401/403/404/503 is admitted by no arm at all.
+            Assert.True(arms[0].GetProperty("nullable").GetBoolean());
+            Assert.True(arms[1].GetProperty("nullable").GetBoolean());
+
+            // Every real payload is ADMITTED (>=1 matching arm), and the two
+            // real maps stay DISCRIMINABLE (exactly their own arm). null and {}
+            // match BOTH arms — legal under anyOf, a violation under oneOf's
+            // exactly-one, which is why the union is anyOf.
+            Assert.Equal(2, MatchingArms(arms, "null"));
+            Assert.Equal(1, MatchingArms(arms, "{\"folderId\":[\"required\"]}"));
+            Assert.Equal(1, MatchingArms(arms, "{\"traceId\":\"trace-1\"}"));
+            Assert.Equal(2, MatchingArms(arms, "{}"));
+        }
+
+        // OpenAPI 3.0.3 validation semantics of exactly the keywords the union
+        // emits — type, nullable (beside type), additionalProperties, items —
+        // applied to a serialized arm. Deliberately generic over those keywords
+        // rather than hard-coding "the arrays arm": what must hold is the
+        // keyword logic, not the arm order.
+        private static int MatchingArms(System.Text.Json.JsonElement arms, string payloadJson)
+        {
+            using var payload = System.Text.Json.JsonDocument.Parse(payloadJson);
+
+            return Enumerable.Count(arms.EnumerateArray(), arm => ArmAdmits(arm, payload.RootElement));
+        }
+
+        private static bool ArmAdmits(System.Text.Json.JsonElement arm, System.Text.Json.JsonElement payload)
+        {
+            // 3.0.3: nullable only takes effect beside `type` — null is
+            // admitted iff the arm itself is nullable.
+            if (payload.ValueKind == System.Text.Json.JsonValueKind.Null)
+                return arm.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean();
+
+            if (arm.GetProperty("type").GetString() != "object" ||
+                payload.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return false;
+
+            if (!arm.TryGetProperty("additionalProperties", out var valueSchema))
+                return true;
+
+            foreach (var property in payload.EnumerateObject())
+                if (!ValueAdmits(property.Value, valueSchema))
+                    return false;
+
+            return true;
+        }
+
+        private static bool ValueAdmits(System.Text.Json.JsonElement value, System.Text.Json.JsonElement schema)
+        {
+            switch (schema.GetProperty("type").GetString())
+            {
+                case "array":
+                    return value.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                           schema.TryGetProperty("items", out var items) &&
+                           value.EnumerateArray().All(item => ValueAdmits(item, items));
+                case "string":
+                    return value.ValueKind == System.Text.Json.JsonValueKind.String;
+                default:
+                    return false;
+            }
+        }
+
+        [Fact]
+        public void ErrorDetailsFilter_AppliesToTheSchemaSwashbuckleGenerates()
+        {
+            // The hand-made inputs above pin the filter's TRANSFORM; this pins
+            // that the transform still lands on the real pipeline's output. The
+            // filter matches by the camelCase "details" key of an INLINE property
+            // — a naming-policy change or the property turning into a $ref would
+            // make TryGetValue miss and the filter silently do nothing while the
+            // tests above stay green. Same System.Text.Json camelCase contract
+            // the app's resolver uses, same filter registration AddSwaggerGen has.
+            var options = new SchemaGeneratorOptions();
+            options.SchemaFilters.Add(new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter());
+
+            var generator = new SchemaGenerator(options,
+                new JsonSerializerDataContractResolver(
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+
+            var repository = new SchemaRepository();
+            generator.GenerateSchema(typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), repository);
+
+            var details = repository.Schemas["ManagementApiErrorDto"].Properties["details"];
+
+            Assert.Equal(2, details.AnyOf.Count);
+        }
+
+        [Fact]
+        public void ErrorDetailsFilter_LeavesOtherSchemasUntouched()
+        {
+            // Scoped to the error DTO's details property alone — nothing else in the
+            // document may be reshaped by it.
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+            {
+                Properties = { ["value"] = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" } },
+            };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(string), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            Assert.Equal("string", schema.Properties["value"].Type);
+            Assert.Empty(schema.Properties["value"].OneOf);
+        }
+
 
         // The per-action error-response sets of the area, from
         // aicontext/features/server/management-api/feature.md — 500 on every action:
