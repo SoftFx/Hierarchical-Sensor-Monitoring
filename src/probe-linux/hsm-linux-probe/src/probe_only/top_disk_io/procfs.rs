@@ -30,12 +30,23 @@
 //! therefore subtracts, from the delta of the receiving process, each vanished process's counters
 //! at the previous read. What is left is the vanished process's last partial interval, which the
 //! kernel moved to the receiver — it is credited there (see [`receiver`] for who that is).
+//!
+//! The scan is not atomic, so the correction is made race-free by what the kernel guarantees:
+//! `wait_task_zombie` adds the child's counters to the reaper **before** `release_task` removes
+//! its pid from `/proc`. So a process missing from the scan has already been added to its reaper,
+//! and every receiver of a vanished process has its `io` read **again after the scan** — that
+//! value contains the jump, whatever the order of the reads. A process whose `stat` was read but
+//! whose `io` is gone by the time it is read (reaped in between) counts as vanished; one whose
+//! `io` fails while it is still there keeps its previous counters. A reaper that ignores `SIGCHLD`
+//! (`SigIgn` in `<pid>/status`) has its children reaped by the kernel without their counters
+//! (`autoreap`), so nothing is taken back from it. What a correction cannot take back from the
+//! receiver's delta (never below 0) is carried into the next read once, then dropped (logged).
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use crate::probe_only::top_cpu::procfs::{read_processes, sensor_name};
+use crate::probe_only::top_cpu::procfs::{parse_pid_stat, read_processes, sensor_name, PidStat};
 
 /// The two counters of `/proc/<pid>/io` the sampler uses.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -130,6 +141,9 @@ pub struct IoRead {
     /// needs `CAP_DAC_READ_SEARCH` to open and `CAP_SYS_PTRACE` to read (kernel:
     /// `ptrace_may_access(PTRACE_MODE_READ_FSCREDS)` in `do_io_accounting`).
     pub denied: usize,
+    /// What the caller logs at Debug: counters that went backwards (skipped), corrections that
+    /// were skipped or could not be applied — never silent, never worth more than a debug line.
+    pub notes: Vec<String>,
 }
 
 /// A process at a read.
@@ -141,12 +155,60 @@ struct Seen {
     counters: Option<IoCounters>,
 }
 
+impl IoCounters {
+    fn add(&mut self, other: IoCounters) {
+        self.read_bytes = self.read_bytes.saturating_add(other.read_bytes);
+        self.write_bytes = self.write_bytes.saturating_add(other.write_bytes);
+    }
+
+    /// `self - other` when neither counter went backwards.
+    fn since(self, other: IoCounters) -> Option<IoCounters> {
+        Some(IoCounters {
+            read_bytes: self.read_bytes.checked_sub(other.read_bytes)?,
+            write_bytes: self.write_bytes.checked_sub(other.write_bytes)?,
+        })
+    }
+
+    /// Take `due` out of `self` as far as it goes (never below 0); returns what is left of `due`.
+    fn take_back(&mut self, due: IoCounters) -> IoCounters {
+        let left = IoCounters {
+            read_bytes: due.read_bytes.saturating_sub(self.read_bytes),
+            write_bytes: due.write_bytes.saturating_sub(self.write_bytes),
+        };
+        self.read_bytes = self.read_bytes.saturating_sub(due.read_bytes);
+        self.write_bytes = self.write_bytes.saturating_sub(due.write_bytes);
+        left
+    }
+
+    fn is_zero(self) -> bool {
+        self.read_bytes == 0 && self.write_bytes == 0
+    }
+}
+
+/// `SIGCHLD` (17) in a `SigIgn:` mask of `<pid>/status`: bit 16.
+const SIGCHLD_MASK: u64 = 1 << 16;
+
+/// Whether a `<pid>/status` says the process ignores `SIGCHLD`: then the kernel reaps its children
+/// itself (`autoreap`) and their counters are not added to it. `false` when the line is absent or
+/// unreadable (the common case: the counters are added).
+pub fn ignores_sigchld(status: &str) -> bool {
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("SigIgn:"))
+        .and_then(|mask| u64::from_str_radix(mask.trim(), 16).ok())
+        .is_some_and(|mask| mask & SIGCHLD_MASK != 0)
+}
+
 /// Samples per-process disk I/O between successive reads.
 pub struct IoSampler {
     proc_root: PathBuf,
     /// pid → the process at the previous successful read; `None` before the first.
     previous: Option<HashMap<u32, Seen>>,
-    /// Reads one `<pid>/io`; injectable so a refused read (`EACCES`) can be tested as root.
+    /// Corrections the previous read could not apply in full, by receiver pid: (its start time,
+    /// what is left). Applied once more at the next read, then dropped.
+    carried: HashMap<u32, (u64, IoCounters)>,
+    /// Reads one `<pid>/io`; injectable so a refused read (`EACCES`) and a reap in the middle of a
+    /// scan can be tested.
     read_io: fn(&Path) -> std::io::Result<String>,
 }
 
@@ -159,6 +221,7 @@ impl IoSampler {
         Self {
             proc_root: proc_root.into(),
             previous: None,
+            carried: HashMap::new(),
             read_io: read_io_file,
         }
     }
@@ -184,31 +247,45 @@ impl IoSampler {
     ///
     /// A process is `(pid, starttime)`, so a reused pid never inherits its predecessor's counters.
     /// One that started since the previous read (absent from it, or its pid then held by another
-    /// process) is credited with its whole counters: the kernel starts a new task's at 0
-    /// (`copy_process`), so they all belong to this interval — here this rule differs from top
-    /// CPU's, because the daily totals should miss nothing. One whose `io` was unreadable at
-    /// either read has no delta. A `<proc>/<pid>` that vanishes while being read is skipped
-    /// silently. A vanished process's counters are subtracted from its [`receiver`]'s delta (see
-    /// the module documentation).
+    /// process, **and** younger than every process that read saw) is credited with its whole
+    /// counters: the kernel starts a new task's at 0 (`copy_process`), so they all belong to this
+    /// interval — here this rule differs from top CPU's, because the daily totals should miss
+    /// nothing. A process absent from the previous read but not younger than it (a read that missed
+    /// it) only sets its baseline. One whose `io` was unreadable at either read has no delta. A
+    /// vanished process's counters are taken back from its [`receiver`] (module documentation).
     pub fn read(&mut self) -> Result<IoRead, String> {
-        let processes = read_processes(&self.proc_root)?;
+        let mut processes = read_processes(&self.proc_root)?;
+        // Ascending pids, like /proc itself, so a scan reads in a stable order.
+        processes.sort_by_key(|stat| stat.pid);
+        let previous = self.previous.take();
+        let mut read = IoRead::default();
         let mut current: HashMap<u32, Seen> = HashMap::with_capacity(processes.len());
-        let (mut readable, mut denied) = (0, 0);
+        let mut alive: Vec<&PidStat> = Vec::with_capacity(processes.len());
         for stat in &processes {
-            let path = self.proc_root.join(stat.pid.to_string()).join("io");
-            let counters = match (self.read_io)(&path) {
-                Ok(text) => parse_io(&text),
+            let earlier = previous
+                .as_ref()
+                .and_then(|previous| previous.get(&stat.pid))
+                .filter(|seen| seen.start_ticks == stat.start_ticks);
+            let counters = match self.read_counters(stat.pid) {
+                Ok(counters) => {
+                    read.readable += usize::from(counters.is_some());
+                    counters
+                }
                 Err(error) if error.kind() == ErrorKind::PermissionDenied => {
-                    denied += 1;
+                    read.denied += 1;
                     None
                 }
-                // Gone since the listing (normal), or a kernel without task I/O accounting (the
-                // caller reports a table with nothing readable).
-                Err(_) => None,
+                // ENOENT/ESRCH: reaped since its stat was read — then it has already been added to
+                // its reaper and is treated as vanished — or a kernel without task I/O accounting
+                // (the caller reports a table with nothing readable). Still there: it keeps what
+                // the previous read knew, so its next delta spans both intervals.
+                Err(_) => {
+                    if !self.is_there(stat) {
+                        continue;
+                    }
+                    earlier.and_then(|seen| seen.counters)
+                }
             };
-            if counters.is_some() {
-                readable += 1;
-            }
             current.insert(
                 stat.pid,
                 Seen {
@@ -217,26 +294,18 @@ impl IoSampler {
                     counters,
                 },
             );
+            alive.push(stat);
         }
-        let mut read = IoRead {
-            processes: processes.len(),
-            readable,
-            denied,
-            ..IoRead::default()
-        };
-        let Some(previous) = self.previous.replace(current) else {
+        read.processes = alive.len();
+        let Some(previous) = previous else {
             read.baseline = true;
+            self.previous = Some(current);
             return Ok(read);
         };
-        let current = self.previous.as_ref().unwrap_or(&previous);
 
-        let alive_in_both = |pid: u32, before: &Seen| {
-            current
-                .get(&pid)
-                .filter(|now| now.start_ticks == before.start_ticks)
-        };
+        let newest_before = previous.values().map(|seen| seen.start_ticks).max();
         let mut deltas: HashMap<u32, IoCounters> = HashMap::new();
-        for (&pid, now) in current {
+        for (&pid, now) in &current {
             let Some(now_counters) = now.counters else {
                 continue;
             };
@@ -248,51 +317,30 @@ impl IoSampler {
                 },
                 // Started since the previous read (a new pid, or a reused one): the kernel zeroes
                 // a new task's counters, so all of them belong to this interval.
-                _ => IoCounters::default(),
+                _ if newest_before.is_none_or(|newest| now.start_ticks > newest) => {
+                    IoCounters::default()
+                }
+                // Older than the previous read's youngest process, yet not in it: that read
+                // missed it, and its counters hold an unknown past. A baseline only.
+                _ => continue,
             };
-            // The counters only grow; a smaller one is not this process's history.
-            let (Some(read_bytes), Some(write_bytes)) = (
-                now_counters
-                    .read_bytes
-                    .checked_sub(before_counters.read_bytes),
-                now_counters
-                    .write_bytes
-                    .checked_sub(before_counters.write_bytes),
-            ) else {
-                continue;
-            };
-            deltas.insert(
-                pid,
-                IoCounters {
-                    read_bytes,
-                    write_bytes,
-                },
-            );
-        }
-        // A vanished process's whole counters were added to its reaper's: take back what the
-        // previous read already credited to it.
-        for (&pid, gone) in &previous {
-            if alive_in_both(pid, gone).is_some() {
-                continue;
+            match now_counters.since(before_counters) {
+                Some(delta) => {
+                    deltas.insert(pid, delta);
+                }
+                None => read.notes.push(format!(
+                    "the I/O counters of pid {pid} went backwards ({before_counters:?} -> \
+                     {now_counters:?}); interval skipped"
+                )),
             }
-            let Some(counters) = gone.counters else {
-                continue;
-            };
-            let Some(delta) = receiver(pid, &previous, current).and_then(|to| deltas.get_mut(&to))
-            else {
-                continue;
-            };
-            delta.read_bytes = delta.read_bytes.saturating_sub(counters.read_bytes);
-            delta.write_bytes = delta.write_bytes.saturating_sub(counters.write_bytes);
         }
 
-        for stat in &processes {
-            let Some(delta) = deltas.get(&stat.pid) else {
+        self.take_back_reaped(&previous, &mut current, &mut deltas, &mut read.notes);
+
+        for stat in alive {
+            let Some(delta) = deltas.get(&stat.pid).filter(|delta| !delta.is_zero()) else {
                 continue;
             };
-            if delta.read_bytes == 0 && delta.write_bytes == 0 {
-                continue;
-            }
             let kernel_thread = stat.is_kernel_thread();
             let Some(name) = sensor_name(&stat.comm, kernel_thread) else {
                 continue;
@@ -311,7 +359,95 @@ impl IoSampler {
                     kernel_thread,
                 });
         }
+        self.previous = Some(current);
         Ok(read)
+    }
+
+    /// Take back from each receiver what the previous read had credited to the processes it
+    /// reaped since (module documentation), plus what the previous read could not take back.
+    fn take_back_reaped(
+        &mut self,
+        previous: &HashMap<u32, Seen>,
+        current: &mut HashMap<u32, Seen>,
+        deltas: &mut HashMap<u32, IoCounters>,
+        notes: &mut Vec<String>,
+    ) {
+        let alive_in_both = |current: &HashMap<u32, Seen>, pid: u32, start: u64| {
+            current
+                .get(&pid)
+                .is_some_and(|now| now.start_ticks == start)
+        };
+        let mut due: HashMap<u32, IoCounters> = HashMap::new();
+        for (&pid, gone) in previous {
+            if alive_in_both(current, pid, gone.start_ticks) {
+                continue;
+            }
+            let (Some(counters), Some(to)) = (gone.counters, receiver(pid, previous, current))
+            else {
+                continue;
+            };
+            due.entry(to).or_default().add(counters);
+        }
+        let mut carried = std::mem::take(&mut self.carried);
+        for (to, counters) in due {
+            if self.reaps_without_counters(to) {
+                notes.push(format!(
+                    "pid {to} ignores SIGCHLD: its children are reaped without their counters, \
+                     nothing is taken back from it"
+                ));
+                continue;
+            }
+            // Read again now: every vanished child is already in this value (the kernel adds it
+            // before it removes the pid), whatever the order of the scan's reads.
+            if let (Some(before), Ok(Some(after))) = (
+                previous.get(&to).and_then(|seen| seen.counters),
+                self.read_counters(to),
+            ) {
+                if let (Some(seen), Some(delta)) = (current.get_mut(&to), after.since(before)) {
+                    seen.counters = Some(after);
+                    deltas.insert(to, delta);
+                }
+            }
+            let Some(delta) = deltas.get_mut(&to) else {
+                continue;
+            };
+            let left = delta.take_back(counters);
+            if !left.is_zero() {
+                let start = current.get(&to).map_or(0, |seen| seen.start_ticks);
+                self.carried.insert(to, (start, left));
+            }
+        }
+        // Last read's remainders: once more, then dropped.
+        for (to, (start, counters)) in carried.drain() {
+            let left = match deltas.get_mut(&to) {
+                Some(delta) if alive_in_both(current, to, start) => delta.take_back(counters),
+                _ => counters,
+            };
+            if !left.is_zero() {
+                notes.push(format!(
+                    "{left:?} of a reaped child's counters could not be taken back from pid {to} \
+                     (was it the reaper?); dropped"
+                ));
+            }
+        }
+    }
+
+    /// `<pid>/io`: `Ok(None)` when it is there but unparsable.
+    fn read_counters(&self, pid: u32) -> std::io::Result<Option<IoCounters>> {
+        (self.read_io)(&self.proc_root.join(pid.to_string()).join("io")).map(|text| parse_io(&text))
+    }
+
+    /// Whether the process whose `stat` was read is still there (the same start time).
+    fn is_there(&self, stat: &PidStat) -> bool {
+        std::fs::read(self.proc_root.join(stat.pid.to_string()).join("stat"))
+            .ok()
+            .and_then(|bytes| parse_pid_stat(&String::from_utf8_lossy(&bytes)))
+            .is_some_and(|now| now.start_ticks == stat.start_ticks)
+    }
+
+    fn reaps_without_counters(&self, pid: u32) -> bool {
+        std::fs::read_to_string(self.proc_root.join(pid.to_string()).join("status"))
+            .is_ok_and(|status| ignores_sigchld(&status))
     }
 }
 
@@ -324,8 +460,8 @@ impl IoSampler {
 ///
 /// An orphan is reaped by its subreaper or by `init`, not by its old grandparent; when its parent
 /// died first **and** both vanished within one interval, the walk names the grandparent instead:
-/// that one's delta is cut by too much (never below 0) and the real reaper keeps the orphan's
-/// whole-life total — a rare case, documented in the README.
+/// that one's delta is cut by too much (never below 0, the rest carried into one more read) and the
+/// real reaper keeps the orphan's whole-life total — a rare case, documented in the README.
 fn receiver(pid: u32, previous: &HashMap<u32, Seen>, current: &HashMap<u32, Seen>) -> Option<u32> {
     let mut ppid = previous.get(&pid)?.ppid;
     // Every step moves to a process of the previous read, so the table's size bounds the walk
@@ -573,17 +709,233 @@ pub mod tests {
         );
     }
 
-    /// What the kernel answers for another user's `io` without the capabilities: an `io` file
-    /// holding `EACCES` reads as a refusal (a chmod would not do: the tests may run as root).
+    /// The kernel's answers, scripted by what an `io` file holds (a chmod would not do: the tests
+    /// may run as root):
+    ///
+    /// * `EACCES` — another user's `io` without the capabilities: refused;
+    /// * `ENOENT` — a read that fails while the process is still there;
+    /// * `REAP <reaper> <read> <write>` — the process is reaped **between its `stat` and `io`
+    ///   reads**: the reaper's counters become `<read> <write>`, the pid disappears, `ENOENT`;
+    /// * `THEN-REAP <child> <read> <write>` on its first line — this (the reaper's) `io` is read
+    ///   first, then `<child>` is reaped: the rest of the file is returned and the reaper's
+    ///   counters become `<read> <write>`, the child's pid disappears.
     pub fn refusing_reader(path: &Path) -> std::io::Result<String> {
         let text = std::fs::read_to_string(path)?;
+        let dir = path.parent().expect("pid dir");
+        let proc_root = dir.parent().expect("proc root");
+        let numbers = |rest: &str| -> Vec<u64> {
+            rest.split_whitespace()
+                .map(|n| n.parse().expect("number"))
+                .collect()
+        };
         if text == DENIED {
             return Err(std::io::Error::from(ErrorKind::PermissionDenied));
+        }
+        if text == VANISHING {
+            return Err(std::io::Error::from(ErrorKind::NotFound));
+        }
+        if let Some(rest) = text.strip_prefix("REAP ") {
+            let n = numbers(rest);
+            std::fs::write(
+                proc_root.join(n[0].to_string()).join("io"),
+                io_text(n[1], n[2]),
+            )?;
+            std::fs::remove_dir_all(dir)?;
+            return Err(std::io::Error::from(ErrorKind::NotFound));
+        }
+        if let Some(rest) = text.strip_prefix("THEN-REAP ") {
+            let (first, io) = rest.split_once('\n').expect("two parts");
+            let n = numbers(first);
+            std::fs::remove_dir_all(proc_root.join(n[0].to_string()))?;
+            std::fs::write(path, io_text(n[1], n[2]))?;
+            return Ok(io.to_string());
         }
         Ok(text)
     }
 
     pub const DENIED: &str = "EACCES";
+    const VANISHING: &str = "ENOENT";
+
+    fn sampler(tree: &FakeTree) -> IoSampler {
+        IoSampler::with_reader(&tree.0, refusing_reader)
+    }
+
+    /// The scenario of the reap tests: bash (10) and its child tar (11) at the baseline, tar at
+    /// 100 MB written. Since then bash wrote 2 MB itself and tar 20 MB more before it exited.
+    fn bash_and_tar(tag: &str, bash: u32, tar: u32) -> (FakeTree, IoSampler) {
+        let tree = FakeTree::new(tag);
+        process(&tree, bash, "bash", 1, 5, 0, MB);
+        process(&tree, tar, "tar", bash, 6, 0, 100 * MB);
+        let mut sampler = sampler(&tree);
+        sampler.read().expect("baseline");
+        (tree, sampler)
+    }
+
+    /// bash's counters after the reap: its own 3 MB plus tar's final 120 MB.
+    const AFTER_REAP: u64 = 3 * MB + 120 * MB;
+
+    /// bash is credited with its own 2 MB plus tar's last 20 MB, once; the next read sees no jump.
+    fn assert_counted_once(tree: &FakeTree, sampler: &mut IoSampler) {
+        let read = sampler.read().expect("read");
+        assert_eq!(read.deltas["bash"].written, 22 * MB, "{:?}", read.deltas);
+        assert!(!read.deltas.contains_key("tar"));
+        assert!(!tree.0.join("11").exists(), "tar was reaped");
+        let next = sampler.read().expect("read");
+        assert!(next.deltas.is_empty(), "no late jump: {:?}", next.deltas);
+    }
+
+    /// The parent's `io` is read, then the child is reaped before its own `io` is read: the
+    /// correction must not meet the parent's pre-reap value and the jump must not come later.
+    #[test]
+    fn a_child_reaped_right_after_its_parents_read_is_taken_back_once() {
+        let (tree, mut sampler) = bash_and_tar("topio-race-a", 10, 11);
+        tree.file(
+            "10/io",
+            &format!("THEN-REAP 11 0 {AFTER_REAP}\n{}", io_text(0, 3 * MB)),
+        );
+        assert_counted_once(&tree, &mut sampler);
+    }
+
+    /// The child's `stat` is read, then it is reaped before its `io` is read: it counts as
+    /// vanished in this very read, not as a live process with unknown counters.
+    #[test]
+    fn a_child_reaped_between_its_stat_and_io_reads_counts_as_vanished() {
+        let (tree, mut sampler) = bash_and_tar("topio-race-b", 10, 11);
+        process(&tree, 10, "bash", 1, 5, 0, 3 * MB);
+        tree.file("11/io", &format!("REAP 10 0 {AFTER_REAP}"));
+        assert_counted_once(&tree, &mut sampler);
+    }
+
+    /// After a pid wrap the parent has the higher pid, so the scan reads the child first.
+    #[test]
+    fn a_parent_with_a_higher_pid_than_its_child_is_corrected_in_the_same_read() {
+        let (tree, mut sampler) = bash_and_tar("topio-race-c", 900, 11);
+        process(&tree, 900, "bash", 1, 5, 0, 3 * MB);
+        tree.file("11/io", &format!("REAP 900 0 {AFTER_REAP}"));
+        assert_counted_once(&tree, &mut sampler);
+    }
+
+    /// An `io` read that fails while the process is still there keeps its previous counters: no
+    /// delta now, the whole span at the next read — and no correction for a live process.
+    #[test]
+    fn an_io_read_failing_for_a_live_process_keeps_its_counters() {
+        let (tree, mut sampler) = bash_and_tar("topio-enoent", 10, 11);
+        process(&tree, 10, "bash", 1, 5, 0, 3 * MB);
+        tree.file("11/io", VANISHING);
+        let read = sampler.read().expect("read");
+        assert_eq!(read.deltas["bash"].written, 2 * MB, "nothing taken back");
+        assert!(!read.deltas.contains_key("tar"));
+        process(&tree, 11, "tar", 10, 6, 0, 130 * MB);
+        assert_eq!(sampler.read().expect("read").deltas["tar"].written, 30 * MB);
+    }
+
+    /// A reaper that ignores SIGCHLD never receives its children's counters (autoreap): nothing
+    /// is taken back from its own I/O.
+    #[test]
+    fn a_reaper_ignoring_sigchld_keeps_its_own_io() {
+        let (tree, mut sampler) = bash_and_tar("topio-sigign", 10, 11);
+        tree.file(
+            "10/status",
+            "Name:\tbash\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000010004\nSigCgt:\t0\n",
+        );
+        gone(&tree, 11);
+        process(&tree, 10, "bash", 1, 5, 0, 3 * MB);
+        let read = sampler.read().expect("read");
+        assert_eq!(read.deltas["bash"].written, 2 * MB);
+        assert!(read.notes.iter().any(|n| n.contains("ignores SIGCHLD")));
+    }
+
+    #[test]
+    fn sigign_is_read_from_the_status_mask() {
+        assert!(ignores_sigchld("SigIgn:\t0000000000010000\n"));
+        // kthreadd ignores every signal: its kernel threads are reaped without their counters.
+        assert!(ignores_sigchld(
+            "Name:\tkthreadd\nSigIgn:\tffffffffffffffff\n"
+        ));
+        assert!(!ignores_sigchld("SigIgn:\t0000000000001000\n"));
+        assert!(!ignores_sigchld("SigIgn:\t0000000000000000\n"));
+        assert!(!ignores_sigchld("Name:\tbash\n"));
+        assert!(!ignores_sigchld("SigIgn:\tzz\n"));
+    }
+
+    /// What cannot be taken back from the receiver (here the orphan G went to init, not to P) is
+    /// tried once more at the next read, then dropped with a note — never carried for ever.
+    #[test]
+    fn an_unapplied_correction_is_carried_once_then_dropped() {
+        let tree = FakeTree::new("topio-carry");
+        process(&tree, 20, "parent", 1, 5, 0, 0);
+        process(&tree, 21, "child", 20, 6, 0, MB);
+        process(&tree, 22, "grandchild", 21, 7, 0, 100 * MB);
+        let mut sampler = sampler(&tree);
+        sampler.read().expect("baseline");
+
+        gone(&tree, 21);
+        gone(&tree, 22);
+        process(&tree, 20, "parent", 1, 5, 0, 5 * MB);
+        let read = sampler.read().expect("read");
+        assert!(
+            !read.deltas.contains_key("parent"),
+            "cut to 0: {:?}",
+            read.deltas
+        );
+
+        process(&tree, 20, "parent", 1, 5, 0, 55 * MB);
+        let read = sampler.read().expect("read");
+        assert!(!read.deltas.contains_key("parent"), "96 MB more taken back");
+        assert!(
+            read.notes.iter().any(|n| n.contains("dropped")),
+            "{:?}",
+            read.notes
+        );
+
+        process(&tree, 20, "parent", 1, 5, 0, 62 * MB);
+        assert_eq!(
+            sampler.read().expect("read").deltas["parent"].written,
+            7 * MB
+        );
+    }
+
+    /// A process one read missed is not new: only a younger one is credited with its whole
+    /// counters; the missed one gets a baseline.
+    #[test]
+    fn a_process_a_read_missed_is_not_credited_with_its_past() {
+        let tree = FakeTree::new("topio-missed");
+        process(&tree, 30, "old", 1, 100, 0, 0);
+        process(&tree, 31, "flaky", 1, 200, 0, 500 * MB);
+        let mut sampler = sampler(&tree);
+        sampler.read().expect("baseline");
+
+        // flaky's stat is missing from this read; a younger process exists.
+        let moved = tree.0.join("31-away");
+        std::fs::rename(tree.0.join("31"), &moved).expect("mv");
+        process(&tree, 32, "young", 1, 300, 0, 0);
+        sampler.read().expect("read");
+
+        std::fs::rename(&moved, tree.0.join("31")).expect("mv back");
+        process(&tree, 31, "flaky", 1, 200, 0, 510 * MB);
+        process(&tree, 33, "newer", 1, 400, 0, 4 * MB);
+        let read = sampler.read().expect("read");
+        assert!(!read.deltas.contains_key("flaky"), "{:?}", read.deltas);
+        assert_eq!(read.deltas["newer"].written, 4 * MB);
+
+        process(&tree, 31, "flaky", 1, 200, 0, 512 * MB);
+        assert_eq!(
+            sampler.read().expect("read").deltas["flaky"].written,
+            2 * MB
+        );
+    }
+
+    #[test]
+    fn a_counter_going_backwards_is_skipped_with_a_note() {
+        let tree = FakeTree::new("topio-backwards");
+        process(&tree, 40, "odd", 1, 5, 0, 9 * MB);
+        let mut sampler = sampler(&tree);
+        sampler.read().expect("baseline");
+        process(&tree, 40, "odd", 1, 5, 0, 8 * MB);
+        let read = sampler.read().expect("read");
+        assert!(read.deltas.is_empty());
+        assert!(read.notes.iter().any(|n| n.contains("went backwards")));
+    }
 
     #[test]
     fn a_refused_io_is_counted_as_denied_and_the_rest_is_still_measured() {

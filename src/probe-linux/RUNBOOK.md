@@ -119,15 +119,23 @@ when — and only when — the config on the host enables the block, and removes
 
 ```bash
 sudo mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
-printf '[Service]\nProtectProc=default\nCapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\nAmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE\n' \
-  | sudo tee /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf
+sudo tee /etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf >/dev/null <<'EOF'
+[Service]
+ProtectProc=default
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace
+EOF
 sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
 ```
 
 The drop-in grants the probe two capabilities that would also allow reading any file its
-namespace shows (`/etc/shadow`, host keys) and other processes' memory; the probe reads only
-`/proc/<pid>/stat`, `io`, `exe` and `cmdline` (`ptrace(2)` stays refused by the unit's syscall
-filter). Enable it only where that trade-off is accepted. To switch the feature off, set
+namespace shows (`/etc/shadow`, host keys) and other processes' `/proc/<pid>/environ`, open files
+(`/proc/<pid>/fd/*`) and memory (`/proc/<pid>/mem`); the probe reads only `/proc/<pid>/stat`,
+`io`, `exe`, `cmdline` and `status`. Its `SystemCallFilter=~…` line refuses the calls that would
+go further: `open_by_handle_at` (with `CAP_DAC_READ_SEARCH` it opens files by handle past
+`ProtectHome=` — the "shocker" bypass), `process_vm_readv`/`writev` and `ptrace`. Enable it only
+where that trade-off is accepted. To switch the feature off, set
 `"enabled": false` and re-run `install.sh`, or delete the file, `daemon-reload` and restart.
 **Check:** `grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status` shows
 `0000000000080004` with the drop-in (`CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`) and all zeros

@@ -1047,7 +1047,8 @@
             checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
             still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
             altogether. So the step grants those two capabilities and lifts that one setting with a
-            drop-in, <b>only when the config installed on the
+            drop-in — which also denies <c>open_by_handle_at</c>, <c>process_vm_readv</c>/<c>writev</c> and
+            <c>ptrace</c>, the calls that would turn the capabilities into more than reading — <b>only when the config installed on the
             host enables the top-level <c>topDiskIo</c> block</b> (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>), and
             removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
             server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK

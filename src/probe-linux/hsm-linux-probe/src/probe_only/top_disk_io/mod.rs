@@ -267,7 +267,8 @@ struct TopDiskIo<'c> {
     local: LocalTime,
     baseline_logged: bool,
     denied_logged: bool,
-    day_cap_logged: bool,
+    /// The day whose name cap was logged: once per day, so a later day is not silent.
+    day_cap_logged: Option<i64>,
     failures: FailureLog,
     accounting: FailureLog,
 }
@@ -304,7 +305,7 @@ impl<'c> TopDiskIo<'c> {
             local: local_time,
             baseline_logged: false,
             denied_logged: false,
-            day_cap_logged: false,
+            day_cap_logged: None,
             failures: FailureLog::default(),
             accounting: FailureLog::default(),
         }
@@ -339,6 +340,9 @@ impl<'c> TopDiskIo<'c> {
             }
         };
         self.report_visibility(&read, logger);
+        for note in &read.notes {
+            logger.log(Level::Debug, &format!("{WHAT}: {note}"));
+        }
         let previous_ms = self.last_read_ms.replace(now_ms);
         match previous_ms.filter(|_| !read.baseline) {
             None => self.pending_since = Some(now),
@@ -370,13 +374,13 @@ impl<'c> TopDiskIo<'c> {
         {
             Ok(0) => {}
             Ok(dropped) => {
-                if !self.day_cap_logged {
+                if self.day_cap_logged != self.ledger.day {
                     logger.warn(format!(
                         "{WHAT}: the day already counts {} process names, the cap; {dropped} new \
-                         name(s) are not counted towards the per-day totals (logged once)",
+                         name(s) are not counted towards the per-day totals (logged once a day)",
                         day::MAX_DAY_NAMES
                     ));
-                    self.day_cap_logged = true;
+                    self.day_cap_logged = self.ledger.day;
                 }
             }
             Err(skip) => logger.log(
@@ -909,6 +913,39 @@ mod tests {
             .count();
         assert_eq!(errors, 1);
         assert!(registrations(&collector, WRITERS).is_empty());
+    }
+
+    /// The per-day name cap is reported once a day, not once per probe run.
+    #[test]
+    fn the_day_name_cap_is_logged_once_a_day() {
+        let tree = FakeTree::new("topio-daycap");
+        let collector = test_collector();
+        let (logger, lines) = capture();
+        let mut source = source(&collector, &tree);
+        let many: BTreeMap<String, NameIo> = (0..day::MAX_DAY_NAMES + 1)
+            .map(|i| {
+                (
+                    format!("p{i:05}"),
+                    NameIo {
+                        written: MB,
+                        ..NameIo::default()
+                    },
+                )
+            })
+            .collect();
+        let noon = MIDNIGHT + 12 * 3600 * 1000;
+        for day in 0..2 {
+            let at = noon + day * 24 * 3600 * 1000;
+            source.count_day(&many, at, at + MIN_MS, &logger);
+            source.count_day(&many, at + MIN_MS, at + 2 * MIN_MS, &logger);
+        }
+        let warned = lines
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.contains("the cap"))
+            .count();
+        assert_eq!(warned, 2, "one per day");
     }
 
     #[test]

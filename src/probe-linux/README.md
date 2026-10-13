@@ -581,11 +581,33 @@ reaper's delta, what the previous read had already credited to each vanished pro
 is the vanished process's parent at the previous read when that parent is still alive; when the
 parent vanished too (a job tree `cron → sh → tar` exiting at once), the walk goes up the previous
 read's parents to the first one still alive. **What a process does between its last read and its
-exit is therefore not lost but counted under its reaper** — the kernel moved it there. Limits: a
-process too short-lived to be read at all (a `gzip` run from `cron` within one minute) is counted
-under its reaper in full; an orphan whose parent died before it, both within one interval, is
-taken back from its grandparent although `init` or a subreaper reaped it (that one is cut by too
-much — never below 0 — and the reaper shows the orphan's whole-life total).
+exit is therefore not lost but counted under its reaper** — the kernel moved it there.
+
+The scan is not atomic, so the correction leans on the kernel's order: `wait_task_zombie` adds the
+child's counters to the reaper **before** `release_task` removes the pid from `/proc`. A process
+missing from the scan is therefore already in its reaper's counter, and every receiver of a
+vanished process has its `io` **read again after the scan**, whatever order the scan read them in
+(a parent with a higher pid than its child after a pid wrap included). A process whose `stat` was
+read but whose `io` is gone when read (reaped in between) counts as vanished in that same read; one
+whose `io` read fails while it is still there keeps its previous counters. A correction that does
+not fit in the receiver's delta (never below 0) is tried once more at the next read, then dropped
+with a debug line. A process started since the previous read is credited with its whole counters
+only when it is younger than every process that read saw; one that read merely missed gets a
+baseline. A counter going backwards is skipped with a debug line.
+
+**Limits** (where a byte can still be counted twice or under-reported):
+
+* a process too short-lived to be read at all (a `gzip` run from `cron` within one minute) is
+  counted under its reaper in full — the kernel gives no other attribution;
+* an orphan whose parent died before it, both within one interval, is taken back from its
+  grandparent although `init` or a subreaper reaped it: the grandparent is cut by too much (never
+  below 0, the rest carried into one more read) and the real reaper shows the orphan's whole-life
+  total;
+* a reaper that ignores `SIGCHLD` has its children reaped by the kernel without their counters
+  (`autoreap`): the sampler reads `SigIgn` from its `/proc/<pid>/status` and then takes nothing back
+  — this also covers `kthreadd`, which ignores every signal, for kernel threads. A reaper that sets
+  `SA_NOCLDWAIT` instead autoreaps too, but that flag is not visible in `/proc`: its own I/O is cut
+  by its exited children's last-read counters.
 
 **Schedule.** The source ticks every 5 s and reads `/proc` only when a sample is due: every
 `periodMs` on the tick grid, plus one **final reading** in the day's last 30 seconds, after which
@@ -618,20 +640,29 @@ The unit's `ProtectProc=invisible` hides the other processes altogether. With `t
 ProtectProc=default
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
 AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace
 ```
 
 then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server
 bundle's `install.sh` writes exactly this file when the config it leaves on the host enables the
 **top-level** `topDiskIo` block (the same top-level-only check as for `topCpu`; a block nested under
 `probe` is ignored by the probe and by the check alike) and removes it when that config does not;
-`uninstall.sh` and the package's `postrm` (remove/purge) delete it. The trade-off is real:
-`CAP_DAC_READ_SEARCH` would let the process read **any file** the unit's namespace shows
-(`/etc/shadow`, host keys; `/home` and `/root` stay hidden by `ProtectHome=yes`), and
-`CAP_SYS_PTRACE` other processes' memory (`/proc/<pid>/mem`, `process_vm_readv`). The probe opens
-only `/proc/<pid>/stat`, `io`, `exe` and `cmdline` (and the files it read before), and `ptrace(2)`
-itself stays refused by the unit's `SystemCallFilter=@system-service`; the feature is off by
-default for this reason, and the owner decides per host. With the capabilities, top CPU's path
-lines name every process's executable (`/proc/<pid>/exe` becomes readable).
+`uninstall.sh` and the package's `postrm` (remove/purge) delete it. The trade-off is real. With
+both capabilities the process could read **any file** the unit's namespace shows (`/etc/shadow`,
+host keys), other processes' `/proc/<pid>/environ` (secrets in environment variables), their open
+files through `/proc/<pid>/fd/*`, and their memory through `/proc/<pid>/mem`. The probe opens only
+`/proc/<pid>/stat`, `io`, `exe`, `cmdline` and `status` (and the files it read before). The
+drop-in's deny list refuses the system calls that would go further: `open_by_handle_at`, which
+with `CAP_DAC_READ_SEARCH` opens a file by handle **past** the unit's hidden paths (the "shocker"
+bypass) — so `/home` and `/root` stay hidden by `ProtectHome=yes` **because** it is denied;
+`process_vm_readv`/`process_vm_writev`, which `@system-service` allows (via `@ipc`; checked with
+`systemd-analyze syscall-filter` on debian:13, systemd 257); and `ptrace`, which `@system-service`
+already refuses, as it does `open_by_handle_at` — both are denied again explicitly. systemd merges
+the deny list into the unit's `SystemCallFilter=@system-service` allow list. The feature is off by
+default for this reason, and the owner decides per host. A stronger design — a tiny privileged
+helper that only returns the counters, with the probe keeping no capability — is a possible
+follow-up, not implemented. With the capabilities, top CPU's path lines name every process's
+executable (`/proc/<pid>/exe` becomes readable).
 
 **Without it** the source keeps measuring what it can read: under `ProtectProc=invisible` only the
 probe's own processes are visible (one WARN line at start naming `hidepid` and the drop-in); with

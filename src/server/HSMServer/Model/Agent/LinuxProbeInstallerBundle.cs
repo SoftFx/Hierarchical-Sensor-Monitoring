@@ -481,7 +481,8 @@ namespace HSMServer.Model.Agent
         /// checks <c>ptrace_may_access</c>, which needs <c>CAP_SYS_PTRACE</c> (measured: either one alone
         /// still reads <c>EACCES</c>). The unit's <c>ProtectProc=invisible</c> hides the other processes
         /// altogether. So the step grants those two capabilities and lifts that one setting with a
-        /// drop-in, <b>only when the config installed on the
+        /// drop-in — which also denies <c>open_by_handle_at</c>, <c>process_vm_readv</c>/<c>writev</c> and
+        /// <c>ptrace</c>, the calls that would turn the capabilities into more than reading — <b>only when the config installed on the
         /// host enables the top-level <c>topDiskIo</c> block</b> (<see cref="TopDiskIoEnabledPattern"/>), and
         /// removes the drop-in otherwise. The bundle never enables <c>topDiskIo</c> itself (there is no
         /// server switch): an operator enables it in the host config and re-runs install.sh (RUNBOOK
@@ -508,13 +509,17 @@ namespace HSMServer.Model.Agent
                 "# The top disk I/O sensors read /proc/<pid>/io of every process. Another user's is a 0400 file whose read",
                 "# the kernel also gates on ptrace access, so it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE; the unit's",
                 "# ProtectProc=invisible hides the other processes. These capabilities would also allow reading any file",
-                "# and other processes' memory; the probe only reads /proc/<pid>/stat, io, exe and cmdline (ptrace(2) itself",
-                "# stays refused by the unit's SystemCallFilter). Delete this file, then",
+                "# the unit can see, other processes' /proc/<pid>/environ and open files (/proc/<pid>/fd/*), and their",
+                "# memory; the probe only reads /proc/<pid>/stat, io, exe, cmdline and status. The deny list below refuses",
+                "# the calls that would widen this further: open_by_handle_at (with CAP_DAC_READ_SEARCH it opens files by",
+                "# handle past ProtectHome= and the other hidden paths), process_vm_readv/writev (other processes' memory)",
+                "# and ptrace. Delete this file, then",
                 "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to drop the capabilities again.",
                 "[Service]",
                 "ProtectProc=default",
                 "CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
                 "AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
+                "SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace",
                 "EOF",
                 "  chmod 0644 \"$TOP_DISK_IO_DROPIN\"",
                 "  echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry and I/O counters (CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE: $TOP_DISK_IO_DROPIN).\"",

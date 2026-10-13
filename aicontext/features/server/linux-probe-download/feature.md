@@ -151,7 +151,10 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    **Top disk I/O processes (#1547), every bundle:** the drop-in
    `/etc/systemd/system/hsm-linux-probe.service.d/top-disk-io.conf`
    (`[Service] ProtectProc=default`, `CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`,
-   `AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`) is written **only when the config installed
+   `AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE`,
+   `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace` — the calls that would
+   turn the capabilities into more than reading: `open_by_handle_at` past `ProtectHome=`, other
+   processes' memory, ptrace) is written **only when the config installed
    on the host enables the top-level `topDiskIo` block**, and removed (said so) otherwise. Reading another
    user's `/proc/<pid>/io` needs both capabilities, which the unit drops — the file is 0400
    (`CAP_DAC_READ_SEARCH` opens it) and the kernel checks ptrace access before answering

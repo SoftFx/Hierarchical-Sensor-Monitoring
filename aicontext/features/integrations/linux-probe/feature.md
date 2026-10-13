@@ -125,11 +125,18 @@ The probe registers **two separately pinned sets**:
    day's last 30 s from a final reading, TTL 26 h). Source: `/proc/<pid>/io` `write_bytes` /
    `read_bytes` (block I/O, not `wchar`/`rchar`; `cancelled_write_bytes` not subtracted) over top
    CPU's process table and name rule (`read_processes`, `sensor_name`), identity `(pid, starttime)`;
-   unlike top CPU a process started since the previous read is credited with its whole counters (they
-   start at 0). The kernel adds a reaped child's whole counters to its parent's, so each vanished
-   process's last-read counters are subtracted from its reaper (its parent at the previous read if
-   alive, else the first live ancestor up the previous read's chain): nothing is counted twice, and a
-   process's last partial interval is counted under its reaper. The day follows `Written per day on
+   unlike top CPU a process started since the previous read — and younger than every process that
+   read saw — is credited with its whole counters (they start at 0). The kernel adds a reaped child's
+   whole counters to its parent's before it removes the pid, so each vanished process's last-read
+   counters are subtracted from its reaper (its parent at the previous read if alive, else the first
+   live ancestor up the previous read's chain), whose `io` is read again after the scan so the jump is
+   in it whatever the read order; a process reaped between its `stat` and `io` reads counts as
+   vanished; a remainder that does not fit is tried once more, then dropped (debug line); a reaper
+   ignoring `SIGCHLD` (`SigIgn` in its `status`) autoreaps and is not corrected. A process's last
+   partial interval is counted under its reaper. Known limits (README "Limits"): a process too
+   short-lived to be read is counted under its reaper in full; an orphan whose parent died first in
+   the same interval is taken back from its grandparent (the real reaper shows it a second time);
+   an `SA_NOCLDWAIT` reaper is cut by its children's counters. The day follows `Written per day on
    <disk>` (post window, after-post bytes to the next day, missed day logged once, never an invented
    0) but is **in memory only**: a restart starts the day afresh (the comment says since when).
    **Off unless the top-level `topDiskIo` block enables it**; no server switch. Needs the
@@ -238,9 +245,15 @@ Linux is the only supported target. The initiative is
   (`install.sh`, from a host config enabling the top-level `topDiskIo`; removed otherwise, by
   `uninstall.sh` and by `postrm`) grants `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` (bounding +
   ambient) and sets `ProtectProc=default`. The capabilities would also allow reading any file the
-  unit's namespace shows and other processes' memory; the probe
-  reads only `/proc/<pid>/stat`, `io`, `exe` and `cmdline`, and `ptrace(2)` stays refused by
-  `SystemCallFilter=@system-service`.
+  unit's namespace shows and other processes' `/proc/<pid>/environ`, `/proc/<pid>/fd/*` and memory;
+  the probe reads only `/proc/<pid>/stat`, `io`, `exe`, `cmdline` and `status`. The drop-in adds
+  `SystemCallFilter=~open_by_handle_at process_vm_readv process_vm_writev ptrace` (merged into the
+  unit's `@system-service` allow list): `open_by_handle_at` with `CAP_DAC_READ_SEARCH` would open
+  files past `ProtectHome=` (so `/home`, `/root` stay hidden only because it is denied);
+  `process_vm_readv`/`writev` are in `@system-service` (via `@ipc`), `ptrace` and
+  `open_by_handle_at` are not (`systemd-analyze syscall-filter`, debian:13, systemd 257) and are
+  denied again explicitly. A privileged helper returning only the counters would avoid the
+  capabilities altogether — a possible follow-up.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.
