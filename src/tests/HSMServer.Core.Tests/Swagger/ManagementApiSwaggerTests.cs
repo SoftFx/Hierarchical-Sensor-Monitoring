@@ -193,16 +193,18 @@ namespace HSMServer.Core.Tests.Swagger
 
             Assert.Null(details.Type);
             Assert.True(details.Nullable);
-            Assert.Equal(2, details.OneOf.Count);
+            // anyOf, not oneOf — the arms overlap for null and the empty map;
+            // see the payload test below for why exactly-one would regress.
+            Assert.Equal(2, details.AnyOf.Count);
 
             // 400/422 arm: field -> message ARRAY.
-            var fieldMessages = details.OneOf[0];
+            var fieldMessages = details.AnyOf[0];
             Assert.Equal("object", fieldMessages.Type);
             Assert.Equal("array", fieldMessages.AdditionalProperties.Type);
             Assert.Equal("string", fieldMessages.AdditionalProperties.Items.Type);
 
             // 500/409 arm: pointer key -> scalar STRING.
-            var pointers = details.OneOf[1];
+            var pointers = details.AnyOf[1];
             Assert.Equal("object", pointers.Type);
             Assert.Equal("string", pointers.AdditionalProperties.Type);
         }
@@ -210,13 +212,13 @@ namespace HSMServer.Core.Tests.Swagger
         [Fact]
         public void ErrorDetailsFilter_PublishedSchema_AllowsRealPayloads()
         {
-            // The in-memory union above must stay VALID once SERIALIZED: an
-            // "additionalProperties": false as a sibling of oneOf — the outer
-            // schema declares no properties — would forbid every key, so every
-            // real details payload ({"traceId": "..."}, {"folderId": ["..."]})
-            // would fail validation against the published document. Only the
-            // union arms may carry additionalProperties; the outer schema must
-            // omit the keyword entirely.
+            // The in-memory union above must stay VALID once SERIALIZED, for
+            // every payload shape the contract actually sends — checked against
+            // the SERIALIZED document, not the object model, because that is
+            // what a strict validator reads. Historically pinned here:
+            // "additionalProperties": false beside the union would forbid every
+            // key; oneOf with both arms nullable fails exactly-one on null (the
+            // most common error body).
             var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
             schema.Properties["details"] = new Microsoft.OpenApi.Models.OpenApiSchema
             {
@@ -240,16 +242,73 @@ namespace HSMServer.Core.Tests.Swagger
 
             Assert.False(details.TryGetProperty("additionalProperties", out _));
 
-            var arms = details.GetProperty("oneOf");
+            var arms = details.GetProperty("anyOf");
             Assert.Equal(2, arms.GetArrayLength());
             Assert.Equal("array", arms[0].GetProperty("additionalProperties").GetProperty("type").GetString());
             Assert.Equal("string", arms[1].GetProperty("additionalProperties").GetProperty("type").GetString());
 
-            // OpenAPI 3.0.3 ignores a nullable that sits beside oneOf with no
-            // type — nullability must ride the arms themselves, or the explicit
-            // null of 401/403/404/503 fails validation against the document.
+            // OpenAPI 3.0.3 ignores a nullable that sits beside the union with
+            // no type — nullability must ride the arms themselves, or the
+            // explicit null of 401/403/404/503 is admitted by no arm at all.
             Assert.True(arms[0].GetProperty("nullable").GetBoolean());
             Assert.True(arms[1].GetProperty("nullable").GetBoolean());
+
+            // Every real payload is ADMITTED (>=1 matching arm), and the two
+            // real maps stay DISCRIMINABLE (exactly their own arm). null and {}
+            // match BOTH arms — legal under anyOf, a violation under oneOf's
+            // exactly-one, which is why the union is anyOf.
+            Assert.Equal(2, MatchingArms(arms, "null"));
+            Assert.Equal(1, MatchingArms(arms, "{\"folderId\":[\"required\"]}"));
+            Assert.Equal(1, MatchingArms(arms, "{\"traceId\":\"trace-1\"}"));
+            Assert.Equal(2, MatchingArms(arms, "{}"));
+        }
+
+        // OpenAPI 3.0.3 validation semantics of exactly the keywords the union
+        // emits — type, nullable (beside type), additionalProperties, items —
+        // applied to a serialized arm. Deliberately generic over those keywords
+        // rather than hard-coding "the arrays arm": what must hold is the
+        // keyword logic, not the arm order.
+        private static int MatchingArms(System.Text.Json.JsonElement arms, string payloadJson)
+        {
+            using var payload = System.Text.Json.JsonDocument.Parse(payloadJson);
+
+            return Enumerable.Count(arms.EnumerateArray(), arm => ArmAdmits(arm, payload.RootElement));
+        }
+
+        private static bool ArmAdmits(System.Text.Json.JsonElement arm, System.Text.Json.JsonElement payload)
+        {
+            // 3.0.3: nullable only takes effect beside `type` — null is
+            // admitted iff the arm itself is nullable.
+            if (payload.ValueKind == System.Text.Json.JsonValueKind.Null)
+                return arm.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean();
+
+            if (arm.GetProperty("type").GetString() != "object" ||
+                payload.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return false;
+
+            if (!arm.TryGetProperty("additionalProperties", out var valueSchema))
+                return true;
+
+            foreach (var property in payload.EnumerateObject())
+                if (!ValueAdmits(property.Value, valueSchema))
+                    return false;
+
+            return true;
+        }
+
+        private static bool ValueAdmits(System.Text.Json.JsonElement value, System.Text.Json.JsonElement schema)
+        {
+            switch (schema.GetProperty("type").GetString())
+            {
+                case "array":
+                    return value.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                           schema.TryGetProperty("items", out var items) &&
+                           value.EnumerateArray().All(item => ValueAdmits(item, items));
+                case "string":
+                    return value.ValueKind == System.Text.Json.JsonValueKind.String;
+                default:
+                    return false;
+            }
         }
 
         [Fact]
@@ -274,7 +333,7 @@ namespace HSMServer.Core.Tests.Swagger
 
             var details = repository.Schemas["ManagementApiErrorDto"].Properties["details"];
 
-            Assert.Equal(2, details.OneOf.Count);
+            Assert.Equal(2, details.AnyOf.Count);
         }
 
         [Fact]

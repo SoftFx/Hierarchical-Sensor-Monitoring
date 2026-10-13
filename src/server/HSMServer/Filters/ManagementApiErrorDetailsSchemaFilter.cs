@@ -29,21 +29,26 @@ namespace HSMServer.Filters
             // present on the wire, but half the statuses answer an explicit null.
             //
             // AdditionalProperties stays null and the ALLOWED flag stays unset:
-            // "additionalProperties": false as a SIBLING of oneOf (with no
+            // "additionalProperties": false as a SIBLING of the union (with no
             // properties declared here) would reject every key of every payload —
             // the union arms below carry their own additionalProperties maps.
             detailsSchema.Nullable = true;
             detailsSchema.Type = null;
             detailsSchema.AdditionalProperties = null;
 
-            detailsSchema.OneOf =
+            // anyOf, not oneOf: the arms OVERLAP — a JSON null matches both and
+            // an empty map matches both — and oneOf demands exactly ONE match,
+            // so the most common error body ("details": null on 401/403/404/503)
+            // would fail strict validators. anyOf demands at least one; real
+            // payloads still match their own arm alone. OpenAPI 3.0.3: nullable
+            // takes effect only beside `type` in the SAME schema (the outer
+            // nullable above, with no type, is ignored), so each arm admits
+            // null itself.
+            //
+            // 400/422 arm: field-keyed message arrays
+            // ({"policies[0].operation": ["..."]}).
+            detailsSchema.AnyOf =
             [
-                // OpenAPI 3.0.3: nullable only takes effect beside `type` in the
-                // SAME schema — the outer nullable (no type there) is ignored by
-                // strict validators. Half the statuses answer an explicit null,
-                // so every arm must admit it itself.
-                //
-                // 400/422: field-keyed message arrays ({"policies[0].operation": ["..."]}).
                 new OpenApiSchema
                 {
                     Type = "object",
