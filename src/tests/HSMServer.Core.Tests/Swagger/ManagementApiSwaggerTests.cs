@@ -244,6 +244,37 @@ namespace HSMServer.Core.Tests.Swagger
             Assert.Equal(2, arms.GetArrayLength());
             Assert.Equal("array", arms[0].GetProperty("additionalProperties").GetProperty("type").GetString());
             Assert.Equal("string", arms[1].GetProperty("additionalProperties").GetProperty("type").GetString());
+
+            // OpenAPI 3.0.3 ignores a nullable that sits beside oneOf with no
+            // type — nullability must ride the arms themselves, or the explicit
+            // null of 401/403/404/503 fails validation against the document.
+            Assert.True(arms[0].GetProperty("nullable").GetBoolean());
+            Assert.True(arms[1].GetProperty("nullable").GetBoolean());
+        }
+
+        [Fact]
+        public void ErrorDetailsFilter_AppliesToTheSchemaSwashbuckleGenerates()
+        {
+            // The hand-made inputs above pin the filter's TRANSFORM; this pins
+            // that the transform still lands on the real pipeline's output. The
+            // filter matches by the camelCase "details" key of an INLINE property
+            // — a naming-policy change or the property turning into a $ref would
+            // make TryGetValue miss and the filter silently do nothing while the
+            // tests above stay green. Same System.Text.Json camelCase contract
+            // the app's resolver uses, same filter registration AddSwaggerGen has.
+            var options = new SchemaGeneratorOptions();
+            options.SchemaFilters.Add(new HSMServer.Filters.ManagementApiErrorDetailsSchemaFilter());
+
+            var generator = new SchemaGenerator(options,
+                new JsonSerializerDataContractResolver(
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+
+            var repository = new SchemaRepository();
+            generator.GenerateSchema(typeof(HSMServer.Model.ManagementApi.ManagementApiErrorDto), repository);
+
+            var details = repository.Schemas["ManagementApiErrorDto"].Properties["details"];
+
+            Assert.Equal(2, details.OneOf.Count);
         }
 
         [Fact]

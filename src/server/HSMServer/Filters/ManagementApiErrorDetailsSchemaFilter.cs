@@ -38,10 +38,16 @@ namespace HSMServer.Filters
 
             detailsSchema.OneOf =
             [
+                // OpenAPI 3.0.3: nullable only takes effect beside `type` in the
+                // SAME schema — the outer nullable (no type there) is ignored by
+                // strict validators. Half the statuses answer an explicit null,
+                // so every arm must admit it itself.
+                //
                 // 400/422: field-keyed message arrays ({"policies[0].operation": ["..."]}).
                 new OpenApiSchema
                 {
                     Type = "object",
+                    Nullable = true,
                     AdditionalProperties = new OpenApiSchema
                     {
                         Type = "array",
@@ -53,6 +59,7 @@ namespace HSMServer.Filters
                 new OpenApiSchema
                 {
                     Type = "object",
+                    Nullable = true,
                     AdditionalProperties = new OpenApiSchema { Type = "string" },
                 },
             ];
