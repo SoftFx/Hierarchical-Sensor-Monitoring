@@ -93,6 +93,15 @@
                                             </ul>
                                         </li>
 
+                                        @if (UserRoleHelper.IsDownloadsPageAllowed((User)Context.User))
+                                        {
+                                            <li class="nav-item">
+                                                <a id="nav_link_Downloads" class="nav-link @Html.ActiveClass(ViewConstants.DownloadsController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController)">
+                                                    Downloads
+                                                </a>
+                                            </li>
+                                        }
+
 
                                                                                 <li class="nav-item dropdown">
                                             <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">

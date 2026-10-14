@@ -1,0 +1,158 @@
+@using HSMServer.Model.Agent
+@model DownloadsViewModel
+
+@{
+    ViewData["Title"] = "Downloads";
+
+    var listSize = Math.Clamp(Model.Products.Count, 2, 10);
+}
+
+<div class="mx-auto py-3 px-3" style="max-width: 1100px;">
+    <h4 class="mb-1">Downloads</h4>
+    <p class="text-muted small">
+        Choose a product, then download a ready-to-run bundle for it. Every bundle points at
+        <code id="downloadsServerAddress">@Model.ServerAddress:@Model.ServerPort</code> and carries the product's access key, so keep the file private.
+        The address comes from Configuration &rarr; Settings &rarr; Agent &rarr; <i>Agent connection URL</i>, or from this page's host when it is blank.
+    </p>
+
+    <div class="mb-4">
+        @if (Model.Products.Count == 0)
+        {
+            <p class="form-label fw-medium mb-1">Product</p>
+            <p id="downloadsNoProducts" class="text-muted small mb-0">There are no products yet. Create one on the Products page first.</p>
+        }
+        else
+        {
+            <label for="downloadsProductFilter" class="form-label fw-medium">Product</label>
+            <input type="search" id="downloadsProductFilter" class="form-control mb-2" placeholder="Filter by product or folder name" autocomplete="off" />
+            <select id="downloadsProductSelect" class="form-select" size="@listSize" aria-label="Product">
+                @foreach (var product in Model.Products)
+                {
+                    <option value="@product.Id" data-search="@product.DisplayName.ToLowerInvariant()" selected="@(product.Id == Model.SelectedProductId)">@product.DisplayName</option>
+                }
+            </select>
+            <p id="downloadsNoMatch" class="text-muted small mt-1 mb-0" style="display: none;">No product matches the filter.</p>
+        }
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title"><i class="fa-brands fa-windows me-2"></i>Windows agent</h5>
+                    <p class="small mb-2">Version: <span id="downloadsAgentVersion" class="fw-medium">@(Model.AgentVersion ?? (Model.AgentStaged ? "unknown" : "not staged"))</span></p>
+                    @await Html.PartialAsync("~/Views/Shared/_WindowsAgentInstallHint.cshtml")
+                    <div class="mt-auto">
+                        @if (Model.AgentStaged)
+                        {
+                            <button id="downloadsAgentButton" class="btn btn-primary downloads-button" type="button" disabled onclick="downloadsAgentClick()"
+                                    title="Download a ready-to-run Windows agent for the selected product (server address + key pre-configured)">
+                                <i class="fa-solid fa-download"></i> Download Windows agent
+                            </button>
+                        }
+                        else
+                        {
+                            <div id="downloadsAgentNotStaged" class="alert alert-warning small mb-0" role="status">@Model.AgentNotStagedMessage</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title"><i class="fa-brands fa-linux me-2"></i>Linux probe</h5>
+                    <p class="small mb-2">Version: <span id="downloadsProbeVersion" class="fw-medium">@(Model.ProbeVersion ?? (Model.ProbeStaged ? "unknown" : "not staged"))</span></p>
+                    @await Html.PartialAsync("~/Views/Shared/_LinuxProbeInstallHint.cshtml")
+                    <div class="mt-auto">
+                        @if (!Model.ProbeStaged)
+                        {
+                            <div id="downloadsProbeNotStaged" class="alert alert-warning small mb-0" role="status">@Model.ProbeNotStagedMessage</div>
+                        }
+                        else if (!Model.ProbeDownloadable)
+                        {
+                            @* The endpoint answers 400 for this address, so there is nothing to click. *@
+                            <div id="downloadsProbeAddressWarning" class="alert alert-warning small mb-0" role="status">@Model.ProbeAddressWarning</div>
+                        }
+                        else
+                        {
+                            <button id="downloadsLinuxProbeButton" class="btn btn-primary downloads-button" type="button" disabled onclick="downloadsLinuxProbeClick()"
+                                    title="Download a ready-to-run Linux probe for the selected product (server address + key pre-configured)">
+                                <i class="fa-solid fa-download"></i> Download Linux probe
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("~/Views/Shared/_DownloadBundleScript.cshtml")
+
+<script>
+    (function () {
+        const select = document.getElementById('downloadsProductSelect');
+        const filter = document.getElementById('downloadsProductFilter');
+        const noMatch = document.getElementById('downloadsNoMatch');
+
+        function selectedProductId() {
+            if (!select || select.selectedIndex < 0)
+                return '';
+
+            const option = select.options[select.selectedIndex];
+            return option.hidden ? '' : option.value;
+        }
+
+        // Buttons stay disabled until a (visible) product is chosen. A button whose download is in
+        // flight (data-busy, set by downloadBundle) stays disabled, so changing the selection meanwhile
+        // cannot start a second key-bearing bundle build.
+        function refreshButtons() {
+            const disabled = selectedProductId() === '';
+            document.querySelectorAll('.downloads-button').forEach(function (button) {
+                button.disabled = disabled || button.dataset.busy === 'true';
+            });
+        }
+
+        function applyFilter() {
+            const text = filter.value.trim().toLowerCase();
+            let visible = 0;
+            for (const option of select.options) {
+                option.hidden = text !== '' && !option.dataset.search.includes(text);
+                if (!option.hidden)
+                    visible++;
+            }
+
+            if (select.selectedIndex >= 0 && select.options[select.selectedIndex].hidden)
+                select.selectedIndex = -1;
+
+            noMatch.style.display = visible === 0 ? '' : 'none';
+            refreshButtons();
+        }
+
+        async function download(buttonId, endpoint, fallbackFileName, label) {
+            const productId = selectedProductId();
+            if (productId === '')
+                return;
+
+            await downloadBundle(buttonId, endpoint + '?productId=' + encodeURIComponent(productId), fallbackFileName, label);
+            refreshButtons();
+        }
+
+        window.downloadsAgentClick = function () {
+            return download('downloadsAgentButton', '/api/Agent/installer', 'hsm-agent.zip', 'HSM Agent');
+        };
+
+        window.downloadsLinuxProbeClick = function () {
+            return download('downloadsLinuxProbeButton', '/api/Agent/linux-installer', 'hsm-linux-probe.tar.gz', 'HSM Linux probe');
+        };
+
+        if (select) {
+            select.addEventListener('change', refreshButtons);
+            filter.addEventListener('input', applyFilter);
+        }
+
+        refreshButtons();
+    })();
+</script>

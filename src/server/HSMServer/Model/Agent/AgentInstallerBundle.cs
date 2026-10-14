@@ -27,6 +27,13 @@ namespace HSMServer.Model.Agent
         public const string InstallScript = "install-hsmagent-service.cmd";
         public const string UninstallScript = "uninstall-hsmagent-service.cmd";
 
+        /// <summary>Directory under wwwroot the server build stages the pinned agent exe + version.txt into.</summary>
+        public const string StagingFolder = "agent";
+        public const string VersionFileName = "version.txt";
+
+        public const string NotStagedMessage =
+            "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.";
+
         private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
         /// <summary>The generated config.json — matches the agent's config schema (only address + key required).</summary>

@@ -23,6 +23,7 @@
         public const string JournalController = "Journal";
         public const string ProfileController = "Profile";
         public const string ApiTokensAdminController = "ApiTokensAdmin";
+        public const string DownloadsController = "Downloads";
 
         public const string LogoutAction = "Logout";
         public const string RegistrationAction = "Registration";

@@ -171,11 +171,12 @@
     
         <div class="my-1">
             <h5 class="mt-2">HSM Agent</h5>
-            <p class="text-muted small">Download a ready-to-run Windows agent pre-configured for this product — this server's address and an access key are baked into its <code>config.json</code>. Run <code>install.cmd</code> on the target machine; the agent self-installs as an auto-start Windows service and connects.</p>
-            <p class="text-muted small">For a Linux host, <b>Download Linux probe</b> gives a <code>.tar.gz</code> with the probe package, its config (this server's address) and the access key in a separate file. Run <code>tar xzf hsm-linux-probe-&lt;product&gt;.tar.gz &amp;&amp; sudo ./hsm-linux-probe-&lt;product&gt;/install.sh</code> on the host; the probe installs as a systemd service and connects. <b>One product per Linux host:</b> the probe reports at the product root with no host node (<code>.computer/…</code> and <code>.probe/…</code>), so installing the same product's bundle on a second host mixes both hosts' values into the same sensors — create a product per host.</p>
+            @await Html.PartialAsync("~/Views/Shared/_WindowsAgentInstallHint.cshtml")
+            @await Html.PartialAsync("~/Views/Shared/_LinuxProbeInstallHint.cshtml")
             @{ var pageUser = User as User; }
             @if (pageUser is not null && pageUser.IsAdmin)
             {
+                <p class="text-muted small">Also available under <a href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController, new { productId = Model.GeneralInfo.Id })">Downloads</a> in the main menu.</p>
                 <button id="downloadAgentButton" class="btn btn-secondary" type="button" onclick="downloadAgentClick()" title="Download a ready-to-run Windows agent for this product (server address + key pre-configured)">
                     <i class="fa-solid fa-download"></i> Download agent
                 </button>
@@ -423,40 +424,6 @@
     async function downloadLinuxProbeClick() {
         await downloadBundle('downloadLinuxProbeButton', '/api/Agent/linux-installer?productId=@Model.GeneralInfo.Id', 'hsm-linux-probe.tar.gz', 'HSM Linux probe');
     }
-
-    async function downloadBundle(buttonId, url, fallbackFileName, label) {
-        // Fetch + blob (not window.location) so a 503/BadRequest surfaces as a toast instead of
-        // navigating the browser to a raw error page — e.g. when the product has no usable access
-        // key or the binary/package isn't staged on the server yet.
-        const button = document.getElementById(buttonId);
-        button.disabled = true;
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                const message = await response.text();
-                showToast(message || 'Failed to download the ' + label + '.', 'Error');
-                return;
-            }
-
-            const blob = await response.blob();
-            const disposition = response.headers.get('Content-Disposition') || '';
-            const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-            const fileName = match ? decodeURIComponent(match[1]) : fallbackFileName;
-
-            const objectUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(objectUrl);
-        } catch (error) {
-            showToast('Failed to download the ' + label + ': ' + error, 'Error');
-        } finally {
-            button.disabled = false;
-        }
-    }
 </script>
 
 <script>
@@ -483,3 +450,5 @@
         });
     });
 </script>
+
+@await Html.PartialAsync("~/Views/Shared/_DownloadBundleScript.cshtml")

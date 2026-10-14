@@ -1,6 +1,6 @@
 # Feature: Per-product Linux probe download (server side)
 
-> Owner: server | Last reviewed: 2026-10-06 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-14 | Canonical: yes
 > Scope: the admin-only endpoint + UI that give an operator a ready-to-run, per-product HSM Linux probe
 > bundle (#1424, epic #1413, initiative `docs/initiatives/linux-docker-probe.md` §4.6). The Linux sibling of
 > `../agent-download/feature.md` (Windows agent); the probe itself lives in `src/probe-linux/`.
@@ -9,7 +9,8 @@
 
 ## Description
 
-An admin opens a product's edit page ("HSM Agent" section) and clicks **Download Linux probe** next to
+An admin opens the **Downloads** main-menu page (#1550), picks a product and clicks **Download Linux probe**,
+or opens a product's edit page ("HSM Agent" section) and clicks **Download Linux probe** next to
 **Download agent**. The server streams `hsm-linux-probe-<product>.tar.gz`. On the host:
 
 ```
@@ -44,7 +45,8 @@ compressed).
 
 ## Invariants
 
-- **Admin-only.** `[AuthorizeIsAdmin]` on `GET /api/agent/linux-installer`; the button renders only for admins.
+- **Admin-only.** `[AuthorizeIsAdmin]` on `GET /api/agent/linux-installer`; the button renders only for admins, and
+  the Downloads menu entry and page are admin-only (see `../agent-download/feature.md` → *Downloads page*).
 - **The key is never in `config.json`**, never an argument, never echoed. install.sh moves it with
   `install -m 0400 -o root -g root` to `/etc/hsm-linux-probe/access-key` (the unit's `LoadCredential=` source)
   and then `shred -u`s the extracted copy.
@@ -53,8 +55,10 @@ compressed).
   comes from `server-ca.pem` in the system store.
 - **HTTPS only.** The probe's config parser rejects `http://`, so an `http://` resolved address is answered
   with 400 and a pointer to Configuration → Agent → *Agent connection URL*, instead of a bundle that never
-  connects.
+  connects. The Downloads page shows that text in place of the Linux button.
 - **Not staged ⇒ 503** with a clear message (no web root, no `wwwroot/probe/`, no `.deb`, or more than one).
+  The Downloads page applies the same rule and shows that message instead of the button, with the version
+  read from the staged package name (`LinuxProbeInstallerBundle.PackageVersion`).
   This is checked first, so a server built without a staged package (empty pin, or staging skipped) reports
   the missing package rather than its default certificate.
 - **Never cacheable.** The response carries a bearer credential: `Installer` and `LinuxInstaller` are
@@ -241,6 +245,7 @@ and the pin now names `probe-v0.8.4`.
 | CA decision + public leaf export | `HSMServer/Model/Agent/LinuxProbeServerCa.cs` |
 | Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
+| Downloads page card (#1550) | `Views/Downloads/Index.cshtml`; page logic in `Model/Agent/DownloadsViewModel.cs` (`DownloadsPageBuilder`) — see `../agent-download/feature.md` → *Downloads page* |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
 | Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the top disk I/O step (top-level-only `topDiskIo` pattern, never matched by a generated config; `hsm-linux-probe-io.service` enabled and restarted only from an enabling host config after `daemon-reload`, stopped, disabled and its snapshot deleted otherwise and by uninstall, no output but a WARNING for a package without the unit, no drop-in and no capability for the probe), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
 
