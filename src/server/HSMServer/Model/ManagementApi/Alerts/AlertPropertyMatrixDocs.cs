@@ -16,7 +16,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             @"Condition-property availability by sensor type — exhaustive, negatives included: a property the type does not offer answers 422 on the policy surface and a template-apply warning on the template surface.
 every type — Status, Comment, NewSensorData
 Boolean — nothing beyond the common set (no Value)
-Integer, Double, Rate, Enum — Value, EmaValue
+Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
 TimeSpan, Version — Value
 String — Value, Length
 File — OriginalSize (no Value)

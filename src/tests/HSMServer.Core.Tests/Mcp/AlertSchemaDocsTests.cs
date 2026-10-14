@@ -37,14 +37,22 @@ namespace HSMServer.Core.Tests.Mcp
             foreach (var (variable, help) in AlertState.VariablesHelp)
                 Assert.Contains($"{variable} — {help}", description);
 
-            // ...and the table invents no variable the state does not register
-            // (an unregistered one would ship literally into the message).
+            // ...and the table invents no variable the state does not register.
             var documented = Regex.Matches(description, @"\$[a-zA-Z]+")
                 .Select(m => m.Value)
                 .Distinct()
                 .ToList();
 
             Assert.Equal(AlertState.VariablesHelp.Keys.Order(StringComparer.Ordinal), documented.Order(StringComparer.Ordinal));
+
+            // The header keeps the renderer's sharp edges in the text
+            // (AlertState.BuildSystemTemplate/BuildComment): variables match
+            // as substrings and the message goes through string.Format, whose
+            // braces throw or silently substitute another variable's value —
+            // "any other text ships literally" was false and led agents into
+            // templates that failed at evaluation time.
+            Assert.Contains("substituted as substrings", description);
+            Assert.Contains("rendered with string.Format", description);
         }
 
         [Theory]
