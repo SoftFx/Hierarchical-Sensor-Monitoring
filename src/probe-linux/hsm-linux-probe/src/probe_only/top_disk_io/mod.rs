@@ -104,7 +104,11 @@ pub fn register<'c>(
     logger: &Logger,
 ) -> Option<Box<dyn Source + 'c>> {
     if !config.enabled {
-        logger.info("top disk I/O: off (topDiskIo.enabled = false)");
+        // Opt-in and not advertised: the default start log does not name it.
+        logger.log(
+            Level::Debug,
+            "top disk I/O: off (topDiskIo.enabled = false)",
+        );
         return None;
     }
     let source = TopDiskIo::new(collector, config, snapshot);

@@ -148,20 +148,23 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
 
    As for the agent, an existing config kept without `--force-config` does not gain `topCpu`.
 
-   **Top disk I/O processes (#1547), every bundle**, after `systemctl daemon-reload` (so the package's
+   **Top disk I/O processes (#1547; opt-in, unadvertised), every bundle**, after `systemctl daemon-reload` (so the package's
    units are known): when the config installed on the host enables the **top-level** `topDiskIo`
    block, `systemctl enable` + `restart` **`hsm-linux-probe-io.service`** (`TopDiskIoUnit`) — the root
    helper the package ships disabled, which alone holds `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE`, reads
    `/proc/<pid>/{stat,io}` and writes `/run/hsm-linux-probe-io/snapshot` for the unprivileged probe;
-   prints `Top disk I/O processes: on in …; started …`. A package without the unit (older than 0.9.0)
-   prints a WARNING and the install goes on. Otherwise, when the helper is enabled or active,
-   `systemctl disable --now` it and say so; else nothing. The probe never gets a drop-in or a
+   the step is one comment line and prints nothing on a host that never enabled the helper, except a
+   WARNING when the block is on and the unit is missing (a package older than 0.9.0; the install goes
+   on). Otherwise, when the helper was enabled or running, it runs `systemctl disable --now` and prints
+   one neutral line (`Stopped and disabled hsm-linux-probe-io.service (not enabled in …/config.json).`),
+   so an operator who enabled it by hand sees that the re-run turned it off; it then deletes
+   `/run/hsm-linux-probe-io` either way. The probe never gets a drop-in or a
    capability for this. The check is the top-CPU one for the key `"topDiskIo"`
    (`LinuxProbeInstallerBundle.TopDiskIoEnabledPattern`, sharing the top-level prefix and the
    enabled-block suffix with `TopCpuEnabledPattern`): top level only, strings as tokens, nested deeper
    than three levels = off. There is **no server switch**: the bundle's `config.json` never carries
    `topDiskIo`, so there is no bundle-switch WARNING — the operator enables the block in the host
-   config and re-runs `install.sh` without `--force-config` (RUNBOOK "Top disk I/O processes").
+   config and re-runs `install.sh` without `--force-config` (RUNBOOK "Advanced").
 4. `systemctl enable --now hsm-linux-probe`, then `restart` (a reinstall picks up the new key/config/CA).
 5. Waits 3 s, prints `systemctl status --no-pager`, exits non-zero if the unit is not active. On success it
    reminds the operator that the downloaded `.tar.gz` still contains the key and should be deleted: the script
@@ -239,7 +242,7 @@ and the pin now names `probe-v0.8.4`.
 | Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
-| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the top disk I/O step (top-level-only `topDiskIo` pattern, never matched by a generated config; `hsm-linux-probe-io.service` enabled and restarted only from an enabling host config after `daemon-reload`, stopped and disabled otherwise and by uninstall, a WARNING for a package without the unit, no drop-in and no capability for the probe), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
+| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the top disk I/O step (top-level-only `topDiskIo` pattern, never matched by a generated config; `hsm-linux-probe-io.service` enabled and restarted only from an enabling host config after `daemon-reload`, stopped, disabled and its snapshot deleted otherwise and by uninstall, no output but a WARNING for a package without the unit, no drop-in and no capability for the probe), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
 
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key

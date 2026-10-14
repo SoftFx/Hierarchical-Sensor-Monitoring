@@ -343,7 +343,7 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "systemctl disable --now \"$UNIT\" 2>/dev/null || true",
-                "# The top disk I/O helper install.sh may have enabled (#1547).",
+                "# topDiskIo helper (advanced, opt-in).",
                 "systemctl disable --now " + TopDiskIoUnit + " 2>/dev/null || true",
                 "rm -rf " + TopDiskIoRuntimeDirectory,
                 "",
@@ -493,35 +493,29 @@ namespace HSMServer.Model.Agent
         /// <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
         /// installed on the host enables the top-level <c>topDiskIo</c> block</b>
         /// (<see cref="TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
-        /// the config; otherwise it disables and stops a helper that is enabled or running, and says so. A
-        /// package older than 0.9.0 has no such unit: enabling prints a WARNING, disabling stays quiet. The
-        /// bundle never enables <c>topDiskIo</c> itself (there is no server switch): an operator enables it in
-        /// the host config and re-runs install.sh (RUNBOOK "Top disk I/O processes"). A config it cannot read
-        /// or recognise counts as "off" — the safe side. uninstall.sh and the package's prerm disable it too.
+        /// the config; otherwise it stops and disables it (one neutral line, only when it was enabled or
+        /// running — an operator who enabled it by hand must see that) and deletes its preserved snapshot.
+        /// The feature is opt-in and not advertised, so on a host that never enabled it the step prints
+        /// nothing but a WARNING when the block is on and the unit is missing (a package older than 0.9.0). The bundle never enables <c>topDiskIo</c>
+        /// itself (there is no server switch): an operator enables it in the host config and re-runs
+        /// install.sh (RUNBOOK "Advanced"). A config it cannot read or recognise counts as "off" — the safe
+        /// side. uninstall.sh and the package's prerm disable it too.
         /// </summary>
         private static string TopDiskIoServiceScript()
         {
             return string.Join("\n",
-                "# Top disk I/O processes (#1547): the root helper that reads /proc/<pid>/io for the unprivileged probe",
-                "# runs when, and only when, the config installed above enables the top-level topDiskIo block.",
+                "# topDiskIo (advanced, opt-in): start/stop the root helper according to the host config.",
                 "IO_UNIT=" + TopDiskIoUnit,
-                "top_disk_io_on=0",
                 "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
                 "  | grep -E '" + TopDiskIoEnabledPattern + "' >/dev/null; then",
-                "  top_disk_io_on=1",
-                "fi",
-                "if [ \"$top_disk_io_on\" -eq 1 ]; then",
-                "  if systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; then",
-                "    echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; started $IO_UNIT (the root helper; the probe itself stays unprivileged).\"",
-                "  else",
+                "  if ! { systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; }; then",
                 "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/" + ConfigName + ", but $IO_UNIT could not be enabled and started (a package older than 0.9.0?); see: journalctl -u $IO_UNIT\" >&2",
                 "  fi",
                 "else",
                 "  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
                 "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
-                "    echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; stopped and disabled $IO_UNIT.\"",
+                "    echo \"Stopped and disabled $IO_UNIT (not enabled in $CONFIG_DIR/" + ConfigName + ").\"",
                 "  fi",
-                "  # Its last snapshot outlives a stop (RuntimeDirectoryPreserve) and lists every process: removed with it.",
                 "  rm -rf " + TopDiskIoRuntimeDirectory,
                 "fi");
         }

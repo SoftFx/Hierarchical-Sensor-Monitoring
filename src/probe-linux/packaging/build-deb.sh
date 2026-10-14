@@ -139,8 +139,7 @@ Homepage: https://github.com/SoftFx/Hierarchical-Sensor-Monitoring
 Description: HSM Linux host probe
  Systemd-hosted probe that reports Linux host metrics into an HSM server
  through the shared native collector: the managed-collector parity set plus
- the probe-only host, disk and Docker Compose sensors, and the root helper
- hsm-linux-probe-io for the top disk I/O sensors (disabled until enabled). Built by
+ the probe-only host, disk and Docker Compose sensors. Built by
  src/probe-linux/packaging/build-deb.sh.
 EOF
 

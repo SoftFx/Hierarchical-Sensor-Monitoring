@@ -117,7 +117,7 @@ The probe registers **two separately pinned sets**:
    `top-cpu.conf` drop-in (`ProtectProc=default`) to see other processes; without it, or under any
    `hidepid`, it runs on what it sees and says so in one INFO line. Cost: ≈ 1 440 records/day per
    name that stays ≥ 1 %. Details: README "Top CPU processes".
-5. **Top disk I/O processes** (#1547, probe-only set; `probe_only/top_disk_io/`) —
+5. **Top disk I/O processes** (#1547, opt-in, unadvertised; probe-only set; `probe_only/top_disk_io/`) —
    `.computer/Top disk writers/<name>` and `Top disk readers/<name>` (Double, `MBytes_sec`, 1 MB =
    1024², every `periodMs` 60 s: names at or above `minBytesPerSec` 1 MiB/s, the fastest `count` 10,
    TTL 5 min, `EnableGrafana`) and `Written per day by process/<name>` / `Read per day by
