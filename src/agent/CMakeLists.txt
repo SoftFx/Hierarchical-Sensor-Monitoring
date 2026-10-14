@@ -2,8 +2,9 @@
 # computer's metrics to an HSM server (epic #1167). It links the in-tree collector library.
 #
 # Target topology:
-#   hsm_agent_config  STATIC  the platform-agnostic config.json parser. Built on EVERY platform so
-#                             the parser unit tests run in any CI lane (no collector / Win32 dep).
+#   hsm_agent_config  STATIC  the platform-agnostic config.json parser + the interactive-launch
+#                             message text (#1559). Built on EVERY platform so their unit tests run
+#                             in any CI lane (no collector / Win32 dep).
 #   hsm_agent_paths   STATIC  agent paths + the protected data-dir DACL (#1279; WIN32 only), shared
 #                             by the exe and the Windows-only ACL tests.
 #   hsm_agent_tests   EXE     name-dispatched config unit tests (+ the ACL tests on Windows).
@@ -20,7 +21,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.5.44 LANGUAGES CXX)
+project(HsmAgent VERSION 0.5.45 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
@@ -48,7 +49,7 @@ endfunction()
 # --- Portable config layer + tests (every platform) ----------------------------------------------
 # cpu_top.cpp moved to the native collector (#1179): SelectTopN + WindowsCpuSampler now live in
 # src/native/collector/src/cpu_top.cpp and are exposed via hsm_collector_enable_top_cpu_sensors.
-add_library(hsm_agent_config STATIC src/config.cpp)
+add_library(hsm_agent_config STATIC src/config.cpp src/launch_hint.cpp)
 target_include_directories(hsm_agent_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(hsm_agent_config PUBLIC cxx_std_17)
 hsm_agent_set_warnings(hsm_agent_config)
@@ -84,7 +85,8 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_topcpu_rejects_bad_config
             agent_update_config_parses_and_defaults
             agent_update_config_rejects_bad_period
-            agent_sensor_group_flag_maps_names)
+            agent_sensor_group_flag_maps_names
+            agent_launch_hint_message_guides_the_operator)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 
@@ -140,8 +142,9 @@ if(WIN32)
         "${TIMESTAMP_CPP}"
     )
     add_dependencies(hsm-agent hsm_agent_timestamp)
-    # winhttp: WinHTTP for self-update HTTP (epic #1174); bcrypt: SHA-256 via Windows CNG
-    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_agent_paths hsm_collector_cpp advapi32 winhttp bcrypt)
+    # winhttp: WinHTTP for self-update HTTP (epic #1174); bcrypt: SHA-256 via Windows CNG;
+    # user32: the interactive-launch message box + window-station check (#1559)
+    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_agent_paths hsm_collector_cpp advapi32 winhttp bcrypt user32)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")
     hsm_agent_set_warnings(hsm-agent)

@@ -1,5 +1,7 @@
 // HSM Agent — entry point. Dispatches on argv:
-//   (no args) / --service   run as an SCM service (StartServiceCtrlDispatcher)
+//   (no args) / --service   run as an SCM service (StartServiceCtrlDispatcher); a bare run that the
+//                           SCM did not start exits 2 and, when interactive, explains itself in a
+//                           message box (#1559)
 //   --console               run AgentRuntime in the foreground (Ctrl-C to stop) for debugging
 //   --install / --uninstall register/remove the auto-start service (requires elevation); --install
 //                           also creates the data dir with its admin-only DACL (#1279)
@@ -185,5 +187,11 @@ int wmain(int argc, wchar_t** argv)
     // with bInitialOwner=FALSE), so just close the handle — the mutex goes away with the last handle.
     if (mutex != nullptr)
         CloseHandle(mutex);
+
+    // #1559: a double-click on the exe otherwise only flashes a console window that closes at once,
+    // which looks like a crash. Only a bare run explains itself (never an explicit --service), and only
+    // after the mutex is gone; the stderr line and exit code stay the same for scripted callers.
+    if (mode.empty() && rc == kNotStartedByScmExitCode)
+        ShowLaunchHintIfInteractive();
     return rc;
 }

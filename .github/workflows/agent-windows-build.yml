@@ -60,6 +60,25 @@ jobs:
       - name: Test (config parser)
         run: ctest --test-dir build/agent -C Release --output-on-failure
 
+      # Bare launch (#1559): with no arguments and no SCM the exe prints one stderr line and exits 2. A
+      # person double-clicking it also gets a message box, but only on an interactive launch: here
+      # stdout/stderr go to files, so the box must be skipped and the run must end on its own. A hang
+      # (the box blocking CI) fails the step after 30 s instead of stalling the job.
+      - name: Bare launch smoke (no arguments, redirected)
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $exe -NoNewWindow -PassThru -RedirectStandardOutput bare-out.txt -RedirectStandardError bare-err.txt
+          $null = $p.Handle # keep the process handle so ExitCode is readable after exit
+          if (-not $p.WaitForExit(30000)) {
+            Stop-Process -Id $p.Id -Force
+            throw "a bare launch with redirected output did not exit within 30 s (message box shown on a non-interactive run?)"
+          }
+          $stderr = Get-Content -Raw -Path bare-err.txt
+          Write-Host "exit $($p.ExitCode); stderr: $stderr"
+          if ($p.ExitCode -ne 2) { throw "a bare launch must exit 2, got $($p.ExitCode)" }
+          if ($stderr -notmatch 'not started by the service control manager') { throw "a bare launch must explain itself on stderr" }
+
       # Service smoke (W9): the GitHub windows runner is admin, so exercise the real SCM lifecycle —
       # --install registers an auto-start service, --uninstall removes it — and a short --console run
       # proves the worker survives an unreachable server (no crash) instead of exiting.

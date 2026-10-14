@@ -3,6 +3,7 @@
 // every CI lane can run them; the data-dir DACL tests (#1279) are compiled on Windows only.
 
 #include "agent/config.hpp"
+#include "agent/launch_hint.hpp"
 
 #ifdef _WIN32
 #include "agent/dir_acl.hpp"
@@ -296,6 +297,22 @@ namespace
         Check(process != nullptr && !(c.*process), "process flag reads its default (off)");
         c.*process = true;
         Check(c.sensors_process, "writing via the pointer flips the right field");
+    }
+
+    // #1559: a double-click on hsm-agent.exe shows this text in a message box instead of a console that
+    // flashes and closes. The box itself is UI and not tested; its wording must carry the four facts an
+    // operator needs: what the exe is, how to install it, how to run it in the foreground, where logs go.
+    void LaunchHintMessageGuidesTheOperator()
+    {
+        const std::wstring message = hsm::agent::BuildInteractiveLaunchMessage("1.2.3");
+        const auto contains = [&message](const std::wstring& text) { return message.find(text) != std::wstring::npos; };
+
+        Check(contains(L"HSM Agent 1.2.3 is a Windows service"), "names the product, its version and what it is");
+        Check(contains(L"To install, run install-hsmagent-service.cmd from the downloaded bundle as Administrator."), "install instruction");
+        Check(contains(L"For a foreground run: hsm-agent.exe --console --config <path>"), "foreground-run instruction");
+        Check(contains(L"Logs: %ProgramData%\\HSM Agent\\logs"), "log location");
+        Check(contains(L"README.txt"), "points at the bundle README");
+        Check(std::wstring(hsm::agent::kLaunchHintTitle) == L"HSM Agent", "message box title");
     }
 
 #ifdef _WIN32
@@ -839,6 +856,7 @@ namespace
             { "agent_update_config_parses_and_defaults", UpdateConfigParsesAndDefaults },
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
             { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
+            { "agent_launch_hint_message_guides_the_operator", LaunchHintMessageGuidesTheOperator },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
