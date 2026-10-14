@@ -136,7 +136,7 @@ turns the sensor to Timeout on the server instead of leaving its last value look
 not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
 eleven times every 5 seconds on garage-server (one stats call per running container); the disk
 counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
-also drives the daily write/read totals), as do top-CPU and top disk I/O (60 s), the shared collector's own bars,
+also drives the daily write/read totals), as do top-CPU (60 s), the shared collector's own bars,
 the heartbeat and the dispatch, which this decision did not touch.
 
 ### Host (#1476)
@@ -533,13 +533,20 @@ the baseline saw.
 at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
 is one read of `/proc/stat` plus one small read per process per minute.
 
-### Top disk I/O processes (#1547)
+### Advanced, opt-in (not advertised)
+
+The sensors below are **off by default**, need a **root helper** (`hsm-linux-probe-io`) next to the
+probe, and are enabled **only by hand-editing `/etc/hsm-linux-probe/config.json`** — the shipped
+skeleton, the server UI and the server bundle do not show them. This section is still their
+canonical documentation.
+
+#### Top disk I/O processes (#1547)
 
 Which **process** writes and reads the disks the most — now, and over a day. The disk sensors
 report a whole disk (`Average disk write speed on <name> disk`, `Written per day on <name> disk`)
 and Docker reports per container; these four families report per process name. **Off unless the
 top-level `topDiskIo` block enables it** (not under `probe`, like `topCpu`); the server has no
-switch for it — enable it in the host's config (RUNBOOK "Top disk I/O processes").
+switch for it — enable it in the host's config (RUNBOOK "Advanced").
 
 | Sensor | Type · unit | Posted |
 |---|---|---|
@@ -932,6 +939,10 @@ Placeholders only — **no secrets**:
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See
   [Top CPU processes](#top-cpu-processes-1479); it also needs the `top-cpu.conf` drop-in.
+
+**Advanced, opt-in (not advertised).** Absent from the shipped skeleton and never written by the
+server bundle; added only by hand to `/etc/hsm-linux-probe/config.json`:
+
 * `topDiskIo` (optional, **top level** like `topCpu`; one under `probe` is ignored): `enabled`
   (`false`), `periodMs` (`60000`), `minBytesPerSec` (`1048576` = 1 MiB/s, for the writers and the
   readers separately), `count` (`10`, for the speeds and the per-day totals alike) — validated only

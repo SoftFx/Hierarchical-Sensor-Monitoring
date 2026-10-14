@@ -99,52 +99,6 @@ sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
 (the same by hand on a host installed from the release). Without the drop-in the probe runs and
 logs one INFO line (`/proc is mounted with hidepid=invisible`).
 
-### Top disk I/O processes
-
-`topDiskIo` in `config.json` (off by default; README "Top disk I/O processes"). The server bundle
-never enables it: add it **at the top level** of `/etc/hsm-linux-probe/config.json` (one under
-`probe` is ignored)
-
-```json
-"topDiskIo": { "enabled": true, "periodMs": 60000, "minBytesPerSec": 1048576, "count": 10 }
-```
-
-and re-run the bundle's `sudo ./install.sh` (without `--force-config`, so the edited config is
-kept). The probe itself stays unprivileged: reading other users' `/proc/<pid>/io` is done by the
-**root helper** `hsm-linux-probe-io.service`, shipped in the same package and **disabled**.
-`install.sh` enables and (re)starts it when — and only when — the config on the host enables the
-block, and stops and disables it otherwise (prints `Top disk I/O processes: on in …; started
-hsm-linux-probe-io.service` / `… off in …; stopped and disabled …`). By hand (or on a host
-installed from the release):
-
-```bash
-sudo systemctl enable --now hsm-linux-probe-io     # after enabling the block
-sudo systemctl restart hsm-linux-probe
-sudo systemctl disable --now hsm-linux-probe-io    # after disabling it
-```
-
-The helper holds the only two capabilities (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`), runs as root
-without network, reads only `/proc/<pid>/stat` and `/proc/<pid>/io` (and the `topDiskIo` block of
-the config) and writes one file, `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which
-the probe reads. After changing `periodMs`, restart both units (or re-run `install.sh`, which
-restarts both).
-
-**Check:**
-
-```bash
-systemctl is-active hsm-linux-probe-io                       # active
-ls -l /run/hsm-linux-probe-io/snapshot                       # -rw-r----- root hsm-probe, rewritten every periodMs
-head -1 /run/hsm-linux-probe-io/snapshot                     # hsm-linux-probe-io 1 seq=… mono_ns=… wall_ms=… kind=regular
-grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status      # 0000000000000000
-grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe-io)/status   # 0000000000080004
-```
-
-and the probe's start log says `baseline over N processes, N with readable I/O counters`.
-**Snapshot stale:** when the helper is not running (not enabled, stopped, failing) the probe logs
-**one WARN line per outage** (`no fresh snapshot from the helper …`, naming the unit) and
-posts nothing for these sensors; `systemctl status hsm-linux-probe-io` and `journalctl -u
-hsm-linux-probe-io` say why. The first fresh snapshot afterwards is one INFO line; a helper restart is no outage (its unit keeps the last snapshot, `RuntimeDirectoryPreserve=yes`, and the probe measures from the last good one).
-
 ## Upgrade
 
 ```bash
@@ -288,3 +242,55 @@ the unit's budget of `MemoryMax=64M` and `CPUQuota=5%`:
 Both on a 4-core Debian 13 host, with no restarts and no errors in the journal. Process RSS
 including shared pages (libcurl, OpenSSL) is higher, about 17–20 MB. History cost on the server:
 see the records/day columns in the [README](README.md#probe-only-sensors).
+
+## Advanced (opt-in, not advertised)
+
+Off by default and not shown by the config skeleton or the server bundle; enabled only by
+hand-editing `/etc/hsm-linux-probe/config.json`.
+
+### Top disk I/O processes (#1547)
+
+`topDiskIo` in `config.json` (off by default; README "Advanced, opt-in", "Top disk I/O processes"). The server bundle
+never enables it: add it **at the top level** of `/etc/hsm-linux-probe/config.json` (one under
+`probe` is ignored)
+
+```json
+"topDiskIo": { "enabled": true, "periodMs": 60000, "minBytesPerSec": 1048576, "count": 10 }
+```
+
+and re-run the bundle's `sudo ./install.sh` (without `--force-config`, so the edited config is
+kept). The probe itself stays unprivileged: reading other users' `/proc/<pid>/io` is done by the
+**root helper** `hsm-linux-probe-io.service`, shipped in the same package and **disabled**.
+`install.sh` enables and (re)starts it when — and only when — the config on the host enables the
+block, and quietly stops and disables it (and deletes its last snapshot) otherwise; it prints
+nothing about it but a WARNING when the block is on and the unit is missing (a package older than
+0.9.0). By hand (or on a host installed from the release):
+
+```bash
+sudo systemctl enable --now hsm-linux-probe-io     # after enabling the block
+sudo systemctl restart hsm-linux-probe
+sudo systemctl disable --now hsm-linux-probe-io    # after disabling it
+```
+
+The helper holds the only two capabilities (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`), runs as root
+without network, reads only `/proc/<pid>/stat` and `/proc/<pid>/io` (and the `topDiskIo` block of
+the config) and writes one file, `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which
+the probe reads. After changing `periodMs`, restart both units (or re-run `install.sh`, which
+restarts both).
+
+**Check:**
+
+```bash
+systemctl is-active hsm-linux-probe-io                       # active
+ls -l /run/hsm-linux-probe-io/snapshot                       # -rw-r----- root hsm-probe, rewritten every periodMs
+head -1 /run/hsm-linux-probe-io/snapshot                     # hsm-linux-probe-io 1 seq=… mono_ns=… wall_ms=… kind=regular
+grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status      # 0000000000000000
+grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe-io)/status   # 0000000000080004
+```
+
+and the probe's start log says `baseline over N processes, N with readable I/O counters`.
+**Snapshot stale:** when the helper is not running (not enabled, stopped, failing) the probe logs
+**one WARN line per outage** (`no fresh snapshot from the helper …`, naming the unit) and
+posts nothing for these sensors; `systemctl status hsm-linux-probe-io` and `journalctl -u
+hsm-linux-probe-io` say why. The first fresh snapshot afterwards is one INFO line; a helper restart is no outage (its unit keeps the last snapshot, `RuntimeDirectoryPreserve=yes`, and the probe measures from the last good one).
+

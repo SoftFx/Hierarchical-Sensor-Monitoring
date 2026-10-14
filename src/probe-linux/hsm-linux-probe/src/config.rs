@@ -650,19 +650,10 @@ mod tests {
             (top.period_ms, top.min_percent, top.count),
             (defaults.period_ms, defaults.min_percent, defaults.count)
         );
-        // So is the topDiskIo block (#1547).
-        assert!(example.contains("\"topDiskIo\""));
-        let io = &config.top_disk_io;
-        let defaults = TopDiskIoConfig::default();
-        assert!(!io.enabled);
-        assert_eq!(
-            (io.period_ms, io.min_bytes_per_sec, io.count),
-            (
-                defaults.period_ms,
-                defaults.min_bytes_per_sec,
-                defaults.count
-            )
-        );
+        // Top disk I/O (#1547) is opt-in and not advertised: the shipped skeleton does not show the
+        // block, and its absence means off.
+        assert!(!example.contains("topDiskIo"));
+        assert!(!config.top_disk_io.enabled);
     }
 
     #[test]
