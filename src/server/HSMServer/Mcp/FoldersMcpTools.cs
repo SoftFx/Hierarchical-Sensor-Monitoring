@@ -34,7 +34,7 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "list_folders", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "list_folders", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Lists access-grouping folders visible to the token's owner, ordered by name — the valid folderId values for alert templates (NOT the tree's nested products; get_node serves those). Each folder carries the products the caller can see (a folder role never grants product sight); bound chats, default-chats routing and retention defaults are null unless the owner is an admin or the folder's manager. Folders have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpFoldersResult ListFolders(
             [Description("Maximum folders to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
@@ -55,7 +55,7 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "get_folder", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "get_folder", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Gets one access-grouping folder by id — the products the caller can see; bound chats, default-chats routing and retention defaults answer only an admin or the folder's manager (null otherwise). Unknown and invisible ids answer the same error.")]
         public FolderDto GetFolder(
             [Description("Folder id.")] Guid folderId) =>
