@@ -203,6 +203,8 @@ namespace hsm::agent
             return;
 
         const std::wstring message = BuildInteractiveLaunchMessage(HSM_AGENT_VERSION);
-        MessageBoxW(nullptr, message.c_str(), kLaunchHintTitle, MB_OK | MB_ICONINFORMATION);
+        // MB_SETFOREGROUND: with Windows Terminal as the default console host the console window belongs to
+        // another process, and an owner-less box could open behind it and look like a hang.
+        MessageBoxW(nullptr, message.c_str(), kLaunchHintTitle, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
     }
 } // namespace hsm::agent
