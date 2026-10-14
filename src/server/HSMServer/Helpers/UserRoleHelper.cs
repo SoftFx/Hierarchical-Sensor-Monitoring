@@ -35,6 +35,12 @@ namespace HSMServer.Helpers
             return user.IsAdmin;
         }
 
+        // The Downloads page hands out bundles that carry a product access key; its endpoints are admin-only (#1550).
+        public static bool IsDownloadsPageAllowed(User user)
+        {
+            return user.IsAdmin;
+        }
+
         public static bool IsChatsPageAllowed(User user)
         {
             return user.IsAdmin;

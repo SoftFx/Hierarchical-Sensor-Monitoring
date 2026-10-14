@@ -61,8 +61,7 @@ namespace HSMServer.Controllers
             // Without a web root there is no wwwroot/agent/ to read from; report the same graceful 503
             // as a missing binary instead of silently probing a relative "agent/hsm-agent.exe".
             if (string.IsNullOrEmpty(_environment.WebRootPath))
-                return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                    "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, AgentInstallerBundle.NotStagedMessage);
 
             var exePath = Path.Combine(_environment.WebRootPath, "agent", AgentInstallerBundle.ExeName);
 
@@ -75,8 +74,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                    "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, AgentInstallerBundle.NotStagedMessage);
             }
 
             var (address, port) = AgentConnectionResolver.Resolve(

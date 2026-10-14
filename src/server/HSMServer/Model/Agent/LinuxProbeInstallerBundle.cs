@@ -161,6 +161,20 @@ namespace HSMServer.Model.Agent
         }
 
         /// <summary>
+        /// The probe version a staged package name carries (<c>hsm-linux-probe_&lt;ver&gt;_&lt;arch&gt;.deb</c>,
+        /// the name staging enforces, #1418), or null when the name does not have that shape.
+        /// </summary>
+        public static string PackageVersion(string packageFileName)
+        {
+            var name = Path.GetFileName(packageFileName ?? string.Empty);
+            if (!name.StartsWith(PackagePrefix, StringComparison.Ordinal) || !name.EndsWith(PackageExtension, StringComparison.Ordinal))
+                return null;
+
+            var parts = name[PackagePrefix.Length..^PackageExtension.Length].Split('_');
+            return parts.Length == 2 && parts[0].Length > 0 && parts[1].Length > 0 ? parts[0] : null;
+        }
+
+        /// <summary>
         /// Returns why the resolved address cannot be baked into a probe config, or null when it can.
         /// The probe refuses plaintext (its config parser rejects http://), so a bundle pointing at an
         /// http:// address would install and then never connect.

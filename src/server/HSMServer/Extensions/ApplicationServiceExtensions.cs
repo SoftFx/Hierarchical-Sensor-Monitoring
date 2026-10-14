@@ -95,6 +95,9 @@ namespace HSMServer.ServiceExtensions
             // Folder entity, not the tree's nested products).
             services.AddScoped<FoldersReadService>();
 
+            // The Downloads page (#1550): products + staged agent/probe state for the admin menu entry.
+            services.AddScoped<HSMServer.Model.Agent.IDownloadsPageService, HSMServer.Model.Agent.DownloadsPageService>();
+
             // The schedule write engine — the schedules' twin of
             // PolicyAdministrationService: transport-agnostic write decisions
             // behind the REST controller and the MCP write tools. Scoped like
