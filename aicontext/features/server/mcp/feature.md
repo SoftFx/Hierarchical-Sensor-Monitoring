@@ -1,6 +1,6 @@
 # Feature: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-10-12 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-13 | Canonical: yes
 > Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders (reads), plus the phase-2 WRITE tools for sensor policies, alert templates and alert schedules. REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
@@ -19,6 +19,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 - **Always on, no config toggle**: like `/api/v1`, the endpoint ships enabled behind its auth; there is no feature flag to drift.
 - **Tool metadata reflects the operation**: reads declare `ReadOnly=true, Idempotent=true`; writes declare `ReadOnly=false` with `Idempotent=true` only for the full-replace updates (`update_*`), never for creates/deletes — clients can surface the safety hints. The flags are METADATA: the enforcement is the credential policy plus the services' per-call authorization.
 - **Compactness rule**: only `get_sensor` embeds the current value (`lastValue`); `find_sensors` returns compact summaries (id, path, type, status, unit), mapped straight from the cache models so the rule holds in the WORK, not only on the wire (#1392 r5 — mapping the full DTO first would materialize current-value payloads just to discard them). No tool serializes file content (the REST File-value metadata rule holds).
+- **Field-value documentation travels in the schemas** (#1545): every record and property of the DTOs the MCP tools bind carries a `[Description]` — the schema exporter (Microsoft.Extensions.AI `AIJsonUtilities`) surfaces only those attributes into `tools/list` input schemas, never the XML doc comments. The enum tables (SensorType/PolicyProperty/PolicyOperation byte codes on the template DTOs, enum names on the policy DTOs), the round-trip rules, and the schedule YAML grammar (see `AlertScheduleYamlDocs`) are therefore machine-readable on the wire. A new DTO field of an MCP-bound type gets its `[Description]` in the same change, or the agent is back to guessing values; a wire test pins the presence of the tables so SDK drift or a DTO refactor that drops them fails loudly. The wire escapes non-ASCII conservatively (apostrophes travel as `\u0027`) — assertions about schema text must decode the JSON first.
 - **Anti-enumeration carried into MCP**: unknown and invisible ids answer the SAME tool-error text (`"The requested resource was not found."`); out-of-sight items are silently absent from lists; the schedule gate denies before the provider is queried.
 
 ## Primary Workflows
@@ -88,6 +89,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/McpToolWriteErrors.cs` | `PolicyWriteResult` -> tool error text, the same strings the REST arm produces (conflict detail pointers included) |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
+| `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleYamlDocs.cs` | The schedule YAML grammar text (`[Description]` payload) shared by the schedule upsert/read DTOs — keep in sync with `AlertScheduleParser` |
 | `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication; fail-closed policy check on matched `/mcp` endpoints |
 | `src/server/HSMServer/Middleware/LegacyBearerGuardMiddleware.cs` | `IsTokenRoutePath`: `/api/v1` + the exact `/mcp` endpoint (not the prefix) — the bearer credential family |
 | `src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs` | `AddMcpServer().WithHttpTransport().WithTools<…>()` + `MapMcp` wiring context |
@@ -141,3 +143,4 @@ No dedicated UI. Operators provision the same personal API tokens as for REST (P
 - ~~The alert tools mirror the REST controllers' list/get logic directly~~ — RESOLVED by #1393: both surfaces render `AlertReadService` (Model/ManagementApi/Alerts/), the visibility rules exist in one place.
 - No `Origin`-header validation (the MCP spec's DNS-rebinding defence for Streamable HTTP servers). Deliberate: the endpoint admits only the HsmApiToken bearer — a browser page can neither attach that credential nor satisfy `ManagementPolicy` with cookies — so the browser-based rebinding vector has no credential to ride. Revisit if a browser-reachable credential kind is ever admitted to `/mcp`.
 - No E2E/Playwright coverage yet; the wire-level MCP handshake (protocol headers, JSON-RPC envelope) is the SDK's tested surface, ours starts at the tool classes.
+- Tool OUTPUT schemas are not emitted today (the SDK emits `outputSchema` only for tools opted into structured content — `UseStructuredContent`, default false). The read-DTO `[Description]`s therefore serve Swagger/IDE, not the MCP wire; flipping the emission is a wire-behavior change tracked by #1553.
