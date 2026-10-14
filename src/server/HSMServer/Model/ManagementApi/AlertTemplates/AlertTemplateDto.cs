@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+using HSMServer.Model.ManagementApi.Alerts;
 
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
@@ -117,8 +118,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         [Description("Disabled policies stay stored but never fire.")]
         public bool IsDisabled { get; init; }
 
-        /// <summary>Alert message template (may reference sensor values).</summary>
-        [Description("Alert message template (may reference alert variables like $product, $path, $status, $comment).")]
+        /// <summary>Alert message template; the full alert-variable table (all 25, with meanings) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
+        [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 
         /// <summary>UI icon name.</summary>
@@ -168,10 +169,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count,
         /// 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize,
         /// 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
-        /// Which properties exist depends on the sensor type (bar types add Min..EmaCount
-        /// incl. EmaMin/EmaMax/EmaMean/EmaCount; EmaValue on numeric single-value types).
+        /// The availability matrix by sensor type lives in
+        /// <see cref="AlertPropertyMatrixDocs.Matrix"/> (exhaustive, negatives included).
         /// </summary>
-        [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. Which properties exist depends on the sensor type (bar types add Min..EmaCount incl. EmaMin/EmaMax/EmaMean/EmaCount; EmaValue on numeric single-value types).")]
+        [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. " + AlertPropertyMatrixDocs.Matrix)]
         public byte Property { get; init; }
     }
 

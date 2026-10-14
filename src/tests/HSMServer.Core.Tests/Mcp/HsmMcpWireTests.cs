@@ -227,6 +227,22 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("LessThanOrEqual, LessThan, GreaterThan, GreaterThanOrEqual", policy);
             Assert.Contains("Immediately (default), FiveMinutes", policy);
             Assert.Contains("FromParent (the parent node's routing)", policy);
+
+            // #1556: the full alert-template variable table and the property x
+            // sensor-type matrix on BOTH write surfaces. The variable fragments
+            // are derived from AlertState.VariablesHelp at runtime — the
+            // registry's own words — while AlertConditionDocsTests guards the
+            // full sets against the code (every variable, the exact matrix).
+            foreach (var (variable, help) in Core.Model.Policies.AlertState.VariablesHelp)
+            {
+                Assert.Contains($"{variable} — {help}", policy);
+                Assert.Contains($"{variable} — {help}", template);
+            }
+
+            Assert.Contains("every type — Status, Comment, NewSensorData", policy);
+            Assert.Contains("Boolean — nothing beyond the common set", policy);
+            Assert.Contains("IntegerBar, DoubleBar — Min, Max, Mean", policy);
+            Assert.Contains("every type — Status, Comment, NewSensorData", template);
         }
 
 

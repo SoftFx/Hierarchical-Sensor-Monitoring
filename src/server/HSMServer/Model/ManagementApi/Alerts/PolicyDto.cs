@@ -143,13 +143,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
     public sealed record AlertConditionDto
     {
         /// <summary>
-        /// The sensor property compared (PolicyProperty enum name).
-        /// Common to every type: Status, Comment, NewSensorData.
-        /// Value types: Value; String adds Length; File adds OriginalSize; bar types add
-        /// Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount;
-        /// numeric single-value types add EmaValue.
+        /// The sensor property compared (PolicyProperty enum name). The availability
+        /// matrix by sensor type lives in <see cref="AlertPropertyMatrixDocs.Matrix"/>
+        /// (exhaustive, negatives included; mirrors the web editor's condition surface).
         /// </summary>
-        [Description("The sensor property compared (PolicyProperty enum name). Common to every type: Status, Comment, NewSensorData. Value types: Value; String adds Length; File adds OriginalSize; bar types add Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount; numeric single-value types add EmaValue.")]
+        [Description("The sensor property compared (PolicyProperty enum name). " + AlertPropertyMatrixDocs.Matrix)]
         public string Property { get; init; }
 
         /// <summary>
@@ -196,8 +194,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
     [Description("The notification effect of a policy: what is sent and on which cadence.")]
     public sealed record AlertNotificationDto
     {
-        /// <summary>Message template, may reference alert variables ($product, $path, $status, $comment, $operation, $target, $prevStatus).</summary>
-        [Description("Message template, may reference alert variables ($product, $path, $status, $comment, $operation, $target, $prevStatus).")]
+        /// <summary>Message template; the full alert-variable table (all 25, with meanings) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
+        [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 
         /// <summary>Re-send cadence of a still-triggered policy (AlertRepeatMode enum name). Repeat table: Immediately (default), FiveMinutes, TenMinutes, FifteenMinutes, ThirtyMinutes, Hourly, Daily, Weekly.</summary>
