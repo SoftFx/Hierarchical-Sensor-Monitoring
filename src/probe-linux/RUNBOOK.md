@@ -262,7 +262,8 @@ and re-run the bundle's `sudo ./install.sh` (without `--force-config`, so the ed
 kept). The probe itself stays unprivileged: reading other users' `/proc/<pid>/io` is done by the
 **root helper** `hsm-linux-probe-io.service`, shipped in the same package and **disabled**.
 `install.sh` enables and (re)starts it when — and only when — the config on the host enables the
-block, and quietly stops and disables it (and deletes its last snapshot) otherwise; it prints
+block, and stops and disables it otherwise — printing one neutral `Stopped and disabled …` line when
+it was enabled or running, nothing when it never was — and deletes its last snapshot; it prints
 nothing about it but a WARNING when the block is on and the unit is missing (a package older than
 0.9.0). By hand (or on a host installed from the release):
 

@@ -1057,9 +1057,10 @@
             <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
             installed on the host enables the top-level <c>topDiskIo</c> block</b>
             (<see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
-            the config; otherwise it quietly stops and disables it and deletes its preserved snapshot. The
-            feature is opt-in and not advertised, so the step prints nothing but a WARNING when the block is
-            on and the unit is missing (a package older than 0.9.0). The bundle never enables <c>topDiskIo</c>
+            the config; otherwise it stops and disables it (one neutral line, only when it was enabled or
+            running — an operator who enabled it by hand must see that) and deletes its preserved snapshot.
+            The feature is opt-in and not advertised, so on a host that never enabled it the step prints
+            nothing but a WARNING when the block is on and the unit is missing (a package older than 0.9.0). The bundle never enables <c>topDiskIo</c>
             itself (there is no server switch): an operator enables it in the host config and re-runs
             install.sh (RUNBOOK "Advanced"). A config it cannot read or recognise counts as "off" — the safe
             side. uninstall.sh and the package's prerm disable it too.
