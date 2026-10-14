@@ -1763,11 +1763,13 @@
             Path patterns the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.
             Matching semantics (PathTemplateConverter): each pattern is matched against the sensor's FULL path,
             anchored at both ends and including the product-name first segment ("Root" in the example is a product
-            name, not a keyword) — a pattern without '/' can never match (every sensor path has at least
-            Product/SensorName). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may
+            name, not a keyword). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may
             cover part of a segment ("Root/To*" matches "Root/Total"). There is no multi-segment or any-depth
-            wildcard — '**' is two adjacent single-segment '*'s, not a glob "any depth" — so the matched depth is
-            fixed by the number of segments in the pattern.
+            wildcard — '**' is two adjacent single-segment '*'s, not a glob "any depth". These segment rules are
+            guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex
+            metacharacters in them stay live — notably '.' matches any character including '/', so "Product.cpu"
+            (no '/') does match "Product/cpu". A pattern of literals without '/' can never match (every sensor path
+            has at least Product/SensorName).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies">

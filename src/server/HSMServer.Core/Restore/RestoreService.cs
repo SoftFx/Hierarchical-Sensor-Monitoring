@@ -313,8 +313,10 @@ namespace HSMServer.Core.Restore
                     // matched no sensors at all. The save persisted, so it is
                     // not an error — the entries name the sensors whose alerts
                     // were not created / the dead patterns, capped the way the
-                    // schedule-detach flash is (first five + "and N more"; the
-                    // journal holds every record).
+                    // schedule-detach flash is (first five + "and N more"; for
+                    // policy rejections the journal holds every record —
+                    // zero-match warnings are never journaled, so dead patterns
+                    // past the cap are lost).
                     if (warnings is { Count: > 0 })
                         outcome += $"; {warnings.Count} warning(s): {SummarizeWarnings(warnings)}";
                 }

@@ -233,11 +233,21 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public async Task PathMatchingNoSensors_ModelStateValid()
+        public async Task PathMatchingNoSensors_SaveProceedsWithZeroMatchWarning()
         {
             // Wildcard path with no current matches (future sensor) must be allowed.
+            // Since #1565 such a save is not a clean Ok either: the zero-match entry
+            // rides the #1401 warnings channel as success:true + warnings JSON — the
+            // payload the cookie-UI page renders in its post-save modal. Mirrors the
+            // cache-level pin in TemplatePathZeroMatchWarningTests.
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
+
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
+                {
+                    new("*/futureSensor", "path pattern matched no sensors in the template's folder"),
+                })));
 
             var controller = CreateController();
             var data = BuildData((byte)SensorType.Integer, "*/futureSensor");
@@ -245,7 +255,15 @@ namespace HSMServer.Core.Tests.Controllers
             var result = await controller.AlertTemplate(data);
 
             Assert.True(controller.ModelState.IsValid);
-            Assert.IsType<OkResult>(result);
+            var json = Assert.IsType<JsonResult>(result);
+
+            using var doc = JsonDocument.Parse(JsonSerializer.Serialize(json.Value));
+            Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+
+            var warnings = doc.RootElement.GetProperty("warnings").EnumerateArray().ToList();
+            Assert.Single(warnings);
+            Assert.Equal("*/futureSensor: path pattern matched no sensors in the template's folder",
+                warnings[0].GetString());
         }
 
         // #1401: a save that persisted while a matching sensor rejected an
