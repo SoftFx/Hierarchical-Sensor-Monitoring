@@ -255,6 +255,26 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("every type — Status, Comment, NewSensorData", template);
             Assert.Contains("Boolean — nothing beyond the common set", template);
             Assert.Contains("IntegerBar, DoubleBar — Min, Max, Mean", template);
+
+            // #1565: the path-pattern MATCHING SEMANTICS — the one field where
+            // Unix-glob intuition submits silently-dead patterns ('*Total CPU*'
+            // has no '/', so it can never match; '**' is not an any-depth
+            // wildcard). The facts live in PathTemplateConverter's behavior;
+            // these assertions pin that they reach the agent through the wire.
+            Assert.Contains("matched against the sensor's FULL path", template);
+            Assert.Contains("product-name first segment", template);
+            Assert.Contains("cannot cross '/'", template);
+            Assert.Contains("no multi-segment or any-depth wildcard", template);
+
+            // #1565, output side: the write echo's warnings field names the
+            // zero-match diagnostic class, and the warning entry's sensor field
+            // documents carrying the PATTERN itself when nothing matched.
+            string OutputDescriptions(ModelContextProtocol.Protocol.Tool tool) =>
+                string.Join("\n", AllDescriptions(tool.OutputSchema!.Value));
+
+            var templateEcho = OutputDescriptions(tools["create_alert_template"]);
+            Assert.Contains("path patterns that matched NO sensors", templateEcho);
+            Assert.Contains("or the path pattern that matched no sensors", templateEcho);
         }
 
 

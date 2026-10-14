@@ -1759,7 +1759,16 @@
             <summary>Target folder id; required on create and update.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Paths">
-            <summary>Path templates the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.</summary>
+            <summary>
+            Path patterns the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.
+            Matching semantics (PathTemplateConverter): each pattern is matched against the sensor's FULL path,
+            anchored at both ends and including the product-name first segment ("Root" in the example is a product
+            name, not a keyword) — a pattern without '/' can never match (every sensor path has at least
+            Product/SensorName). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may
+            cover part of a segment ("Root/To*" matches "Root/Total"). There is no multi-segment or any-depth
+            wildcard — '**' is two adjacent single-segment '*'s, not a glob "any depth" — so the matched depth is
+            fixed by the number of segments in the pattern.
+            </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies">
             <summary>TTL alert policies; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls"/> (same length, matched by position).</summary>
@@ -1775,19 +1784,22 @@
             Output-only apply diagnostics of THIS write: template policies that matching
             sensors REJECTED at apply time — the save persisted, but each listed alert was
             NOT created on that sensor (e.g. a Value condition that a bar sensor's type
-            does not offer). Set only on create/update responses with rejections; absent
+            does not offer) — and, since #1565, path patterns that matched NO sensors
+            (a dead pattern the save still persists; check it against the `paths`
+            matching rules — product-name prefix, segment-local '*', fixed depth).
+            Set only on create/update responses with diagnostics; absent
             on reads and on clean writes (WhenWritingNull — a warning-free response keeps
             its pre-warnings byte shape); ignored when sent by a client.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto">
-            <summary>One apply warning: the alert was not created on this sensor.</summary>
+            <summary>One apply warning: the alert was not created on this sensor, or the path pattern matched no sensors at all.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto.Sensor">
-            <summary>Full path of the sensor that rejected the policy.</summary>
+            <summary>Full path of the sensor that rejected the policy, or the path pattern that matched no sensors.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateWarningDto.Reason">
-            <summary>Why the sensor refused the policy (the validation reason).</summary>
+            <summary>Why the sensor refused the policy (the validation reason), or why the pattern matched nothing.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto">
             <summary>

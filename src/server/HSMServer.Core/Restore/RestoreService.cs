@@ -309,13 +309,14 @@ namespace HSMServer.Core.Restore
 
                     // #1401: the restore applied the template, but some
                     // matching sensors refused individual policies (per-policy
-                    // validation noise). The save persisted, so it is not an
-                    // error — the warnings name the sensors whose alerts were
-                    // not created, capped the way the schedule-detach flash is
-                    // (first five + "and N more"; the journal holds every
-                    // record).
+                    // validation noise), or — since #1565 — some path patterns
+                    // matched no sensors at all. The save persisted, so it is
+                    // not an error — the entries name the sensors whose alerts
+                    // were not created / the dead patterns, capped the way the
+                    // schedule-detach flash is (first five + "and N more"; the
+                    // journal holds every record).
                     if (warnings is { Count: > 0 })
-                        outcome += $"; {warnings.Count} alert(s) not applied: {SummarizeWarnings(warnings)}";
+                        outcome += $"; {warnings.Count} warning(s): {SummarizeWarnings(warnings)}";
                 }
             }
             catch (OperationCanceledException)
