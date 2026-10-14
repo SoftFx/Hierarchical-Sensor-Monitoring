@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -181,6 +182,73 @@ namespace HSMServer.Core.Tests.Mcp
                 Assert.IsType<TextContentBlock>(Assert.Single(error.Content)).Text);
 
             _cache.Verify(c => c.GetProducts(), Times.AtLeastOnce);
+        }
+
+
+        [Fact]
+        public async Task Wire_ToolSchemasCarryTheFieldValueDocumentation()
+        {
+            // #1545: the agent-facing documentation of the write DTOs — the enum
+            // tables and the schedule YAML grammar — must reach the wire through
+            // the tools/list schemas. The schema exporter surfaces only
+            // [Description] attributes (XML doc comments never travel); a DTO
+            // refactor or an SDK drift that drops them fails here instead of
+            // silently returning the agent to guessing field values.
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var tools = (await client.ListToolsAsync())
+                .ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
+
+            // The wire escapes non-ASCII conservatively (apostrophes travel as
+            // \u0027), so the assertions run against the DECODED description
+            // strings, not the raw JSON text.
+            string Descriptions(ModelContextProtocol.Protocol.Tool tool) =>
+                string.Join("\n", AllDescriptions(tool.InputSchema));
+
+            // The template surface carries the byte-coded enum tables.
+            var template = Descriptions(tools["create_alert_template"]);
+            Assert.Contains("0=Boolean, 1=Integer", template);
+            Assert.Contains("0=LessThanOrEqual, 1=LessThan", template);
+            Assert.Contains("20=Value, 101=Min", template);
+            Assert.Contains("26784000000000=Month", template);
+            Assert.Contains("0=Immediately, 5=FiveMinutes", template);
+
+            // The schedule surface carries the YAML grammar.
+            var schedule = Descriptions(tools["create_alert_schedule"]);
+            Assert.Contains("daySchedules", schedule);
+            Assert.Contains("customScheduleDates", schedule);
+            Assert.Contains("start: 09:00", schedule);
+
+            // The policy surface carries the name tables.
+            var policy = Descriptions(tools["create_sensor_policy"]);
+            Assert.Contains("LessThanOrEqual, LessThan, GreaterThan, GreaterThanOrEqual", policy);
+            Assert.Contains("Immediately (default), FiveMinutes", policy);
+            Assert.Contains("FromParent (the parent node's routing)", policy);
+        }
+
+
+        private static IEnumerable<string> AllDescriptions(System.Text.Json.JsonElement schema)
+        {
+            if (schema.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in schema.EnumerateObject())
+                {
+                    if (property.Name == "description" && property.Value.ValueKind == JsonValueKind.String)
+                        yield return property.Value.GetString()!;
+                    else
+                        foreach (var description in AllDescriptions(property.Value))
+                            yield return description;
+                }
+            }
+            else if (schema.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in schema.EnumerateArray())
+                    foreach (var description in AllDescriptions(item))
+                        yield return description;
+            }
         }
 
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace HSMServer.Model.ManagementApi.AlertSchedules
 {
@@ -7,21 +8,26 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     /// Wire contract of the /api/v1/alertSchedules read-only surface. The four durable
     /// fields are exactly what the web-UI editor shows.
     /// </summary>
+    [Description("An alert schedule (working-time window): name, timezone, and the YAML schedule text, plus the sensor paths using it.")]
     public sealed record AlertScheduleDto
     {
         /// <summary>Schedule id.</summary>
+        [Description("Schedule id.")]
         public Guid Id { get; init; }
 
         /// <summary>Schedule name.</summary>
+        [Description("Schedule name (unique per server).")]
         public string Name { get; init; }
 
         /// <summary>IANA/Windows timezone id, as configured by the operator.</summary>
+        [Description("IANA/Windows timezone id, as configured by the operator.")]
         public string Timezone { get; init; }
 
         /// <summary>
         /// The YAML schedule text — the editor's source of truth; day schedules and
         /// overrides are parsed from it, never stored separately.
         /// </summary>
+        [Description(AlertScheduleYamlDocs.Format)]
         public string Schedule { get; init; }
 
         /// <summary>
@@ -29,6 +35,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// products the token's owner can see, so a token never learns paths outside
         /// its owner's sight.
         /// </summary>
+        [Description("Full paths of the sensors currently using the schedule — filtered to the products the token's owner can see.")]
         public List<string> Sensors { get; init; } = [];
     }
 }

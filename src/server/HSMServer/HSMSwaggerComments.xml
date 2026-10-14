@@ -706,6 +706,9 @@
             get_sensor on the chosen id.
             </summary>
         </member>
+        <member name="P:HSMServer.Mcp.McpSensorSummary.Id">
+            <summary>Sensor id.</summary>
+        </member>
         <member name="P:HSMServer.Mcp.McpSensorSummary.Path">
             <summary>Full sensor path from the root product.</summary>
         </member>
@@ -771,7 +774,7 @@
             <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
-            <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpChatsResult">
             <summary>Result of the list_chats tool.</summary>
@@ -1586,7 +1589,7 @@
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
             <summary>
             Alert template wire contract of the /api/v1/alertTemplates surface. The shape
-            mirrors the durable template one field per field; ids are Guid strings. Byte
+            mirrors the durable template one field for field; ids are Guid strings. Byte
             fields carry DOMAIN ENUM VALUES (documented per field) — membership is validated
             structurally, unknown values answer 400 with the offending field key.
             </summary>

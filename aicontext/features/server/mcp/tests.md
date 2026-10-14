@@ -1,6 +1,6 @@
 # Feature tests: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-13 | Canonical: yes
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Mcp/`
 
@@ -68,6 +68,8 @@
 `AlertsMcpToolsTests` (write half) — the template/schedule write tools over the REAL administration services: template create echoes the stored model (and a duplicate name flattens `name: The name must be unique.`), template delete returns the deleted id, schedule create echoes and persists, a non-admin owner answers the not-found text with nothing persisted (the admin-only Global boundary), and an incomplete schedule detach names the retry in the error text while the schedule survives. The write semantics themselves are the services' — pinned by the REST controller suites.
 
 `HsmMcpWireTests` additionally pins `Wire_ReadOnlyToken_CannotReachAnyTool_NotEvenInitialize`: a read-only token (stubbed via `IApiTokenManager.GetToken`) cannot initialize against `/mcp` — every MCP message is a POST and the policy's method backstop rejects it before any tool runs (the loose mock's null `GetToken` passes, so the flag is stubbed explicitly).
+
+`HsmMcpWireTests` also pins `Wire_ToolSchemasCarryTheFieldValueDocumentation` (#1545): the `tools/list` input schemas of the write tools carry the field-value documentation — the byte-coded enum tables of the template surface (SensorType, PolicyOperation, PolicyProperty, TimeInterval, AlertRepeatMode), the schedule YAML grammar (`daySchedules`/`windows`/`overrides`, the worked example), and the policy surface's name tables (operation matrix, repeat cadences, destination modes). The assertions walk the DECODED `description` values of the schema JSON, because the wire escapes non-ASCII conservatively (an apostrophe travels as `\u0027`) — a raw-text `Contains` would be encoding-fragile. The schema exporter surfaces only `[Description]` attributes (XML doc comments never reach the wire), so this test is what fails when a DTO refactor or an SDK drift strips the agent-facing documentation.
 
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 
