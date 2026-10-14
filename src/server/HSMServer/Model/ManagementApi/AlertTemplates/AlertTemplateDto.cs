@@ -118,7 +118,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         [Description("Disabled policies stay stored but never fire.")]
         public bool IsDisabled { get; init; }
 
-        /// <summary>Alert message template; the full alert-variable table (all 25, with meanings) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
+        /// <summary>Alert message template; the full alert-variable table (every registered variable, with its meaning) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
         [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 

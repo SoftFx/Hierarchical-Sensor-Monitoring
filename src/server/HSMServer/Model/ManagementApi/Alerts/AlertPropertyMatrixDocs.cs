@@ -7,7 +7,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // the table behind BOTH the 422 validation of sensor-policy writes and
     // the template-apply warnings — one line per type group, " — " between
     // the types and their properties, parentheticals are prose. The drift
-    // guard (AlertConditionDocsTests) parses these lines back and compares
+    // guard (AlertSchemaDocsTests) parses these lines back and compares
     // the (sensor type, property) pairs with the rule table — edit this text
     // and the rules together.
     internal static class AlertPropertyMatrixDocs

@@ -1529,7 +1529,7 @@
             <summary>The notification effect of a policy: what is sent and on which cadence.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.Template">
-            <summary>Message template; the full alert-variable table (all 25, with meanings) lives in <see cref="F:HSMServer.Model.ManagementApi.Alerts.AlertVariablesDocs.Variables"/>.</summary>
+            <summary>Message template; the full alert-variable table (every registered variable, with its meaning) lives in <see cref="F:HSMServer.Model.ManagementApi.Alerts.AlertVariablesDocs.Variables"/>.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.AlertNotificationDto.Repeat">
             <summary>Re-send cadence of a still-triggered policy (AlertRepeatMode enum name). Repeat table: Immediately (default), FiveMinutes, TenMinutes, FifteenMinutes, ThirtyMinutes, Hourly, Daily, Weekly.</summary>
@@ -1674,7 +1674,7 @@
             <summary>Disabled policies stay stored but never fire.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Template">
-            <summary>Alert message template; the full alert-variable table (all 25, with meanings) lives in <see cref="F:HSMServer.Model.ManagementApi.Alerts.AlertVariablesDocs.Variables"/>.</summary>
+            <summary>Alert message template; the full alert-variable table (every registered variable, with its meaning) lives in <see cref="F:HSMServer.Model.ManagementApi.Alerts.AlertVariablesDocs.Variables"/>.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Icon">
             <summary>UI icon name.</summary>

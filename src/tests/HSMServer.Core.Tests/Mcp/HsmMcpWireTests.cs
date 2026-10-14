@@ -231,7 +231,7 @@ namespace HSMServer.Core.Tests.Mcp
             // #1556: the full alert-template variable table and the property x
             // sensor-type matrix on BOTH write surfaces. The variable fragments
             // are derived from AlertState.VariablesHelp at runtime — the
-            // registry's own words — while AlertConditionDocsTests guards the
+            // registry's own words — while AlertSchemaDocsTests guards the
             // full sets against the code (every variable, the exact matrix).
             foreach (var (variable, help) in Core.Model.Policies.AlertState.VariablesHelp)
             {
@@ -243,6 +243,8 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("Boolean — nothing beyond the common set", policy);
             Assert.Contains("IntegerBar, DoubleBar — Min, Max, Mean", policy);
             Assert.Contains("every type — Status, Comment, NewSensorData", template);
+            Assert.Contains("Boolean — nothing beyond the common set", template);
+            Assert.Contains("IntegerBar, DoubleBar — Min, Max, Mean", template);
         }
 
 

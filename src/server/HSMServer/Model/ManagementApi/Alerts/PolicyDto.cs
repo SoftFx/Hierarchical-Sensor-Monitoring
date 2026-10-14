@@ -194,7 +194,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
     [Description("The notification effect of a policy: what is sent and on which cadence.")]
     public sealed record AlertNotificationDto
     {
-        /// <summary>Message template; the full alert-variable table (all 25, with meanings) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
+        /// <summary>Message template; the full alert-variable table (every registered variable, with its meaning) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
         [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 

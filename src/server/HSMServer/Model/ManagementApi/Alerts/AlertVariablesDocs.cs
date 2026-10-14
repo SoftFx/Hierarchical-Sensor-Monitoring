@@ -6,7 +6,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // template field of the alert-template surface), so the two input schemas
     // cannot drift. One line per variable, "<variable> — <description>" with
     // the description VERBATIM from AlertState's [AlertVariable]s; the drift
-    // guard (AlertConditionDocsTests) re-derives the expected set from
+    // guard (AlertSchemaDocsTests) re-derives the expected set from
     // AlertState.VariablesHelp at runtime — edit this text and AlertState
     // together.
     internal static class AlertVariablesDocs

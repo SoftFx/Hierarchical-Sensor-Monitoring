@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.Mcp
     // (the [AlertVariable] registry the notification renderer substitutes),
     // the matrix from AlertPolicyConditionRules (the table behind both the
     // 422 validation of sensor-policy writes and the template-apply warnings).
-    public class AlertConditionDocsTests
+    public class AlertSchemaDocsTests
     {
         [Theory]
         [InlineData(typeof(AlertNotificationDto), nameof(AlertNotificationDto.Template))]
