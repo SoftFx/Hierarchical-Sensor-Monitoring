@@ -157,8 +157,8 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    WARNING when the block is on and the unit is missing (a package older than 0.9.0; the install goes
    on). Otherwise, when the helper was enabled or running, it runs `systemctl disable --now` and prints
    one neutral line (`Stopped and disabled hsm-linux-probe-io.service (not enabled in …/config.json).`),
-   so an operator who enabled it by hand sees that the re-run turned it off; it then runs
-   on the helper and deletes `/run/hsm-linux-probe-io`. The probe never gets a drop-in or a
+   so an operator who enabled it by hand sees that the re-run turned it off; it then deletes
+   `/run/hsm-linux-probe-io` either way. The probe never gets a drop-in or a
    capability for this. The check is the top-CPU one for the key `"topDiskIo"`
    (`LinuxProbeInstallerBundle.TopDiskIoEnabledPattern`, sharing the top-level prefix and the
    enabled-block suffix with `TopCpuEnabledPattern`): top level only, strings as tokens, nested deeper

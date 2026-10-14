@@ -136,7 +136,7 @@ turns the sensor to Timeout on the server instead of leaving its last value look
 not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
 eleven times every 5 seconds on garage-server (one stats call per running container); the disk
 counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
-also drives the daily write/read totals), as do top-CPU (60 s), the shared collector's own bars,
+also drives the daily write/read totals), as do top-CPU (60 s), the top disk I/O helper (60 s, advanced, opt-in), the shared collector's own bars,
 the heartbeat and the dispatch, which this decision did not touch.
 
 ### Host (#1476)
