@@ -168,8 +168,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count,
         /// 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize,
         /// 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
+        /// Which properties exist depends on the sensor type (bar types add Min..EmaCount
+        /// incl. EmaMin/EmaMax/EmaMean/EmaCount; EmaValue on numeric single-value types).
         /// </summary>
-        [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. Which properties exist depends on the sensor type (bar statistics on bar sensors, Ema on single-value numerics).")]
+        [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. Which properties exist depends on the sensor type (bar types add Min..EmaCount incl. EmaMin/EmaMax/EmaMean/EmaCount; EmaValue on numeric single-value types).")]
         public byte Property { get; init; }
     }
 

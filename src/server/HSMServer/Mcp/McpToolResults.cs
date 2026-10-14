@@ -34,9 +34,9 @@ namespace HSMServer.Mcp
     // limit — pages that skip or repeat items with no observable mismatch
     // (over-paging clamps to the last page instead of answering empty).
     //
-    // Every record and property carries a [Description]: the MCP schema
-    // exporter surfaces them into tools/list output schemas, which is how an
-    // agent learns the envelope's paging semantics without external docs.
+    // Every record and property carries a [Description]; they will surface to
+    // agents through tools/list output schemas once those are emitted (#1553) —
+    // today they serve Swagger/IDE documentation of the result envelope.
 
     /// <summary>Result of the list_products tool.</summary>
     [Description("Result of the list_products tool: one page of visible root products plus the effective paging echo.")]
