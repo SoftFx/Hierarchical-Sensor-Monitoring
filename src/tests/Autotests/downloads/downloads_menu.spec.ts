@@ -2,7 +2,7 @@ import { test, expect, uniqueName, cleanup } from '../fixtures.ts';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
-// #1550: the admin-only "Downloads" menu entry. The page picks a product and hands it to the existing
+// #1550: the admin-only "Downloads" entry of the Configuration menu. The page picks a product and hands it to the existing
 // /api/Agent/installer and /api/Agent/linux-installer endpoints. Whether the agent exe or the probe .deb
 // is staged depends on how the server under test was built, so each card is checked in whichever state
 // it is in: a staged one must issue the request for the chosen product, an unstaged one must say so
@@ -30,6 +30,8 @@ test.describe('Downloads menu', () => {
     await page.getByRole('button', { name: 'Add' }).click();
     await expect(page.getByRole('link', { name: productName, exact: true })).toBeVisible();
 
+    // The entry lives in the Configuration dropdown, so open it first.
+    await page.locator('#optionsDropdown').click();
     await page.locator('#nav_link_Downloads').click();
     await expect(page).toHaveURL(/\/Downloads/);
 
@@ -95,6 +97,10 @@ test.describe('Downloads menu', () => {
     await login(page, testConfig.userName1, testConfig.user1password, testConfig.apiUrl);
     await expect(page.getByRole('link', { name: 'Products' })).toBeVisible();
 
+    // The Configuration dropdown still opens for a viewer, with its viewer items, but without Downloads.
+    await page.locator('#optionsDropdown').click();
+    await expect(page.getByRole('link', { name: 'Access keys' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).not.toBeAttached();
     await expect(page.locator('#nav_link_Downloads')).toHaveCount(0);
 
     const response = await page.goto('/Downloads');

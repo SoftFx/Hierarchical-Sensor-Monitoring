@@ -176,7 +176,7 @@
             @{ var pageUser = User as User; }
             @if (pageUser is not null && pageUser.IsAdmin)
             {
-                <p class="text-muted small">Also available under <a href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController, new { productId = Model.GeneralInfo.Id })">Downloads</a> in the main menu.</p>
+                <p class="text-muted small">Also available under <a href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController, new { productId = Model.GeneralInfo.Id })">Configuration → Downloads</a>.</p>
                 <button id="downloadAgentButton" class="btn btn-secondary" type="button" onclick="downloadAgentClick()" title="Download a ready-to-run Windows agent for this product (server address + key pre-configured)">
                     <i class="fa-solid fa-download"></i> Download agent
                 </button>

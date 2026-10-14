@@ -9,7 +9,7 @@
 
 ## Description
 
-An admin opens the **Downloads** main-menu page (#1550), picks a product and clicks **Download Linux probe**,
+An admin opens **Configuration → Downloads** (#1550), picks a product and clicks **Download Linux probe**,
 or opens a product's edit page ("HSM Agent" section) and clicks **Download Linux probe** next to
 **Download agent**. The server streams `hsm-linux-probe-<product>.tar.gz`. On the host:
 

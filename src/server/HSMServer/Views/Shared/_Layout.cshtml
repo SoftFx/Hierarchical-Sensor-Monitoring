@@ -93,15 +93,6 @@
                                             </ul>
                                         </li>
 
-                                        @if (UserRoleHelper.IsDownloadsPageAllowed((User)Context.User))
-                                        {
-                                            <li class="nav-item">
-                                                <a id="nav_link_Downloads" class="nav-link @Html.ActiveClass(ViewConstants.DownloadsController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController)">
-                                                    Downloads
-                                                </a>
-                                            </li>
-                                        }
-
 
                                                                                 <li class="nav-item dropdown">
                                             <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -135,6 +126,14 @@
                                                     <li>
                                                         <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
                                                             <i class="fas fa-cog me-2"></i>Settings
+                                                        </a>
+                                                    </li>
+                                                }
+                                                @if (UserRoleHelper.IsDownloadsPageAllowed((User)Context.User))
+                                                {
+                                                    <li>
+                                                        <a id="nav_link_Downloads" class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController)">
+                                                            <i class="fas fa-download me-2"></i>Downloads
                                                         </a>
                                                     </li>
                                                 }
