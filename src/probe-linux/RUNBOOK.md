@@ -149,7 +149,7 @@ puts the sensors back under the older paths. Below 0.7.0 the `topCpu` block is i
 are), its sensors time out, and a `top-cpu.conf` drop-in only relaxes `ProtectProc` for nothing:
 delete it (`sudo rm /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf && sudo systemctl
 daemon-reload`) before the restart. Below 0.9.0 the `topDiskIo` block is ignored and the package
-has no `hsm-linux-probe-io` (the downgrade removes the unit; `sudo systemctl disable
+has no `hsm-linux-probe-io` (the advanced, opt-in helper; the downgrade removes the unit; `sudo systemctl disable
 hsm-linux-probe-io` first, so no enablement link is left behind). To make the server's bundles serve the older package
 too, set `src/server/HSMServer/probe-release.txt` back to it and release the server.
 
@@ -162,7 +162,7 @@ sudo systemctl disable --now hsm-linux-probe hsm-linux-probe-io
 sudo shred -u /etc/hsm-linux-probe/access-key
 sudo apt-get purge -y hsm-linux-probe           # removes config, state, logs, the Docker and
                                                 # top-CPU drop-ins (the latter from 0.7.0 on)
-                                                # and the top disk I/O helper (0.9.0)
+                                                # and the top disk I/O helper (0.9.0; advanced, opt-in)
 ```
 
 The `hsm-probe` user and group stay (Debian convention for system users). The sensor history on
@@ -184,10 +184,10 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |
 | Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, while the config on the host enables top-CPU) | at install | until `uninstall.sh` or remove/purge |
-| Top disk I/O snapshot | `/run/hsm-linux-probe-io/snapshot` (tmpfs, `0640 root:hsm-probe`, the helper's `RuntimeDirectory=`) | by `hsm-linux-probe-io` every `periodMs` while `topDiskIo` is on | replaced each time; kept when the helper stops or restarts (`RuntimeDirectoryPreserve=yes`); removed by `install.sh` with `topDiskIo` off, by `uninstall.sh` and by remove/purge; gone at reboot |
+| Top disk I/O snapshot (advanced, opt-in — see the last chapter) | `/run/hsm-linux-probe-io/snapshot` (tmpfs, `0640 root:hsm-probe`, the helper's `RuntimeDirectory=`) | by `hsm-linux-probe-io` every `periodMs` while `topDiskIo` is on | replaced each time; kept when the helper stops or restarts (`RuntimeDirectoryPreserve=yes`); removed by `install.sh` with `topDiskIo` off, by `uninstall.sh` and by remove/purge; gone at reboot |
 
 Nothing else is written: `ProtectSystem=strict` leaves the state and log directories as the unit's
-only writable paths. Top CPU processes (#1479) and top disk I/O (#1547) keep nothing on the host:
+only writable paths. Top CPU processes (#1479) and top disk I/O (#1547, advanced, opt-in) keep nothing on the host:
 their per-process baselines (and top disk I/O's running day) live in memory, and a restart only
 costs one period without values (for top disk I/O also the day so far: that day's per-day values
 say from when they were measured).

@@ -511,7 +511,10 @@ namespace HSMServer.Model.Agent
                 "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/" + ConfigName + ", but $IO_UNIT could not be enabled and started (a package older than 0.9.0?); see: journalctl -u $IO_UNIT\" >&2",
                 "  fi",
                 "else",
-                "  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
+                "  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
+                "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
+                "    echo \"Stopped and disabled $IO_UNIT (not enabled in $CONFIG_DIR/" + ConfigName + ").\"",
+                "  fi",
                 "  rm -rf " + TopDiskIoRuntimeDirectory,
                 "fi");
         }

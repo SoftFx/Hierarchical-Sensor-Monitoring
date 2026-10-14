@@ -249,10 +249,14 @@ namespace HSMServer.Core.Tests
                 // package) is a WARNING, not a failed install.
                 Assert.Contains("  if ! { systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; }; then\n" +
                                 "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/config.json, but $IO_UNIT could not be enabled", script);
-                // Off: quietly stopped and disabled, and its preserved snapshot (every process's pid, name
-                // and counters) removed.
-                Assert.Contains("else\n  systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true\n" +
-                                "  rm -rf /run/hsm-linux-probe-io\nfi\n", script);
+                // Off: a helper that was enabled or running is stopped and disabled with one neutral line
+                // (an operator who enabled it by hand must see that a re-run turned it off); a host that
+                // never enabled it prints nothing. The preserved snapshot (every process's pid, name and
+                // counters) is removed either way.
+                Assert.Contains("else\n  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then\n" +
+                                "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true\n" +
+                                "    echo \"Stopped and disabled $IO_UNIT (not enabled in $CONFIG_DIR/config.json).\"\n" +
+                                "  fi\n  rm -rf /run/hsm-linux-probe-io\nfi\n", script);
                 Assert.DoesNotContain("Top disk I/O", script);
                 Assert.DoesNotContain("top disk I/O", script);
                 // One mechanism: the probe gets no drop-in and no capability for it.

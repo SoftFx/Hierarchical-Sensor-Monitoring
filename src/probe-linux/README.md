@@ -821,7 +821,7 @@ The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
 `/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`,
 `/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (deletes daily log files not written for 30 days — the
-probe itself never deletes one), the copyright file, and since 0.9.0 the top disk I/O helper
+probe itself never deletes one), the copyright file, and since 0.9.0 the top disk I/O helper (advanced, opt-in)
 `/usr/bin/hsm-linux-probe-io` with its unit `/lib/systemd/system/hsm-linux-probe-io.service`
 (installed disabled; [Top disk I/O processes](#top-disk-io-processes-1547));
 `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1` — libcurl and, through it,
