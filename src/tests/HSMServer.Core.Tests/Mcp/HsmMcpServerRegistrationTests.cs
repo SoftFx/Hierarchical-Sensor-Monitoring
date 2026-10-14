@@ -93,6 +93,32 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
         [Fact]
+        public void AddHsmMcpServer_OptsEveryToolIntoStructuredContent()
+        {
+            // #1553: the read-DTO documentation reaches agents only through
+            // the tools/list OUTPUT schemas, which the SDK emits solely for
+            // tools with UseStructuredContent — a dropped flag on any one
+            // tool silently returns that tool's agent-facing docs to
+            // Swagger/IDE only. Pin the opt-in on the registration itself (no
+            // host needed): every spec tool carries an output schema, and
+            // each is a plain type:"object" document (every return type is a
+            // non-nullable record/class), so the legacy-wire {"result": ...}
+            // wrapping never applies whatever protocol version a client
+            // negotiates. The wire twin (HsmMcpWireTests) pins the same on
+            // the tools/list response and the documentation riding it.
+            using var provider = new ServiceCollection().AddHsmMcpServer().BuildServiceProvider();
+
+            var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
+
+            Assert.Equal(25, tools.Count);
+            Assert.All(tools, tool =>
+            {
+                Assert.True(tool.ProtocolTool.OutputSchema.HasValue, tool.ProtocolTool.Name);
+                Assert.Equal("object", tool.ProtocolTool.OutputSchema.Value.GetProperty("type").GetString());
+            });
+        }
+
+        [Fact]
         public void ToolResults_RenderCamelCase_UnderTheSdkDefaultOptions()
         {
             // The SDK's documented default enables JsonSerializerDefaults.Web;

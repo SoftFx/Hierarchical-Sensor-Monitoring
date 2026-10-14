@@ -169,6 +169,16 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("alpha", text);
             Assert.Contains("totalFound", text);
 
+            // #1553: the tools are opted into structured content, so a success
+            // carries the structured JSON ALONGSIDE the text fallback — the
+            // text block above is kept for clients that never read
+            // structuredContent, and the shape change (a new member on every
+            // tools/call result) is pinned here rather than assumed.
+            Assert.True(result.StructuredContent.HasValue);
+            var structured = result.StructuredContent.Value;
+            Assert.Equal("alpha", structured.GetProperty("products")[0].GetProperty("name").GetString());
+            Assert.Equal(1, structured.GetProperty("totalFound").GetInt32());
+
             // The failure hop: an expected tool error must reach the client as
             // isError text carrying the exception's message (the agent
             // self-correction design), with the anti-enumeration text intact —
@@ -245,6 +255,86 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("every type — Status, Comment, NewSensorData", template);
             Assert.Contains("Boolean — nothing beyond the common set", template);
             Assert.Contains("IntegerBar, DoubleBar — Min, Max, Mean", template);
+        }
+
+
+        [Fact]
+        public async Task Wire_ToolOutputSchemasCarryTheReadDocumentation()
+        {
+            // #1553: the read-DTO documentation — the null-semantics, value
+            // tables and visibility rules #1545 attached to the sensor tree,
+            // chats, folders and list envelopes — must reach the wire through
+            // the tools/list OUTPUT schemas. The SDK emits Tool.OutputSchema
+            // only for tools opted into structured content
+            // (UseStructuredContent, default false); without the opt-in the
+            // read descriptions served Swagger/IDE only and an agent saw no
+            // output schema at all. Like the input-side fact above, the
+            // assertions walk the DECODED description values — the wire
+            // escapes non-ASCII conservatively (an apostrophe travels as
+            // \u0027).
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var tools = (await client.ListToolsAsync())
+                .ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
+
+            // Every tool opts in, and every return type is a non-nullable
+            // object, so each output schema is a plain type:"object" document
+            // — no legacy-wire {"result": ...} wrapping for older clients to
+            // trip over, whatever protocol version they negotiate.
+            foreach (var name in SpecTools)
+            {
+                var schema = tools[name].OutputSchema;
+                Assert.True(schema.HasValue, $"{name} carries no output schema");
+                Assert.Equal("object", schema.Value.GetProperty("type").GetString());
+            }
+
+            string Descriptions(ModelContextProtocol.Protocol.Tool tool) =>
+                string.Join("\n", AllDescriptions(tool.OutputSchema!.Value));
+
+            // The sensor tree: the list envelope's effective-paging echo and
+            // the ProductDto docs nested under the items property.
+            var products = Descriptions(tools["list_products"]);
+            Assert.Contains("The 1-based page actually served (a page past the end serves the last page).", products);
+            Assert.Contains("A root product visible to the token's owner", products);
+
+            var node = Descriptions(tools["get_node"]);
+            Assert.Contains("DIRECT children only (no recursion)", node);
+
+            // The item DTO's value table and null-semantics — the tables an
+            // agent needs to interpret status/state without guessing.
+            var sensor = Descriptions(tools["get_sensor"]);
+            Assert.Contains("Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum.", sensor);
+            Assert.Contains("null when the sensor has no data yet", sensor);
+
+            var history = Descriptions(tools["get_sensor_history"]);
+            Assert.Contains("the NEWEST maxPoints values inside [from, to], oldest first", history);
+            Assert.Contains("narrow the window for full resolution", history);
+            Assert.Contains("retry shortly", history);
+
+            // The search surface: the compact summary is an MCP-only shape (no
+            // REST twin to inherit a pin from), so its own docs are pinned here.
+            var sensors = Descriptions(tools["find_sensors"]);
+            Assert.Contains("Compact sensor summary of the find_sensors tool", sensors);
+            Assert.Contains("the id get_sensor and the policy tools take", sensors);
+
+            // The alert surface: the schedule YAML grammar and the visibility
+            // filter travel on the READ side too, not only on the upsert body.
+            var schedule = Descriptions(tools["get_alert_schedule"]);
+            Assert.Contains("daySchedules", schedule);
+            Assert.Contains("start: 09:00", schedule);
+            Assert.Contains("filtered to the products the token's owner can see", schedule);
+
+            // The chat surface: the secrets rule (webhook URLs never exposed).
+            var chats = Descriptions(tools["list_chats"]);
+            Assert.Contains("the webhook URLs themselves are never exposed", chats);
+
+            // The folder surface: the entity disambiguation (access-grouping
+            // folder, not the tree's nested products).
+            var folder = Descriptions(tools["get_folder"]);
+            Assert.Contains("NOT a tree node", folder);
         }
 
 
