@@ -1,6 +1,6 @@
 # Feature: Per-product HSM Agent download (server side)
 
-> Owner: server | Last reviewed: 2026-10-13 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-14 | Canonical: yes
 > Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
 > bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
 > The Linux sibling (**Download Linux probe**, `.tar.gz` + `install.sh`, #1424) is `../linux-probe-download/feature.md`.
@@ -9,7 +9,8 @@
 
 ## Description
 
-An admin opens a product's edit page ("HSM Agent" section) and clicks **Download agent**; the server streams a zip
+An admin opens the **Downloads** main-menu page (#1550), picks a product and clicks **Download Windows agent**,
+or opens a product's edit page ("HSM Agent" section) and clicks **Download agent**; the server streams a zip
 containing the byte-identical signed `hsm-agent.exe` + a generated `config.json` (this server's address
 + the product's access key) + silent `install.cmd`/`uninstall.cmd`. The client runs `install.cmd` → the
 **C++ exe self-installs** as an auto-start Windows service and connects — zero configuration.
@@ -22,7 +23,9 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 - **Signed-exe invariant.** The bundled `hsm-agent.exe` is served **byte-identical** to the published,
   signed binary. Only `config.json` is generated per product — the PE is never patched (Authenticode).
   Pinned by `AgentInstallerBundleTests.Zip_KeepsExeByteIdentical`.
-- **Admin-only.** `[AuthorizeIsAdmin]` on the endpoint; the UI button renders only for `User.IsAdmin`.
+- **Admin-only.** `[AuthorizeIsAdmin]` on the endpoint; the UI button renders only for `User.IsAdmin`, and the
+  **Downloads** menu entry and page are admin-only too (`UserRoleHelper.IsDownloadsPageAllowed`, `[AuthorizeIsAdmin]`
+  on `DownloadsController`).
 - **Never cacheable.** The zip carries the product access key, so `Installer` (like the Linux probe's
   `LinuxInstaller`, #1424) is `[ResponseCache(NoStore = true, Location = None)]` — the `ProductController`
   convention. The self-update endpoints (`version`, `exe`) stay cacheable: they carry no credential.
@@ -51,16 +54,38 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Bundle builder (config.json + scripts + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
 | Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
-| Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
+| Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only), which also links to the Downloads page |
+| Downloads page (#1550): main-menu entry, product selector, Windows + Linux cards | `Views/Shared/_Layout.cshtml` (`nav_link_Downloads`), `Controllers/DownloadsController.cs`, `Views/Downloads/Index.cshtml`, `Model/Agent/DownloadsPageService.cs` + `DownloadsViewModel.cs` (`DownloadsPageBuilder`) |
+| Shared UI pieces (both pages) | `Views/Shared/_WindowsAgentInstallHint.cshtml`, `_LinuxProbeInstallHint.cshtml`, `_DownloadBundleScript.cshtml` (`downloadBundle`: fetch + blob, errors as a toast) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` + `version.txt` (gitignored; staged by `server-build.yml` — see *Packaging*) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
-| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (10: incl. topCpu on/off, static-script drift, data-dir ACL before config copy) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
+| Tests | `tests/HSMServer.Core.Tests/DownloadsPageTests.cs` (Downloads page: product order/visibility, staged state, address) + `tests/Autotests/downloads/downloads_menu.spec.ts` (e2e) + `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (10: incl. topCpu on/off, static-script drift, data-dir ACL before config copy) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
 
 `AgentConfig.EnableTopCpuProcesses` (admin toggle, Configuration → Agent) makes `BuildConfigJson` add a
 `topCpu` block (`enabled:true, periodMs:60000, minPercent:1.0, count:10`) to the generated `config.json`,
 so the downloaded agent also reports the top processes by CPU (issue #1175). Off by default; the client
 agent has no UI and just runs the baked config. The Linux probe bundle honours the same switch with the
 same block (`AgentInstallerBundle.TopCpuBlock`, #1479; see `../linux-probe-download/feature.md`).
+
+## Downloads page (#1550)
+
+The main-menu **Downloads** entry (admins only, between Alerts and Configuration) opens `/Downloads`: a
+filterable product list (every root product the admin sees in the tree, `TreeViewModel.GetUserProducts`,
+sorted by name, the folder shown in brackets) and two cards, **Windows agent** and **Linux probe**. Each
+card shows the staged version and the same install hint as the product page; its button stays disabled
+until a product is chosen and then calls the unchanged `GET /api/Agent/installer` / `linux-installer`
+with that product's id (`?productId=` on `/Downloads` preselects one; the product page's link passes it).
+The page reads exactly what the endpoints read, with the same "not staged" rules, so a card that would get
+a 503 shows the endpoint's message instead of a button:
+
+| Card | Staged when | Version shown |
+|---|---|---|
+| Windows agent | `wwwroot/agent/hsm-agent.exe` exists | `wwwroot/agent/version.txt` (trimmed), else "unknown" |
+| Linux probe | exactly one `hsm-linux-probe_*.deb` in `wwwroot/probe/` (`SelectStagedPackage`) | from the package name `hsm-linux-probe_<ver>_<arch>.deb` (`PackageVersion`) |
+
+The page also shows the address both bundles bake in (`AgentConnectionResolver`, display only), and on the
+Linux card the endpoint's https-only refusal text when that address is `http://`. The bundles themselves
+are not generated by the page; key/certificate errors still arrive as the endpoints' toasts.
 
 ## Connection URL resolution
 
