@@ -16,13 +16,14 @@
     </p>
 
     <div class="mb-4">
-        <label for="downloadsProductFilter" class="form-label fw-medium">Product</label>
         @if (Model.Products.Count == 0)
         {
+            <p class="form-label fw-medium mb-1">Product</p>
             <p id="downloadsNoProducts" class="text-muted small mb-0">There are no products yet. Create one on the Products page first.</p>
         }
         else
         {
+            <label for="downloadsProductFilter" class="form-label fw-medium">Product</label>
             <input type="search" id="downloadsProductFilter" class="form-control mb-2" placeholder="Filter by product or folder name" autocomplete="off" />
             <select id="downloadsProductSelect" class="form-select" size="@listSize" aria-label="Product">
                 @foreach (var product in Model.Products)
