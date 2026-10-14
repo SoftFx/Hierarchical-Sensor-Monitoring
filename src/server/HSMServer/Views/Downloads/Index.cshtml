@@ -65,20 +65,21 @@
                     <p class="small mb-2">Version: <span id="downloadsProbeVersion" class="fw-medium">@(Model.ProbeVersion ?? (Model.ProbeStaged ? "unknown" : "not staged"))</span></p>
                     @await Html.PartialAsync("~/Views/Shared/_LinuxProbeInstallHint.cshtml")
                     <div class="mt-auto">
-                        @if (Model.ProbeStaged)
+                        @if (!Model.ProbeStaged)
                         {
-                            @if (Model.ProbeAddressWarning is not null)
-                            {
-                                <div id="downloadsProbeAddressWarning" class="alert alert-warning small" role="status">@Model.ProbeAddressWarning</div>
-                            }
+                            <div id="downloadsProbeNotStaged" class="alert alert-warning small mb-0" role="status">@Model.ProbeNotStagedMessage</div>
+                        }
+                        else if (!Model.ProbeDownloadable)
+                        {
+                            @* The endpoint answers 400 for this address, so there is nothing to click. *@
+                            <div id="downloadsProbeAddressWarning" class="alert alert-warning small mb-0" role="status">@Model.ProbeAddressWarning</div>
+                        }
+                        else
+                        {
                             <button id="downloadsLinuxProbeButton" class="btn btn-primary downloads-button" type="button" disabled onclick="downloadsLinuxProbeClick()"
                                     title="Download a ready-to-run Linux probe for the selected product (server address + key pre-configured)">
                                 <i class="fa-solid fa-download"></i> Download Linux probe
                             </button>
-                        }
-                        else
-                        {
-                            <div id="downloadsProbeNotStaged" class="alert alert-warning small mb-0" role="status">@Model.ProbeNotStagedMessage</div>
                         }
                     </div>
                 </div>
@@ -103,11 +104,13 @@
             return option.hidden ? '' : option.value;
         }
 
-        // Buttons stay disabled until a (visible) product is chosen.
+        // Buttons stay disabled until a (visible) product is chosen. A button whose download is in
+        // flight (data-busy, set by downloadBundle) stays disabled, so changing the selection meanwhile
+        // cannot start a second key-bearing bundle build.
         function refreshButtons() {
             const disabled = selectedProductId() === '';
             document.querySelectorAll('.downloads-button').forEach(function (button) {
-                button.disabled = disabled;
+                button.disabled = disabled || button.dataset.busy === 'true';
             });
         }
 

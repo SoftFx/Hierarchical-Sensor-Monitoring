@@ -4,8 +4,10 @@
         // Fetch + blob (not window.location) so a 503/BadRequest surfaces as a toast instead of
         // navigating the browser to a raw error page — e.g. when the product has no usable access
         // key or the binary/package isn't staged on the server yet.
+        // data-busy marks the in-flight download so page code re-enabling buttons can skip this one.
         const button = document.getElementById(buttonId);
         button.disabled = true;
+        button.dataset.busy = 'true';
         try {
             const response = await fetch(url);
             if (!response.ok) {
@@ -30,6 +32,7 @@
         } catch (error) {
             showToast('Failed to download the ' + label + ': ' + error, 'Error');
         } finally {
+            delete button.dataset.busy;
             button.disabled = false;
         }
     }

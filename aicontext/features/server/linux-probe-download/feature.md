@@ -55,7 +55,7 @@ compressed).
   comes from `server-ca.pem` in the system store.
 - **HTTPS only.** The probe's config parser rejects `http://`, so an `http://` resolved address is answered
   with 400 and a pointer to Configuration → Agent → *Agent connection URL*, instead of a bundle that never
-  connects.
+  connects. The Downloads page shows that text in place of the Linux button.
 - **Not staged ⇒ 503** with a clear message (no web root, no `wwwroot/probe/`, no `.deb`, or more than one).
   The Downloads page applies the same rule and shows that message instead of the button, with the version
   read from the staged package name (`LinuxProbeInstallerBundle.PackageVersion`).

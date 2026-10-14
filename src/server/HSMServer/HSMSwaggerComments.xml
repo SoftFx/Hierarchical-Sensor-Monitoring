@@ -975,6 +975,12 @@
         <member name="P:HSMServer.Model.Agent.DownloadsViewModel.ProbeAddressWarning">
             <summary>Why the Linux probe endpoint would refuse this address (400), or null when it accepts it.</summary>
         </member>
+        <member name="P:HSMServer.Model.Agent.DownloadsViewModel.ProbeDownloadable">
+            <summary>
+            Whether the Linux card offers its button: a staged package and an address the probe accepts.
+            Otherwise every click would be a 503 or a 400, so the card shows the reason instead.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Agent.DownloadsPageBuilder">
             <summary>
             Builds <see cref="T:HSMServer.Model.Agent.DownloadsViewModel"/> from the visible products and the web root. Reads only what

@@ -48,6 +48,12 @@ namespace HSMServer.Model.Agent
         /// <summary>Why the Linux probe endpoint would refuse this address (400), or null when it accepts it.</summary>
         public string ProbeAddressWarning { get; init; }
 
+        /// <summary>
+        /// Whether the Linux card offers its button: a staged package and an address the probe accepts.
+        /// Otherwise every click would be a 503 or a 400, so the card shows the reason instead.
+        /// </summary>
+        public bool ProbeDownloadable => ProbeStaged && ProbeAddressWarning is null;
+
         public string AgentNotStagedMessage => AgentInstallerBundle.NotStagedMessage;
 
         public string ProbeNotStagedMessage => LinuxProbeInstallerBundle.NotStagedMessage;

@@ -159,6 +159,7 @@ namespace HSMServer.Core.Tests
         [Theory]
         [InlineData("hsm-linux-probe_0.8.4_amd64.deb", "0.8.4")]
         [InlineData("hsm-linux-probe_1.0.0-rc1_arm64.deb", "1.0.0-rc1")]
+        [InlineData("hsm-linux-probe_0.9.0~rc1_amd64.deb", "0.9.0~rc1")]
         [InlineData("hsm-linux-probe_0.8.4.deb", null)]
         [InlineData("hsm-linux-probe__amd64.deb", null)]
         [InlineData("other_0.8.4_amd64.deb", null)]
@@ -180,6 +181,22 @@ namespace HSMServer.Core.Tests
             var plain = DownloadsPageBuilder.Build([], null, "http://hsm.local", Port);
             Assert.Equal(LinuxProbeInstallerBundle.ValidateServerAddress("http://hsm.local"), plain.ProbeAddressWarning);
             Assert.NotNull(plain.ProbeAddressWarning);
+        }
+
+        [Theory]
+        [InlineData(true, Address, true)]
+        [InlineData(true, "http://hsm.local", false)] // every click would be a 400: the card shows the warning instead
+        [InlineData(false, Address, false)]           // every click would be a 503: the card shows the not-staged notice
+        [InlineData(false, "http://hsm.local", false)]
+        public void ProbeDownloadable_RequiresAStagedPackage_AndAnAddressTheProbeAccepts(bool staged, string address, bool expected)
+        {
+            WithWebRoot(webRoot =>
+            {
+                if (staged)
+                    StageProbe(webRoot, "hsm-linux-probe_0.8.4_amd64.deb");
+
+                Assert.Equal(expected, DownloadsPageBuilder.Build([], webRoot, address, Port).ProbeDownloadable);
+            });
         }
 
         [Fact]
