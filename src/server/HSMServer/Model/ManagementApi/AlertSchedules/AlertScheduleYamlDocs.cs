@@ -12,11 +12,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 - daySchedules (required key; an empty list validates but leaves no recurring working time): each entry has:
   - id: optional string; auto-generated when omitted. Referenced by overrides.customScheduleDates[].scheduleType.
   - days (required, non-empty): day names mon, tue, wed, thu, fri, sat, sun (3-letter or full English).
-  - windows (required, non-empty): entries of start/end as HH:mm (00:00..24:00); start < end, each window at least 1 minute, windows within one entry must not overlap.
+  - windows (required, non-empty): entries of start/end as HH:mm (00:00..23:59); start < end, each window at least 1 minute, windows within one entry must not overlap. A window running to the end of the day writes end: 1.00:00 (TimeSpan with a days part; 24:00 is NOT accepted).
 - disabledDates (optional): 'yyyy-MM-dd' dates (years 2000..2100) with no working time at all.
 - overrides (optional):
   - enabledDates: 'yyyy-MM-dd' dates that follow their weekday schedule despite disabledDates.
-  - customScheduleDates: per-date entries with EITHER scheduleType (an id of a daySchedules entry, max 50 chars; the reference is NOT validated — an unknown value silently falls back to the regular weekday schedule) OR their own windows.
+  - customScheduleDates: per-date entries with EITHER scheduleType (an id of a daySchedules entry, max 50 chars; the reference is NOT validated — an unknown value falls back to the date's normal handling: disabledDates first, then the regular weekday schedule) OR their own windows. A custom date with windows or a valid scheduleType takes precedence over disabledDates.
 A date must not appear in both enabledDates and customScheduleDates; custom dates must be unique.
 Example:
 daySchedules:

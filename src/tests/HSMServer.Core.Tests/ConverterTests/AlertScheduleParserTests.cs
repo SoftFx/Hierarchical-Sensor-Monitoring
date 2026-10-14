@@ -95,5 +95,35 @@ disabledDates: [""2026-13-33""]
             Assert.Throws<Exception>(() => _parser.Parse(yaml));
         }
 
+
+        [Fact]
+        public void ParseEndOfDayWindowUsesOneDayFormTest()
+        {
+            var yaml = @"daySchedules:
+      - days: [Sat]
+        windows:
+            - { start: ""22:00"", end: ""1.00:00"" }
+                        ";
+
+            var result = _parser.Parse(yaml);
+
+            Assert.NotNull(result);
+            var window = Assert.Single(result.DaySchedules[0].Windows);
+            Assert.Equal(TimeSpan.FromDays(1), window.End);
+        }
+
+
+        [Fact]
+        public void ParseTwentyFourHoursEndThrowsValidationException()
+        {
+            var yaml = @"daySchedules:
+      - days: [Sat]
+        windows:
+            - { start: ""22:00"", end: ""24:00"" }
+                        ";
+
+            Assert.Throws<Exception>(() => _parser.Parse(yaml));
+        }
+
     }
 }

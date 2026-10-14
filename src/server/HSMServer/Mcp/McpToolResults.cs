@@ -114,8 +114,8 @@ namespace HSMServer.Mcp
         [Description("The 1-based page actually served (a page past the end serves the last page).")]
         public int Page { get; init; }
 
-        /// <summary>Total page count at the effective limit (0 when nothing matches).</summary>
-        [Description("Total page count at the effective limit (0 when nothing matches).")]
+        /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        [Description("Total page count at the effective limit (0 when the collection is empty).")]
         public int TotalPages { get; init; }
     }
 

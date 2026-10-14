@@ -737,7 +737,7 @@
             <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpSensorsResult.TotalPages">
-            <summary>Total page count at the effective limit (0 when nothing matches).</summary>
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpAlertTemplatesResult">
             <summary>Result of the list_alert_templates tool.</summary>
