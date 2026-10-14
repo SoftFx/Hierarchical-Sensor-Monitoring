@@ -33,7 +33,7 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "list_products", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "list_products", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Lists the root products visible to the token's owner — the discovery entry point of the sensor tree. Nested folders are not listed here; use get_node or find_sensors. Products have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpProductsResult ListProducts(
             [Description("Maximum products to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
@@ -54,7 +54,7 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "get_node", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "get_node", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Gets one tree node (a root product or a nested folder) by id: metadata plus its DIRECT children. The folders list is paginated (foldersPage, page size 200) so folder ids beyond the first page stay reachable; the sensors list is capped at 200 with totalSensors — use find_sensors with productId for the full list. Unknown and invisible ids answer the same error.")]
         public NodeDto GetNode(
             [Description("Node id (a root product or a nested folder).")] Guid nodeId,
@@ -67,7 +67,7 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "find_sensors", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "find_sensors", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Searches sensors visible to the token's owner — the workhorse for 'analyze network problems in product X': pass search='network' (or a regex) and productId to scope to one product's subtree. Returns compact summaries ordered by path; get_sensor on an id embeds the current value. The search text matches name, description and path (OR). Prefer narrowing (search/type/productId); `page` walks the result set when the matches cannot be partitioned (uniform names) — get_node's own sensors list caps at 200 without paging.")]
         public McpSensorsResult FindSensors(
             [Description("Optional search text (see searchMode).")] string search = null,
@@ -96,14 +96,14 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "get_sensor", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "get_sensor", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Gets one sensor by id: metadata plus its current value (lastValue) — the only tool that embeds the value. Unknown and invisible ids answer the same error.")]
         public SensorDto GetSensor(
             [Description("Sensor id (from find_sensors or a node listing).")] Guid sensorId) =>
             McpToolErrors.Unwrap(_reader.GetSensor(sensorId, User));
 
 
-        [McpServerTool(Name = "get_sensor_history", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+        [McpServerTool(Name = "get_sensor_history", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Reads the sensor's history: the NEWEST maxPoints values inside [from, to], oldest first, no aggregation. When the window holds more values than requested, truncated is set — narrow the window for full resolution. A File sensor whose history another request is reading answers readUnavailable=true with no points: retry shortly. Use after find_sensors/get_sensor to analyze a value timeline.")]
         public async Task<SensorHistoryDto> GetSensorHistoryAsync(
             [Description("Sensor id.")] Guid sensorId,
