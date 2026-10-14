@@ -13,7 +13,7 @@ An admin opens the **Downloads** main-menu page (#1550), picks a product and cli
 or opens a product's edit page ("HSM Agent" section) and clicks **Download agent**; the server streams a zip
 containing the byte-identical signed `hsm-agent.exe` + a generated `config.json` (this server's address
 + the product's access key) + silent `install-hsmagent-service.cmd`/`uninstall-hsmagent-service.cmd`
-(`AgentInstallerBundle.InstallScript`/`UninstallScript`). The client runs `install-hsmagent-service.cmd` as
+(`AgentInstallerBundle.InstallScript`/`UninstallScript`) + a `README.txt` (#1559). The client runs `install-hsmagent-service.cmd` as
 Administrator → the
 **C++ exe self-installs** as an auto-start Windows service and connects — zero configuration.
 
@@ -48,12 +48,25 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
   by every local user on those hosts: rotate the product access key once they run the fixed agent.**
   The key is still not encrypted (DPAPI is out of scope: the service must read it unattended).
 
+- **The bundle explains itself (#1559).** `README.txt` (`AgentInstallerBundle.BuildReadme`, plain
+  ASCII, CRLF) lists every file in the zip and covers: install and uninstall (both scripts, right-click
+  "Run as administrator"), the service name `HSMAgent`, the config (`%ProgramData%\HSM Agent\config.json`)
+  and log (`%ProgramData%\HSM Agent\logs\hsm-agent.log` + Application Event Log) locations, that the
+  data dir is restricted to SYSTEM + Administrators (#1279), a `--console --config` troubleshooting run,
+  updating (automatic self-update when the server enables it; manual = rerun the install script, which
+  keeps the existing config), that `hsm-agent.exe` is identical for every product and only `config.json`
+  differs, and the Downloads page. `Installer` passes the absolute Downloads URL with this product
+  preselected (`AgentBundleOptions.DownloadsPageUrl`); without it only the menu hint is written. The
+  install hint on both pages (`_WindowsAgentInstallHint.cshtml`) points at the README. Pinned by
+  `Zip_ReadmeExplainsInstallLocationsAndUpdates` + `Readme_WithoutDownloadsUrl_KeepsTheMenuHint`. A bare
+  double-click on the exe shows a matching message box (`../../agent/feature.md` → *Service model*).
+
 ## Key components
 
 | Component | Location |
 |---|---|
 | Download endpoint `GET /api/agent/installer?productId=…` | `HSMServer/Controllers/AgentController.cs` |
-| Bundle builder (config.json + scripts + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
+| Bundle builder (config.json + scripts + README.txt + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
 | Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only), which also links to the Downloads page |
@@ -61,7 +74,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Shared UI pieces (both pages) | `Views/Shared/_WindowsAgentInstallHint.cshtml`, `_LinuxProbeInstallHint.cshtml`, `_DownloadBundleScript.cshtml` (`downloadBundle`: fetch + blob, errors as a toast) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` + `version.txt` (gitignored; staged by `server-build.yml` — see *Packaging*) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
-| Tests | `tests/HSMServer.Core.Tests/DownloadsPageTests.cs` (Downloads page: product order/visibility, staged state, address) + `tests/Autotests/downloads/downloads_menu.spec.ts` (e2e) + `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (10: incl. topCpu on/off, static-script drift, data-dir ACL before config copy) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
+| Tests | `tests/HSMServer.Core.Tests/DownloadsPageTests.cs` (Downloads page: product order/visibility, staged state, address) + `tests/Autotests/downloads/downloads_menu.spec.ts` (e2e) + `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (12: incl. topCpu on/off, static-script drift, data-dir ACL before config copy, README contents) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
 
 `AgentConfig.EnableTopCpuProcesses` (admin toggle, Configuration → Agent) makes `BuildConfigJson` add a
 `topCpu` block (`enabled:true, periodMs:60000, minPercent:1.0, count:10`) to the generated `config.json`,

@@ -10,13 +10,15 @@ namespace HSMServer.Model.Agent
     /// Parameters baked into one per-product agent bundle. <see cref="AccessKey"/> is the product's
     /// access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="EnableTopCpu"/>
     /// adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
+    /// <see cref="DownloadsPageUrl"/> is the absolute URL of this server's Downloads page, quoted in the
+    /// bundle's README.txt (#1559); null leaves only the generic menu hint.
     /// </summary>
-    public sealed record AgentBundleOptions(string ServerAddress, int Port, string AccessKey, bool AllowUntrustedCertificate, bool EnableTopCpu = false);
+    public sealed record AgentBundleOptions(string ServerAddress, int Port, string AccessKey, bool AllowUntrustedCertificate, bool EnableTopCpu = false, string DownloadsPageUrl = null);
 
     /// <summary>
     /// Builds the downloadable HSM Agent bundle (epic #1167, W7): a zip of the byte-identical signed
     /// <c>hsm-agent.exe</c> + a generated <c>config.json</c> (server address + key) + silent
-    /// install/uninstall scripts. The exe is NEVER modified — all per-product data lives in
+    /// install/uninstall scripts + a README.txt (#1559). The exe is NEVER modified — all per-product data lives in
     /// <c>config.json</c> (Authenticode invariant). Install is 100% native C++ (the exe self-installs);
     /// no .NET/MSI on the client. Pure + side-effect-free so it is unit-tested without a web host.
     /// </summary>
@@ -26,6 +28,7 @@ namespace HSMServer.Model.Agent
         public const string ConfigName = "config.json";
         public const string InstallScript = "install-hsmagent-service.cmd";
         public const string UninstallScript = "uninstall-hsmagent-service.cmd";
+        public const string ReadmeName = "README.txt";
 
         /// <summary>Directory under wwwroot the server build stages the pinned agent exe + version.txt into.</summary>
         public const string StagingFolder = "agent";
@@ -200,7 +203,92 @@ namespace HSMServer.Model.Agent
                 "endlocal");
         }
 
-        /// <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts.</summary>
+        /// <summary>
+        /// README.txt for the bundle (#1559): what each file is, install/uninstall as Administrator, where
+        /// the config and logs live, the service name, the admin-only data dir (#1279), how to update, and
+        /// that the exe is the same for every product. Plain ASCII with CRLF so Notepad on any Windows
+        /// shows it as written. <paramref name="downloadsPageUrl"/> (optional) is quoted as the place to
+        /// get fresh bundles.
+        /// </summary>
+        public static string BuildReadme(string downloadsPageUrl = null)
+        {
+            var lines = new List<string>
+            {
+                "HSM Agent for Windows",
+                "=====================",
+                "",
+                "The HSM Agent is a Windows service that streams this computer's metrics (CPU, memory,",
+                "disks, network) to the HSM server this archive was downloaded from.",
+                "",
+                "Files",
+                "-----",
+                ExeName + "                   The agent. Windows starts it as a service; double-clicking",
+                "                                it only shows a short hint.",
+                ConfigName + "                     This product's settings: the server address and the product",
+                "                                access key.",
+                InstallScript + "    Installs (or reinstalls) and starts the service.",
+                UninstallScript + "  Stops and removes the service.",
+                ReadmeName + "                      This file.",
+                "",
+                "Install",
+                "-------",
+                "1. Extract the whole archive into one folder.",
+                "2. Right-click " + InstallScript + " and choose \"Run as administrator\".",
+                "   The script copies " + ExeName + " to %ProgramFiles%\\HSM Agent, copies " + ConfigName + " to",
+                "   %ProgramData%\\HSM Agent (only when no config is there yet), registers the Windows",
+                "   service HSMAgent (automatic start) and starts it.",
+                "3. The computer then appears in this product's tree on the HSM server.",
+                "",
+                "Uninstall",
+                "---------",
+                "Right-click " + UninstallScript + " and choose \"Run as administrator\".",
+                "It stops and removes the HSMAgent service and the installed exe. The data folder",
+                "%ProgramData%\\HSM Agent (config and logs) is kept; delete it as Administrator if it is",
+                "no longer needed.",
+                "",
+                "Configuration and logs",
+                "----------------------",
+                "Service name:  HSMAgent (services.msc, or: sc query HSMAgent)",
+                "Config:        %ProgramData%\\HSM Agent\\" + ConfigName,
+                "Logs:          %ProgramData%\\HSM Agent\\logs\\hsm-agent.log",
+                "               Errors also go to the Windows Application Event Log, source HSMAgent.",
+                "",
+                ConfigName + " holds the product access key, so the data dir %ProgramData%\\HSM Agent is",
+                "restricted to SYSTEM and Administrators (#1279): the install script and every service",
+                "start set its permissions. Open it, read the logs or edit the config as Administrator.",
+                "After editing the config, restart the service: sc stop HSMAgent, then sc start HSMAgent.",
+                "",
+                "For troubleshooting, run the agent in the foreground from an Administrator prompt",
+                "(stop the service first; Ctrl-C to quit):",
+                "    \"%ProgramFiles%\\HSM Agent\\" + ExeName + "\" --console --config \"%ProgramData%\\HSM Agent\\" + ConfigName + "\"",
+                "",
+                "Updating",
+                "--------",
+                "- Automatic: the installed agent checks the server for a newer version and updates",
+                "  itself when the server administrator has enabled agent auto-update.",
+                "- Manual: download a fresh archive and run " + InstallScript + " as Administrator",
+                "  again. It stops the service, replaces " + ExeName + " and starts it again; the existing",
+                "  %ProgramData%\\HSM Agent\\" + ConfigName + " is kept as it is. To move an installed agent to",
+                "  another product, replace that " + ConfigName + " with the one from the new archive (as",
+                "  Administrator), then restart the service.",
+                "",
+                "One exe for every product",
+                "-------------------------",
+                ExeName + " is identical in every download, for every product; only " + ConfigName + " differs.",
+                "",
+                "Downloads",
+                "---------",
+                "Fresh archives for this or any other product (Windows agent and Linux probe) are on the",
+                "Downloads page of the HSM server (main menu > Downloads, administrators only).",
+            };
+
+            if (!string.IsNullOrWhiteSpace(downloadsPageUrl))
+                lines.Add(downloadsPageUrl);
+
+            return Join(lines.ToArray());
+        }
+
+        /// <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts + README.</summary>
         public static byte[] BuildZip(byte[] agentExe, AgentBundleOptions options)
         {
             using var memory = new MemoryStream();
@@ -210,6 +298,7 @@ namespace HSMServer.Model.Agent
                 AddEntry(archive, ConfigName, Encoding.UTF8.GetBytes(BuildConfigJson(options)));
                 AddEntry(archive, InstallScript, Encoding.ASCII.GetBytes(BuildInstallScript()));
                 AddEntry(archive, UninstallScript, Encoding.ASCII.GetBytes(BuildUninstallScript()));
+                AddEntry(archive, ReadmeName, Encoding.ASCII.GetBytes(BuildReadme(options.DownloadsPageUrl)));
             }
 
             return memory.ToArray();
@@ -222,7 +311,7 @@ namespace HSMServer.Model.Agent
             stream.Write(content, 0, content.Length);
         }
 
-        // Batch scripts want CRLF line endings.
+        // Batch scripts (and README.txt, for Notepad) want CRLF line endings.
         private static string Join(params string[] lines) => string.Join("\r\n", lines) + "\r\n";
     }
 }

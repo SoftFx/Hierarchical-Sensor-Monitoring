@@ -858,20 +858,24 @@
             Parameters baked into one per-product agent bundle. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.AccessKey"/> is the product's
             access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/>
             adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
+            <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.DownloadsPageUrl"/> is the absolute URL of this server's Downloads page, quoted in the
+            bundle's README.txt (#1559); null leaves only the generic menu hint.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.AgentBundleOptions.#ctor(System.String,System.Int32,System.String,System.Boolean,System.Boolean)">
+        <member name="M:HSMServer.Model.Agent.AgentBundleOptions.#ctor(System.String,System.Int32,System.String,System.Boolean,System.Boolean,System.String)">
             <summary>
             Parameters baked into one per-product agent bundle. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.AccessKey"/> is the product's
             access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/>
             adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
+            <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.DownloadsPageUrl"/> is the absolute URL of this server's Downloads page, quoted in the
+            bundle's README.txt (#1559); null leaves only the generic menu hint.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentInstallerBundle">
             <summary>
             Builds the downloadable HSM Agent bundle (epic #1167, W7): a zip of the byte-identical signed
             <c>hsm-agent.exe</c> + a generated <c>config.json</c> (server address + key) + silent
-            install/uninstall scripts. The exe is NEVER modified — all per-product data lives in
+            install/uninstall scripts + a README.txt (#1559). The exe is NEVER modified — all per-product data lives in
             <c>config.json</c> (Authenticode invariant). Install is 100% native C++ (the exe self-installs);
             no .NET/MSI on the client. Pure + side-effect-free so it is unit-tested without a web host.
             </summary>
@@ -900,8 +904,17 @@
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildUninstallScript">
             <summary>Uninstaller script: deregisters the service and removes the installed exe. Requires Administrator.</summary>
         </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildReadme(System.String)">
+            <summary>
+            README.txt for the bundle (#1559): what each file is, install/uninstall as Administrator, where
+            the config and logs live, the service name, the admin-only data dir (#1279), how to update, and
+            that the exe is the same for every product. Plain ASCII with CRLF so Notepad on any Windows
+            shows it as written. <paramref name="downloadsPageUrl"/> (optional) is quoted as the place to
+            get fresh bundles.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildZip(System.Byte[],HSMServer.Model.Agent.AgentBundleOptions)">
-            <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts.</summary>
+            <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts + README.</summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentKeySelector">
             <summary>

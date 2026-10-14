@@ -68,6 +68,53 @@ namespace HSMServer.Core.Tests
             Assert.Contains(AgentInstallerBundle.ConfigName, names);
             Assert.Contains(AgentInstallerBundle.InstallScript, names);
             Assert.Contains(AgentInstallerBundle.UninstallScript, names);
+            Assert.Contains(AgentInstallerBundle.ReadmeName, names);
+        }
+
+        // #1559: the bundle explains itself — a double-clicked exe only shows a hint, so the README is
+        // where an operator finds install/uninstall, config/log locations, update and the Downloads page.
+        [Fact]
+        public void Zip_ReadmeExplainsInstallLocationsAndUpdates()
+        {
+            const string downloadsUrl = "https://hsm.example.com:44333/Downloads?productId=42";
+            var zipBytes = AgentInstallerBundle.BuildZip(new byte[] { 0x4D, 0x5A }, _options with { DownloadsPageUrl = downloadsUrl });
+
+            using var memory = new MemoryStream(zipBytes);
+            using var archive = new ZipArchive(memory, ZipArchiveMode.Read);
+            using var entryStream = archive.GetEntry(AgentInstallerBundle.ReadmeName).Open();
+            using var copy = new MemoryStream();
+            entryStream.CopyTo(copy);
+            var bytes = copy.ToArray();
+            var readme = Encoding.ASCII.GetString(bytes);
+
+            Assert.All(bytes, b => Assert.True(b < 0x80, $"README.txt must be plain ASCII (byte 0x{b:X2})"));
+            Assert.DoesNotMatch("(?<!\r)\n", readme); // CRLF only, so Notepad shows the line breaks
+            Assert.EndsWith("\r\n", readme);
+
+            Assert.Contains("Right-click " + AgentInstallerBundle.InstallScript + " and choose \"Run as administrator\".", readme);
+            Assert.Contains("Right-click " + AgentInstallerBundle.UninstallScript + " and choose \"Run as administrator\".", readme);
+            Assert.Contains("Service name:  HSMAgent", readme);
+            Assert.Contains("Config:        %ProgramData%\\HSM Agent\\" + AgentInstallerBundle.ConfigName, readme);
+            Assert.Contains("Logs:          %ProgramData%\\HSM Agent\\logs\\hsm-agent.log", readme);
+            Assert.Contains("restricted to SYSTEM and Administrators", readme);
+            Assert.Contains("--console --config", readme);
+            Assert.Contains("download a fresh archive and run " + AgentInstallerBundle.InstallScript + " as Administrator", readme);
+            Assert.Contains(AgentInstallerBundle.ExeName + " is identical in every download, for every product; only " + AgentInstallerBundle.ConfigName + " differs.", readme);
+            Assert.Contains("Downloads page of the HSM server", readme);
+            Assert.Contains(downloadsUrl, readme);
+
+            // Every file the zip carries is described.
+            foreach (var entry in archive.Entries)
+                Assert.Contains(entry.FullName, readme);
+        }
+
+        [Fact]
+        public void Readme_WithoutDownloadsUrl_KeepsTheMenuHint()
+        {
+            var readme = AgentInstallerBundle.BuildReadme();
+
+            Assert.Contains("main menu > Downloads", readme);
+            Assert.DoesNotContain("http", readme);
         }
 
         [Fact]
