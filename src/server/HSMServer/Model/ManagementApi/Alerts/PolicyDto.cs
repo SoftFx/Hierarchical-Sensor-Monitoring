@@ -144,12 +144,21 @@ namespace HSMServer.Model.ManagementApi.Alerts
     {
         /// <summary>
         /// The sensor property compared (PolicyProperty enum name).
-        /// Common to every type: Status, Comment, NewSensorData.
-        /// Value types: Value; String adds Length; File adds OriginalSize; bar types add
-        /// Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount;
-        /// numeric single-value types add EmaValue.
+        /// Condition-property availability by sensor type — exhaustive, negatives included:
+        /// on the policy surface a property the type does not offer answers 422. The template
+        /// surface checks nothing against this table: only some non-offered pairs are rejected
+        /// with a template-apply warning, the rest are stored silently and fail at every
+        /// evaluation (the bar statistics on Integer, Double and Rate sensors, and Length,
+        /// Count or OriginalSize on a type that does not offer them).
+        /// every type — Status, Comment, NewSensorData
+        /// Boolean — nothing beyond the common set (no Value)
+        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
+        /// TimeSpan, Version — Value
+        /// String — Value, Length
+        /// File — OriginalSize (no Value)
+        /// IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)
         /// </summary>
-        [Description("The sensor property compared (PolicyProperty enum name). Common to every type: Status, Comment, NewSensorData. Value types: Value; String adds Length; File adds OriginalSize; bar types add Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount; numeric single-value types add EmaValue.")]
+        [Description("The sensor property compared (PolicyProperty enum name). " + AlertPropertyMatrixDocs.Matrix)]
         public string Property { get; init; }
 
         /// <summary>
@@ -196,8 +205,40 @@ namespace HSMServer.Model.ManagementApi.Alerts
     [Description("The notification effect of a policy: what is sent and on which cadence.")]
     public sealed record AlertNotificationDto
     {
-        /// <summary>Message template, may reference alert variables ($product, $path, $status, $comment, $operation, $target, $prevStatus).</summary>
-        [Description("Message template, may reference alert variables ($product, $path, $status, $comment, $operation, $target, $prevStatus).")]
+        /// <summary>
+        /// Message template — the variables below are substituted as substrings (a longer token
+        /// containing a variable has that variable replaced inside it); curly braces are not
+        /// allowed: the message is rendered with string.Format, where braces either throw at
+        /// evaluation time or silently substitute another variable's value; the template is
+        /// split on spaces, so whitespace touching a space is dropped and whitespace with no
+        /// space in it is kept:
+        /// $product — Parent product name
+        /// $path — Sensor path
+        /// $sensor — Sensor name
+        /// $unit — Sensor unit
+        /// $status — Sensor status
+        /// $time — Sensor value sending time
+        /// $comment — Sensor value comment
+        /// $prevStatus — Status of the previous sensor data
+        /// $prevComment — Comment of the previous sensor data
+        /// $prevValue — Value of the previous sensor data
+        /// $value — Sensor Value
+        /// $emaValue — Sensor EMA (Value) value
+        /// $min — Bar sensor Min value
+        /// $max — Bar sensor Max value
+        /// $mean — Bar sensor Mean value
+        /// $firstValue — Bar sensor FirstValue value
+        /// $lastValue — Bar sensor LastValue value
+        /// $count — Bar sensor Count value
+        /// $emaMin — Bar sensor EMA (Min) value
+        /// $emaMax — Bar sensor EMA (Max) value
+        /// $emaMean — Bar sensor EMA (Mean) value
+        /// $emaCount — Bar sensor EMA (Count) value
+        /// $property — Alert property
+        /// $operation — Alert operation
+        /// $target — Alert constant to compare
+        /// </summary>
+        [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 
         /// <summary>Re-send cadence of a still-triggered policy (AlertRepeatMode enum name). Repeat table: Immediately (default), FiveMinutes, TenMinutes, FifteenMinutes, ThirtyMinutes, Hourly, Daily, Weekly.</summary>
