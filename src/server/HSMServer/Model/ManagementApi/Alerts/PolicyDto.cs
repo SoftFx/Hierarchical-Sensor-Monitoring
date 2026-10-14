@@ -94,7 +94,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// Inactivity interval as a TimeSpan string (e.g. "00:30:00"); null exactly when
         /// <c>inherit</c> is true (reads: also null for a policy resolving to no interval anywhere).
         /// </summary>
-        [Description("Inactivity interval as a TimeSpan string (e.g. \"00:30:00\"); null exactly when `inherit` is true.")]
+        [Description("Inactivity interval as a TimeSpan string (e.g. \"00:30:00\"); null exactly when `inherit` is true (on reads, also null for a policy resolving to no interval anywhere).")]
         public string Interval { get; init; }
 
         /// <summary>True = take the interval from the parent node (the explicit reset-to-parent switch; on a product it resolves against the product's own Inactivity Period setting).</summary>

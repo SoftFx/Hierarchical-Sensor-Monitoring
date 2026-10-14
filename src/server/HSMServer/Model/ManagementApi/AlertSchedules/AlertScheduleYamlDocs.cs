@@ -9,14 +9,14 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     {
         internal const string Format =
             @"The working-time schedule as YAML text (camelCase keys). Structure and rules:
-- daySchedules (required, non-empty): each entry has:
+- daySchedules (required key; an empty list validates but leaves no recurring working time): each entry has:
   - id: optional string; auto-generated when omitted. Referenced by overrides.customScheduleDates[].scheduleType.
   - days (required, non-empty): day names mon, tue, wed, thu, fri, sat, sun (3-letter or full English).
   - windows (required, non-empty): entries of start/end as HH:mm (00:00..24:00); start < end, each window at least 1 minute, windows within one entry must not overlap.
 - disabledDates (optional): 'yyyy-MM-dd' dates (years 2000..2100) with no working time at all.
 - overrides (optional):
   - enabledDates: 'yyyy-MM-dd' dates that follow their weekday schedule despite disabledDates.
-  - customScheduleDates: per-date entries with EITHER scheduleType (the id of a daySchedules entry, max 50 chars) OR their own windows.
+  - customScheduleDates: per-date entries with EITHER scheduleType (an id of a daySchedules entry, max 50 chars; the reference is NOT validated — an unknown value silently falls back to the regular weekday schedule) OR their own windows.
 A date must not appear in both enabledDates and customScheduleDates; custom dates must be unique.
 Example:
 daySchedules:
