@@ -80,13 +80,16 @@ namespace HSMServer.Model.Agent
                 .ToList();
 
             var probePackage = FindStagedProbePackage(webRootPath);
+            // The version follows the staged state: a version.txt left behind without the exe must not
+            // show a version next to the "not staged" notice (the endpoint answers 503 either way).
+            var agentStaged = IsAgentStaged(webRootPath);
 
             return new DownloadsViewModel
             {
                 Products = ordered,
                 SelectedProductId = selectedProductId is Guid id && ordered.Any(p => p.Id == id) ? id : null,
-                AgentStaged = IsAgentStaged(webRootPath),
-                AgentVersion = ReadStagedAgentVersion(webRootPath),
+                AgentStaged = agentStaged,
+                AgentVersion = agentStaged ? ReadStagedAgentVersion(webRootPath) : null,
                 ProbePackage = probePackage,
                 ProbeVersion = LinuxProbeInstallerBundle.PackageVersion(probePackage),
                 ServerAddress = serverAddress,

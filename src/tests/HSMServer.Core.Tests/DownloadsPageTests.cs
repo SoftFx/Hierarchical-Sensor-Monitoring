@@ -102,7 +102,7 @@ namespace HSMServer.Core.Tests
         [Theory]
         [InlineData(true, null, true)]     // exe without version.txt: downloadable, version unknown
         [InlineData(true, "  \n", true)]   // empty version.txt reads as unknown, not as a blank version
-        [InlineData(false, "0.5.28", false)] // version.txt alone: the endpoint answers 503, so no button
+        [InlineData(false, "0.5.28", false)] // version.txt alone: the endpoint answers 503, so no button and no version
         public void Build_AgentStagedFollowsTheExe_VersionIsNullWhenUnknown(bool exe, string version, bool expectedStaged)
         {
             WithWebRoot(webRoot =>
@@ -112,7 +112,7 @@ namespace HSMServer.Core.Tests
                 var model = DownloadsPageBuilder.Build([], webRoot, Address, Port);
 
                 Assert.Equal(expectedStaged, model.AgentStaged);
-                Assert.Equal(string.IsNullOrWhiteSpace(version) ? null : version.Trim(), model.AgentVersion);
+                Assert.Equal(expectedStaged && !string.IsNullOrWhiteSpace(version) ? version.Trim() : null, model.AgentVersion);
             });
         }
 
