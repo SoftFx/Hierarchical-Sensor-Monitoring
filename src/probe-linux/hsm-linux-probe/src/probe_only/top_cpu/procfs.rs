@@ -15,54 +15,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-/// `PF_KTHREAD` (include/linux/sched.h): the task is a kernel thread.
-const PF_KTHREAD: u64 = 0x0020_0000;
-
-/// The fields of `/proc/<pid>/stat` the sampler uses.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PidStat {
-    pub pid: u32,
-    /// Field 2 without its parentheses (`task->comm`, ≤ 15 bytes, lossily decoded).
-    pub comm: String,
-    /// Field 9, the `PF_*` flags.
-    pub flags: u64,
-    /// Fields 14 + 15, `utime + stime`, in clock ticks (USER_HZ). For a thread-group leader the
-    /// kernel sums every thread, live and exited, so this is the whole process.
-    pub cpu_ticks: u64,
-    /// Field 22, the start time in clock ticks after boot: with the pid it identifies a process,
-    /// so a reused pid is never credited with its predecessor's time.
-    pub start_ticks: u64,
-}
-
-impl PidStat {
-    pub fn is_kernel_thread(&self) -> bool {
-        self.flags & PF_KTHREAD != 0
-    }
-}
-
-/// Parse `/proc/<pid>/stat`. The name (field 2) is in parentheses and may itself contain spaces,
-/// parentheses and `)` — a process can name itself anything — so the fields after it are split
-/// at the **last** `)` (the same rule as the collector's `ParseProcSelfStat`). `None` for
-/// anything malformed or short.
-pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
-    let open = text.find('(')?;
-    let close = text.rfind(')')?;
-    if close < open {
-        return None;
-    }
-    let pid = text[..open].trim().parse().ok()?;
-    let comm = text[open + 1..close].to_string();
-    // rest[0] is field 3 (state), so field N is rest[N - 3].
-    let rest: Vec<&str> = text[close + 1..].split_whitespace().collect();
-    let field = |n: usize| -> Option<u64> { rest.get(n - 3)?.parse().ok() };
-    Some(PidStat {
-        pid,
-        comm,
-        flags: field(9)?,
-        cpu_ticks: field(14)?.checked_add(field(15)?)?,
-        start_ticks: field(22)?,
-    })
-}
+#[cfg(test)]
+pub use hsm_linux_probe_io::procstat::{parse_pid_stat, PF_KTHREAD};
+/// The process table and the stat parser live in the top disk I/O helper crate, which reads the
+/// same processes (#1547); re-exported so both samplers name them alike.
+pub use hsm_linux_probe_io::procstat::{read_processes, PidStat};
 
 /// The host's total CPU time from the aggregate `cpu` line of `/proc/stat`, in clock ticks:
 /// every field except `guest`/`guest_nice` (already counted in `user`/`nice`). The same total the
@@ -177,29 +134,11 @@ impl Sampler {
             .map_err(|error| format!("cannot read {}: {error}", stat_path.display()))?;
         let total = parse_total_ticks(&total_text)
             .ok_or_else(|| format!("{} has no aggregate cpu line", stat_path.display()))?;
-        let entries = std::fs::read_dir(&self.proc_root)
-            .map_err(|error| format!("cannot list {}: {error}", self.proc_root.display()))?;
-
-        let mut current: HashMap<u32, (u64, u64)> = HashMap::new();
-        let mut processes: Vec<PidStat> = Vec::new();
-        for entry in entries.flatten() {
-            let file_name = entry.file_name();
-            let Some(pid) = file_name.to_str().and_then(|name| name.parse::<u32>().ok()) else {
-                continue;
-            };
-            // Gone between the listing and the read, or a pid directory being torn down: normal.
-            let Ok(bytes) = std::fs::read(entry.path().join("stat")) else {
-                continue;
-            };
-            let Some(stat) = parse_pid_stat(&String::from_utf8_lossy(&bytes)) else {
-                continue;
-            };
-            if stat.pid != pid {
-                continue;
-            }
-            current.insert(pid, (stat.start_ticks, stat.cpu_ticks));
-            processes.push(stat);
-        }
+        let processes = read_processes(&self.proc_root)?;
+        let current: HashMap<u32, (u64, u64)> = processes
+            .iter()
+            .map(|stat| (stat.pid, (stat.start_ticks, stat.cpu_ticks)))
+            .collect();
         let visibility = Visibility {
             processes: processes.len(),
         };
@@ -313,9 +252,22 @@ pub mod tests {
         stime: u64,
         start: u64,
     ) -> String {
+        stat_line_of_child(pid, comm, 1, flags, utime, stime, start)
+    }
+
+    /// [`stat_line`] with the parent's pid (field 4).
+    pub fn stat_line_of_child(
+        pid: u32,
+        comm: &str,
+        ppid: u32,
+        flags: u64,
+        utime: u64,
+        stime: u64,
+        start: u64,
+    ) -> String {
         format!(
-            "{pid} ({comm}) S 1 {pid} {pid} 0 -1 {flags} 120 0 0 0 {utime} {stime} 0 0 20 0 1 0 \
-             {start} 12345678 345 18446744073709551615 1 1 0 0 0 0 0 4096 0 0 0 0 17 2 0 0 0 0 0\n"
+            "{pid} ({comm}) S {ppid} {pid} {pid} 0 -1 {flags} 120 0 0 0 {utime} {stime} 0 0 20 0 1 \
+             0 {start} 12345678 345 18446744073709551615 1 1 0 0 0 0 0 4096 0 0 0 0 17 2 0 0 0 0 0\n"
         )
     }
 
@@ -355,6 +307,7 @@ pub mod tests {
                 .unwrap_or_else(|| panic!("{comm:?} must parse"));
             assert_eq!(parsed.comm, comm);
             assert_eq!(parsed.pid, 4242);
+            assert_eq!(parsed.ppid, 1);
             assert_eq!(parsed.flags, 0x40_0100);
             assert_eq!(parsed.cpu_ticks, 755);
             assert_eq!(parsed.start_ticks, 9000);
@@ -369,6 +322,7 @@ pub mod tests {
                     0 0 0 0 0 0 0 0 0\n";
         let parsed = parse_pid_stat(line).expect("parse");
         assert_eq!(parsed.comm, "kworker/3:1-events");
+        assert_eq!(parsed.ppid, 2, "kthreadd");
         assert!(parsed.is_kernel_thread());
         assert_eq!(parsed.cpu_ticks, 112);
         assert_eq!(parsed.start_ticks, 112);

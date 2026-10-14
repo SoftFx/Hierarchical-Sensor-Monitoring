@@ -1,0 +1,21 @@
+[package]
+name = "hsm-linux-probe-io"
+description = "Root-run helper of the HSM Linux probe: reads every process's /proc/<pid>/io and writes one snapshot file for the unprivileged probe (#1547)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hsm-linux-probe-io"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }

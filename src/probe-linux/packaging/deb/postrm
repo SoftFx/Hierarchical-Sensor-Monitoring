@@ -8,6 +8,12 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
     rmdir /etc/systemd/system/hsm-linux-probe.service.d 2>/dev/null || true
+    # The top disk I/O helper's enablement link (#1547), when prerm could not disable it (no
+    # running systemd): its unit file is gone with the package.
+    rm -f /etc/systemd/system/multi-user.target.wants/hsm-linux-probe-io.service
+    # Its last snapshot, kept across stops (RuntimeDirectoryPreserve=yes): every process's pid, name
+    # and I/O counters must not outlive the package until the next reboot.
+    rm -rf /run/hsm-linux-probe-io
 fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true

@@ -58,44 +58,8 @@ pub const BYTES_PER_GB: f64 = 1_000_000_000.0;
 const SECTOR_BYTES: u64 = 512;
 const FILE_VERSION: u32 = 1;
 
-/// `(local day number, second of that day)` for a Unix time in milliseconds, in the host's
-/// timezone. Injectable so tests do not depend on the machine's zone.
-pub type LocalTime = fn(i64) -> (i64, i64);
-
-/// [`LocalTime`] of the host: `localtime_r`'s UTC offset (so DST is honored), UTC if unknown.
-pub fn local_time(unix_ms: i64) -> (i64, i64) {
-    let seconds = unix_ms.div_euclid(1000);
-    let local = seconds + utc_offset(seconds).unwrap_or(0);
-    (local.div_euclid(86_400), local.rem_euclid(86_400))
-}
-
-#[cfg(unix)]
-fn utc_offset(seconds: i64) -> Option<i64> {
-    // glibc's localtime_r reads the zone once per process; tzset re-reads TZ and /etc/localtime
-    // (a stat when unchanged), so a `timedatectl set-timezone` applies without a restart.
-    extern "C" {
-        // POSIX <time.h>; not bound by the libc crate.
-        fn tzset();
-    }
-    // SAFETY: tzset takes no arguments and only updates libc's own zone state.
-    unsafe { tzset() };
-    let time = libc::time_t::try_from(seconds).ok()?;
-    // SAFETY: `tm` is plain data; localtime_r only writes into it.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    // SAFETY: both pointers are valid for the duration of the call.
-    let result = unsafe { libc::localtime_r(&time, &mut tm) };
-    if result.is_null() {
-        return None;
-    }
-    // The field type differs between libc targets, hence `as`.
-    #[allow(clippy::unnecessary_cast)]
-    Some(tm.tm_gmtoff as i64)
-}
-
-#[cfg(not(unix))]
-fn utc_offset(_seconds: i64) -> Option<i64> {
-    None
-}
+/// The local calendar, shared with the top disk I/O helper (`hsm_linux_probe_io::clock`).
+pub use hsm_linux_probe_io::clock::{local_time, LocalTime};
 
 /// A disk's counters at its last sample.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]

@@ -41,6 +41,18 @@ namespace HSMServer.Model.Agent
         public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
         public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
+        /// <summary>
+        /// The root helper of top disk I/O (#1547), shipped disabled in the package: install.sh enables it
+        /// when the host config enables <c>topDiskIo</c> and disables it otherwise.
+        /// </summary>
+        public const string TopDiskIoUnit = "hsm-linux-probe-io.service";
+
+        /// <summary>
+        /// The helper's runtime directory: kept across its stops (<c>RuntimeDirectoryPreserve=yes</c>) and
+        /// holding every process's pid, name and I/O counters, so install.sh ("off") and uninstall.sh remove it.
+        /// </summary>
+        public const string TopDiskIoRuntimeDirectory = "/run/hsm-linux-probe-io";
+
         // A JSON string with any characters, escaped quotes included (#1515): a brace inside one
         // (an exclude pattern, say) is text, not structure. Inside a POSIX bracket expression the
         // backslash is literal, so [^"\\] is "neither a quote nor a backslash", as in .NET.
@@ -67,9 +79,20 @@ namespace HSMServer.Model.Agent
         /// of truth: the tests apply it to what <see cref="BuildConfigJson"/> emits. Contains no single
         /// quote (it is embedded in '...').
         /// </summary>
-        public const string TopCpuEnabledPattern =
-            "^[[:space:]]*\\{(" + TextPattern + "|" + ThreeLevelObjectPattern + ")*" +
-            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{(" + TextPattern + ")*\"enabled\"[[:space:]]*:[[:space:]]*true";
+        public const string TopCpuEnabledPattern = TopLevelKeyPattern + "\"topCpu\"" + EnabledBlockPattern;
+
+        /// <summary>
+        /// The same check as <see cref="TopCpuEnabledPattern"/> for the top-level <c>topDiskIo</c> block
+        /// (#1547), the only one the probe and its helper read (<c>Config::top_disk_io</c>): install.sh
+        /// enables <see cref="TopDiskIoUnit"/> only when it matches.
+        /// </summary>
+        public const string TopDiskIoEnabledPattern = TopLevelKeyPattern + "\"topDiskIo\"" + EnabledBlockPattern;
+
+        // The root object's own text up to a top-level key: whole strings or balanced nested objects.
+        private const string TopLevelKeyPattern = "^[[:space:]]*\\{(" + TextPattern + "|" + ThreeLevelObjectPattern + ")*";
+
+        // A key's value: a flat object holding "enabled": true.
+        private const string EnabledBlockPattern = "[[:space:]]*:[[:space:]]*\\{(" + TextPattern + ")*\"enabled\"[[:space:]]*:[[:space:]]*true";
 
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
@@ -276,6 +299,9 @@ namespace HSMServer.Model.Agent
                 TopCpuDropInScript(enableTopCpu),
                 "",
                 "systemctl daemon-reload",
+                "",
+                TopDiskIoServiceScript(),
+                "",
                 "# A failed start is judged by the status check below, which prints the diagnostics.",
                 "systemctl enable --now \"$UNIT\" || true",
                 "# Also restart an already running probe so a reinstall picks up the new key, config and CA.",
@@ -317,6 +343,9 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "systemctl disable --now \"$UNIT\" 2>/dev/null || true",
+                "# The top disk I/O helper install.sh may have enabled (#1547).",
+                "systemctl disable --now " + TopDiskIoUnit + " 2>/dev/null || true",
+                "rm -rf " + TopDiskIoRuntimeDirectory,
                 "",
                 "if dpkg -s \"$PACKAGE\" >/dev/null 2>&1; then",
                 "  DEBIAN_FRONTEND=noninteractive apt-get purge -y \"$PACKAGE\"",
@@ -453,6 +482,48 @@ namespace HSMServer.Model.Agent
 
             lines.Add("fi");
             return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// The install.sh step for top disk I/O processes (#1547), run after <c>daemon-reload</c> so the
+        /// package's units are known. Reading another user's <c>/proc/&lt;pid&gt;/io</c> needs
+        /// <c>CAP_DAC_READ_SEARCH</c> and <c>CAP_SYS_PTRACE</c>, which would let their holder read the whole
+        /// host filesystem through <c>/proc/&lt;pid&gt;/root</c>; so the probe holds neither and the package
+        /// ships a separate root helper, <see cref="TopDiskIoUnit"/> (disabled), that reads only
+        /// <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
+        /// installed on the host enables the top-level <c>topDiskIo</c> block</b>
+        /// (<see cref="TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
+        /// the config; otherwise it disables and stops a helper that is enabled or running, and says so. A
+        /// package older than 0.9.0 has no such unit: enabling prints a WARNING, disabling stays quiet. The
+        /// bundle never enables <c>topDiskIo</c> itself (there is no server switch): an operator enables it in
+        /// the host config and re-runs install.sh (RUNBOOK "Top disk I/O processes"). A config it cannot read
+        /// or recognise counts as "off" — the safe side. uninstall.sh and the package's prerm disable it too.
+        /// </summary>
+        private static string TopDiskIoServiceScript()
+        {
+            return string.Join("\n",
+                "# Top disk I/O processes (#1547): the root helper that reads /proc/<pid>/io for the unprivileged probe",
+                "# runs when, and only when, the config installed above enables the top-level topDiskIo block.",
+                "IO_UNIT=" + TopDiskIoUnit,
+                "top_disk_io_on=0",
+                "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
+                "  | grep -E '" + TopDiskIoEnabledPattern + "' >/dev/null; then",
+                "  top_disk_io_on=1",
+                "fi",
+                "if [ \"$top_disk_io_on\" -eq 1 ]; then",
+                "  if systemctl enable \"$IO_UNIT\" >/dev/null 2>&1 && systemctl restart \"$IO_UNIT\"; then",
+                "    echo \"Top disk I/O processes: on in $CONFIG_DIR/" + ConfigName + "; started $IO_UNIT (the root helper; the probe itself stays unprivileged).\"",
+                "  else",
+                "    echo \"WARNING: topDiskIo is on in $CONFIG_DIR/" + ConfigName + ", but $IO_UNIT could not be enabled and started (a package older than 0.9.0?); see: journalctl -u $IO_UNIT\" >&2",
+                "  fi",
+                "else",
+                "  if systemctl is-enabled --quiet \"$IO_UNIT\" 2>/dev/null || systemctl is-active --quiet \"$IO_UNIT\" 2>/dev/null; then",
+                "    systemctl disable --now \"$IO_UNIT\" >/dev/null 2>&1 || true",
+                "    echo \"Top disk I/O processes: off in $CONFIG_DIR/" + ConfigName + "; stopped and disabled $IO_UNIT.\"",
+                "  fi",
+                "  # Its last snapshot outlives a stop (RuntimeDirectoryPreserve) and lists every process: removed with it.",
+                "  rm -rf " + TopDiskIoRuntimeDirectory,
+                "fi");
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.

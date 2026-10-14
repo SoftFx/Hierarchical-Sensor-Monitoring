@@ -23,6 +23,10 @@
 //! * [`top_cpu`] — `.computer/Top CPU processes/<name>` (#1479), the Windows agents' sensor family
 //!   from `/proc`; off unless the top-level `topCpu` block enables it; every sensor registers at
 //!   runtime. Registered by the probe next to [`register`], since its switch is not under `probe`.
+//! * [`top_disk_io`] — `.computer/Top disk writers/<name>`, `Top disk readers/<name>` and the
+//!   per-day `Written per day by process/<name>` / `Read per day by process/<name>` (#1547), from
+//!   `/proc/<pid>/io`; off unless the top-level `topDiskIo` block enables it, registered like
+//!   [`top_cpu`], with which it shares the process table and the name rule.
 //!
 //! # Failure isolation (root rules #6 and #8)
 //!
@@ -36,6 +40,7 @@ pub mod disks;
 pub mod docker;
 pub mod host;
 pub mod top_cpu;
+pub mod top_disk_io;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;

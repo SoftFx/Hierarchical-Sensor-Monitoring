@@ -43,6 +43,9 @@ case "$1" in
         # config + key first, then runs `systemctl enable --now`.
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload >/dev/null || true
+            # The top disk I/O helper (#1547) is never enabled here: install.sh enables it when the
+            # config asks for it. A running one is restarted so it runs the new binary.
+            systemctl try-restart hsm-linux-probe-io.service >/dev/null 2>&1 || true
         fi
         # Packages before 0.2.0 left no marker, so upgrading from those still needs a manual start.
         restart_if_marked

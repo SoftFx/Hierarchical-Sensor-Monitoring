@@ -4,6 +4,9 @@ if [ -d /run/systemd/system ]; then
     case "$1" in
         remove|deconfigure)
             systemctl disable --now hsm-linux-probe.service >/dev/null 2>&1 || true
+            # The top disk I/O helper (#1547), enabled by install.sh where the config asks for it:
+            # disabled here so no enablement link outlives the unit file.
+            systemctl disable --now hsm-linux-probe-io.service >/dev/null 2>&1 || true
             ;;
         upgrade)
             # Remember a running probe, so the new package's postinst starts it again: an upgrade

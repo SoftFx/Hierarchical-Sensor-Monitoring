@@ -136,7 +136,7 @@ turns the sensor to Timeout on the server instead of leaving its last value look
 not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
 eleven times every 5 seconds on garage-server (one stats call per running container); the disk
 counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
-also drives the daily write/read totals), as do top-CPU (60 s), the shared collector's own bars,
+also drives the daily write/read totals), as do top-CPU and top disk I/O (60 s), the shared collector's own bars,
 the heartbeat and the dispatch, which this decision did not touch.
 
 ### Host (#1476)
@@ -533,6 +533,161 @@ the baseline saw.
 at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
 is one read of `/proc/stat` plus one small read per process per minute.
 
+### Top disk I/O processes (#1547)
+
+Which **process** writes and reads the disks the most — now, and over a day. The disk sensors
+report a whole disk (`Average disk write speed on <name> disk`, `Written per day on <name> disk`)
+and Docker reports per container; these four families report per process name. **Off unless the
+top-level `topDiskIo` block enables it** (not under `probe`, like `topCpu`); the server has no
+switch for it — enable it in the host's config (RUNBOOK "Top disk I/O processes").
+
+| Sensor | Type · unit | Posted |
+|---|---|---|
+| `.computer/Top disk writers/<name>` | Double · `MBytes_sec` (1 MB = 1024² bytes, as the disk speed sensors) | every `periodMs` (60 s): the names at or above `minBytesPerSec` (1 MiB/s), the fastest `count` (10), ties by name |
+| `.computer/Top disk readers/<name>` | the same | the same snapshots, for the bytes read |
+| `.computer/Written per day by process/<name>` | Double · GB (decimal, 10⁹ bytes, three decimals) | once a day, in its last 30 s: the top `count` names by the day's total |
+| `.computer/Read per day by process/<name>` | the same | posted with it |
+
+The speeds carry a 5-minute TTL (or three periods, when longer) and `EnableGrafana`, and a name
+that drops out of the top is simply not posted (as top CPU: it turns to Timeout); the per-day
+sensors carry 26 h, so a missing day shows. No alerts, no statistics. Every sensor registers at
+runtime, when its name first makes a top; at most `max(count × 8, 64)` names per family ever get
+one (then one WARN line; the tracked ones keep reporting). Probe-only: per-process I/O is not in
+the shared default-sensor catalog, so there is no Windows counterpart, no wire contract to copy
+and no conformance scenario (root `CLAUDE.md` rules #9/#10 concern shared sensors).
+
+**Two processes — the probe stays unprivileged.** Another user's `/proc/<pid>/io` is a `0400` file
+owned by that user, and the kernel also checks `ptrace_may_access(PTRACE_MODE_READ_FSCREDS)` before
+answering: reading it needs `CAP_DAC_READ_SEARCH` **and** `CAP_SYS_PTRACE` — measured in a
+systemd-booted `debian:13` container (2026-10-13): with either alone 10 of 11 processes read
+`EACCES`, with both all 11. A process holding both can also read the **whole host filesystem and
+every container's** through `/proc/<pid>/root` (PID 1's mount namespace has no `ProtectHome=` or
+`PrivateTmp=`), other processes' `environ`, open files and memory — no unit setting contains that.
+So the probe never holds them. A separate root-run helper does, and it is the **only privileged
+piece**:
+
+* **`hsm-linux-probe-io`** (crate `hsm-linux-probe-io`, unit `hsm-linux-probe-io.service`, shipped
+  in the same `.deb`, **disabled**) reads `topDiskIo.enabled`/`periodMs` from
+  `/etc/hsm-linux-probe/config.json` (it exits 0 when the block is off), and every `periodMs` —
+  plus once in the day's last 30 seconds (a `final` scan) — reads `/proc/<pid>/stat` and
+  `/proc/<pid>/io` of every process and replaces **`/run/hsm-linux-probe-io/snapshot`** atomically
+  (temp file + rename). Nothing else: no network (`PrivateNetwork=yes`,
+  `RestrictAddressFamilies=none`), no other file, no other program. Its unit: `User=root`,
+  `Group=hsm-probe`, `RuntimeDirectory=hsm-linux-probe-io` (0750) and `UMask=0027` — the snapshot is
+  `0640 root:hsm-probe` —, `CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE` and nothing
+  else, `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`,
+  `ProtectProc=default` (it must see every pid), `MemoryDenyWriteExecute`, `SystemCallFilter=
+  @system-service` minus `open_by_handle_at process_vm_readv process_vm_writev ptrace @privileged
+  @resources`, `MemoryMax=16M`, `TasksMax=4`.
+* **the probe** keeps `CapabilityBoundingSet=` empty and its `ProtectProc=invisible`, and reads the
+  snapshot as a member of `hsm-probe`.
+
+The snapshot format (version 1): a header `hsm-linux-probe-io 1 seq=<n> mono_ns=<CLOCK_MONOTONIC ns>
+wall_ms=<Unix ms> kind=regular|final`, then one line per process `pid start_ticks ppid
+kernel_thread sigchld_ignored read_bytes write_bytes comm` — the counters `-` when unreadable,
+`comm` last and percent-escaped (bytes outside `!`..`~`, and `%`, as `%XX`), so a name holding spaces
+or newlines cannot break a line. `kernel_thread` is `PF_KTHREAD`; `sigchld_ignored` is bit 16 of the
+stat line's ignored-signal mask (field 33, `sigignore`; not field 34, `sigcatch`: a shell or a Go program catches `SIGCHLD`, which is no autoreap).
+
+**Enable / disable.** The server bundle's `install.sh` enables and (re)starts the helper when the
+config it leaves on the host enables the **top-level** `topDiskIo` block (the same top-level-only
+check as for `topCpu`; a block nested under `probe` is ignored by the probe, the helper and the
+check alike), and stops and disables it otherwise; `uninstall.sh` and the package's `prerm`
+(remove) disable it; an upgrade restarts a running one (`postinst`: `try-restart`). By hand:
+`sudo systemctl enable --now hsm-linux-probe-io` / `sudo systemctl disable --now
+hsm-linux-probe-io`. After changing `periodMs`, restart the helper and the probe.
+
+**Source.** The process table as top CPU reads it (the helper uses the same stat parser and
+`read_processes`, in ascending pid order; one `/proc/<pid>/stat` per process: name, parent, start
+time, flags, ignored signals) and each process's `/proc/<pid>/io` — its **`write_bytes` /
+`read_bytes`**, the bytes the process caused to be sent to or fetched from the block layer, not
+`wchar`/`rchar` (every `write(2)`/`read(2)`, sockets and page-cache hits included). `write_bytes`
+is charged when the process dirties a page, so data the kernel flushes later still counts for the
+writer; `cancelled_write_bytes` (dirty pages truncated before reaching a disk — a temp file
+deleted at once) is **not** subtracted, as `iotop` and `pidstat -d` do not either. Nothing outside
+`/proc` is read: a sleeping disk is never asked.
+
+**Names and deltas** are top CPU's: the same `comm`-based name rule (normalized to the
+template-wildcard characters, kernel threads by kind: `kworker`, `jbd2`), processes of one name
+summed, a process is `(pid, starttime)` — a reused pid never inherits its predecessor's counters —
+and the first snapshot after the probe's start only takes the baseline. One difference, so the
+daily totals miss nothing: a process that **started since the previous snapshot** (younger than
+every process it held) is credited with its whole counters (the kernel starts a new task's at 0),
+where top CPU skips its first interval; one the previous snapshot merely missed gets a baseline. A
+process whose counters are unknown in a snapshot keeps its previous ones. A counter going backwards
+is skipped with a debug line. The description of a speed sensor names the busiest process's
+executable with top CPU's path line, as far as the unprivileged probe can see the process (with its
+`ProtectProc=invisible`, usually not: then there is no path line).
+
+**Reaped children.** The kernel adds a reaped child's whole counters to its parent's
+(`wait_task_zombie`), so when a measured process exits, its reaper's counter jumps by the child's
+whole-life total — `tar` writing 100 GB for an hour would reappear as 100 GB under `bash`, `cron`,
+`systemd` or `containerd-shim`. The probe therefore subtracts, from the reaper's delta, what the
+previous snapshot had already credited to each vanished process. The reaper is the vanished
+process's parent at the previous snapshot when that parent is still alive; when the parent vanished
+too (a job tree `cron → sh → tar` exiting at once), the walk goes up the previous snapshot's parents
+to the first one still alive (`hsm_linux_probe_io::scan::receiver`, shared by both). **What a process
+does between its last snapshot and its exit is therefore not lost but counted under its reaper** —
+the kernel moved it there. The helper makes this race-free: the kernel adds the child's counters to
+the reaper **before** `release_task` removes the pid from `/proc`, so a process missing from a scan
+is already in its reaper's counter; after each scan the helper reads the `io` of every receiver of a
+vanished process **again**, whatever order the scan read them in (a parent with a higher pid than its
+child after a pid wrap included); and a process whose `stat` was read but whose `io` is gone when
+read (reaped in between) counts as vanished in that scan. A correction that does not fit in the
+receiver's delta (never below 0) is tried once more at the next snapshot, then dropped with a debug
+line.
+
+**Limits** (where a byte can still be counted twice or under-reported):
+
+* a process too short-lived to be scanned at all (a `gzip` run from `cron` within one minute) is
+  counted under its reaper in full — the kernel gives no other attribution;
+* an orphan whose parent died before it, both within one interval, is taken back from its
+  grandparent although `init` or a subreaper reaped it: the grandparent is cut by too much (never
+  below 0, the rest carried into one more snapshot) and the real reaper shows the orphan's
+  whole-life total;
+* a reaper that ignores `SIGCHLD` has its children reaped by the kernel without their counters
+  (`autoreap`): the snapshot carries that flag and nothing is taken back from it — this also covers
+  `kthreadd`, which ignores every signal, for kernel threads. A reaper that sets `SA_NOCLDWAIT`
+  instead autoreaps too, but that flag is not visible in `/proc`: its own I/O is cut by its exited
+  children's last-read counters.
+
+**Schedule.** The helper owns the cadence; the probe ticks every 5 s and consumes each new snapshot
+once. A `regular` snapshot posts the speeds over the interval since the previous regular one (the
+helper's monotonic timestamps); a snapshot taken in the day's last 30 seconds (the helper's `final`
+one, or a regular one that lands there) posts the day's totals — the window `Written per day on
+<disk>` uses. A day post that failed entirely is tried again on the next ticks.
+
+**The day** follows `Written per day on <disk>` (#1498/#1506), on the snapshots' wall times: every
+snapshot adds each name's delta since the previous one to the current local day (the host's
+timezone); after the day's post, what is moved before midnight counts towards the next day; the
+first snapshot, a clock stepped backwards and a gap longer than three periods across midnight add
+nothing; a day with no measured interval is not posted (never an invented 0), and a name whose
+total rounds to 0.000 GB is left out; a day whose window was missed (a suspended host, a stopped
+helper) is never posted late and is logged once at WARN. **Unlike the disk ledger, nothing is
+persisted**: a probe restart starts the day afresh, and that day's values say `measured since
+HH:MM local time (writes before that are not counted)`. A day keeps at most 4 096 names (one WARN
+line per day past that).
+
+**When it goes wrong.** An outage is judged by the age of the last good snapshot (before the first
+one, of the probe: the helper gets three periods), not by the file being there at one tick — so a
+helper restart is not an outage; the unit keeps its runtime directory across a stop or restart
+(`RuntimeDirectoryPreserve=yes`), so the last snapshot stays and simply ages (it lists every process, so `install.sh` with the block off, `uninstall.sh` and the package's `postrm` delete the directory; a reboot does anyway). No fresh snapshot for
+three periods — the helper is not enabled, stopped or crashed — is **one WARN line per outage**,
+naming `hsm-linux-probe-io.service` and how `install.sh` enables it, with the reason (missing,
+unreadable, `… is N s old`); nothing is posted meanwhile; the first fresh snapshot after it is one
+INFO line, and the next outage warns again. The helper does not restart on a bad config or bad
+arguments (exit 1 or 2, `RestartPreventExitStatus=1 2`); it restarts after anything else. Check `systemctl status hsm-linux-probe-io` and `journalctl -u
+hsm-linux-probe-io`, and `ls -l /run/hsm-linux-probe-io/` (the snapshot's age: `head -1` shows its
+`wall_ms`). A snapshot with no readable counters at all (a kernel without task I/O accounting, or a
+helper stripped of its capabilities — it logs that itself once) is one ERROR until it recovers.
+
+**Cost** (measured on garage-server, 2026-10-13): 203 processes; reading every `/proc/<pid>/io`
+costs 2.9 ms of CPU and every `/proc/<pid>/stat` 3.5 ms (Python) — at the 60 s cadence ≈ 0.005 % of
+one core, now spent in the helper; the snapshot is ~10 KB on tmpfs, read by the probe every 5 s.
+The probe today uses 0.2 % CPU / 21 MB RSS. procfs only: no disk access. Records: one per minute
+per name in a top — at most `2 × count` × 1 440 ≈ 28 800/day at the defaults, in practice only the
+few processes above 1 MiB/s — plus at most `2 × count` per day.
+
 ## Crate layout
 
 ```
@@ -540,9 +695,12 @@ src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/) and their per-source threads
+    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/, top_disk_io/) and their threads
     fixtures/docker/   Engine API captures from garage-server
-  packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
+  hsm-linux-probe-io/  the root helper of top disk I/O (#1547): reads /proc/<pid>/{stat,io}, writes
+                       the snapshot; its library (stat parser, scan, reaper walk, snapshot format,
+                       clocks) is shared with the probe
+  packaging/           systemd units (probe, helper), config skeleton, maintainer scripts, build-deb.sh,
                        smoke-deb.sh (install smoke), docker-access.sh (Docker socket drop-in),
                        hsm-linux-probe.tmpfiles (log ageing)
   RUNBOOK.md           install / upgrade / rollback, retention, disk-standby acceptance, cost
@@ -656,7 +814,9 @@ The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
 `/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`,
 `/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (deletes daily log files not written for 30 days — the
-probe itself never deletes one) and the copyright file;
+probe itself never deletes one), the copyright file, and since 0.9.0 the top disk I/O helper
+`/usr/bin/hsm-linux-probe-io` with its unit `/lib/systemd/system/hsm-linux-probe-io.service`
+(installed disabled; [Top disk I/O processes](#top-disk-io-processes-1547));
 `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1` — libcurl and, through it,
 OpenSSL are the distribution's shared libraries, so their security fixes arrive with `apt upgrade`,
 not with a probe rebuild. The maintainer scripts
@@ -772,6 +932,15 @@ Placeholders only — **no secrets**:
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See
   [Top CPU processes](#top-cpu-processes-1479); it also needs the `top-cpu.conf` drop-in.
+* `topDiskIo` (optional, **top level** like `topCpu`; one under `probe` is ignored): `enabled`
+  (`false`), `periodMs` (`60000`), `minBytesPerSec` (`1048576` = 1 MiB/s, for the writers and the
+  readers separately), `count` (`10`, for the speeds and the per-day totals alike) — validated only
+  when enabled: `periodMs > 0`, `count > 0`, `minBytesPerSec` a number `>= 0` (`0` = every process
+  that moved a byte). The root helper `hsm-linux-probe-io` reads `enabled` and `periodMs` from the
+  same block (and nothing else of the file). See
+  [Top disk I/O processes](#top-disk-io-processes-1547); it also needs `hsm-linux-probe-io.service`
+  running, which the bundle's `install.sh` enables from this block. The server bundle never writes
+  this block.
 
 ## Running
 
@@ -793,4 +962,7 @@ the collector's own file logger, so the two line up; the journal adds local time
 `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `StateDirectory`, empty capability bounding
 set, `LoadCredential`) and the §5 budget (`MemoryMax=64M`, `CPUQuota=5%`). Docker socket access is
 not in the unit but in a drop-in written only where a docker group exists — see
-[Socket access](#docker-compose-services-1416).
+[Socket access](#docker-compose-services-1416). The probe holds no capability, also with top disk
+I/O on: `packaging/hsm-linux-probe-io.service`, the root helper that reads `/proc/<pid>/io` for it,
+holds the only two (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`) and runs only where the host config
+enables `topDiskIo` — see [Top disk I/O processes](#top-disk-io-processes-1547).

@@ -83,7 +83,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
-# The probe never listens; it only makes outbound HTTPS connections to the HSM server.
+# The probe never listens; it only makes outbound HTTPS connections to the HSM server. It holds no
+# capability, also with top disk I/O on (#1547): the root helper hsm-linux-probe-io.service reads
+# /proc/<pid>/io and the probe reads its snapshot under /run/hsm-linux-probe-io/ (group hsm-probe).
 CapabilityBoundingSet=
 AmbientCapabilities=
 

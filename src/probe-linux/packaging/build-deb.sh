@@ -13,6 +13,8 @@
 # (src/probe-linux/dist/), with the layout, maintainer scripts and Depends of the hand-built
 # 0.1.0~trial* packages:
 #   /usr/bin/hsm-linux-probe
+#   /usr/bin/hsm-linux-probe-io                     (the root helper of top disk I/O, #1547)
+#   /lib/systemd/system/hsm-linux-probe-io.service  (installed disabled; install.sh enables it)
 #   /lib/systemd/system/hsm-linux-probe.service     (kept under /lib, where the trials put it:
 #                                                    moving a file between /lib and /usr/lib across
 #                                                    versions is unsafe with dpkg on a merged /usr)
@@ -72,11 +74,15 @@ cd "$PROBE_DIR"
 cargo build --release --locked -p hsm-linux-probe --features linux-default-sensors
 BINARY="$CARGO_TARGET_DIR/release/hsm-linux-probe"
 "$BINARY" --version
+# The top disk I/O helper (#1547): a second, dependency-light binary (libc only).
+cargo build --release --locked -p hsm-linux-probe-io
+HELPER="$CARGO_TARGET_DIR/release/hsm-linux-probe-io"
+"$HELPER" --version
 
 # The Depends line below is fixed, so prove the binary needs nothing outside it: every shared
 # library it loads must come from libcurl4t64, libc6, libstdc++6 or libgcc-s1.
 echo "==> shared-library closure"
-NEEDED="$(objdump -p "$BINARY" | awk '/NEEDED/ {print $2}' | sort)"
+NEEDED="$(objdump -p "$BINARY" "$HELPER" | awk '/NEEDED/ {print $2}' | sort -u)"
 echo "$NEEDED"
 while read -r lib; do
     case "$lib" in
@@ -104,7 +110,10 @@ install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" "$R
     "$ROOT/usr/lib/tmpfiles.d"
 install -m 0755 "$BINARY" "$ROOT/usr/bin/hsm-linux-probe"
 strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe"
-install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.service" "$ROOT/lib/systemd/system/"
+install -m 0755 "$HELPER" "$ROOT/usr/bin/hsm-linux-probe-io"
+strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe-io"
+install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.service" "$PACKAGING_DIR/hsm-linux-probe-io.service" \
+    "$ROOT/lib/systemd/system/"
 install -m 0644 "$PACKAGING_DIR/config.example.json" "$ROOT/usr/share/hsm-linux-probe/config.example.json"
 install -m 0644 "$PACKAGING_DIR/deb/copyright" "$ROOT/usr/share/doc/hsm-linux-probe/copyright"
 install -m 0755 "$PACKAGING_DIR/docker-access.sh" "$ROOT/usr/lib/hsm-linux-probe/docker-access.sh"
@@ -130,7 +139,8 @@ Homepage: https://github.com/SoftFx/Hierarchical-Sensor-Monitoring
 Description: HSM Linux host probe
  Systemd-hosted probe that reports Linux host metrics into an HSM server
  through the shared native collector: the managed-collector parity set plus
- the probe-only host, disk and Docker Compose sensors. Built by
+ the probe-only host, disk and Docker Compose sensors, and the root helper
+ hsm-linux-probe-io for the top disk I/O sensors (disabled until enabled). Built by
  src/probe-linux/packaging/build-deb.sh.
 EOF
 

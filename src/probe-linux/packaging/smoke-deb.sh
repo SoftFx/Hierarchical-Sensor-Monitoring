@@ -44,6 +44,7 @@ echo "==> package contents"
 CONTENTS="$(dpkg-deb --contents "$DEB")"
 echo "$CONTENTS"
 for path in ./usr/bin/hsm-linux-probe ./lib/systemd/system/hsm-linux-probe.service \
+    ./usr/bin/hsm-linux-probe-io ./lib/systemd/system/hsm-linux-probe-io.service \
     ./usr/share/hsm-linux-probe/config.example.json ./usr/lib/hsm-linux-probe/docker-access.sh \
     ./usr/lib/tmpfiles.d/hsm-linux-probe.conf ./usr/share/doc/hsm-linux-probe/copyright \
     ./etc/hsm-linux-probe/; do
@@ -71,6 +72,28 @@ VERSION_LINE="$(hsm-linux-probe --version)"
 echo "$VERSION_LINE"
 [[ "$VERSION_LINE" == "hsm-linux-probe $EXPECTED "* ]] ||
     fail "--version says '$VERSION_LINE', expected probe version $EXPECTED"
+
+echo "==> the top disk I/O helper (#1547): root, as its unit runs it"
+if ldd /usr/bin/hsm-linux-probe-io | grep -q 'not found'; then
+    fail "the installed helper has an unresolved shared library"
+fi
+HELPER_LINE="$(hsm-linux-probe-io --version)"
+[[ "$HELPER_LINE" == "hsm-linux-probe-io $EXPECTED" ]] ||
+    fail "hsm-linux-probe-io --version says '$HELPER_LINE', expected $EXPECTED"
+HELPER="$(mktemp -d)"
+printf '{ "topDiskIo": { "enabled": false } }\n' >"$HELPER/off.json"
+hsm-linux-probe-io --config "$HELPER/off.json" --output "$HELPER/snapshot" --once 2>"$HELPER/off.log" ||
+    fail "the helper failed with topDiskIo off: $(cat "$HELPER/off.log")"
+grep -q "not enabled" "$HELPER/off.log" || fail "the helper did not say it has nothing to do"
+[[ ! -e "$HELPER/snapshot" ]] || fail "the helper wrote a snapshot with topDiskIo off"
+printf '{ "topDiskIo": { "enabled": true, "periodMs": 60000 } }\n' >"$HELPER/on.json"
+hsm-linux-probe-io --config "$HELPER/on.json" --output "$HELPER/snapshot" --once 2>"$HELPER/on.log" ||
+    fail "the helper failed: $(cat "$HELPER/on.log")"
+head -1 "$HELPER/snapshot" | grep -qE '^hsm-linux-probe-io 1 seq=1 mono_ns=[0-9]+ wall_ms=[0-9]+ kind=(regular|final)$' ||
+    fail "unexpected snapshot header: $(head -1 "$HELPER/snapshot")"
+grep -qE '^1 [0-9]+ 0 0 [01] [0-9]+ [0-9]+ ' "$HELPER/snapshot" ||
+    fail "the snapshot has no readable line for pid 1: $(head -3 "$HELPER/snapshot")"
+[[ ! -e "$HELPER/snapshot.tmp" ]] || fail "the helper left its temp file"
 
 echo "==> postinst results"
 PASSWD="$(getent passwd hsm-probe)" || fail "postinst did not create the hsm-probe user"
@@ -124,8 +147,14 @@ echo "==> purge"
 # The top-CPU drop-in the server bundle's install.sh writes (#1479): postrm must remove it.
 mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
 printf '[Service]\nProtectProc=default\n' >/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+# The top disk I/O helper's preserved snapshot (#1547): postrm must remove it too.
+mkdir -p /run/hsm-linux-probe-io
+printf 'hsm-linux-probe-io 1 seq=1 mono_ns=1 wall_ms=1 kind=regular\n' >/run/hsm-linux-probe-io/snapshot
 apt-get purge -y -qq hsm-linux-probe >/dev/null
+[[ ! -e /run/hsm-linux-probe-io ]] || fail "purge left the helper's snapshot: $(ls -A /run/hsm-linux-probe-io)"
 [[ ! -e /usr/bin/hsm-linux-probe ]] || fail "purge left /usr/bin/hsm-linux-probe"
+[[ ! -e /usr/bin/hsm-linux-probe-io ]] || fail "purge left /usr/bin/hsm-linux-probe-io"
+[[ ! -e /lib/systemd/system/hsm-linux-probe-io.service ]] || fail "purge left the helper's unit"
 [[ ! -e /etc/systemd/system/hsm-linux-probe.service.d ]] ||
     fail "purge left the unit's drop-ins: $(ls -A /etc/systemd/system/hsm-linux-probe.service.d)"
 [[ ! -e /etc/hsm-linux-probe ]] || fail "purge left /etc/hsm-linux-probe: $(ls -A /etc/hsm-linux-probe)"

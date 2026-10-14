@@ -19,6 +19,7 @@ linux-default-sensors = ["hsm-collector/linux-default-sensors"]
 
 [dependencies]
 hsm-collector = { workspace = true }
+hsm-linux-probe-io = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

@@ -99,6 +99,52 @@ sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
 (the same by hand on a host installed from the release). Without the drop-in the probe runs and
 logs one INFO line (`/proc is mounted with hidepid=invisible`).
 
+### Top disk I/O processes
+
+`topDiskIo` in `config.json` (off by default; README "Top disk I/O processes"). The server bundle
+never enables it: add it **at the top level** of `/etc/hsm-linux-probe/config.json` (one under
+`probe` is ignored)
+
+```json
+"topDiskIo": { "enabled": true, "periodMs": 60000, "minBytesPerSec": 1048576, "count": 10 }
+```
+
+and re-run the bundle's `sudo ./install.sh` (without `--force-config`, so the edited config is
+kept). The probe itself stays unprivileged: reading other users' `/proc/<pid>/io` is done by the
+**root helper** `hsm-linux-probe-io.service`, shipped in the same package and **disabled**.
+`install.sh` enables and (re)starts it when — and only when — the config on the host enables the
+block, and stops and disables it otherwise (prints `Top disk I/O processes: on in …; started
+hsm-linux-probe-io.service` / `… off in …; stopped and disabled …`). By hand (or on a host
+installed from the release):
+
+```bash
+sudo systemctl enable --now hsm-linux-probe-io     # after enabling the block
+sudo systemctl restart hsm-linux-probe
+sudo systemctl disable --now hsm-linux-probe-io    # after disabling it
+```
+
+The helper holds the only two capabilities (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`), runs as root
+without network, reads only `/proc/<pid>/stat` and `/proc/<pid>/io` (and the `topDiskIo` block of
+the config) and writes one file, `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which
+the probe reads. After changing `periodMs`, restart both units (or re-run `install.sh`, which
+restarts both).
+
+**Check:**
+
+```bash
+systemctl is-active hsm-linux-probe-io                       # active
+ls -l /run/hsm-linux-probe-io/snapshot                       # -rw-r----- root hsm-probe, rewritten every periodMs
+head -1 /run/hsm-linux-probe-io/snapshot                     # hsm-linux-probe-io 1 seq=… mono_ns=… wall_ms=… kind=regular
+grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status      # 0000000000000000
+grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe-io)/status   # 0000000000080004
+```
+
+and the probe's start log says `baseline over N processes, N with readable I/O counters`.
+**Snapshot stale:** when the helper is not running (not enabled, stopped, failing) the probe logs
+**one WARN line per outage** (`no fresh snapshot from the helper …`, naming the unit) and
+posts nothing for these sensors; `systemctl status hsm-linux-probe-io` and `journalctl -u
+hsm-linux-probe-io` say why. The first fresh snapshot afterwards is one INFO line; a helper restart is no outage (its unit keeps the last snapshot, `RuntimeDirectoryPreserve=yes`, and the probe measures from the last good one).
+
 ## Upgrade
 
 ```bash
@@ -148,7 +194,9 @@ the newer one, the read day starts afresh with its "measured since" comment. A r
 puts the sensors back under the older paths. Below 0.7.0 the `topCpu` block is ignored (unknown keys
 are), its sensors time out, and a `top-cpu.conf` drop-in only relaxes `ProtectProc` for nothing:
 delete it (`sudo rm /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf && sudo systemctl
-daemon-reload`) before the restart. To make the server's bundles serve the older package
+daemon-reload`) before the restart. Below 0.9.0 the `topDiskIo` block is ignored and the package
+has no `hsm-linux-probe-io` (the downgrade removes the unit; `sudo systemctl disable
+hsm-linux-probe-io` first, so no enablement link is left behind). To make the server's bundles serve the older package
 too, set `src/server/HSMServer/probe-release.txt` back to it and release the server.
 
 ## Remove
@@ -156,10 +204,11 @@ too, set `src/server/HSMServer/probe-release.txt` back to it and release the ser
 ```bash
 sudo ./hsm-linux-probe-<product>/uninstall.sh   # from a bundle: purge + key + config + CA + drop-ins
 # or by hand:
-sudo systemctl disable --now hsm-linux-probe
+sudo systemctl disable --now hsm-linux-probe hsm-linux-probe-io
 sudo shred -u /etc/hsm-linux-probe/access-key
 sudo apt-get purge -y hsm-linux-probe           # removes config, state, logs, the Docker and
                                                 # top-CPU drop-ins (the latter from 0.7.0 on)
+                                                # and the top disk I/O helper (0.9.0)
 ```
 
 The `hsm-probe` user and group stay (Debian convention for system users). The sensor history on
@@ -181,10 +230,13 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |
 | Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, while the config on the host enables top-CPU) | at install | until `uninstall.sh` or remove/purge |
+| Top disk I/O snapshot | `/run/hsm-linux-probe-io/snapshot` (tmpfs, `0640 root:hsm-probe`, the helper's `RuntimeDirectory=`) | by `hsm-linux-probe-io` every `periodMs` while `topDiskIo` is on | replaced each time; kept when the helper stops or restarts (`RuntimeDirectoryPreserve=yes`); removed by `install.sh` with `topDiskIo` off, by `uninstall.sh` and by remove/purge; gone at reboot |
 
 Nothing else is written: `ProtectSystem=strict` leaves the state and log directories as the unit's
-only writable paths. Top CPU processes (#1479) keeps nothing on the host: its per-process baseline
-lives in memory, and a restart only costs one period without values.
+only writable paths. Top CPU processes (#1479) and top disk I/O (#1547) keep nothing on the host:
+their per-process baselines (and top disk I/O's running day) live in memory, and a restart only
+costs one period without values (for top disk I/O also the day so far: that day's per-day values
+say from when they were measured).
 
 ## Acceptance: sleeping disks stay asleep
 

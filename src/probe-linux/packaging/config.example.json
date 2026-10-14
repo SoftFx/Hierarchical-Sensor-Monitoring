@@ -35,5 +35,11 @@
     "minPercent": 1.0,
     "count": 10
   },
+  "topDiskIo": {
+    "enabled": false,
+    "periodMs": 60000,
+    "minBytesPerSec": 1048576,
+    "count": 10
+  },
   "shutdownTimeoutSec": 10
 }

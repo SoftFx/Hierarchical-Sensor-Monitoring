@@ -106,11 +106,11 @@ const CMDLINE_READ_LIMIT: u64 = 4096;
 /// looked at (the managed "never looked up" case). Another user's process — most of them, the
 /// probe being unprivileged — has an unreadable `exe` link (it needs `CAP_SYS_PTRACE`); it is
 /// named by its absolute argv[0] ([`argv0_path`]) and otherwise by a note saying so.
-fn path_line(proc_root: &Path, usage: &Usage) -> String {
-    if usage.kernel_thread {
+pub(crate) fn path_line(proc_root: &Path, pid: u32, kernel_thread: bool) -> String {
+    if kernel_thread {
         return SYSTEM_PROCESS_PATH.to_string();
     }
-    let process_dir = proc_root.join(usage.pid.to_string());
+    let process_dir = proc_root.join(pid.to_string());
     path_line_from(std::fs::read_link(process_dir.join("exe")), &process_dir)
 }
 
@@ -275,7 +275,7 @@ impl TopCpu<'_> {
                 .with_enable_grafana(true)
                 .with_description(description(
                     self.count,
-                    &path_line(&self.proc_root(), usage),
+                    &path_line(&self.proc_root(), usage.pid, usage.kernel_thread),
                 ));
             match self.collector.double_sensor(&path, &options) {
                 Ok(sensor) => {
@@ -301,7 +301,7 @@ impl TopCpu<'_> {
 
 /// One sample's outcomes of one kind (registrations or posts).
 #[derive(Debug, Default)]
-struct Tally {
+pub(crate) struct Tally {
     attempts: usize,
     failures: usize,
     /// The first failure's path and error.
@@ -309,11 +309,11 @@ struct Tally {
 }
 
 impl Tally {
-    fn succeeded(&mut self) {
+    pub(crate) fn succeeded(&mut self) {
         self.attempts += 1;
     }
 
-    fn failed(&mut self, path: &str, error: String) {
+    pub(crate) fn failed(&mut self, path: &str, error: String) {
         self.attempts += 1;
         self.failures += 1;
         if self.first.is_none() {
@@ -326,7 +326,7 @@ impl Tally {
     /// and samples logs once; the counts and the first path ride in the logged line only. The
     /// episode ends ("recovered") only with a sample in which every attempt of this kind worked;
     /// a mixed sample keeps it open, and a sample with nothing to do decides nothing.
-    fn report(self, episode: &mut Episode, logger: &Logger, what: &str) {
+    pub(crate) fn report(self, episode: &mut Episode, logger: &Logger, what: &str) {
         let Some((path, error)) = self.first else {
             if self.attempts > 0 && episode.current.take().is_some() {
                 logger.info(format!("{what}: recovered"));
@@ -347,7 +347,7 @@ impl Tally {
 
 /// The failure currently being reported for one kind (its error text), if any.
 #[derive(Debug, Default)]
-struct Episode {
+pub(crate) struct Episode {
     current: Option<String>,
 }
 
@@ -494,7 +494,7 @@ mod tests {
             kernel_thread: false,
         };
         assert_eq!(
-            description(10, &path_line(&tree.0, &usage)),
+            description(10, &path_line(&tree.0, usage.pid, usage.kernel_thread)),
             "Top **10** CPU consumers by % of machine CPU\n\n**Path:** \
              `/usr/lib/postgresql/17/bin/postgres`"
         );
