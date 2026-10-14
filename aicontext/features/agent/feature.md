@@ -70,7 +70,7 @@ server image + the install→data→stop run). A plugin system is **not** planne
   downloaded exe), `StartServiceCtrlDispatcherW` fails with `ERROR_FAILED_SERVICE_CONTROLLER_CONNECT`
   (1063). The agent prints one stderr line and exits **2** — unchanged for scripted callers. Before
   #1559 that was all, so the console window flashed and closed, which looked like a crash. Now, on an
-  **interactive** launch it also shows a `MessageBoxW` (`MB_OK | MB_ICONINFORMATION`, title
+  **interactive** launch it also shows a `MessageBoxW` (`MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND` (the last flag keeps the box in front of a Windows Terminal console window, which belongs to another process), title
   "HSM Agent") saying what the exe is, to install it by running `install-hsmagent-service.cmd` from
   the downloaded bundle as Administrator, `hsm-agent.exe --console --config <path>` for a foreground
   run, the log folder `%ProgramData%\HSM Agent\logs`, and to see the bundle's `README.txt`.
