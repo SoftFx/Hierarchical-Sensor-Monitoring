@@ -274,6 +274,9 @@ namespace HSMServer.Core.Tests
             var uninstall = LinuxProbeInstallerBundle.BuildUninstallScript();
             Assert.Contains("systemctl disable --now hsm-linux-probe-io.service 2>/dev/null || true\nrm -rf /run/hsm-linux-probe-io\n", uninstall);
             Assert.DoesNotContain("top-disk-io.conf", uninstall);
+            Assert.Contains("# topDiskIo helper (advanced, opt-in).\nsystemctl disable --now hsm-linux-probe-io.service", uninstall);
+            Assert.DoesNotContain("Top disk I/O", uninstall);
+            Assert.DoesNotContain("top disk I/O", uninstall);
         }
 
         [Fact]

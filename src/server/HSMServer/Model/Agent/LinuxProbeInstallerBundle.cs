@@ -343,7 +343,7 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "systemctl disable --now \"$UNIT\" 2>/dev/null || true",
-                "# The top disk I/O helper install.sh may have enabled (#1547).",
+                "# topDiskIo helper (advanced, opt-in).",
                 "systemctl disable --now " + TopDiskIoUnit + " 2>/dev/null || true",
                 "rm -rf " + TopDiskIoRuntimeDirectory,
                 "",
