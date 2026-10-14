@@ -118,7 +118,39 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         [Description("Disabled policies stay stored but never fire.")]
         public bool IsDisabled { get; init; }
 
-        /// <summary>Alert message template; the full alert-variable table (every registered variable, with its meaning) lives in <see cref="AlertVariablesDocs.Variables"/>.</summary>
+        /// <summary>
+        /// Alert message template. The variables below are substituted as substrings (a longer
+        /// token containing a variable has that variable replaced inside it); curly braces are
+        /// not allowed: the message is rendered with string.Format, where braces either throw
+        /// at evaluation time or silently substitute another variable's value; the template is
+        /// split on spaces, so whitespace touching a space is dropped and whitespace with no
+        /// space in it is kept:
+        /// $product — Parent product name
+        /// $path — Sensor path
+        /// $sensor — Sensor name
+        /// $unit — Sensor unit
+        /// $status — Sensor status
+        /// $time — Sensor value sending time
+        /// $comment — Sensor value comment
+        /// $prevStatus — Status of the previous sensor data
+        /// $prevComment — Comment of the previous sensor data
+        /// $prevValue — Value of the previous sensor data
+        /// $value — Sensor Value
+        /// $emaValue — Sensor EMA (Value) value
+        /// $min — Bar sensor Min value
+        /// $max — Bar sensor Max value
+        /// $mean — Bar sensor Mean value
+        /// $firstValue — Bar sensor FirstValue value
+        /// $lastValue — Bar sensor LastValue value
+        /// $count — Bar sensor Count value
+        /// $emaMin — Bar sensor EMA (Min) value
+        /// $emaMax — Bar sensor EMA (Max) value
+        /// $emaMean — Bar sensor EMA (Mean) value
+        /// $emaCount — Bar sensor EMA (Count) value
+        /// $property — Alert property
+        /// $operation — Alert operation
+        /// $target — Alert constant to compare
+        /// </summary>
         [Description(AlertVariablesDocs.Variables)]
         public string Template { get; init; }
 
@@ -169,8 +201,19 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count,
         /// 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize,
         /// 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
-        /// The availability matrix by sensor type lives in
-        /// <see cref="AlertPropertyMatrixDocs.Matrix"/> (exhaustive, negatives included).
+        /// Condition-property availability by sensor type — exhaustive, negatives included:
+        /// on the policy surface a property the type does not offer answers 422. The template
+        /// surface checks nothing against this table: only some non-offered pairs are rejected
+        /// with a template-apply warning, the rest are stored silently and fail at every
+        /// evaluation (the bar statistics on Integer, Double and Rate sensors, and Length,
+        /// Count or OriginalSize on a type that does not offer them).
+        /// every type — Status, Comment, NewSensorData
+        /// Boolean — nothing beyond the common set (no Value)
+        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
+        /// TimeSpan, Version — Value
+        /// String — Value, Length
+        /// File — OriginalSize (no Value)
+        /// IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)
         /// </summary>
         [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. " + AlertPropertyMatrixDocs.Matrix)]
         public byte Property { get; init; }

@@ -12,7 +12,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
     internal static class AlertVariablesDocs
     {
         internal const string Variables =
-            @"Message template — the variables below are substituted as substrings (a longer token containing a variable has that variable replaced inside it); curly braces are not allowed: the message is rendered with string.Format, where braces either throw at evaluation time or silently substitute another variable's value; runs of whitespace collapse to a single space:
+            @"Message template — the variables below are substituted as substrings (a longer token containing a variable has that variable replaced inside it); curly braces are not allowed: the message is rendered with string.Format, where braces either throw at evaluation time or silently substitute another variable's value; the template is split on spaces, so whitespace touching a space is dropped and whitespace with no space in it is kept:
 $product — Parent product name
 $path — Sensor path
 $sensor — Sensor name

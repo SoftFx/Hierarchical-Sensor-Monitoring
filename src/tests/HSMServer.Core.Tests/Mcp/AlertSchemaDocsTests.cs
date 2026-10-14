@@ -20,8 +20,11 @@ namespace HSMServer.Core.Tests.Mcp
     // from the runtime sources and fail when the docs and the code drift
     // apart in EITHER direction: the variable set from AlertState.VariablesHelp
     // (the [AlertVariable] registry the notification renderer substitutes),
-    // the matrix from AlertPolicyConditionRules (the table behind both the
-    // 422 validation of sensor-policy writes and the template-apply warnings).
+        // the matrix from AlertPolicyConditionRules (the table behind the
+        // 422 validation of sensor-policy writes; the template surface does
+        // not consult it — only some non-offered pairs produce a
+        // template-apply warning there, the matrix header documents the
+        // silently-failing rest).
     public class AlertSchemaDocsTests
     {
         [Theory]
