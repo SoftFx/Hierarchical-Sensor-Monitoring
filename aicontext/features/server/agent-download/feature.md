@@ -9,7 +9,7 @@
 
 ## Description
 
-An admin opens the **Downloads** main-menu page (#1550), picks a product and clicks **Download Windows agent**,
+An admin opens **Configuration → Downloads** (#1550), picks a product and clicks **Download Windows agent**,
 or opens a product's edit page ("HSM Agent" section) and clicks **Download agent**; the server streams a zip
 containing the byte-identical signed `hsm-agent.exe` + a generated `config.json` (this server's address
 + the product's access key) + silent `install-hsmagent-service.cmd`/`uninstall-hsmagent-service.cmd`
@@ -70,7 +70,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only), which also links to the Downloads page |
-| Downloads page (#1550): main-menu entry, product selector, Windows + Linux cards | `Views/Shared/_Layout.cshtml` (`nav_link_Downloads`), `Controllers/DownloadsController.cs`, `Views/Downloads/Index.cshtml`, `Model/Agent/DownloadsPageService.cs` + `DownloadsViewModel.cs` (`DownloadsPageBuilder`) |
+| Downloads page (#1550): Configuration-menu entry, product selector, Windows + Linux cards | `Views/Shared/_Layout.cshtml` (`nav_link_Downloads`), `Controllers/DownloadsController.cs`, `Views/Downloads/Index.cshtml`, `Model/Agent/DownloadsPageService.cs` + `DownloadsViewModel.cs` (`DownloadsPageBuilder`) |
 | Shared UI pieces (both pages) | `Views/Shared/_WindowsAgentInstallHint.cshtml`, `_LinuxProbeInstallHint.cshtml`, `_DownloadBundleScript.cshtml` (`downloadBundle`: fetch + blob, errors as a toast) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` + `version.txt` (gitignored; staged by `server-build.yml` — see *Packaging*) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
@@ -84,7 +84,8 @@ same block (`AgentInstallerBundle.TopCpuBlock`, #1479; see `../linux-probe-downl
 
 ## Downloads page (#1550)
 
-The main-menu **Downloads** entry (admins only, between Alerts and Configuration) opens `/Downloads`: a
+The **Downloads** entry of the Configuration menu (admins only, last before the API link; moved there from
+the top level because it is rarely used) opens `/Downloads`: a
 filterable product list (every root product the admin sees in the tree, `TreeViewModel.GetUserProducts`,
 sorted by name, the folder shown in brackets) and two cards, **Windows agent** and **Linux probe**. Each
 card shows the staged version and the same install hint as the product page; its button stays disabled
