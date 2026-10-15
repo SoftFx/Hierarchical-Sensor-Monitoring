@@ -1,31 +1,30 @@
 # HSM Server
 
-## Alerts and schedules
-* A Const target on a targetless condition (New data, Status, Is changed) is now evaluated as the sensor's last value instead of failing template reconstruction with a generic "condition is not supported for this sensor type"; the templates API reports the actual reconstruction reason, and the stored target echoes the input unchanged.
-* Migration note: creating, editing and deleting alert templates is now admin-only, aligned with alert schedules; viewing stays open to all users. The REST API is unchanged (own token grants).
-* Removing a chat from a folder no longer wipes TTL intervals and schedule/template references from unaffected policies — the policy re-assertion on chat removal is no longer lossy.
-* The newDataArrived witness that decides whether a TTL resolution sends its recovery Ok is hardened (queue-order discriminator, atomic expiry stamp) — a stale witness can no longer suppress or double-send the recovery.
+## Alerts
+* Alert templates warn at save time about per-policy validation problems — including a path pattern that matches no sensors, or a condition the matched sensor types do not offer; template path-pattern semantics are documented.
+
+## Sensor history
+* Bar standard deviation is stored, compressed and served: the history table shows a σ column and the CSV export appends StdDev (timeout rows excluded).
+
+## MCP
+* Write tools for sensor policies, alert templates and alert schedules; read tools for chats and folders (list/get).
+* Tool schemas now carry field-value documentation, output schemas via structured content, and the documented alert-variable and property × sensor-type matrices.
 
 ## Management API
-* REST administration of alerts: data-alert policies and TTL policies on sensors and products (create, update, delete) for non-interactive clients — authenticated with a personal API token and authorized per folder through the token's alerts grants.
+* New REST surface: read-only /api/v1/chats and /api/v1/folders, and CRUD on /api/v1/alertSchedules — one read envelope (ManagementReadResult) and a tightened error contract with typed Details.
 
-## API tokens
-* The Profile page becomes "Personal tokens" in the user menu, and the token name is now an optional note (a blank note gets a generated default).
-* Migration note: the API tokens section is gone from Settings → Server — the kill switch is a server-configuration-file setting only (`ApiTokens.Disabled`), and API tokens are on by default. A settings save can no longer silently revert a hand-edited kill switch when the configuration reload lags.
+## UI
+* New admin Downloads page with the Windows agent and Linux probe bundles and per-product install commands.
+* Personal tokens: fresh tokens point at the management API and MCP; Esc closes the token dialogs; the disabled-tokens banner is informational.
 
-## Security
-* Removing a product now requires Manager rights on the product (or admin) and a POST with an antiforgery token, and is journaled as the user — previously any signed-in user could remove any product over a GET link.
-
-## Data storage
-* Out-of-order values inside a dense batch are stored instead of being silently dropped, and every dropped-value shape is now reported by the add-value result.
-
-## Infrastructure
-* The server Docker image declares its own HEALTHCHECK — health no longer depends on this repo's compose file; the compose healthcheck runs every 5 minutes instead of 30 seconds (2 880 anonymous testConnection requests a day → 288).
-* docker-compose can ship server logs to VictoriaLogs: a vlagent shipper with a VictoriaLogs single-node, Caddy path exposure and env-gated JSON logging.
-* Ready-made Caddy image (`hsmonitoring/hsm-caddy`) with Cloudflare and dynv6 DNS-01 modules — DNS-01 certificates no longer require a self-built Caddy; certificate modes letsencrypt-dns, letsencrypt-http, custom PEM and self-signed.
+## Self-monitoring
+* The server reports its own database backups: result (with TTL so a missed run times out), zip sizes and duration on the Backup node, plus daily environment/dashboards database sizes.
 
 ## Linux probe
-* The server ships the pinned Linux probe 0.8.2 `.deb` in the per-product download: Docker Compose metrics (per-container CPU, memory, network, disk write volume), host and per-disk sensors for every mounted disk (free space, inodes, read/write speed, read and write volume per day), Top CPU processes, alert rules in the Rust wrapper, and the `.probe` module node layout under the product; Docker stats and CPU temperature are sampled once a minute.
+* Ships probe 0.9.1 (from 0.8.2): top disk I/O processes via the hsm-linux-probe-io root helper enabled by install.sh; bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log.
+
+## Infrastructure
+* hsm-caddy 2.11.4-3 passes the client Host header through to the server upstream — redirects no longer break behind the proxy.
 
 ## Dependencies
-* Bundled `HSMDataCollector` 3.5.0 and HsmAgent 0.5.28 (both unchanged since 3.41.5).
+* Bundled HSMDataCollector 3.5.0 and HsmAgent 0.5.28 (both unchanged since 3.41.6).
