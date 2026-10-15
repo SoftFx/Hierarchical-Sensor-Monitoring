@@ -550,7 +550,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // RE-ASSERT a full-list update performs — the "AnyType Value
             // condition on a bar sensor" class feature.md documents for the
             // apply path, planted directly on the collection.
+            //
+            // The plant is DISABLED on purpose. Since #1542 a rejected
+            // re-assert leaves the policy's previous version intact (it used
+            // to wipe Conditions before the throw), so the planted Count
+            // condition survives the detach — and the update's closing
+            // TryRevalidate(LastValue) would evaluate it against the sensor's
+            // IntegerValue, an InvalidCastException no production policy can
+            // reach (TryUpdate and Apply both build conditions through
+            // GetCondition, which refuses Count on IntegerPolicy). Disabled
+            // policies are skipped by revalidation but still re-asserted, so
+            // the rebuild still fails softly — the arm this test pins.
             var noisy = new IntegerPolicy { ScheduleId = deletedId };
+            noisy.SetDisabled(true);
 
             noisy.Conditions.Add(new PolicyIntegerCondition<IntegerValue>
             {
@@ -569,6 +581,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // The healthy TTL policy on the same sensor WAS detached.
             var ttl = Assert.Single(sensor.Policies.TTLPolicies);
             Assert.Null(ttl.ScheduleId);
+
+            // The rejected re-assert left the noisy policy's previous version
+            // intact (#1542): condition kept, and its schedule reference kept
+            // too — the documented backstop applies to it, not a half update.
+            var kept = Assert.Single(sensor.Policies, p => p.Id == noisy.Id);
+            Assert.Equal(deletedId, kept.ScheduleId);
+            Assert.Equal(PolicyProperty.Count, Assert.Single(kept.Conditions).Property);
         }
 
         // #1409 review round 5: the per-root chunk errors must fold into ONE
