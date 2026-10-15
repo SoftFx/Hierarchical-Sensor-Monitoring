@@ -2263,10 +2263,13 @@ namespace HSMServer.Core.Cache
         // Result of a template save: Success/Error keep the #1394 contract
         // (false + products-naming error → the 409 with failed products);
         // Warnings (#1401) carry the per-policy VALIDATION rejections of an
-        // apply that PERSISTED — one entry per rejected policy, ordered
-        // deterministically (sensor path, then reason) so every transport
-        // renders the same list. Warnings never flip Success: a save that
-        // persisted is not failed over validation noise.
+        // apply that PERSISTED — one entry per rejected policy — and, since
+        // #1565, one entry per path pattern that matched no sensors
+        // (SensorPath = the pattern; the save persists the template anyway),
+        // ordered deterministically (sensor path, then reason) so every
+        // transport renders the same list. Warnings never flip Success: a
+        // save that persisted is not failed over validation noise or a dead
+        // pattern.
         public async Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
         {
             var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
@@ -2305,11 +2308,28 @@ namespace HSMServer.Core.Cache
                 var matchedSensors = new HashSet<BaseSensorModel>();
                 foreach (var path in alertTemplateModel.Paths.Where(p => !string.IsNullOrEmpty(p)))
                 {
+                    var pathMatched = false;
+
                     foreach (var product in products)
                     {
                         foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, product.Id))
+                        {
                             matchedSensors.Add(sensor);
+                            pathMatched = true;
+                        }
                     }
+
+                    // #1565: a pattern that matched nothing is still a legal save
+                    // (the template may precede its sensors — see
+                    // AlertTemplatePathValidation), but a clean-success answer
+                    // left the caller no feedback loop at all: the dead pattern
+                    // surfaced only when someone re-checked in the UI. One
+                    // warning per dead pattern rides the #1401 channel —
+                    // SensorPath carries the PATTERN itself, there being no
+                    // sensor to name — and never flips Success.
+                    if (!pathMatched)
+                        warnings.Add(new TemplateApplyWarning(path,
+                            "path pattern matched no sensors in the template's folder"));
                 }
 
                 // Reconcile sensors that previously held policies from this template but no longer

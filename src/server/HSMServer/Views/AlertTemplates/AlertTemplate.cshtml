@@ -211,10 +211,13 @@
                     else if (typeof viewData === 'object' && viewData.success === true && viewData.warnings && viewData.warnings.length) {
                         // #1401: the save PERSISTED but some matching sensors rejected
                         // individual policies — each listed alert was not created on its
-                        // sensor. Not a failure: the template is stored, so the only
-                        // action left is acknowledging and returning to the list. The
-                        // lines are built as text nodes (never raw HTML): sensor paths
-                        // and rejection reasons are user-influenced strings.
+                        // sensor — or (#1565) some path pattern matched no sensors at all:
+                        // the line then carries the pattern itself, and the modal opens on
+                        // every save of that template until a matching sensor exists. Not a
+                        // failure: the template is stored, so the only action left is
+                        // acknowledging and returning to the list. The lines are built as
+                        // text nodes (never raw HTML): sensor paths and rejection reasons
+                        // are user-influenced strings.
                         var $list = $('<ul class="mb-0">');
                         // First five + "and N more" (the RestoreService outcome
                         // pattern): a save where every matching sensor rejects

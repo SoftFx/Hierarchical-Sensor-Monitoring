@@ -44,8 +44,19 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         [Description("Target folder id (the access-grouping Folder entity, not a tree node); required on create and update. Use list_folders to discover valid values.")]
         public Guid FolderId { get; init; }
 
-        /// <summary>Path templates the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.</summary>
-        [Description("Path patterns the template applies to (e.g. \"Root/*/cpu\"; '*' matches one path segment); 1..100 entries.")]
+        /// <summary>
+        /// Path patterns the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.
+        /// Matching semantics (PathTemplateConverter): each pattern is matched against the sensor's FULL path,
+        /// anchored at both ends and including the product-name first segment ("Root" in the example is a product
+        /// name, not a keyword). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may
+        /// cover part of a segment ("Root/To*" matches "Root/Total"). There is no multi-segment or any-depth
+        /// wildcard — '**' is two adjacent single-segment '*'s, not a glob "any depth". These segment rules are
+        /// guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex
+        /// metacharacters in them stay live — notably '.' matches any character including '/', so "Product.cpu"
+        /// (no '/') does match "Product/cpu". A pattern of literals without '/' can never match (every sensor path
+        /// has at least Product/SensorName).
+        /// </summary>
+        [Description("Path patterns the template applies to (e.g. \"Root/*/cpu\"); 1..100 entries. Each pattern is matched against the sensor's FULL path, anchored at both ends and including the product-name first segment (\"Root\" in the example is a product name, not a keyword). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may cover part of a segment (\"Root/To*\" matches \"Root/Total\"). There is no multi-segment or any-depth wildcard — \"**\" is two adjacent single-segment '*'s, not a glob \"any depth\". The segment rules are guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex metacharacters stay live — notably '.' matches any character including '/', so \"Product.cpu\" (no '/') does match \"Product/cpu\"; a pattern of literals without '/' can never match (every sensor path has at least Product/SensorName).")]
         public List<string> Paths { get; init; } = [];
 
         /// <summary>TTL alert policies; parallel to <see cref="Ttls"/> (same length, matched by position).</summary>
@@ -64,25 +75,28 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// Output-only apply diagnostics of THIS write: template policies that matching
         /// sensors REJECTED at apply time — the save persisted, but each listed alert was
         /// NOT created on that sensor (e.g. a Value condition that a bar sensor's type
-        /// does not offer). Set only on create/update responses with rejections; absent
+        /// does not offer) — and, since #1565, path patterns that matched NO sensors
+        /// (a dead pattern the save still persists; check it against the `paths`
+        /// matching rules — product-name prefix, segment-local '*', fixed depth).
+        /// Set only on create/update responses with diagnostics; absent
         /// on reads and on clean writes (WhenWritingNull — a warning-free response keeps
         /// its pre-warnings byte shape); ignored when sent by a client.
         /// </summary>
-        [Description("Output-only apply diagnostics of THIS write: template policies that matching sensors REJECTED at apply time — the save persisted, but each listed alert was NOT created on that sensor (e.g. a Value condition the sensor's type does not offer). Absent on reads and on clean writes; ignored when sent by a client.")]
+        [Description("Output-only apply diagnostics of THIS write: template policies that matching sensors REJECTED at apply time — the save persisted, but each listed alert was NOT created on that sensor (e.g. a Value condition the sensor's type does not offer) — and path patterns that matched NO sensors (a dead pattern the save still persists; check it against the `paths` matching rules). Absent on reads and on clean writes; ignored when sent by a client.")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AlertTemplateWarningDto> Warnings { get; init; }
     }
 
-    /// <summary>One apply warning: the alert was not created on this sensor.</summary>
-    [Description("One apply warning: the alert was not created on this sensor.")]
+    /// <summary>One apply warning: the alert was not created on this sensor, or the path pattern matched no sensors at all.</summary>
+    [Description("One apply warning: the alert was not created on this sensor, or the path pattern matched no sensors at all.")]
     public sealed record AlertTemplateWarningDto
     {
-        /// <summary>Full path of the sensor that rejected the policy.</summary>
-        [Description("Full path of the sensor that rejected the policy.")]
+        /// <summary>Full path of the sensor that rejected the policy, or the path pattern that matched no sensors.</summary>
+        [Description("Full path of the sensor that rejected the policy, or the path pattern that matched no sensors.")]
         public string Sensor { get; init; }
 
-        /// <summary>Why the sensor refused the policy (the validation reason).</summary>
-        [Description("Why the sensor refused the policy (the validation reason).")]
+        /// <summary>Why the sensor refused the policy (the validation reason), or why the pattern matched nothing.</summary>
+        [Description("Why the sensor refused the policy (the validation reason), or why the pattern matched nothing.")]
         public string Reason { get; init; }
     }
 

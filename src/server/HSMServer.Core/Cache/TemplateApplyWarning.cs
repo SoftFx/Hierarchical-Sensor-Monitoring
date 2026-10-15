@@ -8,5 +8,10 @@ namespace HSMServer.Core.Cache
     // saw a saved template with an alert that "isn't there" and no journal
     // trace. The rejection does NOT fail the save that persisted — it rides
     // the warnings channel of AddAlertTemplateAsync's result instead.
+    // Since #1565 the same channel also carries the zero-match diagnostic:
+    // SensorPath holds the PATH PATTERN itself (there is no sensor to name)
+    // when it matched no sensors in the template's folder — a dead pattern
+    // the save still persists (sensors may come later), reported so the
+    // caller no longer needs a UI round-trip to discover it.
     public sealed record TemplateApplyWarning(string SensorPath, string Reason);
 }
