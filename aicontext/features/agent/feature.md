@@ -1,6 +1,6 @@
 # Feature: HSM Agent (Windows service)
 
-> Owner: agent | Last reviewed: 2026-10-13 | Canonical: yes
+> Owner: agent | Last reviewed: 2026-10-14 | Canonical: yes
 > Scope: The standalone **HSM Agent** product (`src/agent/`) — an always-on Windows service that hosts the native collector and streams this computer's metrics to an HSM server with zero client-side configuration. This feature owns the service host, config, and logging; it owns NO wire behavior (that all lives in `collector/` + `integrations/native-collector`).
 
 ---
@@ -66,6 +66,23 @@ server image + the install→data→stop run). A plugin system is **not** planne
   `ServiceMain` → `RegisterServiceCtrlHandlerExW`, status machine
   `START_PENDING → RUNNING → STOP_PENDING → STOPPED`); `--console` → foreground run with a Ctrl-C
   handler (debugging); `--install`/`--uninstall` → SCM management; `--config <path>` → override.
+- **Bare launch outside the SCM (#1559).** Started by hand with no mode (typically a double-click on the
+  downloaded exe), `StartServiceCtrlDispatcherW` fails with `ERROR_FAILED_SERVICE_CONTROLLER_CONNECT`
+  (1063). The agent prints one stderr line and exits **2** — unchanged for scripted callers. Before
+  #1559 that was all, so the console window flashed and closed, which looked like a crash. Now, on an
+  **interactive** launch it also shows a `MessageBoxW` (`MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND` (the last flag keeps the box in front of a Windows Terminal console window, which belongs to another process), title
+  "HSM Agent") saying what the exe is, to install it by running `install-hsmagent-service.cmd` from
+  the downloaded bundle as Administrator, `hsm-agent.exe --console --config <path>` for a foreground
+  run, the log folder `%ProgramData%\HSM Agent\logs`, and to see the bundle's `README.txt`.
+  "Interactive" means all of: a non-zero session (`ProcessIdToSessionId`; the SCM runs in session 0),
+  a visible window station (`GetProcessWindowStation` + `GetUserObjectInformationW(UOI_FLAGS)` has
+  `WSF_VISIBLE`), and stdin **and** stdout on a real console (`GetFileType == FILE_TYPE_CHAR` plus
+  `GetConsoleMode`, so `> NUL` also counts as redirected). Scripts and CI redirect at least one of
+  these and never block on the box. An explicit `--service` never shows it. `main` shows the box only
+  after closing the single-instance mutex (`Global\HSMAgent`): the operator may leave it open while
+  running the install script, and a service started meanwhile must not find the mutex taken (exit 3).
+  The text comes from the pure `BuildInteractiveLaunchMessage` (`src/launch_hint.cpp`, unit-tested);
+  the detection and the box are `ShowLaunchHintIfInteractive` in `src/service/windows_service.cpp`.
 - On-disk layout: exe at `C:\Program Files\HSM Agent\` (placed by the installer, W7); config at
   `%ProgramData%\HSM Agent\config.json`; logs at `%ProgramData%\HSM Agent\logs\hsm-agent.log` + the
   Windows Application Event Log (source `HSMAgent`, registered at install).
@@ -267,8 +284,9 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 15 cases — config parser + topCpu/update
-  config + the sensor-group directive name↔field map) — run on every platform, registered in `ctest`.
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 16 cases — config parser + topCpu/update
+  config + the sensor-group directive name↔field map + the interactive-launch message text,
+  `agent_launch_hint_message_guides_the_operator`) — run on every platform, registered in `ctest`.
 - Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
     a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to
@@ -295,6 +313,9 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
   the bundle payload (`hsm-agent.exe` + `config.json` template + `install-hsmagent-service.cmd`/`uninstall-hsmagent-service.cmd`) as an
   artifact.
+- **Bare-launch smoke (#1559):** the same lane runs the exe with no arguments and stdout/stderr
+  redirected to files; it must exit 2 with the "not started by the service control manager" stderr
+  line within 30 s (a message box on a redirected run would hang it, so the step fails instead).
 - **Service smoke (W9):** the same lane then exercises the real SCM lifecycle on the admin runner —
   `--install` → `sc qc HSMAgent` shows `AUTO_START` → a `--console` run survives an unreachable server
   (no crash) → `--uninstall`. The lane first seeds a pre-#1279 data dir (plain `mkdir` + a

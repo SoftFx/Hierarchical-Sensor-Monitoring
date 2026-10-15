@@ -4,6 +4,7 @@
 #include "agent/config.hpp"
 #include "agent/event_log.hpp"
 #include "agent/file_logger.hpp"
+#include "agent/launch_hint.hpp"
 #include "agent/logging.hpp"
 #include "agent/paths.hpp"
 #include "agent/service_install.hpp"
@@ -139,6 +140,37 @@ namespace hsm::agent
                 SetState(SERVICE_STOPPED, ERROR_PROCESS_ABORTED);
             }
         }
+
+        // #1559: true only when a person can see and dismiss a message box. Every check below fails for
+        // the SCM (session 0), for a scheduled task or service-like host without a visible window
+        // station, and for scripts / CI that redirect stdin or stdout, so none of them ever blocks on it.
+        bool IsInteractiveLaunch()
+        {
+            DWORD session_id = 0;
+            if (!ProcessIdToSessionId(GetCurrentProcessId(), &session_id) || session_id == 0)
+                return false;
+
+            // The handle returned by GetProcessWindowStation must not be closed.
+            HWINSTA station = GetProcessWindowStation();
+            USEROBJECTFLAGS flags{};
+            if (station == nullptr ||
+                !GetUserObjectInformationW(station, UOI_FLAGS, &flags, sizeof(flags), nullptr) ||
+                (flags.dwFlags & WSF_VISIBLE) == 0)
+                return false;
+
+            const DWORD std_handles[] = { STD_INPUT_HANDLE, STD_OUTPUT_HANDLE };
+            for (const DWORD id : std_handles)
+            {
+                const HANDLE handle = GetStdHandle(id);
+                DWORD console_mode = 0;
+                // GetFileType alone reports the NUL device as FILE_TYPE_CHAR too; GetConsoleMode
+                // succeeds only on a real console, so "> NUL" also counts as redirected.
+                if (handle == nullptr || handle == INVALID_HANDLE_VALUE ||
+                    GetFileType(handle) != FILE_TYPE_CHAR || !GetConsoleMode(handle, &console_mode))
+                    return false;
+            }
+            return true;
+        }
     } // namespace
 
     int RunService(const std::wstring& config_path)
@@ -157,11 +189,22 @@ namespace hsm::agent
             {
                 std::cerr << "hsm-agent: not started by the service control manager. "
                              "Use --console for a foreground run, or --install to register the service.\n";
-                return 2;
+                return kNotStartedByScmExitCode;
             }
             std::cerr << "hsm-agent: service dispatcher failed (error " << code << ")\n";
             return 1;
         }
         return 0;
+    }
+
+    void ShowLaunchHintIfInteractive()
+    {
+        if (!IsInteractiveLaunch())
+            return;
+
+        const std::wstring message = BuildInteractiveLaunchMessage(HSM_AGENT_VERSION);
+        // MB_SETFOREGROUND: with Windows Terminal as the default console host the console window belongs to
+        // another process, and an owner-less box could open behind it and look like a hang.
+        MessageBoxW(nullptr, message.c_str(), kLaunchHintTitle, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
     }
 } // namespace hsm::agent

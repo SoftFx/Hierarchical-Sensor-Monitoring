@@ -1,5 +1,6 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
@@ -79,7 +80,9 @@ namespace HSMServer.Controllers
 
             var (address, port) = AgentConnectionResolver.Resolve(
                 _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
-            var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate, _config.Agent.EnableTopCpuProcesses);
+            // README.txt (#1559) points at the Downloads page this admin can reach, preselecting this product.
+            var downloadsPageUrl = Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController, new { productId }, Request.Scheme);
+            var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate, _config.Agent.EnableTopCpuProcesses, downloadsPageUrl);
             var zip = AgentInstallerBundle.BuildZip(exeBytes, options);
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Agent bundle for product '{product.DisplayName}' ({productId}).");
