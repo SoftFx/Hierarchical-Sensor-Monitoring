@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -284,6 +285,38 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal(created.Value.Id, new Guid(entry.AfterSchedule.Id));
         }
 
+        [Fact]
+        public async Task FailedJournalAppend_WriteSucceedsWithoutEchoingADeadChangeSetId()
+        {
+            // Record's false = the undo point is lost, but the write itself
+            // already applied. The template/schedule engines stamp the echoed
+            // changeSetId ONLY on true (the policy engine's rule): a client
+            // must never receive an undo handle that does not exist.
+            var failing = new ChangeSetRecorder(new ThrowingJournal(),
+                NullLogger<ChangeSetRecorder>.Instance);
+
+            var schedules = new AlertScheduleAdministrationService(_alertScheduleProvider, _valuesCache,
+                _authorization.Object, new AlertReadService(_valuesCache, _alertScheduleProvider, _authorization.Object),
+                failing, _users.Object);
+            var templates = new AlertTemplateAdministrationService(_valuesCache, _folders.Object, _chats.Object,
+                _alertScheduleProvider, _authorization.Object, _users.Object, failing,
+                NullLogger<AlertTemplateAdministrationService>.Instance);
+
+            var schedule = await schedules.CreateScheduleAsync(User, ScheduleDto(),
+                new ChangeSetWriteOptions { ChangeSetId = Guid.NewGuid() });
+            Assert.True(schedule.Success, schedule.Failure?.Message);
+            Assert.Null(schedule.ChangeSetId);
+
+            var sensor = await CreateIntegerSensorAsync("svcJournalLost");
+            var createdTemplate = await templates.CreateTemplateAsync(User, TemplateDto(paths: ["*/svcJournalLost"]));
+            Assert.True(createdTemplate.Success, createdTemplate.Failure?.Message);
+            Assert.Null(createdTemplate.ChangeSetId);
+
+            var deletedTemplate = await templates.DeleteTemplateAsync(createdTemplate.Value.Id, User);
+            Assert.True(deletedTemplate.Success, deletedTemplate.Failure?.Message);
+            Assert.Null(deletedTemplate.ChangeSetId);
+        }
+
 
         // === Test vocabulary (mirrors PolicyAdministrationServiceTests) ===
 
@@ -394,5 +427,24 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                         end: 18:00
                 """,
         };
+
+
+        // A journal whose storage is down: every Append throws, surfacing
+        // Record's false path without tearing down the real test database.
+        private sealed class ThrowingJournal : IChangeSetJournal
+        {
+            public ChangeSetModel Get(Guid changeSetId) => throw new NotImplementedException();
+
+            public List<ChangeSetModel> GetAll() => throw new NotImplementedException();
+
+            public void Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry) =>
+                throw new InvalidOperationException("the journal storage is down");
+
+            public void MarkRolledBack(Guid changeSetId, Guid rollbackChangeSetId) => throw new NotImplementedException();
+
+            public void MarkEntryRestored(Guid changeSetId, int entrySequence, Guid rollbackChangeSetId) => throw new NotImplementedException();
+
+            public int PurgeReferences(Guid entityId, Guid? folderId = null) => throw new NotImplementedException();
+        }
     }
 }

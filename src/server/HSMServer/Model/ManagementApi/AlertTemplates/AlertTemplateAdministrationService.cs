@@ -155,16 +155,18 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             var stored = _cache.GetAlertTemplate(model.Id) ?? model;
 
-            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
-                model.Id, model.FolderId, model.Name, beforeTemplate: null, afterTemplate: stored.ToEntity(),
-                targets, beforeImages);
-
             // #1401: a persisting save with per-policy rejections is a
             // SUCCESS — the warnings name the sensors whose alerts were not
             // created and ride the echoed DTO (rendered by REST and MCP with
             // the same strings).
-            return PolicyWriteResult<AlertTemplateDto>.Ok(
-                AlertTemplateDtoMapper.ToDto(stored, warnings), changeSetId);
+            var created = PolicyWriteResult<AlertTemplateDto>.Ok(
+                AlertTemplateDtoMapper.ToDto(stored, warnings));
+
+            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
+                model.Id, model.FolderId, model.Name, beforeTemplate: null, afterTemplate: stored.ToEntity(),
+                targets, beforeImages)
+                ? created.WithChangeSet(changeSetId)
+                : created;
         }
 
 
@@ -229,10 +231,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // result. The #1401 warnings ride the echo (see CreateTemplateAsync).
             var stored = _cache.GetAlertTemplate(id) ?? model;
 
-            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
-                id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages);
+            var updated = PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings));
 
-            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings), changeSetId);
+            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
+                id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages)
+                ? updated.WithChangeSet(changeSetId)
+                : updated;
         }
 
 
@@ -275,10 +279,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (!removed.Success)
                 return removed;
 
-            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
-                id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages);
-
-            return PolicyWriteResult.Ok(changeSetId);
+            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
+                id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages)
+                ? PolicyWriteResult.Ok(changeSetId)
+                : PolicyWriteResult.Ok();
         }
 
 
@@ -436,13 +440,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // One journal entry per template write: the template row's
         // before/after image plus a per-sensor full-list image of the fan-out
         // (#1570 story 19 — rollback restores both the template and every
-        // affected sensor's policy list).
-        private void RecordTemplateEntry(Guid changeSetId, InitiatorInfo initiator, ChangeSetOperation operation,
+        // affected sensor's policy list). Returns Record's verdict — the
+        // callers stamp the echoed change-set id ONLY on true, so a client
+        // never receives an undo handle that does not exist.
+        private bool RecordTemplateEntry(Guid changeSetId, InitiatorInfo initiator, ChangeSetOperation operation,
             Guid templateId, Guid folderId, string templateName, AlertTemplateEntity beforeTemplate,
             AlertTemplateEntity afterTemplate, List<BaseSensorModel> targets,
             Dictionary<Guid, (List<PolicyEntity> Data, List<PolicyEntity> Ttl)> beforeImages)
         {
-            _changeSets.Record(changeSetId, initiator, new ChangeSetEntry
+            return _changeSets.Record(changeSetId, initiator, new ChangeSetEntry
             {
                 Kind = ChangeSetEntryKind.AlertTemplate,
                 Operation = operation,

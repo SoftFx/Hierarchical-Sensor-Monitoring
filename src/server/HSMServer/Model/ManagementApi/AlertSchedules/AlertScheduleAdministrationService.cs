@@ -154,7 +154,9 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             if (!deleted.Success)
                 return deleted;
 
-            _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+            // The echoed change-set id is stamped ONLY when the journal entry
+            // actually landed (Record's false = the undo point is lost).
+            var recorded = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
             {
                 Kind = ChangeSetEntryKind.AlertSchedule,
                 Operation = ChangeSetOperation.Delete,
@@ -173,7 +175,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 AfterTemplates = templates.Select(t => t.ToEntity()).ToList(),
             });
 
-            return PolicyWriteResult.Ok(changeSetId);
+            return recorded ? PolicyWriteResult.Ok(changeSetId) : PolicyWriteResult.Ok();
         }
 
 
@@ -264,6 +266,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             ScheduleModel schedule;
             var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            bool recorded;
 
             lock (NameUniquenessGate)
             {
@@ -293,7 +296,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // The provider's Save is an idempotent upsert (cache + LevelDB row).
                 _schedules.SaveSchedule(schedule);
 
-                _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+                recorded = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
                 {
                     Kind = ChangeSetEntryKind.AlertSchedule,
                     Operation = id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update,
@@ -307,8 +310,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             // Echo the STORED schedule through the read mapping — sensor
             // references filtered to the owner's sight, exactly as GET does.
-            return PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user))
-                .WithChangeSet(changeSetId);
+            // The echoed change-set id is stamped ONLY when the journal entry
+            // actually landed (Record's false = the undo point is lost).
+            var result = PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
+
+            return recorded ? result.WithChangeSet(changeSetId) : result;
         }
 
 

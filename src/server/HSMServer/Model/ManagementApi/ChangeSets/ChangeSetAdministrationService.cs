@@ -749,11 +749,16 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         private static string OperationOf(ChangeSetEntry entry) =>
             WritePreviews.CamelOf(entry.Operation);
 
+        // One change set can hold SEVERAL entries under one path (a sensor's
+        // data and TTL lists journaled as separate writes) — the diff report
+        // merges them per path instead of tripping ToDictionary's duplicate
+        // key with a 500.
         private static Dictionary<string, string> ConflictDetails(
             List<(ChangeSetEntry Entry, List<string> Conflicts)> conflicts) =>
             conflicts.Where(pair => pair.Conflicts.Count > 0)
-                .ToDictionary(pair => pair.Entry.Path,
-                    pair => string.Join("; ", pair.Conflicts),
+                .GroupBy(pair => pair.Entry.Path, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key,
+                    group => string.Join("; ", group.SelectMany(pair => pair.Conflicts)),
                     StringComparer.Ordinal);
 
 

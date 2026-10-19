@@ -134,6 +134,41 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task Rollback_TwoConflictingEntriesUnderOnePath_ReportTheMergedDiff()
+        {
+            // One change set, two entries with the SAME path (the sensor's
+            // data and TTL lists journaled as separate writes — story 1's
+            // grouped plan): the per-entity diff report merges both entries'
+            // conflicts under the one path instead of tripping the dictionary
+            // on a duplicate key.
+            var sensor = await CreateSensorAsync("rbTwoEntries");
+            var changeSetId = Guid.NewGuid();
+
+            var data = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            var ttl = await _policies.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(data.Success, data.Failure?.Message);
+            Assert.True(ttl.Success, ttl.Failure?.Message);
+
+            // Intervening writes on BOTH lists — both entries conflict.
+            var interveningData = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var interveningTtl = await _policies.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(), User);
+            Assert.True(interveningData.Success, interveningData.Failure?.Message);
+            Assert.True(interveningTtl.Success, interveningTtl.Failure?.Message);
+
+            var refused = await _changeSets.RollbackAsync(changeSetId, User);
+
+            Assert.False(refused.Success);
+            Assert.Equal(PolicyWriteOutcome.Conflict, refused.Failure.Outcome);
+
+            var detail = Assert.Single(refused.Failure.Details);
+
+            Assert.Equal(sensor.FullPath, detail.Key);
+            Assert.Contains("added after the journaled write", detail.Value);
+        }
+
+        [Fact]
         public async Task Rollback_WebEditorStyleReAssertOfSameContent_IsNotAConflict()
         {
             var sensor = await CreateSensorAsync("rbReAssert");
@@ -470,6 +505,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 },
             ],
             Notification = new AlertNotificationDto { Template = "api [$product]$path" },
+            Destination = new AlertDestinationDto { Mode = "FromParent" },
+        };
+
+        private static TtlPolicyDto TtlPolicy() => new()
+        {
+            Interval = "00:30:00",
+            Notification = new AlertNotificationDto { Template = "api ttl [$product]$path" },
             Destination = new AlertDestinationDto { Mode = "FromParent" },
         };
 
