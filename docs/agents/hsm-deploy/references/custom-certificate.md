@@ -45,15 +45,19 @@ fixes.
 1. Convert PFX → PEM in a private temp dir. `cert.pem` is the leaf plus the
    intermediate; the self-signed root is excluded — clients must have it in their
    own trust stores. The key is written unencrypted, so keep the temp dir at 700
-   and remove it in step 3.
+   and remove it in step 3. The PFX password travels through the environment
+   (`export PW` + `-passin env:PW`), never on the command line — argv is visible
+   in `/proc/<pid>/cmdline`, the same rule `caddy/docker-entrypoint.sh` follows
+   for the VictoriaLogs password.
 
    ```bash
-   PW=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
+   export PW=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
    TMP=$(mktemp -d /tmp/hsmcert.XXXXXX) && chmod 700 "$TMP"
    P=<dir>/Config/<machine-domain>.pfx
-   openssl pkcs12 -in "$P" -passin pass:"$PW" -nokeys -clcerts -out "$TMP/leaf.pem" 2>/dev/null
-   openssl pkcs12 -in "$P" -passin pass:"$PW" -nocerts -nodes  -out "$TMP/key.pem"  2>/dev/null
-   openssl pkcs12 -in "$P" -passin pass:"$PW" -nokeys -cacerts -out "$TMP/cas.pem"  2>/dev/null
+   openssl pkcs12 -in "$P" -passin env:PW -nokeys -clcerts -out "$TMP/leaf.pem" 2>/dev/null
+   openssl pkcs12 -in "$P" -passin env:PW -nocerts -nodes  -out "$TMP/key.pem"  2>/dev/null
+   openssl pkcs12 -in "$P" -passin env:PW -nokeys -cacerts -out "$TMP/cas.pem"  2>/dev/null
+   unset PW
    cd "$TMP"
    awk 'BEGIN{n=0} /-----BEGIN CERTIFICATE-----/{n++} {print > ("ca" n ".pem")}' cas.pem
    cp leaf.pem cert.pem
@@ -68,27 +72,38 @@ fixes.
    A PFX may repeat the root (dev's did, twice) — harmless, every copy is skipped.
 
 2. Sanity-check before placing anything: the key must match the leaf, and the chain
-   must verify through the excluded root.
+   must verify through the excluded root. On `EXTRACT_FAILED or KEY_MISMATCH`
+   stop here — nothing has been placed yet. The emptiness check matters: a failed
+   extraction (wrong password, unreadable PFX) produces empty files whose pubkeys
+   hash as equal, so the match check alone would pass.
 
    ```bash
-   awk '/BEGIN/{n++} n==2' cert.pem > interm.pem
-   [ "$(openssl pkey -in key.pem -pubout 2>/dev/null | sha256sum | cut -d' ' -f1)" \
-     = "$(openssl x509 -in leaf.pem -noout -pubkey 2>/dev/null | sha256sum | cut -d' ' -f1)" ] \
-     || { echo KEY_MISMATCH; exit 1; }
-   openssl verify -CAfile root.pem -untrusted interm.pem leaf.pem   # expect: OK
+   if [ -s leaf.pem ] && [ -s key.pem ] \
+      && [ "$(openssl pkey -in key.pem -pubout 2>/dev/null | sha256sum | cut -d' ' -f1)" \
+           = "$(openssl x509 -in leaf.pem -noout -pubkey 2>/dev/null | sha256sum | cut -d' ' -f1)" ]; then
+     awk '/BEGIN/{n++} n>=2' cert.pem > interm.pem
+     openssl verify -CAfile root.pem -untrusted interm.pem leaf.pem   # expect: OK
+   else
+     echo "EXTRACT_FAILED or KEY_MISMATCH — stop here"
+   fi
    ```
 
-3. Place the files into `CaddyCertificates/`. With passwordless sudo:
+3. Place the files into `CaddyCertificates/` and remove the temp dir — its
+   `key.pem` sits there unencrypted. Step 1 left the shell inside `$TMP`; leave it
+   before deleting. With passwordless sudo:
 
    ```bash
+   cd /tmp
    sudo install -m 644 "$TMP/cert.pem" <dir>/CaddyCertificates/cert.pem
    sudo install -m 600 "$TMP/key.pem"  <dir>/CaddyCertificates/key.pem
+   rm -rf "$TMP"
    ```
 
    Without it (docker group only) — the image's ENTRYPOINT demands HSM_DOMAIN, so
    override it; use the same caddy image tag the stack runs:
 
    ```bash
+   cd /tmp
    docker run --entrypoint sh --rm -v "$TMP":/src:ro -v <dir>/CaddyCertificates:/dst \
      hsmonitoring/hsm-caddy:2.11.4-3 -c \
      'cp /src/cert.pem /dst/cert.pem && cp /src/key.pem /dst/key.pem && chmod 644 /dst/cert.pem && chmod 600 /dst/key.pem'
@@ -111,7 +126,8 @@ fixes.
    ```bash
    echo | openssl s_client -connect <domain>:44333 -servername <domain> 2>/dev/null \
      | openssl x509 -noout -subject -issuer -dates
-   # expect the corporate issuer, CN/SAN = <domain>, expiry of the PFX; served chain: 2 certs
+   # expect the corporate issuer, CN/SAN = <domain>, expiry of the PFX; served
+   # chain: leaf plus every intermediate (2 certs for a single-intermediate PFX)
    curl -o /dev/null -w "%{http_code}\n" https://<domain>:44333/api/sensors/testConnection   # 200
    ```
 
@@ -128,9 +144,11 @@ them.
 
 `custom` has no auto-renewal. The dev certificate expires **2027-05-21**. A month
 before expiry: obtain a fresh PFX from NOC into `Config/`, repeat steps 1–3 (they
-overwrite cert.pem/key.pem), then `docker compose restart caddy` — a restart is
-enough once the mode is already `custom`: the files are re-read at container start
-and no `.env` change is needed. A calendar reminder (and/or an HSM sensor on the
+overwrite cert.pem/key.pem), then `docker restart hsm-caddy` — a plain container
+restart, not a compose command, so it needs none of the machine's compose `-f`
+files (troubleshooting.md) — and a restart is enough once the mode is already
+`custom`: the files are re-read at container start and no `.env` change is needed.
+A calendar reminder (and/or an HSM sensor on the
 cert expiry) belongs on whoever runs the machine.
 
 ## Notes
