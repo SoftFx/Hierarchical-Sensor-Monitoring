@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -84,7 +85,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreatePolicy(Guid productId, [FromBody] PolicyDto dto) =>
             PolicyWriteResult.ToActionResult(
-                (await _writer.CreateProductPolicyAsync(productId, dto, User)).Failure);
+                (await _writer.CreateProductPolicyAsync(productId, dto, User, Request.WriteOptions())).Failure);
 
         /// <summary>
         /// Replace the full content of one data policy found anywhere in the
@@ -105,7 +106,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdatePolicy(Guid productId, Guid policyId, [FromBody] PolicyDto dto) =>
-            (await _writer.UpdateProductPolicyAsync(productId, policyId, dto, User)).ToActionResult();
+            (await _writer.UpdateProductPolicyAsync(productId, policyId, dto, User, Request.WriteOptions())).ToActionResult(Response);
 
         /// <summary>Remove one data policy of the product's subtree, through the owning sensor's full list.</summary>
         /// <param name="productId">Product id.</param>
@@ -119,9 +120,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeletePolicy(Guid productId, Guid policyId)
         {
-            var result = await _writer.DeleteProductPolicyAsync(productId, policyId, User);
+            var result = await _writer.DeleteProductPolicyAsync(productId, policyId, User, Request.WriteOptions());
 
-            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+                return Ok(result.Preview);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+            Response.SetChangeSet(result.ChangeSetId);
+
+            return NoContent();
         }
 
         /// <summary>The product's own TTL policies, ordered by policy id.</summary>
@@ -168,11 +177,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateTtlPolicy(Guid productId, [FromBody] TtlPolicyDto dto)
         {
-            var result = await _writer.CreateProductTtlPolicyAsync(productId, dto, User);
+            var result = await _writer.CreateProductTtlPolicyAsync(productId, dto, User, Request.WriteOptions());
 
-            return result.Success
-                ? CreatedAtAction(nameof(GetTtlPolicy), new { productId, policyId = result.Value.Id }, result.Value)
-                : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+            return Ok(result.Preview);
+
+if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+Response.SetChangeSet(result.ChangeSetId);
+
+            return  CreatedAtAction(nameof(GetTtlPolicy), new { productId, policyId = result.Value.Id }, result.Value);
         }
 
         /// <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
@@ -189,7 +204,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateTtlPolicy(Guid productId, Guid policyId, [FromBody] TtlPolicyDto dto) =>
-            (await _writer.UpdateProductTtlPolicyAsync(productId, policyId, dto, User)).ToActionResult();
+            (await _writer.UpdateProductTtlPolicyAsync(productId, policyId, dto, User, Request.WriteOptions())).ToActionResult(Response);
 
         /// <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
         /// <param name="productId">Product id.</param>
@@ -203,9 +218,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteTtlPolicy(Guid productId, Guid policyId)
         {
-            var result = await _writer.DeleteProductTtlPolicyAsync(productId, policyId, User);
+            var result = await _writer.DeleteProductTtlPolicyAsync(productId, policyId, User, Request.WriteOptions());
 
-            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+                return Ok(result.Preview);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+            Response.SetChangeSet(result.ChangeSetId);
+
+            return NoContent();
         }
     }
 }

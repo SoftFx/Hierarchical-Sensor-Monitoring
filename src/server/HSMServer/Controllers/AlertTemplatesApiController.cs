@@ -4,6 +4,7 @@ using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -110,11 +111,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto)
         {
-            var result = await _writer.CreateTemplateAsync(User, dto);
+            var result = await _writer.CreateTemplateAsync(User, dto, Request.WriteOptions());
 
-            return result.Success
-                ? CreatedAtAction(nameof(GetTemplate), new { id = result.Value.Id }, result.Value)
-                : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+            return Ok(result.Preview);
+
+if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+Response.SetChangeSet(result.ChangeSetId);
+
+            return  CreatedAtAction(nameof(GetTemplate), new { id = result.Value.Id }, result.Value);
         }
 
         /// <summary>
@@ -132,7 +139,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] AlertTemplateDto dto) =>
-            (await _writer.UpdateTemplateAsync(id, User, dto)).ToActionResult();
+            (await _writer.UpdateTemplateAsync(id, User, dto, Request.WriteOptions())).ToActionResult(Response);
 
         /// <summary>Delete a template and strip its per-sensor policies.</summary>
         /// <param name="id">Template id.</param>
@@ -145,9 +152,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteTemplate(Guid id)
         {
-            var result = await _writer.DeleteTemplateAsync(id, User);
+            var result = await _writer.DeleteTemplateAsync(id, User, Request.WriteOptions());
 
-            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+                return Ok(result.Preview);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+            Response.SetChangeSet(result.ChangeSetId);
+
+            return NoContent();
         }
     }
 }

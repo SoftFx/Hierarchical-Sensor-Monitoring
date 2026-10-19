@@ -179,5 +179,32 @@ namespace HSMServer.Model.ManagementApi.Alerts
             result.Success
                 ? new OkObjectResult(result.Value)
                 : PolicyWriteResult.ToActionResult(result.Failure);
+
+        // #1570 transport arm: a dry run renders its preview (200, nothing
+        // applied) and a journaled success echoes the change-set id through
+        // the response header before the regular rendering takes over.
+        public static IActionResult ToActionResult<T>(this PolicyWriteResult<T> result,
+            Microsoft.AspNetCore.Http.HttpResponse response)
+        {
+            if (result.IsDryRun)
+                return new OkObjectResult(result.Preview);
+
+            if (result.Success)
+                response.SetChangeSet(result.ChangeSetId);
+
+            return result.ToActionResult();
+        }
+
+        public static IActionResult ToActionResult(this PolicyWriteResult result,
+            Microsoft.AspNetCore.Http.HttpResponse response)
+        {
+            if (result.IsDryRun)
+                return new OkObjectResult(result.Preview);
+
+            if (result.Success)
+                response.SetChangeSet(result.ChangeSetId);
+
+            return PolicyWriteResult.ToActionResult(result.Failure);
+        }
     }
 }

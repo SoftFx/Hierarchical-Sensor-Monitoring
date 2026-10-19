@@ -4,6 +4,7 @@ using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -99,11 +100,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateSchedule([FromBody] AlertScheduleUpsertDto dto)
         {
-            var result = await _writer.CreateScheduleAsync(User, dto);
+            var result = await _writer.CreateScheduleAsync(User, dto, Request.WriteOptions());
 
-            return result.Success
-                ? CreatedAtAction(nameof(GetSchedule), new { id = result.Value.Id }, result.Value)
-                : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+            return Ok(result.Preview);
+
+if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+Response.SetChangeSet(result.ChangeSetId);
+
+            return  CreatedAtAction(nameof(GetSchedule), new { id = result.Value.Id }, result.Value);
         }
 
         /// <summary>
@@ -121,7 +128,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateSchedule(Guid id, [FromBody] AlertScheduleUpsertDto dto) =>
-            (await _writer.UpdateScheduleAsync(id, User, dto)).ToActionResult();
+            (await _writer.UpdateScheduleAsync(id, User, dto, Request.WriteOptions())).ToActionResult(Response);
 
         /// <summary>
         /// Delete a schedule. Detaches the id from every referencing policy FIRST;
@@ -139,9 +146,17 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteSchedule(Guid id)
         {
-            var result = await _writer.DeleteScheduleAsync(id, User, HttpContext.RequestAborted);
+            var result = await _writer.DeleteScheduleAsync(id, User, HttpContext.RequestAborted, Request.WriteOptions());
 
-            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
+            if (result.IsDryRun)
+                return Ok(result.Preview);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+            Response.SetChangeSet(result.ChangeSetId);
+
+            return NoContent();
         }
     }
 }

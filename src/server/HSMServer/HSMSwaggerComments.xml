@@ -148,6 +148,45 @@
             <summary>Delete a template and strip its per-sensor policies.</summary>
             <param name="id">Template id.</param>
         </member>
+        <member name="T:HSMServer.Controllers.ChangeSetsApiController">
+            <summary>
+            The change-set surface of the undo journal (#1570): list with filters,
+            per-entity before/after details, and rollback (with force and dryRun).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsApiController.ListChangeSets(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Change sets touching entities visible to the caller, newest first.
+            Writers without a changeSetId form their own single-entry change
+            sets — every REST/MCP configuration write is listed here.
+            </summary>
+            <param name="author">Exact author name filter (case-insensitive).</param>
+            <param name="fromUtc">Created at or after (UTC ISO 8601).</param>
+            <param name="toUtc">Created at or before (UTC ISO 8601).</param>
+            <param name="status">applied | rolledBack | partial.</param>
+            <param name="entityId">Only change sets touching this entity id (sensor, product, template, schedule).</param>
+            <param name="limit">Page size, 1..200 (default 50).</param>
+            <param name="offset">Skip count (default 0).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsApiController.GetChangeSet(System.Guid)">
+            <summary>
+            One change set's details: per-entity before/after images (visible
+            entries only). An unknown or invisible id answers 404.
+            </summary>
+            <param name="id">Change set id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsApiController.Rollback(System.Guid,System.Boolean,System.Boolean)">
+            <summary>
+            Roll back a change set: compensating writes replayed in reverse
+            order through the same write gates. Refuses with a per-entity diff
+            when an entity changed after the change set recorded it, unless
+            forced. Restores configuration only — notifications sent, alerts
+            fired and sensor history are untouched.
+            </summary>
+            <param name="id">Change set id.</param>
+            <param name="force">Override content conflicts deliberately.</param>
+            <param name="dryRun">Report conflicts and the restore plan, apply nothing.</param>
+        </member>
         <member name="T:HSMServer.Controllers.ChatsApiController">
             <summary>
             Read-only surface for notification chats (epic #1347 follow-up): the id
@@ -2020,7 +2059,7 @@
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
         </member>
-        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService">
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService">
             <summary>
             The read and rollback surface of the undo journal (#1570):
             transport-agnostic list/get with caller-sight filtering, and the
@@ -2104,6 +2143,22 @@
             Shared dry-run preview builder of the journaled write surface: one
             shape for policy, template and schedule writes across REST and MCP.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders">
+            <summary>
+            The REST transport of the write options (#1570): headers in, the
+            journaled change-set id echoed on every successful write response.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.WriteOptions(Microsoft.AspNetCore.Http.HttpRequest)">
+            <summary>
+            Parse the write options of a management-API request. An absent or
+            malformed change-set id answers null options (the write stands
+            alone) — the header is advisory grouping, never a 400.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.SetChangeSet(Microsoft.AspNetCore.Http.HttpResponse,System.Nullable{System.Guid})">
+            <summary>The change-set id echo on write responses (201/200/204).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
             <summary>

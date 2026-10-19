@@ -30,7 +30,20 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     // lists on every save). A mismatch blocks the rollback with a per-entity
     // diff unless the caller forces it. A rollback is itself journaled as a
     // new change set, which makes redo a rollback of the rollback.
-    public sealed class ChangeSetAdministrationService
+    // The controller-facing contract of the undo-journal surface: mocked in
+    // the REST contract tests, implemented by ChangeSetAdministrationService.
+    public interface IChangeSetAdministrationService
+    {
+        PolicyWriteResult<List<ChangeSetSummaryDto>> ListChangeSets(ClaimsPrincipal user, ChangeSetFilter filter);
+
+        PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user);
+
+        Task<PolicyWriteResult<RollbackResultDto>> RollbackAsync(Guid id, ClaimsPrincipal user,
+            bool force = false, bool dryRun = false);
+    }
+
+
+    public sealed class ChangeSetAdministrationService : IChangeSetAdministrationService
     {
         private const int MaxLimit = 200;
 

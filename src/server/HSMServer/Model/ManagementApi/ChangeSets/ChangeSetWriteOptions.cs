@@ -85,4 +85,41 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             return char.ToLowerInvariant(name[0]) + name[1..];
         }
     }
+
+
+    /// <summary>
+    /// The REST transport of the write options (#1570): headers in, the
+    /// journaled change-set id echoed on every successful write response.
+    /// </summary>
+    public static class ChangeSetHeaders
+    {
+        public const string ChangeSetId = "X-HSM-Change-Set";
+
+        public const string DryRun = "X-HSM-Dry-Run";
+
+        /// <summary>
+        /// Parse the write options of a management-API request. An absent or
+        /// malformed change-set id answers null options (the write stands
+        /// alone) — the header is advisory grouping, never a 400.
+        /// </summary>
+        public static ChangeSetWriteOptions WriteOptions(this Microsoft.AspNetCore.Http.HttpRequest request)
+        {
+            var changeSetId = Guid.TryParse(request.Headers[ChangeSetId], out var parsed) ? parsed : (Guid?)null;
+            var dryRun = request.Headers[DryRun].Count > 0 &&
+                         !string.Equals(request.Headers[DryRun], "false", StringComparison.OrdinalIgnoreCase);
+
+            return changeSetId is null && !dryRun ? null : new ChangeSetWriteOptions
+            {
+                ChangeSetId = changeSetId,
+                DryRun = dryRun,
+            };
+        }
+
+        /// <summary>The change-set id echo on write responses (201/200/204).</summary>
+        public static void SetChangeSet(this Microsoft.AspNetCore.Http.HttpResponse response, Guid? changeSetId)
+        {
+            if (changeSetId is { } id)
+                response.Headers[ChangeSetId] = id.ToString();
+        }
+    }
 }
