@@ -168,8 +168,9 @@ The probe registers **two separately pinned sets**:
    the growth of its reaped part over an interval in which its `cminflt` grew (else exited
    threads', i.e. its own), capped at the delta, take-backs out of it first — and its own. The
    children's rest goes to the names of the vanished processes a snapshot saw whose reaper walk
-   ends at it (shared by their last measured interval, else their own lifetime counters, else
-   equally), and when there are none to **`children of <reaper>`** (no parentheses: not in the
+   ends at it (shared by their last measured interval, else their own lifetime counters; none of
+   them when both are 0), and when there are none (or none moved anything) to
+   **`children of <reaper>`** (no parentheses: not in the
    template-wildcard charset) — never to the reaper's name; such names get no path line. A
    version-1 snapshot, a kernel thread or unreadable threads: no split (the old rule). Known
    limits (README "Limits"): a process too short-lived to be read has no name of its own (it is

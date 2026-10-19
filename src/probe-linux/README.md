@@ -507,7 +507,9 @@ candidate's basename is longer and starts with the 15 bytes (the kernel's `comm`
 bytes of the executed file's basename, so anything else names another file) — and is no
 interpreter. The comparison is on bytes: a cut that splits a multibyte character reaches the probe
 as U+FFFD (the stat line is decoded lossily), still matches the full name it was cut from, and is
-never itself taken for an extended name; a candidate that is not valid UTF-8 is never used:
+never itself taken for an extended name; a candidate that is not valid UTF-8, or whose basename is
+longer than `NAME_MAX` (255 bytes — no real file name is; an argv[0] can be anything a local user
+makes up), is never used:
 
 1. the name the top disk I/O helper wrote for the same `(pid, starttime)` (when `topDiskIo` is
    on; the helper reads the `exe` link), so both families name a process alike;
@@ -730,9 +732,10 @@ delta is split, from the snapshot's reaped part and `cminflt`:
   process a snapshot saw whose reaper walk ends at it — a whole `cron → sh → tar` tree included),
   shared in proportion to what each moved in its last measured interval, or, when none moved
   anything then (seen at one snapshot only), to what each had done itself over its life (its
-  counters without its reaped part), equally when that is nothing too. When it received **no**
-  process a snapshot saw — only children that lived less than one period — the bytes are credited
-  to **`children of <reaper>`**: `children of systemd`, `children of crond`, `children of bash`.
+  counters without its reaped part); when that is nothing too, none of them gets any (an idle
+  `sleep` that exited inherits nothing). When it received **no** process a snapshot saw that
+  moved anything — only children that lived less than one period — the bytes are credited to
+  **`children of <reaper>`**: `children of systemd`, `children of crond`, `children of bash`.
   Never to the reaper's own name. (Parentheses, as in `systemd (children)`, are not among the
   characters the server's template wildcard matches, so the name says it in words.) Speed and
   per-day sensors use the same names;

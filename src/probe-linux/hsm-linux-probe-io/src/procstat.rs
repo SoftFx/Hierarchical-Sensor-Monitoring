@@ -19,6 +19,11 @@ pub const SIGCHLD_MASK: u64 = 1 << 16;
 /// `TASK_COMM_LEN - 1`: the longest `comm`. Only a name of exactly this length can be truncated.
 pub const COMM_LEN: usize = 15;
 
+/// `NAME_MAX`: the longest file name. No executable's basename is longer, so a longer candidate
+/// (an argv[0] any local user can make up, up to the 4 KiB read) is never a full name — it would
+/// otherwise become a sensor path segment of that length.
+pub const NAME_MAX: usize = 255;
+
 /// The fields of `/proc/<pid>/stat` the samplers use.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PidStat {
@@ -106,7 +111,8 @@ fn as_comm(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
 /// the first 15 bytes of the executed file's basename, so anything else names another file: a
 /// script's interpreter, a symlink's differently named target, a rewritten title), it holds no
 /// U+FFFD (a name that is not valid UTF-8 is never taken, so an extended name never holds one —
-/// what [`original_comm`] relies on) and it is no interpreter ([`is_interpreter`]). Callers pass
+/// what [`original_comm`] relies on), it is at most [`NAME_MAX`] bytes (no real file name is
+/// longer; an argv[0] can be anything) and it is no interpreter ([`is_interpreter`]). Callers pass
 /// argv[0] only, never an argument: arguments can carry secrets.
 pub fn extended_name(comm: &str, candidate: &str) -> Option<String> {
     if !may_be_cut(comm) {
@@ -116,6 +122,7 @@ pub fn extended_name(comm: &str, candidate: &str) -> Option<String> {
     let base = candidate.rsplit('/').next().unwrap_or(candidate);
     let bytes = base.as_bytes();
     (bytes.len() > COMM_LEN
+        && bytes.len() <= NAME_MAX
         && as_comm(&bytes[..COMM_LEN]) == comm
         && !base.contains(char::REPLACEMENT_CHARACTER)
         && !is_interpreter(base))
@@ -296,5 +303,25 @@ mod tests {
         assert_eq!(original_comm(&middle), None);
         // A candidate that is not valid UTF-8 (decoded with U+FFFD) is never taken.
         assert_eq!(extended_name(&comm, "sauvegarde_bdd\u{fffd}-nuit"), None);
+    }
+
+    /// A basename longer than `NAME_MAX` names no real file: an argv[0] like that (any local user
+    /// can start `./<4 KB name>`) keeps the `comm`, so it cannot make a 4 KB sensor segment.
+    #[test]
+    fn a_name_longer_than_name_max_is_never_taken() {
+        let comm = "valheim_server.";
+        let longest = format!("{comm}{}", "x".repeat(NAME_MAX - COMM_LEN));
+        assert_eq!(longest.len(), NAME_MAX);
+        assert_eq!(
+            extended_name(comm, &format!("./{longest}")).as_deref(),
+            Some(longest.as_str())
+        );
+        let too_long = format!("{comm}{}", "x".repeat(300 - COMM_LEN));
+        assert_eq!(too_long.len(), 300);
+        assert_eq!(extended_name(comm, &format!("./{too_long}")), None);
+        assert_eq!(
+            extended_name(comm, &format!("/opt/{too_long} (deleted)")),
+            None
+        );
     }
 }

@@ -44,9 +44,9 @@
 //!   vanished process whose [`receiver`] it is: a whole job tree that exits at once lands on the
 //!   tree's names), shared in proportion to what each moved in its last measured interval (when
 //!   none moved anything then — seen at one snapshot only —, to what each had done itself over its
-//!   life; equally when that is nothing too); when it reaped none that was seen — only children
-//!   too short-lived for any scan — to [`children_of`] its name (`children of systemd`), never to
-//!   its own name;
+//!   life; none of them when that is nothing too — an idle `sleep` is no heir); when it reaped
+//!   none that was seen and moved anything — only children too short-lived for any scan — to
+//!   [`children_of`] its name (`children of systemd`), never to its own name;
 //! * **its own** — the rest, under its own name as before.
 //!
 //! A version-1 snapshot, a kernel thread, or a process whose threads could not be read has no
@@ -455,12 +455,34 @@ impl IoSampler {
             if !is_zero(split.children) {
                 match heirs.get(&entry.pid).filter(|heirs| !heirs.is_empty()) {
                     Some(heirs) => {
-                        let written = shares(
+                        // Per direction: heirs that moved nothing (all weights 0) get nothing —
+                        // those bytes are children's no snapshot saw do it: `children of …`.
+                        let mut unseen = IoCounters::default();
+                        let share_out = |total: u64, unseen: &mut u64, weights: Vec<u64>| {
+                            if weights.iter().all(|&weight| weight == 0) {
+                                *unseen = total;
+                                vec![0; weights.len()]
+                            } else {
+                                shares(total, &weights)
+                            }
+                        };
+                        let written = share_out(
                             split.children.write_bytes,
-                            &weights(heirs, |c| c.write_bytes),
+                            &mut unseen.write_bytes,
+                            weights(heirs, |c| c.write_bytes),
                         );
-                        let fetched =
-                            shares(split.children.read_bytes, &weights(heirs, |c| c.read_bytes));
+                        let fetched = share_out(
+                            split.children.read_bytes,
+                            &mut unseen.read_bytes,
+                            weights(heirs, |c| c.read_bytes),
+                        );
+                        credited |= credit(
+                            &mut read.deltas,
+                            &children_of(&name),
+                            false,
+                            NO_PROCESS,
+                            unseen,
+                        );
                         for ((heir, write_bytes), read_bytes) in
                             heirs.iter().zip(written).zip(fetched)
                         {
@@ -830,6 +852,21 @@ pub mod tests {
         let mut feed = Feed::new(vec![writer(30, "java", 1, 5, 10 * MB, 0, 3)]);
         let read = feed.next(vec![writer(30, "java", 1, 5, 60 * MB, 50 * MB, 3)]);
         assert_eq!(read.deltas["java"].written, 50 * MB);
+        assert_eq!(read.deltas.len(), 1, "{:?}", read.deltas);
+    }
+
+    /// A seen child that moved nothing — no bytes in its last interval, none over its life (an
+    /// idle `sleep`) — is no heir: when it exits in the same interval as children no snapshot saw,
+    /// their bytes are `children of systemd`, not the idle child's (PR review of #1576).
+    #[test]
+    fn an_idle_seen_child_inherits_nothing() {
+        let mut feed = Feed::new(vec![
+            writer(1, "systemd", 0, 1, 50 * MB, 40 * MB, 1000),
+            writer(300, "sleep", 1, 90, 0, 0, 0),
+        ]);
+        let read = feed.next(vec![writer(1, "systemd", 0, 1, 350 * MB, 340 * MB, 1003)]);
+        assert_eq!(read.deltas["children of systemd"].written, 300 * MB);
+        assert!(!read.deltas.contains_key("sleep"), "{:?}", read.deltas);
         assert_eq!(read.deltas.len(), 1, "{:?}", read.deltas);
     }
 
