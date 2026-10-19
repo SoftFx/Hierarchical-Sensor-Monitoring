@@ -68,6 +68,7 @@ namespace HSMServer.Core.Tests.Mcp
             "find_sensors",
             "get_alert_schedule",
             "get_alert_template",
+            "get_change_set",
             "get_chat",
             "get_folder",
             "get_node",
@@ -75,9 +76,11 @@ namespace HSMServer.Core.Tests.Mcp
             "get_sensor_history",
             "list_alert_schedules",
             "list_alert_templates",
+            "list_change_sets",
             "list_chats",
             "list_folders",
             "list_products",
+            "rollback_change_set",
             "update_alert_schedule",
             "update_alert_template",
             "update_sensor_policy",
@@ -96,6 +99,7 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
+        private readonly Mock<HSMServer.Core.ChangeSets.IChangeSetJournal> _journalMock = new();
 
         private readonly Guid _ownerId = Guid.NewGuid();
         private readonly string _credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
@@ -269,12 +273,12 @@ namespace HSMServer.Core.Tests.Mcp
             // #1565, output side: the write echo's warnings field names the
             // zero-match diagnostic class, and the warning entry's sensor field
             // documents carrying the PATTERN itself when nothing matched.
-            string OutputDescriptions(ModelContextProtocol.Protocol.Tool tool) =>
-                string.Join("\n", AllDescriptions(tool.OutputSchema!.Value));
-
-            var templateEcho = OutputDescriptions(tools["create_alert_template"]);
-            Assert.Contains("path patterns that matched NO sensors", templateEcho);
-            Assert.Contains("or the path pattern that matched no sensors", templateEcho);
+            // #1570: create_alert_template's output is a union now, so the
+            // warning-entry docs ride the tool description instead of the
+            // (former) AlertTemplateDto output schema.
+            var templateDescription = tools["create_alert_template"].Description ?? string.Empty;
+            Assert.Contains("path pattern matched NO sensors", templateDescription);
+            Assert.Contains("warnings", templateDescription);
         }
 
 
@@ -308,7 +312,14 @@ namespace HSMServer.Core.Tests.Mcp
             {
                 var schema = tools[name].OutputSchema;
                 Assert.True(schema.HasValue, $"{name} carries no output schema");
-                Assert.Equal("object", schema.Value.GetProperty("type").GetString());
+
+                // #1570: the journaled WRITE tools return a union (the DTO
+                // echo plus changeSetId, or a dry-run preview), so their
+                // schema is permissively `true`; everything else stays a
+                // plain type:"object" document.
+                Assert.True(schema.Value.ValueKind == JsonValueKind.True ||
+                            schema.Value.GetProperty("type").GetString() == "object",
+                    $"{name} carries neither an object nor a permissive schema");
             }
 
             string Descriptions(ModelContextProtocol.Protocol.Tool tool) =>
@@ -469,6 +480,14 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddScoped<HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService>();
                         services.AddScoped<HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService>();
                         services.AddSingleton<HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService>();
+                        // #1570: the undo-journal collaborators of the write
+                        // services — a no-op journal (this host has no DB) and
+                        // the real recorder/engine over the mocked managers.
+                        services.AddSingleton(_journalMock.Object);
+                        services.AddSingleton(_ => new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
+                            _journalMock.Object, Microsoft.Extensions.Logging.Abstractions.NullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>.Instance));
+                        services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService,
+                            HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);

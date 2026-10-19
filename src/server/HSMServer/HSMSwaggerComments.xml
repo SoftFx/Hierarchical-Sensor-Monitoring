@@ -710,6 +710,13 @@
             #1393 one-decision-two-transports pattern).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.ChangeSetsMcpTools">
+            <summary>
+            The undo-journal tools of the MCP surface (#1570): list, details and
+            rollback of change sets — every REST/MCP configuration write is
+            journaled under a changeSetId and undoable as a unit here.
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
             <summary>
             The two chat tools of the MCP surface: the id source an agent needs to
@@ -866,6 +873,24 @@
         </member>
         <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
             <summary>Id of the deleted resource.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpDeletedResult.ChangeSetId">
+            <summary>The change set the delete was journaled under (#1570).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpChangeSetsResult">
+            <summary>Result of the list_change_sets tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChangeSetsResult.ChangeSets">
+            <summary>The visible change sets of the served slice, newest first.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChangeSetsResult.TotalFound">
+            <summary>Total visible change sets, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChangeSetsResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChangeSetsResult.Offset">
+            <summary>The skip count actually served.</summary>
         </member>
         <member name="T:HSMServer.Mcp.PoliciesMcpTools">
             <summary>

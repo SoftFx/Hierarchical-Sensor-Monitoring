@@ -432,7 +432,7 @@ namespace HSMServer.Core.Tests.Mcp
                 .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
                 .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
 
-            var dto = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+            var dto = (AlertTemplateDto)await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
 
             Assert.NotEqual(Guid.Empty, dto.Id);
             Assert.Contains(_templateStore, t => t.Id == dto.Id);
@@ -452,7 +452,7 @@ namespace HSMServer.Core.Tests.Mcp
                 }))
                 .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
 
-            var dto = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+            var dto = (AlertTemplateDto)await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
 
             var warning = Assert.Single(dto.Warnings);
             Assert.Equal("Root/Product A/cpu bar", warning.Sensor);
@@ -471,7 +471,7 @@ namespace HSMServer.Core.Tests.Mcp
                     new("Root/Product B/ram bar", "Not supported property Value for DoubleBarPolicy"),
                 }));
 
-            var dto = await CreateTools().UpdateAlertTemplateAsync(template.Id, TemplateDto("warned"));
+            var dto = (AlertTemplateDto)await CreateTools().UpdateAlertTemplateAsync(template.Id, TemplateDto("warned"));
 
             var warning = Assert.Single(dto.Warnings);
             Assert.Equal("Root/Product B/ram bar", warning.Sensor);
@@ -505,7 +505,7 @@ namespace HSMServer.Core.Tests.Mcp
                 .ReturnsAsync(((bool Ok, string Error))(true, null))
                 .Callback((Guid id, CancellationToken _) => _templateStore.RemoveAll(t => t.Id == id));
 
-            var result = await CreateTools().DeleteAlertTemplateAsync(template.Id);
+            var result = (McpDeletedResult)await CreateTools().DeleteAlertTemplateAsync(template.Id);
 
             Assert.Equal(template.Id, result.Id);
         }
@@ -514,7 +514,7 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertSchedule_ReturnsTheStoredSchedule()
         {
-            var dto = await CreateTools().CreateAlertScheduleAsync(
+            var dto = (AlertScheduleDto)await CreateTools().CreateAlertScheduleAsync(
                 new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
                 {
                     Name = "night-shift",
@@ -572,7 +572,7 @@ namespace HSMServer.Core.Tests.Mcp
                 {
                     try
                     {
-                        var dto = await CreateTools().CreateAlertScheduleAsync(
+                        var dto = (AlertScheduleDto)await CreateTools().CreateAlertScheduleAsync(
                             new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
                             {
                                 Name = "same-name", Timezone = "UTC", Schedule = ValidYaml,

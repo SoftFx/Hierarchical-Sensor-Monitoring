@@ -46,6 +46,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "find_sensors",
                 "get_alert_schedule",
                 "get_alert_template",
+                "get_change_set",
                 "get_chat",
                 "get_folder",
                 "get_node",
@@ -53,9 +54,11 @@ namespace HSMServer.Core.Tests.Mcp
                 "get_sensor_history",
                 "list_alert_schedules",
                 "list_alert_templates",
+                "list_change_sets",
                 "list_chats",
                 "list_folders",
                 "list_products",
+                "rollback_change_set",
                 "update_alert_schedule",
                 "update_alert_template",
                 "update_sensor_policy",
@@ -110,11 +113,19 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(25, tools.Count);
+            Assert.Equal(28, tools.Count);
             Assert.All(tools, tool =>
             {
                 Assert.True(tool.ProtocolTool.OutputSchema.HasValue, tool.ProtocolTool.Name);
-                Assert.Equal("object", tool.ProtocolTool.OutputSchema.Value.GetProperty("type").GetString());
+
+                // #1570: the journaled write tools return a UNION — the DTO
+                // echo (plus changeSetId) or a dry-run WritePreviewDto — so
+                // their output schema is permissively `true`; every other
+                // tool keeps a plain type:"object" document (#1553).
+                var type = tool.ProtocolTool.OutputSchema.Value;
+
+                Assert.True(type.ValueKind == JsonValueKind.True ||
+                            type.GetProperty("type").GetString() == "object", tool.ProtocolTool.Name);
             });
         }
 

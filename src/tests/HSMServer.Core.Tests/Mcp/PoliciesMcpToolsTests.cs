@@ -123,7 +123,7 @@ namespace HSMServer.Core.Tests.Mcp
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
 
-            var dto = await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var dto = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
 
             Assert.NotEqual(Guid.Empty, dto.Id);
             Assert.Single(dto.Conditions);
@@ -159,10 +159,10 @@ namespace HSMServer.Core.Tests.Mcp
         public async System.Threading.Tasks.Task UpdateSensorPolicy_ReplacesContentAndEchoes()
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
-            var created = await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var created = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
 
             var replaced = DataDto() with { Icon = "✅" };
-            var updated = await CreateTools().UpdateSensorPolicyAsync(sensor.Id, created.Id, replaced);
+            var updated = (PolicyDto)await CreateTools().UpdateSensorPolicyAsync(sensor.Id, created.Id, replaced);
 
             Assert.Equal(created.Id, updated.Id);
             Assert.Equal("✅", updated.Icon);
@@ -173,9 +173,9 @@ namespace HSMServer.Core.Tests.Mcp
         public async System.Threading.Tasks.Task DeleteSensorPolicy_ReturnsTheDeletedId()
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
-            var created = await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var created = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
 
-            var result = await CreateTools().DeleteSensorPolicyAsync(sensor.Id, created.Id);
+            var result = (McpDeletedResult)await CreateTools().DeleteSensorPolicyAsync(sensor.Id, created.Id);
 
             Assert.Equal(created.Id, result.Id);
 
@@ -192,7 +192,7 @@ namespace HSMServer.Core.Tests.Mcp
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
 
-            var dto = await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, new TtlPolicyDto
+            var dto = (TtlPolicyDto)await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, new TtlPolicyDto
             {
                 Interval = "00:30:00",
                 Notification = new AlertNotificationDto { Template = "mcp ttl" },
