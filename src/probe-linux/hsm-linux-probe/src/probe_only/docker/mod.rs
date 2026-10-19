@@ -138,8 +138,9 @@ pub struct DockerSource<'c, E: EngineApi> {
     /// Each listed container's `State.StartedAt` from the last inspect: a change means a restart,
     /// whose write counter began again from 0.
     started_at: std::collections::HashMap<String, String>,
-    /// Some container on this host has reported a block-I/O write counter: the host accounts
-    /// I/O per container, so a running container without one simply has not written yet.
+    /// Some container on this host has listed a block-I/O write counter since the probe started:
+    /// the host accounts I/O per container, so a running container without one has written 0 so
+    /// far (#1574). Never set on a host that lists none (Docker Desktop).
     counters_seen: bool,
 }
 
@@ -402,7 +403,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     continue;
                 }
             };
-            writes |= written::written_bytes(&stats, &mut self.stacking).is_some();
+            writes |= written::written_bytes(&stats, &mut self.stacking, &mut self.counters_seen)
+                .is_some();
             match stats::memory_reading(&stats, self.host_mem_total) {
                 Some(reading) => readings.push(reading),
                 None => complete = false,
@@ -808,9 +810,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     }
                 };
                 let now_ms = (self.clock)();
-                let counter = written::written_bytes(&stats, &mut self.stacking);
-                let running = stats.cpu_stats.system_cpu_usage.is_some();
-                self.counters_seen |= counter.is_some();
+                // A running container that lists no write yet reads as 0 once the host has shown
+                // that it accounts block I/O per container (#1574); see `written_bytes`.
+                let counter =
+                    written::written_bytes(&stats, &mut self.stacking, &mut self.counters_seen);
                 let started_at = self.started_at.get(id).map(String::as_str);
                 let mut restarted = false;
                 let mut discarded: Option<&str> = None;
@@ -823,7 +826,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 .get_or_insert_with(|| WriteRecord::new(now_ms));
                             self.written_dirty = true;
                             any_writes = true;
-                            match accumulator.sample(
+                            match accumulator.sample_written(
                                 id,
                                 counter,
                                 now_ms,
@@ -852,15 +855,6 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 ),
                                 Err(_) => {}
                             }
-                        }
-                        // Running, and this host accounts block I/O (another container reported a
-                        // counter): nothing written yet, so its counter is 0 since it started.
-                        None if self.counters_seen && running && started_at.is_some() => {
-                            let accumulator = record
-                                .written
-                                .get_or_insert_with(|| WriteRecord::new(now_ms));
-                            accumulator.zero_baseline(id, now_ms, started_at.unwrap_or_default());
-                            self.written_dirty = true;
                         }
                         None => {
                             if let Some(accumulator) = record.written.as_mut() {
@@ -2171,6 +2165,39 @@ pub(crate) mod tests {
             db.bytes, 4_096,
             "the first write counts, it is not the baseline"
         );
+    }
+
+    #[test]
+    fn an_idle_container_posts_0_like_its_neighbours() {
+        // #1574: gitea/db recreated and idle — io.stat lists no device, `[]` in every round — next
+        // to services that list a counter: its hour is a measured 0, posted, with its sensor.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        for round in &mut engine.rounds {
+            let stats = round
+                .iter_mut()
+                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .unwrap()
+                .1;
+            stats.blkio_stats.io_service_bytes_recursive = Some(Vec::new());
+        }
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = source.roll_written_hours(&quiet());
+        let paths = registered(&collector);
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .expect("an idle hour is posted, not skipped")
+            .1;
+        assert_eq!(db.bytes, 0);
+        assert!(paths
+            .iter()
+            .any(|p| p == ".probe/Docker/gitea/db/Disk written per hour"));
     }
 
     #[test]

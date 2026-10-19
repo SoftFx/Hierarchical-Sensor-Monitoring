@@ -329,12 +329,13 @@ Everything lives under one node in the probe's module node:
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
 | `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`probe.docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
-| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the stats samples (one a minute by default). The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
+| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the stats samples (one a minute by default). The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. A running container that has not written yet (its list names no device) is measured as 0 written, so its idle hour posts `0` like a neighbour's (#1574). Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
 
 Cost: ≈ **604 records/day per service** (two bars, 24 hourly write totals and a handful of state
 changes), ≈ 4 830/day for eight services — within the owner's budget. The stats sensors register
 only for a service that has run, `Disk written per hour` only once its containers report a write
-counter, `Health` only where a healthcheck is defined: no empty nodes.
+counter (or, on a host that accounts block I/O, run without having written yet: 0), `Health` only
+where a healthcheck is defined: no empty nodes.
 
 **Disk written per hour — who wears the disk.** The disks' `Average disk write speed` says how
 much a disk is written, not by whom; this sensor splits it by Compose service. Each stats sample
@@ -362,9 +363,16 @@ member really is written (the wear this sensor is for). A container restarted wi
 also while the probe was down — is recognised by its new `State.StartedAt` and only sets a
 baseline (logged once), since its counter began again from 0. A host that does not account block
 I/O per container reports no counter and gets no sensor: Docker Desktop (WSL2) answers an empty
-list for every container. On a host that does (some container reports a counter), a running
-container that has not written yet — `io.stat` lists a device only after its first I/O — starts
-from a zero baseline tied to its start time, so its first write counts in full.
+list for every container. On a host that does — some container has listed a write counter since
+the probe started — a running container that has not written yet (`io.stat` lists a device only
+after the cgroup's first I/O on it, so a freshly created container answers `[]`) has written 0:
+it is sampled as a counter of 0, so its idle hours are posted as `0` like those of a neighbour
+whose list says `write 0`, not left as gaps (#1574), and its first write counts in full. A
+container that is not running (`null`) is never 0. An empty list never replaces a real counter
+of the same start (a removed device or a transient read must not turn the container's whole
+history into one delta); a restart the state poll has reported starts again from 0. The host is
+learned anew at each probe start: an idle container read before any container with a counter is
+sampled from the next stats round on.
 
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start

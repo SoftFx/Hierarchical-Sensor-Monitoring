@@ -88,7 +88,10 @@ The probe registers **two separately pinned sets**:
    same stats; sent just after the hour, once — the comment names the window; a clock stepped
    back at most three sample periods into the hour just posted keeps the running hour, a larger
    step resets it, and the posted hour is never posted twice (#1489); the running hour survives
-   a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
+   a probe restart through the state file; a running container whose cgroup lists no device yet
+   counts as 0 written once some container on the host has listed a write counter, so its idle
+   hour posts 0 instead of a gap, while a host that lists none (Docker Desktop) gets no sensor
+   (#1574); no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
