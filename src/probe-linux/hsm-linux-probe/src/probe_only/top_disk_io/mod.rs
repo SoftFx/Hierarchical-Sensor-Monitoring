@@ -27,12 +27,16 @@
 //! # Mirrors top CPU
 //!
 //! The same process table (the helper uses the stat parser top CPU uses), the same name rule
-//! ([`top_cpu::procfs::sensor_name`]: `comm`, normalized; kernel threads by kind), processes of
-//! one name summed, `(pid, starttime)` identity, a first snapshot that only sets the baseline,
+//! ([`top_cpu::procfs::sensor_name`]: `comm`, normalized; kernel threads by kind; a 15-byte `comm`
+//! extended to the executable's full name, here by the helper from the `exe` link — #1573),
+//! processes of one name summed, `(pid, starttime)` identity, a first snapshot that only sets the
+//! baseline,
 //! sensors registered at runtime for the names that make the top, the same name cap
 //! ([`top_cpu::max_tracked_names`]) and the same path line in the speed sensors' descriptions
 //! ([`top_cpu::path_line`], as far as the unprivileged probe can see the process). Values are
-//! MB/s (1 MB = 1024² bytes), the unit of the disk speed sensors.
+//! MB/s (1 MB = 1024² bytes), the unit of the disk speed sensors. One rule is this family's own:
+//! what a reap moves into the reaper's counters is credited to the reaped processes' names, or to
+//! `children of <reaper>` when no snapshot saw them ([`sampler`], #1572).
 //!
 //! # Schedule
 //!
@@ -59,9 +63,9 @@ use hsm_linux_probe_io::clock::monotonic_ns;
 use hsm_linux_probe_io::snapshot::{Kind, Snapshot};
 
 use self::day::DayLedger;
-use self::sampler::{Direction, IoRead, IoSampler, NameIo};
+use self::sampler::{Direction, IoRead, IoSampler, NameIo, NO_PROCESS};
 use super::disks::written::{day_label, local_time, LocalTime};
-use super::top_cpu::{max_tracked_names, path_line, Episode, Tally, PROC_ROOT};
+use super::top_cpu::{log_renamed_once, max_tracked_names, path_line, Episode, Tally, PROC_ROOT};
 use super::{FailureLog, Source};
 use crate::config::TopDiskIoConfig;
 use crate::logging::{Level, Logger};
@@ -381,6 +385,9 @@ impl<'c> TopDiskIo<'c> {
         for note in &read.notes {
             logger.log(Level::Debug, &format!("{WHAT}: {note}"));
         }
+        for (new, old) in &read.renamed {
+            log_renamed_once(logger, new, old);
+        }
         let previous_wall = self.last_wall_ms.replace(snapshot.wall_ms);
         match previous_wall.filter(|_| !read.baseline) {
             None => self.pending_since_ns = Some(snapshot.mono_ns),
@@ -485,7 +492,8 @@ impl<'c> TopDiskIo<'c> {
                 .map(|rate| Post {
                     value: megabytes_per_second(rate.bytes_per_sec),
                     name: rate.name,
-                    process: Some((rate.pid, rate.kernel_thread)),
+                    // A vanished process's share or `children of …`: no process to name.
+                    process: (rate.pid != NO_PROCESS).then_some((rate.pid, rate.kernel_thread)),
                 })
                 .collect();
             let options = |post: &Post| {
@@ -611,9 +619,9 @@ fn per_day_options(direction: Direction, count: usize, period: Duration) -> Sens
              timezone), in GB (decimal: 1 GB = 10⁹ bytes): `{field}` of /proc/<pid>/io, summed \
              from the {}-s samples. **One value per day**, posted in the day's last 30 seconds \
              for the top **{count}** names by the day's total; what is {moved} between a post and \
-             midnight counts towards the next day. A process that exits between two samples has \
-             its last partial interval counted under the process that reaped it (the kernel adds \
-             a reaped child's counters to its parent's). A day with no measurement is not posted \
+             midnight counts towards the next day. A process that exits between two samples keeps \
+             its last partial interval under its own name; children too short-lived to be sampled \
+             are counted as `children of <their reaper>`. A day with no measurement is not posted \
              (never an invented 0); a day whose measurement began after midnight — the probe \
              started or restarted during it — says since when in the comment. TTL 26 h: a \
              missing day shows as Timeout.",

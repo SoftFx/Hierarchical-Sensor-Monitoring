@@ -5,7 +5,8 @@
 //! for `<proc>/<pid>/comm` (`proc_task_name(…, escape = false)` in `fs/proc/array.c`), so both
 //! carry the same bytes and a second read per process would add nothing. Like `comm`, it is
 //! `task->comm`: at most **15 bytes** (`TASK_COMM_LEN - 1`), so a long executable name arrives
-//! truncated (`systemd-journald` → `systemd-journal`).
+//! truncated (`systemd-journald` → `systemd-journal`). [`extended_name`] is the one rule both sides
+//! use to recover the full name (#1573): the helper from the `exe` link, the probe from argv[0].
 
 use std::path::Path;
 
@@ -14,6 +15,9 @@ pub const PF_KTHREAD: u64 = 0x0020_0000;
 
 /// `SIGCHLD` (17) in a signal mask: bit 16.
 pub const SIGCHLD_MASK: u64 = 1 << 16;
+
+/// `TASK_COMM_LEN - 1`: the longest `comm`. Only a name of exactly this length can be truncated.
+pub const COMM_LEN: usize = 15;
 
 /// The fields of `/proc/<pid>/stat` the samplers use.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -26,6 +30,11 @@ pub struct PidStat {
     pub ppid: u32,
     /// Field 9, the `PF_*` flags.
     pub flags: u64,
+    /// Field 11, `cminflt`: the minor faults of the children the process has reaped. The kernel
+    /// adds a child's faults and its I/O counters to the reaper in one step (`wait_task_zombie`)
+    /// and a child that ran has faulted at least once, so this growing says "it reaped a child" —
+    /// which tells reaped children's bytes from exited threads' (#1572).
+    pub cminflt: u64,
     /// Fields 14 + 15, `utime + stime`, in clock ticks (USER_HZ). For a thread-group leader the
     /// kernel sums every thread, live and exited, so this is the whole process.
     pub cpu_ticks: u64,
@@ -68,10 +77,55 @@ pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
         comm,
         ppid: u32::try_from(field(4)?).ok()?,
         flags: field(9)?,
+        cminflt: field(11)?,
         cpu_ticks: field(14)?.checked_add(field(15)?)?,
         start_ticks: field(22)?,
         sigignore: field(33).unwrap_or(0),
     })
+}
+
+/// The full name of a process whose `comm` may have been cut at [`COMM_LEN`] bytes (#1573), from
+/// `candidate` — the target of its `exe` link (the helper, which may read it) or its argv[0] (the
+/// probe, which usually may not): the candidate's basename, without the ` (deleted)` the kernel
+/// appends to a replaced executable. `None` — keep `comm` — unless `comm` is exactly [`COMM_LEN`]
+/// bytes and the basename is longer, **starts with it** (the kernel's `comm` is the first 15 bytes
+/// of the executed file's basename, so anything else names another file: a script's interpreter, a
+/// symlink's differently named target, a rewritten title) and is no interpreter
+/// ([`is_interpreter`]). Callers pass argv[0] only, never an argument: arguments can carry secrets.
+pub fn extended_name(comm: &str, candidate: &str) -> Option<String> {
+    if comm.len() != COMM_LEN {
+        return None;
+    }
+    let candidate = candidate.strip_suffix(" (deleted)").unwrap_or(candidate);
+    let base = candidate.rsplit('/').next().unwrap_or(candidate);
+    (base.len() > COMM_LEN && base.starts_with(comm) && !is_interpreter(base))
+        .then(|| base.to_string())
+}
+
+/// An interpreter's basename (`bash`, `python3.12`, `node`, `java`, …): a script it runs has its
+/// own name in argv[1], which is never read, so such a process keeps its `comm`.
+pub fn is_interpreter(base: &str) -> bool {
+    const EXACT: &[&str] = &[
+        "sh", "bash", "dash", "ash", "zsh", "ksh", "mksh", "fish", "busybox", "env", "node",
+        "nodejs", "deno", "bun", "java", "dotnet", "mono", "Rscript", "wish", "awk", "gawk",
+        "mawk",
+    ];
+    const VERSIONED: &[&str] = &["python", "perl", "ruby", "php", "lua", "tclsh", "pwsh"];
+    EXACT.contains(&base)
+        || VERSIONED.iter().any(|prefix| {
+            base.strip_prefix(prefix).is_some_and(|rest| {
+                rest.chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, '.' | '-'))
+            })
+        })
+}
+
+/// What the kernel's `comm` was for a process [`extended_name`] renamed: the name's first
+/// [`COMM_LEN`] bytes (lossily decoded, as the stat line is). `None` for a name of at most
+/// [`COMM_LEN`] bytes, which was never extended.
+pub fn truncated_comm(name: &str) -> Option<String> {
+    let bytes = name.as_bytes();
+    (bytes.len() > COMM_LEN).then(|| String::from_utf8_lossy(&bytes[..COMM_LEN]).into_owned())
 }
 
 /// Read one `<proc>/<pid>/stat`; `None` when it is gone, malformed or names another pid.
@@ -128,5 +182,68 @@ mod tests {
         let stat = parse_pid_stat(autoreap).expect("daemon");
         assert_eq!(stat.sigignore, SIGCHLD_MASK);
         assert!(stat.ignores_sigchld());
+    }
+
+    /// Field 10 is `minflt`, 11 `cminflt` (the reaped children's), 12 `majflt`, 13 `cmajflt`.
+    #[test]
+    fn cminflt_is_field_11() {
+        let line = "4242 (bash) S 4241 4242 4242 34816 4250 4194560 693 488 0 7 3 2 9 6 20 0 1 0 \
+                    9120 8970240 1312 18446744073709551615 94 95 140 0 0 0 65536 3670020";
+        assert_eq!(parse_pid_stat(line).expect("bash").cminflt, 488);
+    }
+
+    /// Only a 15-byte `comm` is extended, only by a basename it starts, never to an interpreter.
+    #[test]
+    fn a_15_byte_comm_is_extended_only_by_a_name_it_starts() {
+        let valheim = "valheim_server.";
+        assert_eq!(valheim.len(), COMM_LEN);
+        for candidate in [
+            "./valheim_server.x86_64",
+            "valheim_server.x86_64",
+            "/home/steam/valheim/valheim_server.x86_64",
+            "/home/steam/valheim/valheim_server.x86_64 (deleted)",
+        ] {
+            assert_eq!(
+                extended_name(valheim, candidate).as_deref(),
+                Some("valheim_server.x86_64"),
+                "{candidate}"
+            );
+        }
+        assert_eq!(
+            extended_name("systemd-journal", "/usr/lib/systemd/systemd-journald").as_deref(),
+            Some("systemd-journald")
+        );
+        // A script: comm is the script's name, exe and argv[0] are its interpreter.
+        assert_eq!(extended_name("valheim-world-b", "/usr/bin/bash"), None);
+        // Not longer, not a prefix (another file), a comm shorter than 15 bytes, nothing.
+        assert_eq!(extended_name(valheim, "valheim_server."), None);
+        assert_eq!(extended_name(valheim, "/opt/other_binary_name"), None);
+        assert_eq!(
+            extended_name("dart_flutter_to", "/usr/lib/dart/bin/dart"),
+            None
+        );
+        assert_eq!(extended_name("nginx", "/usr/sbin/nginx-debug"), None);
+        assert_eq!(extended_name(valheim, ""), None);
+        // An interpreter whose name happens to extend the comm still keeps it.
+        assert_eq!(extended_name("python3.12-3.12", "python3.12-3.12.1"), None);
+        for interpreter in [
+            "bash",
+            "sh",
+            "python3",
+            "python3.12",
+            "perl5.36",
+            "node",
+            "pwsh",
+        ] {
+            assert!(is_interpreter(interpreter), "{interpreter}");
+        }
+        for binary in ["valheim_server.x86_64", "pythonista", "nodes", "bashtop"] {
+            assert!(!is_interpreter(binary), "{binary}");
+        }
+        assert_eq!(
+            truncated_comm("valheim_server.x86_64").as_deref(),
+            Some(valheim)
+        );
+        assert_eq!(truncated_comm(valheim), None);
     }
 }

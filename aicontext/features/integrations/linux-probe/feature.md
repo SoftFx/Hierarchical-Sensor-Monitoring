@@ -112,7 +112,14 @@ The probe registers **two separately pinned sets**:
    `/proc/<pid>/stat` `utime+stime` deltas over `/proc/stat`'s total (Total CPU's total), stat split
    at the last `)`, identity `(pid, starttime)`; name = field 2 (= `/proc/<pid>/comm`, ≤ 15 bytes),
    normalized to the server's template-wildcard charset, kernel threads by the part before `/`
-   (`kworker/…` → `kworker`). The description's path line is the `exe` link, or — for another
+   (`kworker/…` → `kworker`). A `comm` of exactly 15 bytes (#1573, probe 0.10.0) is extended to
+   the first candidate whose basename is longer and starts with it and is no interpreter
+   (`hsm_linux_probe_io::procstat::extended_name`/`is_interpreter`): the top disk I/O helper's
+   name for the same `(pid, starttime)` (from the `exe` link), the `exe` link, then argv[0]
+   (absolute or relative; only argv[0], the arguments are never read) — `valheim_server.` →
+   `valheim_server.x86_64`; a script keeps its cut name (its `exe`/argv[0] is the interpreter).
+   A renamed name is logged once per name and run (INFO); the old sensor goes to Timeout. The
+   description's path line is the `exe` link, or — for another
    user's process, whose link the unprivileged probe cannot read — argv[0] from `/proc/<pid>/cmdline`
    when absolute (only argv[0], cut at NUL and whitespace; the arguments never), else a note.
    **Off unless the top-level `topCpu` block enables it** (the agent's
@@ -134,9 +141,14 @@ The probe registers **two separately pinned sets**:
    families, `ProtectProc=default`, syscall filter without `ptrace`/`process_vm_*`/
    `open_by_handle_at`/`@privileged`/`@resources`) reads `topDiskIo.enabled/periodMs` from the
    config (exits 0 when off) and every `periodMs`, plus once in the day's last 30 s, reads every
-   `/proc/<pid>/{stat,io}` and replaces `/run/hsm-linux-probe-io/snapshot` atomically (`0640
-   root:hsm-probe`; header `hsm-linux-probe-io 1 seq= mono_ns= wall_ms= kind=regular|final`, lines
-   `pid start ppid kthread sigchld_ignored read write comm`, comm percent-escaped). The probe ticks
+   `/proc/<pid>/{stat,io}`, every thread's `task/<tid>/io` and, for a 15-byte `comm`, the `exe`
+   link, and replaces `/run/hsm-linux-probe-io/snapshot` atomically (`0640 root:hsm-probe`; format
+   version 2 since 0.10.0: header `hsm-linux-probe-io 2 seq= mono_ns= wall_ms= kind=regular|final`,
+   lines `pid start ppid kthread sigchld_ignored read write reaped_read reaped_write cminflt name`
+   — reaped = `io` minus the live threads' (exited threads + reaped children, `signal->ioac`),
+   `cminflt` = stat field 11 (grows only with a reap; a process with a reaped part has its stat
+   re-read after its `io`), name = comm or its `exe` full name, percent-escaped; the probe also
+   reads version 1, without the split). The probe ticks
    every 5 s and consumes each new snapshot once: regular → speeds (interval from the snapshots'
    monotonic times), any in the day's last 30 s → the day's post. A missing/unreadable/stale (> 3
    periods) snapshot (judged by the age of the last good one; the helper unit keeps it across restarts with `RuntimeDirectoryPreserve=yes`; `install.sh` with the block off, `uninstall.sh` and `postrm` delete it, since it lists every process) is one WARN per outage naming the unit, nothing posted; recovery one
@@ -152,9 +164,18 @@ The probe registers **two separately pinned sets**:
    after its scan so the jump is in the same snapshot whatever the read order, and a process reaped
    between its `stat` and `io` reads counts as vanished; a remainder that does not fit is tried once
    more, then dropped (debug line); a reaper ignoring `SIGCHLD` (stat field 33, `sigignore`) autoreaps and is not
-   corrected. A process's last
-   partial interval is counted under its reaper. Known limits (README "Limits"): a process too
-   short-lived to be read is counted under its reaper in full; an orphan whose parent died first in
+   corrected. **Attribution (#1572, 0.10.0):** a process's delta is split into its children's —
+   the growth of its reaped part over an interval in which its `cminflt` grew (else exited
+   threads', i.e. its own), capped at the delta, take-backs out of it first — and its own. The
+   children's rest goes to the names of the vanished processes a snapshot saw whose reaper walk
+   ends at it (shared by their last measured interval, else their own lifetime counters, else
+   equally), and when there are none to **`children of <reaper>`** (no parentheses: not in the
+   template-wildcard charset) — never to the reaper's name; such names get no path line. A
+   version-1 snapshot, a kernel thread or unreadable threads: no split (the old rule). Known
+   limits (README "Limits"): a process too short-lived to be read has no name of its own (it is
+   `children of <reaper>`, or part of a seen sibling's share in the same interval); the split among
+   several vanished processes is an estimate; a thread exiting in a reap interval counts as
+   children's; an orphan whose parent died first in
    the same interval is taken back from its grandparent (the real reaper shows it a second time);
    an `SA_NOCLDWAIT` reaper is cut by its children's counters. The day follows `Written per day on
    <disk>` (post window, after-post bytes to the next day, missed day logged once, never an invented
@@ -256,12 +277,14 @@ Linux is the only supported target. The initiative is
   the config installed on the host enables `topCpu` and removes it otherwise (a kept config wins over
   the bundle's switch; an enabling bundle over a kept config without the block warns instead);
   `uninstall.sh` and `postrm` remove it. Top-CPU reads only `/proc/stat`,
-  `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
-  argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
+  `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor,
+  and once per process with a 15-byte `comm` (its full name, #1573) — argv[0] of `/proc/<pid>/cmdline`
+  (never the arguments, never `environ`); with top disk I/O on, also the helper's snapshot.
 - **The probe holds no capability, ever.** Top disk I/O (#1547) does not change that: the only
   privileged piece of the package is the root helper `hsm-linux-probe-io.service`, which holds
   `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` (bounding set; nothing else), reads only
-  `/proc/<pid>/{stat,io}` and the config's `topDiskIo` block, has no network, and writes one file,
+  `/proc/<pid>/{stat,io}`, `/proc/<pid>/task/<tid>/io`, the `/proc/<pid>/exe` link of a 15-byte
+  `comm` and the config's `topDiskIo` block, has no network, and writes one file,
   `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which the probe reads as a member of
   `hsm-probe`. It runs only where `install.sh` enabled it from an enabling host config. With both
   capabilities a process could read the whole host filesystem via `/proc/<pid>/root`; that is why

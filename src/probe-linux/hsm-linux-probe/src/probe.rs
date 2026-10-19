@@ -43,10 +43,16 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         &HostEnvironment::system(),
         &logger,
     );
+    // With top disk I/O on, top CPU names a process as the helper's snapshot does (#1573).
+    let helper_snapshot = config
+        .top_disk_io
+        .enabled
+        .then(|| std::path::Path::new(probe_only::top_disk_io::SNAPSHOT));
     probe_only_sources.extend(probe_only::top_cpu::register(
         &collector,
         &config.top_cpu,
         std::path::Path::new(probe_only::top_cpu::PROC_ROOT),
+        helper_snapshot,
         &logger,
     ));
     probe_only_sources.extend(probe_only::top_disk_io::register(

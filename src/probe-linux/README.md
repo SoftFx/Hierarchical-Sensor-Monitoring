@@ -501,6 +501,35 @@ result gets no sensor. **Kernel threads** (`PF_KTHREAD`) are named by the part b
 `kworker/3:1-events` → `kworker`, `ksoftirqd/0` → `ksoftirqd`, `irq/42-nvme0q1` → `irq`. Processes
 with the same name are summed (Windows rule), also when two names normalize to the same one.
 
+**Full names (#1573, probe 0.10.0).** Only a `comm` of **exactly 15 bytes** can have been cut, and
+only such a one is looked at again: its full name is the first of these that **extends** it — the
+candidate's basename is longer and starts with the 15 bytes (the kernel's `comm` is the first 15
+bytes of the executed file's basename, so anything else names another file) — and is no
+interpreter:
+
+1. the name the top disk I/O helper wrote for the same `(pid, starttime)` (when `topDiskIo` is
+   on; the helper reads the `exe` link), so both families name a process alike;
+2. the `exe` link's basename (` (deleted)` dropped) — readable here only for the probe's own
+   processes;
+3. the basename of **argv[0]**, absolute **or relative** (`./valheim_server.x86_64` →
+   `valheim_server.x86_64`), read under the same rule as the path line below: only argv[0], cut at
+   the first NUL and whitespace, at most 4 KiB of `cmdline`; **the arguments are never read** —
+   they can carry secrets.
+
+An interpreter (`bash`, `sh`, `dash`, `python*`, `perl*`, `ruby*`, `php*`, `node`, `pwsh`, `java`,
+… — `hsm_linux_probe_io::procstat::is_interpreter`) never names a process: a script it runs has its
+own name in argv[1], which is never read. So a script whose name is longer than 15 bytes keeps its
+cut `comm` (`valheim-world-backup` stays `valheim-world-b`: the kernel's `exe` and argv[0] are the
+interpreter), and so does a process whose `comm` is not the start of its executable's or argv[0]'s
+basename (one that named itself with `prctl(PR_SET_NAME)`, or a symlink with another name). A
+process is resolved once, while it lives.
+
+**A full name is a new sensor path:** after the upgrade to 0.10.0, `valheim_server.` reports as
+`.computer/Top CPU processes/valheim_server.x86_64` (and `systemd-journal` as `systemd-journald`),
+and the old sensor stops being posted (it turns to Timeout after 5 minutes; delete it on the server
+if you no longer want it). The probe logs each such change **once per name and run** at INFO:
+`process name 'valheim_server.' is now reported as 'valheim_server.x86_64' …`.
+
 **Path line** of the description, set once when the name's sensor is created, for the name's
 busiest process:
 
@@ -585,7 +614,9 @@ piece**:
   in the same `.deb`, **disabled**) reads `topDiskIo.enabled`/`periodMs` from
   `/etc/hsm-linux-probe/config.json` (it exits 0 when the block is off), and every `periodMs` —
   plus once in the day's last 30 seconds (a `final` scan) — reads `/proc/<pid>/stat` and
-  `/proc/<pid>/io` of every process and replaces **`/run/hsm-linux-probe-io/snapshot`** atomically
+  `/proc/<pid>/io` of every process, the `/proc/<pid>/task/<tid>/io` of its threads (the reaped
+  part, below) and, for a 15-byte `comm` only, the `/proc/<pid>/exe` link (its full name), and
+  replaces **`/run/hsm-linux-probe-io/snapshot`** atomically
   (temp file + rename). Nothing else: no network (`PrivateNetwork=yes`,
   `RestrictAddressFamilies=none`), no other file, no other program. Its unit: `User=root`,
   `Group=hsm-probe`, `RuntimeDirectory=hsm-linux-probe-io` (0750) and `UMask=0027` — the snapshot is
@@ -597,12 +628,40 @@ piece**:
 * **the probe** keeps `CapabilityBoundingSet=` empty and its `ProtectProc=invisible`, and reads the
   snapshot as a member of `hsm-probe`.
 
-The snapshot format (version 1): a header `hsm-linux-probe-io 1 seq=<n> mono_ns=<CLOCK_MONOTONIC ns>
-wall_ms=<Unix ms> kind=regular|final`, then one line per process `pid start_ticks ppid
-kernel_thread sigchld_ignored read_bytes write_bytes comm` — the counters `-` when unreadable,
-`comm` last and percent-escaped (bytes outside `!`..`~`, and `%`, as `%XX`), so a name holding spaces
-or newlines cannot break a line. `kernel_thread` is `PF_KTHREAD`; `sigchld_ignored` is bit 16 of the
-stat line's ignored-signal mask (field 33, `sigignore`; not field 34, `sigcatch`: a shell or a Go program catches `SIGCHLD`, which is no autoreap).
+The snapshot format (**version 2**, helper 0.10.0): a header `hsm-linux-probe-io 2 seq=<n>
+mono_ns=<CLOCK_MONOTONIC ns> wall_ms=<Unix ms> kind=regular|final`, then one line per process `pid
+start_ticks ppid kernel_thread sigchld_ignored read_bytes write_bytes reaped_read reaped_write
+cminflt name`:
+
+* `read_bytes write_bytes` — `/proc/<pid>/io`; `-` when unreadable;
+* `reaped_read reaped_write` — the part of them that **exited threads and reaped children** added
+  (the kernel's `signal->ioac`): `io` minus the sum of the live threads' `task/<tid>/io` (a thread
+  that exits between the listing and its read is skipped), never below 0; `-` when unknown (a
+  kernel thread, a thread `io` refused);
+* `cminflt` — stat field 11, the minor faults of the reaped children: it grows with every reap
+  (the kernel adds a child's faults and counters in one step) and not when a thread exits. A
+  process with a reaped part has its stat read **again after** its `io`, so the value is at least
+  as new as the counters (gone by then, it counts as vanished, like one whose `io` is gone);
+* `name` — `comm`, or for a 15-byte `comm` the `exe` link's basename when it extends it (the rule
+  of [Top CPU's full names](#top-cpu-processes-1479)) — last and percent-escaped (bytes outside
+  `!`..`~`, and `%`, as `%XX`), so a name holding spaces or newlines cannot break a line.
+
+`kernel_thread` is `PF_KTHREAD`; `sigchld_ignored` is bit 16 of the stat line's ignored-signal mask
+(field 33, `sigignore`; not field 34, `sigcatch`: a shell or a Go program catches `SIGCHLD`, which is no autoreap).
+**Version 1** (helper 0.9.x: `pid start_ticks ppid kernel_thread sigchld_ignored read_bytes
+write_bytes comm`) is still read — reaped part unknown, `cminflt` 0, the plain `comm` — so the probe
+keeps working whatever order the two are restarted in (below). A 0.9.x probe rejects version 2.
+
+**Upgrade to 0.10.0.** Both binaries come in the one package, and the package's `postinst`
+restarts a running helper (`systemctl try-restart hsm-linux-probe-io`) as well as a probe its
+`prerm` stopped, so after the upgrade both run 0.10.0 (re-running the bundle's `install.sh` with the
+block on enables and restarts the helper as well). Until the helper's first new scan the probe
+may read the old helper's last version-1 snapshot (accepted, no attribution split); the first
+interval across the switch is not split either (both ends need a reaped part). A helper that is
+enabled but **stopped** is not started by the upgrade, and its old snapshot stays until it ages out
+(the usual outage WARN). A **rollback** to 0.9.x restarts the helper too, so the old probe gets a
+version-1 snapshot again within one period. Expect new sensor names (full names, `children of …`)
+and the old ones going to Timeout (README sections above and below).
 
 **Enable / disable.** The server bundle's `install.sh` enables and (re)starts the helper when the
 config it leaves on the host enables the **top-level** `topDiskIo` block (the same top-level-only
@@ -623,7 +682,10 @@ deleted at once) is **not** subtracted, as `iotop` and `pidstat -d` do not eithe
 `/proc` is read: a sleeping disk is never asked.
 
 **Names and deltas** are top CPU's: the same `comm`-based name rule (normalized to the
-template-wildcard characters, kernel threads by kind: `kworker`, `jbd2`), processes of one name
+template-wildcard characters, kernel threads by kind: `kworker`, `jbd2`; a 15-byte `comm` extended
+to the executable's full name — here by the helper, from the `exe` link, so `valheim_server.`
+reports as `valheim_server.x86_64`; see top CPU's [full names](#top-cpu-processes-1479) for the
+rule, the cases that keep the cut name and the one-time "renamed" log line), processes of one name
 summed, a process is `(pid, starttime)` — a reused pid never inherits its predecessor's counters —
 and the first snapshot after the probe's start only takes the baseline. One difference, so the
 daily totals miss nothing: a process that **started since the previous snapshot** (younger than
@@ -641,21 +703,56 @@ whole-life total — `tar` writing 100 GB for an hour would reappear as 100 GB u
 previous snapshot had already credited to each vanished process. The reaper is the vanished
 process's parent at the previous snapshot when that parent is still alive; when the parent vanished
 too (a job tree `cron → sh → tar` exiting at once), the walk goes up the previous snapshot's parents
-to the first one still alive (`hsm_linux_probe_io::scan::receiver`, shared by both). **What a process
-does between its last snapshot and its exit is therefore not lost but counted under its reaper** —
-the kernel moved it there. The helper makes this race-free: the kernel adds the child's counters to
-the reaper **before** `release_task` removes the pid from `/proc`, so a process missing from a scan
-is already in its reaper's counter; after each scan the helper reads the `io` of every receiver of a
-vanished process **again**, whatever order the scan read them in (a parent with a higher pid than its
-child after a pid wrap included); and a process whose `stat` was read but whose `io` is gone when
-read (reaped in between) counts as vanished in that scan. A correction that does not fit in the
-receiver's delta (never below 0) is tried once more at the next snapshot, then dropped with a debug
-line.
+to the first one still alive (`hsm_linux_probe_io::scan::receiver`, shared by both). The helper makes
+this race-free: the kernel adds the child's counters to the reaper **before** `release_task` removes
+the pid from `/proc`, so a process missing from a scan is already in its reaper's counter; after
+each scan the helper reads the `io` (with its reaped part and `cminflt`) of every receiver of a
+vanished process **again**, whatever order the scan read them in (a parent with a higher pid than
+its child after a pid wrap included); and a process whose `stat` was read but whose `io` is gone
+when read, or that is gone when its stat is read again after its `io` (reaped in between), counts as
+vanished in that scan. A correction that does not fit in the receiver's delta (never below 0) is
+tried once more at the next snapshot, then dropped with a debug line.
 
-**Limits** (where a byte can still be counted twice or under-reported):
+**Whose name a reap's bytes get (#1572, probe 0.10.0).** What is left of the reaper's jump is still
+the exited processes' I/O — the last partial interval of the ones a snapshot saw, and the whole life
+of children too short-lived for any scan. Before 0.10.0 it was counted under the reaper, so a night
+of backup jobs read as `Top disk writers/systemd` 8.8 MB/s and `Written per day by
+process/systemd` 3.4 GB (`docker-init`, `containerd-shim`, `crond` likewise). Now each process's
+delta is split, from the snapshot's reaped part and `cminflt`:
 
-* a process too short-lived to be scanned at all (a `gzip` run from `cron` within one minute) is
-  counted under its reaper in full — the kernel gives no other attribution;
+* **its children's**: how much its reaped part grew — counted as children's only over an interval
+  in which its `cminflt` grew too (a reap happened), since the reaped part also grows when one of
+  its own threads exits, and never more than its delta. The take-back above comes out of this part
+  first. What is left is credited to the **names of the vanished processes it received** (every
+  process a snapshot saw whose reaper walk ends at it — a whole `cron → sh → tar` tree included),
+  shared in proportion to what each moved in its last measured interval, or, when none moved
+  anything then (seen at one snapshot only), to what each had done itself over its life (its
+  counters without its reaped part), equally when that is nothing too. When it received **no**
+  process a snapshot saw — only children that lived less than one period — the bytes are credited
+  to **`children of <reaper>`**: `children of systemd`, `children of crond`, `children of bash`.
+  Never to the reaper's own name. (Parentheses, as in `systemd (children)`, are not among the
+  characters the server's template wildcard matches, so the name says it in words.) Speed and
+  per-day sensors use the same names;
+* **its own**: the rest, under its own name as before.
+
+The shares of vanished processes and the `children of …` names have no live process behind them,
+so a speed sensor created for one has no path line. A version-1 snapshot (helper 0.9.x), a kernel
+thread or a process whose threads could not be read has no reaped part: its whole delta is its own,
+the rule before 0.10.0. The cost on the helper: one `task/<tid>/io` read per thread, a second stat
+read for a process with a reaped part, and one `readlink` per 15-byte `comm`.
+
+**Limits** (where a byte can still be counted twice, under-reported or under another name):
+
+* the bytes of a child too short-lived to be scanned at all (a `gzip` run from `cron` within one
+  minute) carry no name of their own — the kernel keeps none: they are `children of <reaper>`, or,
+  when the same reaper also received a process a snapshot saw in that interval, part of that
+  process's share;
+* the split between several vanished processes of one reaper is by their last measured interval,
+  an estimate: the kernel reports only their sum;
+* an interval in which a process both reaped a child and lost a thread counts the thread's
+  counters as children's; and a reap that lands between the helper's `io` and stat reads of the
+  reaper (microseconds) is in the counters one interval before it is in `cminflt`, so its bytes
+  stay with the reaper's own name;
 * an orphan whose parent died before it, both within one interval, is taken back from its
   grandparent although `init` or a subreaper reaped it: the grandparent is cut by too much (never
   below 0, the rest carried into one more snapshot) and the real reaper shows the orphan's
@@ -698,7 +795,9 @@ helper stripped of its capabilities — it logs that itself once) is one ERROR u
 
 **Cost** (measured on garage-server, 2026-10-13): 203 processes; reading every `/proc/<pid>/io`
 costs 2.9 ms of CPU and every `/proc/<pid>/stat` 3.5 ms (Python) — at the 60 s cadence ≈ 0.005 % of
-one core, now spent in the helper; the snapshot is ~10 KB on tmpfs, read by the probe every 5 s.
+one core, now spent in the helper; the snapshot is ~10 KB on tmpfs (version 2 adds three numbers per
+line), read by the probe every 5 s. Since 0.10.0 the helper also reads every thread's
+`task/<tid>/io` — one more small read per thread, still procfs only (not re-measured on garage).
 The probe today uses 0.2 % CPU / 21 MB RSS. procfs only: no disk access. Records: one per minute
 per name in a top — at most `2 × count` × 1 440 ≈ 28 800/day at the defaults, in practice only the
 few processes above 1 MiB/s — plus at most `2 × count` per day.
@@ -712,7 +811,7 @@ src/probe-linux/
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
     src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/, top_disk_io/) and their threads
     fixtures/docker/   Engine API captures from garage-server
-  hsm-linux-probe-io/  the root helper of top disk I/O (#1547): reads /proc/<pid>/{stat,io}, writes
+  hsm-linux-probe-io/  the root helper of top disk I/O (#1547): reads /proc/<pid>/{stat,io,task/*/io,exe}, writes
                        the snapshot; its library (stat parser, scan, reaper walk, snapshot format,
                        clocks) is shared with the probe
   packaging/           systemd units (probe, helper), config skeleton, maintainer scripts, build-deb.sh,

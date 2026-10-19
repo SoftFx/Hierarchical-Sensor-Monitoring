@@ -1,26 +1,42 @@
 //! The snapshot file: what the helper read in one scan, for the probe.
 //!
 //! ```text
-//! hsm-linux-probe-io 1 seq=42 mono_ns=123456789000 wall_ms=1791900000000 kind=regular
-//! 1 2 0 0 0 1048576 52428800 systemd
-//! 812 9120 1 0 1 - - cron%20job
+//! hsm-linux-probe-io 2 seq=42 mono_ns=123456789000 wall_ms=1791900000000 kind=regular
+//! 1 2 0 0 0 1048576 52428800 1048576 50331648 92114 systemd
+//! 812 9120 1 0 1 - - - - 0 cron%20job
+//! 4410 9500 1 0 0 0 734003200 0 0 0 valheim_server.x86_64
 //! ```
 //!
 //! The header: the format name and version, the scan's sequence number (from 1 at each helper
 //! start), its `CLOCK_MONOTONIC` time in ns (how old it is, whatever the wall clock does), its wall
 //! time in Unix ms (which local day it counts towards) and its kind — `regular` (every
 //! `periodMs`) or `final` (the extra scan in the day's last 30 s). Then one line per process:
-//! `pid start_ticks ppid kernel_thread sigchld_ignored read_bytes write_bytes comm`, the two
-//! counters `-` when `io` could not be read, `comm` last and percent-escaped (every byte outside
-//! `!`..`~`, and `%` itself, as `%XX`), so a name holding spaces or newlines cannot break a line.
-//! A reader rejects another format name or version.
+//! `pid start_ticks ppid kernel_thread sigchld_ignored read_bytes write_bytes reaped_read
+//! reaped_write cminflt name`:
+//!
+//! * `read_bytes write_bytes` — `/proc/<pid>/io`, the whole process; `-` when it could not be read;
+//! * `reaped_read reaped_write` — the part of them that came from **exited threads and reaped
+//!   children** (the kernel's `signal->ioac`): the whole minus the sum of the live threads'
+//!   `/proc/<pid>/task/<tid>/io`; `-` when unknown (a kernel thread, a thread read refused);
+//! * `cminflt` — stat field 11, the reaped children's minor faults: it grows with every reap, which
+//!   tells a reap from an exited thread (#1572);
+//! * `name` — `comm`, or the full name the `exe` link gives a 15-byte `comm`
+//!   ([`crate::procstat::extended_name`], #1573); last and percent-escaped (every byte outside
+//!   `!`..`~`, and `%` itself, as `%XX`), so a name holding spaces or newlines cannot break a line.
+//!
+//! Version 1 (helper ≤ 0.9.1) had no `reaped_*`/`cminflt` fields and always the plain `comm`; the
+//! reader still accepts it (the reaped part unknown, `cminflt` 0), so a probe upgraded before its
+//! helper restarts keeps working. A reader rejects another format name or version.
 
 use std::fmt::Write as _;
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 
 pub const FORMAT: &str = "hsm-linux-probe-io";
-pub const VERSION: u32 = 1;
+/// The version written.
+pub const VERSION: u32 = 2;
+/// The versions read: 1 (no reaped part, plain `comm`) and 2.
+pub const READABLE_VERSIONS: [u32; 2] = [1, 2];
 /// Where the helper's unit (`RuntimeDirectory=hsm-linux-probe-io`) keeps it.
 pub const DEFAULT_PATH: &str = "/run/hsm-linux-probe-io/snapshot";
 
@@ -69,7 +85,12 @@ pub struct Entry {
     pub sigchld_ignored: bool,
     /// `None`: its `io` could not be read.
     pub counters: Option<IoCounters>,
-    pub comm: String,
+    /// The part of `counters` from exited threads and reaped children; `None`: unknown.
+    pub reaped: Option<IoCounters>,
+    /// Stat field 11, the reaped children's minor faults (0 in a version-1 snapshot).
+    pub cminflt: u64,
+    /// `comm`, or the full name of a 15-byte `comm` (`procstat::extended_name`).
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,20 +112,23 @@ impl Snapshot {
             "{FORMAT} {VERSION} seq={} mono_ns={} wall_ms={} kind={kind}\n",
             self.seq, self.mono_ns, self.wall_ms
         );
+        let pair = |counters: Option<IoCounters>| match counters {
+            Some(c) => format!("{} {}", c.read_bytes, c.write_bytes),
+            None => "- -".to_string(),
+        };
         for entry in &self.entries {
-            let (read, write) = match entry.counters {
-                Some(c) => (c.read_bytes.to_string(), c.write_bytes.to_string()),
-                None => ("-".to_string(), "-".to_string()),
-            };
             let _ = writeln!(
                 text,
-                "{} {} {} {} {} {read} {write} {}",
+                "{} {} {} {} {} {} {} {} {}",
                 entry.pid,
                 entry.start_ticks,
                 entry.ppid,
                 u8::from(entry.kernel_thread),
                 u8::from(entry.sigchld_ignored),
-                escape(&entry.comm)
+                pair(entry.counters),
+                pair(entry.reaped),
+                entry.cminflt,
+                escape(&entry.name)
             );
         }
         text
@@ -114,9 +138,14 @@ impl Snapshot {
         let mut lines = text.lines();
         let header = lines.next().ok_or("empty snapshot")?;
         let mut fields = header.split_whitespace();
-        if fields.next() != Some(FORMAT) || fields.next() != Some(&VERSION.to_string()) {
-            return Err(format!("not a {FORMAT} {VERSION} snapshot: '{header}'"));
+        let version = match (fields.next(), fields.next()) {
+            (Some(FORMAT), Some(version)) => version
+                .parse::<u32>()
+                .ok()
+                .filter(|version| READABLE_VERSIONS.contains(version)),
+            _ => None,
         }
+        .ok_or_else(|| format!("not a {FORMAT} 1 or 2 snapshot: '{header}'"))?;
         let mut value = |key: &str| -> Result<&str, String> {
             fields
                 .next()
@@ -136,7 +165,7 @@ impl Snapshot {
         let mut entries = Vec::new();
         for (index, line) in lines.enumerate() {
             entries
-                .push(parse_entry(line).ok_or_else(|| {
+                .push(parse_entry(line, version).ok_or_else(|| {
                     format!("snapshot line {} is malformed: '{line}'", index + 2)
                 })?);
         }
@@ -150,7 +179,8 @@ impl Snapshot {
     }
 }
 
-fn parse_entry(line: &str) -> Option<Entry> {
+/// One process line of a `version` snapshot; `None` when malformed.
+fn parse_entry(line: &str, version: u32) -> Option<Entry> {
     let mut fields = line.split(' ');
     let mut next = || fields.next();
     let pid = next()?.parse().ok()?;
@@ -163,14 +193,22 @@ fn parse_entry(line: &str) -> Option<Entry> {
     };
     let kernel_thread = flag(next()?)?;
     let sigchld_ignored = flag(next()?)?;
-    let counters = match (next()?, next()?) {
-        ("-", "-") => None,
-        (read, write) => Some(IoCounters {
-            read_bytes: read.parse().ok()?,
-            write_bytes: write.parse().ok()?,
-        }),
+    let pair = |read: &str, write: &str| -> Option<Option<IoCounters>> {
+        match (read, write) {
+            ("-", "-") => Some(None),
+            (read, write) => Some(Some(IoCounters {
+                read_bytes: read.parse().ok()?,
+                write_bytes: write.parse().ok()?,
+            })),
+        }
     };
-    let comm = unescape(next()?)?;
+    let counters = pair(next()?, next()?)?;
+    let (reaped, cminflt) = if version >= 2 {
+        (pair(next()?, next()?)?, next()?.parse().ok()?)
+    } else {
+        (None, 0)
+    };
+    let name = unescape(next()?)?;
     if next().is_some() {
         return None;
     }
@@ -181,13 +219,15 @@ fn parse_entry(line: &str) -> Option<Entry> {
         kernel_thread,
         sigchld_ignored,
         counters,
-        comm,
+        reaped,
+        cminflt,
+        name,
     })
 }
 
-fn escape(comm: &str) -> String {
-    let mut out = String::with_capacity(comm.len());
-    for byte in comm.bytes() {
+fn escape(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for byte in name.bytes() {
         if (b'!'..=b'~').contains(&byte) && byte != b'%' {
             out.push(char::from(byte));
         } else {
@@ -250,7 +290,12 @@ mod tests {
                         read_bytes: 1_048_576,
                         write_bytes: 52_428_800,
                     }),
-                    comm: "systemd".into(),
+                    reaped: Some(IoCounters {
+                        read_bytes: 1_048_576,
+                        write_bytes: 50_331_648,
+                    }),
+                    cminflt: 92_114,
+                    name: "systemd".into(),
                 },
                 Entry {
                     pid: 812,
@@ -259,7 +304,9 @@ mod tests {
                     kernel_thread: true,
                     sigchld_ignored: true,
                     counters: None,
-                    comm: "a b\nc%d) (e ü".into(),
+                    reaped: None,
+                    cminflt: 0,
+                    name: "a b\nc%d) (e ü".into(),
                 },
             ],
         }
@@ -269,18 +316,40 @@ mod tests {
     fn a_snapshot_round_trips_whatever_the_names_hold() {
         let text = sample().render();
         assert!(text.starts_with(
-            "hsm-linux-probe-io 1 seq=42 mono_ns=123456789000 wall_ms=1791900000000 kind=final\n"
+            "hsm-linux-probe-io 2 seq=42 mono_ns=123456789000 wall_ms=1791900000000 kind=final\n"
         ));
         assert!(
-            text.contains("\n1 2 0 0 0 1048576 52428800 systemd\n"),
+            text.contains("\n1 2 0 0 0 1048576 52428800 1048576 50331648 92114 systemd\n"),
             "{text}"
         );
         assert!(
-            text.contains("\n812 9120 1 1 1 - - a%20b%0Ac%25d)%20(e%20%C3%BC\n"),
+            text.contains("\n812 9120 1 1 1 - - - - 0 a%20b%0Ac%25d)%20(e%20%C3%BC\n"),
             "{text}"
         );
         assert_eq!(text.lines().count(), 3);
         assert_eq!(Snapshot::parse(&text), Ok(sample()));
+    }
+
+    /// What a 0.9.x helper writes is still read: no reaped part (unknown), `cminflt` 0.
+    #[test]
+    fn a_version_1_snapshot_is_still_read() {
+        let text = "hsm-linux-probe-io 1 seq=7 mono_ns=5 wall_ms=6 kind=regular\n\
+                    1 2 0 0 0 1048576 52428800 systemd\n\
+                    812 9120 1 1 1 - - cron%20job\n";
+        let snapshot = Snapshot::parse(text).expect("version 1");
+        assert_eq!(snapshot.entries.len(), 2);
+        let systemd = &snapshot.entries[0];
+        assert_eq!(
+            (systemd.reaped, systemd.cminflt, systemd.name.as_str()),
+            (None, 0, "systemd")
+        );
+        assert_eq!(systemd.counters.map(|c| c.write_bytes), Some(52_428_800));
+        assert_eq!(snapshot.entries[1].name, "cron job");
+        // A version-2 line under a version-1 header (or the reverse) is malformed.
+        let mixed = text.replace("cron%20job", "- - 0 cron%20job");
+        assert!(Snapshot::parse(&mixed).is_err());
+        let v2_short = text.replace("hsm-linux-probe-io 1", "hsm-linux-probe-io 2");
+        assert!(Snapshot::parse(&v2_short).is_err());
     }
 
     #[test]
@@ -288,7 +357,11 @@ mod tests {
         let good = sample().render();
         for bad in [
             String::new(),
-            good.replace("hsm-linux-probe-io 1", "hsm-linux-probe-io 2"),
+            good.replace("hsm-linux-probe-io 2", "hsm-linux-probe-io 3"),
+            good.replace("hsm-linux-probe-io 2", "hsm-linux-probe-io 0"),
+            good.replace("hsm-linux-probe-io 2", "other-format 2"),
+            good.replace(" 92114 ", " x "),
+            good.replace(" 50331648 ", " - "),
             good.replace("kind=final", "kind=other"),
             good.replace("seq=42 ", ""),
             good.replace(" systemd", " sys temd"),
