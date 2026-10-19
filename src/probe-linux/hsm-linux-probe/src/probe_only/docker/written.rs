@@ -22,6 +22,16 @@
 //! So a mid-hour recreate loses only the writes between the old container's last sample and the
 //! new one's first, not the hour.
 //!
+//! **Idle containers.** On cgroup v2 `io.stat` lists a device only after the cgroup's first I/O on
+//! it, so a running container that has not written yet answers `[]` (or reads only): its counter
+//! is 0 ([`Written::Nothing`]) and is sampled like any other, so its idle hour posts `0` like a
+//! neighbour whose list says `write 0` (#1574). That needs a host that accounts block I/O per
+//! container at all, which only the stats themselves tell: Docker Desktop answers `[]` for every
+//! container. The rule is therefore that an empty list means 0 only once some container on this
+//! host has listed a write counter since the probe started ([`written_bytes`]); until then it
+//! means nothing, so a host that never accounts block I/O gets no sensor and keeps no record.
+//! `null` (a container that is not running) is never 0.
+//!
 //! **Posting.** An hour is posted on the first tick after it ends, and only when at least one delta
 //! was accepted in it — never an invented 0. The value's time is when it is sent (just after the
 //! hour); the comment names the window. An hour is posted once: a clock stepped back into the hour
@@ -125,12 +135,39 @@ fn read_dev(entry: &Path) -> Option<String> {
     (!number.is_empty()).then(|| number.to_string())
 }
 
-/// Bytes the container has written to block devices since it started; `None` when the stats carry
-/// no write counter: a stopped container (`null`), one that has done no block I/O yet, or a host
-/// that does not account block I/O per container — Docker Desktop answers `[]` for every
-/// container (checked 2026-09-29, Engine 29.6.2 on WSL2), so no sensor registers there. A stacked
-/// device whose disk is listed as well is not counted: the disk already carries that write.
-pub fn written_bytes(stats: &ContainerStats, stacking: &mut Stacking) -> Option<u64> {
+/// A container's write counter as one stats read gives it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Written {
+    /// The bytes the stats list as written to block devices since the container started.
+    Listed(u64),
+    /// A running container whose stats list no write (`[]`, or reads only) on a host that accounts
+    /// block I/O per container: it has written nothing yet, so its counter is 0.
+    Nothing,
+}
+
+impl Written {
+    pub fn bytes(self) -> u64 {
+        match self {
+            Self::Listed(bytes) => bytes,
+            Self::Nothing => 0,
+        }
+    }
+}
+
+/// Bytes the container has written to block devices since it started. `None` when the stats say
+/// nothing about it: a container that is not running (`null`, or no CPU counters), or a list
+/// without a write entry while `host_accounts_io` is still false — no container on this host has
+/// listed a write counter yet, so the host may not account block I/O per container at all (Docker
+/// Desktop answers `[]` for every container, checked 2026-09-29, Engine 29.6.2 on WSL2) and no
+/// sensor registers there. Once some container has listed one (`host_accounts_io` is set here), a
+/// running container's list without a write entry is [`Written::Nothing`]: on cgroup v2 a cgroup
+/// that has done no block I/O yet lists no device (#1574). A stacked device whose disk is listed
+/// as well is not counted: the disk already carries that write.
+pub fn written_bytes(
+    stats: &ContainerStats,
+    stacking: &mut Stacking,
+    host_accounts_io: &mut bool,
+) -> Option<Written> {
     let entries = stats.blkio_stats.io_service_bytes_recursive.as_ref()?;
     let writes: Vec<(String, u64)> = entries
         .iter()
@@ -138,8 +175,10 @@ pub fn written_bytes(stats: &ContainerStats, stacking: &mut Stacking) -> Option<
         .map(|entry| (format!("{}:{}", entry.major, entry.minor), entry.value))
         .collect();
     if writes.is_empty() {
-        return None;
+        let running = stats.cpu_stats.system_cpu_usage.is_some();
+        return (*host_accounts_io && running).then_some(Written::Nothing);
     }
+    *host_accounts_io = true;
     let listed: HashSet<&str> = writes.iter().map(|(device, _)| device.as_str()).collect();
     let mut total = 0u64;
     for (device, value) in &writes {
@@ -151,7 +190,7 @@ pub fn written_bytes(stats: &ContainerStats, stacking: &mut Stacking) -> Option<
             total = total.saturating_add(*value);
         }
     }
-    Some(total)
+    Some(Written::Listed(total))
 }
 
 /// A container's counter at its last sample.
@@ -190,6 +229,9 @@ pub enum Skip {
     /// The clock passed the running hour's end before the tick rolled it: nothing is counted and
     /// the baseline is kept, so the next sample credits these bytes to the new hour.
     HourNotRolled,
+    /// The stats list no write while the baseline holds a real counter of the same start: the
+    /// baseline is kept and nothing is counted (see [`WriteRecord::sample_written`]).
+    NothingOverCounter,
 }
 
 /// An hour that ended, with what was measured in it.
@@ -381,30 +423,42 @@ impl WriteRecord {
             .min(HOUR_MS as u64);
     }
 
-    /// A running container that has done no block I/O yet (its stats list no device) on a host
-    /// that does account I/O: its counter is 0 since it started, so that is its baseline — its
-    /// first write then counts in full instead of becoming the baseline. A real counter of the
-    /// same start is kept; one of an earlier start (restarted, not written since) is replaced.
-    pub fn zero_baseline(&mut self, container_id: &str, now_ms: i64, started_at: &str) {
-        let keep = self.baselines.get(container_id).is_some_and(|baseline| {
-            let same_start = baseline
-                .started_at
-                .as_deref()
-                .is_none_or(|s| s == started_at)
-                || baseline.ignored_started_at.as_deref() == Some(started_at);
-            baseline.bytes > 0 && same_start
-        });
-        if !keep {
-            self.baselines.insert(
-                container_id.to_string(),
-                Baseline {
-                    bytes: 0,
-                    at_ms: now_ms,
-                    started_at: Some(started_at.to_string()),
-                    ..Baseline::default()
-                },
-            );
+    /// [`WriteRecord::sample`] for a counter as [`written_bytes`] gives it. [`Written::Nothing`] is
+    /// sampled as 0 — an idle hour accumulates an honest 0 delta and posts `0`, and the first write
+    /// then counts in full instead of becoming the baseline — except over a real counter of the
+    /// same start, which is kept: a list that empties without a restart (a removed device, a
+    /// transient read) must not turn the container's whole history into its next delta. A restart
+    /// the state poll has reported (a different start) is sampled, and so rebases on 0.
+    pub fn sample_written(
+        &mut self,
+        container_id: &str,
+        written: Written,
+        now_ms: i64,
+        sample_period: Duration,
+        started_at: Option<&str>,
+    ) -> Result<(u64, u64), Skip> {
+        if written == Written::Nothing {
+            let keep = self.baselines.get(container_id).is_some_and(|baseline| {
+                let same_start = started_at.is_none_or(|now| {
+                    baseline
+                        .started_at
+                        .as_deref()
+                        .is_none_or(|then| then == now)
+                        || baseline.ignored_started_at.as_deref() == Some(now)
+                });
+                baseline.bytes > 0 && same_start
+            });
+            if keep {
+                return Err(Skip::NothingOverCounter);
+            }
         }
+        self.sample(
+            container_id,
+            written.bytes(),
+            now_ms,
+            sample_period,
+            started_at,
+        )
     }
 
     /// Forget one container's baseline (its counter is gone); whether there was one.
@@ -446,6 +500,23 @@ mod tests {
             .1
     }
 
+    /// The bytes `written_bytes` lists, on a host that has not shown a write counter before.
+    fn listed(stats: &ContainerStats, stacking: &mut Stacking) -> Option<u64> {
+        written_bytes(stats, stacking, &mut false).map(|written| match written {
+            Written::Listed(bytes) => bytes,
+            Written::Nothing => panic!("an implied 0 on a host without counters"),
+        })
+    }
+
+    /// Running stats (CPU counters present) with this `io_service_bytes_recursive`.
+    fn running(io_service_bytes_recursive: serde_json::Value) -> ContainerStats {
+        serde_json::from_value(serde_json::json!({
+            "cpu_stats": { "cpu_usage": { "total_usage": 1 }, "system_cpu_usage": 2 },
+            "blkio_stats": { "io_service_bytes_recursive": io_service_bytes_recursive }
+        }))
+        .unwrap()
+    }
+
     #[test]
     fn hours_are_utc_clock_hours() {
         assert_eq!(hour_start(H13) * 1000, H13);
@@ -461,18 +532,15 @@ mod tests {
         // (2_881_179_648) are not counted.
         let mut plain = Stacking::default();
         assert_eq!(
-            written_bytes(by_prefix(&t0, "abbd59dcacc8"), &mut plain),
+            listed(by_prefix(&t0, "abbd59dcacc8"), &mut plain),
             Some(11_377_098_752)
         );
         assert_eq!(
-            written_bytes(by_prefix(&t1, "abbd59dcacc8"), &mut plain),
+            listed(by_prefix(&t1, "abbd59dcacc8"), &mut plain),
             Some(11_377_262_592)
         );
         // The exited ci-image has `io_service_bytes_recursive: null`: no counter, not 0.
-        assert_eq!(
-            written_bytes(by_prefix(&t0, "3537ef2ee867"), &mut plain),
-            None
-        );
+        assert_eq!(listed(by_prefix(&t0, "3537ef2ee867"), &mut plain), None);
     }
 
     #[test]
@@ -487,23 +555,95 @@ mod tests {
         }))
         .unwrap();
         let mut plain = Stacking::default();
-        assert_eq!(written_bytes(&stats, &mut plain), Some(150));
+        assert_eq!(listed(&stats, &mut plain), Some(150));
         let empty: ContainerStats =
             serde_json::from_value(serde_json::json!({ "blkio_stats": {} })).unwrap();
-        assert_eq!(written_bytes(&empty, &mut plain), None);
+        assert_eq!(listed(&empty, &mut plain), None);
         // Docker Desktop's shape: every list present and empty.
         let desktop: ContainerStats = serde_json::from_value(serde_json::json!({
             "blkio_stats": { "io_service_bytes_recursive": [], "sectors_recursive": [] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&desktop, &mut plain), None);
+        assert_eq!(listed(&desktop, &mut plain), None);
         let reads_only: ContainerStats = serde_json::from_value(serde_json::json!({
             "blkio_stats": { "io_service_bytes_recursive": [
                 { "major": 8, "minor": 0, "op": "read", "value": 7 }
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&reads_only, &mut plain), None);
+        assert_eq!(listed(&reads_only, &mut plain), None);
+    }
+
+    #[test]
+    fn a_running_container_without_a_write_counter_has_written_0_once_the_host_accounts_io() {
+        let t0 = garage_stats(STATS_T0);
+        let mut plain = Stacking::default();
+        // lingua-admin freshly recreated on cgroup v2: running, io.stat lists no device yet.
+        let fresh = running(serde_json::json!([]));
+        let reads_only = running(serde_json::json!([
+            { "major": 8, "minor": 0, "op": "read", "value": 24_576 }
+        ]));
+        let mut host_accounts_io = false;
+        // Nothing on this host has listed a write counter yet: an empty list means nothing.
+        assert_eq!(
+            written_bytes(&fresh, &mut plain, &mut host_accounts_io),
+            None
+        );
+        assert!(!host_accounts_io);
+        // A sibling lists one (gitea/db): the host accounts block I/O per container.
+        assert_eq!(
+            written_bytes(
+                by_prefix(&t0, "abbd59dcacc8"),
+                &mut plain,
+                &mut host_accounts_io
+            ),
+            Some(Written::Listed(11_377_098_752))
+        );
+        assert!(host_accounts_io);
+        // From then on a running container without a write entry has written 0 so far.
+        assert_eq!(
+            written_bytes(&fresh, &mut plain, &mut host_accounts_io),
+            Some(Written::Nothing)
+        );
+        assert_eq!(
+            written_bytes(&reads_only, &mut plain, &mut host_accounts_io),
+            Some(Written::Nothing)
+        );
+        assert_eq!(Written::Nothing.bytes(), 0);
+        // A container that is not running is never 0: `null` (the exited ci-image) ...
+        assert_eq!(
+            written_bytes(
+                by_prefix(&t0, "3537ef2ee867"),
+                &mut plain,
+                &mut host_accounts_io
+            ),
+            None
+        );
+        // ... nor an empty list without CPU counters.
+        let stopped: ContainerStats = serde_json::from_value(serde_json::json!({
+            "blkio_stats": { "io_service_bytes_recursive": [] }
+        }))
+        .unwrap();
+        assert_eq!(
+            written_bytes(&stopped, &mut plain, &mut host_accounts_io),
+            None
+        );
+    }
+
+    #[test]
+    fn docker_desktop_never_implies_a_0() {
+        // Docker Desktop (WSL2): every running container answers `[]`, so no counter is ever
+        // listed, the host is never taken as accounting I/O, and no container is read as 0.
+        let mut plain = Stacking::default();
+        let mut host_accounts_io = false;
+        for _ in 0..3 {
+            let desktop = running(serde_json::json!([]));
+            assert_eq!(
+                written_bytes(&desktop, &mut plain, &mut host_accounts_io),
+                None
+            );
+        }
+        assert!(!host_accounts_io);
     }
 
     /// A root on LVM over `sda2`: `dm-0` (253:0) sits on the partition, the partition on `sda`.
@@ -613,7 +753,7 @@ mod tests {
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&both, &mut stacking), Some(4096 + 100));
+        assert_eq!(listed(&both, &mut stacking), Some(4096 + 100));
         // A kernel that lists only the stacked device: it is all there is, so it counts.
         let top_only: ContainerStats = serde_json::from_value(serde_json::json!({
             "blkio_stats": { "io_service_bytes_recursive": [
@@ -621,7 +761,7 @@ mod tests {
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&top_only, &mut stacking), Some(4096));
+        assert_eq!(listed(&top_only, &mut stacking), Some(4096));
     }
 
     /// md RAID1 over `sda1` and `sdb1`: `md0` (9:0) has both partitions as slaves.
@@ -671,7 +811,7 @@ mod tests {
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&mirrored, &mut stacking), Some(8192));
+        assert_eq!(listed(&mirrored, &mut stacking), Some(8192));
     }
 
     #[test]
@@ -804,27 +944,74 @@ mod tests {
     }
 
     #[test]
-    fn an_idle_containers_first_write_counts_in_full() {
+    fn an_idle_container_samples_0_and_its_first_write_counts_in_full() {
         let mut record = WriteRecord::new(H13);
-        let started = "2026-09-29T12:00:00Z";
-        // Running, no device in io.stat yet: a zero baseline, refreshed while it stays idle.
-        record.zero_baseline("a", H13 + 5_000, started);
-        record.zero_baseline("a", H13 + 10_000, started);
+        let started = Some("2026-09-29T12:00:00Z");
+        // Running, no device in io.stat yet: its counter is 0 - a baseline, then 0 deltas.
+        assert_eq!(
+            record.sample_written("a", Written::Nothing, H13 + 5_000, PERIOD, started),
+            Err(Skip::FirstSample)
+        );
+        assert_eq!(
+            record.sample_written("a", Written::Nothing, H13 + 10_000, PERIOD, started),
+            Ok((0, 5_000))
+        );
         // Its first burst: 1 GB, all of it counted.
         assert_eq!(
-            record.sample("a", 1_000_000_000, H13 + 15_000, PERIOD, Some(started)),
+            record.sample_written(
+                "a",
+                Written::Listed(1_000_000_000),
+                H13 + 15_000,
+                PERIOD,
+                started
+            ),
             Ok((1_000_000_000, 5_000))
         );
         // A real counter of the same start is never replaced by a zero.
-        record.zero_baseline("a", H13 + 20_000, started);
+        assert_eq!(
+            record.sample_written("a", Written::Nothing, H13 + 20_000, PERIOD, started),
+            Err(Skip::NothingOverCounter)
+        );
         assert_eq!(record.baselines["a"].bytes, 1_000_000_000);
         // Restarted and idle since: its counter is 0 again, and its first write counts too.
-        let again = "2026-09-29T13:30:00Z";
-        record.zero_baseline("a", H13 + 31 * MIN, again);
+        let again = Some("2026-09-29T13:30:00Z");
         assert_eq!(
-            record.sample("a", 2_048, H13 + 31 * MIN + 5_000, PERIOD, Some(again)),
+            record.sample_written("a", Written::Nothing, H13 + 31 * MIN, PERIOD, again),
+            Err(Skip::Restarted)
+        );
+        assert_eq!(
+            record.sample_written(
+                "a",
+                Written::Listed(2_048),
+                H13 + 31 * MIN + 5_000,
+                PERIOD,
+                again
+            ),
             Ok((2_048, 5_000))
         );
+        assert_eq!(record.bytes, 1_000_000_000 + 2_048);
+        assert_eq!(record.deltas, 3);
+    }
+
+    #[test]
+    fn an_hour_in_which_a_container_stayed_idle_is_posted_as_0() {
+        // #1574: lingua-admin, recreated with its sibling, did no block I/O for hours; its hours
+        // are measured zeros, posted like lingua-api's `write 0`, not gaps.
+        let period = Duration::from_secs(60);
+        let mut record = WriteRecord::new(H13);
+        let started = Some("2026-09-29T12:58:00Z");
+        for minute in 0..60 {
+            let now = H13 + minute * MIN + 1_000;
+            if let Ok((_, gap)) =
+                record.sample_written("admin", Written::Nothing, now, period, started)
+            {
+                record.cover(gap, now);
+            }
+        }
+        let done = record.roll(H13 + 60 * MIN + 1_000).expect("posted");
+        assert_eq!(done.bytes, 0);
+        assert_eq!(done.megabytes(), 0.0);
+        assert_eq!(done.comment(), "13:00–14:00 UTC");
     }
 
     #[test]

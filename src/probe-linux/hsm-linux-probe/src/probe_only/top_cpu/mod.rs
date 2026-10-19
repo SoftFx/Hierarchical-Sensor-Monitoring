@@ -43,12 +43,16 @@
 //!
 //! See [`procfs::sensor_name`]: `comm` (≤ 15 bytes, the kernel's truncation), normalized to the
 //! characters the server's alert-template wildcard matches; a kernel thread is named by the part
-//! before its first `/` (`kworker/3:1-events` → `kworker`), so per-CPU threads are one sensor.
+//! before its first `/` (`kworker/3:1-events` → `kworker`), so per-CPU threads are one sensor. A
+//! `comm` of exactly 15 bytes is extended to the executable's full name when one is known (#1573,
+//! [`procfs`] "Full names"); the first time a name changes that way it is logged once
+//! ([`log_renamed_once`]).
 
 pub mod procfs;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use hsm_collector::{Collector, DoubleSensor, SensorOptions};
@@ -128,14 +132,14 @@ fn path_line_from(exe: std::io::Result<PathBuf>, process_dir: &Path) -> String {
     }
 }
 
-/// argv[0] from `<pid>/cmdline` — world-readable, unlike the `exe` link — when it is an absolute
-/// path; `None` when it is relative, empty (a zombie or a kernel thread has an empty cmdline) or
-/// unreadable. **Only argv[0] ever leaves this function**: the arguments can carry secrets. It is
-/// cut at the first NUL *and* at the first whitespace, because a process that rewrites its title
-/// (`setproctitle`, Chrome) may join its arguments with spaces into one NUL-free string; the cost
-/// is that an executable path containing a space is shown only up to it. At most
-/// [`CMDLINE_READ_LIMIT`] bytes are read.
-fn argv0_path(process_dir: &Path) -> Option<String> {
+/// argv[0] from `<pid>/cmdline` — world-readable, unlike the `exe` link; `None` when empty (a
+/// zombie or a kernel thread has an empty cmdline) or unreadable. **Only argv[0] ever leaves this
+/// function**: the arguments can carry secrets. It is cut at the first NUL *and* at the first
+/// whitespace, because a process that rewrites its title (`setproctitle`, Chrome) may join its
+/// arguments with spaces into one NUL-free string; the cost is that an executable path containing
+/// a space is cut at it. At most [`CMDLINE_READ_LIMIT`] bytes are read. Used for the path line
+/// ([`argv0_path`]) and for the full name of a 15-byte `comm` ([`procfs::Sampler`], #1573).
+pub(crate) fn argv0(process_dir: &Path) -> Option<String> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::fs::File::open(process_dir.join("cmdline"))
@@ -146,11 +150,35 @@ fn argv0_path(process_dir: &Path) -> Option<String> {
     let first = bytes.split(|byte| *byte == 0).next().unwrap_or_default();
     let text = String::from_utf8_lossy(first);
     let argv0 = text.split(char::is_whitespace).next().unwrap_or_default();
-    if argv0.starts_with('/') {
-        Some(argv0.to_string())
-    } else {
-        None
+    (!argv0.is_empty()).then(|| argv0.to_string())
+}
+
+/// [`argv0`] when it is an absolute path; `None` when it is relative.
+fn argv0_path(process_dir: &Path) -> Option<String> {
+    argv0(process_dir).filter(|argv0| argv0.starts_with('/'))
+}
+
+/// How many renamed names [`log_renamed_once`] remembers; past that it stays silent.
+const MAX_RENAMES_LOGGED: usize = 4096;
+
+/// One INFO line per name and probe run when a process name changes because a 15-byte `comm` —
+/// possibly cut by the kernel — was extended to the executable's full name (#1573): sensors under
+/// the old name are no longer posted, new ones appear under the full name. Shared by top CPU and
+/// top disk I/O, so a name is announced once, not once per sensor family.
+pub(crate) fn log_renamed_once(logger: &Logger, new: &str, old: &str) {
+    static LOGGED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    let mut logged = LOGGED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if logged.len() >= MAX_RENAMES_LOGGED || !logged.insert(new.to_string()) {
+        return;
     }
+    logger.info(format!(
+        "process name '{old}' is now reported as '{new}': the kernel cuts a process name at 15 \
+         bytes and the full name comes from the executable (#1573). Top CPU / top disk I/O \
+         sensors under '{old}', if any, are no longer posted; the new ones are under '{new}' \
+         (logged once per name)"
+    ));
 }
 
 /// A path as the description's code span shows it: control characters and backticks (which would
@@ -170,10 +198,13 @@ fn sanitize_path(path: &str) -> String {
 
 /// Register the source when `topCpu.enabled`. No sensor exists before the first measured
 /// interval: each busy name registers at runtime (collector ≥ 0.9.1 posts the registration).
+/// `helper_snapshot` is the top disk I/O helper's snapshot when that source is on: its names (from
+/// the `exe` link) win for the same process, so both families name it alike (#1573).
 pub fn register<'c>(
     collector: &'c Collector,
     config: &TopCpuConfig,
     proc_root: &Path,
+    helper_snapshot: Option<&Path>,
     logger: &Logger,
 ) -> Option<Box<dyn Source + 'c>> {
     if !config.enabled {
@@ -198,7 +229,7 @@ pub fn register<'c>(
     }
     Some(Box::new(TopCpu {
         collector,
-        sampler: Sampler::new(proc_root),
+        sampler: Sampler::new(proc_root).with_helper_snapshot(helper_snapshot),
         count,
         min_percent,
         period,
@@ -373,6 +404,9 @@ impl Source for TopCpu<'_> {
                     ));
                     self.baseline_logged = true;
                 }
+                for (new, old) in &visibility.renamed {
+                    log_renamed_once(logger, new, old);
+                }
                 let top = procfs::select_top(&by_name, self.count, self.min_percent);
                 self.post_all(&top, logger);
             }
@@ -419,7 +453,7 @@ mod tests {
         let collector = test_collector();
         let (logger, lines) = capture();
         let tree = FakeTree::new("topcpu-off");
-        assert!(register(&collector, &TopCpuConfig::default(), &tree.0, &logger).is_none());
+        assert!(register(&collector, &TopCpuConfig::default(), &tree.0, None, &logger).is_none());
         assert!(lines.lock().unwrap().iter().any(|l| l.contains("off")));
     }
 
@@ -434,7 +468,7 @@ mod tests {
         process(&tree, 300, "kworker/0:1-events", 0x0020_0000, 0, 1);
         let collector = test_collector();
         let (logger, _) = capture();
-        let mut source = register(&collector, &enabled(), &tree.0, &logger).expect("source");
+        let mut source = register(&collector, &enabled(), &tree.0, None, &logger).expect("source");
         assert_eq!(source.period(), Duration::from_secs(60));
         collector.start().expect("start");
 
@@ -709,6 +743,25 @@ mod tests {
         assert_eq!(warned, 1, "logged once");
     }
 
+    /// A rename (#1573) is one INFO line per name for the whole probe run, whichever family sees
+    /// it first and however often.
+    #[test]
+    fn a_rename_is_logged_once_per_name() {
+        let (logger, lines) = capture();
+        for _ in 0..3 {
+            log_renamed_once(&logger, "renamed-once-test.x86_64", "renamed-once-te");
+        }
+        log_renamed_once(&logger, "renamed-once-test.other", "renamed-once-te");
+        let lines = lines.lock().unwrap();
+        assert_eq!(lines.len(), 2, "{lines:#?}");
+        assert!(lines[0].contains("|INFO|"), "{}", lines[0]);
+        assert!(
+            lines[0].contains("'renamed-once-te' is now reported as 'renamed-once-test.x86_64'"),
+            "{}",
+            lines[0]
+        );
+    }
+
     #[test]
     fn hidepid_is_one_info_line_not_a_failure() {
         let tree = FakeTree::new("topcpu-hidepid");
@@ -720,7 +773,7 @@ mod tests {
         fake_proc(&tree, 0);
         let collector = test_collector();
         let (logger, lines) = capture();
-        let mut source = register(&collector, &enabled(), &tree.0, &logger).expect("source");
+        let mut source = register(&collector, &enabled(), &tree.0, None, &logger).expect("source");
         source.sample(&logger);
         let lines = lines.lock().unwrap();
         let hidepid: Vec<&String> = lines.iter().filter(|l| l.contains("hidepid")).collect();
@@ -734,8 +787,14 @@ mod tests {
         let tree = FakeTree::new("topcpu-broken");
         let collector = test_collector();
         let (logger, lines) = capture();
-        let mut source =
-            register(&collector, &enabled(), &tree.0.join("absent"), &logger).expect("source");
+        let mut source = register(
+            &collector,
+            &enabled(),
+            &tree.0.join("absent"),
+            None,
+            &logger,
+        )
+        .expect("source");
         source.sample(&logger);
         source.sample(&logger);
         let errors = lines

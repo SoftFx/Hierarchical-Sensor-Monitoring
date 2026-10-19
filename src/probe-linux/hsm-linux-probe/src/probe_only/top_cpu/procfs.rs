@@ -11,15 +11,29 @@
 //! second read per process would add nothing. Like `comm`, it is `task->comm`: at most **15
 //! bytes** (`TASK_COMM_LEN - 1`), so a long executable name arrives truncated
 //! (`systemd-journald` → `systemd-journal`).
+//!
+//! # Full names (#1573)
+//!
+//! Only a `comm` of 15 raw bytes can have been cut ([`may_be_cut`]). For such a process with CPU
+//! in the interval, the full name is, in this order: the name the top disk I/O helper wrote for
+//! the same `(pid, starttime)` (it reads the `exe` link, so both families name the process alike);
+//! the `exe` link's basename (readable here only for the probe's own processes); the basename of
+//! argv[0] from `<pid>/cmdline` (absolute or relative: `./valheim_server.x86_64`) — each taken only
+//! when it extends the `comm` ([`extended_name`]: compared byte-wise, never an interpreter, whose
+//! script's name would be in argv[1], which is never read). Otherwise the `comm`. A process is
+//! resolved **once**, at its first busy sample, and keeps that name for its life — the helper's
+//! snapshot appearing or going later never renames it.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
+use hsm_linux_probe_io::procstat::{extended_name, may_be_cut, original_comm};
 #[cfg(test)]
 pub use hsm_linux_probe_io::procstat::{parse_pid_stat, PF_KTHREAD};
 /// The process table and the stat parser live in the top disk I/O helper crate, which reads the
 /// same processes (#1547); re-exported so both samplers name them alike.
 pub use hsm_linux_probe_io::procstat::{read_processes, PidStat};
+use hsm_linux_probe_io::snapshot::Snapshot;
 
 /// The host's total CPU time from the aggregate `cpu` line of `/proc/stat`, in clock ticks:
 /// every field except `guest`/`guest_nice` (already counted in `user`/`nice`). The same total the
@@ -97,6 +111,9 @@ pub struct Usage {
 pub struct Visibility {
     /// Processes whose `stat` was read.
     pub processes: usize,
+    /// Names of this sample extended from a 15-byte `comm`, each with the name it replaces — for
+    /// the caller's one-time "renamed" line.
+    pub renamed: BTreeMap<String, String>,
 }
 
 /// Samples per-process CPU between successive calls. The first call only sets the baseline.
@@ -105,6 +122,12 @@ pub struct Sampler {
     /// (pid) → (start ticks, cpu ticks) of the previous sample.
     previous: HashMap<u32, (u64, u64)>,
     previous_total: Option<u64>,
+    /// The top disk I/O helper's snapshot, whose names win for the same process (`None`: no
+    /// helper).
+    helper_snapshot: Option<PathBuf>,
+    /// pid → (start ticks, full name) of the 15-byte `comm`s already resolved, for live
+    /// processes only.
+    full_names: HashMap<u32, (u64, String)>,
 }
 
 impl Sampler {
@@ -113,11 +136,77 @@ impl Sampler {
             proc_root: proc_root.into(),
             previous: HashMap::new(),
             previous_total: None,
+            helper_snapshot: None,
+            full_names: HashMap::new(),
         }
+    }
+
+    /// Prefer the names of the top disk I/O helper's snapshot at `path` (module documentation).
+    pub fn with_helper_snapshot(mut self, path: Option<&Path>) -> Self {
+        self.helper_snapshot = path.map(Path::to_path_buf);
+        self
     }
 
     pub fn proc_root(&self) -> &Path {
         &self.proc_root
+    }
+
+    /// The helper's extended names by `(pid, start ticks)`; empty without a readable snapshot.
+    fn helper_names(&self) -> HashMap<(u32, u64), String> {
+        let Some(path) = &self.helper_snapshot else {
+            return HashMap::new();
+        };
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| Snapshot::parse(&text).ok())
+            .map(|snapshot| {
+                snapshot
+                    .entries
+                    .into_iter()
+                    .filter(|entry| !entry.kernel_thread && original_comm(&entry.name).is_some())
+                    .map(|entry| ((entry.pid, entry.start_ticks), entry.name))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The name a process is reported under: its `comm`, or the full name of a 15-byte one
+    /// (module documentation). `helper` is loaded on first need, once per sample.
+    fn full_name(
+        &mut self,
+        stat: &PidStat,
+        helper: &mut Option<HashMap<(u32, u64), String>>,
+    ) -> String {
+        if stat.is_kernel_thread() || !may_be_cut(&stat.comm) {
+            return stat.comm.clone();
+        }
+        // Resolved once, at the process's first busy sample, and kept for its life: a name that
+        // changed between samples (the helper's snapshot appearing or going) would fork its sensor.
+        if let Some((_, name)) = self
+            .full_names
+            .get(&stat.pid)
+            .filter(|(start, _)| *start == stat.start_ticks)
+        {
+            return name.clone();
+        }
+        let helper = helper.get_or_insert_with(|| self.helper_names());
+        let process_dir = self.proc_root.join(stat.pid.to_string());
+        let name = helper
+            .get(&(stat.pid, stat.start_ticks))
+            .filter(|name| original_comm(name).as_deref() == Some(stat.comm.as_str()))
+            .cloned()
+            .or_else(|| {
+                std::fs::read_link(process_dir.join("exe"))
+                    .ok()
+                    .and_then(|exe| extended_name(&stat.comm, &exe.to_string_lossy()))
+            })
+            .or_else(|| {
+                super::argv0(&process_dir).and_then(|argv0| extended_name(&stat.comm, &argv0))
+            })
+            .unwrap_or_else(|| stat.comm.clone());
+        self.full_names
+            .insert(stat.pid, (stat.start_ticks, name.clone()));
+        name
     }
 
     /// Read the process table and return every name that used CPU since the previous call
@@ -139,8 +228,9 @@ impl Sampler {
             .iter()
             .map(|stat| (stat.pid, (stat.start_ticks, stat.cpu_ticks)))
             .collect();
-        let visibility = Visibility {
+        let mut visibility = Visibility {
             processes: processes.len(),
+            ..Visibility::default()
         };
 
         let previous = std::mem::replace(&mut self.previous, current);
@@ -172,11 +262,18 @@ impl Sampler {
             }
         }
         shares.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.pid.cmp(&b.1.pid)));
+        let mut helper = None;
         for (percent, stat) in shares {
             let kernel_thread = stat.is_kernel_thread();
-            let Some(name) = sensor_name(&stat.comm, kernel_thread) else {
+            let full = self.full_name(&stat, &mut helper);
+            let Some(name) = sensor_name(&full, kernel_thread) else {
                 continue;
             };
+            if full != stat.comm {
+                if let Some(old) = sensor_name(&stat.comm, false).filter(|old| *old != name) {
+                    visibility.renamed.insert(name.clone(), old);
+                }
+            }
             by_name
                 .entry(name.clone())
                 .and_modify(|usage| usage.percent += percent)
@@ -187,6 +284,10 @@ impl Sampler {
                     kernel_thread,
                 });
         }
+        // Only live processes keep a resolved name: the cache never outgrows the process table.
+        let live = &self.previous;
+        self.full_names
+            .retain(|pid, (start, _)| live.get(pid).is_some_and(|(now, _)| now == start));
         Ok((by_name, visibility))
     }
 }
@@ -534,6 +635,147 @@ pub mod tests {
                 kernel_thread: false,
             },
         )
+    }
+
+    /// A 15-byte `comm` gets the full name from a relative or absolute argv[0] that extends it —
+    /// never from an argument (a secret among them), never from an interpreter; the helper's
+    /// snapshot wins for the same process; any other `comm` is left alone (#1573).
+    #[test]
+    fn a_15_byte_comm_gets_the_full_name_from_argv0_or_the_helper() {
+        use hsm_linux_probe_io::snapshot::{Entry, Kind};
+
+        let tree = FakeTree::new("topcpu-names");
+        fake_proc(&tree, 0);
+        let busy = [
+            (
+                40,
+                "valheim_server.",
+                &b"./valheim_server.x86_64\0-password\0s3cr3t\0"[..],
+            ),
+            (
+                41,
+                "valheim-world-b",
+                b"/bin/bash\0./valheim-world-backup\0--token=s3cr3t\0",
+            ),
+            (
+                42,
+                "dart_frontend_s",
+                b"/usr/lib/dart/bin/dart\0frontend_server.dart.snapshot\0",
+            ),
+            (
+                43,
+                "nginx",
+                b"nginx: master process /usr/sbin/nginx-with-a-long-name\0",
+            ),
+            (
+                44,
+                "systemd-journal",
+                b"/usr/lib/systemd/systemd-journald\0",
+            ),
+            (
+                45,
+                "python3.12-3.12",
+                b"python3.12-3.12.1\0secret_script_name.py\0",
+            ),
+        ];
+        for (pid, comm, cmdline) in busy {
+            process(&tree, pid, comm, 0, 0, u64::from(pid));
+            std::fs::write(tree.0.join(format!("{pid}/cmdline")), cmdline).expect("cmdline");
+        }
+        // The helper read pid 44's exe link: its name wins (here a test value, to tell them apart).
+        let snapshot = Snapshot {
+            seq: 1,
+            mono_ns: 1,
+            wall_ms: 0,
+            kind: Kind::Regular,
+            entries: vec![Entry {
+                pid: 44,
+                start_ticks: 44,
+                ppid: 1,
+                kernel_thread: false,
+                sigchld_ignored: false,
+                counters: None,
+                reaped: None,
+                cminflt: 0,
+                name: "systemd-journald-from-exe".into(),
+            }],
+        };
+        tree.file("helper-snapshot", &snapshot.render());
+        let mut sampler =
+            Sampler::new(&tree.0).with_helper_snapshot(Some(&tree.0.join("helper-snapshot")));
+        sampler.sample().expect("baseline");
+
+        fake_proc(&tree, 1_000);
+        for (pid, comm, _) in busy {
+            process(&tree, pid, comm, 0, 10, u64::from(pid));
+        }
+        let (usage, seen) = sampler.sample().expect("sample");
+        let names: Vec<&str> = usage.keys().map(String::as_str).collect();
+        assert_eq!(
+            names,
+            [
+                "dart_frontend_s",
+                "nginx",
+                "python3.12-3.12",
+                "systemd-journald-from-exe",
+                "valheim-world-b",
+                "valheim_server.x86_64"
+            ]
+        );
+        assert!(names.iter().all(|name| !name.contains("s3cr3t")
+            && !name.contains("secret")
+            && !name.contains("backup")));
+        assert_eq!(
+            seen.renamed,
+            [
+                (
+                    "systemd-journald-from-exe".to_string(),
+                    "systemd-journal".to_string()
+                ),
+                (
+                    "valheim_server.x86_64".to_string(),
+                    "valheim_server.".to_string()
+                )
+            ]
+            .into()
+        );
+
+        // Resolved once per process: a later cmdline change does not rename it again.
+        std::fs::write(tree.0.join("40/cmdline"), b"rewritten-title\0").expect("cmdline");
+        fake_proc(&tree, 2_000);
+        for (pid, comm, _) in busy {
+            process(&tree, pid, comm, 0, 20, u64::from(pid));
+        }
+        let (usage, _) = sampler.sample().expect("sample");
+        assert!(usage.contains_key("valheim_server.x86_64"));
+
+        // No flip: the helper now names pid 40 differently (from its exe link), and later loses
+        // pid 44 — both keep the name they were first resolved to.
+        let mut renamed = snapshot.clone();
+        renamed.entries[0].name = "systemd-journald-from-exe".into();
+        renamed.entries.push(Entry {
+            pid: 40,
+            start_ticks: 40,
+            name: "valheim_server.x86_64-real".into(),
+            ..snapshot.entries[0].clone()
+        });
+        tree.file("helper-snapshot", &renamed.render());
+        fake_proc(&tree, 3_000);
+        for (pid, comm, _) in busy {
+            process(&tree, pid, comm, 0, 30, u64::from(pid));
+        }
+        let (usage, seen) = sampler.sample().expect("sample");
+        assert!(usage.contains_key("valheim_server.x86_64"), "{usage:?}");
+        assert!(!usage.contains_key("valheim_server.x86_64-real"));
+        assert!(seen.renamed.contains_key("valheim_server.x86_64"));
+        std::fs::remove_file(tree.0.join("helper-snapshot")).expect("rm");
+        fake_proc(&tree, 4_000);
+        for (pid, comm, _) in busy {
+            process(&tree, pid, comm, 0, 40, u64::from(pid));
+        }
+        let (usage, _) = sampler.sample().expect("sample");
+        assert!(usage.contains_key("systemd-journald-from-exe"), "{usage:?}");
+        assert!(!usage.contains_key("systemd-journald"));
     }
 
     #[test]

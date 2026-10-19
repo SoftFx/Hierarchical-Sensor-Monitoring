@@ -323,8 +323,9 @@ are flushed; reads and tmpfs never count. One value per hour, **sent just after 
 covers**: its time is about one hour later than the writes, and the comment names the window \
 (e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was \
 measured. The first sample of a container (a recreate), a restart of it or a counter reset \
-only sets a baseline; an hour with no measurement is skipped, never sent as 0. With EMA \
-statistics.",
+only sets a baseline; an hour with no measurement is skipped, never sent as 0. A running \
+container that has not written to a block device yet (its cgroup lists no device) is measured \
+as 0 written, so an idle hour is sent as 0. With EMA statistics.",
         every = every(sample_period)
     )
 }
@@ -409,6 +410,7 @@ mod tests {
         assert!(text.contains("sent just after the hour it covers"));
         assert!(text.contains("1 MB = 10⁶ bytes"));
         assert!(text.contains("never sent as 0"));
+        assert!(text.contains("an idle hour is sent as 0"));
     }
 
     /// The stats descriptions state the period the probe actually samples at: a config that

@@ -4,18 +4,18 @@ version = 4
 
 [[package]]
 name = "hsm-collector"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "hsm-collector-sys",
 ]
 
 [[package]]
 name = "hsm-collector-sys"
-version = "0.9.1"
+version = "0.10.0"
 
 [[package]]
 name = "hsm-linux-probe"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "hsm-collector",
  "hsm-linux-probe-io",
@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "hsm-linux-probe-io"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "libc",
  "serde_json",

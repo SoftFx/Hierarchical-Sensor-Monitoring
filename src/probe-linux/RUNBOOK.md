@@ -119,6 +119,14 @@ Upgrading to **0.8.1**: Docker stats are sampled once a minute by default, but a
 an earlier package pins `"samplePeriodSec": 5` — remove that key from `probe.docker` (or set `60`)
 in `/etc/hsm-linux-probe/config.json` and `sudo systemctl restart hsm-linux-probe`; the start log
 flags a pinned faster period in one INFO line (README, "Upgrade note (0.8.1)").
+Upgrading to **0.10.0** renames some top CPU / top disk I/O sensors: a process whose 15-byte name
+was cut by the kernel reports under its full name (`valheim_server.` → `valheim_server.x86_64`,
+#1573; the probe logs each rename once at INFO), and top disk I/O credits a reaped child's bytes to
+the child's name or to `children of <reaper>` instead of the reaper (#1572). The old sensors turn
+to Timeout; remove them on the server by hand if you like. With top disk I/O on, the helper writes
+a new snapshot format (version 2); `postinst` restarts a running helper, so both binaries are
+0.10.0 after the upgrade, and the 0.10.0 probe still reads the old helper's version 1 meanwhile.
+A rollback to 0.9.x restarts the helper too (README, "Upgrade to 0.10.0").
 
 Re-running a newer server bundle's `install.sh` upgrades the same way and keeps the existing config
 and key; `install.sh --force-config` replaces the config with the bundle's.
@@ -274,8 +282,9 @@ sudo systemctl disable --now hsm-linux-probe-io    # after disabling it
 ```
 
 The helper holds the only two capabilities (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE`), runs as root
-without network, reads only `/proc/<pid>/stat` and `/proc/<pid>/io` (and the `topDiskIo` block of
-the config) and writes one file, `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which
+without network, reads only `/proc/<pid>/stat`, `/proc/<pid>/io`, its threads'
+`/proc/<pid>/task/<tid>/io` and, for a 15-byte process name, the `/proc/<pid>/exe` link (and the
+`topDiskIo` block of the config) and writes one file, `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`), which
 the probe reads. After changing `periodMs`, restart both units (or re-run `install.sh`, which
 restarts both).
 
@@ -284,7 +293,7 @@ restarts both).
 ```bash
 systemctl is-active hsm-linux-probe-io                       # active
 ls -l /run/hsm-linux-probe-io/snapshot                       # -rw-r----- root hsm-probe, rewritten every periodMs
-head -1 /run/hsm-linux-probe-io/snapshot                     # hsm-linux-probe-io 1 seq=… mono_ns=… wall_ms=… kind=regular
+head -1 /run/hsm-linux-probe-io/snapshot                     # hsm-linux-probe-io 2 seq=… mono_ns=… wall_ms=… kind=regular
 grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe)/status      # 0000000000000000
 grep CapEff /proc/$(systemctl show -p MainPID --value hsm-linux-probe-io)/status   # 0000000000080004
 ```

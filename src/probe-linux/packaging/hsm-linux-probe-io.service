@@ -4,7 +4,8 @@
 # ptrace access: reading it needs CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE. A process holding both can
 # read the whole host filesystem through /proc/<pid>/root, so the probe (hsm-linux-probe.service)
 # must not hold them. This helper does instead, and it is the ONLY privileged piece: it reads
-# /proc/<pid>/stat and /proc/<pid>/io of every process (and its own config's topDiskIo block) and
+# /proc/<pid>/stat, /proc/<pid>/io and /proc/<pid>/task/<tid>/io of every process, the
+# /proc/<pid>/exe link of a process with a 15-byte name (and its own config's topDiskIo block) and
 # writes ONE file, /run/hsm-linux-probe-io/snapshot (root:hsm-probe 0640), which the unprivileged
 # probe reads. It opens no socket and runs no other program.
 #
