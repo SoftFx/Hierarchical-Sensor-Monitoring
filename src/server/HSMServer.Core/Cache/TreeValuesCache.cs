@@ -118,6 +118,11 @@ namespace HSMServer.Core.Cache
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
 
+        // The undo journal of change sets (#1570): entity-deletion cleanup
+        // (entries of deleted nodes are dropped, their change sets go
+        // partial). Optional for the mocked-cache harnesses.
+        private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
+
         private readonly TimeSpan StateUpdatePeriod = TimeSpan.FromMinutes(1);
         private readonly TimeSpan StateUpdateStartDelay = TimeSpan.FromMinutes(2);
 
@@ -135,7 +140,8 @@ namespace HSMServer.Core.Cache
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot,
-            IJournalService journalService, IAlertScheduleProvider alertScheduleProvider)
+            IJournalService journalService, IAlertScheduleProvider alertScheduleProvider,
+            HSMServer.Core.ChangeSets.IChangeSetJournal changeSetJournal = null)
         {
             _database = database;
             _snapshot = snapshot;
@@ -143,6 +149,8 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _alertScheduleProvider = alertScheduleProvider;
+
+            _changeSetJournal = changeSetJournal;
 
             Initialize();
 
@@ -384,6 +392,8 @@ namespace HSMServer.Core.Cache
 
                 product.Parent?.SubProducts.TryRemove(productId, out _);
                 _database.RemoveProduct(product.Id.ToString());
+
+                PurgeChangeSets(product.Id);
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
@@ -940,6 +950,21 @@ namespace HSMServer.Core.Cache
             await ProcessRequestAsync(sensor.Root.Id, request, token);
         }
 
+        // #1570 deletion cleanup, mirroring the Journal lifecycle: undo
+        // records must not outlive their entities. A purge failure is logged
+        // and swallowed — it must not break the deletion itself.
+        private void PurgeChangeSets(Guid entityId)
+        {
+            try
+            {
+                _changeSetJournal?.PurgeReferences(entityId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Change-set purge failed for entity {entityId}");
+            }
+        }
+
         private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
         {
             try
@@ -969,6 +994,8 @@ namespace HSMServer.Core.Cache
                 _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
                 _database.RemoveSensorWithMetadata(sensorId);
+
+                PurgeChangeSets(sensorId);
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
             }

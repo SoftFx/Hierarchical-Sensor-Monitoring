@@ -270,15 +270,70 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // alert policies — silent alert loss with nobody left to report
             // it to (the client is gone by definition). The delete completes
             // once accepted.
-            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+            var removed = await RemoveTemplateCoreAsync(id, user);
 
-            if (!success)
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: error);
+            if (!removed.Success)
+                return removed;
 
             RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
                 id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages);
 
             return PolicyWriteResult.Ok(changeSetId);
+        }
+
+
+        // === Rollback restore paths (#1570) ===
+
+        // Non-journaling delete core: authorization + the cache strip, no
+        // capture and no journal entry. The rollback engine calls this when
+        // compensating a template CREATE — it journals the whole rollback as
+        // its own change set.
+        internal async Task<PolicyWriteResult> RemoveTemplateCoreAsync(Guid id, ClaimsPrincipal user)
+        {
+            var template = _cache.GetAlertTemplate(id);
+
+            if (template is null)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+            if (AuthorizeFolder(template.FolderId, user) is { } denied)
+                return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
+
+            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+
+            return success
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: error);
+        }
+
+        // Restore a recorded template row VERBATIM (same id — unlike the
+        // public create, which generates one) and re-run the fan-out.
+        // Validation is skipped by design: the recorded body was valid when
+        // it was written, and state it referenced (chats, schedules) may have
+        // moved on since — the rollback's contract is to restore the recorded
+        // configuration, not to re-judge it against today's referential state.
+        internal async Task<PolicyWriteResult> RestoreTemplateEntityAsync(AlertTemplateEntity entity,
+            ClaimsPrincipal user)
+        {
+            if (AuthorizeFolder(entity.FolderId, user) is { } denied)
+                return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
+
+            AlertTemplateModel model;
+
+            try
+            {
+                model = new AlertTemplateModel(entity);
+            }
+            catch (Exception e)
+            {
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict,
+                    message: $"The recorded template image could not be reconstructed: {e.Message}");
+            }
+
+            var (success, error, _) = await _cache.AddAlertTemplateAsync(model);
+
+            return success
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: error);
         }
 
 

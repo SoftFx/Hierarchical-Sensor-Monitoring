@@ -134,6 +134,12 @@ namespace HSMServer.ServiceExtensions
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
 
+            // The undo-journal read/rollback engine (#1570): list/get with
+            // caller-sight filtering and the rollback replay. Scoped like its
+            // readers; every stateful collaborator it touches (the journal,
+            // the recorder, the policy write gates) is singleton.
+            services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its SitePort/bearer guards live with the

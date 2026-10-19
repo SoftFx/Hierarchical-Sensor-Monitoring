@@ -1174,6 +1174,85 @@ namespace HSMServer.Model.ManagementApi.Alerts
             string.Equals(left ?? defaultWhenNull, right ?? defaultWhenNull, StringComparison.OrdinalIgnoreCase);
 
 
+        // === Rollback restore paths (#1570) ===
+
+        // Full-list restore of a sensor's data and/or TTL lists from recorded
+        // images, under the SAME per-node write gate and authorization the
+        // original write used. No journaling here — the rollback engine
+        // journals the whole rollback as its own change set, so the restores
+        // themselves must not append entries.
+        //
+        // Ownership nuance: an item whose live content ALREADY equals the
+        // image is a pure re-assert and PRESERVES its change-table owner (a
+        // re-stamp would release the CanChange protection that blocks later
+        // template applies — the CopyTtlUpdate lesson); a restored (changed
+        // or re-created) item takes the rollback caller's ownership.
+        internal Task<PolicyWriteResult> RestoreSensorListsAsync(Guid sensorId, List<PolicyEntity> dataPolicies,
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => RestoreSensorListsCoreAsync(sensorId, dataPolicies, ttlPolicies, user));
+
+        private async Task<PolicyWriteResult> RestoreSensorListsCoreAsync(Guid sensorId,
+            List<PolicyEntity> dataPolicies, List<PolicyEntity> ttlPolicies, ClaimsPrincipal user)
+        {
+            var (sensor, failure) = ResolveWritableSensor(sensorId, user);
+
+            if (failure is not null)
+                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            var initiator = InitiatorOf(user);
+
+            var result = await _cache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensorId,
+                Initiator = initiator,
+                Policies = dataPolicies?.Select(p => ChangeSetSnapshotMapper.ToDataUpdate(
+                    p, sensor.Type, initiator, Unchanged(sensor.Policies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+                TTLPolicies = ttlPolicies?.Select(p => ChangeSetSnapshotMapper.ToTtlUpdate(
+                    p, initiator, Unchanged(sensor.Policies.TTLPolicies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+            });
+
+            return result.IsOk
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+        }
+
+        // The product's own TTL list restore — same shape, the product gate.
+        internal Task<PolicyWriteResult> RestoreProductTtlAsync(Guid productId, List<PolicyEntity> ttlPolicies,
+            ClaimsPrincipal user) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user),
+                () => RestoreProductTtlCoreAsync(productId, ttlPolicies, user));
+
+        private async Task<PolicyWriteResult> RestoreProductTtlCoreAsync(Guid productId,
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user)
+        {
+            var (product, failure) = ResolveWritableProduct(productId, user);
+
+            if (failure is not null)
+                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            var initiator = InitiatorOf(user);
+
+            var result = await _cache.UpdateProductAsync(new ProductUpdate
+            {
+                Id = productId,
+                Initiator = initiator,
+                TTLPolicies = ttlPolicies?.Select(p => ChangeSetSnapshotMapper.ToTtlUpdate(
+                    p, initiator, Unchanged(product.Policies.TTLPolicies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+            });
+
+            return result.IsOk
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+        }
+
+        private static bool Unchanged(Policy live, PolicyEntity image) =>
+            live is not null && PolicyImageComparer.PoliciesEqual(image, live.ToEntity());
+
+        private static bool Unchanged(TTLPolicy live, PolicyEntity image) =>
+            live is not null && PolicyImageComparer.PoliciesEqual(image, live.ToEntity());
+
+
         // === Undo-journal hooks (#1570) ===
 
         // Dry-run arm of every policy write: validation has passed, nothing

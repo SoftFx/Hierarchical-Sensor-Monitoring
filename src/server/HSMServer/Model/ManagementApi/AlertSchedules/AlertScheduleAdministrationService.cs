@@ -149,28 +149,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // Deliberately tied to the cancellation token like the web Remove:
             // an aborted request stops the DISPATCH of further detach work;
             // the schedule is not deleted either way (see the class comment).
-            var detach = await _cache.DetachAlertScheduleFromPoliciesAsync(id, cancellationToken);
+            var deleted = await DeleteScheduleCoreAsync(id, user, cancellationToken);
 
-            if (!detach.IsOk)
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict,
-                    message:
-                    "The schedule was not deleted — not every policy reference could be cleared. Delete it again to retry. " +
-                    detach.Error);
-
-            // The detach is async, so it ran OUTSIDE the gate; re-validate and
-            // remove under the same NameUniquenessGate the write path's
-            // check-then-save pair holds (round-3 review): an update that
-            // passed its existence check while this delete was detaching must
-            // not resurrect the row by saving between the detach and the
-            // remove. Both sides decide under the gate, so one of them loses
-            // cleanly — the delete answers 204 only when the row is gone.
-            lock (NameUniquenessGate)
-            {
-                if (_schedules.GetSchedule(id) is null)
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
-
-                _schedules.DeleteSchedule(id);
-            }
+            if (!deleted.Success)
+                return deleted;
 
             _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
             {
@@ -192,6 +174,72 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             });
 
             return PolicyWriteResult.Ok(changeSetId);
+        }
+
+
+        // === Rollback restore paths (#1570) ===
+
+        // Non-journaling delete core: the detach walk plus the gated remove,
+        // no capture and no journal entry. The rollback engine calls this
+        // when compensating a schedule CREATE.
+        internal async Task<PolicyWriteResult> DeleteScheduleCoreAsync(Guid id, ClaimsPrincipal user,
+            CancellationToken cancellationToken = default)
+        {
+            if (AuthorizeGlobalWrite(user) is { } denied)
+                return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
+
+            if (_schedules.GetSchedule(id) is null)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+            var detach = await _cache.DetachAlertScheduleFromPoliciesAsync(id, cancellationToken);
+
+            if (!detach.IsOk)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict,
+                    message:
+                    "The schedule was not deleted — not every policy reference could be cleared. Delete it again to retry. " +
+                    detach.Error);
+
+            lock (NameUniquenessGate)
+            {
+                if (_schedules.GetSchedule(id) is null)
+                    return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+                _schedules.DeleteSchedule(id);
+            }
+
+            return PolicyWriteResult.Ok();
+        }
+
+        // Restore a recorded schedule row VERBATIM (same id, recorded YAML).
+        // The uniqueness gate still serializes with the write path; a name
+        // collision with a NEWER schedule is not re-judged — the rollback's
+        // contract is to restore the recorded configuration.
+        internal PolicyWriteResult RestoreScheduleEntityAsync(AlertScheduleEntity entity, ClaimsPrincipal user)
+        {
+            if (AuthorizeGlobalWrite(user) is { } denied)
+                return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
+
+            ScheduleModel schedule;
+
+            try
+            {
+                schedule = _parser.Parse(entity?.Schedule ?? string.Empty);
+                schedule.Id = new Guid(entity.Id);
+                schedule.Name = entity.Name;
+                schedule.Timezone = entity.Timezone;
+            }
+            catch (Exception ex)
+            {
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict,
+                    message: $"The recorded schedule image could not be reconstructed: {ex.Message}");
+            }
+
+            lock (NameUniquenessGate)
+            {
+                _schedules.SaveSchedule(schedule);
+            }
+
+            return PolicyWriteResult.Ok();
         }
 
 

@@ -30,6 +30,11 @@ namespace HSMServer.Folders
         private readonly IJournalService _journalService;
         private readonly IChatsManager _chatsManager;
 
+        // #1570: folder-bound template entries of the undo journal are
+        // purged with the folder (constructed over the same DB core — the
+        // journal is a thin facade).
+        private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -63,6 +68,8 @@ namespace HSMServer.Folders
             _userManager.Added += AddUserHandler;
 
             _chatsManager = chatsManager;
+
+            _changeSetJournal = new HSMServer.Core.ChangeSets.ChangeSetJournal(databaseCore);
         }
 
         private void FillFolderChats(FolderEventArgs e)
@@ -182,6 +189,7 @@ namespace HSMServer.Folders
 
             if (result)
             {
+
                 foreach (var productId in folder.Products.Keys)
                     await RemoveProductFromFolder(productId, remove.Id, remove.Initiator);
 
@@ -193,6 +201,13 @@ namespace HSMServer.Folders
                 }
 
                 result &= await base.TryRemove(remove);
+
+                // #1570: the folder's undo-journal records (folder-bound
+                // template entries) do not outlive the folder; surviving
+                // change sets go partial. Guid.Empty matches no entity id —
+                // the purge runs on the FOLDER arm only.
+                if (result)
+                    _changeSetJournal.PurgeReferences(Guid.Empty, remove.Id);
             }
 
             string logFolder = folder?.Name ?? remove.Id.ToString();

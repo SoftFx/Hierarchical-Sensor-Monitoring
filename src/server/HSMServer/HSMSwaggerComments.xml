@@ -2020,6 +2020,36 @@
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService">
+            <summary>
+            The read and rollback surface of the undo journal (#1570):
+            transport-agnostic list/get with caller-sight filtering, and the
+            rollback engine — compensating writes replayed in reverse journal
+            order through the same administration services, write gates and
+            authorization the original writes used.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto.Status">
+            <summary>applied | rolledBack | partial</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto.Entities">
+            <summary>Display paths of the touched entities, visible to the caller.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetFilter.Status">
+            <summary>applied | rolledBack | partial (case-insensitive).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetFilter.EntityId">
+            <summary>Only change sets touching this entity id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.RollbackResultDto.Status">
+            <summary>completed | partial | conflicts</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.RollbackResultDto.RollbackChangeSetId">
+            <summary>The change set the rollback itself was journaled under (redo handle).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.RollbackEntryReportDto.Status">
+            <summary>wouldRestore | restored | skipped | failed</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder">
             <summary>
             The single hook helper every journaled administration service uses
