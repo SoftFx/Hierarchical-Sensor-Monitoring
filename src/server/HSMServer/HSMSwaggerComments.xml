@@ -187,6 +187,21 @@
             <param name="force">Override content conflicts deliberately.</param>
             <param name="dryRun">Report conflicts and the restore plan, apply nothing.</param>
         </member>
+        <member name="T:HSMServer.Controllers.ChangeSetsController">
+            <summary>
+            The change-sets page of the web UI (#1570): the undo journal's list,
+            before/after details and the rollback action with confirmation.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsController.GetChangeSetsTable(System.Int32,System.Int32)">
+            <summary>The table page: newest change sets visible to the caller.</summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsController.Details(System.Guid)">
+            <summary>The details view: per-entity before/after images.</summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChangeSetsController.Rollback(System.Guid,System.Boolean,System.Boolean)">
+            <summary>Rollback with force; dry-run variant feeds the confirmation dialog.</summary>
+        </member>
         <member name="T:HSMServer.Controllers.ChatsApiController">
             <summary>
             Read-only surface for notification chats (epic #1347 follow-up): the id
@@ -2084,13 +2099,11 @@
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
         </member>
-        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService">
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess">
             <summary>
-            The read and rollback surface of the undo journal (#1570):
-            transport-agnostic list/get with caller-sight filtering, and the
-            rollback engine — compensating writes replayed in reverse journal
-            order through the same administration services, write gates and
-            authorization the original writes used.
+            Per-entry sight/write decisions of the undo-journal surface. The
+            default is the token evaluator; the web UI supplies a cookie-`User`
+            implementation (the evaluator only resolves HsmApiToken principals).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto.Status">

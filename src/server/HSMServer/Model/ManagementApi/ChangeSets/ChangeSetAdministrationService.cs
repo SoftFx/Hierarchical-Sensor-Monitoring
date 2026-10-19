@@ -30,16 +30,31 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     // lists on every save). A mismatch blocks the rollback with a per-entity
     // diff unless the caller forces it. A rollback is itself journaled as a
     // new change set, which makes redo a rollback of the rollback.
+    /// <summary>
+    /// Per-entry sight/write decisions of the undo-journal surface. The
+    /// default is the token evaluator; the web UI supplies a cookie-`User`
+    /// implementation (the evaluator only resolves HsmApiToken principals).
+    /// </summary>
+    public interface IChangeSetAccess
+    {
+        bool CanRead(ChangeSetEntry entry);
+
+        bool CanWrite(ChangeSetEntry entry);
+    }
+
+
     // The controller-facing contract of the undo-journal surface: mocked in
     // the REST contract tests, implemented by ChangeSetAdministrationService.
     public interface IChangeSetAdministrationService
     {
-        PolicyWriteResult<List<ChangeSetSummaryDto>> ListChangeSets(ClaimsPrincipal user, ChangeSetFilter filter);
+        PolicyWriteResult<List<ChangeSetSummaryDto>> ListChangeSets(ClaimsPrincipal user, ChangeSetFilter filter,
+            IChangeSetAccess access = null);
 
-        PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user);
+        PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user,
+            IChangeSetAccess access = null);
 
         Task<PolicyWriteResult<RollbackResultDto>> RollbackAsync(Guid id, ClaimsPrincipal user,
-            bool force = false, bool dryRun = false);
+            bool force = false, bool dryRun = false, IChangeSetAccess access = null);
     }
 
 
@@ -82,14 +97,15 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         // === List / Get ===
 
         public PolicyWriteResult<List<ChangeSetSummaryDto>> ListChangeSets(ClaimsPrincipal user,
-            ChangeSetFilter filter)
+            ChangeSetFilter filter, IChangeSetAccess access = null)
         {
             filter ??= new ChangeSetFilter();
+            access = AccessOf(user, access);
 
             var visible = _journal.GetAll()
-                .Where(set => set.Entries.Any(e => EntryIsVisible(e, user)))
+                .Where(set => set.Entries.Any(e => access.CanRead(e)))
                 .Where(set => Matches(set, filter))
-                .Select(set => RenderSummary(set, user))
+                .Select(set => RenderSummary(set, access))
                 .ToList();
 
             var limit = Math.Clamp(filter.Limit <= 0 ? 50 : filter.Limit, 1, MaxLimit);
@@ -98,27 +114,30 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             return PolicyWriteResult<List<ChangeSetSummaryDto>>.Ok(visible.Skip(offset).Take(limit).ToList());
         }
 
-        public PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user)
+        public PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user,
+            IChangeSetAccess access = null)
         {
+            access = AccessOf(user, access);
             var set = _journal.Get(id);
 
             // Anti-enumeration: an unknown id and an invisible change set
             // answer the same 404.
-            if (set is null || set.Entries.All(e => !EntryIsVisible(e, user)))
+            if (set is null || set.Entries.All(e => !access.CanRead(e)))
                 return PolicyWriteResult<ChangeSetDetailsDto>.Fail(PolicyWriteOutcome.NotFound);
 
-            return PolicyWriteResult<ChangeSetDetailsDto>.Ok(RenderDetails(set, user));
+            return PolicyWriteResult<ChangeSetDetailsDto>.Ok(RenderDetails(set, access));
         }
 
 
         // === Rollback ===
 
         public async Task<PolicyWriteResult<RollbackResultDto>> RollbackAsync(Guid id, ClaimsPrincipal user,
-            bool force = false, bool dryRun = false)
+            bool force = false, bool dryRun = false, IChangeSetAccess access = null)
         {
+            access = AccessOf(user, access);
             var set = _journal.Get(id);
 
-            if (set is null || set.Entries.All(e => !EntryIsVisible(e, user)))
+            if (set is null || set.Entries.All(e => !access.CanRead(e)))
                 return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.NotFound);
 
             if (set.Status == ChangeSetStatus.RolledBack)
@@ -130,7 +149,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             // Pre-flight: authorization on every pending entry (the same
             // boundaries the original writes passed), then the content
             // comparison against each after-image.
-            var denied = pending.FirstOrDefault(e => !EntryIsWritable(e, user));
+            var denied = pending.FirstOrDefault(e => !access.CanWrite(e));
 
             if (denied is not null)
                 return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Forbidden,
@@ -531,16 +550,35 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Visibility and authorization ===
 
-        // A change set is VISIBLE when any of its entries touches an entity
-        // the caller can see (#1570 story 13) — viewers get read-only sight.
-        private bool EntryIsVisible(ChangeSetEntry entry, ClaimsPrincipal user) =>
-            _authorization.AuthorizeRead(user, EntryResource(entry)) == ApiTokenAuthorization.Allowed;
+        // The default access: the token evaluator over the caller's
+        // HsmApiToken principal. The web UI overrides with its cookie-`User`
+        // implementation — the evaluator resolves token principals only.
+        private IChangeSetAccess AccessOf(ClaimsPrincipal user, IChangeSetAccess access) =>
+            access ?? new TokenAccess(_authorization, user);
 
-        // The rollback pre-flight demands WRITE on every pending entry — the
-        // same boundary the original write passed (story 12: another
-        // principal's change set is rollbackable with write access).
-        private bool EntryIsWritable(ChangeSetEntry entry, ClaimsPrincipal user) =>
-            _authorization.AuthorizeWrite(user, EntryResource(entry)) == ApiTokenAuthorization.Allowed;
+        private sealed class TokenAccess : IChangeSetAccess
+        {
+            private readonly IApiTokenAuthorizationService _authorization;
+            private readonly ClaimsPrincipal _user;
+
+            public TokenAccess(IApiTokenAuthorizationService authorization, ClaimsPrincipal user)
+            {
+                _authorization = authorization;
+                _user = user;
+            }
+
+            // A change set is VISIBLE when any of its entries touches an
+            // entity the caller can see (#1570 story 13) — viewers get
+            // read-only sight.
+            public bool CanRead(ChangeSetEntry entry) =>
+                _authorization.AuthorizeRead(_user, EntryResource(entry)) == ApiTokenAuthorization.Allowed;
+
+            // The rollback pre-flight demands WRITE on every pending entry —
+            // the same boundary the original write passed (story 12: another
+            // principal's change set is rollbackable with write access).
+            public bool CanWrite(ChangeSetEntry entry) =>
+                _authorization.AuthorizeWrite(_user, EntryResource(entry)) == ApiTokenAuthorization.Allowed;
+        }
 
         private static ApiTokenResource EntryResource(ChangeSetEntry entry) =>
             entry.Kind switch
@@ -567,7 +605,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             (filter.EntityId is not { } entity ||
              set.Entries.Any(e => e.EntityId == entity || (e.Fanout ?? []).Any(f => f.NodeId == entity)));
 
-        private ChangeSetSummaryDto RenderSummary(ChangeSetModel set, ClaimsPrincipal user) =>
+        private ChangeSetSummaryDto RenderSummary(ChangeSetModel set, IChangeSetAccess access) =>
             new()
             {
                 Id = set.Id.ToString(),
@@ -577,15 +615,15 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 Status = StatusOf(set.Status),
                 EntryCount = set.Entries.Count,
                 RestoredEntryCount = set.Entries.Count(e => e.RestoredBy is not null),
-                Entities = set.Entries.Where(e => EntryIsVisible(e, user)).Select(e => e.Path).ToList(),
+                Entities = set.Entries.Where(e => access.CanRead(e)).Select(e => e.Path).ToList(),
             };
 
-        private ChangeSetDetailsDto RenderDetails(ChangeSetModel set, ClaimsPrincipal user) =>
+        private ChangeSetDetailsDto RenderDetails(ChangeSetModel set, IChangeSetAccess access) =>
             new()
             {
-                Summary = RenderSummary(set, user),
+                Summary = RenderSummary(set, access),
                 Entries = set.Entries
-                    .Where(e => EntryIsVisible(e, user))
+                    .Where(e => access.CanRead(e))
                     .Select(e => new ChangeSetEntryDto
                     {
                         Sequence = e.Sequence,
@@ -601,7 +639,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                         AfterTemplate = RenderJson(e.AfterTemplate),
                         BeforeSchedule = RenderJson(e.BeforeSchedule),
                         AfterSchedule = RenderJson(e.AfterSchedule),
-                        Fanout = (e.Fanout ?? []).Where(i => EntryIsVisible(e, user)).Select(i => new NodeImageDto
+                        Fanout = (e.Fanout ?? []).Where(i => access.CanRead(e)).Select(i => new NodeImageDto
                         {
                             NodeKind = i.NodeKind.ToString(),
                             Id = i.NodeId.ToString(),
