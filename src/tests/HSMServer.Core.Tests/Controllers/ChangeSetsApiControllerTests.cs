@@ -41,7 +41,7 @@ namespace HSMServer.Core.Tests.Controllers
                 new() { Id = Guid.NewGuid().ToString(), Author = "alice", Status = "applied" },
             };
 
-            _service.Setup(s => s.ListChangeSets(It.IsAny<ClaimsPrincipal>(), It.IsAny<ChangeSetFilter>()))
+            _service.Setup(s => s.ListChangeSets(It.IsAny<ClaimsPrincipal>(), It.IsAny<ChangeSetFilter>(), null))
                 .Returns(PolicyWriteResult<List<ChangeSetSummaryDto>>.Ok(summaries));
 
             var result = CreateController().ListChangeSets(author: "alice");
@@ -50,13 +50,13 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Same(summaries, ok.Value);
 
             _service.Verify(s => s.ListChangeSets(It.IsAny<ClaimsPrincipal>(),
-                It.Is<ChangeSetFilter>(f => f.Author == "alice" && f.Limit == 50)), Times.Once);
+                It.Is<ChangeSetFilter>(f => f.Author == "alice" && f.Limit == 50), null), Times.Once);
         }
 
         [Fact]
         public void GetChangeSet_NotFound_RendersTheUniform404()
         {
-            _service.Setup(s => s.GetChangeSet(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>()))
+            _service.Setup(s => s.GetChangeSet(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), null))
                 .Returns(PolicyWriteResult<ChangeSetDetailsDto>.Fail(PolicyWriteOutcome.NotFound));
 
             var (body, status) = BodyAndStatus(CreateController().GetChangeSet(Guid.NewGuid()));
@@ -71,7 +71,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var rollbackChangeSetId = Guid.NewGuid();
 
-            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), true, false))
+            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), true, false, null))
                 .ReturnsAsync(PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
                 {
                     ChangeSetId = Guid.NewGuid().ToString(),
@@ -90,7 +90,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Rollback_DryRun_DoesNotEchoTheHeader()
         {
-            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, true))
+            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, true, null))
                 .ReturnsAsync(PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
                 {
                     ChangeSetId = Guid.NewGuid().ToString(),
@@ -106,7 +106,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void Rollback_Conflict_RendersTheUniform409()
         {
-            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, false))
+            _service.Setup(s => s.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, false, null))
                 .ReturnsAsync(PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
                     message: "entities changed",
                     details: new Dictionary<string, string> { ["ProductA/cpu"] = "policy added" }));

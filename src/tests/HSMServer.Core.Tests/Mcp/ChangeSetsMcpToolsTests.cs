@@ -37,7 +37,7 @@ namespace HSMServer.Core.Tests.Mcp
                 .Select(i => new ChangeSetSummaryDto { Id = Guid.NewGuid().ToString(), Author = "alice" })
                 .ToList();
 
-            _engine.Setup(e => e.ListChangeSets(It.IsAny<ClaimsPrincipal>(), It.IsAny<ChangeSetFilter>()))
+            _engine.Setup(e => e.ListChangeSets(It.IsAny<ClaimsPrincipal>(), It.IsAny<ChangeSetFilter>(), null))
                 .Returns(PolicyWriteResult<List<ChangeSetSummaryDto>>.Ok(summaries));
 
             var result = await CreateTools().ListChangeSetsAsync(author: "alice", limit: 2, offset: 1);
@@ -48,7 +48,7 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal(1, result.Offset);
 
             _engine.Verify(e => e.ListChangeSets(It.IsAny<ClaimsPrincipal>(),
-                It.Is<ChangeSetFilter>(f => f.Author == "alice")), Times.Once);
+                It.Is<ChangeSetFilter>(f => f.Author == "alice"), null), Times.Once);
         }
 
         [Fact]
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Tests.Mcp
                 Entries = [],
             };
 
-            _engine.Setup(e => e.GetChangeSet(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>()))
+            _engine.Setup(e => e.GetChangeSet(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), null))
                 .Returns(PolicyWriteResult<ChangeSetDetailsDto>.Ok(details));
 
             var result = await CreateTools().GetChangeSetAsync(Guid.Parse(details.Summary.Id));
@@ -73,7 +73,7 @@ namespace HSMServer.Core.Tests.Mcp
         {
             var rollback = new RollbackResultDto { ChangeSetId = Guid.NewGuid().ToString(), Status = "completed" };
 
-            _engine.Setup(e => e.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), true, false))
+            _engine.Setup(e => e.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), true, false, null))
                 .ReturnsAsync(PolicyWriteResult<RollbackResultDto>.Ok(rollback));
 
             var result = await CreateTools().RollbackChangeSetAsync(Guid.Parse(rollback.ChangeSetId), force: true);
@@ -84,7 +84,7 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public async Task RollbackChangeSet_NotFound_RendersTheUniformToolError()
         {
-            _engine.Setup(e => e.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, false))
+            _engine.Setup(e => e.RollbackAsync(It.IsAny<Guid>(), It.IsAny<ClaimsPrincipal>(), false, false, null))
                 .ReturnsAsync(PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.NotFound));
 
             var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
