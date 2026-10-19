@@ -140,6 +140,13 @@ namespace HSMServer.ServiceExtensions
             // the recorder, the policy write gates) is singleton.
             services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService, HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
 
+            // The sensor-mute write engine (#1569): mute/unmute rendered
+            // through the core's own UpdateMutedSensorStateAsync entry (the
+            // web modal's path). Scoped like the schedule/template write
+            // engines: stateless over singletons — a single-field update with
+            // no read-merge-write window needs no per-node gate.
+            services.AddScoped<SensorMuteAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its SitePort/bearer guards live with the

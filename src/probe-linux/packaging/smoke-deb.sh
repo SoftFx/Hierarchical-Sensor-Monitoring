@@ -89,9 +89,9 @@ grep -q "not enabled" "$HELPER/off.log" || fail "the helper did not say it has n
 printf '{ "topDiskIo": { "enabled": true, "periodMs": 60000 } }\n' >"$HELPER/on.json"
 hsm-linux-probe-io --config "$HELPER/on.json" --output "$HELPER/snapshot" --once 2>"$HELPER/on.log" ||
     fail "the helper failed: $(cat "$HELPER/on.log")"
-head -1 "$HELPER/snapshot" | grep -qE '^hsm-linux-probe-io 1 seq=1 mono_ns=[0-9]+ wall_ms=[0-9]+ kind=(regular|final)$' ||
+head -1 "$HELPER/snapshot" | grep -qE '^hsm-linux-probe-io 2 seq=1 mono_ns=[0-9]+ wall_ms=[0-9]+ kind=(regular|final)$' ||
     fail "unexpected snapshot header: $(head -1 "$HELPER/snapshot")"
-grep -qE '^1 [0-9]+ 0 0 [01] [0-9]+ [0-9]+ ' "$HELPER/snapshot" ||
+grep -qE '^1 [0-9]+ 0 0 [01] [0-9]+ [0-9]+ ([0-9]+|-) ([0-9]+|-) [0-9]+ ' "$HELPER/snapshot" ||
     fail "the snapshot has no readable line for pid 1: $(head -3 "$HELPER/snapshot")"
 [[ ! -e "$HELPER/snapshot.tmp" ]] || fail "the helper left its temp file"
 

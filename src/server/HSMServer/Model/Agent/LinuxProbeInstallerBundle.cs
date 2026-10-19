@@ -504,7 +504,8 @@ namespace HSMServer.Model.Agent
         /// <c>CAP_DAC_READ_SEARCH</c> and <c>CAP_SYS_PTRACE</c>, which would let their holder read the whole
         /// host filesystem through <c>/proc/&lt;pid&gt;/root</c>; so the probe holds neither and the package
         /// ships a separate root helper, <see cref="TopDiskIoUnit"/> (disabled), that reads only
-        /// <c>/proc/&lt;pid&gt;/{stat,io}</c> and writes one snapshot the probe reads. <b>When the config
+        /// <c>/proc/&lt;pid&gt;/{stat,io}</c>, each thread's <c>task/&lt;tid&gt;/io</c> and, for a 15-byte name, the
+        /// <c>exe</c> link (#1572, #1573), and writes one snapshot the probe reads. <b>When the config
         /// installed on the host enables the top-level <c>topDiskIo</c> block</b>
         /// (<see cref="TopDiskIoEnabledPattern"/>) the step enables and (re)starts the helper, so it picks up
         /// the config; otherwise it stops and disables it (one neutral line, only when it was enabled or

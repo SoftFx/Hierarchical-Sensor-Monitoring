@@ -43,6 +43,7 @@ namespace HSMServer.Mcp
                 .WithTools<ChatsMcpTools>()
                 .WithTools<FoldersMcpTools>()
                 .WithTools<PoliciesMcpTools>()
+                .WithTools<SensorMuteMcpTools>()
                 .Services;
         }
     }
