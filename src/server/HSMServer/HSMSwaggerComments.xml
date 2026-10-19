@@ -1282,20 +1282,20 @@
             controller and the MCP write tools render the same decision.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Create a schedule. The server generates the id (a client cannot
             choose one — the provider's Save is an upsert by id); the response
             echoes the stored schedule.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Update a schedule (upsert semantics at a known id); the response
             echoes the stored schedule.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Delete a schedule. Detaches the id from every referencing policy
             FIRST; on an incomplete detach the schedule survives and the answer
@@ -1431,36 +1431,36 @@
             the same failures as tool error text.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Create one data policy on the sensor; the id is server-generated and
             every other policy of the sensor rides through untouched.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Replace the full content of one data policy (the route id wins; a
             template-owned policy accepts only the disable toggle — anything else
             answers 409).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Remove one data policy; every other policy of the sensor rides through untouched.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateSensorTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Create one TTL policy on the sensor. The interval is explicit —
             <c>interval</c> or <c>inherit</c>, never a null: the server owns the
             reset-to-parent translation.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateSensorTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Replace one TTL policy of the sensor; the interval/inherit switch is part of the content.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteSensorTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Remove one TTL policy; every other TTL policy of the sensor rides through untouched.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             A product holds no data policies of its own (per-node alert creation
             was removed in #1142) — the product surface reads the subtree aggregate
@@ -1468,22 +1468,22 @@
             expressible here and always answers 422 pointing at the sensor endpoint.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.PolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Replace one data policy found anywhere in the product's subtree; the
             write is applied atomically on the OWNING sensor's full list.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Remove one data policy found anywhere in the product's subtree, through the owning sensor's full list.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.CreateProductTtlPolicyAsync(System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Create one TTL policy on the product itself.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.UpdateProductTtlPolicyAsync(System.Guid,System.Guid,HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService.DeleteProductTtlPolicyAsync(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Alerts.PolicyDto">
@@ -1719,7 +1719,7 @@
             the REST controller and the MCP write tools render the same decision.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Create a template. A client-sent id is ignored (the server generates
             one — the cache Add is an upsert by id, so honoring a client-chosen
@@ -1728,14 +1728,14 @@
             normalized ids, chat display names.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
             Update a template (upsert semantics). Moving it to another folder
             requires the owner's write access on BOTH folders; the result
             echoes the STORED template.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>Delete a template and strip its per-sensor policies.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
@@ -2019,6 +2019,61 @@
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
             <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder">
+            <summary>
+            The single hook helper every journaled administration service uses
+            (#1570): resolves the effective change-set id of a write (client id or
+            a fresh one for an ungrouped write), snapshots policy lists as entity
+            images, and appends entries to the undo journal — swallowing journal
+            failures AFTER LOUD LOGGING so a write that already applied is never
+            reported failed over a lost undo point (ADR-0010 trade-off).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.ResolveChangeSetId(HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+            <summary>
+            The change-set id a write journals under: the client-supplied id
+            when grouping, a fresh id when the write stands alone. Also used as
+            the dry-run echo id.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions">
+            <summary>
+            Per-request write options of the journaled management-API surface
+            (#1570): the client-supplied change-set grouping id and the dry-run
+            flag. Transport-agnostic — REST carries them as headers, MCP tools as
+            optional arguments, and both transports pass this record down to the
+            administration services.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto">
+            <summary>
+            The affected-entities report of a dry-run write (#1570): validation
+            ran, nothing was applied. For a template write the report names every
+            sensor the fan-out would touch (apply or prune); for policy and
+            schedule writes it names the resolved target nodes.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.ChangeSetId">
+            <summary>The change-set id the write would be journaled under.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Kind">
+            <summary>camelCase entry kind, e.g. "sensorDataPolicies", "alertTemplate".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Operation">
+            <summary>camelCase operation: "create", "update" or "delete".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Path">
+            <summary>Display path of the primary entity at preview time.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.PreviewAffectedEntityDto.Change">
+            <summary>What the write would do there, e.g. "apply", "prune", "replace".</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ChangeSets.WritePreviews">
+            <summary>
+            Shared dry-run preview builder of the journaled write surface: one
+            shape for policy, template and schedule writes across REST and MCP.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
             <summary>

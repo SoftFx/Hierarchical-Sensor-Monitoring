@@ -12,6 +12,10 @@ namespace HSMServer.Core.DataLayer
     {
         IDashboardCollection Dashboards { get; }
 
+        // The undo journal of change sets (#1570). Write failures propagate
+        // (unlike the dashboard collection) — see ChangeSetCollection.
+        IChangeSetCollection ChangeSets { get; }
+
         ISnapshotDatabase Snapshots { get; }
 
         public bool IsCompactRunning { get; }

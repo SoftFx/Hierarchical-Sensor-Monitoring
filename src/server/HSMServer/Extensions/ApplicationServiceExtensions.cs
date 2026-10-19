@@ -62,6 +62,14 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                     .AddSingleton<IJournalService, JournalService>();
 
+            // The undo journal of change sets (#1570): durable LevelDB table
+            // behind every REST/MCP configuration write, powering rollback.
+            // Singleton like the cache and the presentation Journal it
+            // mirrors; the recorder is the stateless hook helper the
+            // administration services share.
+            services.AddSingleton<HSMServer.Core.ChangeSets.IChangeSetJournal, HSMServer.Core.ChangeSets.ChangeSetJournal>()
+                    .AddSingleton<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>();
+
             services.AddAsyncStorage<IUserManager, UserManager>()
                     .AddAsyncStorage<IFolderManager, FolderManager>()
                     .AddAsyncStorage<IChatsManager, ChatsManager>()

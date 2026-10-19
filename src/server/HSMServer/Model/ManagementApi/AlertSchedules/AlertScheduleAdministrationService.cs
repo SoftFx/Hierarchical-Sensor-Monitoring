@@ -5,10 +5,15 @@ using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.ChangeSets;
+using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using ScheduleModel = HSMServer.Core.Model.Policies.AlertSchedule;
 
 namespace HSMServer.Model.ManagementApi.AlertSchedules
@@ -55,6 +60,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
         private readonly AlertReadService _reader;
+        private readonly ChangeSetRecorder _changeSets;
+        private readonly IUserManager _users;
 
         // Stateless YAML machinery (the web controller holds one the same way);
         // not DI-registered anywhere today.
@@ -71,12 +78,15 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         private static readonly object NameUniquenessGate = new();
 
         public AlertScheduleAdministrationService(IAlertScheduleProvider schedules, ITreeValuesCache cache,
-            IApiTokenAuthorizationService authorization, AlertReadService reader)
+            IApiTokenAuthorizationService authorization, AlertReadService reader, ChangeSetRecorder changeSets,
+            IUserManager users)
         {
             _schedules = schedules;
             _cache = cache;
             _authorization = authorization;
             _reader = reader;
+            _changeSets = changeSets;
+            _users = users;
         }
 
 
@@ -86,16 +96,16 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// echoes the stored schedule.
         /// </summary>
         public Task<PolicyWriteResult<AlertScheduleDto>> CreateScheduleAsync(ClaimsPrincipal user,
-            AlertScheduleUpsertDto dto) =>
-            Task.FromResult(Write(user, id: null, dto));
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null) =>
+            Task.FromResult(Write(user, id: null, dto, write));
 
         /// <summary>
         /// Update a schedule (upsert semantics at a known id); the response
         /// echoes the stored schedule.
         /// </summary>
         public Task<PolicyWriteResult<AlertScheduleDto>> UpdateScheduleAsync(Guid id, ClaimsPrincipal user,
-            AlertScheduleUpsertDto dto) =>
-            Task.FromResult(Write(user, id, dto));
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null) =>
+            Task.FromResult(Write(user, id, dto, write));
 
         /// <summary>
         /// Delete a schedule. Detaches the id from every referencing policy
@@ -111,13 +121,30 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // shared gate inside the core cache update paths. See
         // management-api/feature.md.
         public async Task<PolicyWriteResult> DeleteScheduleAsync(Guid id, ClaimsPrincipal user,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, ChangeSetWriteOptions write = null)
         {
             if (AuthorizeGlobalWrite(user) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
-            if (_schedules.GetSchedule(id) is null)
+            if (_schedules.GetSchedule(id) is not { } schedule)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+            // #1570 dry-run: report the nodes the detach would touch (sensors
+            // and products referencing the schedule) plus the schedule row
+            // itself; nothing is detached or deleted.
+            if (write is { DryRun: true })
+                return PolicyWriteResult.OkPreview(SchedulePreview(write, id, schedule.Name));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+
+            // #1570 before-images of the detach fan-out: every sensor whose
+            // policies reference the schedule, every product with a TTL
+            // reference, and every template row carrying the reference.
+            var (sensors, products) = ScheduleReferencingNodes(id);
+            var templates = ScheduleReferencingTemplates(id);
+            var beforeSensorImages = CaptureSensorImages(sensors);
+            var beforeProductTtls = products.ToDictionary(p => p.Id, ChangeSetRecorder.SnapshotProductTtlPolicies);
+            var beforeTemplateEntities = templates.Select(t => t.ToEntity()).ToList();
 
             // Deliberately tied to the cancellation token like the web Remove:
             // an aborted request stops the DISPATCH of further detach work;
@@ -145,12 +172,31 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 _schedules.DeleteSchedule(id);
             }
 
-            return PolicyWriteResult.Ok();
+            _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+            {
+                Kind = ChangeSetEntryKind.AlertSchedule,
+                Operation = ChangeSetOperation.Delete,
+                EntityId = id,
+                ParentId = null,
+                Path = schedule.Name,
+                BeforeSchedule = schedule.ToEntity(),
+                AfterSchedule = null,
+                Fanout =
+                [
+                    .. sensors.Select(s => SensorImage(s, beforeSensorImages[s.Id],
+                        ChangeSetRecorder.SnapshotDataPolicies(s), ChangeSetRecorder.SnapshotSensorTtlPolicies(s))),
+                    .. products.Select(p => ProductImage(p, beforeProductTtls[p.Id])),
+                ],
+                BeforeTemplates = beforeTemplateEntities,
+                AfterTemplates = templates.Select(t => t.ToEntity()).ToList(),
+            });
+
+            return PolicyWriteResult.Ok(changeSetId);
         }
 
 
         private PolicyWriteResult<AlertScheduleDto> Write(ClaimsPrincipal user, Guid? id,
-            AlertScheduleUpsertDto dto)
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null)
         {
             if (AuthorizeGlobalWrite(user) is { } denied)
                 return PolicyWriteResult<AlertScheduleDto>.Fail(denied.Outcome, message: denied.Message);
@@ -169,6 +215,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                     new Dictionary<string, string[]> { ["schedule"] = ["The schedule body is required."] });
 
             ScheduleModel schedule;
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
 
             lock (NameUniquenessGate)
             {
@@ -178,19 +225,42 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // resurrect the deleted schedule. With the check and the save
                 // under the same gate DeleteScheduleAsync takes around its
                 // final remove, one of the two loses cleanly instead.
-                if (id is not null && _schedules.GetSchedule(id.Value) is null)
+                var before = id is null ? null : _schedules.GetSchedule(id.Value);
+
+                if (id is not null && before is null)
                     return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.NotFound);
 
                 if (!TryBuildValidatedSchedule(dto, id, out schedule, out var errors))
                     return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
+                // #1570 dry-run: the body is valid; report the row the write
+                // would create/replace, apply nothing.
+                if (write is { DryRun: true })
+                    return PolicyWriteResult<AlertScheduleDto>.OkPreview(WritePreviews.Create(write,
+                        WritePreviews.CamelOf(ChangeSetEntryKind.AlertSchedule),
+                        WritePreviews.CamelOf(id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update),
+                        schedule.Id, schedule.Name,
+                        [new PreviewAffectedEntityDto { Id = schedule.Id.ToString(), Path = schedule.Name, Change = "save" }]));
+
                 // The provider's Save is an idempotent upsert (cache + LevelDB row).
                 _schedules.SaveSchedule(schedule);
+
+                _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+                {
+                    Kind = ChangeSetEntryKind.AlertSchedule,
+                    Operation = id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update,
+                    EntityId = schedule.Id,
+                    ParentId = null,
+                    Path = schedule.Name,
+                    BeforeSchedule = before?.ToEntity(),
+                    AfterSchedule = schedule.ToEntity(),
+                });
             }
 
             // Echo the STORED schedule through the read mapping — sensor
             // references filtered to the owner's sight, exactly as GET does.
-            return PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
+            return PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user))
+                .WithChangeSet(changeSetId);
         }
 
 
@@ -271,6 +341,117 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                     Message = PolicyWriteResult.WriteDeniedMessage,
                 },
                 _ => new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound },
+            };
+
+
+        // === Undo-journal hooks (#1570) ===
+
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
+        {
+            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
+
+            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
+
+            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+        }
+
+        private WritePreviewDto SchedulePreview(ChangeSetWriteOptions write, Guid scheduleId, string name)
+        {
+            var (sensors, products) = ScheduleReferencingNodes(scheduleId);
+            var templates = ScheduleReferencingTemplates(scheduleId);
+
+            var affected = sensors.Select(s => new PreviewAffectedEntityDto
+                {
+                    Id = s.Id.ToString(),
+                    Path = s.FullPath,
+                    Change = "detach schedule reference",
+                })
+                .Concat(products.Select(p => new PreviewAffectedEntityDto
+                {
+                    Id = p.Id.ToString(),
+                    Path = p.FullPath,
+                    Change = "detach schedule reference",
+                }))
+                .Concat(templates.Select(t => new PreviewAffectedEntityDto
+                {
+                    Id = t.Id.ToString(),
+                    Path = t.Name,
+                    Change = "detach schedule reference",
+                }))
+                .ToList();
+
+            affected.Add(new PreviewAffectedEntityDto
+            {
+                Id = scheduleId.ToString(),
+                Path = name,
+                Change = "delete schedule",
+            });
+
+            return WritePreviews.Create(write, WritePreviews.CamelOf(ChangeSetEntryKind.AlertSchedule),
+                WritePreviews.CamelOf(ChangeSetOperation.Delete), scheduleId, name, affected);
+        }
+
+        // The nodes the schedule-delete detach walks: sensors whose policies
+        // reference the schedule (the cache's own lookup) and products with a
+        // TTL reference (nested products included — the detach's product arm
+        // enumerates them all).
+        private (List<BaseSensorModel> Sensors, List<ProductModel> Products) ScheduleReferencingNodes(Guid scheduleId)
+        {
+            var sensors = _cache.GetSensorsByAlertSchedule(scheduleId) ?? [];
+            var products = new List<ProductModel>();
+
+            foreach (var root in _cache.GetProducts() ?? [])
+                foreach (var product in EnumerateTree(root))
+                    if (product.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId))
+                        products.Add(product);
+
+            return (sensors, products);
+        }
+
+        private static IEnumerable<ProductModel> EnumerateTree(ProductModel product)
+        {
+            yield return product;
+
+            foreach (var child in product.SubProducts.Values)
+                foreach (var nested in EnumerateTree(child))
+                    yield return nested;
+        }
+
+        private List<AlertTemplateModel> ScheduleReferencingTemplates(Guid scheduleId) =>
+            (_cache.GetAlertTemplateModels() ?? [])
+                .Where(t => (t.Policies ?? []).Any(p => p.ScheduleId == scheduleId) ||
+                            (t.TtlEntries ?? []).Any(e => e.Policy?.ScheduleId == scheduleId))
+                .ToList();
+
+        private static Dictionary<Guid, (List<PolicyEntity> Data, List<PolicyEntity> Ttl)> CaptureSensorImages(
+            IEnumerable<BaseSensorModel> sensors) =>
+            sensors.ToDictionary(s => s.Id,
+                s => (ChangeSetRecorder.SnapshotDataPolicies(s), ChangeSetRecorder.SnapshotSensorTtlPolicies(s)));
+
+        private static NodePolicyImage SensorImage(BaseSensorModel sensor,
+            (List<PolicyEntity> Data, List<PolicyEntity> Ttl) before,
+            List<PolicyEntity> afterData, List<PolicyEntity> afterTtl) =>
+            new()
+            {
+                NodeKind = ChangeSetNodeKind.Sensor,
+                NodeId = sensor.Id,
+                RootProductId = ChangeSetRecorder.RootProductIdOf(sensor),
+                Path = sensor.FullPath,
+                BeforePolicies = before.Data,
+                AfterPolicies = afterData,
+                BeforeTtlPolicies = before.Ttl,
+                AfterTtlPolicies = afterTtl,
+            };
+
+        private static NodePolicyImage ProductImage(ProductModel product, List<PolicyEntity> beforeTtl) =>
+            new()
+            {
+                NodeKind = ChangeSetNodeKind.Product,
+                NodeId = product.Id,
+                RootProductId = ChangeSetRecorder.RootProductIdOf(product),
+                Path = product.FullPath,
+                BeforeTtlPolicies = beforeTtl,
+                AfterTtlPolicies = ChangeSetRecorder.SnapshotProductTtlPolicies(product),
             };
     }
 }

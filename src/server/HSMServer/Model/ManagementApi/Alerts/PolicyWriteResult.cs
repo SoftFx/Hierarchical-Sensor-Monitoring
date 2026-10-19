@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using HSMServer.Model.ManagementApi.ChangeSets;
+using System;
 
 namespace HSMServer.Model.ManagementApi.Alerts
 {
@@ -62,42 +64,83 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
     // A value-or-failure envelope: Value is set exactly when Failure is null.
     // Delete flows use the non-generic form (no payload on success).
+    //
+    // #1570 additions: ChangeSetId is the change set the write was journaled
+    // under (null only when journaling was impossible or the write never
+    // reached it — a plain Ok() without an id); Preview is set exactly when
+    // the call ran as a dry run (validation passed, nothing applied).
     public sealed class PolicyWriteResult<T>
     {
-        private PolicyWriteResult(T value, PolicyWriteFailure failure)
+        private PolicyWriteResult(T value, PolicyWriteFailure failure, Guid? changeSetId, WritePreviewDto preview)
         {
             Value = value;
             Failure = failure;
+            ChangeSetId = changeSetId;
+            Preview = preview;
         }
 
         public T Value { get; }
 
         public PolicyWriteFailure Failure { get; }
 
+        public Guid? ChangeSetId { get; }
+
+        public WritePreviewDto Preview { get; }
+
         public bool Success => Failure is null;
 
-        public static PolicyWriteResult<T> Ok(T value) => new(value, null);
+        public bool IsDryRun => Preview is not null;
+
+        public static PolicyWriteResult<T> Ok(T value) => new(value, null, null, null);
+
+        public static PolicyWriteResult<T> Ok(T value, Guid changeSetId) => new(value, null, changeSetId, null);
+
+        public static PolicyWriteResult<T> OkPreview(WritePreviewDto preview) => new(default, null, preview.ChangeSetId is { } id ? Guid.Parse(id) : null, preview);
 
         public static PolicyWriteResult<T> Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
             System.Collections.Generic.Dictionary<string, string> details = null) =>
-            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
+            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null, null);
+
+        // Attach the journaled change-set id to an already-built success (the
+        // dispatch helpers return a plain Ok; the hook records the entry only
+        // after the write applied and then stamps the echo).
+        public PolicyWriteResult<T> WithChangeSet(Guid changeSetId) =>
+            Success ? new(Value, null, changeSetId, Preview) : this;
     }
 
     public sealed class PolicyWriteResult
     {
-        private PolicyWriteResult(PolicyWriteFailure failure) => Failure = failure;
+        private PolicyWriteResult(PolicyWriteFailure failure, Guid? changeSetId, WritePreviewDto preview)
+        {
+            Failure = failure;
+            ChangeSetId = changeSetId;
+            Preview = preview;
+        }
 
         public PolicyWriteFailure Failure { get; }
 
+        public Guid? ChangeSetId { get; }
+
+        public WritePreviewDto Preview { get; }
+
         public bool Success => Failure is null;
 
-        public static PolicyWriteResult Ok() => new(null);
+        public bool IsDryRun => Preview is not null;
+
+        public static PolicyWriteResult Ok() => new(null, null, null);
+
+        public static PolicyWriteResult Ok(Guid changeSetId) => new(null, changeSetId, null);
+
+        public static PolicyWriteResult OkPreview(WritePreviewDto preview) => new(null, preview.ChangeSetId is { } id ? Guid.Parse(id) : null, preview);
 
         public static PolicyWriteResult Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
             System.Collections.Generic.Dictionary<string, string> details = null) =>
-            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details });
+            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null, null);
+
+        public PolicyWriteResult WithChangeSet(Guid changeSetId) =>
+            Success ? new(null, changeSetId, Preview) : this;
 
 
         // The single 403 message of every write denial (read-only token or the

@@ -15,6 +15,7 @@ namespace HSMDatabase.Settings
         private const string DefaultSensorValuesDatabaseName = "SensorValuesV2";
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
+        private const string DefaultChangeSetsDatabaseName = "ChangeSets";
 
         private const string DefaultExportFolder = "Export";
 
@@ -37,5 +38,7 @@ namespace HSMDatabase.Settings
         public string JournalValuesDatabaseName { get; init; } = DefaultJournalValuesDatabaseName;
 
         public string ServerLayoutDatabaseName { get; init; } = DefaultServerLayoutDatabaseName;
+
+        public string ChangeSetsDatabaseName { get; init; } = DefaultChangeSetsDatabaseName;
     }
 }

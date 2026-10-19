@@ -73,7 +73,7 @@ namespace HSMServer.Core.Tests.Mcp
 
         private PoliciesMcpTools CreateTools() =>
             new(new PolicyAdministrationService(_cache.Object, _authorization.Object, _users.Object,
-                _chats.Object, _folders.Object, _schedules.Object), AccessorOf());
+                    _chats.Object, _folders.Object, _schedules.Object, ChangeSetTestHelpers.Recorder()), AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>
             new HttpContextAccessor

@@ -84,9 +84,10 @@ namespace HSMServer.Core.Tests.Mcp
             var reader = new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object);
             var templateWriter = new AlertTemplateAdministrationService(_cache.Object, _foldersManager.Object,
                 _chatsManager.Object, _schedules.Object, _authorization.Object,
+                new Mock<IUserManager>().Object, ChangeSetTestHelpers.Recorder(),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<AlertTemplateAdministrationService>.Instance);
             var scheduleWriter = new AlertScheduleAdministrationService(_schedules.Object, _cache.Object,
-                _authorization.Object, reader);
+                _authorization.Object, reader, ChangeSetTestHelpers.Recorder(), new Mock<IUserManager>().Object);
 
             return new AlertsMcpTools(reader, templateWriter, scheduleWriter, AccessorOf());
         }

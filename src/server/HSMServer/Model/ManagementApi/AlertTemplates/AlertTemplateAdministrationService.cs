@@ -4,16 +4,20 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 using HSMServer.Core.Cache;
+using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
 using Microsoft.Extensions.Logging;
 
@@ -60,17 +64,21 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         private readonly IChatsManager _chats;
         private readonly IAlertScheduleProvider _schedules;
         private readonly IApiTokenAuthorizationService _authorization;
+        private readonly IUserManager _users;
+        private readonly ChangeSetRecorder _changeSets;
         private readonly ILogger<AlertTemplateAdministrationService> _logger;
 
         public AlertTemplateAdministrationService(ITreeValuesCache cache, IFolderManager folders,
             IChatsManager chats, IAlertScheduleProvider schedules, IApiTokenAuthorizationService authorization,
-            ILogger<AlertTemplateAdministrationService> logger)
+            IUserManager users, ChangeSetRecorder changeSets, ILogger<AlertTemplateAdministrationService> logger)
         {
             _cache = cache;
             _folders = folders;
             _chats = chats;
             _schedules = schedules;
             _authorization = authorization;
+            _users = users;
+            _changeSets = changeSets;
             _logger = logger;
         }
 
@@ -83,7 +91,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// normalized ids, chat display names.
         /// </summary>
         public async Task<PolicyWriteResult<AlertTemplateDto>> CreateTemplateAsync(ClaimsPrincipal user,
-            AlertTemplateDto dto)
+            AlertTemplateDto dto, ChangeSetWriteOptions write = null)
         {
             // A JSON-null body reaches here only from MCP (REST's
             // [ApiController] binding rejects it with a 400 before the
@@ -106,6 +114,21 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
+
+            // #1570 dry-run: the template body is valid; report the fan-out
+            // target set (matched sensors; a fresh id has no stale holders)
+            // and apply nothing.
+            if (write is { DryRun: true })
+                return TemplatePreview(write, ChangeSetOperation.Create, model, previousFolderId: null);
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+
+            // #1570 before-images: the touched sensor set (matched ∪ stale)
+            // with both policy lists, snapshotted BEFORE the apply. The
+            // rollback restores these exact lists after compensating the
+            // template row itself.
+            var targets = TemplateTargets(model, previousFolderId: null, scanPaths: true);
+            var beforeImages = CaptureBeforeImages(targets);
 
             // Deliberately NOT tied to a cancellation token (see DeleteTemplateAsync
             // for the worst case): the cache persists before reconciling, so a
@@ -130,11 +153,18 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                         details: new Dictionary<string, string> { ["templateId"] = model.Id.ToString() });
             }
 
+            var stored = _cache.GetAlertTemplate(model.Id) ?? model;
+
+            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
+                model.Id, model.FolderId, model.Name, beforeTemplate: null, afterTemplate: stored.ToEntity(),
+                targets, beforeImages);
+
             // #1401: a persisting save with per-policy rejections is a
             // SUCCESS — the warnings name the sensors whose alerts were not
             // created and ride the echoed DTO (rendered by REST and MCP with
             // the same strings).
-            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(model, warnings));
+            return PolicyWriteResult<AlertTemplateDto>.Ok(
+                AlertTemplateDtoMapper.ToDto(stored, warnings), changeSetId);
         }
 
 
@@ -144,7 +174,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// echoes the STORED template.
         /// </summary>
         public async Task<PolicyWriteResult<AlertTemplateDto>> UpdateTemplateAsync(Guid id, ClaimsPrincipal user,
-            AlertTemplateDto dto)
+            AlertTemplateDto dto, ChangeSetWriteOptions write = null)
         {
             var existing = _cache.GetAlertTemplate(id);
 
@@ -178,6 +208,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
+            // #1570 dry-run: report the fan-out target set of the NEW body —
+            // matched sensors plus stale holders of the id (sensors the edit
+            // would prune, including the old folder's on a move).
+            if (write is { DryRun: true })
+                return TemplatePreview(write, ChangeSetOperation.Update, model, existing.FolderId);
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var targets = TemplateTargets(model, existing.FolderId, scanPaths: true);
+            var beforeImages = CaptureBeforeImages(targets);
+            var beforeTemplate = existing.ToEntity();
+
             var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
@@ -188,12 +229,16 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // result. The #1401 warnings ride the echo (see CreateTemplateAsync).
             var stored = _cache.GetAlertTemplate(id) ?? model;
 
-            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings));
+            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
+                id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages);
+
+            return PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings), changeSetId);
         }
 
 
         /// <summary>Delete a template and strip its per-sensor policies.</summary>
-        public async Task<PolicyWriteResult> DeleteTemplateAsync(Guid id, ClaimsPrincipal user)
+        public async Task<PolicyWriteResult> DeleteTemplateAsync(Guid id, ClaimsPrincipal user,
+            ChangeSetWriteOptions write = null)
         {
             var template = _cache.GetAlertTemplate(id);
 
@@ -202,6 +247,20 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             if (AuthorizeFolder(template.FolderId, user) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
+
+            // #1570 dry-run: report the sensors the strip would touch (the
+            // holders of this template's policies).
+            if (write is { DryRun: true })
+                return PolicyWriteResult.OkPreview(TemplatePreview(write, ChangeSetOperation.Delete,
+                    template, template.FolderId).Preview);
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+
+            // The touched set of a delete: sensors holding this template's
+            // policies (no matched set — the body is going away).
+            var targets = TemplateTargets(template, template.FolderId, scanPaths: false);
+            var beforeImages = CaptureBeforeImages(targets);
+            var beforeTemplate = template.ToEntity();
 
             // Deliberately NOT tied to a cancellation token:
             // RemoveAlertTemplateAsync strips the template-derived policies
@@ -213,9 +272,13 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // once accepted.
             var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
 
-            return success
-                ? PolicyWriteResult.Ok()
-                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: error);
+            if (!success)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: error);
+
+            RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
+                id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages);
+
+            return PolicyWriteResult.Ok(changeSetId);
         }
 
 
@@ -244,6 +307,108 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);
+
+
+        // === Undo-journal hooks (#1570) ===
+
+        // The write initiator mirrors PolicyAdministrationService: the token's
+        // OWNER as a user (the token acts as its owner, #1384).
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
+        {
+            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
+
+            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
+
+            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+        }
+
+        // Dry-run preview of a template write: the fan-out target set (matched
+        // by the new paths, plus stale holders the edit would prune — the old
+        // folder's holders included on a move), nothing applied.
+        private PolicyWriteResult<AlertTemplateDto> TemplatePreview(ChangeSetWriteOptions write,
+            ChangeSetOperation operation, AlertTemplateModel template, Guid? previousFolderId)
+        {
+            var targets = TemplateTargets(template, previousFolderId, scanPaths: operation != ChangeSetOperation.Delete);
+
+            return PolicyWriteResult<AlertTemplateDto>.OkPreview(WritePreviews.Create(write,
+                WritePreviews.CamelOf(ChangeSetEntryKind.AlertTemplate), WritePreviews.CamelOf(operation),
+                template.Id, template.Name,
+                targets.Select(sensor => new PreviewAffectedEntityDto
+                {
+                    Id = sensor.Id.ToString(),
+                    Path = sensor.FullPath,
+                    Change = "fan-out",
+                })));
+        }
+
+        // The sensors a template write touches, mirroring the cache's own
+        // enumeration in AddAlertTemplateAsync (matched by wildcard over the
+        // folder's products, plus stale holders of the template id — sensors
+        // of the old folder included when the template moves). Deleting scans
+        // holders only: the body is going away, so path matching adds nothing
+        // the strip would touch.
+        private List<BaseSensorModel> TemplateTargets(AlertTemplateModel template, Guid? previousFolderId,
+            bool scanPaths)
+        {
+            var targets = new HashSet<BaseSensorModel>();
+
+            if (scanPaths)
+                foreach (var path in template.Paths.Where(p => !string.IsNullOrEmpty(p)))
+                    foreach (var sensor in _cache.GetSensors(path, template.GetSensorType(), template.FolderId) ?? [])
+                        targets.Add(sensor);
+
+            foreach (var product in (_cache.GetProducts() ?? []).Where(p =>
+                         p.FolderId == template.FolderId ||
+                         (previousFolderId is { } previous && p.FolderId == previous)))
+                foreach (var sensor in product.GetAllSensors())
+                {
+                    if (targets.Contains(sensor))
+                        continue;
+
+                    if (sensor.Policies.TTLPolicies.Any(t => t.TemplateId == template.Id) ||
+                        sensor.Policies.Any(p => p.TemplateId == template.Id))
+                        targets.Add(sensor);
+                }
+
+            return [.. targets];
+        }
+
+        private static Dictionary<Guid, (List<PolicyEntity> Data, List<PolicyEntity> Ttl)> CaptureBeforeImages(
+            IEnumerable<BaseSensorModel> sensors) =>
+            sensors.ToDictionary(s => s.Id,
+                s => (ChangeSetRecorder.SnapshotDataPolicies(s), ChangeSetRecorder.SnapshotSensorTtlPolicies(s)));
+
+        // One journal entry per template write: the template row's
+        // before/after image plus a per-sensor full-list image of the fan-out
+        // (#1570 story 19 — rollback restores both the template and every
+        // affected sensor's policy list).
+        private void RecordTemplateEntry(Guid changeSetId, InitiatorInfo initiator, ChangeSetOperation operation,
+            Guid templateId, Guid folderId, string templateName, AlertTemplateEntity beforeTemplate,
+            AlertTemplateEntity afterTemplate, List<BaseSensorModel> targets,
+            Dictionary<Guid, (List<PolicyEntity> Data, List<PolicyEntity> Ttl)> beforeImages)
+        {
+            _changeSets.Record(changeSetId, initiator, new ChangeSetEntry
+            {
+                Kind = ChangeSetEntryKind.AlertTemplate,
+                Operation = operation,
+                EntityId = templateId,
+                ParentId = folderId,
+                Path = templateName,
+                BeforeTemplate = beforeTemplate,
+                AfterTemplate = afterTemplate,
+                Fanout = targets.Select(sensor => new NodePolicyImage
+                {
+                    NodeKind = ChangeSetNodeKind.Sensor,
+                    NodeId = sensor.Id,
+                    RootProductId = ChangeSetRecorder.RootProductIdOf(sensor),
+                    Path = sensor.FullPath,
+                    BeforePolicies = beforeImages[sensor.Id].Data,
+                    AfterPolicies = ChangeSetRecorder.SnapshotDataPolicies(sensor),
+                    BeforeTtlPolicies = beforeImages[sensor.Id].Ttl,
+                    AfterTtlPolicies = ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor),
+                }).ToList(),
+            });
+        }
 
 
         // Structural validation, then entity reconstruction (inside a try — the
