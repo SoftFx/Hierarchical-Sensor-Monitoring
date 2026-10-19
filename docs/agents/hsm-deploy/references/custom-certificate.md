@@ -42,30 +42,44 @@ fixes.
 
 ## Steps (on the target machine)
 
+Run steps 1–3 in **one shell session** — one `ssh` heredoc when driving the
+machine remotely. Steps 2–3 reuse both `$TMP` and the working directory step 1
+ends in; the deploy skills' one-command-per-`ssh` pattern loses that state. If a
+session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
+
 1. Convert PFX → PEM in a private temp dir. `cert.pem` is the leaf plus the
    intermediate; the self-signed root is excluded — clients must have it in their
    own trust stores. The key is written unencrypted, so keep the temp dir at 700
    and remove it in step 3. The PFX password travels through the environment
    (`export PW` + `-passin env:PW`), never on the command line — argv is visible
    in `/proc/<pid>/cmdline`, the same rule `caddy/docker-entrypoint.sh` follows
-   for the VictoriaLogs password.
+   for the VictoriaLogs password. When `jq` exists the password is read as real
+   JSON; the `sed` fallback cannot decode `\"`, `\\`, `\uXXXX` escapes and matches
+   any `"Key"` in the file, not just `ServerCertificate`'s.
 
    ```bash
-   export PW=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
+   if command -v jq >/dev/null; then
+     export PW=$(jq -r '.ServerCertificate.Key // empty' <dir>/Config/appsettings.json)
+   else
+     export PW=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
+   fi
    TMP=$(mktemp -d /tmp/hsmcert.XXXXXX) && chmod 700 "$TMP"
    P=<dir>/Config/<machine-domain>.pfx
    openssl pkcs12 -in "$P" -passin env:PW -nokeys -clcerts -out "$TMP/leaf.pem" 2>/dev/null
    openssl pkcs12 -in "$P" -passin env:PW -nocerts -nodes  -out "$TMP/key.pem"  2>/dev/null
    openssl pkcs12 -in "$P" -passin env:PW -nokeys -cacerts -out "$TMP/cas.pem"  2>/dev/null
+   # OpenSSL 3 + legacy RC2/3DES PFX (typical for Windows CA tooling): add -legacy to each call
    unset PW
    cd "$TMP"
    awk 'BEGIN{n=0} /-----BEGIN CERTIFICATE-----/{n++} {print > ("ca" n ".pem")}' cas.pem
    cp leaf.pem cert.pem
-   for f in ca*.pem; do
+   for f in ca[0-9]*.pem; do
      [ -s "$f" ] || continue
      s=$(openssl x509 -in "$f" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/^subject=//')
      i=$(openssl x509 -in "$f" -noout -issuer  -nameopt RFC2253 2>/dev/null | sed 's/^issuer=//')
-     if [ -n "$s" ] && [ "$s" = "$i" ]; then cp "$f" root.pem; else cat "$f" >> cert.pem; fi
+     if [ -n "$s" ] && [ "$s" = "$i" ]; then cp "$f" root.pem
+     elif [ -n "$s" ]; then cat "$f" >> cert.pem
+     else echo "skipped unparsed block: $f"; fi
    done
    ```
 
@@ -75,16 +89,25 @@ fixes.
    must verify through the excluded root. On `EXTRACT_FAILED or KEY_MISMATCH`
    stop here — nothing has been placed yet. The emptiness check matters: a failed
    extraction (wrong password, unreadable PFX) produces empty files whose pubkeys
-   hash as equal, so the match check alone would pass.
+   hash as equal, so the match check alone would pass. A failure here usually
+   means the password never decoded — without `jq` the `sed` fallback copies JSON
+   escapes verbatim (step 1) — or, on OpenSSL 3, a legacy PFX needs `-legacy`. A
+   PFX without the root leaves no `root.pem`: point `-CAfile` at the corporate or
+   system root bundle instead.
 
    ```bash
    if [ -s leaf.pem ] && [ -s key.pem ] \
       && [ "$(openssl pkey -in key.pem -pubout 2>/dev/null | sha256sum | cut -d' ' -f1)" \
            = "$(openssl x509 -in leaf.pem -noout -pubkey 2>/dev/null | sha256sum | cut -d' ' -f1)" ]; then
      awk '/BEGIN/{n++} n>=2' cert.pem > interm.pem
-     openssl verify -CAfile root.pem -untrusted interm.pem leaf.pem   # expect: OK
+     if [ -s interm.pem ]; then
+       openssl verify -CAfile root.pem -untrusted interm.pem leaf.pem   # expect: OK
+     else
+       openssl verify -CAfile root.pem leaf.pem   # leaf signed directly by the root — expect: OK
+     fi
    else
      echo "EXTRACT_FAILED or KEY_MISMATCH — stop here"
+     cd /tmp && rm -rf "$TMP"   # never leave the (possibly partial) unencrypted key behind
    fi
    ```
 
@@ -100,12 +123,14 @@ fixes.
    ```
 
    Without it (docker group only) — the image's ENTRYPOINT demands HSM_DOMAIN, so
-   override it; use the same caddy image tag the stack runs:
+   override it; the tag is taken from the running `hsm-caddy` container so it
+   cannot drift from the stack:
 
    ```bash
    cd /tmp
+   IMG=$(docker inspect hsm-caddy --format '{{.Config.Image}}')
    docker run --entrypoint sh --rm -v "$TMP":/src:ro -v <dir>/CaddyCertificates:/dst \
-     hsmonitoring/hsm-caddy:2.11.4-3 -c \
+     "$IMG" -c \
      'cp /src/cert.pem /dst/cert.pem && cp /src/key.pem /dst/key.pem && chmod 644 /dst/cert.pem && chmod 600 /dst/key.pem'
    rm -rf "$TMP"
    ```
@@ -126,9 +151,12 @@ fixes.
    ```bash
    echo | openssl s_client -connect <domain>:44333 -servername <domain> 2>/dev/null \
      | openssl x509 -noout -subject -issuer -dates
-   # expect the corporate issuer, CN/SAN = <domain>, expiry of the PFX; served
-   # chain: leaf plus every intermediate (2 certs for a single-intermediate PFX)
+   # expect the corporate issuer, CN/SAN = <domain>, expiry of the PFX
+   echo | openssl s_client -connect <domain>:44333 -servername <domain> -showcerts 2>/dev/null \
+     | grep -c -- "-----BEGIN CERTIFICATE"
+   # served chain: leaf plus every intermediate (2 certs for a single-intermediate PFX)
    curl -o /dev/null -w "%{http_code}\n" https://<domain>:44333/api/sensors/testConnection   # 200
+   curl -o /dev/null -w "%{http_code}\n" https://<domain>:44330/api/sensors/testConnection   # 200 — the DataCollector port this mode exists for
    ```
 
    From a corporate workstation the curl needs no `-k`: the Soft-FX root is already
