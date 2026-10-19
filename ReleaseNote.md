@@ -21,7 +21,7 @@
 * The server reports its own database backups: result (with TTL so a missed run times out), zip sizes and duration on the Backup node, plus daily environment/dashboards database sizes.
 
 ## Linux probe
-* Ships probe 0.10.0 (from 0.8.2): top disk I/O processes via the hsm-linux-probe-io root helper enabled by install.sh; bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log; reaped children's disk I/O credited to their own names or `children of <reaper>` instead of systemd/docker-init (#1572); full names for processes whose 15-byte kernel name was cut, e.g. `valheim_server.x86_64` (#1573); an idle container's `Disk written per hour` posts 0 instead of a gap (#1574).
+* Ships probe 0.10.0 (from 0.8.2): bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log; full process names in top CPU where the 15-byte kernel name was cut, e.g. `valheim_server.x86_64` (#1573); an idle container's `Disk written per hour` posts 0 instead of a gap (#1574).
 
 ## Infrastructure
 * hsm-caddy 2.11.4-3 passes the client Host header through to the server upstream — redirects no longer break behind the proxy.
