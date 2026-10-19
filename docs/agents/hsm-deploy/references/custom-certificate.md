@@ -31,9 +31,11 @@ fixes.
 ## Preconditions
 
 - The PFX: the pre-compose install leaves it in `<dir>/Config/` (dev:
-  `hsm.dev.soft-fx.eu.pfx`); NOC issues fresh ones on request. Its password is the
-  target machine's `Config/appsettings.json` → `ServerCertificate:Key` — read it on
-  the machine, never into the chat.
+  `hsm.dev.soft-fx.eu.pfx`); NOC issues fresh ones on request. The file name and
+  its password are the target machine's `Config/appsettings.json` →
+  `ServerCertificate:Name` / `ServerCertificate:Key` — the same two settings the
+  pre-compose server loaded (`ServerCertificateConfig.GetCertificate()`); read
+  them on the machine, never into the chat.
 - The compose file carries the `./CaddyCertificates:/certs:ro` mount (all versions
   since the compose stack exists) and `CaddyCertificates/` exists next to it.
 - `CaddyCertificates/` is root-owned with no group write. If the SSH user has no
@@ -43,8 +45,9 @@ fixes.
 ## Steps (on the target machine)
 
 Run steps 1–3 in **one shell session** — one `ssh` heredoc when driving the
-machine remotely. Steps 2–3 reuse both `$TMP` and the working directory step 1
-ends in; the deploy skills' one-command-per-`ssh` pattern loses that state. If a
+machine remotely. Steps 2–3 reuse both `$CRTMP` and the working directory step 1
+ends in; the deploy skills' one-command-per-`ssh` pattern loses that state. Step 2
+stops the heredoc itself on any failed check, so step 3 runs only on green. If a
 session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
 
 1. Convert PFX → PEM in a private temp dir. `cert.pem` is the leaf plus the
@@ -60,17 +63,18 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
    ```bash
    if command -v jq >/dev/null; then
      export PW=$(jq -r '.ServerCertificate.Key // empty' <dir>/Config/appsettings.json)
+     P=<dir>/Config/$(jq -r '.ServerCertificate.Name // empty' <dir>/Config/appsettings.json)
    else
      export PW=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
+     P=<dir>/Config/$(sed -n 's/.*"Name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <dir>/Config/appsettings.json | head -1)
    fi
-   TMP=$(mktemp -d /tmp/hsmcert.XXXXXX) && chmod 700 "$TMP"
-   P=<dir>/Config/<machine-domain>.pfx
-   openssl pkcs12 -in "$P" -passin env:PW -nokeys -clcerts -out "$TMP/leaf.pem" 2>/dev/null
-   openssl pkcs12 -in "$P" -passin env:PW -nocerts -nodes  -out "$TMP/key.pem"  2>/dev/null
-   openssl pkcs12 -in "$P" -passin env:PW -nokeys -cacerts -out "$TMP/cas.pem"  2>/dev/null
+   CRTMP=$(mktemp -d /tmp/hsmcert.XXXXXX) && chmod 700 "$CRTMP"
+   openssl pkcs12 -in "$P" -passin env:PW -nokeys -clcerts -out "$CRTMP/leaf.pem" 2>/dev/null
+   openssl pkcs12 -in "$P" -passin env:PW -nocerts -nodes  -out "$CRTMP/key.pem"  2>/dev/null
+   openssl pkcs12 -in "$P" -passin env:PW -nokeys -cacerts -out "$CRTMP/cas.pem"  2>/dev/null
    # OpenSSL 3 + legacy RC2/3DES PFX (typical for Windows CA tooling): add -legacy to each call
    unset PW
-   cd "$TMP"
+   cd "$CRTMP"
    awk 'BEGIN{n=0} /-----BEGIN CERTIFICATE-----/{n++} {print > ("ca" n ".pem")}' cas.pem
    cp leaf.pem cert.pem
    for f in ca[0-9]*.pem; do
@@ -89,37 +93,40 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
    must verify through the excluded root. On `EXTRACT_FAILED or KEY_MISMATCH`
    stop here — nothing has been placed yet. The emptiness check matters: a failed
    extraction (wrong password, unreadable PFX) produces empty files whose pubkeys
-   hash as equal, so the match check alone would pass. A failure here usually
+   hash as equal, so the match check alone would pass; the same false pass occurs
+   when both pubkey extractions fail on non-empty but unparsable files, which is
+   why `KP` must also be non-empty. A failure here usually
    means the password never decoded — without `jq` the `sed` fallback copies JSON
    escapes verbatim (step 1) — or, on OpenSSL 3, a legacy PFX needs `-legacy`. A
    PFX without the root leaves no `root.pem`: point `-CAfile` at the corporate or
    system root bundle instead.
 
    ```bash
-   if [ -s leaf.pem ] && [ -s key.pem ] \
-      && [ "$(openssl pkey -in key.pem -pubout 2>/dev/null | sha256sum | cut -d' ' -f1)" \
-           = "$(openssl x509 -in leaf.pem -noout -pubkey 2>/dev/null | sha256sum | cut -d' ' -f1)" ]; then
-     awk '/BEGIN/{n++} n>=2' cert.pem > interm.pem
-     if [ -s interm.pem ]; then
-       openssl verify -CAfile root.pem -untrusted interm.pem leaf.pem   # expect: OK
-     else
-       openssl verify -CAfile root.pem leaf.pem   # leaf signed directly by the root — expect: OK
-     fi
-   else
-     echo "EXTRACT_FAILED or KEY_MISMATCH — stop here"
-     cd /tmp && rm -rf "$TMP"   # never leave the (possibly partial) unencrypted key behind
-   fi
+   fail() { echo "$1"; cd /tmp && rm -rf "$CRTMP"; exit 1; }
+   KP=$(openssl pkey -in key.pem -pubout 2>/dev/null | sha256sum | cut -d' ' -f1)
+   LP=$(openssl x509 -in leaf.pem -noout -pubkey 2>/dev/null | sha256sum | cut -d' ' -f1)
+   [ -s leaf.pem ] && [ -s key.pem ] && [ -n "$KP" ] && [ "$KP" = "$LP" ] \
+     || fail "EXTRACT_FAILED or KEY_MISMATCH — empty/unparsable files, wrong password, or key≠cert"
+   awk '/BEGIN/{n++} n>=2' cert.pem > interm.pem
+   [ -s interm.pem ] && U="-untrusted interm.pem" || U=""
+   openssl verify -CAfile root.pem $U leaf.pem \
+     || fail "VERIFY_FAILED — the chain did not validate; nothing has been placed"   # expect: OK
    ```
 
+   `fail` exits the single heredoc with `$CRTMP` removed, so step 3 only runs on a
+   green step 2. When pasting step by step into an interactive shell instead,
+   treat every failure message as stop-here — the `exit 1` would close that
+   shell.
+
 3. Place the files into `CaddyCertificates/` and remove the temp dir — its
-   `key.pem` sits there unencrypted. Step 1 left the shell inside `$TMP`; leave it
+   `key.pem` sits there unencrypted. Step 1 left the shell inside `$CRTMP`; leave it
    before deleting. With passwordless sudo:
 
    ```bash
    cd /tmp
-   sudo install -m 644 "$TMP/cert.pem" <dir>/CaddyCertificates/cert.pem
-   sudo install -m 600 "$TMP/key.pem"  <dir>/CaddyCertificates/key.pem
-   rm -rf "$TMP"
+   sudo install -m 644 "$CRTMP/cert.pem" <dir>/CaddyCertificates/cert.pem
+   sudo install -m 600 "$CRTMP/key.pem"  <dir>/CaddyCertificates/key.pem
+   rm -rf "$CRTMP"
    ```
 
    Without it (docker group only) — the image's ENTRYPOINT demands HSM_DOMAIN, so
@@ -129,10 +136,10 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
    ```bash
    cd /tmp
    IMG=$(docker inspect hsm-caddy --format '{{.Config.Image}}')
-   docker run --entrypoint sh --rm -v "$TMP":/src:ro -v <dir>/CaddyCertificates:/dst \
+   docker run --entrypoint sh --rm -v "$CRTMP":/src:ro -v <dir>/CaddyCertificates:/dst \
      "$IMG" -c \
      'cp /src/cert.pem /dst/cert.pem && cp /src/key.pem /dst/key.pem && chmod 644 /dst/cert.pem && chmod 600 /dst/key.pem'
-   rm -rf "$TMP"
+   rm -rf "$CRTMP"
    ```
 
 4. The user switches the mode in `<dir>/.env` — the agent never edits `.env`:
