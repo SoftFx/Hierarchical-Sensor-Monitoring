@@ -77,6 +77,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         [Description("Sensor lifecycle state. Value table: Available, Muted, Blocked.")]
         public string State { get; init; }
 
+        /// <summary>
+        /// When the current mute lifts (UTC ISO 8601). Null when the sensor is not
+        /// muted OR muted indefinitely — <c>state</c> distinguishes the two: a Muted
+        /// sensor with a null <c>endOfMuting</c> never auto-unmutes.
+        /// </summary>
+        [Description("When the current mute lifts (UTC ISO 8601). Null when the sensor is not muted OR muted indefinitely — `state` distinguishes the two: a Muted sensor with a null `endOfMuting` never auto-unmutes.")]
+        public DateTime? EndOfMuting { get; init; }
+
         /// <summary>Sensor creation time (UTC).</summary>
         [Description("Sensor creation time (UTC).")]
         public DateTime CreationDate { get; init; }

@@ -429,6 +429,12 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.CreateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.UpdateTtlPolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(ProductPoliciesApiController), nameof(ProductPoliciesApiController.DeleteTtlPolicy))] = [401, 403, 404, 409, 500],
+
+            // The sensor-mute surface (#1569): the mute carries the
+            // semantic-validation 422 (a past endOfMuting) and the blocked
+            // sensor's 409; the unmute carries the 409 only (no body).
+            [(typeof(SensorMuteApiController), nameof(SensorMuteApiController.MuteSensor))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(SensorMuteApiController), nameof(SensorMuteApiController.UnmuteSensor))] = [400, 401, 403, 404, 409, 500],
         };
 
         // The ONE action of the area with no success response (#1500):

@@ -78,6 +78,8 @@ namespace HSMServer.Core.Tests.Mcp
             "list_chats",
             "list_folders",
             "list_products",
+            "mute_sensor",
+            "unmute_sensor",
             "update_alert_schedule",
             "update_alert_template",
             "update_sensor_policy",
@@ -275,6 +277,20 @@ namespace HSMServer.Core.Tests.Mcp
             var templateEcho = OutputDescriptions(tools["create_alert_template"]);
             Assert.Contains("path patterns that matched NO sensors", templateEcho);
             Assert.Contains("or the path pattern that matched no sensors", templateEcho);
+
+            // #1569: the mute surface — the period semantics (indefinite vs
+            // auto-unmute) and the Blocked refusal travel on the TOOL
+            // description (the input schema carries the parameters only).
+            Assert.Contains("mute indefinitely (never auto-unmutes)", tools["mute_sensor"].Description);
+            Assert.Contains("the server auto-unmutes at expiry", tools["mute_sensor"].Description);
+            Assert.Contains("Fails on a Blocked sensor", tools["mute_sensor"].Description);
+
+            var muteParameters = Descriptions(tools["mute_sensor"]);
+            Assert.Contains("must be in the future", muteParameters);
+            Assert.Contains("mute indefinitely", muteParameters);
+
+            Assert.Contains("notifications resume and the stored muting period clears", tools["unmute_sensor"].Description);
+            Assert.Contains("Fails on a Blocked sensor", tools["unmute_sensor"].Description);
         }
 
 
@@ -328,6 +344,12 @@ namespace HSMServer.Core.Tests.Mcp
             var sensor = Descriptions(tools["get_sensor"]);
             Assert.Contains("Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum.", sensor);
             Assert.Contains("null when the sensor has no data yet", sensor);
+
+            // #1569: the muted-until semantics on every sensor echo — an agent
+            // reading a mute result must know a null endOfMuting means
+            // indefinite, not unmuted.
+            var muteEcho = Descriptions(tools["mute_sensor"]);
+            Assert.Contains("a Muted sensor with a null `endOfMuting` never auto-unmutes", muteEcho);
 
             var history = Descriptions(tools["get_sensor_history"]);
             Assert.Contains("the NEWEST maxPoints values inside [from, to], oldest first", history);
