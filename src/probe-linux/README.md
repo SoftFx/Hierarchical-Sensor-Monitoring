@@ -505,7 +505,9 @@ with the same name are summed (Windows rule), also when two names normalize to t
 only such a one is looked at again: its full name is the first of these that **extends** it — the
 candidate's basename is longer and starts with the 15 bytes (the kernel's `comm` is the first 15
 bytes of the executed file's basename, so anything else names another file) — and is no
-interpreter:
+interpreter. The comparison is on bytes: a cut that splits a multibyte character reaches the probe
+as U+FFFD (the stat line is decoded lossily), still matches the full name it was cut from, and is
+never itself taken for an extended name; a candidate that is not valid UTF-8 is never used:
 
 1. the name the top disk I/O helper wrote for the same `(pid, starttime)` (when `topDiskIo` is
    on; the helper reads the `exe` link), so both families name a process alike;
@@ -522,7 +524,8 @@ own name in argv[1], which is never read. So a script whose name is longer than 
 cut `comm` (`valheim-world-backup` stays `valheim-world-b`: the kernel's `exe` and argv[0] are the
 interpreter), and so does a process whose `comm` is not the start of its executable's or argv[0]'s
 basename (one that named itself with `prctl(PR_SET_NAME)`, or a symlink with another name). A
-process is resolved once, while it lives.
+process is resolved **once**, at its first busy sample, and keeps that name for its life: the
+helper's snapshot appearing, changing or going later never renames it.
 
 **A full name is a new sensor path:** after the upgrade to 0.10.0, `valheim_server.` reports as
 `.computer/Top CPU processes/valheim_server.x86_64` (and `systemd-journal` as `systemd-journald`),
@@ -750,9 +753,11 @@ read for a process with a reaped part, and one `readlink` per 15-byte `comm`.
 * the split between several vanished processes of one reaper is by their last measured interval,
   an estimate: the kernel reports only their sum;
 * an interval in which a process both reaped a child and lost a thread counts the thread's
-  counters as children's; and a reap that lands between the helper's `io` and stat reads of the
-  reaper (microseconds) is in the counters one interval before it is in `cminflt`, so its bytes
-  stay with the reaper's own name;
+  counters as children's; and a reap that lands while the helper is between the reaper's `io` read
+  and its stat read again (a window as long as the walk over the reaper's `task/` threads) is in
+  `cminflt` one interval **before** it is in the counters: in the next interval the counters jump
+  but `cminflt` no longer grows (unless the reaper reaps again), so those bytes stay with the
+  reaper's own name;
 * an orphan whose parent died before it, both within one interval, is taken back from its
   grandparent although `init` or a subreaper reaped it: the grandparent is cut by too much (never
   below 0, the rest carried into one more snapshot) and the real reaper shows the orphan's

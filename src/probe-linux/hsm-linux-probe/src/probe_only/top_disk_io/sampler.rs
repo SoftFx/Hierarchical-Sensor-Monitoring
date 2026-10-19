@@ -55,7 +55,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use hsm_linux_probe_io::procstat::truncated_comm;
+use hsm_linux_probe_io::procstat::original_comm;
 use hsm_linux_probe_io::scan::receiver;
 use hsm_linux_probe_io::snapshot::{IoCounters, Snapshot};
 
@@ -85,7 +85,8 @@ pub struct NameIo {
     pub written: u64,
     pub read: u64,
     /// The process of the name with the largest write delta, and that delta: the one whose
-    /// executable a writers' sensor description names ([`NO_PROCESS`]: none).
+    /// executable a writers' sensor description names. A live process is preferred to
+    /// [`NO_PROCESS`] (none), whatever the bytes ([`NameIo::merge`]).
     pub top_writer: (u32, u64),
     /// The same for the reads.
     pub top_reader: (u32, u64),
@@ -112,13 +113,25 @@ impl NameIo {
     pub fn merge(&mut self, other: &NameIo) {
         self.written = self.written.saturating_add(other.written);
         self.read = self.read.saturating_add(other.read);
-        if other.top_writer.1 > self.top_writer.1 {
+        if takes_over(self.top_writer, other.top_writer) {
             self.top_writer = other.top_writer;
         }
-        if other.top_reader.1 > self.top_reader.1 {
+        if takes_over(self.top_reader, other.top_reader) {
             self.top_reader = other.top_reader;
         }
         self.kernel_thread = other.kernel_thread;
+    }
+}
+
+/// Whether `other` replaces `current` as a name's representative `(pid, bytes)`: a live process
+/// always beats [`NO_PROCESS`] (a vanished process's share, `children of …`), whatever the bytes,
+/// so a sensor created for the name gets a path line whenever a live process stands for it;
+/// otherwise the one that moved more.
+fn takes_over(current: (u32, u64), other: (u32, u64)) -> bool {
+    match (current.0 == NO_PROCESS, other.0 == NO_PROCESS) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => other.1 > current.1,
     }
 }
 
@@ -360,7 +373,7 @@ impl IoSampler {
             };
             let name = sensor_name(&entry.name, entry.kernel_thread);
             let renamed_from = (!entry.kernel_thread)
-                .then(|| truncated_comm(&entry.name))
+                .then(|| original_comm(&entry.name))
                 .flatten()
                 .and_then(|comm| sensor_name(&comm, false))
                 .filter(|old| name.as_ref() != Some(old));
@@ -887,6 +900,72 @@ pub mod tests {
                 "valheim_server.".to_string()
             )]
             .into()
+        );
+    }
+
+    /// A live process stays a name's representative over a larger share of a vanished one (or
+    /// `children of …`), in either merge order, so the sensor gets a path line (review of #1572).
+    #[test]
+    fn a_live_process_beats_no_process_as_the_representative() {
+        let live = |bytes| NameIo {
+            written: bytes,
+            top_writer: (12, bytes),
+            ..NameIo::default()
+        };
+        let share = |bytes| NameIo {
+            written: bytes,
+            top_writer: (NO_PROCESS, bytes),
+            ..NameIo::default()
+        };
+        let mut io = live(MB);
+        io.merge(&share(20 * MB));
+        assert_eq!(io.top_writer, (12, MB));
+        let mut io = share(20 * MB);
+        io.merge(&live(MB));
+        assert_eq!((io.top_writer, io.written), ((12, MB), 21 * MB));
+        let mut io = share(MB);
+        io.merge(&share(20 * MB));
+        assert_eq!(io.top_writer, (NO_PROCESS, 20 * MB));
+
+        // In a snapshot: a dead tar's last 20 MB and a live tar's 1 MB under one name.
+        let mut feed = Feed::new(vec![
+            writer(10, "bash", 1, 5, 0, 0, 0),
+            writer(11, "tar", 10, 6, 100 * MB, 0, 0),
+            writer(12, "tar", 10, 7, 0, 0, 0),
+        ]);
+        let read = feed.next(vec![
+            writer(10, "bash", 1, 5, 120 * MB, 120 * MB, 1),
+            writer(12, "tar", 10, 7, MB, 0, 0),
+        ]);
+        assert_eq!(read.deltas["tar"].written, 21 * MB);
+        assert_eq!(read.deltas["tar"].top_writer.0, 12);
+    }
+
+    /// A `comm` whose 15-byte cut split a multibyte character arrives lossily decoded, longer than
+    /// 15 bytes; it was never extended, so it is not reported as renamed (review of #1573).
+    #[test]
+    fn a_comm_cut_inside_a_multibyte_character_is_not_a_rename() {
+        let cut = "sauvegarde_bdd\u{fffd}";
+        let middle = String::from_utf8_lossy(b"a\xe9bcdefghijklmn").into_owned();
+        let mut feed = Feed::new(vec![
+            writer(50, cut, 1, 5, 0, 0, 0),
+            writer(51, &middle, 1, 6, 0, 0, 0),
+            writer(52, "sauvegarde_bdd\u{e9}-nuit", 1, 7, 0, 0, 0),
+        ]);
+        let read = feed.next(vec![
+            writer(50, cut, 1, 5, MB, 0, 0),
+            writer(51, &middle, 1, 6, MB, 0, 0),
+            writer(52, "sauvegarde_bdd\u{e9}-nuit", 1, 7, MB, 0, 0),
+        ]);
+        assert_eq!(read.deltas.len(), 3, "{:?}", read.deltas);
+        assert_eq!(
+            read.renamed,
+            [(
+                "sauvegarde_bdd_-nuit".to_string(),
+                "sauvegarde_bdd_".to_string()
+            )]
+            .into(),
+            "only the extended name"
         );
     }
 

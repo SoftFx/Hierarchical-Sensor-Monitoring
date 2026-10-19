@@ -34,7 +34,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use crate::procstat::{extended_name, read_pid_stat, read_processes, PidStat, COMM_LEN};
+use crate::procstat::{extended_name, may_be_cut, read_pid_stat, read_processes, PidStat};
 use crate::snapshot::{parse_io, Entry, IoCounters};
 
 /// The process a vanished `pid` was reaped by, as far as two reads can tell: its parent at the
@@ -163,7 +163,7 @@ impl Scanner {
 
     /// `comm`, or the `exe` link's basename when it extends a 15-byte one.
     fn name(&self, stat: &PidStat) -> String {
-        if stat.is_kernel_thread() || stat.comm.len() != COMM_LEN {
+        if stat.is_kernel_thread() || !may_be_cut(&stat.comm) {
             return stat.comm.clone();
         }
         std::fs::read_link(self.proc_root.join(stat.pid.to_string()).join("exe"))

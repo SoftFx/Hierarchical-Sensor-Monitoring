@@ -84,22 +84,42 @@ pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
     })
 }
 
+/// Whether `comm` — as decoded from the stat line, lossily — may be the kernel's cut of a longer
+/// name: 15 raw bytes decode to at least 15 bytes (exactly 15 when valid UTF-8; more when the cut
+/// split a multibyte character, which decodes to U+FFFD), so anything shorter was never cut. Only
+/// such a `comm` is looked at again (the `exe` link, argv[0]).
+pub fn may_be_cut(comm: &str) -> bool {
+    comm.len() >= COMM_LEN
+}
+
+/// `bytes` decoded as the kernel's `comm` would be after the stat line's lossy decoding.
+fn as_comm(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
+    String::from_utf8_lossy(bytes)
+}
+
 /// The full name of a process whose `comm` may have been cut at [`COMM_LEN`] bytes (#1573), from
 /// `candidate` — the target of its `exe` link (the helper, which may read it) or its argv[0] (the
 /// probe, which usually may not): the candidate's basename, without the ` (deleted)` the kernel
-/// appends to a replaced executable. `None` — keep `comm` — unless `comm` is exactly [`COMM_LEN`]
-/// bytes and the basename is longer, **starts with it** (the kernel's `comm` is the first 15 bytes
-/// of the executed file's basename, so anything else names another file: a script's interpreter, a
-/// symlink's differently named target, a rewritten title) and is no interpreter
-/// ([`is_interpreter`]). Callers pass argv[0] only, never an argument: arguments can carry secrets.
+/// appends to a replaced executable. `None` — keep `comm` — unless the basename is longer than
+/// [`COMM_LEN`] bytes, **its first [`COMM_LEN`] bytes are `comm`** (compared as bytes, decoded the
+/// way the stat line is, so a cut inside a multibyte character matches too; the kernel's `comm` is
+/// the first 15 bytes of the executed file's basename, so anything else names another file: a
+/// script's interpreter, a symlink's differently named target, a rewritten title), it holds no
+/// U+FFFD (a name that is not valid UTF-8 is never taken, so an extended name never holds one —
+/// what [`original_comm`] relies on) and it is no interpreter ([`is_interpreter`]). Callers pass
+/// argv[0] only, never an argument: arguments can carry secrets.
 pub fn extended_name(comm: &str, candidate: &str) -> Option<String> {
-    if comm.len() != COMM_LEN {
+    if !may_be_cut(comm) {
         return None;
     }
     let candidate = candidate.strip_suffix(" (deleted)").unwrap_or(candidate);
     let base = candidate.rsplit('/').next().unwrap_or(candidate);
-    (base.len() > COMM_LEN && base.starts_with(comm) && !is_interpreter(base))
-        .then(|| base.to_string())
+    let bytes = base.as_bytes();
+    (bytes.len() > COMM_LEN
+        && as_comm(&bytes[..COMM_LEN]) == comm
+        && !base.contains(char::REPLACEMENT_CHARACTER)
+        && !is_interpreter(base))
+    .then(|| base.to_string())
 }
 
 /// An interpreter's basename (`bash`, `python3.12`, `node`, `java`, …): a script it runs has its
@@ -120,12 +140,15 @@ pub fn is_interpreter(base: &str) -> bool {
         })
 }
 
-/// What the kernel's `comm` was for a process [`extended_name`] renamed: the name's first
-/// [`COMM_LEN`] bytes (lossily decoded, as the stat line is). `None` for a name of at most
-/// [`COMM_LEN`] bytes, which was never extended.
-pub fn truncated_comm(name: &str) -> Option<String> {
+/// The `comm` a user process's `name` (as the helper writes it) was extended from by
+/// [`extended_name`]: its first [`COMM_LEN`] bytes, decoded as the stat line is. `None` when `name`
+/// is a `comm` itself — at most [`COMM_LEN`] bytes, or longer only because the kernel's cut split a
+/// multibyte character and decoding made it U+FFFD. An extended name never holds U+FFFD and a
+/// `comm` longer than [`COMM_LEN`] bytes always does, so this tells them apart exactly.
+pub fn original_comm(name: &str) -> Option<String> {
     let bytes = name.as_bytes();
-    (bytes.len() > COMM_LEN).then(|| String::from_utf8_lossy(&bytes[..COMM_LEN]).into_owned())
+    (bytes.len() > COMM_LEN && !name.contains(char::REPLACEMENT_CHARACTER))
+        .then(|| as_comm(&bytes[..COMM_LEN]).into_owned())
 }
 
 /// Read one `<proc>/<pid>/stat`; `None` when it is gone, malformed or names another pid.
@@ -241,9 +264,37 @@ mod tests {
             assert!(!is_interpreter(binary), "{binary}");
         }
         assert_eq!(
-            truncated_comm("valheim_server.x86_64").as_deref(),
+            original_comm("valheim_server.x86_64").as_deref(),
             Some(valheim)
         );
-        assert_eq!(truncated_comm(valheim), None);
+        assert_eq!(original_comm(valheim), None);
+    }
+
+    /// The kernel cuts at 15 **bytes**, so a cut can split a multibyte character; the stat line's
+    /// lossy decoding then ends the `comm` in U+FFFD and makes it longer than 15 bytes. Such a
+    /// `comm` is matched byte-wise (still only by a name it is the cut of), and is never mistaken
+    /// for an extended name.
+    #[test]
+    fn a_comm_cut_inside_a_multibyte_character_is_matched_byte_wise() {
+        let full = "sauvegarde_bdd\u{e9}-nuit"; // 14 ASCII bytes, then "é" (C3 A9): cut inside it
+        let raw = &full.as_bytes()[..COMM_LEN];
+        let comm = String::from_utf8_lossy(raw).into_owned();
+        assert_eq!(comm, "sauvegarde_bdd\u{fffd}");
+        assert!(comm.len() > COMM_LEN && may_be_cut(&comm));
+        assert_eq!(
+            extended_name(&comm, &format!("/opt/backup/{full}")).as_deref(),
+            Some(full)
+        );
+        assert_eq!(original_comm(full).as_deref(), Some(comm.as_str()));
+        // Not a prefix (byte-wise): another file. A shorter comm is never looked at.
+        assert_eq!(extended_name(&comm, "/opt/sauvegarde_bddX-nuit"), None);
+        assert!(!may_be_cut("nginx"));
+        // The lossily decoded comm itself — at the end or in the middle — is no extended name.
+        assert_eq!(original_comm(&comm), None);
+        let middle = String::from_utf8_lossy(b"a\xe9bcdefghijklmn").into_owned();
+        assert!(middle.len() > COMM_LEN);
+        assert_eq!(original_comm(&middle), None);
+        // A candidate that is not valid UTF-8 (decoded with U+FFFD) is never taken.
+        assert_eq!(extended_name(&comm, "sauvegarde_bdd\u{fffd}-nuit"), None);
     }
 }
