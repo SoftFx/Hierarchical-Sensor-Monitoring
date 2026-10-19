@@ -90,6 +90,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Unit = UnitOf(sensor),
             Status = sensor.Status?.Status.ToString(),
             State = sensor.State.ToString(),
+            EndOfMuting = MutedUntilOf(sensor),
             CreationDate = sensor.CreationDate.ToUtcInstant(),
             LastUpdate = sensor.HasData ? sensor.LastUpdate.ToUtcInstant() : null,
             Product = sensor.Parent?.Root is { } product ? ToNodeRef(product) : null,
@@ -188,6 +189,12 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         public const string NodeTypeProduct = "product";
         public const string NodeTypeFolder = "folder";
+
+        // The mute lifts at this instant; the core stores an indefinite mute as
+        // DateTime.MaxValue (the web UI's "Forever" rule), which renders as null —
+        // the DTO's `state` distinguishes "not muted" from "muted indefinitely".
+        private static DateTime? MutedUntilOf(BaseSensorModel sensor) =>
+            sensor.EndOfMuting is { } end && end != DateTime.MaxValue ? end.ToUtcInstant() : null;
 
         // The node endpoint's response bound, matching the area's list ceiling:
         // a node's DIRECT children can reach thousands (a flat product with

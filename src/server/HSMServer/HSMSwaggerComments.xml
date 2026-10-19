@@ -358,6 +358,36 @@
             in the window are omitted (drawn with gaps, never zero-filled).
             </summary>
         </member>
+        <member name="T:HSMServer.Controllers.SensorMuteApiController">
+            <summary>
+            Sensor muting of the management API (#1569): suppress a sensor's alert
+            notifications, indefinitely or until a chosen instant, and lift the mute
+            again — the REST twin of the web UI's ignore-notifications modal. Bearer-
+            token authenticated only (the HsmApiToken scheme); served on the web-UI
+            port only. Writes need a read-write token and the owner's write access at
+            the sensor; unknown and invisible ids answer the SAME 404. A Blocked
+            sensor is not mutable and answers 409.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorMuteApiController.MuteSensor(System.Guid,HSMServer.Model.ManagementApi.SensorTree.SensorMuteRequestDto)">
+            <summary>
+            Mute the sensor's alert notifications. The body is OPTIONAL: omitted
+            (or a null <c>endOfMuting</c>) mutes indefinitely; an instant (UTC
+            ISO 8601, must be in the future) mutes until it — the core's
+            system-initiated sweep auto-unmutes at expiry. The response echoes
+            the resulting sensor.
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+            <param name="dto">Optional muting period.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorMuteApiController.UnmuteSensor(System.Guid)">
+            <summary>
+            Unmute the sensor: notifications resume and the stored muting period
+            clears. The response echoes the resulting sensor. A sensor that is
+            not muted answers 200 with its unchanged state (idempotent).
+            </summary>
+            <param name="sensorId">Sensor id.</param>
+        </member>
         <member name="T:HSMServer.Controllers.SensorPoliciesApiController">
             <summary>
             Alert administration on a sensor (#1500): item-level CRUD over the
@@ -834,6 +864,14 @@
             access): data-policy and TTL-policy CRUD on a sensor — thin
             delegations to <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500), the
             same engine the REST policy controllers run on.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.SensorMuteMcpTools">
+            <summary>
+            The sensor muting tools of the MCP surface (#1569, phase 2): suppress or
+            restore a sensor's alert notifications — thin delegations to
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorMuteAdministrationService"/>, the same engine the REST
+            mute controller runs on.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
@@ -2400,6 +2438,13 @@
             Sensor lifecycle state. Value table: Available, Muted, Blocked.
             </summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.EndOfMuting">
+            <summary>
+            When the current mute lifts (UTC ISO 8601). Null when the sensor is not
+            muted OR muted indefinitely — <c>state</c> distinguishes the two: a Muted
+            sensor with a null <c>endOfMuting</c> never auto-unmutes.
+            </summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.CreationDate">
             <summary>Sensor creation time (UTC).</summary>
         </member>
@@ -2459,6 +2504,39 @@
             read this sensor's values — retry shortly. Never true for other sensor
             types; an empty points list without this flag means the window holds
             no values.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMuteAdministrationService">
+            <summary>
+            The mute write engine of the sensor surface (#1569): suppress or restore a
+            sensor's alert notifications — the token-side twin of the web UI's
+            ignore-notifications modal. Transport-agnostic — the REST controller and
+            the MCP write tools render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through
+            the same envelopes every other administration service uses.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMuteAdministrationService.MuteSensorAsync(System.Guid,System.Nullable{System.DateTime},System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Mute the sensor's notifications: indefinitely (a null
+            <paramref name="endOfMuting"/>), or until the given instant — the
+            core's system-initiated sweep auto-unmutes at expiry. The result
+            echoes the stored sensor.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMuteAdministrationService.UnmuteSensorAsync(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Unmute the sensor: notifications resume; the stored period clears.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMuteRequestDto">
+            <summary>
+            The optional body of the mute write: omitted (or a null
+            <c>endOfMuting</c>) mutes indefinitely; an instant mutes until it,
+            auto-unmuting at expiry.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMuteRequestDto.EndOfMuting">
+            <summary>
+            Mute until this instant (UTC ISO 8601; must be in the future). Null =
+            mute indefinitely (never auto-unmutes).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService">

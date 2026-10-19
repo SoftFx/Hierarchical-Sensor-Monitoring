@@ -1,8 +1,8 @@
 # Tests: Management REST API (resource controllers)
 
-> Owner: server | Last reviewed: 2026-09-11 | Canonical: yes
+> Owner: server | Last reviewed: 2026-10-19 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), and the OpenAPI publication (`ManagementApiSwaggerTests`).
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), the OpenAPI publication (`ManagementApiSwaggerTests`), and sensor muting (`SensorMuteApiControllerTests`).
 
 ## Conventions (area admission)
 
@@ -69,6 +69,17 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 - Envelope carries time/status/comment with the UTC kind pinned.
 - Unit resolution: `OriginalUnit` display name ("%"), the Rate default denominator ("# per sec"), null otherwise.
 - Enum options mapped ordered by value with label+description; null `enumOptions` for non-Enum sensors.
+
+## Sensor muting (#1569)
+
+**Controller** (`SensorMuteApiControllerTests`, controller level — the `SensorMuteMcpToolsTests` harness shape): the service is real; the `ITreeValuesCache` mock mirrors the core's own `UpdateMutedSensorStateAsync` (the State + EndOfMutingPeriod translation onto the live model, the Blocked no-op, the unchanged-period skip), so the round-trip runs the actual semantics, and every invocation (sensor id, initiator, period) is captured.
+
+- Conventions reflection pin (same attribute set, route `api/v1/sensors/{sensorId:guid}`, `ControllerBase`).
+- **Mute**: omitted body AND an explicit `endOfMuting: null` both mute indefinitely — the model stores the core's `DateTime.MaxValue` ("Forever", never swept) and the echo renders `state: Muted` + `endOfMuting: null`; a period mute echoes the stored instant and the model carries it; a LOCAL-kind instant CONVERTS to its UTC instant (not relabeled — the mute does not shift on a non-UTC server); the same period twice is an idempotent 200; the write names the token's OWNER as the InitiatorInfo (`User`/`api-owner`, the #1384 rule).
+- **Unmute**: after a period mute resumes notifications (`state: Available`, model `EndOfMuting` null, the core's null period); a not-muted sensor answers 200 with its unchanged state (idempotent).
+- **Blocked**: mute and unmute on a Blocked sensor → 409 `conflict` (the web flow's silent no-op surfaced as an explicit error), the sensor untouched.
+- **Semantic validation**: a past `endOfMuting` → 422 field-keyed (`details.endOfMuting`), the write never dispatched.
+- **Authorization mapping**: evaluator Forbidden → uniform 403 (both actions, write never dispatched — the read-only-token/Viewer arm); unknown id and the evaluator's NotFound answer the SAME 404 body (anti-enumeration); authorize-before-write pinned on the 404 path (no `UpdateMutedSensorStateAsync` call).
 
 ## Uniform JSON error contract (#1353)
 

@@ -1,7 +1,7 @@
 # Feature: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-10-14 | Canonical: yes
-> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders (reads), plus the phase-2 WRITE tools for sensor policies, alert templates and alert schedules. REST stays the canonical surface; MCP is an adapter over the same implementations.
+> Owner: server | Last reviewed: 2026-10-19 | Canonical: yes
+> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules and sensor muting (#1569). REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
 
@@ -17,7 +17,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 - **Outside the area guard, inside the credential family**: `/mcp` is NOT under `ManagementApiGuardMiddleware` (no `[ManagementApi]` marker; the SDK owns the route and errors follow MCP's JSON-RPC semantics, not the uniform JSON contract). `LegacyBearerGuardMiddleware` exempts it (`IsTokenRoutePath`) — the hsm_pat_ credential is expected there, not misplaced. The one carry-over from the JSON world: whatever ESCAPES the SDK handler (a transport-level failure, a serialization error) is caught by `ApiExceptionJsonMiddleware` and answers a **JSON-RPC error envelope** (`-32603 Internal error` with `data.traceId`) — machine-parseable, never the Razor HTML page (#1392 review, round 3).
 - **SitePort-only, probing-blind, fail-closed over the endpoint family**: `McpSitePortOnlyMiddleware` (before authentication, with the other guards) answers `/mcp` off the SitePort with the area's uniform 404 — an unauthenticated probe on the sensor port never gets a 401 that confirms the endpoint exists. It also carries the area guard's rule over `/mcp`'s endpoints: a matched endpoint under `/mcp` must require `ManagementPolicy` and never be anonymous, so a future route mapped there is unreachable without the credential, exactly like an unmarked route under `/api/v1`.
 - **Always on, no config toggle**: like `/api/v1`, the endpoint ships enabled behind its auth; there is no feature flag to drift.
-- **Tool metadata reflects the operation**: reads declare `ReadOnly=true, Idempotent=true`; writes declare `ReadOnly=false` with `Idempotent=true` only for the full-replace updates (`update_*`), never for creates/deletes — clients can surface the safety hints. The flags are METADATA: the enforcement is the credential policy plus the services' per-call authorization.
+- **Tool metadata reflects the operation**: reads declare `ReadOnly=true, Idempotent=true`; writes declare `ReadOnly=false` with `Idempotent=true` only for retry-safe writes — the full-replace updates (`update_*`) and the state-setting mute/unmute pair (#1569: re-sending converges on the same state) — never for creates/deletes; clients can surface the safety hints. The flags are METADATA: the enforcement is the credential policy plus the services' per-call authorization.
 - **Compactness rule**: only `get_sensor` embeds the current value (`lastValue`); `find_sensors` returns compact summaries (id, path, type, status, unit), mapped straight from the cache models so the rule holds in the WORK, not only on the wire (#1392 r5 — mapping the full DTO first would materialize current-value payloads just to discard them). No tool serializes file content (the REST File-value metadata rule holds).
 - **Field-value documentation travels in the schemas** (#1545, output side #1553): every record and property of the DTOs the MCP tools bind carries a `[Description]` — the schema exporter (Microsoft.Extensions.AI `AIJsonUtilities`) surfaces only those attributes into `tools/list` schemas, never the XML doc comments. The enum tables (SensorType/PolicyProperty/PolicyOperation byte codes on the template DTOs, enum names on the policy DTOs), the round-trip rules, and the schedule YAML grammar (see `AlertScheduleYamlDocs`) are therefore machine-readable on the wire. Since #1553 every tool opts into structured content (`UseStructuredContent` on `[McpServerTool]`), so the SDK also emits the tool **output schemas**: the READ-DTO documentation (sensor tree, chats, folders, list envelopes — the null-semantics, value tables, visibility rules) reaches agents the input schemas could never carry. A new DTO field of an MCP-bound type gets its `[Description]` in the same change, or the agent is back to guessing values; wire tests pin the presence of the tables on BOTH sides so SDK drift or a DTO refactor that drops them fails loudly. The wire escapes non-ASCII conservatively (apostrophes travel as `\u0027`) — assertions about schema text must decode the JSON first.
 - **The two blind-guess surfaces are documented exhaustively** (#1556): the message-template fields of BOTH write surfaces carry the FULL alert-template variable table (`AlertVariablesDocs.Variables` — every registered `$variable` with its `[AlertVariable]` description; variables substitute as substrings, the message renders with string.Format so braces are not allowed, and the template splits on spaces, dropping whitespace that touches a space (whitespace with no space in it is kept) — only other plain text ships as-is), and the condition `property` fields carry the property x sensor-type availability matrix (`AlertPropertyMatrixDocs.Matrix` — the exhaustive table with negatives: no `Value` on Boolean/File/bars, `Length` String-only, `OriginalSize` File-only, bar statistics on no single-value type; the Enum `EmaValue` pair passes validation but currently fails at apply time), mirroring `AlertPolicyConditionRules` — the table behind the 422 validation (the template surface does not consult it: only some non-offered pairs produce a template-apply warning, the rest are stored silently and fail at evaluation). Both texts are shared consts referenced from the `[Description]s` of the policy and template DTOs alike; `AlertSchemaDocsTests` re-derives the expected sets from `AlertState.VariablesHelp` and the rule table, so the prose cannot drift from the code in either direction.
@@ -33,6 +33,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | 4 | Alert review: `list_alert_templates` / `get_alert_template`, `list_alert_schedules` / `get_alert_schedule` | AI agent |
 | 5 | Chat discovery for alert routing: `list_chats` / `get_chat` (the valid `destination.chats` ids) | AI agent |
 | 6 | Folder discovery for template scoping: `list_folders` / `get_folder` (the valid `folderId` values — the access-grouping entity, not the tree's nested products) | AI agent |
+| 7 | The noisy-sensor flow: `mute_sensor` / `unmute_sensor` after a diagnosis | AI agent |
 
 ### The read-analysis scenario (#1391 acceptance)
 
@@ -51,6 +52,14 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 2. `list_alert_schedules` → an existing night window, or `create_alert_schedule` (admin owner; the id is server-generated).
 3. `create_sensor_policy` on S with `destination.chats: [C]` and the `scheduleId` — 422-class tool errors flatten field-keyed ("destination: Chat ... is not available ..."), so the agent self-corrects.
 4. For many sensors at once: `list_folders` → `create_alert_template` with path patterns (folder-scoped, applies tree-wide).
+
+### The noisy-sensor scenario (#1569 acceptance)
+
+"The diagnosed sensor keeps paging overnight; silence it until the morning" with a read-write token:
+
+1. `find_sensors` / `get_sensor` → the diagnosis names the sensor id (and `state`/`endOfMuting` show it is not muted yet).
+2. `mute_sensor(sensorId, endOfMuting=<tomorrow 09:00Z>)` → the echo renders `state: Muted` + the lift instant; omit `endOfMuting` to mute indefinitely.
+3. The server's system-initiated sweep auto-unmutes at expiry — no second tool call needed; `unmute_sensor(sensorId)` lifts it early, and the unknown/invisible id answers the same tool-error text as every item tool.
 
 ## API / Public Contracts
 
@@ -71,6 +80,8 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `create_sensor_policy(sensorId, policy)` | `PoliciesMcpTools.CreateSensorPolicyAsync` | `PolicyDto` echo of the STORED policy (server id); one atomic full-list sensor update; 422-class tool errors flatten field-keyed |
 | `update_sensor_policy(sensorId, policyId, policy)` / `delete_sensor_policy(sensorId, policyId)` | `PoliciesMcpTools` | Full replace at item granularity (template-owned policies: isDisabled only, else a conflict error) / `McpDeletedResult {id}` |
 | `create_/update_/delete_sensor_ttl_policy` | `PoliciesMcpTools` | The TTL twins — `interval` (TimeSpan string) or `inherit: true`, never both |
+| `mute_sensor(sensorId, endOfMuting?)` | `SensorMuteMcpTools.MuteSensorAsync` | `SensorDto` echo of the resulting sensor (`state: Muted`, `endOfMuting`); omitted/`null` `endOfMuting` = indefinitely, a future UTC ISO 8601 instant = until it (auto-unmuted at expiry by the core's sweep); a Blocked sensor answers a conflict tool error, a past instant the field-keyed validation error; delegates to `SensorMuteAdministrationService` — the same engine as `POST /api/v1/sensors/{id}/mute` (#1569) |
+| `unmute_sensor(sensorId)` | `SensorMuteMcpTools.UnmuteSensorAsync` | `SensorDto` echo; a not-muted sensor answers its unchanged state (idempotent); the same engine as `DELETE /api/v1/sensors/{id}/mute` |
 | `create_alert_template(template)` | `AlertsMcpTools.CreateAlertTemplateAsync` | `AlertTemplateDto` echo (server id, canonical chat names); applies policies tree-wide; requires the owner's write access at the target folder; #1401: the echo carries `warnings` (`[{sensor, reason}]`) when matching sensors REJECTED individual policies at apply time — the same strings the REST 201 body carries; #1565: `warnings` also carries one entry per path pattern that matched NO sensors (`sensor` = the pattern itself) — the dead-pattern feedback loop the schema text of `paths` (anchored full-path match, segment-local `*`, fixed depth, no any-depth wildcard) exists to prevent |
 | `update_alert_template(templateId, template)` / `delete_alert_template(templateId)` | `AlertsMcpTools` | Upsert with the both-folders move rule (the `warnings` echo of create applies to the update result too, #1401 and #1565) / tree-wide policy strip + `McpDeletedResult {id}` |
 | `create_alert_schedule(schedule)` | `AlertsMcpTools.CreateAlertScheduleAsync` | `AlertScheduleDto` echo; ADMIN owner + read-write token (the Global boundary is admin-only); name-unique, parser-validated YAML, system timezone id (IANA or Windows) |
@@ -87,6 +98,8 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The two chat tools — a thin rendering of `ChatsReadService` (the #1393 pattern) |
 | `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |
 | `src/server/HSMServer/Mcp/PoliciesMcpTools.cs` | The six policy write tools — delegations to `PolicyAdministrationService` |
+| `src/server/HSMServer/Mcp/SensorMuteMcpTools.cs` | The two sensor-mute write tools (#1569) — delegations to `SensorMuteAdministrationService` |
+| `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorMuteAdministrationService.cs` | The sensor-mute write engine shared with the REST `SensorMuteApiController` (#1569) |
 | `src/server/HSMServer/Mcp/McpToolWriteErrors.cs` | `PolicyWriteResult` -> tool error text, the same strings the REST arm produces (conflict detail pointers included) |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
@@ -112,8 +125,11 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                        │     (folder sight / caller-wide gate, as REST)
                        ├── ChatsMcpTools → ChatsReadService → IChatsManager
                        │     (caller-wide gate + global-or-visible-folder chat sight, as REST)
-                       └── FoldersMcpTools → FoldersReadService → IFolderManager
-                             (owner-sight folder filter, as REST)
+                       ├── FoldersMcpTools → FoldersReadService → IFolderManager
+                       │     (owner-sight folder filter, as REST)
+                       └── PoliciesMcpTools / SensorMuteMcpTools → PolicyAdministrationService /
+                             SensorMuteAdministrationService → ITreeValuesCache
+                             (the write engines, as REST; errors → McpException)
 ```
 
 The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service (`CancellationToken` parameters, same abort semantics as REST `RequestAborted`).

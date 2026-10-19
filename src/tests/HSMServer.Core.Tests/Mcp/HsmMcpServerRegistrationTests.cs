@@ -56,6 +56,8 @@ namespace HSMServer.Core.Tests.Mcp
                 "list_chats",
                 "list_folders",
                 "list_products",
+                "mute_sensor",
+                "unmute_sensor",
                 "update_alert_schedule",
                 "update_alert_template",
                 "update_sensor_policy",
@@ -110,7 +112,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(25, tools.Count);
+            Assert.Equal(27, tools.Count);
             Assert.All(tools, tool =>
             {
                 Assert.True(tool.ProtocolTool.OutputSchema.HasValue, tool.ProtocolTool.Name);
@@ -197,7 +199,7 @@ namespace HSMServer.Core.Tests.Mcp
             // REST: the full shape, null members included.
             Assert.Equal(
             [
-                "creationDate", "description", "enumOptions", "id", "lastUpdate",
+                "creationDate", "description", "endOfMuting", "enumOptions", "id", "lastUpdate",
                 "lastValue", "name", "parent", "path", "product", "state", "status", "type", "unit",
             ], [.. mvcKeys.Order()]);
         }
