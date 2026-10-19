@@ -34,14 +34,17 @@ namespace HSMServer.Mcp
         }
 
 
-        [McpServerTool(Name = "mute_sensor", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        // Idempotent=true (the retry-safe state-set writes): re-sending the
+        // same mute/unmute converges on the same state — no create/delete
+        // hazard the false flag of creates/deletes exists to warn about.
+        [McpServerTool(Name = "mute_sensor", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Mutes a sensor's alert notifications — the sensor's data keeps flowing, only notifications are suppressed. Omit endOfMuting to mute indefinitely (never auto-unmutes); pass a UTC ISO 8601 instant (in the future) to mute until it — the server auto-unmutes at expiry. The response echoes the resulting sensor (state, endOfMuting). Fails on a Blocked sensor and on an unknown/invisible sensor id.")]
         public async System.Threading.Tasks.Task<SensorDto> MuteSensorAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("Optional UTC ISO 8601 instant to mute until (must be in the future); omitted or null = mute indefinitely.")] DateTime? endOfMuting = null) =>
             McpToolWriteErrors.Unwrap(await _writer.MuteSensorAsync(sensorId, endOfMuting, User));
 
-        [McpServerTool(Name = "unmute_sensor", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        [McpServerTool(Name = "unmute_sensor", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Lifts a sensor's mute: alert notifications resume and the stored muting period clears. The response echoes the resulting sensor; a sensor that is not muted answers with its unchanged state (idempotent). Fails on a Blocked sensor and on an unknown/invisible sensor id.")]
         public async System.Threading.Tasks.Task<SensorDto> UnmuteSensorAsync(
             [Description("Sensor id.")] Guid sensorId) =>

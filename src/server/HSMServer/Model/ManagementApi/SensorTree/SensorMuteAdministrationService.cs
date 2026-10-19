@@ -60,7 +60,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public async Task<PolicyWriteResult<SensorDto>> MuteSensorAsync(Guid sensorId,
             DateTime? endOfMuting, ClaimsPrincipal user)
         {
-            var (sensor, failure) = ResolveMutableSensor(sensorId, user);
+            var failure = AuthorizeMutableSensor(sensorId, user);
 
             if (failure is not null)
                 return PolicyWriteResult<SensorDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
@@ -86,7 +86,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Unmute the sensor: notifications resume; the stored period clears.</summary>
         public async Task<PolicyWriteResult<SensorDto>> UnmuteSensorAsync(Guid sensorId, ClaimsPrincipal user)
         {
-            var (sensor, failure) = ResolveMutableSensor(sensorId, user);
+            var failure = AuthorizeMutableSensor(sensorId, user);
 
             if (failure is not null)
                 return PolicyWriteResult<SensorDto>.Fail(failure.Outcome, failure.Errors, failure.Message);
@@ -112,28 +112,27 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // Authorization FIRST (the evaluator owns the 404/403 split), then the
         // live lookup — an unknown id never reaches validation. The core's own
         // Blocked no-op is surfaced HERE as an explicit conflict instead of the
-        // silent success the web flow settles for.
-        private (BaseSensorModel Sensor, PolicyWriteFailure Failure) ResolveMutableSensor(Guid sensorId,
-            ClaimsPrincipal user)
+        // silent success the web flow settles for. Null = the write may proceed.
+        private PolicyWriteFailure AuthorizeMutableSensor(Guid sensorId, ClaimsPrincipal user)
         {
             var decision = _authorization.AuthorizeWrite(user, new ApiTokenResource(ApiTokenResourceKind.Sensor, sensorId));
 
             if (decision != ApiTokenAuthorization.Allowed)
             {
                 return decision == ApiTokenAuthorization.Forbidden
-                    ? (null, new PolicyWriteFailure { Outcome = PolicyWriteOutcome.Forbidden, Message = PolicyWriteResult.WriteDeniedMessage })
-                    : (null, new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound });
+                    ? new PolicyWriteFailure { Outcome = PolicyWriteOutcome.Forbidden, Message = PolicyWriteResult.WriteDeniedMessage }
+                    : new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound };
             }
 
             var sensor = _cache.GetSensor(sensorId);
 
             if (sensor is null)
-                return (null, new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound });
+                return new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound };
 
             if (sensor.State is SensorState.Blocked)
-                return (null, new PolicyWriteFailure { Outcome = PolicyWriteOutcome.Conflict, Message = BlockedMessage });
+                return new PolicyWriteFailure { Outcome = PolicyWriteOutcome.Conflict, Message = BlockedMessage };
 
-            return (sensor, null);
+            return null;
         }
 
         // The write initiator mirrors the web UI's CurrentInitiator: the token's

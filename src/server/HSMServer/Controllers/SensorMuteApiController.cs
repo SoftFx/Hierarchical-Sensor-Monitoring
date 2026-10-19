@@ -69,7 +69,6 @@ namespace HSMServer.Controllers
         /// <param name="sensorId">Sensor id.</param>
         [HttpDelete("mute")]
         [ProducesResponseType(typeof(SensorDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
