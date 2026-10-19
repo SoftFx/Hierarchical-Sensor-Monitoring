@@ -142,9 +142,6 @@ namespace HSMServer.Mcp
         return id is null && !dryRun ? null : new ChangeSetWriteOptions { ChangeSetId = id, DryRun = dryRun };
     }
 
-    internal static object JournaledValue<T>(PolicyWriteResult<T> result) =>
-        result.IsDryRun ? result.Preview : result.Value;
-
 
         // The shared ambient-principal accessor (see McpToolContext); a property
         // so the tool bodies read like their REST twins' `User`.

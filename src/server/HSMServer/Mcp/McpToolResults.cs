@@ -127,7 +127,8 @@ namespace HSMServer.Mcp
     /// <summary>Result of the list_alert_templates tool.</summary>
     [Description("Result of the list_alert_templates tool: one page of visible templates plus the effective paging echo.")]
     public sealed record McpAlertTemplatesResult
-    {        /// <summary>The visible templates of the served page, ordered by name.</summary>
+    {
+        /// <summary>The visible templates of the served page, ordered by name.</summary>
         [Description("The visible templates of the served page, ordered by name.")]
         public List<AlertTemplateDto> Templates { get; init; }
 
@@ -254,8 +255,8 @@ namespace HSMServer.Mcp
         [Description("The visible change sets of the served slice, newest first.")]
         public List<ChangeSetSummaryDto> ChangeSets { get; init; }
 
-        /// <summary>Total visible change sets, whatever the limit.</summary>
-        [Description("Total visible change sets, whatever the limit.")]
+        /// <summary>Total visible change sets up to the server-side cap (200).</summary>
+        [Description("Total visible change sets up to the server-side cap (200).")]
         public int TotalFound { get; init; }
 
         /// <summary>The effective page size (the clamped `limit`).</summary>

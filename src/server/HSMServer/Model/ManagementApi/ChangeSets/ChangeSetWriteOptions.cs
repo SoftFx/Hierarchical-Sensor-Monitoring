@@ -15,8 +15,6 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         public Guid? ChangeSetId { get; init; }
 
         public bool DryRun { get; init; }
-
-        public static ChangeSetWriteOptions None => null;
     }
 
 

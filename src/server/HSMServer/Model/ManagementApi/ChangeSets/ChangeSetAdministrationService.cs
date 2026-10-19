@@ -40,6 +40,12 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         bool CanRead(ChangeSetEntry entry);
 
         bool CanWrite(ChangeSetEntry entry);
+
+        // A fan-out image's node (sensor or product of a template apply or a
+        // schedule detach): a viewer who sees the node sees the change set
+        // touching it (story 13), even when the entry itself (a folder-bound
+        // template) is outside the viewer's sight.
+        bool CanReadNode(NodePolicyImage image);
     }
 
 
@@ -103,7 +109,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             access = AccessOf(user, access);
 
             var visible = _journal.GetAll()
-                .Where(set => set.Entries.Any(e => access.CanRead(e)))
+                .Where(set => set.Entries.Any(e => access.CanRead(e) || HasVisibleNode(e, access)))
                 .Where(set => Matches(set, filter))
                 .Select(set => RenderSummary(set, access))
                 .ToList();
@@ -122,7 +128,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
             // Anti-enumeration: an unknown id and an invisible change set
             // answer the same 404.
-            if (set is null || set.Entries.All(e => !access.CanRead(e)))
+            if (set is null || set.Entries.All(e => !access.CanRead(e) && !HasVisibleNode(e, access)))
                 return PolicyWriteResult<ChangeSetDetailsDto>.Fail(PolicyWriteOutcome.NotFound);
 
             return PolicyWriteResult<ChangeSetDetailsDto>.Ok(RenderDetails(set, access));
@@ -137,7 +143,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             access = AccessOf(user, access);
             var set = _journal.Get(id);
 
-            if (set is null || set.Entries.All(e => !access.CanRead(e)))
+            if (set is null || set.Entries.All(e => !access.CanRead(e) && !HasVisibleNode(e, access)))
                 return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.NotFound);
 
             if (set.Status == ChangeSetStatus.RolledBack)
@@ -323,32 +329,74 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
             // Then the per-sensor exact restores: the fan-out images force
             // every touched sensor to its recorded before-list regardless of
-            // what the template machinery just did.
+            // what the template machinery just did. Each restored node's
+            // state-at-rollback and restored lists ride the rollback's own
+            // entry, so the redo path sees the same per-node images.
+            var rollbackFanout = new List<NodePolicyImage>();
+
             foreach (var image in entry.Fanout ?? [])
             {
+                PolicyWriteResult nodeResult;
+                NodePolicyImage rollbackImage;
+
                 if (image.NodeKind == ChangeSetNodeKind.Product)
                 {
-                    var productResult = await _policies.RestoreProductTtlAsync(image.NodeId,
-                        image.BeforeTtlPolicies, user);
+                    var beforeTtl = CaptureProductTtl(image.NodeId);
 
-                    if (!productResult.Success)
-                        return $"Sensor list restore failed on {image.Path}: {productResult.Failure.Message}";
+                    nodeResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies, user);
+                    rollbackImage = RollbackProductImage(image, beforeTtl);
                 }
                 else
                 {
-                    var sensorResult = await _policies.RestoreSensorListsAsync(image.NodeId,
-                        image.BeforePolicies, image.BeforeTtlPolicies, user);
+                    var beforeData = CaptureSensorData(image.NodeId);
+                    var beforeTtl = CaptureSensorTtl(image.NodeId);
 
-                    if (!sensorResult.Success)
-                        return $"Sensor list restore failed on {image.Path}: {sensorResult.Failure.Message}";
+                    nodeResult = await _policies.RestoreSensorListsAsync(image.NodeId,
+                        image.BeforePolicies, image.BeforeTtlPolicies, user);
+                    rollbackImage = RollbackSensorImage(image, beforeData, beforeTtl);
                 }
+
+                if (!nodeResult.Success)
+                    return $"Sensor list restore failed on {image.Path}: {nodeResult.Failure.Message}";
+
+                rollbackFanout.Add(rollbackImage);
             }
 
             RecordRollbackEntry(rollbackChangeSetId, author, entry,
-                beforeTemplate: beforeTemplate, afterTemplate: _cache.GetAlertTemplate(entry.EntityId)?.ToEntity());
+                beforeTemplate: beforeTemplate, afterTemplate: _cache.GetAlertTemplate(entry.EntityId)?.ToEntity(),
+                fanout: rollbackFanout);
 
             return null;
         }
+
+        private NodePolicyImage RollbackSensorImage(NodePolicyImage original,
+            List<PolicyEntity> beforeData, List<PolicyEntity> beforeTtl)
+        {
+            var sensor = _cache.GetSensor(original.NodeId);
+
+            return new NodePolicyImage
+            {
+                NodeKind = original.NodeKind,
+                NodeId = original.NodeId,
+                RootProductId = original.RootProductId,
+                Path = original.Path,
+                BeforePolicies = beforeData,
+                AfterPolicies = sensor is null ? null : CaptureSensorData(original.NodeId),
+                BeforeTtlPolicies = beforeTtl,
+                AfterTtlPolicies = sensor is null ? null : CaptureSensorTtl(original.NodeId),
+            };
+        }
+
+        private NodePolicyImage RollbackProductImage(NodePolicyImage original, List<PolicyEntity> beforeTtl) =>
+            new()
+            {
+                NodeKind = original.NodeKind,
+                NodeId = original.NodeId,
+                RootProductId = original.RootProductId,
+                Path = original.Path,
+                BeforeTtlPolicies = beforeTtl,
+                AfterTtlPolicies = CaptureProductTtl(original.NodeId),
+            };
 
         private async Task<string> RestoreScheduleAsync(ChangeSetEntry entry, ClaimsPrincipal user,
             Guid rollbackChangeSetId, InitiatorInfo author)
@@ -363,16 +411,36 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 return result.Failure.Message;
 
             // The detach fan-out: restore the recorded per-node lists and the
-            // template rows that carried the schedule reference.
+            // template rows that carried the schedule reference; each node's
+            // rollback images ride the rollback's own entry.
+            var scheduleRollbackFanout = new List<NodePolicyImage>();
+
             foreach (var image in entry.Fanout ?? [])
             {
-                var fanoutResult = image.NodeKind == ChangeSetNodeKind.Product
-                    ? await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies, user)
-                    : await _policies.RestoreSensorListsAsync(image.NodeId, image.BeforePolicies,
+                PolicyWriteResult fanoutResult;
+                NodePolicyImage rollbackImage;
+
+                if (image.NodeKind == ChangeSetNodeKind.Product)
+                {
+                    var beforeTtl = CaptureProductTtl(image.NodeId);
+
+                    fanoutResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies, user);
+                    rollbackImage = RollbackProductImage(image, beforeTtl);
+                }
+                else
+                {
+                    var beforeData = CaptureSensorData(image.NodeId);
+                    var beforeTtl = CaptureSensorTtl(image.NodeId);
+
+                    fanoutResult = await _policies.RestoreSensorListsAsync(image.NodeId, image.BeforePolicies,
                         image.BeforeTtlPolicies, user);
+                    rollbackImage = RollbackSensorImage(image, beforeData, beforeTtl);
+                }
 
                 if (!fanoutResult.Success)
                     return $"Detach restore failed on {image.Path}: {fanoutResult.Failure.Message}";
+
+                scheduleRollbackFanout.Add(rollbackImage);
             }
 
             foreach (var templateEntity in entry.BeforeTemplates ?? [])
@@ -384,7 +452,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             }
 
             RecordRollbackEntry(rollbackChangeSetId, author, entry,
-                beforeSchedule: beforeSchedule, afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity());
+                beforeSchedule: beforeSchedule, afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
+                fanout: scheduleRollbackFanout);
 
             return null;
         }
@@ -550,6 +619,9 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Visibility and authorization ===
 
+        private static bool HasVisibleNode(ChangeSetEntry entry, IChangeSetAccess access) =>
+            (entry.Fanout ?? []).Any(access.CanReadNode);
+
         // The default access: the token evaluator over the caller's
         // HsmApiToken principal. The web UI overrides with its cookie-`User`
         // implementation — the evaluator resolves token principals only.
@@ -578,6 +650,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             // principal's change set is rollbackable with write access).
             public bool CanWrite(ChangeSetEntry entry) =>
                 _authorization.AuthorizeWrite(_user, EntryResource(entry)) == ApiTokenAuthorization.Allowed;
+
+            public bool CanReadNode(NodePolicyImage image) =>
+                _authorization.AuthorizeRead(_user,
+                    new ApiTokenResource(ApiTokenResourceKind.Product, image.RootProductId)) ==
+                ApiTokenAuthorization.Allowed;
         }
 
         private static ApiTokenResource EntryResource(ChangeSetEntry entry) =>
@@ -639,7 +716,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                         AfterTemplate = RenderJson(e.AfterTemplate),
                         BeforeSchedule = RenderJson(e.BeforeSchedule),
                         AfterSchedule = RenderJson(e.AfterSchedule),
-                        Fanout = (e.Fanout ?? []).Where(i => access.CanRead(e)).Select(i => new NodeImageDto
+                        Fanout = (e.Fanout ?? []).Where(i => access.CanReadNode(i)).Select(i => new NodeImageDto
                         {
                             NodeKind = i.NodeKind.ToString(),
                             Id = i.NodeId.ToString(),
@@ -704,7 +781,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         private void RecordRollbackEntry(Guid rollbackChangeSetId, InitiatorInfo author, ChangeSetEntry original,
             List<PolicyEntity> before = null, List<PolicyEntity> after = null,
             AlertTemplateEntity beforeTemplate = null, AlertTemplateEntity afterTemplate = null,
-            AlertScheduleEntity beforeSchedule = null, AlertScheduleEntity afterSchedule = null)
+            AlertScheduleEntity beforeSchedule = null, AlertScheduleEntity afterSchedule = null,
+            List<NodePolicyImage> fanout = null)
         {
             // The rollback entry mirrors the original entry's kind and entity
             // with the INVERSE operation, so a redo (rollback of the
@@ -729,6 +807,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 AfterTemplate = afterTemplate,
                 BeforeSchedule = beforeSchedule,
                 AfterSchedule = afterSchedule,
+                Fanout = fanout,
             });
         }
     }

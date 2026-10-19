@@ -20,7 +20,7 @@ namespace HSMServer.Mcp
     [Description("Change-set tools of the undo journal: every configuration write through the API or these tools is journaled under a changeSetId. List change sets, inspect their before/after images, and roll them back (undo) with conflict detection, force and dry-run.")]
     public sealed class ChangeSetsMcpTools
     {
-private const int MaxLimit = 200;
+        private const int MaxLimit = 200;
 
         private readonly IChangeSetAdministrationService _changeSets;
         private readonly IHttpContextAccessor _http;

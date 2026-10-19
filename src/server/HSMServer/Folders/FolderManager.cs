@@ -54,7 +54,8 @@ namespace HSMServer.Folders
 
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService,
-                             IChatsManager chatsManager)
+                             IChatsManager chatsManager,
+                             HSMServer.Core.ChangeSets.IChangeSetJournal changeSetJournal = null)
         {
             _databaseCore = databaseCore;
 
@@ -69,7 +70,10 @@ namespace HSMServer.Folders
 
             _chatsManager = chatsManager;
 
-            _changeSetJournal = new HSMServer.Core.ChangeSets.ChangeSetJournal(databaseCore);
+            // The SINGLETON journal when DI provides it (the process-wide
+            // read-modify-write lock must be shared with the write hooks);
+            // the local fallback serves only the mocked harnesses.
+            _changeSetJournal = changeSetJournal ?? new HSMServer.Core.ChangeSets.ChangeSetJournal(databaseCore);
         }
 
         private void FillFolderChats(FolderEventArgs e)

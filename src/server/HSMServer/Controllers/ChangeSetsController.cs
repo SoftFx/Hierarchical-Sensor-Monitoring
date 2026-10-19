@@ -99,6 +99,9 @@ namespace HSMServer.Controllers
                     _ => false,
                 };
 
+            public bool CanReadNode(NodePolicyImage image) =>
+                _user is not null && _user.IsProductAvailable(image.RootProductId);
+
             private static (ApiTokenResourceKind Kind, Guid Id)? EntryResourceOf(ChangeSetEntry entry) =>
                 entry.Kind switch
                 {

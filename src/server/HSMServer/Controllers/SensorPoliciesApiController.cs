@@ -93,14 +93,14 @@ namespace HSMServer.Controllers
             var result = await _writer.CreateSensorPolicyAsync(sensorId, dto, User, Request.WriteOptions());
 
             if (result.IsDryRun)
-            return Ok(result.Preview);
+                return Ok(result.Preview);
 
-if (!result.Success)
+            if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-Response.SetChangeSet(result.ChangeSetId);
+            Response.SetChangeSet(result.ChangeSetId);
 
-            return  CreatedAtAction(nameof(GetPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
+            return CreatedAtAction(nameof(GetPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
         }
 
         /// <summary>
@@ -195,14 +195,14 @@ Response.SetChangeSet(result.ChangeSetId);
             var result = await _writer.CreateSensorTtlPolicyAsync(sensorId, dto, User, Request.WriteOptions());
 
             if (result.IsDryRun)
-            return Ok(result.Preview);
+                return Ok(result.Preview);
 
-if (!result.Success)
+            if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-Response.SetChangeSet(result.ChangeSetId);
+            Response.SetChangeSet(result.ChangeSetId);
 
-            return  CreatedAtAction(nameof(GetTtlPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
+            return CreatedAtAction(nameof(GetTtlPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
         }
 
         /// <summary>Replace one TTL policy; the interval/inherit switch is part of the content.</summary>

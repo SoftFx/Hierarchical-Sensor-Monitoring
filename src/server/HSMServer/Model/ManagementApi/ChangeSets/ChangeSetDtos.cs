@@ -139,7 +139,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         public string Path { get; init; }
 
-        /// <summary>wouldRestore | restored | skipped | failed</summary>
+        /// <summary>wouldRestore | restored | failed</summary>
         public string Status { get; init; }
 
         public string Message { get; init; }

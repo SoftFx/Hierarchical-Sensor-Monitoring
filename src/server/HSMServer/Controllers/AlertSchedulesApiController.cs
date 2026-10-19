@@ -103,14 +103,14 @@ namespace HSMServer.Controllers
             var result = await _writer.CreateScheduleAsync(User, dto, Request.WriteOptions());
 
             if (result.IsDryRun)
-            return Ok(result.Preview);
+                return Ok(result.Preview);
 
-if (!result.Success)
+            if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-Response.SetChangeSet(result.ChangeSetId);
+            Response.SetChangeSet(result.ChangeSetId);
 
-            return  CreatedAtAction(nameof(GetSchedule), new { id = result.Value.Id }, result.Value);
+            return CreatedAtAction(nameof(GetSchedule), new { id = result.Value.Id }, result.Value);
         }
 
         /// <summary>

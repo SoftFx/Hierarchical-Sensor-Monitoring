@@ -105,7 +105,7 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> CreateAlertTemplateAsync(
             [Description("The template — name (globally unique), folderId, sensor type, path patterns, policies and TTL entries.")] AlertTemplateDto template,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _templateWriter.CreateTemplateAsync(User, template, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));
 
@@ -120,7 +120,7 @@ namespace HSMServer.Mcp
             [Description("Template id.")] Guid templateId,
             [Description("The new template content; the body id, when carried, must equal templateId.")] AlertTemplateDto template,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _templateWriter.UpdateTemplateAsync(templateId, User, template, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));
 
@@ -134,7 +134,7 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> DeleteAlertTemplateAsync(
             [Description("Template id.")] Guid templateId,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _templateWriter.DeleteTemplateAsync(templateId, User, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));
 
@@ -150,7 +150,7 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> CreateAlertScheduleAsync(
             [Description("The schedule — name, timezone, schedule (YAML).")] AlertScheduleUpsertDto schedule,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _scheduleWriter.CreateScheduleAsync(User, schedule, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));
 
@@ -165,7 +165,7 @@ namespace HSMServer.Mcp
             [Description("Schedule id.")] Guid scheduleId,
             [Description("The new schedule content — name, timezone, schedule (YAML).")] AlertScheduleUpsertDto schedule,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _scheduleWriter.UpdateScheduleAsync(scheduleId, User, schedule, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));
 
@@ -179,7 +179,7 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> DeleteAlertScheduleAsync(
             [Description("Schedule id.")] Guid scheduleId,
             [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
-            [Description("Validate and report the affected entities WITHOUT applying anything (for templates: the full fan-out target set).")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
             var result = await _scheduleWriter.DeleteScheduleAsync(scheduleId, User,
                 cancellationToken: default, PoliciesMcpTools.WriteOptionsOf(changeSetId, dryRun));

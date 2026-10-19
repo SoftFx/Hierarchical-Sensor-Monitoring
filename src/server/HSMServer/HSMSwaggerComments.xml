@@ -899,7 +899,7 @@
             <summary>The visible change sets of the served slice, newest first.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChangeSetsResult.TotalFound">
-            <summary>Total visible change sets, whatever the limit.</summary>
+            <summary>Total visible change sets up to the server-side cap (200).</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChangeSetsResult.Limit">
             <summary>The effective page size (the clamped `limit`).</summary>
@@ -2125,7 +2125,7 @@
             <summary>The change set the rollback itself was journaled under (redo handle).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.RollbackEntryReportDto.Status">
-            <summary>wouldRestore | restored | skipped | failed</summary>
+            <summary>wouldRestore | restored | failed</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder">
             <summary>
@@ -2142,6 +2142,14 @@
             The change-set id a write journals under: the client-supplied id
             when grouping, a fresh id when the write stands alone. Also used as
             the dry-run echo id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
+            <summary>
+            Append one entry; false when the journal write failed (the undo
+            point is lost — logged loudly). Callers echo the change-set id on
+            the write response ONLY on true, so a client never receives an
+            undo handle that does not exist.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions">

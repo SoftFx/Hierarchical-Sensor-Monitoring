@@ -370,6 +370,9 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.CreateTemplate))] = [400, 401, 403, 404, 409, 500],
             [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.UpdateTemplate))] = [400, 401, 403, 404, 409, 500],
             [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.DeleteTemplate))] = [401, 403, 404, 409, 500],
+            [(typeof(ChangeSetsApiController), nameof(ChangeSetsApiController.ListChangeSets))] = [401, 500],
+            [(typeof(ChangeSetsApiController), nameof(ChangeSetsApiController.GetChangeSet))] = [401, 404, 500],
+            [(typeof(ChangeSetsApiController), nameof(ChangeSetsApiController.Rollback))] = [401, 403, 404, 409, 500],
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedules))] = [400, 401, 403, 500],
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedule))] = [401, 403, 404, 500],
 

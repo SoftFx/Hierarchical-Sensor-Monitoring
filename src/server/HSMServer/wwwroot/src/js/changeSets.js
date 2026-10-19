@@ -36,30 +36,40 @@
             }
 
             var conflicts = (preview.entries || []).filter(function (e) { return (e.conflicts || []).length > 0; });
+            var hasConflicts = conflicts.length > 0;
             var body = 'Roll back this change set (' + (preview.status || 'completed') + ')?<br/>' +
                 (preview.message || '') +
-                (conflicts.length > 0
+                (hasConflicts
                     ? '<div class="alert alert-warning mt-2 mb-0 small">' +
                       conflicts.map(function (e) {
                           return '<div><strong>' + e.path + '</strong></div>' +
                               e.conflicts.map(function (c) { return '<div>' + c + '</div>'; }).join('');
-                      }).join('') + '</div>'
+                      }).join('') +
+                      '</div>' +
+                      '<div class="mt-1">Entities changed after the change set was recorded. ' +
+                      'Forcing the rollback DELIBERATELY overrides those changes with the recorded ' +
+                      'before-images.</div>'
                     : '');
 
-            window.showConfirmationModal('Rollback change set', body, function () {
-                $.post(window.changeSetsUrls.rollback, { id: changeSetId, force: conflicts.length > 0 }, function (result) {
-                    var text = result.error
-                        ? result.error
-                        : (result.message || 'Rolled back.') +
-                          (result.status === 'partial' ? ' Retry to restore the failed entries.' : '');
+            window.showConfirmationModal(
+                hasConflicts ? 'Rollback has conflicts' : 'Rollback change set',
+                body,
+                function () {
+                    $.post(window.changeSetsUrls.rollback, { id: changeSetId, force: hasConflicts }, function (result) {
+                        var text = result.error
+                            ? result.error
+                            : (result.message || 'Rolled back.') +
+                              (result.status === 'partial' ? ' Retry to restore the failed entries.' : '');
 
-                    window.showConfirmationModal(
-                        result.error || result.status === 'partial' ? 'Rollback partial' : 'Rollback complete',
-                        text, null);
+                        window.showConfirmationModal(
+                            result.error || result.status === 'partial' ? 'Rollback partial' : 'Rollback complete',
+                            text, null);
 
-                    refreshTable();
-                });
-            });
+                        refreshTable();
+                    });
+                },
+                null,
+                hasConflicts ? 'Force rollback' : 'Rollback');
         });
     }
 

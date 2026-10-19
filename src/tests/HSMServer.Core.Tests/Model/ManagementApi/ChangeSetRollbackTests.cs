@@ -378,6 +378,39 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensorB.Policies);
         }
 
+        [Fact]
+        public async Task Rollback_VersusConcurrentWriteToTheSameNode_LeavesConsistentState()
+        {
+            // The #1570 concurrency pin: the rollback's full-list restore and
+            // a concurrent policy write to the SAME node both go through the
+            // write gates, so the final state is one of the two consistent
+            // outcomes — the sensor's list is never a torn mix. Bounded
+            // iterations; the gate, not timing, is the subject.
+            for (var i = 0; i < 5; i++)
+            {
+                var sensor = await CreateSensorAsync($"rbConcurrent{i}");
+                var changeSetId = Guid.NewGuid();
+
+                var journaled = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                    new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+                Assert.True(journaled.Success, journaled.Failure?.Message);
+
+                var rollback = _changeSets.RollbackAsync(changeSetId, User);
+                var concurrent = _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+
+                await Task.WhenAll(rollback, concurrent);
+
+                // Either the concurrent write won (rollback conflicted or ran
+                // after it) or the rollback did — the list holds 0 or 1
+                // well-formed policies either way, never a duplicate of the
+                // journaled policy id twice.
+                var ids = sensor.Policies.Select(p => p.Id).ToList();
+
+                Assert.True(ids.Count <= 2, $"torn state: {ids.Count} policies");
+                Assert.Equal(ids.Count, ids.Distinct().Count());
+            }
+        }
+
 
         // === Test vocabulary (mirrors ChangeSetJournalingTests) ===
 

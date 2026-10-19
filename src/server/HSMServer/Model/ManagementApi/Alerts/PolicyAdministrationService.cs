@@ -1284,27 +1284,36 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // echoed change-set id. A failed write records nothing.
         private PolicyWriteResult<T> RecordSensorList<T>(PolicyWriteResult<T> result, Guid changeSetId,
             InitiatorInfo initiator, ChangeSetEntryKind kind, ChangeSetOperation operation,
-            BaseSensorModel sensor, List<PolicyEntity> before)
-        {
-            if (!result.Success)
-                return result;
-
-            _changeSets.Record(changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
-
-            return result.WithChangeSet(changeSetId);
-        }
+            BaseSensorModel sensor, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
 
         private PolicyWriteResult RecordSensorList(PolicyWriteResult result, Guid changeSetId,
             InitiatorInfo initiator, ChangeSetEntryKind kind, ChangeSetOperation operation,
-            BaseSensorModel sensor, List<PolicyEntity> before)
-        {
-            if (!result.Success)
-                return result;
+            BaseSensorModel sensor, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
 
-            _changeSets.Record(changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
+        private PolicyWriteResult<T> RecordProductTtlList<T>(PolicyWriteResult<T> result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
 
-            return result.WithChangeSet(changeSetId);
-        }
+        private PolicyWriteResult RecordProductTtlList(PolicyWriteResult result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
+
+        // The echoed change-set id is stamped ONLY when the journal entry
+        // actually landed (Record's false = the undo point is lost; echoing
+        // the id anyway would hand the client a dead undo handle).
+        private PolicyWriteResult<T> RecordList<T>(PolicyWriteResult<T> result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntry entry) =>
+            !result.Success || !_changeSets.Record(changeSetId, initiator, entry)
+                ? result
+                : result.WithChangeSet(changeSetId);
+
+        private PolicyWriteResult RecordList(PolicyWriteResult result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntry entry) =>
+            !result.Success || !_changeSets.Record(changeSetId, initiator, entry)
+                ? result
+                : result.WithChangeSet(changeSetId);
 
         private static ChangeSetEntry SensorListEntry(ChangeSetEntryKind kind, ChangeSetOperation operation,
             BaseSensorModel sensor, List<PolicyEntity> before) =>
@@ -1320,28 +1329,6 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
                     : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor),
             };
-
-        private PolicyWriteResult<T> RecordProductTtlList<T>(PolicyWriteResult<T> result, Guid changeSetId,
-            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before)
-        {
-            if (!result.Success)
-                return result;
-
-            _changeSets.Record(changeSetId, initiator, ProductTtlListEntry(operation, product, before));
-
-            return result.WithChangeSet(changeSetId);
-        }
-
-        private PolicyWriteResult RecordProductTtlList(PolicyWriteResult result, Guid changeSetId,
-            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before)
-        {
-            if (!result.Success)
-                return result;
-
-            _changeSets.Record(changeSetId, initiator, ProductTtlListEntry(operation, product, before));
-
-            return result.WithChangeSet(changeSetId);
-        }
 
         private static ChangeSetEntry ProductTtlListEntry(ChangeSetOperation operation, ProductModel product,
             List<PolicyEntity> before) =>

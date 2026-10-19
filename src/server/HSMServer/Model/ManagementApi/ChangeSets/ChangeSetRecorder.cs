@@ -37,17 +37,27 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// </summary>
         public static Guid ResolveChangeSetId(ChangeSetWriteOptions write) => write?.ChangeSetId ?? Guid.NewGuid();
 
-        public void Record(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry)
+        /// <summary>
+        /// Append one entry; false when the journal write failed (the undo
+        /// point is lost — logged loudly). Callers echo the change-set id on
+        /// the write response ONLY on true, so a client never receives an
+        /// undo handle that does not exist.
+        /// </summary>
+        public bool Record(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry)
         {
             try
             {
                 _journal.Append(changeSetId, author, entry);
+
+                return true;
             }
             catch (Exception e)
             {
                 _logger.LogError(e,
                     "Undo point lost: journal append failed for change set {ChangeSetId} ({Kind} {Operation} on {EntityId})",
                     changeSetId, entry.Kind, entry.Operation, entry.EntityId);
+
+                return false;
             }
         }
 
