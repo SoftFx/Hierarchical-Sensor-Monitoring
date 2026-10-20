@@ -41,10 +41,12 @@
 # ships it to VictoriaLogs with durable delivery (checkpoints + on-disk buffer; automatic replay
 # after an outage — no manual backfill). .env.example pairs COMPOSE_PROFILES=logs with
 # HSM_STRUCTURED_LOGS=true, so fresh installs get the full pipeline.
-# Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql) with basic auth
-# only when VL_UI_USER/VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so
-# a fresh install stores logs but serves no public log routes until real credentials are set.
-# Disable entirely by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
+# Caddy exposes VictoriaLogs' UI (/logs/select/vmui) and query API (/logs/select/logsql)
+# at https://<HSM_DOMAIN>/logs/, gated by the HSM admin session (forward_auth against the
+# app): there is no separate credential, and a fresh install with the 'logs' profile serves
+# the routes to every logged-in HSM admin immediately.
+# Disable entirely by removing 'logs' from COMPOSE_PROFILES (Caddy then answers 502 on
+# /logs/ — it cannot see which profiles are active). See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -104,6 +106,9 @@ services:
     profiles: ['logs']
     command:
       - '-httpListenAddr=:9428'
+      # Serve everything under /logs so Caddy can proxy the read routes pass-through (no
+      # path rewriting); vmui then generates its URLs under that prefix by itself.
+      - '-http.pathPrefix=/logs'
       - '-storageDataPath=/victoria-logs-data'
       - '-retentionPeriod=${VL_RETENTION_PERIOD:-30d}'
       - '-retention.maxDiskSpaceUsageBytes=${VL_RETENTION_MAX_DISK:-10GiB}'
@@ -136,7 +141,8 @@ services:
       - '-fileCollector.msgField=_msg'
       - '-fileCollector.timeField=_time'
       - '-tmpDataPath=/vlagent-data'
-      - '-remoteWrite.url=http://victorialogs:9428/insert/native'
+      # The store serves everything under /logs (-http.pathPrefix), ingest included.
+      - '-remoteWrite.url=http://victorialogs:9428/logs/insert/native'
       - '-remoteWrite.maxDiskUsagePerURL=1024MB'
     mem_limit: 128m
     volumes:
@@ -144,7 +150,7 @@ services:
       - 'vlagent-data:/vlagent-data'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-3'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-4'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -158,9 +164,6 @@ services:
       HSM_DNS_PROVIDER: '${HSM_DNS_PROVIDER:-}'
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
-      # Basic auth for the VictoriaLogs UI and query API; the entrypoint hashes the password.
-      VL_UI_USER: '${VL_UI_USER:-}'
-      VL_UI_PASSWORD: '${VL_UI_PASSWORD:-}'
     ports:
       - '80:80'
       - '443:443'

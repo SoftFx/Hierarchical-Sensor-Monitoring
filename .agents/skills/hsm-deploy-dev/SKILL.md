@@ -141,7 +141,7 @@ releases — filter them out):
      upstream change, say so in the plan message instead of applying silently.
    - **Never modify the remote `.env`** (holds TLS tokens). Do compare its *key names*
      against `origin/master:.env.example` and report keys the user may want to add
-     (e.g. `HSM_STRUCTURED_LOGS`, `VL_UI_*`). Extract names only — never `cat` the
+     (e.g. `HSM_STRUCTURED_LOGS`, `VL_RETENTION_PERIOD`). Extract names only — never `cat` the
      file (that puts tokens into the chat), never values, no
      `docker compose config`:
 

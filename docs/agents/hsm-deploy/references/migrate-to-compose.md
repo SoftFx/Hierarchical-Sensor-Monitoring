@@ -109,8 +109,9 @@ more than necessary):
 - `HSM_DOMAIN` — the address clients use (bare DNS name or IP).
 - `HSM_CERTIFICATE` — mode: `letsencrypt-http` / `letsencrypt-dns` (+ `HSM_DNS_PROVIDER`
   and the matching token) / `self-signed` / `custom`.
-- Log stack: keep the shipped `COMPOSE_PROFILES=logs` + `HSM_STRUCTURED_LOGS=true`;
-  `VL_UI_USER`/`VL_UI_PASSWORD` stay commented out unless the user wants the log UI.
+- Log stack: keep the shipped `COMPOSE_PROFILES=logs` + `HSM_STRUCTURED_LOGS=true`. The
+  log UI (`/logs/select/vmui`) needs no `.env` keys — it is admitted for logged-in HSM
+  admins only.
 
 ## 5. Switch over
 
