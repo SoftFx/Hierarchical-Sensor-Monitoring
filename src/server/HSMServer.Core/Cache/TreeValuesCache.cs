@@ -375,6 +375,12 @@ namespace HSMServer.Core.Cache
 
         private void RemoveProduct(RemoveProductRequest request)
         {
+            // #1570 deletion cleanup: the whole subtree purges in ONE journal
+            // pass (every removed node's id collected here) — a per-node
+            // purge would rescan and deserialize every change set once
+            // per sensor of the deleted tree, under the journal-wide lock.
+            List<Guid> purgedEntityIds = [];
+
             void RemoveProduct(Guid productId, InitiatorInfo initiator)
             {
                 if (!_tree.Remove(productId, out var product))
@@ -384,7 +390,7 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId, initiator);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId, initiator, product.Parent?.Id);
+                    RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -393,7 +399,7 @@ namespace HSMServer.Core.Cache
                 product.Parent?.SubProducts.TryRemove(productId, out _);
                 _database.RemoveProduct(product.Id.ToString());
 
-                PurgeChangeSets(product.Id);
+                purgedEntityIds.Add(product.Id);
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
@@ -415,6 +421,8 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(request.Id, request.InitiatorInfo);
 
                     RemoveProductFromCache(product);
+
+                    PurgeChangeSets(purgedEntityIds);
 
                     if (!product.IsRoot)
                         UpdateProduct(product.Parent);
@@ -953,19 +961,22 @@ namespace HSMServer.Core.Cache
         // #1570 deletion cleanup, mirroring the Journal lifecycle: undo
         // records must not outlive their entities. A purge failure is logged
         // and swallowed — it must not break the deletion itself.
-        private void PurgeChangeSets(Guid entityId)
+        private void PurgeChangeSets(Guid entityId) => PurgeChangeSets([entityId]);
+
+        private void PurgeChangeSets(IReadOnlyCollection<Guid> entityIds)
         {
             try
             {
-                _changeSetJournal?.PurgeReferences(entityId);
+                _changeSetJournal?.PurgeReferences(entityIds);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Change-set purge failed for entity {entityId}");
+                _logger.Error(ex, $"Change-set purge failed for {entityIds.Count} entity(ies)");
             }
         }
 
-        private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
+        private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
+            List<Guid> purgeIds = null)
         {
             try
             {
@@ -995,7 +1006,13 @@ namespace HSMServer.Core.Cache
 
                 _database.RemoveSensorWithMetadata(sensorId);
 
-                PurgeChangeSets(sensorId);
+                // Inside a product deletion the sensor's id joins the
+                // subtree's single batch purge; a standalone sensor removal
+                // purges on its own.
+                if (purgeIds is not null)
+                    purgeIds.Add(sensorId);
+                else
+                    PurgeChangeSets(sensorId);
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
             }

@@ -9,10 +9,12 @@ using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Model.ManagementApi.ChangeSets
@@ -33,7 +35,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     /// <summary>
     /// Per-entry sight/write decisions of the undo-journal surface. The
     /// default is the token evaluator; the web UI supplies a cookie-`User`
-    /// implementation (the evaluator only resolves HsmApiToken principals).
+    /// implementation (the evaluator only resolves token principals).
     /// </summary>
     public interface IChangeSetAccess
     {
@@ -46,6 +48,19 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         // touching it (story 13), even when the entry itself (a folder-bound
         // template) is outside the viewer's sight.
         bool CanReadNode(NodePolicyImage image);
+
+        // A fan-out node's WRITE decision for the rollback pre-flight: the
+        // restores re-authorize per node, so a caller who cannot write every
+        // touched node would apply half a fan-out before failing — refuse
+        // such a rollback up front instead.
+        bool CanWriteNode(NodePolicyImage image);
+
+        // The per-RESOURCE write decision the compensating writes themselves
+        // authorize through: the restore paths decide per node (sensor,
+        // product, folder, global), not per change-set entry. The token
+        // default delegates to the evaluator; the cookie twin maps the web
+        // user's role predicates onto the same resources.
+        bool CanWrite(ApiTokenResource resource);
     }
 
 
@@ -72,6 +87,13 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         {
             WriteIndented = true,
         };
+
+        // One gate per change-set id: concurrent rollbacks of the same set
+        // serialize here, so the second finds the set RolledBack instead of
+        // replaying every entry and journaling an orphan rollback change set
+        // (whose redo would re-apply writes nobody intended). Never removed —
+        // bounded by the number of ids a server ever rolls back.
+        private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> _rollbackGates = new();
 
         private readonly IChangeSetJournal _journal;
         private readonly ITreeValuesCache _cache;
@@ -108,16 +130,21 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             filter ??= new ChangeSetFilter();
             access = AccessOf(user, access);
 
-            var visible = _journal.GetAll()
-                .Where(set => set.Entries.Any(e => access.CanRead(e) || HasVisibleNode(e, access)))
-                .Where(set => Matches(set, filter))
-                .Select(set => RenderSummary(set, access))
-                .ToList();
-
             var limit = Math.Clamp(filter.Limit <= 0 ? 50 : filter.Limit, 1, MaxLimit);
             var offset = Math.Max(filter.Offset, 0);
 
-            return PolicyWriteResult<List<ChangeSetSummaryDto>>.Ok(visible.Skip(offset).Take(limit).ToList());
+            // Page BEFORE rendering: the UI reloads this list on every page
+            // view, and a summary is built per visible set — the offset and
+            // limit bound the rendering work too.
+            var page = _journal.GetAll()
+                .Where(set => set.Entries.Any(e => access.CanRead(e) || HasVisibleNode(e, access)))
+                .Where(set => Matches(set, filter))
+                .Skip(offset)
+                .Take(limit)
+                .Select(set => RenderSummary(set, access))
+                .ToList();
+
+            return PolicyWriteResult<List<ChangeSetSummaryDto>>.Ok(page);
         }
 
         public PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user,
@@ -146,105 +173,152 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             if (set is null || set.Entries.All(e => !access.CanRead(e) && !HasVisibleNode(e, access)))
                 return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.NotFound);
 
-            if (set.Status == ChangeSetStatus.RolledBack)
-                return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                    message: "The change set was already rolled back. Roll back its rollback change set to redo it.");
+            var gate = _rollbackGates.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
 
-            var pending = set.Entries.Where(e => e.RestoredBy is null).OrderBy(e => e.Sequence).ToList();
+            await gate.WaitAsync();
+            try
+            {
+                // Re-read under the gate: a concurrent rollback of this id may
+                // have finished while this call waited for the gate.
+                set = _journal.Get(id);
 
-            // Pre-flight: authorization on every pending entry (the same
-            // boundaries the original writes passed), then the content
-            // comparison against each after-image.
-            var denied = pending.FirstOrDefault(e => !access.CanWrite(e));
+                if (set.Status == ChangeSetStatus.RolledBack)
+                    return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
+                        message: "The change set was already rolled back. Roll back its rollback change set to redo it.");
 
-            if (denied is not null)
-                return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Forbidden,
-                    message: PolicyWriteResult.WriteDeniedMessage);
+                var pending = set.Entries.Where(e => e.RestoredBy is null).OrderBy(e => e.Sequence).ToList();
 
-            var reports = new List<RollbackEntryReportDto>();
-            var conflicts = pending
-                .Select(e => (Entry: e, Conflicts: CompareWithAfterImage(e)))
-                .ToList();
+                // Pre-flight: authorization on every pending entry (the same
+                // boundaries the original writes passed), then on every
+                // FAN-OUT NODE — the restores re-authorize per node, so a
+                // caller who cannot write one node would otherwise apply half
+                // a fan-out before the per-node authorization fails.
+                var denied = pending.FirstOrDefault(e => !access.CanWrite(e));
 
-            foreach (var (entry, entryConflicts) in conflicts.OrderByDescending(pair => pair.Entry.Sequence))
-                reports.Add(new RollbackEntryReportDto
+                if (denied is not null)
+                    return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Forbidden,
+                        message: PolicyWriteResult.WriteDeniedMessage);
+
+                var deniedNode = pending.SelectMany(e => e.Fanout ?? [])
+                    .FirstOrDefault(image => !access.CanWriteNode(image));
+
+                if (deniedNode is not null)
+                    return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Forbidden,
+                        message: PolicyWriteResult.WriteDeniedMessage);
+
+                // Then the content comparison: each entry's after-image
+                // against the next pending write's before-image (a grouped
+                // change set may write one list twice), live state for the
+                // latest pending write on each target.
+                var reports = new List<RollbackEntryReportDto>();
+                var conflicts = pending
+                    .Select(e => (Entry: e, Conflicts: CompareWithChain(e, pending)))
+                    .ToList();
+
+                foreach (var (entry, entryConflicts) in conflicts.OrderByDescending(pair => pair.Entry.Sequence))
+                    reports.Add(new RollbackEntryReportDto
+                    {
+                        Sequence = entry.Sequence,
+                        Kind = KindOf(entry),
+                        Operation = OperationOf(entry),
+                        Path = entry.Path,
+                        Status = dryRun ? "wouldRestore" : "restored",
+                        Conflicts = entryConflicts,
+                    });
+
+                var allConflicts = conflicts.SelectMany(pair => pair.Conflicts).ToList();
+
+                if (dryRun)
+                    return PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
+                    {
+                        ChangeSetId = id.ToString(),
+                        DryRun = true,
+                        Forced = force,
+                        Status = allConflicts.Count > 0 ? "conflicts" : "completed",
+                        Message = allConflicts.Count > 0
+                            ? "Conflicts detected — the rollback needs force to proceed."
+                            : "No conflicts — the rollback would restore every pending entry.",
+                        Entries = reports,
+                    });
+
+                if (allConflicts.Count > 0 && !force)
+                    return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
+                        message:
+                        "The change set cannot be rolled back: entities changed after it was recorded. " +
+                        "Force the rollback to override, or restore the entities manually.",
+                        details: ConflictDetails(conflicts));
+
+                // Execute in REVERSE journal order (the latest write is undone
+                // first), skipping already-restored entries of a partial retry.
+                var rollbackChangeSetId = Guid.NewGuid();
+                var author = AuthorOf(user);
+                var failures = 0;
+                var restoredAny = false;
+
+                foreach (var entry in pending.OrderByDescending(e => e.Sequence))
                 {
-                    Sequence = entry.Sequence,
-                    Kind = KindOf(entry),
-                    Operation = OperationOf(entry),
-                    Path = entry.Path,
-                    Status = dryRun ? "wouldRestore" : "restored",
-                    Conflicts = entryConflicts,
-                });
+                    // A write may land on an entity between the pre-flight
+                    // comparison and this restore (the gate serializes
+                    // ROLLBACKS, not writes) — re-check the live content and
+                    // fail the entry instead of silently overwriting it.
+                    if (!force && CompareWithLive(entry).Count > 0)
+                    {
+                        failures++;
 
-            var allConflicts = conflicts.SelectMany(pair => pair.Conflicts).ToList();
+                        var stale = reports.First(r => r.Sequence == entry.Sequence);
 
-            if (dryRun)
+                        reports.Remove(stale);
+                        reports.Add(stale with
+                        {
+                            Status = "failed",
+                            Message = "the entity changed after the pre-flight check — retry the rollback",
+                        });
+
+                        continue;
+                    }
+
+                    var restored = await RestoreEntryAsync(entry, user, access, rollbackChangeSetId, author);
+
+                    if (restored is not null)
+                    {
+                        failures++;
+
+                        var report = reports.First(r => r.Sequence == entry.Sequence);
+
+                        reports.Remove(report);
+                        reports.Add(report with { Status = "failed", Message = restored });
+                    }
+                    else
+                    {
+                        restoredAny = true;
+                        _journal.MarkEntryRestored(id, entry.Sequence, rollbackChangeSetId);
+                    }
+                }
+
+                var completed = failures == 0 && restoredAny;
+
+                // Terminal only when EVERY entry (including ones restored by an
+                // earlier partial retry) is restored.
+                if (_journal.Get(id)?.Entries.All(e => e.RestoredBy is not null) == true)
+                    _journal.MarkRolledBack(id, rollbackChangeSetId);
+
                 return PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
                 {
                     ChangeSetId = id.ToString(),
-                    DryRun = true,
+                    DryRun = false,
                     Forced = force,
-                    Status = allConflicts.Count > 0 ? "conflicts" : "completed",
-                    Message = allConflicts.Count > 0
-                        ? "Conflicts detected — the rollback needs force to proceed."
-                        : "No conflicts — the rollback would restore every pending entry.",
+                    Status = completed ? "completed" : "partial",
+                    Message = failures == 0
+                        ? $"Rolled back; redo via change set {rollbackChangeSetId}."
+                        : $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry.",
+                    RollbackChangeSetId = rollbackChangeSetId.ToString(),
                     Entries = reports,
                 });
-
-            if (allConflicts.Count > 0 && !force)
-                return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                    message:
-                    "The change set cannot be rolled back: entities changed after it was recorded. " +
-                    "Force the rollback to override, or restore the entities manually.",
-                    details: ConflictDetails(conflicts));
-
-            // Execute in REVERSE journal order (the latest write is undone
-            // first), skipping already-restored entries of a partial retry.
-            var rollbackChangeSetId = Guid.NewGuid();
-            var author = AuthorOf(user);
-            var failures = 0;
-            var restoredAny = false;
-
-            foreach (var entry in pending.OrderByDescending(e => e.Sequence))
-            {
-                var restored = await RestoreEntryAsync(entry, user, rollbackChangeSetId, author);
-
-                if (restored is not null)
-                {
-                    failures++;
-
-                    var report = reports.First(r => r.Sequence == entry.Sequence);
-
-                    reports.Remove(report);
-                    reports.Add(report with { Status = "failed", Message = restored });
-                }
-                else
-                {
-                    restoredAny = true;
-                    _journal.MarkEntryRestored(id, entry.Sequence, rollbackChangeSetId);
-                }
             }
-
-            var completed = failures == 0 && restoredAny;
-
-            // Terminal only when EVERY entry (including ones restored by an
-            // earlier partial retry) is restored.
-            if (_journal.Get(id)?.Entries.All(e => e.RestoredBy is not null) == true)
-                _journal.MarkRolledBack(id, rollbackChangeSetId);
-
-            return PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
+            finally
             {
-                ChangeSetId = id.ToString(),
-                DryRun = false,
-                Forced = force,
-                Status = completed ? "completed" : "partial",
-                Message = failures == 0
-                    ? $"Rolled back; redo via change set {rollbackChangeSetId}."
-                    : $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry.",
-                RollbackChangeSetId = rollbackChangeSetId.ToString(),
-                Entries = reports,
-            });
+                gate.Release();
+            }
         }
 
 
@@ -253,25 +327,26 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         // One entry's compensating writes; returns null on success or the
         // failure message. The rollback's own journal entry (before = state
         // at rollback time, after = restored state) is recorded per entry so
-        // the redo path sees the same full-list images.
+        // the redo path sees the same full-list images. The caller's access
+        // rides every restore — the authorization seam the web UI needs.
         private async Task<string> RestoreEntryAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            Guid rollbackChangeSetId, InitiatorInfo author)
+            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             switch (entry.Kind)
             {
                 case ChangeSetEntryKind.SensorDataPolicies:
                     return await RestoreSensorListAsync(entry, data: entry.Before, ttl: null,
-                        user, rollbackChangeSetId, author);
+                        user, access, rollbackChangeSetId, author);
 
                 case ChangeSetEntryKind.SensorTtlPolicies:
                     return await RestoreSensorListAsync(entry, data: null, ttl: entry.Before,
-                        user, rollbackChangeSetId, author);
+                        user, access, rollbackChangeSetId, author);
 
                 case ChangeSetEntryKind.ProductTtlPolicies:
                 {
                     var before = CaptureProductTtl(entry.EntityId);
 
-                    var result = await _policies.RestoreProductTtlAsync(entry.EntityId, entry.Before, user);
+                    var result = await _policies.RestoreProductTtlAsync(entry.EntityId, entry.Before, user, access);
 
                     if (!result.Success)
                         return result.Failure.Message;
@@ -283,10 +358,10 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 }
 
                 case ChangeSetEntryKind.AlertTemplate:
-                    return await RestoreTemplateAsync(entry, user, rollbackChangeSetId, author);
+                    return await RestoreTemplateAsync(entry, user, access, rollbackChangeSetId, author);
 
                 case ChangeSetEntryKind.AlertSchedule:
-                    return await RestoreScheduleAsync(entry, user, rollbackChangeSetId, author);
+                    return await RestoreScheduleAsync(entry, user, access, rollbackChangeSetId, author);
 
                 default:
                     return $"Unknown entry kind {entry.Kind}.";
@@ -294,13 +369,14 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         }
 
         private async Task<string> RestoreSensorListAsync(ChangeSetEntry entry, List<PolicyEntity> data,
-            List<PolicyEntity> ttl, ClaimsPrincipal user, Guid rollbackChangeSetId, InitiatorInfo author)
+            List<PolicyEntity> ttl, ClaimsPrincipal user, IChangeSetAccess access, Guid rollbackChangeSetId,
+            InitiatorInfo author)
         {
             // Capture the list THIS entry owns (kind decides data vs TTL) —
             // the rollback's own before-image.
             var before = data is not null ? CaptureSensorData(entry.EntityId) : CaptureSensorTtl(entry.EntityId);
 
-            var result = await _policies.RestoreSensorListsAsync(entry.EntityId, data, ttl, user);
+            var result = await _policies.RestoreSensorListsAsync(entry.EntityId, data, ttl, user, access);
 
             if (!result.Success)
                 return result.Failure.Message;
@@ -313,7 +389,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         }
 
         private async Task<string> RestoreTemplateAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            Guid rollbackChangeSetId, InitiatorInfo author)
+            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             var beforeTemplate = _cache.GetAlertTemplate(entry.EntityId)?.ToEntity();
 
@@ -321,8 +397,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             // (which strips its policies); an UPDATE or DELETE is compensated
             // by restoring the recorded row and re-running its fan-out.
             var result = entry.Operation == ChangeSetOperation.Create
-                ? await _templates.RemoveTemplateCoreAsync(entry.EntityId, user)
-                : await _templates.RestoreTemplateEntityAsync(entry.BeforeTemplate, user);
+                ? await _templates.RemoveTemplateCoreAsync(entry.EntityId, user, access)
+                : await _templates.RestoreTemplateEntityAsync(entry.BeforeTemplate, user, access);
 
             if (!result.Success)
                 return result.Failure.Message;
@@ -343,7 +419,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 {
                     var beforeTtl = CaptureProductTtl(image.NodeId);
 
-                    nodeResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies, user);
+                    nodeResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies,
+                        user, access);
                     rollbackImage = RollbackProductImage(image, beforeTtl);
                 }
                 else
@@ -352,12 +429,23 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     var beforeTtl = CaptureSensorTtl(image.NodeId);
 
                     nodeResult = await _policies.RestoreSensorListsAsync(image.NodeId,
-                        image.BeforePolicies, image.BeforeTtlPolicies, user);
+                        image.BeforePolicies, image.BeforeTtlPolicies, user, access);
                     rollbackImage = RollbackSensorImage(image, beforeData, beforeTtl);
                 }
 
                 if (!nodeResult.Success)
+                {
+                    // The row and the nodes before this one are ALREADY
+                    // restored — journal them (redo parity): a retry without
+                    // this record would have no undo point for the applied
+                    // half. The entry stays pending; the set reports partial.
+                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                        beforeTemplate: beforeTemplate,
+                        afterTemplate: _cache.GetAlertTemplate(entry.EntityId)?.ToEntity(),
+                        fanout: rollbackFanout);
+
                     return $"Sensor list restore failed on {image.Path}: {nodeResult.Failure.Message}";
+                }
 
                 rollbackFanout.Add(rollbackImage);
             }
@@ -399,13 +487,13 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             };
 
         private async Task<string> RestoreScheduleAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            Guid rollbackChangeSetId, InitiatorInfo author)
+            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             var beforeSchedule = _schedules.GetSchedule(entry.EntityId)?.ToEntity();
 
             var result = entry.Operation == ChangeSetOperation.Create
-                ? await _scheduleWrites.DeleteScheduleCoreAsync(entry.EntityId, user)
-                : _scheduleWrites.RestoreScheduleEntityAsync(entry.BeforeSchedule, user);
+                ? await _scheduleWrites.DeleteScheduleCoreAsync(entry.EntityId, user, access)
+                : _scheduleWrites.RestoreScheduleEntity(entry.BeforeSchedule, user, access);
 
             if (!result.Success)
                 return result.Failure.Message;
@@ -424,7 +512,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 {
                     var beforeTtl = CaptureProductTtl(image.NodeId);
 
-                    fanoutResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies, user);
+                    fanoutResult = await _policies.RestoreProductTtlAsync(image.NodeId, image.BeforeTtlPolicies,
+                        user, access);
                     rollbackImage = RollbackProductImage(image, beforeTtl);
                 }
                 else
@@ -433,22 +522,39 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     var beforeTtl = CaptureSensorTtl(image.NodeId);
 
                     fanoutResult = await _policies.RestoreSensorListsAsync(image.NodeId, image.BeforePolicies,
-                        image.BeforeTtlPolicies, user);
+                        image.BeforeTtlPolicies, user, access);
                     rollbackImage = RollbackSensorImage(image, beforeData, beforeTtl);
                 }
 
                 if (!fanoutResult.Success)
+                {
+                    // Journal the already-restored half before failing (the
+                    // template twin's rule): the retry needs an undo point
+                    // for everything this attempt applied.
+                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                        beforeSchedule: beforeSchedule,
+                        afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
+                        fanout: scheduleRollbackFanout);
+
                     return $"Detach restore failed on {image.Path}: {fanoutResult.Failure.Message}";
+                }
 
                 scheduleRollbackFanout.Add(rollbackImage);
             }
 
             foreach (var templateEntity in entry.BeforeTemplates ?? [])
             {
-                var templateResult = await _templates.RestoreTemplateEntityAsync(templateEntity, user);
+                var templateResult = await _templates.RestoreTemplateEntityAsync(templateEntity, user, access);
 
                 if (!templateResult.Success)
+                {
+                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                        beforeSchedule: beforeSchedule,
+                        afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
+                        fanout: scheduleRollbackFanout);
+
                     return $"Template restore failed: {templateResult.Failure.Message}";
+                }
             }
 
             RecordRollbackEntry(rollbackChangeSetId, author, entry,
@@ -461,126 +567,223 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Conflict detection (content comparison, #1570) ===
 
-        private List<string> CompareWithAfterImage(ChangeSetEntry entry)
+        // A comparison target: one journalable list or row an entry touches.
+        // A grouped change set may write the SAME target twice (a plan's two
+        // edits of one sensor, a template apply plus a manual policy) — the
+        // conflict rule therefore compares an entry's after-image against the
+        // NEXT pending write's before-image, and only the LATEST pending
+        // write on each target against live state. Comparing every entry
+        // against live state would flag the set's own later writes as
+        // conflicts and train callers to force where nothing intervened.
+        private enum ComparisonArea { SensorData, SensorTtl, ProductTtl, TemplateRow, ScheduleRow }
+
+        private readonly record struct ComparisonTarget(ComparisonArea Area, Guid Id);
+
+        private List<string> CompareWithChain(ChangeSetEntry entry, List<ChangeSetEntry> pending)
         {
             var conflicts = new List<string>();
 
-            switch (entry.Kind)
+            foreach (var (target, path) in TargetsOf(entry))
             {
-                case ChangeSetEntryKind.SensorDataPolicies:
-                case ChangeSetEntryKind.SensorTtlPolicies:
-                    CompareSensorLists(entry, conflicts);
-                    break;
+                var successor = pending
+                    .Where(e => e.Sequence > entry.Sequence && TargetsOf(e).Any(pair => pair.Target == target))
+                    .MinBy(e => e.Sequence);
 
-                case ChangeSetEntryKind.ProductTtlPolicies:
-                    CompareProductTtl(entry, conflicts);
-                    break;
+                if (successor is not null)
+                {
+                    CompareTarget(target, path, afterEntry: entry, baselineEntry: successor, conflicts);
+                    continue;
+                }
 
-                case ChangeSetEntryKind.AlertTemplate:
-                    CompareTemplate(entry, conflicts);
-
-                    foreach (var image in entry.Fanout ?? [])
-                        CompareNodeImage(image, conflicts);
-
-                    break;
-
-                case ChangeSetEntryKind.AlertSchedule:
-                    CompareSchedule(entry, conflicts);
-
-                    foreach (var image in entry.Fanout ?? [])
-                        CompareNodeImage(image, conflicts);
-
-                    foreach (var (before, index) in (entry.BeforeTemplates ?? []).Select((t, i) => (t, i)))
-                    {
-                        var after = (entry.AfterTemplates ?? []).ElementAtOrDefault(index);
-                        var current = _cache.GetAlertTemplate(new Guid(before.Id))?.ToEntity();
-
-                        if (!TemplateRowsEqual(after, current))
-                            conflicts.Add($"template {before.Name}: changed after the journaled write");
-                    }
-
-                    break;
+                CompareWithLive(target, path, entry, conflicts);
             }
 
             return conflicts;
         }
 
-        private void CompareSensorLists(ChangeSetEntry entry, List<string> conflicts)
+        // The live-only twin (no chain): the mid-rollback re-check just
+        // before an entry restores — the restores of newer entries have
+        // already rewound live state to this entry's successor images.
+        private List<string> CompareWithLive(ChangeSetEntry entry)
         {
-            var sensor = _cache.GetSensor(entry.EntityId);
+            var conflicts = new List<string>();
 
-            if (sensor is null)
+            foreach (var (target, path) in TargetsOf(entry))
+                CompareWithLive(target, path, entry, conflicts);
+
+            return conflicts;
+        }
+
+        private static IEnumerable<(ComparisonTarget Target, string Path)> TargetsOf(ChangeSetEntry entry)
+        {
+            switch (entry.Kind)
             {
-                conflicts.Add($"{entry.Path}: sensor deleted after the journaled write");
-                return;
-            }
+                case ChangeSetEntryKind.SensorDataPolicies:
+                    yield return (new ComparisonTarget(ComparisonArea.SensorData, entry.EntityId), entry.Path);
+                    break;
 
-            var live = entry.Kind == ChangeSetEntryKind.SensorDataPolicies
-                ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
-                : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+                case ChangeSetEntryKind.SensorTtlPolicies:
+                    yield return (new ComparisonTarget(ComparisonArea.SensorTtl, entry.EntityId), entry.Path);
+                    break;
 
-            AddListConflicts(entry.Path, entry.After, live, conflicts);
-        }
+                case ChangeSetEntryKind.ProductTtlPolicies:
+                    yield return (new ComparisonTarget(ComparisonArea.ProductTtl, entry.EntityId), entry.Path);
+                    break;
 
-        private void CompareProductTtl(ChangeSetEntry entry, List<string> conflicts)
-        {
-            if (!_cache.TryGetProduct(entry.EntityId, out var product) || product is null)
-            {
-                conflicts.Add($"{entry.Path}: product deleted after the journaled write");
-                return;
-            }
-
-            AddListConflicts(entry.Path, entry.After,
-                ChangeSetRecorder.SnapshotProductTtlPolicies(product), conflicts);
-        }
-
-        private void CompareTemplate(ChangeSetEntry entry, List<string> conflicts)
-        {
-            var current = _cache.GetAlertTemplate(entry.EntityId)?.ToEntity();
-
-            if (!TemplateRowsEqual(entry.AfterTemplate, current))
-                conflicts.Add($"{entry.Path}: template changed after the journaled write");
-        }
-
-        private void CompareSchedule(ChangeSetEntry entry, List<string> conflicts)
-        {
-            var current = _schedules.GetSchedule(entry.EntityId)?.ToEntity();
-            var after = entry.AfterSchedule;
-
-            if ((after is null) != (current is null) ||
-                (after is not null && current is not null &&
-                 (after.Name != current.Name || after.Timezone != current.Timezone || after.Schedule != current.Schedule)))
-                conflicts.Add($"{entry.Path}: schedule changed after the journaled write");
-        }
-
-        private void CompareNodeImage(NodePolicyImage image, List<string> conflicts)
-        {
-            if (image.NodeKind == ChangeSetNodeKind.Product)
-            {
-                if (!_cache.TryGetProduct(image.NodeId, out var product) || product is null)
+                case ChangeSetEntryKind.AlertTemplate:
                 {
-                    conflicts.Add($"{image.Path}: product deleted after the journaled write");
-                    return;
+                    yield return (new ComparisonTarget(ComparisonArea.TemplateRow, entry.EntityId), entry.Path);
+
+                    foreach (var pair in NodeTargets(entry.Fanout))
+                        yield return pair;
+
+                    break;
                 }
 
-                AddListConflicts(image.Path, image.AfterTtlPolicies,
-                    ChangeSetRecorder.SnapshotProductTtlPolicies(product), conflicts);
-                return;
+                case ChangeSetEntryKind.AlertSchedule:
+                {
+                    yield return (new ComparisonTarget(ComparisonArea.ScheduleRow, entry.EntityId), entry.Path);
+
+                    foreach (var pair in NodeTargets(entry.Fanout))
+                        yield return pair;
+
+                    foreach (var template in entry.BeforeTemplates ?? [])
+                        yield return (new ComparisonTarget(ComparisonArea.TemplateRow, new Guid(template.Id)),
+                            template.Name);
+
+                    break;
+                }
             }
-
-            var sensor = _cache.GetSensor(image.NodeId);
-
-            if (sensor is null)
-            {
-                conflicts.Add($"{image.Path}: sensor deleted after the journaled write");
-                return;
-            }
-
-            AddListConflicts(image.Path, image.AfterPolicies,
-                ChangeSetRecorder.SnapshotDataPolicies(sensor), conflicts);
-            AddListConflicts(image.Path, image.AfterTtlPolicies,
-                ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor), conflicts);
         }
+
+        private static IEnumerable<(ComparisonTarget Target, string Path)> NodeTargets(List<NodePolicyImage> fanout)
+        {
+            foreach (var image in fanout ?? [])
+            {
+                if (image.NodeKind == ChangeSetNodeKind.Product)
+                    yield return (new ComparisonTarget(ComparisonArea.ProductTtl, image.NodeId), image.Path);
+                else
+                {
+                    yield return (new ComparisonTarget(ComparisonArea.SensorData, image.NodeId), image.Path);
+                    yield return (new ComparisonTarget(ComparisonArea.SensorTtl, image.NodeId), image.Path);
+                }
+            }
+        }
+
+        // The successor-baseline comparison: the entry's after-image against
+        // the NEXT pending write's before-image on the same target.
+        private void CompareTarget(ComparisonTarget target, string path, ChangeSetEntry afterEntry,
+            ChangeSetEntry baselineEntry, List<string> conflicts)
+        {
+            switch (target.Area)
+            {
+                case ComparisonArea.SensorData:
+                case ComparisonArea.SensorTtl:
+                case ComparisonArea.ProductTtl:
+                    AddListConflicts(path,
+                        ListImageOf(afterEntry, target, before: false),
+                        ListImageOf(baselineEntry, target, before: true),
+                        conflicts);
+                    break;
+
+                case ComparisonArea.TemplateRow:
+                    if (!TemplateRowsEqual(TemplateImageOf(afterEntry, target.Id, before: false),
+                            TemplateImageOf(baselineEntry, target.Id, before: true)))
+                        conflicts.Add($"{path}: template changed after the journaled write");
+                    break;
+
+                case ComparisonArea.ScheduleRow:
+                    if (!ScheduleRowsEqual(ScheduleImageOf(afterEntry, before: false),
+                            ScheduleImageOf(baselineEntry, before: true)))
+                        conflicts.Add($"{path}: schedule changed after the journaled write");
+                    break;
+            }
+        }
+
+        private void CompareWithLive(ComparisonTarget target, string path, ChangeSetEntry entry,
+            List<string> conflicts)
+        {
+            switch (target.Area)
+            {
+                case ComparisonArea.SensorData:
+                case ComparisonArea.SensorTtl:
+                {
+                    if (_cache.GetSensor(target.Id) is not { } sensor)
+                    {
+                        conflicts.Add($"{path}: sensor deleted after the journaled write");
+                        break;
+                    }
+
+                    var live = target.Area == ComparisonArea.SensorData
+                        ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                        : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
+                    AddListConflicts(path, ListImageOf(entry, target, before: false), live, conflicts);
+                    break;
+                }
+
+                case ComparisonArea.ProductTtl:
+                {
+                    if (!_cache.TryGetProduct(target.Id, out var product) || product is null)
+                    {
+                        conflicts.Add($"{path}: product deleted after the journaled write");
+                        break;
+                    }
+
+                    AddListConflicts(path, ListImageOf(entry, target, before: false),
+                        ChangeSetRecorder.SnapshotProductTtlPolicies(product), conflicts);
+                    break;
+                }
+
+                case ComparisonArea.TemplateRow:
+                    if (!TemplateRowsEqual(TemplateImageOf(entry, target.Id, before: false),
+                            _cache.GetAlertTemplate(target.Id)?.ToEntity()))
+                        conflicts.Add($"{path}: template changed after the journaled write");
+                    break;
+
+                case ComparisonArea.ScheduleRow:
+                    if (!ScheduleRowsEqual(ScheduleImageOf(entry, before: false),
+                            _schedules.GetSchedule(target.Id)?.ToEntity()))
+                        conflicts.Add($"{path}: schedule changed after the journaled write");
+                    break;
+            }
+        }
+
+        // The recorded list image of one target: the entry's own Before/After
+        // for a policy list write, the fan-out node image for a template or
+        // schedule entry.
+        private static List<PolicyEntity> ListImageOf(ChangeSetEntry entry, ComparisonTarget target, bool before) =>
+            entry.Kind switch
+            {
+                ChangeSetEntryKind.SensorDataPolicies when target.Area == ComparisonArea.SensorData =>
+                    before ? entry.Before : entry.After,
+                ChangeSetEntryKind.SensorTtlPolicies when target.Area == ComparisonArea.SensorTtl =>
+                    before ? entry.Before : entry.After,
+                ChangeSetEntryKind.ProductTtlPolicies when target.Area == ComparisonArea.ProductTtl =>
+                    before ? entry.Before : entry.After,
+                _ => (entry.Fanout ?? []).FirstOrDefault(image => image.NodeId == target.Id) switch
+                {
+                    { } image when target.Area == ComparisonArea.SensorData =>
+                        before ? image.BeforePolicies : image.AfterPolicies,
+                    { } image => before ? image.BeforeTtlPolicies : image.AfterTtlPolicies,
+                    _ => null,
+                },
+            };
+
+        private static AlertTemplateEntity TemplateImageOf(ChangeSetEntry entry, Guid templateId, bool before) =>
+            entry.Kind == ChangeSetEntryKind.AlertTemplate
+                ? before ? entry.BeforeTemplate : entry.AfterTemplate
+                : (before ? entry.BeforeTemplates : entry.AfterTemplates)?.FirstOrDefault(
+                    template => new Guid(template.Id) == templateId);
+
+        private static AlertScheduleEntity ScheduleImageOf(ChangeSetEntry entry, bool before) =>
+            before ? entry.BeforeSchedule : entry.AfterSchedule;
+
+        private static bool ScheduleRowsEqual(AlertScheduleEntity expected, AlertScheduleEntity current) =>
+            (expected is null) == (current is null) &&
+            (expected is null || current is null ||
+             (expected.Name == current.Name && expected.Timezone == current.Timezone &&
+              expected.Schedule == current.Schedule));
 
         private static void AddListConflicts(string path, List<PolicyEntity> afterImage, List<PolicyEntity> live,
             List<string> conflicts)
@@ -655,6 +858,15 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 _authorization.AuthorizeRead(_user,
                     new ApiTokenResource(ApiTokenResourceKind.Product, image.RootProductId)) ==
                 ApiTokenAuthorization.Allowed;
+
+            public bool CanWriteNode(NodePolicyImage image) =>
+                _authorization.AuthorizeWrite(_user, image.NodeKind == ChangeSetNodeKind.Product
+                    ? new ApiTokenResource(ApiTokenResourceKind.Product, image.NodeId)
+                    : new ApiTokenResource(ApiTokenResourceKind.Sensor, image.NodeId)) ==
+                ApiTokenAuthorization.Allowed;
+
+            public bool CanWrite(ApiTokenResource resource) =>
+                _authorization.AuthorizeWrite(_user, resource) == ApiTokenAuthorization.Allowed;
         }
 
         private static ApiTokenResource EntryResource(ChangeSetEntry entry) =>
@@ -769,7 +981,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
             var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
 
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+            // A cookie principal (the web UI's rollback) carries no token
+            // claims — the authenticated identity name is the author.
+            var name = owner?.Name ?? user?.Identity?.Name;
+
+            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
         }
 
         private List<PolicyEntity> CaptureSensorData(Guid sensorId) =>

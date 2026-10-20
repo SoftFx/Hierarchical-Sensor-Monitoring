@@ -2142,7 +2142,7 @@
             <summary>
             Per-entry sight/write decisions of the undo-journal surface. The
             default is the token evaluator; the web UI supplies a cookie-`User`
-            implementation (the evaluator only resolves HsmApiToken principals).
+            implementation (the evaluator only resolves token principals).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto.Status">
@@ -2185,10 +2185,12 @@
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
             <summary>
-            Append one entry; false when the journal write failed (the undo
-            point is lost — logged loudly). Callers echo the change-set id on
-            the write response ONLY on true, so a client never receives an
-            undo handle that does not exist.
+            Append one entry; null when the journal write failed (the undo
+            point is lost — logged loudly). The returned id is the set the
+            entry ACTUALLY landed in: the journal forks a client-supplied id
+            whose set belongs to another author or is already rolled back.
+            Callers echo THAT id on the write response only on success, so a
+            client never receives an undo handle that does not exist.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions">
@@ -2239,7 +2241,9 @@
             <summary>
             Parse the write options of a management-API request. An absent or
             malformed change-set id answers null options (the write stands
-            alone) — the header is advisory grouping, never a 400.
+            alone) — the header is advisory grouping, never a 400. The dry-run
+            header is a strict boolean: only "true" (any casing) previews,
+            so a "0" or "no" never silently suppresses the write.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.SetChangeSet(Microsoft.AspNetCore.Http.HttpResponse,System.Nullable{System.Guid})">

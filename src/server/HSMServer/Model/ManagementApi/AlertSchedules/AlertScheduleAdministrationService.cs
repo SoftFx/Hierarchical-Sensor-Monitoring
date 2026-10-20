@@ -149,14 +149,16 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // Deliberately tied to the cancellation token like the web Remove:
             // an aborted request stops the DISPATCH of further detach work;
             // the schedule is not deleted either way (see the class comment).
-            var deleted = await DeleteScheduleCoreAsync(id, user, cancellationToken);
+            var deleted = await DeleteScheduleCoreAsync(id, user, cancellationToken: cancellationToken);
 
             if (!deleted.Success)
                 return deleted;
 
             // The echoed change-set id is stamped ONLY when the journal entry
-            // actually landed (Record's false = the undo point is lost).
-            var recorded = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+            // actually landed, and it is the id the entry landed in (the
+            // journal forks a foreign or terminal id; Record's null = the
+            // undo point is lost).
+            var landedId = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
             {
                 Kind = ChangeSetEntryKind.AlertSchedule,
                 Operation = ChangeSetOperation.Delete,
@@ -175,7 +177,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 AfterTemplates = templates.Select(t => t.ToEntity()).ToList(),
             });
 
-            return recorded ? PolicyWriteResult.Ok(changeSetId) : PolicyWriteResult.Ok();
+            return landedId is { } landed ? PolicyWriteResult.Ok(landed) : PolicyWriteResult.Ok();
         }
 
 
@@ -185,9 +187,9 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // no capture and no journal entry. The rollback engine calls this
         // when compensating a schedule CREATE.
         internal async Task<PolicyWriteResult> DeleteScheduleCoreAsync(Guid id, ClaimsPrincipal user,
-            CancellationToken cancellationToken = default)
+            ChangeSets.IChangeSetAccess access = null, CancellationToken cancellationToken = default)
         {
-            if (AuthorizeGlobalWrite(user) is { } denied)
+            if (AuthorizeGlobalWrite(user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             if (_schedules.GetSchedule(id) is null)
@@ -198,8 +200,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             if (!detach.IsOk)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict,
                     message:
-                    "The schedule was not deleted — not every policy reference could be cleared. Delete it again to retry. " +
-                    detach.Error);
+                        "The schedule was not deleted — not every policy reference could be cleared. Delete it again to retry. " +
+                        detach.Error);
 
             lock (NameUniquenessGate)
             {
@@ -216,9 +218,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // The uniqueness gate still serializes with the write path; a name
         // collision with a NEWER schedule is not re-judged — the rollback's
         // contract is to restore the recorded configuration.
-        internal PolicyWriteResult RestoreScheduleEntityAsync(AlertScheduleEntity entity, ClaimsPrincipal user)
+        internal PolicyWriteResult RestoreScheduleEntity(AlertScheduleEntity entity, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
         {
-            if (AuthorizeGlobalWrite(user) is { } denied)
+            if (AuthorizeGlobalWrite(user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             ScheduleModel schedule;
@@ -266,7 +269,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             ScheduleModel schedule;
             var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
-            bool recorded;
+            Guid? landedId;
 
             lock (NameUniquenessGate)
             {
@@ -296,7 +299,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // The provider's Save is an idempotent upsert (cache + LevelDB row).
                 _schedules.SaveSchedule(schedule);
 
-                recorded = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+                landedId = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
                 {
                     Kind = ChangeSetEntryKind.AlertSchedule,
                     Operation = id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update,
@@ -311,10 +314,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // Echo the STORED schedule through the read mapping — sensor
             // references filtered to the owner's sight, exactly as GET does.
             // The echoed change-set id is stamped ONLY when the journal entry
-            // actually landed (Record's false = the undo point is lost).
+            // actually landed, and it is the id the entry landed in (the
+            // journal forks a foreign or terminal id; null = lost undo point).
             var result = PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
 
-            return recorded ? result.WithChangeSet(changeSetId) : result;
+            return landedId is { } landed ? result.WithChangeSet(landed) : result;
         }
 
 
@@ -385,8 +389,22 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // read-write token. The 403/404 split is preserved verbatim — a
         // non-admin owner's Global sight is false, so the answer is the same
         // 404 as an unknown id (nothing about the surface's existence leaks).
-        private PolicyWriteFailure AuthorizeGlobalWrite(ClaimsPrincipal user) =>
-            _authorization.AuthorizeWrite(user, ApiTokenResource.GlobalScope) switch
+        // The rollback's authorization seam rides the same optional access as
+        // the template twin: a cookie principal decides through the web UI's
+        // IChangeSetAccess implementation instead of the token evaluator.
+        private PolicyWriteFailure AuthorizeGlobalWrite(ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
+        {
+            if (access is not null)
+                return access.CanWrite(ApiTokenResource.GlobalScope)
+                    ? null
+                    : new PolicyWriteFailure
+                    {
+                        Outcome = PolicyWriteOutcome.Forbidden,
+                        Message = PolicyWriteResult.WriteDeniedMessage,
+                    };
+
+            return _authorization.AuthorizeWrite(user, ApiTokenResource.GlobalScope) switch
             {
                 ApiTokenAuthorization.Allowed => null,
                 ApiTokenAuthorization.Forbidden => new PolicyWriteFailure
@@ -396,6 +414,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 },
                 _ => new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound },
             };
+        }
 
 
         // === Undo-journal hooks (#1570) ===
@@ -406,7 +425,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
 
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+            // A cookie principal (the web UI) carries no token claims — the
+            // authenticated identity name is the acting user.
+            var name = owner?.Name ?? user?.Identity?.Name;
+
+            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
         }
 
         private WritePreviewDto SchedulePreview(ChangeSetWriteOptions write, Guid scheduleId, string name)

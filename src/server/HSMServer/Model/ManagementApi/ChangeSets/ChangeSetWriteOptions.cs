@@ -98,13 +98,15 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// <summary>
         /// Parse the write options of a management-API request. An absent or
         /// malformed change-set id answers null options (the write stands
-        /// alone) — the header is advisory grouping, never a 400.
+        /// alone) — the header is advisory grouping, never a 400. The dry-run
+        /// header is a strict boolean: only "true" (any casing) previews,
+        /// so a "0" or "no" never silently suppresses the write.
         /// </summary>
         public static ChangeSetWriteOptions WriteOptions(this Microsoft.AspNetCore.Http.HttpRequest request)
         {
             var changeSetId = Guid.TryParse(request.Headers[ChangeSetId], out var parsed) ? parsed : (Guid?)null;
             var dryRun = request.Headers[DryRun].Count > 0 &&
-                         !string.Equals(request.Headers[DryRun], "false", StringComparison.OrdinalIgnoreCase);
+                         bool.TryParse(request.Headers[DryRun], out var dryRunParsed) && dryRunParsed;
 
             return changeSetId is null && !dryRun ? null : new ChangeSetWriteOptions
             {

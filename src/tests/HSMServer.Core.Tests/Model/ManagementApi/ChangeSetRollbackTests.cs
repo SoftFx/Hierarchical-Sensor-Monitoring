@@ -446,8 +446,227 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             }
         }
 
+        [Fact]
+        public async Task Rollback_FromACookiePrincipal_RestoresEntries_AndJournalsTheWebUser()
+        {
+            // The web UI rolls back with a cookie principal — no HsmApiToken
+            // claims. The compensating writes must authorize through the
+            // supplied access (the token evaluator would answer NotFound for
+            // every node), and the rollback's journal author is the login
+            // name, not "api-token".
+            var sensor = await CreateSensorAsync("rbCookie");
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "cookie-me"), User);
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var cookie = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.Name, "web-admin")], "Cookies"));
+            var access = new CookieUserAccess(new User("web-admin") { IsAdmin = true }, _valuesCache);
+
+            var rolledBack = await _changeSets.RollbackAsync(created.ChangeSetId.Value, cookie, access: access);
+
+            Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
+            Assert.Equal("completed", rolledBack.Value.Status);
+            Assert.Empty(sensor.Policies);
+
+            Assert.Equal("web-admin", _journal.Get(Guid.Parse(rolledBack.Value.RollbackChangeSetId)).Author);
+        }
+
+        [Fact]
+        public async Task TwoWritesToOneList_UnderOneChangeSet_RollBackCleanlyWithoutForce()
+        {
+            // A grouped plan may write the same list twice: the set's own
+            // later write replaces the earlier entry's after-image, so an
+            // earlier entry compares against the NEXT write's before-image —
+            // only the latest write on a target compares against live state.
+            // Without that chain rule every grouped edit would demand force.
+            var sensor = await CreateSensorAsync("rbTwice");
+            var changeSetId = Guid.NewGuid();
+
+            var first = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            var second = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(first.Success, first.Failure?.Message);
+            Assert.True(second.Success, second.Failure?.Message);
+            Assert.Equal(2, sensor.Policies.Count());
+
+            var rolledBack = await _changeSets.RollbackAsync(changeSetId, User);
+
+            Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
+            Assert.Equal("completed", rolledBack.Value.Status);
+            Assert.Empty(sensor.Policies);
+        }
+
+        [Fact]
+        public async Task Rollback_PreFlightDeniesAFanOutNodeTheCallerCannotWrite()
+        {
+            // The entry-level boundary alone is not the whole write: the
+            // restores re-authorize per node, so a caller who cannot write
+            // one fan-out node is refused UP FRONT instead of applying half
+            // a fan-out before the per-node authorization fails.
+            var first = await CreateSensorAsync("rbFanA");
+            var second = await CreateSensorAsync("rbFanB");
+            var changeSetId = Guid.NewGuid();
+
+            var created = await _templates.CreateTemplateAsync(User, TemplateDto("rbFanA", "rbFanB"),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var access = new SelectiveAccess(canWriteNode: image => image.NodeId != second.Id);
+
+            var refused = await _changeSets.RollbackAsync(changeSetId, User, access: access);
+
+            Assert.False(refused.Success);
+            Assert.Equal(PolicyWriteOutcome.Forbidden, refused.Failure.Outcome);
+
+            // Nothing restored: the template and both fan-out applies stand.
+            Assert.NotNull(_valuesCache.GetAlertTemplate(created.Value.Id));
+            Assert.Single(first.Policies);
+            Assert.Single(second.Policies);
+        }
+
+        [Fact]
+        public async Task FanOutRestoreFailure_JournalsTheAlreadyRestoredHalf()
+        {
+            // A node restore that fails mid-loop (here: denied at restore
+            // time after passing the pre-flight) must leave an undo point for
+            // everything the attempt already applied — the rollback's own
+            // journal entry carries the restored nodes, so a retry's redo
+            // parity survives.
+            var first = await CreateSensorAsync("rbHalfA");
+            var second = await CreateSensorAsync("rbHalfB");
+            var changeSetId = Guid.NewGuid();
+
+            var created = await _templates.CreateTemplateAsync(User, TemplateDto("rbHalfA", "rbHalfB"),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            // Deny the LAST node of the recorded fan-out at RESTORE time
+            // only (the pre-flight allows every node).
+            var deniedNode = _journal.Get(changeSetId).Entries.Single().Fanout.Last();
+            var access = new SelectiveAccess(canWriteResource: resource =>
+                resource.Kind != ApiTokenResourceKind.Sensor || resource.Id != deniedNode.NodeId);
+
+            var result = await _changeSets.RollbackAsync(changeSetId, User, access: access);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("partial", result.Value.Status);
+
+            var redoEntry = Assert.Single(_journal.Get(Guid.Parse(result.Value.RollbackChangeSetId)).Entries);
+
+            // Exactly the nodes restored before the denial ride the rollback
+            // entry. (The row compensation itself strips the template's
+            // policies from every matching sensor — including the denied
+            // node; that change rides the row's image, not a node image.)
+            var restoredNode = Assert.Single(redoEntry.Fanout ?? []);
+
+            Assert.NotEqual(deniedNode.NodeId, restoredNode.NodeId);
+            Assert.Empty(_valuesCache.GetSensor(restoredNode.NodeId).Policies);
+            Assert.Empty(_valuesCache.GetSensor(deniedNode.NodeId).Policies);
+            Assert.Contains(result.Value.Entries, report => report.Status == "failed");
+
+            // The template row itself was compensated (its create undone).
+            Assert.Null(_valuesCache.GetAlertTemplate(created.Value.Id));
+        }
+
+        [Fact]
+        public async Task ForeignAuthorWrite_UnderAnExistingChangeSet_ForksToAFreshId()
+        {
+            // The change-set id is client-supplied and not secret: a foreign
+            // principal's write under it must not join the set (the audit
+            // trail credits the author) nor block the author's rollback —
+            // it journals under a fresh id and the ECHO names that id. A
+            // terminal (rolled-back) id forks the same way.
+            var users = new Mock<IUserManager>();
+            users.Setup(u => u[It.IsAny<Guid>()]).Returns((Guid id) => new User($"owner-{id:N}"));
+
+            var policies = new PolicyAdministrationService(_valuesCache, _authorization.Object, users.Object,
+                _chats.Object, _folders.Object, _alertScheduleProvider,
+                ChangeSetTestHelpers.Recorder(_databaseCoreManager.DatabaseCore));
+
+            var sensor = await CreateSensorAsync("rbFork");
+            var changeSetId = Guid.NewGuid();
+
+            var mine = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(mine.Success, mine.Failure?.Message);
+            Assert.Equal(changeSetId, mine.ChangeSetId);
+
+            var stranger = BuildPrincipal();
+
+            var forked = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), stranger,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(forked.Success, forked.Failure?.Message);
+            Assert.NotEqual(changeSetId, forked.ChangeSetId);
+
+            // One entry in each set; the author's set still rolls back (the
+            // foreign write is an intervening change — force over its diff,
+            // but no 403 block).
+            Assert.Single(_journal.Get(changeSetId).Entries);
+            Assert.Single(_journal.Get(forked.ChangeSetId.Value).Entries);
+
+            var rolledBack = await _changeSets.RollbackAsync(changeSetId, User, force: true);
+            Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
+
+            // The rolled-back id is terminal: a new write under it forks too.
+            var afterRollback = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(afterRollback.Success, afterRollback.Failure?.Message);
+            Assert.NotEqual(changeSetId, afterRollback.ChangeSetId);
+        }
+
+        [Fact]
+        public async Task ConcurrentRollbacks_OfOneChangeSet_Serialize_ExactlyOneWins()
+        {
+            // The per-id rollback gate: the second rollback of a concurrent
+            // pair finds the set RolledBack and answers a conflict, instead
+            // of replaying every entry and journaling an orphan rollback
+            // change set whose redo would re-apply writes nobody intended.
+            var sensor = await CreateSensorAsync("rbRace");
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var first = Task.Run(() => _changeSets.RollbackAsync(created.ChangeSetId.Value, User));
+            var second = Task.Run(() => _changeSets.RollbackAsync(created.ChangeSetId.Value, User));
+
+            await Task.WhenAll(first, second);
+
+            var outcomes = new[] { first.Result, second.Result }.OrderBy(result => result.Success).ToList();
+
+            Assert.True(outcomes[1].Success, outcomes[1].Failure?.Message);
+            Assert.False(outcomes[0].Success);
+            Assert.Equal(PolicyWriteOutcome.Conflict, outcomes[0].Failure.Outcome);
+            Assert.Contains("already rolled back", outcomes[0].Failure.Message);
+        }
+
 
         // === Test vocabulary (mirrors ChangeSetJournalingTests) ===
+
+        // A permissive IChangeSetAccess for the rollback tests: everything
+        // allowed except the one predicate the test denies (a fan-out node
+        // or a resource-level write).
+        private sealed class SelectiveAccess : IChangeSetAccess
+        {
+            private readonly Func<NodePolicyImage, bool> _canWriteNode;
+            private readonly Func<ApiTokenResource, bool> _canWriteResource;
+
+            public SelectiveAccess(Func<NodePolicyImage, bool> canWriteNode = null,
+                Func<ApiTokenResource, bool> canWriteResource = null)
+            {
+                _canWriteNode = canWriteNode;
+                _canWriteResource = canWriteResource;
+            }
+
+            public bool CanRead(ChangeSetEntry entry) => true;
+
+            public bool CanWrite(ChangeSetEntry entry) => true;
+
+            public bool CanReadNode(NodePolicyImage image) => true;
+
+            public bool CanWriteNode(NodePolicyImage image) => _canWriteNode?.Invoke(image) ?? true;
+
+            public bool CanWrite(ApiTokenResource resource) => _canWriteResource?.Invoke(resource) ?? true;
+        }
 
         private static ClaimsPrincipal BuildPrincipal() =>
             new(new ClaimsIdentity(
@@ -515,12 +734,12 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Destination = new AlertDestinationDto { Mode = "FromParent" },
         };
 
-        private AlertTemplateDto TemplateDto(string sensorName) => new()
+        private AlertTemplateDto TemplateDto(params string[] sensorNames) => new()
         {
             Name = $"template-{Guid.NewGuid():N}",
             SensorType = (byte)SensorType.Integer,
             FolderId = _fixture.FolderId,
-            Paths = [$"*/{sensorName}"],
+            Paths = [.. sensorNames.Select(name => $"*/{name}")],
             Policies =
             [
                 new AlertPolicyDto

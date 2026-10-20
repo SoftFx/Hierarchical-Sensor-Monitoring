@@ -34,8 +34,15 @@ namespace HSMServer.Core.ChangeSets
         /// Append one entry, creating the change set on first use (author and
         /// creation time fixed by the first write). The entry's Sequence is
         /// assigned here — append order is the journal order.
+        ///
+        /// Returns the id of the change set the entry ACTUALLY landed in: an
+        /// id whose existing set belongs to a DIFFERENT author, or whose set
+        /// is terminal (rolled back), FORKS to a fresh id — the write still
+        /// journals (its undo point is never lost), and the echoed id tells
+        /// the caller which set holds it. A foreign entry can therefore never
+        /// block the original author's rollback or distort its audit trail.
         /// </summary>
-        void Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry);
+        Guid Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry);
 
         /// <summary>Mark every non-restored entry restored and the set terminal.</summary>
         void MarkRolledBack(Guid changeSetId, Guid rollbackChangeSetId);
@@ -51,6 +58,14 @@ namespace HSMServer.Core.ChangeSets
         /// sets touched (removed or marked partial).
         /// </summary>
         int PurgeReferences(Guid entityId, Guid? folderId = null);
+
+        /// <summary>
+        /// The batch twin of the single-entity purge: one pass over the
+        /// journal for a whole deleted product subtree (the per-node loop
+        /// would rescan and deserialize every change set once per node,
+        /// under the same journal-wide lock).
+        /// </summary>
+        int PurgeReferences(IReadOnlyCollection<Guid> entityIds, Guid? folderId = null);
     }
 
 
@@ -82,38 +97,63 @@ namespace HSMServer.Core.ChangeSets
                 .ThenBy(model => model.Id)
                 .ToList();
 
-        public void Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry)
+        public Guid Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry)
         {
             if (entry is null)
                 throw new ArgumentNullException(nameof(entry));
 
             lock (_sync)
             {
-                var model = _database.ChangeSets.TryReadEntity(changeSetId, out var existing)
-                    ? ChangeSetMapper.ToModel(existing)
-                    : new ChangeSetModel
+                if (_database.ChangeSets.TryReadEntity(changeSetId, out var existing))
+                {
+                    var current = ChangeSetMapper.ToModel(existing);
+
+                    // The fork rule: a change set accepts appends only from
+                    // its own author while it is still open. A rolled-back
+                    // set is terminal, and a foreign author's entry would
+                    // both distort the audit trail and block the original
+                    // author's rollback pre-flight — either way the write
+                    // journals under a fresh id instead of being rejected
+                    // after it already applied.
+                    var foreignAuthor = author is not null &&
+                        (current.Author != author.Info || current.AuthorType != author.Type);
+
+                    if (current.Status == ChangeSetStatus.RolledBack || foreignAuthor)
+                        changeSetId = Guid.NewGuid();
+                    else
                     {
-                        Id = changeSetId,
-                        Author = author?.Info ?? "unknown",
-                        AuthorType = author?.Type ?? InitiatorType.System,
-                        CreatedAtUtc = DateTime.UtcNow,
-                        Status = ChangeSetStatus.Applied,
-                    };
+                        AppendTo(current, entry, existing is not null);
 
-                if (model.Status == ChangeSetStatus.RolledBack)
-                    throw new InvalidOperationException(
-                        $"Change set {changeSetId} was already rolled back and accepts no further writes.");
+                        return changeSetId;
+                    }
+                }
 
-                entry.Sequence = model.Entries.Count == 0 ? 0 : model.Entries.Max(e => e.Sequence) + 1;
-                model.Entries.Add(entry);
+                var model = new ChangeSetModel
+                {
+                    Id = changeSetId,
+                    Author = author?.Info ?? "unknown",
+                    AuthorType = author?.Type ?? InitiatorType.System,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    Status = ChangeSetStatus.Applied,
+                };
 
-                var persisted = ChangeSetMapper.ToEntity(model);
+                AppendTo(model, entry, existing: false);
 
-                if (existing is null)
-                    _database.ChangeSets.AddEntity(persisted);
-                else
-                    _database.ChangeSets.UpdateEntity(persisted);
+                return changeSetId;
             }
+        }
+
+        private void AppendTo(ChangeSetModel model, ChangeSetEntry entry, bool existing)
+        {
+            entry.Sequence = model.Entries.Count == 0 ? 0 : model.Entries.Max(e => e.Sequence) + 1;
+            model.Entries.Add(entry);
+
+            var persisted = ChangeSetMapper.ToEntity(model);
+
+            if (existing)
+                _database.ChangeSets.UpdateEntity(persisted);
+            else
+                _database.ChangeSets.AddEntity(persisted);
         }
 
         public void MarkRolledBack(Guid changeSetId, Guid rollbackChangeSetId)
@@ -153,9 +193,13 @@ namespace HSMServer.Core.ChangeSets
             }
         }
 
-        public int PurgeReferences(Guid entityId, Guid? folderId = null)
+        public int PurgeReferences(Guid entityId, Guid? folderId = null) =>
+            PurgeReferences(new[] { entityId }, folderId);
+
+        public int PurgeReferences(IReadOnlyCollection<Guid> entityIds, Guid? folderId = null)
         {
             var touched = 0;
+            var ids = entityIds as HashSet<Guid> ?? [.. entityIds];
 
             lock (_sync)
             {
@@ -166,19 +210,19 @@ namespace HSMServer.Core.ChangeSets
 
                     // Entry-level drops: the entity itself is gone, or a
                     // folder-bound template entry lost its folder.
-                    foreach (var entry in model.Entries.Where(e => References(e, entityId, folderId)).ToList())
+                    foreach (var entry in model.Entries.Where(e => References(e, ids, folderId)).ToList())
                     {
                         model.Entries.Remove(entry);
                         changed = true;
                     }
 
                     // Fan-out images of surviving entries: drop images of the
-                    // deleted node (the entry itself survives, partial).
+                    // deleted nodes (the entry itself survives, partial).
                     foreach (var entry in model.Entries.Where(e => e.Fanout is { Count: > 0 }))
                     {
                         var before = entry.Fanout.Count;
 
-                        entry.Fanout.RemoveAll(image => image.NodeId == entityId);
+                        entry.Fanout.RemoveAll(image => ids.Contains(image.NodeId));
 
                         if (entry.Fanout.Count != before)
                             changed = true;
@@ -204,8 +248,8 @@ namespace HSMServer.Core.ChangeSets
 
             return touched;
 
-            static bool References(ChangeSetEntry entry, Guid entityId, Guid? folderId) =>
-                entry.EntityId == entityId ||
+            static bool References(ChangeSetEntry entry, HashSet<Guid> entityIds, Guid? folderId) =>
+                entityIds.Contains(entry.EntityId) ||
                 (folderId is { } folder && entry.Kind == ChangeSetEntryKind.AlertTemplate && entry.ParentId == folder);
         }
     }

@@ -25,12 +25,17 @@ namespace HSMServer.Core.Tests.ChangeSets
 
 
         [Fact]
-        public void Append_FirstWrite_CreatesChangeSetWithAuthorAndSequence()
+        public void Append_SameAuthorGroups_SequenceFollowsAppendOrder()
         {
             var id = Guid.NewGuid();
 
-            _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
-            _journal.Append(id, InitiatorInfo.AsUser("bob"), Entry(ChangeSetEntryKind.SensorTtlPolicies));
+            var firstLanding = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorDataPolicies));
+            var secondLanding = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorTtlPolicies));
+
+            Assert.Equal(id, firstLanding);
+            Assert.Equal(id, secondLanding);
 
             var stored = _journal.Get(id);
 
@@ -41,6 +46,30 @@ namespace HSMServer.Core.Tests.ChangeSets
             Assert.Equal([0, 1], stored.Entries.Select(e => e.Sequence));
             Assert.Equal(ChangeSetEntryKind.SensorDataPolicies, stored.Entries[0].Kind);
             Assert.Equal(ChangeSetEntryKind.SensorTtlPolicies, stored.Entries[1].Kind);
+        }
+
+        [Fact]
+        public void Append_ForeignAuthor_ForksToAFreshId()
+        {
+            // The fork rule: a change set accepts appends only from its own
+            // author — a foreign entry would distort the audit trail and
+            // block the author's rollback pre-flight, so it journals under a
+            // fresh id the echo names instead.
+            var id = Guid.NewGuid();
+
+            _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
+
+            var forked = _journal.Append(id, InitiatorInfo.AsUser("bob"), Entry(ChangeSetEntryKind.SensorTtlPolicies));
+
+            Assert.NotEqual(id, forked);
+
+            var original = _journal.Get(id);
+            var forkSet = _journal.Get(forked);
+
+            Assert.Equal("alice", original.Author);
+            Assert.Single(original.Entries);
+            Assert.Equal("bob", forkSet.Author);
+            Assert.Single(forkSet.Entries);
         }
 
         [Fact]
@@ -57,15 +86,22 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_RolledBackSet_RejectsFurtherWrites()
+        public void Append_RolledBackSet_ForksFurtherWritesToAFreshId()
         {
+            // A rolled-back set is terminal, but the write already applied —
+            // rejecting after the fact would lose its undo point. The append
+            // FORKS to a fresh id instead; the terminal set stays untouched.
             var id = Guid.NewGuid();
 
             _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
             _journal.MarkRolledBack(id, Guid.NewGuid());
 
-            Assert.Throws<InvalidOperationException>(() =>
-                _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies)));
+            var forked = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorDataPolicies));
+
+            Assert.NotEqual(id, forked);
+            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(id).Status);
+            Assert.Single(_journal.Get(forked).Entries);
         }
 
         [Fact]

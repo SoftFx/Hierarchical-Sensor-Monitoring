@@ -1,5 +1,7 @@
+using System;
 using HSMServer.Core.ChangeSets;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using Moq;
 
@@ -18,6 +20,18 @@ namespace HSMServer.Core.Tests.Infrastructure
             new(database is null ? Journal() : new ChangeSetJournal(database),
                 CommonMoqs.CreateNullLogger<ChangeSetRecorder>());
 
-        internal static IChangeSetJournal Journal() => new Mock<IChangeSetJournal>().Object;
+        // The mock accepts every append under the id it was given (the real
+        // journal's fork paths — foreign author, terminal set — never trigger
+        // here), so the echoed change-set id is the one the test supplied.
+        internal static IChangeSetJournal Journal()
+        {
+            var journal = new Mock<IChangeSetJournal>();
+
+            journal.Setup(j => j.Append(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(),
+                    It.IsAny<ChangeSetEntry>()))
+                .Returns((Guid changeSetId, InitiatorInfo _, ChangeSetEntry _) => changeSetId);
+
+            return journal.Object;
+        }
     }
 }

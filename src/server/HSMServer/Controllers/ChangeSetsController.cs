@@ -1,15 +1,12 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Controllers;
-using HSMServer.Core.ChangeSets;
+using HSMServer.Core.Cache;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -27,10 +24,15 @@ namespace HSMServer.Controllers
     public sealed class ChangeSetsController : BaseController
     {
         private readonly IChangeSetAdministrationService _changeSets;
+        private readonly ITreeValuesCache _cache;
 
-        public ChangeSetsController(IChangeSetAdministrationService changeSets, IUserManager users)
-            : base(users) =>
+        public ChangeSetsController(IChangeSetAdministrationService changeSets, IUserManager users,
+            ITreeValuesCache cache)
+            : base(users)
+        {
             _changeSets = changeSets;
+            _cache = cache;
+        }
 
 
         public IActionResult Index() => View("Index");
@@ -40,7 +42,7 @@ namespace HSMServer.Controllers
         public IActionResult GetChangeSetsTable(int limit = 100, int offset = 0)
         {
             var result = _changeSets.ListChangeSets(User, new ChangeSetFilter { Limit = limit, Offset = offset },
-                new CookieUserAccess(CurrentUser));
+                new CookieUserAccess(CurrentUser, _cache));
 
             return result.Success
                 ? PartialView("_ChangeSetsTable", result.Value)
@@ -51,7 +53,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult Details(Guid id)
         {
-            var result = _changeSets.GetChangeSet(id, User, new CookieUserAccess(CurrentUser));
+            var result = _changeSets.GetChangeSet(id, User, new CookieUserAccess(CurrentUser, _cache));
 
             return result.Success ? PartialView("_ChangeSetDetails", result.Value) : NotFound();
         }
@@ -62,57 +64,9 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> Rollback(Guid id, bool force = false, bool dryRun = false)
         {
             var result = await _changeSets.RollbackAsync(id, User, force, dryRun,
-                new CookieUserAccess(CurrentUser));
+                new CookieUserAccess(CurrentUser, _cache));
 
             return result.Success ? Json(result.Value) : Json(new { error = result.Failure.Message });
-        }
-
-
-        // The cookie-`User` twin of the token evaluator's per-entry checks:
-        // the evaluator resolves HsmApiToken principals only, so the UI maps
-        // its role predicates onto the same boundaries. Admin sees and rolls
-        // back everything; product/folder roles gate their own entities;
-        // schedule entries (Global) stay admin-only.
-        private sealed class CookieUserAccess : IChangeSetAccess
-        {
-            private readonly User _user;
-
-            public CookieUserAccess(User user) => _user = user;
-
-            public bool CanRead(ChangeSetEntry entry) =>
-                _user is null ? false : EntryResourceOf(entry) switch
-                {
-                    { Kind: ApiTokenResourceKind.Global } => _user.IsAdmin,
-                    { Kind: ApiTokenResourceKind.Folder } resource => _user.IsAdmin || _user.IsFolderManager(resource.Id),
-                    { Kind: ApiTokenResourceKind.Product } resource => _user.IsProductAvailable(resource.Id),
-                    { Kind: ApiTokenResourceKind.Sensor } resource => _user.IsProductAvailable(entry.ParentId ?? resource.Id),
-                    _ => false,
-                };
-
-            public bool CanWrite(ChangeSetEntry entry) =>
-                _user is null ? false : EntryResourceOf(entry) switch
-                {
-                    { Kind: ApiTokenResourceKind.Global } => _user.IsAdmin,
-                    { Kind: ApiTokenResourceKind.Folder } resource => _user.IsFolderManager(resource.Id),
-                    { Kind: ApiTokenResourceKind.Product } resource => _user.IsManager(resource.Id),
-                    { Kind: ApiTokenResourceKind.Sensor } resource => _user.IsManager(entry.ParentId ?? resource.Id),
-                    _ => false,
-                };
-
-            public bool CanReadNode(NodePolicyImage image) =>
-                _user is not null && _user.IsProductAvailable(image.RootProductId);
-
-            private static (ApiTokenResourceKind Kind, Guid Id)? EntryResourceOf(ChangeSetEntry entry) =>
-                entry.Kind switch
-                {
-                    ChangeSetEntryKind.SensorDataPolicies or ChangeSetEntryKind.SensorTtlPolicies =>
-                        (ApiTokenResourceKind.Sensor, entry.EntityId),
-                    ChangeSetEntryKind.ProductTtlPolicies => (ApiTokenResourceKind.Product, entry.EntityId),
-                    ChangeSetEntryKind.AlertTemplate when entry.ParentId is { } folder =>
-                        (ApiTokenResourceKind.Folder, folder),
-                    ChangeSetEntryKind.AlertSchedule => (ApiTokenResourceKind.Global, Guid.Empty),
-                    _ => null,
-                };
         }
     }
 }

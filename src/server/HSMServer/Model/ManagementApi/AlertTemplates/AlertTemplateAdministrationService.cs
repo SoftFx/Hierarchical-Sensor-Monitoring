@@ -164,8 +164,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
                 model.Id, model.FolderId, model.Name, beforeTemplate: null, afterTemplate: stored.ToEntity(),
-                targets, beforeImages)
-                ? created.WithChangeSet(changeSetId)
+                targets, beforeImages) is { } landedId
+                ? created.WithChangeSet(landedId)
                 : created;
         }
 
@@ -235,7 +235,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
                 id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages)
-                ? updated.WithChangeSet(changeSetId)
+                is { } landedId
+                ? updated.WithChangeSet(landedId)
                 : updated;
         }
 
@@ -281,7 +282,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
                 id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages)
-                ? PolicyWriteResult.Ok(changeSetId)
+                is { } landedId
+                ? PolicyWriteResult.Ok(landedId)
                 : PolicyWriteResult.Ok();
         }
 
@@ -292,14 +294,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // capture and no journal entry. The rollback engine calls this when
         // compensating a template CREATE — it journals the whole rollback as
         // its own change set.
-        internal async Task<PolicyWriteResult> RemoveTemplateCoreAsync(Guid id, ClaimsPrincipal user)
+        internal async Task<PolicyWriteResult> RemoveTemplateCoreAsync(Guid id, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
         {
             var template = _cache.GetAlertTemplate(id);
 
             if (template is null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
-            if (AuthorizeFolder(template.FolderId, user) is { } denied)
+            if (AuthorizeFolder(template.FolderId, user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
@@ -316,9 +319,9 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // moved on since — the rollback's contract is to restore the recorded
         // configuration, not to re-judge it against today's referential state.
         internal async Task<PolicyWriteResult> RestoreTemplateEntityAsync(AlertTemplateEntity entity,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            if (AuthorizeFolder(entity.FolderId, user) is { } denied)
+            if (AuthorizeFolder(entity.FolderId, user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             AlertTemplateModel model;
@@ -348,8 +351,23 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // from an unknown id — the area's anti-enumeration rule). Every write
         // path here IS a write (the read half stayed in AlertReadService), so
         // the decision is always AuthorizeWrite.
-        private PolicyWriteFailure AuthorizeFolder(Guid folderId, ClaimsPrincipal user) =>
-            _authorization.AuthorizeWrite(user, FolderResource(folderId)) switch
+        //
+        // The rollback's authorization seam: a web-UI rollback supplies the
+        // cookie twin instead — the evaluator resolves HsmApiToken principals
+        // only and would answer NotFound for a cookie user on every restore.
+        private PolicyWriteFailure AuthorizeFolder(Guid folderId, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
+        {
+            if (access is not null)
+                return access.CanWrite(FolderResource(folderId))
+                    ? null
+                    : new PolicyWriteFailure
+                    {
+                        Outcome = PolicyWriteOutcome.Forbidden,
+                        Message = FolderWriteDeniedMessage,
+                    };
+
+            return _authorization.AuthorizeWrite(user, FolderResource(folderId)) switch
             {
                 ApiTokenAuthorization.Allowed => null,
                 ApiTokenAuthorization.Forbidden => new PolicyWriteFailure
@@ -359,6 +377,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 },
                 _ => new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound },
             };
+        }
 
         private static PolicyWriteResult<AlertTemplateDto> ValidationFailure(string key, string message) =>
             PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation,
@@ -378,7 +397,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
 
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+            // A cookie principal (the web UI) carries no token claims — the
+            // authenticated identity name is the acting user.
+            var name = owner?.Name ?? user?.Identity?.Name;
+
+            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
         }
 
         // Dry-run preview of a template write: the fan-out target set (matched
@@ -440,10 +463,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // One journal entry per template write: the template row's
         // before/after image plus a per-sensor full-list image of the fan-out
         // (#1570 story 19 — rollback restores both the template and every
-        // affected sensor's policy list). Returns Record's verdict — the
-        // callers stamp the echoed change-set id ONLY on true, so a client
-        // never receives an undo handle that does not exist.
-        private bool RecordTemplateEntry(Guid changeSetId, InitiatorInfo initiator, ChangeSetOperation operation,
+        // affected sensor's policy list). Returns the id the entry landed in
+        // (null when the journal write failed) — the callers stamp the echoed
+        // change-set id ONLY on a landed id, so a client never receives an
+        // undo handle that does not exist.
+        private Guid? RecordTemplateEntry(Guid changeSetId, InitiatorInfo initiator, ChangeSetOperation operation,
             Guid templateId, Guid folderId, string templateName, AlertTemplateEntity beforeTemplate,
             AlertTemplateEntity afterTemplate, List<BaseSensorModel> targets,
             Dictionary<Guid, (List<PolicyEntity> Data, List<PolicyEntity> Ttl)> beforeImages)

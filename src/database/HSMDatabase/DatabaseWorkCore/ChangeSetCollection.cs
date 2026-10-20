@@ -52,10 +52,25 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             lock (_sync)
             {
-                if (!_ids.Add(new Guid(entity.Id)))
-                    throw new InvalidOperationException($"Change set {new Guid(entity.Id)} already exists in the journal.");
+                var id = new Guid(entity.Id);
 
-                _database.Put(entity.Id, ToBytes(entity));
+                if (!_ids.Add(id))
+                    throw new InvalidOperationException($"Change set {id} already exists in the journal.");
+
+                // Roll the in-memory id back out when the row never landed:
+                // a stuck id would make every later Append to it miss on
+                // TryReadEntity and die on "already exists" — the group's
+                // undo points lost until a restart.
+                try
+                {
+                    _database.Put(entity.Id, ToBytes(entity));
+                }
+                catch
+                {
+                    _ids.Remove(id);
+                    throw;
+                }
+
                 ResaveIdSet();
             }
         }

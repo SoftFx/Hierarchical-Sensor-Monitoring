@@ -430,14 +430,14 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
 
         // A journal whose storage is down: every Append throws, surfacing
-        // Record's false path without tearing down the real test database.
+        // Record's null path without tearing down the real test database.
         private sealed class ThrowingJournal : IChangeSetJournal
         {
             public ChangeSetModel Get(Guid changeSetId) => throw new NotImplementedException();
 
             public List<ChangeSetModel> GetAll() => throw new NotImplementedException();
 
-            public void Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry) =>
+            public Guid Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry) =>
                 throw new InvalidOperationException("the journal storage is down");
 
             public void MarkRolledBack(Guid changeSetId, Guid rollbackChangeSetId) => throw new NotImplementedException();
@@ -445,6 +445,8 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             public void MarkEntryRestored(Guid changeSetId, int entrySequence, Guid rollbackChangeSetId) => throw new NotImplementedException();
 
             public int PurgeReferences(Guid entityId, Guid? folderId = null) => throw new NotImplementedException();
+
+            public int PurgeReferences(IReadOnlyCollection<Guid> entityIds, Guid? folderId = null) => throw new NotImplementedException();
         }
     }
 }

@@ -791,9 +791,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // Authorization FIRST (the evaluator owns the 404/403 split), then the
         // live model lookup — an unknown id never reaches validation.
         private (BaseSensorModel Sensor, PolicyWriteFailure Failure) ResolveWritableSensor(Guid sensorId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, SensorResource(sensorId));
+            var failure = Authorize(user, SensorResource(sensorId), access);
 
             if (failure is not null)
                 return (null, failure);
@@ -804,9 +804,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
         private (ProductModel Product, PolicyWriteFailure Failure) ResolveWritableProduct(Guid productId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, ProductResource(productId));
+            var failure = Authorize(user, ProductResource(productId), access);
 
             if (failure is not null)
                 return (null, failure);
@@ -1187,15 +1187,22 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // re-stamp would release the CanChange protection that blocks later
         // template applies — the CopyTtlUpdate lesson); a restored (changed
         // or re-created) item takes the rollback caller's ownership.
+        // The access seam (web-UI rollbacks): a compensating write authorizes
+        // through the caller's IChangeSetAccess when the rollback supplies
+        // one — the cookie principal cannot travel through the token
+        // evaluator (it resolves HsmApiToken principals only and would
+        // answer NotFound for every node).
         internal Task<PolicyWriteResult> RestoreSensorListsAsync(Guid sensorId, List<PolicyEntity> dataPolicies,
-            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
-                () => RestoreSensorListsCoreAsync(sensorId, dataPolicies, ttlPolicies, user));
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user, access),
+                () => RestoreSensorListsCoreAsync(sensorId, dataPolicies, ttlPolicies, user, access));
 
         private async Task<PolicyWriteResult> RestoreSensorListsCoreAsync(Guid sensorId,
-            List<PolicyEntity> dataPolicies, List<PolicyEntity> ttlPolicies, ClaimsPrincipal user)
+            List<PolicyEntity> dataPolicies, List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
         {
-            var (sensor, failure) = ResolveWritableSensor(sensorId, user);
+            var (sensor, failure) = ResolveWritableSensor(sensorId, user, access);
 
             if (failure is not null)
                 return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
@@ -1219,14 +1226,15 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         // The product's own TTL list restore — same shape, the product gate.
         internal Task<PolicyWriteResult> RestoreProductTtlAsync(Guid productId, List<PolicyEntity> ttlPolicies,
-            ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableProduct(productId, user),
-                () => RestoreProductTtlCoreAsync(productId, ttlPolicies, user));
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user, access),
+                () => RestoreProductTtlCoreAsync(productId, ttlPolicies, user, access));
 
         private async Task<PolicyWriteResult> RestoreProductTtlCoreAsync(Guid productId,
-            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user)
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
         {
-            var (product, failure) = ResolveWritableProduct(productId, user);
+            var (product, failure) = ResolveWritableProduct(productId, user, access);
 
             if (failure is not null)
                 return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
@@ -1301,19 +1309,21 @@ namespace HSMServer.Model.ManagementApi.Alerts
             RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
 
         // The echoed change-set id is stamped ONLY when the journal entry
-        // actually landed (Record's false = the undo point is lost; echoing
-        // the id anyway would hand the client a dead undo handle).
+        // actually landed, and it is the id the entry LANDED in — the journal
+        // forks a client-supplied id that belongs to another author or is
+        // already rolled back (Record's null = the undo point is lost;
+        // echoing nothing then never hands the client a dead undo handle).
         private PolicyWriteResult<T> RecordList<T>(PolicyWriteResult<T> result, Guid changeSetId,
             InitiatorInfo initiator, ChangeSetEntry entry) =>
-            !result.Success || !_changeSets.Record(changeSetId, initiator, entry)
+            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
                 ? result
-                : result.WithChangeSet(changeSetId);
+                : result.WithChangeSet(landedId);
 
         private PolicyWriteResult RecordList(PolicyWriteResult result, Guid changeSetId,
             InitiatorInfo initiator, ChangeSetEntry entry) =>
-            !result.Success || !_changeSets.Record(changeSetId, initiator, entry)
+            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
                 ? result
-                : result.WithChangeSet(changeSetId);
+                : result.WithChangeSet(landedId);
 
         private static ChangeSetEntry SensorListEntry(ChangeSetEntryKind kind, ChangeSetOperation operation,
             BaseSensorModel sensor, List<PolicyEntity> before) =>
@@ -1349,8 +1359,18 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         // === Lookups and shared helpers ===
 
-        private PolicyWriteFailure Authorize(ClaimsPrincipal user, ApiTokenResource resource)
+        private PolicyWriteFailure Authorize(ClaimsPrincipal user, ApiTokenResource resource,
+            ChangeSets.IChangeSetAccess access = null)
         {
+            if (access is not null)
+                return access.CanWrite(resource)
+                    ? null
+                    : new PolicyWriteFailure
+                    {
+                        Outcome = PolicyWriteOutcome.Forbidden,
+                        Message = PolicyWriteResult.WriteDeniedMessage,
+                    };
+
             var decision = _authorization.AuthorizeWrite(user, resource);
 
             return decision switch
@@ -1467,7 +1487,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
 
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+            // A cookie principal (the web UI) carries no token claims — the
+            // authenticated identity name is the acting user.
+            var name = owner?.Name ?? user?.Identity?.Name;
+
+            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
         }
 
         private static Dictionary<string, string[]> ToErrors(Dictionary<string, List<string>> errorMap) =>
