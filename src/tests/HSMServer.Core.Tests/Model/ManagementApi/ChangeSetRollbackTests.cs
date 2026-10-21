@@ -616,6 +616,30 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task Rollback_WithNothingJournaled_OmitsTheRedoHandle()
+        {
+            // The write echoes' own rule, applied to the rollback itself: the
+            // response carries a redo handle ONLY when at least one rollback
+            // entry actually landed in the journal — a mid-restore failure
+            // that journals nothing answers without one.
+            var sensor = await CreateSensorAsync("rbNoRedo");
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            Assert.True(created.Success, created.Failure?.Message);
+
+            // The pre-flight passes (the entry-level check allows), but every
+            // compensating write is denied at restore time — nothing restores,
+            // nothing journals.
+            var access = new SelectiveAccess(canWriteResource: _ => false);
+
+            var result = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User, access: access);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("partial", result.Value.Status);
+            Assert.Null(result.Value.RollbackChangeSetId);
+            Assert.Contains(result.Value.Entries, report => report.Status == "failed");
+        }
+
+        [Fact]
         public async Task ConcurrentRollbacks_OfOneChangeSet_Serialize_ExactlyOneWins()
         {
             // The per-id rollback gate: the second rollback of a concurrent

@@ -101,8 +101,11 @@ namespace HSMServer.Controllers
         {
             var result = await _changeSets.RollbackAsync(id, User, force, dryRun);
 
-            if (result.Success && !dryRun)
-                Response.SetChangeSet(Guid.Parse(result.Value.RollbackChangeSetId));
+            // The redo handle rides the header only when the rollback's own
+            // journal entry actually landed (nothing restored or a journal
+            // failure leaves it null — the write echoes' rule).
+            if (result.Success && !dryRun && result.Value.RollbackChangeSetId is { } redo)
+                Response.SetChangeSet(Guid.Parse(redo));
 
             return result.ToActionResult();
         }

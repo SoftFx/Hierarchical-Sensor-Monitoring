@@ -3,6 +3,21 @@
 // Bootstrap modal idioms follow alertSchedule.js; the shared confirmation
 // modal is window.showConfirmationModal (confirmation.js).
 (function () {
+    // The dialog body is assembled as HTML and the shared confirmation modal
+    // renders it with .html(), so every SERVER-derived string (entry paths,
+    // conflict lines, messages) is escaped here. Paths originate from
+    // DataCollector clients — a sensor name is far weaker trust than the
+    // admin reading this dialog.
+    function esc(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+
+    // The rollback POST is antiforgery-validated: the token rendered by
+    // @Html.AntiForgeryToken() on the page rides every request.
+    function antiForgeryToken() {
+        return $('input[name="__RequestVerificationToken"]').first().val();
+    }
+
     function refreshTable() {
         $.get(window.changeSetsUrls.table, { limit: 200 }, function (html) {
             $('#changeSetsTableContainer').html(html);
@@ -29,48 +44,52 @@
     function confirmRollback(changeSetId) {
         // Dry-run first: the confirmation dialog shows the restore plan and
         // the conflict report before anything is applied.
-        $.post(window.changeSetsUrls.rollback, { id: changeSetId, dryRun: true }, function (preview) {
-            if (preview.error) {
-                window.showConfirmationModal('Rollback failed', preview.error, null);
-                return;
-            }
+        $.post(window.changeSetsUrls.rollback,
+            { id: changeSetId, dryRun: true, __RequestVerificationToken: antiForgeryToken() },
+            function (preview) {
+                if (preview.error) {
+                    window.showConfirmationModal('Rollback failed', esc(preview.error), null);
+                    return;
+                }
 
-            var conflicts = (preview.entries || []).filter(function (e) { return (e.conflicts || []).length > 0; });
-            var hasConflicts = conflicts.length > 0;
-            var body = 'Roll back this change set (' + (preview.status || 'completed') + ')?<br/>' +
-                (preview.message || '') +
-                (hasConflicts
-                    ? '<div class="alert alert-warning mt-2 mb-0 small">' +
-                      conflicts.map(function (e) {
-                          return '<div><strong>' + e.path + '</strong></div>' +
-                              e.conflicts.map(function (c) { return '<div>' + c + '</div>'; }).join('');
-                      }).join('') +
-                      '</div>' +
-                      '<div class="mt-1">Entities changed after the change set was recorded. ' +
-                      'Forcing the rollback DELIBERATELY overrides those changes with the recorded ' +
-                      'before-images.</div>'
-                    : '');
+                var conflicts = (preview.entries || []).filter(function (e) { return (e.conflicts || []).length > 0; });
+                var hasConflicts = conflicts.length > 0;
+                var body = 'Roll back this change set (' + esc(preview.status || 'completed') + ')?<br/>' +
+                    esc(preview.message || '') +
+                    (hasConflicts
+                        ? '<div class="alert alert-warning mt-2 mb-0 small">' +
+                          conflicts.map(function (e) {
+                              return '<div><strong>' + esc(e.path) + '</strong></div>' +
+                                  e.conflicts.map(function (c) { return '<div>' + esc(c) + '</div>'; }).join('');
+                          }).join('') +
+                          '</div>' +
+                          '<div class="mt-1">Entities changed after the change set was recorded. ' +
+                          'Forcing the rollback DELIBERATELY overrides those changes with the recorded ' +
+                          'before-images.</div>'
+                        : '');
 
-            window.showConfirmationModal(
-                hasConflicts ? 'Rollback has conflicts' : 'Rollback change set',
-                body,
-                function () {
-                    $.post(window.changeSetsUrls.rollback, { id: changeSetId, force: hasConflicts }, function (result) {
-                        var text = result.error
-                            ? result.error
-                            : (result.message || 'Rolled back.') +
-                              (result.status === 'partial' ? ' Retry to restore the failed entries.' : '');
+                window.showConfirmationModal(
+                    hasConflicts ? 'Rollback has conflicts' : 'Rollback change set',
+                    body,
+                    function () {
+                        $.post(window.changeSetsUrls.rollback,
+                            { id: changeSetId, force: hasConflicts, __RequestVerificationToken: antiForgeryToken() },
+                            function (result) {
+                                var text = result.error
+                                    ? esc(result.error)
+                                    : esc(result.message || 'Rolled back.') +
+                                      (result.status === 'partial' ? ' Retry to restore the failed entries.' : '');
 
-                        window.showConfirmationModal(
-                            result.error || result.status === 'partial' ? 'Rollback partial' : 'Rollback complete',
-                            text, null);
+                                window.showConfirmationModal(
+                                    result.error || result.status === 'partial' ? 'Rollback partial' : 'Rollback complete',
+                                    text, null);
 
-                        refreshTable();
-                    });
-                },
-                null,
-                hasConflicts ? 'Force rollback' : 'Rollback');
-        });
+                                refreshTable();
+                            });
+                    },
+                    null,
+                    hasConflicts ? 'Force rollback' : 'Rollback');
+            });
     }
 
     $(document).ready(function () {

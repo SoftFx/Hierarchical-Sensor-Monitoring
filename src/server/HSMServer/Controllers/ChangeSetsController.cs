@@ -61,6 +61,7 @@ namespace HSMServer.Controllers
         /// <summary>Rollback with force; dry-run variant feeds the confirmation dialog.</summary>
         [HttpPost]
         [AuthorizeIsAdmin]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Rollback(Guid id, bool force = false, bool dryRun = false)
         {
             var result = await _changeSets.RollbackAsync(id, User, force, dryRun,

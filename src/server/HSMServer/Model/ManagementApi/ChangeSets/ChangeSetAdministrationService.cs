@@ -179,8 +179,14 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             try
             {
                 // Re-read under the gate: a concurrent rollback of this id may
-                // have finished while this call waited for the gate.
+                // have finished while this call waited for the gate — and a
+                // concurrent entity deletion may have purged the set entirely
+                // (an entry-less change set is removed), so the re-read can
+                // answer null where the pre-gate read did not.
                 set = _journal.Get(id);
+
+                if (set is null)
+                    return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.NotFound);
 
                 if (set.Status == ChangeSetStatus.RolledBack)
                     return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
@@ -254,6 +260,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 var author = AuthorOf(user);
                 var failures = 0;
                 var restoredAny = false;
+                var landedAny = false;
 
                 foreach (var entry in pending.OrderByDescending(e => e.Sequence))
                 {
@@ -277,16 +284,21 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                         continue;
                     }
 
-                    var restored = await RestoreEntryAsync(entry, user, access, rollbackChangeSetId, author);
+                    var (failure, landed) = await RestoreEntryAsync(entry, user, access, rollbackChangeSetId, author);
 
-                    if (restored is not null)
+                    // A partially-failed entry may still have journaled its
+                    // restored half (fan-out parity) — the redo handle is
+                    // honest as soon as ANY rollback entry landed.
+                    landedAny |= landed;
+
+                    if (failure is not null)
                     {
                         failures++;
 
                         var report = reports.First(r => r.Sequence == entry.Sequence);
 
                         reports.Remove(report);
-                        reports.Add(report with { Status = "failed", Message = restored });
+                        reports.Add(report with { Status = "failed", Message = failure });
                     }
                     else
                     {
@@ -302,16 +314,21 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 if (_journal.Get(id)?.Entries.All(e => e.RestoredBy is not null) == true)
                     _journal.MarkRolledBack(id, rollbackChangeSetId);
 
+                // The redo handle rides the response ONLY when at least one
+                // rollback entry actually landed in the journal — the write
+                // echoes' own rule (never hand out an id that holds nothing).
                 return PolicyWriteResult<RollbackResultDto>.Ok(new RollbackResultDto
                 {
                     ChangeSetId = id.ToString(),
                     DryRun = false,
                     Forced = force,
                     Status = completed ? "completed" : "partial",
-                    Message = failures == 0
-                        ? $"Rolled back; redo via change set {rollbackChangeSetId}."
-                        : $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry.",
-                    RollbackChangeSetId = rollbackChangeSetId.ToString(),
+                    Message = failures != 0
+                        ? $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry."
+                        : landedAny
+                            ? $"Rolled back; redo via change set {rollbackChangeSetId}."
+                            : "Rolled back.",
+                    RollbackChangeSetId = landedAny ? rollbackChangeSetId.ToString() : null,
                     Entries = reports,
                 });
             }
@@ -324,13 +341,13 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Restore execution ===
 
-        // One entry's compensating writes; returns null on success or the
-        // failure message. The rollback's own journal entry (before = state
-        // at rollback time, after = restored state) is recorded per entry so
-        // the redo path sees the same full-list images. The caller's access
+        // One entry's compensating writes; returns the failure message (null
+        // on success) and whether the rollback's own journal entry for it
+        // actually LANDED (before = state at rollback time, after = restored
+        // state — the redo path needs those images). The caller's access
         // rides every restore — the authorization seam the web UI needs.
-        private async Task<string> RestoreEntryAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
+        private async Task<(string Failure, bool Landed)> RestoreEntryAsync(ChangeSetEntry entry,
+            ClaimsPrincipal user, IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             switch (entry.Kind)
             {
@@ -349,12 +366,12 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     var result = await _policies.RestoreProductTtlAsync(entry.EntityId, entry.Before, user, access);
 
                     if (!result.Success)
-                        return result.Failure.Message;
+                        return (result.Failure.Message, false);
 
-                    RecordRollbackEntry(rollbackChangeSetId, author, entry, before,
+                    var landed = RecordRollbackEntry(rollbackChangeSetId, author, entry, before,
                         CaptureProductTtl(entry.EntityId));
 
-                    return null;
+                    return (null, landed);
                 }
 
                 case ChangeSetEntryKind.AlertTemplate:
@@ -364,13 +381,13 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     return await RestoreScheduleAsync(entry, user, access, rollbackChangeSetId, author);
 
                 default:
-                    return $"Unknown entry kind {entry.Kind}.";
+                    return ($"Unknown entry kind {entry.Kind}.", false);
             }
         }
 
-        private async Task<string> RestoreSensorListAsync(ChangeSetEntry entry, List<PolicyEntity> data,
-            List<PolicyEntity> ttl, ClaimsPrincipal user, IChangeSetAccess access, Guid rollbackChangeSetId,
-            InitiatorInfo author)
+        private async Task<(string Failure, bool Landed)> RestoreSensorListAsync(ChangeSetEntry entry,
+            List<PolicyEntity> data, List<PolicyEntity> ttl, ClaimsPrincipal user, IChangeSetAccess access,
+            Guid rollbackChangeSetId, InitiatorInfo author)
         {
             // Capture the list THIS entry owns (kind decides data vs TTL) —
             // the rollback's own before-image.
@@ -379,17 +396,17 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             var result = await _policies.RestoreSensorListsAsync(entry.EntityId, data, ttl, user, access);
 
             if (!result.Success)
-                return result.Failure.Message;
+                return (result.Failure.Message, false);
 
             var after = data is not null ? CaptureSensorData(entry.EntityId) : CaptureSensorTtl(entry.EntityId);
 
-            RecordRollbackEntry(rollbackChangeSetId, author, entry, before, after);
+            var landed = RecordRollbackEntry(rollbackChangeSetId, author, entry, before, after);
 
-            return null;
+            return (null, landed);
         }
 
-        private async Task<string> RestoreTemplateAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
+        private async Task<(string Failure, bool Landed)> RestoreTemplateAsync(ChangeSetEntry entry,
+            ClaimsPrincipal user, IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             var beforeTemplate = _cache.GetAlertTemplate(entry.EntityId)?.ToEntity();
 
@@ -401,7 +418,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 : await _templates.RestoreTemplateEntityAsync(entry.BeforeTemplate, user, access);
 
             if (!result.Success)
-                return result.Failure.Message;
+                return (result.Failure.Message, false);
 
             // Then the per-sensor exact restores: the fan-out images force
             // every touched sensor to its recorded before-list regardless of
@@ -439,22 +456,22 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     // restored — journal them (redo parity): a retry without
                     // this record would have no undo point for the applied
                     // half. The entry stays pending; the set reports partial.
-                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                    var journaled = RecordRollbackEntry(rollbackChangeSetId, author, entry,
                         beforeTemplate: beforeTemplate,
                         afterTemplate: _cache.GetAlertTemplate(entry.EntityId)?.ToEntity(),
                         fanout: rollbackFanout);
 
-                    return $"Sensor list restore failed on {image.Path}: {nodeResult.Failure.Message}";
+                    return ($"Sensor list restore failed on {image.Path}: {nodeResult.Failure.Message}", journaled);
                 }
 
                 rollbackFanout.Add(rollbackImage);
             }
 
-            RecordRollbackEntry(rollbackChangeSetId, author, entry,
+            var landed = RecordRollbackEntry(rollbackChangeSetId, author, entry,
                 beforeTemplate: beforeTemplate, afterTemplate: _cache.GetAlertTemplate(entry.EntityId)?.ToEntity(),
                 fanout: rollbackFanout);
 
-            return null;
+            return (null, landed);
         }
 
         private NodePolicyImage RollbackSensorImage(NodePolicyImage original,
@@ -486,8 +503,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 AfterTtlPolicies = CaptureProductTtl(original.NodeId),
             };
 
-        private async Task<string> RestoreScheduleAsync(ChangeSetEntry entry, ClaimsPrincipal user,
-            IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
+        private async Task<(string Failure, bool Landed)> RestoreScheduleAsync(ChangeSetEntry entry,
+            ClaimsPrincipal user, IChangeSetAccess access, Guid rollbackChangeSetId, InitiatorInfo author)
         {
             var beforeSchedule = _schedules.GetSchedule(entry.EntityId)?.ToEntity();
 
@@ -496,7 +513,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 : _scheduleWrites.RestoreScheduleEntity(entry.BeforeSchedule, user, access);
 
             if (!result.Success)
-                return result.Failure.Message;
+                return (result.Failure.Message, false);
 
             // The detach fan-out: restore the recorded per-node lists and the
             // template rows that carried the schedule reference; each node's
@@ -531,12 +548,12 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     // Journal the already-restored half before failing (the
                     // template twin's rule): the retry needs an undo point
                     // for everything this attempt applied.
-                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                    var journaled = RecordRollbackEntry(rollbackChangeSetId, author, entry,
                         beforeSchedule: beforeSchedule,
                         afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
                         fanout: scheduleRollbackFanout);
 
-                    return $"Detach restore failed on {image.Path}: {fanoutResult.Failure.Message}";
+                    return ($"Detach restore failed on {image.Path}: {fanoutResult.Failure.Message}", journaled);
                 }
 
                 scheduleRollbackFanout.Add(rollbackImage);
@@ -548,20 +565,20 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
                 if (!templateResult.Success)
                 {
-                    RecordRollbackEntry(rollbackChangeSetId, author, entry,
+                    var journaled = RecordRollbackEntry(rollbackChangeSetId, author, entry,
                         beforeSchedule: beforeSchedule,
                         afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
                         fanout: scheduleRollbackFanout);
 
-                    return $"Template restore failed: {templateResult.Failure.Message}";
+                    return ($"Template restore failed: {templateResult.Failure.Message}", journaled);
                 }
             }
 
-            RecordRollbackEntry(rollbackChangeSetId, author, entry,
+            var landed = RecordRollbackEntry(rollbackChangeSetId, author, entry,
                 beforeSchedule: beforeSchedule, afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
                 fanout: scheduleRollbackFanout);
 
-            return null;
+            return (null, landed);
         }
 
 
@@ -999,7 +1016,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 ? ChangeSetRecorder.SnapshotProductTtlPolicies(product)
                 : null;
 
-        private void RecordRollbackEntry(Guid rollbackChangeSetId, InitiatorInfo author, ChangeSetEntry original,
+        private bool RecordRollbackEntry(Guid rollbackChangeSetId, InitiatorInfo author, ChangeSetEntry original,
             List<PolicyEntity> before = null, List<PolicyEntity> after = null,
             AlertTemplateEntity beforeTemplate = null, AlertTemplateEntity afterTemplate = null,
             AlertScheduleEntity beforeSchedule = null, AlertScheduleEntity afterSchedule = null,
@@ -1007,7 +1024,9 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         {
             // The rollback entry mirrors the original entry's kind and entity
             // with the INVERSE operation, so a redo (rollback of the
-            // rollback) restores the rollback's own before-images.
+            // rollback) restores the rollback's own before-images. The
+            // return is Record's landed verdict — the response carries a redo
+            // handle only when at least one entry actually landed.
             var operation = original.Operation switch
             {
                 ChangeSetOperation.Create => ChangeSetOperation.Delete,
@@ -1015,7 +1034,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 _ => ChangeSetOperation.Update,
             };
 
-            _recorder.Record(rollbackChangeSetId, author, new ChangeSetEntry
+            return _recorder.Record(rollbackChangeSetId, author, new ChangeSetEntry
             {
                 Kind = original.Kind,
                 Operation = operation,
@@ -1029,7 +1048,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 BeforeSchedule = beforeSchedule,
                 AfterSchedule = afterSchedule,
                 Fanout = fanout,
-            });
+            }) is not null;
         }
     }
 

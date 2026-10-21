@@ -33,6 +33,10 @@
 
 <div id="changeSetDetailsContainer"></div>
 
+@* The rollback POST is antiforgery-validated; the token rides the jQuery
+   posts from changeSets.js (the schedules-page precedent). *@
+@Html.AntiForgeryToken()
+
 @section Scripts {
     <script>
         window.changeSetsUrls = {
