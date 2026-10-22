@@ -50,27 +50,27 @@
 	lb_try_duration 30s
 }
 
-# VictoriaLogs read-only exposure (docker-compose 'logs' profile). The entrypoint selects one
-# of the two snippets below through HSM_VL_SNIPPET and generates VL_UI_BCRYPT_HASH from
-# VL_UI_PASSWORD, so no plaintext secret ever reaches the Caddyfile. /select/vmui is the
-# built-in web UI and /select/logsql the query API in the pinned VictoriaLogs version; ingest
-# (/insert/...) is not routed here — shipping is done by vlagent inside the compose network.
+# VictoriaLogs read-only exposure (docker-compose 'logs' profile). VictoriaLogs runs with
+# -http.pathPrefix=/logs, so its built-in web UI (/logs/select/vmui) and the LogSQL query
+# API (/logs/select/logsql) map 1:1 under that prefix. Only /logs/select/* is routed, and
+# only for a logged-in HSM admin: forward_auth consults the app's session-check endpoint
+# (204 admits; the endpoint's login-redirect/401/403 answers are passed back to the client
+# as-is). Ingest (/logs/insert/...), /logs/delete/* and the internal endpoints are NOT
+# routed here — shipping is done by vlagent inside the compose network.
 (victorialogs-routes) {
-	@victorialogs path /select/vmui /select/vmui/* /select/logsql /select/logsql/*
+	@victorialogs path /logs/select/*
 	handle @victorialogs {
-		basic_auth {
-			{$VL_UI_USER} {$VL_UI_BCRYPT_HASH}
+		forward_auth https://app:44333 {
+			uri /logs-auth
+			import hsm_upstream
 		}
 		reverse_proxy victorialogs:9428
 	}
 }
-(victorialogs-off) {
-	# VictoriaLogs credentials are not configured: no routes are exposed.
-}
 
 {$HSM_DOMAIN}, {$HSM_DOMAIN}:44333 {
 	import {$HSM_TLS_SNIPPET}
-	import {$HSM_VL_SNIPPET}
+	import victorialogs-routes
 	handle {
 		reverse_proxy https://app:44333 {
 			import hsm_upstream
@@ -87,7 +87,7 @@
 # Preserve connections made by IP, short name, or an old CNAME. These clients receive the
 # HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
 https://:443, https://:44333 {
-	import {$HSM_VL_SNIPPET}
+	import victorialogs-routes
 	handle {
 		reverse_proxy https://app:44333 {
 			import hsm_upstream

@@ -25,6 +25,7 @@
 
 ## Infrastructure
 * hsm-caddy 2.11.4-3 passes the client Host header through to the server upstream — redirects no longer break behind the proxy.
+* The VictoriaLogs read path moved to https://<HSM_DOMAIN>/logs/ and is admitted only for logged-in HSM admins (Caddy forward_auth against the app): the separate VL_UI_* basic-auth credential is gone, and the log routes ship enabled with the 'logs' compose profile.
 
 ## Dependencies
 * Bundled HSMDataCollector 3.5.0 and HsmAgent 0.5.28 (both unchanged since 3.41.6).

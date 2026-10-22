@@ -24,4 +24,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0007 | Accepted | [Distribute Caddy with DNS challenge modules as a pinned image](0007-bundled-dns-caddy-image.md) | 2026-09-24 |
 | 0008 | Accepted | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-28 |
 | 0009 | Accepted | [Bar StdDev is sent by the native collector only (exception to rules #9/#10)](0009-bar-stddev-native-only.md) | 2026-10-07 |
+| 0011 | Accepted | [VictoriaLogs read path is the HSM admin session at /logs/](0011-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |
