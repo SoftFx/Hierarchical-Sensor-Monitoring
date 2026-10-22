@@ -55,6 +55,17 @@ logged loss of an undo point for never reporting failure on an applied write.
 - Rollback restores configuration only: notifications already sent, alerts already
   fired, and sensor history are untouched by design.
 - The change-set table grows without retention by design (#1570: entity-deletion
+
+
+## Backup exclusion
+
+The `Databases/ChangeSets` store is deliberately NOT part of the backup set
+(`BackupDatabaseService` copies only EnvironmentData and ServerLayout, and the
+DB-size sensors do not count it). Losing the disk loses the undo points with
+everything else; restoring a backup restores the configuration the backup
+holds, which needs no undo journal of writes that never happened on this
+server. The exclusion is recorded here and in the backup node's
+not-backed-up note so it is a decision, not an accident.
   cleanup only); list reads scan and filter in memory.
 
 ## Alternatives Considered

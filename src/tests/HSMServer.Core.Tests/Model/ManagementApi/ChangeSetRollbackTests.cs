@@ -447,6 +447,32 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public void CookieUserAccess_ProductTtlEntry_OfASubProduct_ResolvesTheRecordedRoot()
+        {
+            // A ProductTtl entry's entity may be a SUB-product, but a web
+            // user's product roles are granted on ROOT products — the cookie
+            // twin must check the recorded root (entry.ParentId), like the
+            // sensor arm, or the entry is invisible to the root's viewer.
+            var root = Guid.NewGuid();
+            var user = new User(new HSMDatabase.AccessManager.DatabaseEntities.UserEntity
+            {
+                UserName = "viewer",
+                ProductsRoles = [new(root.ToString(), (byte)ProductRoleEnum.ProductManager)],
+            });
+
+            var access = new CookieUserAccess(user, _valuesCache);
+            var entry = new ChangeSetEntry
+            {
+                Kind = ChangeSetEntryKind.ProductTtlPolicies,
+                EntityId = Guid.NewGuid(),
+                ParentId = root,
+            };
+
+            Assert.True(access.CanRead(entry));
+            Assert.True(access.CanWrite(entry));
+        }
+
+        [Fact]
         public async Task Rollback_FromACookiePrincipal_RestoresEntries_AndJournalsTheWebUser()
         {
             // The web UI rolls back with a cookie principal — no HsmApiToken

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMServer.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Model.Policies;
@@ -284,6 +285,60 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Null(entry.BeforeSchedule);
             Assert.Equal(created.Value.Id, new Guid(entry.AfterSchedule.Id));
         }
+
+        [Fact]
+        public async Task PartiallyAppliedTemplateCreate_JournalsTheAppliedHalf()
+        {
+            // The cache persists the row BEFORE the fan-out; a per-product
+            // apply failure answers a Conflict with the row saved and some
+            // sensors possibly already changed. The half-applied write must
+            // keep its undo point (captured before-images, live after-state)
+            // — ADR-0010's "every write is recorded".
+            var cache = new Mock<ITreeValuesCache>();
+            cache.Setup(c => c.GetProducts()).Returns(new List<Core.Model.ProductModel>());
+            cache.Setup(c => c.GetSensors()).Returns(new List<Core.Model.BaseSensorModel>());
+            cache.Setup(c => c.GetAlertTemplateModels()).Returns(new List<Core.Model.AlertTemplateModel>());
+            cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<HSMCommon.Model.SensorType?>(), It.IsAny<Guid>()))
+                .Returns(new List<Core.Model.BaseSensorModel>());
+            cache.Setup(c => c.GetAlertTemplate(It.IsAny<Guid>()))
+                .Returns((Guid id) => new Core.Model.AlertTemplateModel(PersistedTemplateEntity(id)));
+            cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(),
+                    It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync((false, "Failed to apply template to products: P2",
+                    new List<HSMServer.Core.Cache.TemplateApplyWarning>()));
+
+            var templates = new AlertTemplateAdministrationService(cache.Object, _folders.Object, _chats.Object,
+                _alertScheduleProvider, _authorization.Object, _users.Object,
+                ChangeSetTestHelpers.Recorder(_databaseCoreManager.DatabaseCore),
+                NullLogger<AlertTemplateAdministrationService>.Instance);
+
+            var changeSetId = Guid.NewGuid();
+            var failed = await templates.CreateTemplateAsync(User, TemplateDto(paths: ["*/svcPartial"]),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+
+            Assert.False(failed.Success);
+            Assert.Equal(PolicyWriteOutcome.Conflict, failed.Failure.Outcome);
+            Assert.Contains("templateId", failed.Failure.Details.Keys);
+
+            // The partial apply is journaled under the client's id: the entry
+            // carries the live (saved) row as its after-image, so the applied
+            // half can be rolled back.
+            var entry = Assert.Single(_journal.Get(changeSetId).Entries);
+
+            Assert.Equal(ChangeSetEntryKind.AlertTemplate, entry.Kind);
+            Assert.Equal(ChangeSetOperation.Create, entry.Operation);
+            Assert.Null(entry.BeforeTemplate);
+            Assert.NotNull(entry.AfterTemplate);
+        }
+
+        private static HSMDatabase.AccessManager.DatabaseEntities.AlertTemplateEntity PersistedTemplateEntity(Guid id) =>
+            new()
+            {
+                Id = id.ToByteArray(),
+                Name = "partially-applied",
+                SensorType = (byte)SensorType.Integer,
+                Paths = [],
+            };
 
         [Fact]
         public async Task FailedJournalAppend_WriteSucceedsWithoutEchoingADeadChangeSetId()

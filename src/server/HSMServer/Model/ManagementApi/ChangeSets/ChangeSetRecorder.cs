@@ -1,4 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Model;
@@ -36,6 +37,25 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// the dry-run echo id.
         /// </summary>
         public static Guid ResolveChangeSetId(ChangeSetWriteOptions write) => write?.ChangeSetId ?? Guid.NewGuid();
+
+        /// <summary>
+        /// The write initiator, resolved identically everywhere it is needed
+        /// (policy, template and schedule writes, the rollback engine): the
+        /// token's OWNER as a user (the token acts as its owner, #1384); a
+        /// cookie principal (the web UI) carries no token claims and falls to
+        /// the authenticated identity name. ONE helper because the journal's
+        /// fork rule compares the author STRINGS this produces — drifting
+        /// copies would silently split a user's grouped writes.
+        /// </summary>
+        public static InitiatorInfo InitiatorOf(System.Security.Claims.ClaimsPrincipal user, IUserManager users)
+        {
+            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
+            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? users[ownerId] : null;
+
+            var name = owner?.Name ?? user?.Identity?.Name;
+
+            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
+        }
 
         /// <summary>
         /// Append one entry; null when the journal write failed (the undo

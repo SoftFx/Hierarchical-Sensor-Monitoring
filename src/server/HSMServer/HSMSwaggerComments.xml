@@ -2183,6 +2183,17 @@
             the dry-run echo id.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.InitiatorOf(System.Security.Claims.ClaimsPrincipal,HSMServer.Authentication.IUserManager)">
+            <summary>
+            The write initiator, resolved identically everywhere it is needed
+            (policy, template and schedule writes, the rollback engine): the
+            token's OWNER as a user (the token acts as its owner, #1384); a
+            cookie principal (the web UI) carries no token claims and falls to
+            the authenticated identity name. ONE helper because the journal's
+            fork rule compares the author STRINGS this produces — drifting
+            copies would silently split a user's grouped writes.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
             <summary>
             Append one entry; null when the journal write failed (the undo

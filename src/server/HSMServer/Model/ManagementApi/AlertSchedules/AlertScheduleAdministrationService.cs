@@ -151,14 +151,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // the schedule is not deleted either way (see the class comment).
             var deleted = await DeleteScheduleCoreAsync(id, user, cancellationToken: cancellationToken);
 
-            if (!deleted.Success)
-                return deleted;
-
-            // The echoed change-set id is stamped ONLY when the journal entry
-            // actually landed, and it is the id the entry landed in (the
-            // journal forks a foreign or terminal id; Record's null = the
-            // undo point is lost).
-            var landedId = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+            // The delete's journal entry: the row's before/after image plus
+            // the per-node detach images (the fan-out afters are the LIVE
+            // lists, so a PARTIAL detach journals exactly what was cleared).
+            ChangeSetEntry DeleteEntry(bool scheduleDeleted) => new()
             {
                 Kind = ChangeSetEntryKind.AlertSchedule,
                 Operation = ChangeSetOperation.Delete,
@@ -166,7 +162,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 ParentId = null,
                 Path = schedule.Name,
                 BeforeSchedule = schedule.ToEntity(),
-                AfterSchedule = null,
+                AfterSchedule = scheduleDeleted ? null : schedule.ToEntity(),
                 Fanout =
                 [
                     .. sensors.Select(s => SensorImage(s, beforeSensorImages[s.Id],
@@ -175,7 +171,26 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 ],
                 BeforeTemplates = beforeTemplateEntities,
                 AfterTemplates = templates.Select(t => t.ToEntity()).ToList(),
-            });
+            };
+
+            if (!deleted.Success)
+            {
+                // #1570: an incomplete detach has already cleared SOME
+                // references while the schedule survives — journal the
+                // partial detach so the cleared references keep their undo
+                // point; auth/NotFound failures changed nothing and journal
+                // nothing.
+                if (deleted.Failure.Outcome == PolicyWriteOutcome.Conflict)
+                    _changeSets.Record(changeSetId, InitiatorOf(user), DeleteEntry(scheduleDeleted: false));
+
+                return deleted;
+            }
+
+            // The echoed change-set id is stamped ONLY when the journal entry
+            // actually landed, and it is the id the entry landed in (the
+            // journal forks a foreign or terminal id; Record's null = the
+            // undo point is lost).
+            var landedId = _changeSets.Record(changeSetId, InitiatorOf(user), DeleteEntry(scheduleDeleted: true));
 
             return landedId is { } landed ? PolicyWriteResult.Ok(landed) : PolicyWriteResult.Ok();
         }
@@ -419,18 +434,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
         // === Undo-journal hooks (#1570) ===
 
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            // A cookie principal (the web UI) carries no token claims — the
-            // authenticated identity name is the acting user.
-            var name = owner?.Name ?? user?.Identity?.Name;
-
-            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
-        }
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
+            ChangeSetRecorder.InitiatorOf(user, _users);
 
         private WritePreviewDto SchedulePreview(ChangeSetWriteOptions write, Guid scheduleId, string name)
         {

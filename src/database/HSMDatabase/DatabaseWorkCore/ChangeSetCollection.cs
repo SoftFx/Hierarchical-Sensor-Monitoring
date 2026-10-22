@@ -118,7 +118,19 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var list = new List<ChangeSetEntity>();
 
-            foreach (var id in _ids)
+            // Snapshot the ids under the lock: a concurrent Add/Remove mutates
+            // the set, and enumerating it directly would throw
+            // InvalidOperationException mid-iteration (the read itself is
+            // per-id and unlocked on purpose — the parse of one row must not
+            // hold up writers).
+            Guid[] ids;
+
+            lock (_sync)
+            {
+                ids = [.. _ids];
+            }
+
+            foreach (var id in ids)
                 if (TryReadEntity(id, out var entity))
                     list.Add(entity);
 

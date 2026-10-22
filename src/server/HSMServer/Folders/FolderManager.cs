@@ -193,7 +193,6 @@ namespace HSMServer.Folders
 
             if (result)
             {
-
                 foreach (var productId in folder.Products.Keys)
                     await RemoveProductFromFolder(productId, remove.Id, remove.Initiator);
 
@@ -209,9 +208,21 @@ namespace HSMServer.Folders
                 // #1570: the folder's undo-journal records (folder-bound
                 // template entries) do not outlive the folder; surviving
                 // change sets go partial. Guid.Empty matches no entity id —
-                // the purge runs on the FOLDER arm only.
+                // the purge runs on the FOLDER arm only. A purge failure is
+                // logged and swallowed — the folder is already gone and the
+                // deletion must not fail over journal cleanup (the
+                // TreeValuesCache.PurgeChangeSets rule).
                 if (result)
-                    _changeSetJournal.PurgeReferences(Guid.Empty, remove.Id);
+                {
+                    try
+                    {
+                        _changeSetJournal.PurgeReferences(Guid.Empty, remove.Id);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Change-set purge failed for folder {remove.Id}");
+                    }
+                }
             }
 
             string logFolder = folder?.Name ?? remove.Id.ToString();

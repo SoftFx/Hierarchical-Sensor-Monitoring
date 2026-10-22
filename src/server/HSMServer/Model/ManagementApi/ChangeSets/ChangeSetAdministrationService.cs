@@ -135,10 +135,12 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
             // Page BEFORE rendering: the UI reloads this list on every page
             // view, and a summary is built per visible set — the offset and
-            // limit bound the rendering work too.
+            // limit bound the rendering work too. The entityId filter sees
+            // only the caller-visible entries: matching hidden ones would
+            // leak their existence through the filter's selectivity.
             var page = _journal.GetAll()
                 .Where(set => set.Entries.Any(e => access.CanRead(e) || HasVisibleNode(e, access)))
-                .Where(set => Matches(set, filter))
+                .Where(set => Matches(set, filter, set.Entries.Where(access.CanRead).ToList()))
                 .Skip(offset)
                 .Take(limit)
                 .Select(set => RenderSummary(set, access))
@@ -515,9 +517,23 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             if (!result.Success)
                 return (result.Failure.Message, false);
 
-            // The detach fan-out: restore the recorded per-node lists and the
-            // template rows that carried the schedule reference; each node's
-            // rollback images ride the rollback's own entry.
+            // The detached template rows FIRST (the template twin's order):
+            // RestoreTemplateEntityAsync re-runs each template's fan-out, so
+            // restoring them AFTER the per-node loop would silently overwrite
+            // the exact recorded lists with the template engine's output and
+            // leave those writes out of the rollback's own journal entry.
+            foreach (var templateEntity in entry.BeforeTemplates ?? [])
+            {
+                var templateResult = await _templates.RestoreTemplateEntityAsync(templateEntity, user, access);
+
+                if (!templateResult.Success)
+                    return ($"Template restore failed: {templateResult.Failure.Message}", false);
+            }
+
+            // The detach fan-out: the per-node exact restores, forcing every
+            // touched node to its recorded before-list regardless of what the
+            // template re-runs just did; each node's rollback images ride the
+            // rollback's own entry.
             var scheduleRollbackFanout = new List<NodePolicyImage>();
 
             foreach (var image in entry.Fanout ?? [])
@@ -557,21 +573,6 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 }
 
                 scheduleRollbackFanout.Add(rollbackImage);
-            }
-
-            foreach (var templateEntity in entry.BeforeTemplates ?? [])
-            {
-                var templateResult = await _templates.RestoreTemplateEntityAsync(templateEntity, user, access);
-
-                if (!templateResult.Success)
-                {
-                    var journaled = RecordRollbackEntry(rollbackChangeSetId, author, entry,
-                        beforeSchedule: beforeSchedule,
-                        afterSchedule: _schedules.GetSchedule(entry.EntityId)?.ToEntity(),
-                        fanout: scheduleRollbackFanout);
-
-                    return ($"Template restore failed: {templateResult.Failure.Message}", journaled);
-                }
             }
 
             var landed = RecordRollbackEntry(rollbackChangeSetId, author, entry,
@@ -901,7 +902,10 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Rendering ===
 
-        private static bool Matches(ChangeSetModel set, ChangeSetFilter filter) =>
+        // The entityId filter matches only the caller-VISIBLE entries —
+        // matching hidden ones would let a caller probe whether an invisible
+        // entity was touched by a set they can see.
+        private static bool Matches(ChangeSetModel set, ChangeSetFilter filter, List<ChangeSetEntry> visibleEntries) =>
             (filter.Author is null || string.Equals(set.Author, filter.Author, StringComparison.OrdinalIgnoreCase)) &&
             (filter.FromUtc is not { } from || set.CreatedAtUtc >= from) &&
             (filter.ToUtc is not { } to || set.CreatedAtUtc <= to) &&
@@ -909,20 +913,27 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
              string.Equals(set.Status.ToString(), filter.Status.Replace("-", "").Replace("_", ""),
                  StringComparison.OrdinalIgnoreCase)) &&
             (filter.EntityId is not { } entity ||
-             set.Entries.Any(e => e.EntityId == entity || (e.Fanout ?? []).Any(f => f.NodeId == entity)));
+             visibleEntries.Any(e => e.EntityId == entity || (e.Fanout ?? []).Any(f => f.NodeId == entity)));
 
-        private ChangeSetSummaryDto RenderSummary(ChangeSetModel set, IChangeSetAccess access) =>
-            new()
+        // The counts and the entities list see only the caller-visible
+        // entries (the details view's own filter) — hidden entries must not
+        // be observable through the arithmetic either.
+        private ChangeSetSummaryDto RenderSummary(ChangeSetModel set, IChangeSetAccess access)
+        {
+            var visibleEntries = set.Entries.Where(access.CanRead).ToList();
+
+            return new ChangeSetSummaryDto
             {
                 Id = set.Id.ToString(),
                 Author = set.Author,
                 AuthorType = set.AuthorType.ToString(),
                 CreatedAtUtc = set.CreatedAtUtc,
                 Status = StatusOf(set.Status),
-                EntryCount = set.Entries.Count,
-                RestoredEntryCount = set.Entries.Count(e => e.RestoredBy is not null),
-                Entities = set.Entries.Where(e => access.CanRead(e)).Select(e => e.Path).ToList(),
+                EntryCount = visibleEntries.Count,
+                RestoredEntryCount = visibleEntries.Count(e => e.RestoredBy is not null),
+                Entities = visibleEntries.Select(e => e.Path).ToList(),
             };
+        }
 
         private ChangeSetDetailsDto RenderDetails(ChangeSetModel set, IChangeSetAccess access) =>
             new()
@@ -993,17 +1004,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // === Snapshot capture for the rollback's own journal entries ===
 
-        private InitiatorInfo AuthorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            // A cookie principal (the web UI's rollback) carries no token
-            // claims — the authenticated identity name is the author.
-            var name = owner?.Name ?? user?.Identity?.Name;
-
-            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
-        }
+        private InitiatorInfo AuthorOf(ClaimsPrincipal user) =>
+            ChangeSetRecorder.InitiatorOf(user, _users);
 
         private List<PolicyEntity> CaptureSensorData(Guid sensorId) =>
             _cache.GetSensor(sensorId) is { } sensor ? ChangeSetRecorder.SnapshotDataPolicies(sensor) : null;

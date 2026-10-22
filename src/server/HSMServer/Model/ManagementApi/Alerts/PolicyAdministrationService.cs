@@ -1479,20 +1479,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
             return folderChats.GetAvailableChats(_chats);
         }
 
-        // The write initiator mirrors the web UI's CurrentInitiator: the token's
-        // OWNER as a user (the token acts as its owner, #1384).
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            // A cookie principal (the web UI) carries no token claims — the
-            // authenticated identity name is the acting user.
-            var name = owner?.Name ?? user?.Identity?.Name;
-
-            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
-        }
+        // The write initiator resolves through the shared ChangeSetRecorder
+        // helper (the journal's fork rule compares the author strings).
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
+            ChangeSetRecorder.InitiatorOf(user, _users);
 
         private static Dictionary<string, string[]> ToErrors(Dictionary<string, List<string>> errorMap) =>
             errorMap.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());

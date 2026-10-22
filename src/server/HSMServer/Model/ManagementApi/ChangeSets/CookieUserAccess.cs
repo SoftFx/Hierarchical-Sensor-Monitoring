@@ -35,7 +35,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             {
                 { Kind: ApiTokenResourceKind.Global } => _user.IsAdmin,
                 { Kind: ApiTokenResourceKind.Folder } resource => _user.IsAdmin || _user.IsFolderManager(resource.Id),
-                { Kind: ApiTokenResourceKind.Product } resource => _user.IsProductAvailable(resource.Id),
+                // The RECORDED root, like the sensor arm: a ProductTtl entry's
+                // entity may be a sub-product, but a web user's product roles
+                // are granted on ROOT products — resolving the sub-product's
+                // own id would hide (or expose, on write) the entry.
+                { Kind: ApiTokenResourceKind.Product } resource => _user.IsProductAvailable(entry.ParentId ?? resource.Id),
                 { Kind: ApiTokenResourceKind.Sensor } resource => _user.IsProductAvailable(entry.ParentId ?? resource.Id),
                 _ => false,
             };
@@ -45,7 +49,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             {
                 { Kind: ApiTokenResourceKind.Global } => _user.IsAdmin,
                 { Kind: ApiTokenResourceKind.Folder } resource => _user.IsFolderManager(resource.Id),
-                { Kind: ApiTokenResourceKind.Product } resource => _user.IsManager(resource.Id),
+                { Kind: ApiTokenResourceKind.Product } resource => _user.IsManager(entry.ParentId ?? resource.Id),
                 { Kind: ApiTokenResourceKind.Sensor } resource => _user.IsManager(entry.ParentId ?? resource.Id),
                 _ => false,
             };

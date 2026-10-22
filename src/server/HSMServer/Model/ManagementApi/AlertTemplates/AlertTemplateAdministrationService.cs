@@ -147,7 +147,19 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 // pre-persist "no products" conflict leaves nothing behind:
                 // the cache lookup returns null there (the id is freshly
                 // generated, so no false positive).
-                return _cache.GetAlertTemplate(model.Id) is null
+                var partiallyApplied = _cache.GetAlertTemplate(model.Id);
+
+                if (partiallyApplied is not null)
+                    // #1570: the row is saved and some matched sensors may
+                    // already carry the fan-out — journal the PARTIAL apply
+                    // (the captured before-images, the live after-state) so
+                    // the half-applied write keeps its undo point instead of
+                    // leaving changed sensors no change set can explain.
+                    RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
+                        model.Id, model.FolderId, model.Name, beforeTemplate: null,
+                        afterTemplate: partiallyApplied.ToEntity(), targets, beforeImages);
+
+                return partiallyApplied is null
                     ? PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Conflict, message: error)
                     : PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Conflict, message: error,
                         details: new Dictionary<string, string> { ["templateId"] = model.Id.ToString() });
@@ -224,7 +236,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
+            {
+                // #1570: the upsert persists the row BEFORE the fan-out, so
+                // an apply conflict can leave some sensors already updated —
+                // journal the partial apply (the create path's rule) with the
+                // live row and lists as the after-image.
+                RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
+                    id, existing.FolderId, existing.Name, beforeTemplate,
+                    _cache.GetAlertTemplate(id)?.ToEntity(), targets, beforeImages);
+
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Conflict, message: error);
+            }
 
             // Echo the STORED template, not the request: the write normalizes
             // ids and chat names, and the caller must see the canonical
@@ -278,7 +300,19 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             var removed = await RemoveTemplateCoreAsync(id, user);
 
             if (!removed.Success)
+            {
+                // #1570: a strip conflict (the cache strips per-sensor
+                // policies BEFORE deleting the row) leaves some sensors
+                // already stripped with the row alive — journal the partial
+                // strip so it keeps its undo point; auth/NotFound failures
+                // changed nothing and journal nothing.
+                if (removed.Failure.Outcome == PolicyWriteOutcome.Conflict)
+                    RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
+                        id, template.FolderId, template.Name, beforeTemplate,
+                        _cache.GetAlertTemplate(id)?.ToEntity(), targets, beforeImages);
+
                 return removed;
+            }
 
             return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
                 id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages)
@@ -389,20 +423,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         // === Undo-journal hooks (#1570) ===
 
-        // The write initiator mirrors PolicyAdministrationService: the token's
-        // OWNER as a user (the token acts as its owner, #1384).
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            // A cookie principal (the web UI) carries no token claims — the
-            // authenticated identity name is the acting user.
-            var name = owner?.Name ?? user?.Identity?.Name;
-
-            return InitiatorInfo.AsUser(string.IsNullOrEmpty(name) ? "api-token" : name);
-        }
+        // The write initiator resolves through the shared ChangeSetRecorder
+        // helper (the journal's fork rule compares the author strings).
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
+            ChangeSetRecorder.InitiatorOf(user, _users);
 
         // Dry-run preview of a template write: the fan-out target set (matched
         // by the new paths, plus stale holders the edit would prune — the old
