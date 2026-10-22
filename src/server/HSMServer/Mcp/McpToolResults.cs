@@ -1,7 +1,9 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel;
 using HSMServer.Model.ManagementApi.AlertSchedules;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
@@ -237,5 +239,32 @@ namespace HSMServer.Mcp
         /// <summary>Id of the deleted resource.</summary>
         [Description("Id of the deleted resource.")]
         public Guid Id { get; init; }
+
+        /// <summary>The change set the delete was journaled under (#1570).</summary>
+        [Description("The change set the delete was journaled under — the undo handle.")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Guid? ChangeSetId { get; init; }
+    }
+
+
+    /// <summary>Result of the list_change_sets tool.</summary>
+    [Description("Result of the list_change_sets tool: one page of visible change sets plus the effective paging echo.")]
+    public sealed record McpChangeSetsResult
+    {
+        /// <summary>The visible change sets of the served slice, newest first.</summary>
+        [Description("The visible change sets of the served slice, newest first.")]
+        public List<ChangeSetSummaryDto> ChangeSets { get; init; }
+
+        /// <summary>Total visible change sets up to the server-side cap (200).</summary>
+        [Description("Total visible change sets up to the server-side cap (200).")]
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        [Description("The effective page size (the clamped `limit`).")]
+        public int Limit { get; init; }
+
+        /// <summary>The skip count actually served.</summary>
+        [Description("The skip count actually served.")]
+        public int Offset { get; init; }
     }
 }

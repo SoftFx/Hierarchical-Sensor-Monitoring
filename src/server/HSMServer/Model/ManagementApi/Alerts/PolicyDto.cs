@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel;
 
@@ -25,6 +26,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
     [Description("One data-alert policy: conditions, destination, notification, effects. Enum-valued fields carry the DOMAIN ENUM NAME as a string (value tables on each field). Writes are FULL-REPLACE: fields left out fall back to their defaults. A policy must carry at least one effect: a notification, an icon, or a status change.")]
     public sealed record PolicyDto
     {
+        // #1570: the change set the write was journaled under — set on
+        // journaled write echoes (REST header and MCP structured content),
+        // absent on reads.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Guid? ChangeSetId { get; init; }
+
         /// <summary>Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.</summary>
         [Description("Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.")]
         public Guid Id { get; init; }
@@ -86,6 +93,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
     [Description("One TTL (inactivity) policy: fires when the node receives no data within the interval. Exactly one of `interval` or `inherit` is required on every write — never both, never neither.")]
     public sealed record TtlPolicyDto
     {
+        // #1570: the change set the write was journaled under — set on
+        // journaled write echoes (REST header and MCP structured content),
+        // absent on reads.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Guid? ChangeSetId { get; init; }
+
         /// <summary>Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.</summary>
         [Description("Policy id; assigned by the server on create, taken from the route on update. Input values are ignored.")]
         public Guid Id { get; init; }

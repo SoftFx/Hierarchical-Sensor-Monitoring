@@ -5,17 +5,20 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
 
 namespace HSMServer.Model.ManagementApi.Alerts
@@ -77,6 +80,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private readonly IChatsManager _chats;
         private readonly IFolderManager _folders;
         private readonly IAlertScheduleProvider _schedules;
+        private readonly ChangeSetRecorder _changeSets;
 
         // #1501 round-1 (F2): per-node write serialization. Every write reads a
         // node's full policy list, merges ONE item and sends the whole list back
@@ -110,7 +114,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private readonly Dictionary<Guid, (SemaphoreSlim Gate, int Users)> _writeGates = new();
 
         public PolicyAdministrationService(ITreeValuesCache cache, IApiTokenAuthorizationService authorization,
-            IUserManager users, IChatsManager chats, IFolderManager folders, IAlertScheduleProvider schedules)
+            IUserManager users, IChatsManager chats, IFolderManager folders, IAlertScheduleProvider schedules,
+            ChangeSetRecorder changeSets)
         {
             _cache = cache;
             _authorization = authorization;
@@ -118,6 +123,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             _chats = chats;
             _folders = folders;
             _schedules = schedules;
+            _changeSets = changeSets;
         }
 
 
@@ -128,11 +134,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// every other policy of the sensor rides through untouched.
         /// </summary>
         public Task<PolicyWriteResult<PolicyDto>> CreateSensorPolicyAsync(Guid sensorId, PolicyDto dto,
-            ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => CreateSensorPolicyCoreAsync(sensorId, dto, user));
+            ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => CreateSensorPolicyCoreAsync(sensorId, dto, user, write));
 
         private async Task<PolicyWriteResult<PolicyDto>> CreateSensorPolicyCoreAsync(Guid sensorId, PolicyDto dto,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -155,13 +162,23 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("policies"));
 
             var initiator = InitiatorOf(user);
+
+            if (write is { DryRun: true })
+                return PreviewOf<PolicyDto>(write, ChangeSetEntryKind.SensorDataPolicies,
+                    ChangeSetOperation.Create, sensor, (sensor.Id, sensor.FullPath, "create policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotDataPolicies(sensor);
             var policyId = Guid.NewGuid();
 
             // Full-list merge: every existing policy re-asserted, the new one appended.
             var merged = sensor.Policies.Select(p => new PolicyUpdate(p, initiator)).ToList();
             merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, conditions, AvailableChats(sensor)));
 
-            return await SendSensorUpdateAsync(sensor, policyId, merged, initiator);
+            var sent = await SendSensorUpdateAsync(sensor, policyId, merged, initiator);
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorDataPolicies,
+                ChangeSetOperation.Create, sensor, before);
         }
 
         /// <summary>
@@ -170,11 +187,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// answers 409).
         /// </summary>
         public Task<PolicyWriteResult<PolicyDto>> UpdateSensorPolicyAsync(Guid sensorId, Guid policyId,
-            PolicyDto dto, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => UpdateSensorPolicyCoreAsync(sensorId, policyId, dto, user));
+            PolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => UpdateSensorPolicyCoreAsync(sensorId, policyId, dto, user, write));
 
         private async Task<PolicyWriteResult<PolicyDto>> UpdateSensorPolicyCoreAsync(Guid sensorId, Guid policyId,
-            PolicyDto dto, ClaimsPrincipal user)
+            PolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -212,6 +230,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var initiator = InitiatorOf(user);
 
+            if (write is { DryRun: true })
+                return PreviewOf<PolicyDto>(write, ChangeSetEntryKind.SensorDataPolicies,
+                    ChangeSetOperation.Update, sensor, (sensor.Id, sensor.FullPath, "replace policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotDataPolicies(sensor);
+
             var merged = sensor.Policies
                 .Where(p => p.Id != policyId)
                 .Select(p => new PolicyUpdate(p, initiator))
@@ -226,15 +251,20 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, conditions, AvailableChats(sensor),
                     existing.TemplateId, existing.TemplateAlertId));
 
-            return await SendSensorUpdateAsync(sensor, policyId, merged, initiator);
+            var sent = await SendSensorUpdateAsync(sensor, policyId, merged, initiator);
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorDataPolicies,
+                ChangeSetOperation.Update, sensor, before);
         }
 
         /// <summary>Remove one data policy; every other policy of the sensor rides through untouched.</summary>
-        public Task<PolicyWriteResult> DeleteSensorPolicyAsync(Guid sensorId, Guid policyId, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => DeleteSensorPolicyCoreAsync(sensorId, policyId, user));
+        public Task<PolicyWriteResult> DeleteSensorPolicyAsync(Guid sensorId, Guid policyId, ClaimsPrincipal user,
+            ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => DeleteSensorPolicyCoreAsync(sensorId, policyId, user, write));
 
         private async Task<PolicyWriteResult> DeleteSensorPolicyCoreAsync(Guid sensorId, Guid policyId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -251,12 +281,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var initiator = InitiatorOf(user);
 
+            if (write is { DryRun: true })
+                return PreviewOf(write, ChangeSetEntryKind.SensorDataPolicies,
+                    ChangeSetOperation.Delete, sensor, (sensor.Id, sensor.FullPath, "remove policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotDataPolicies(sensor);
+
             var merged = sensor.Policies
                 .Where(p => p.Id != policyId)
                 .Select(p => new PolicyUpdate(p, initiator))
                 .ToList();
 
-            return SendAndVerifyRemoval(
+            var sent = SendAndVerifyRemoval(
                 await _cache.UpdateSensorAsync(new SensorUpdate
                 {
                     Id = sensorId,
@@ -264,6 +301,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     Initiator = initiator,
                 }),
                 () => sensor.Policies.Any(p => p.Id == policyId));
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorDataPolicies,
+                ChangeSetOperation.Delete, sensor, before);
         }
 
         // === TTL policies on a sensor ===
@@ -274,11 +314,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// reset-to-parent translation.
         /// </summary>
         public Task<PolicyWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyAsync(Guid sensorId,
-            TtlPolicyDto dto, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => CreateSensorTtlPolicyCoreAsync(sensorId, dto, user));
+            TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => CreateSensorTtlPolicyCoreAsync(sensorId, dto, user, write));
 
         private async Task<PolicyWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyCoreAsync(Guid sensorId,
-            TtlPolicyDto dto, ClaimsPrincipal user)
+            TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -298,21 +339,32 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("ttlPolicies"));
 
             var initiator = InitiatorOf(user);
+
+            if (write is { DryRun: true })
+                return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.SensorTtlPolicies,
+                    ChangeSetOperation.Create, sensor, (sensor.Id, sensor.FullPath, "create ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
             var policyId = Guid.NewGuid();
 
             var merged = sensor.Policies.TTLPolicies.Select(p => CopyTtlUpdate(p, initiator)).ToList();
             merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(sensor)));
 
-            return await SendSensorTtlUpdateAsync(sensor, policyId, merged, initiator);
+            var sent = await SendSensorTtlUpdateAsync(sensor, policyId, merged, initiator);
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorTtlPolicies,
+                ChangeSetOperation.Create, sensor, before);
         }
 
         /// <summary>Replace one TTL policy of the sensor; the interval/inherit switch is part of the content.</summary>
         public Task<PolicyWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyAsync(Guid sensorId,
-            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => UpdateSensorTtlPolicyCoreAsync(sensorId, policyId, dto, user));
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => UpdateSensorTtlPolicyCoreAsync(sensorId, policyId, dto, user, write));
 
         private async Task<PolicyWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyCoreAsync(Guid sensorId,
-            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user)
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -346,6 +398,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var initiator = InitiatorOf(user);
 
+            if (write is { DryRun: true })
+                return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.SensorTtlPolicies,
+                    ChangeSetOperation.Update, sensor, (sensor.Id, sensor.FullPath, "replace ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
             var merged = sensor.Policies.TTLPolicies
                 .Where(p => p.Id != policyId)
                 .Select(p => CopyTtlUpdate(p, initiator))
@@ -361,16 +420,20 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(sensor),
                     existing.TemplateId, existing.TemplateAlertId));
 
-            return await SendSensorTtlUpdateAsync(sensor, policyId, merged, initiator);
+            var sent = await SendSensorTtlUpdateAsync(sensor, policyId, merged, initiator);
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorTtlPolicies,
+                ChangeSetOperation.Update, sensor, before);
         }
 
         /// <summary>Remove one TTL policy; every other TTL policy of the sensor rides through untouched.</summary>
         public Task<PolicyWriteResult> DeleteSensorTtlPolicyAsync(Guid sensorId, Guid policyId,
-            ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableSensor(sensorId, user), () => DeleteSensorTtlPolicyCoreAsync(sensorId, policyId, user));
+            ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user),
+                () => DeleteSensorTtlPolicyCoreAsync(sensorId, policyId, user, write));
 
         private async Task<PolicyWriteResult> DeleteSensorTtlPolicyCoreAsync(Guid sensorId, Guid policyId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -387,12 +450,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var initiator = InitiatorOf(user);
 
+            if (write is { DryRun: true })
+                return PreviewOf(write, ChangeSetEntryKind.SensorTtlPolicies,
+                    ChangeSetOperation.Delete, sensor, (sensor.Id, sensor.FullPath, "remove ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
             var merged = sensor.Policies.TTLPolicies
                 .Where(p => p.Id != policyId)
                 .Select(p => CopyTtlUpdate(p, initiator))
                 .ToList();
 
-            return SendAndVerifyRemoval(
+            var sent = SendAndVerifyRemoval(
                 await _cache.UpdateSensorAsync(new SensorUpdate
                 {
                     Id = sensorId,
@@ -400,6 +470,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     Initiator = initiator,
                 }),
                 () => sensor.Policies.TTLPolicies.Any(p => p.Id == policyId));
+
+            return RecordSensorList(sent, changeSetId, initiator, ChangeSetEntryKind.SensorTtlPolicies,
+                ChangeSetOperation.Delete, sensor, before);
         }
 
         // === Data policies under a product (the subtree aggregate) ===
@@ -411,7 +484,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// expressible here and always answers 422 pointing at the sensor endpoint.
         /// </summary>
         public Task<PolicyWriteResult<ProductPolicyDto>> CreateProductPolicyAsync(Guid productId,
-            PolicyDto dto, ClaimsPrincipal user) =>
+            PolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
             Task.FromResult(PolicyWriteResult<ProductPolicyDto>.Fail(PolicyWriteOutcome.Invalid,
                 new Dictionary<string, string[]>
                 {
@@ -431,7 +504,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // replaced. A policy never moves between sensors, so resolving outside
         // the gate cannot race the merge.
         public async Task<PolicyWriteResult<ProductPolicyDto>> UpdateProductPolicyAsync(Guid productId,
-            Guid policyId, PolicyDto dto, ClaimsPrincipal user)
+            Guid policyId, PolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null)
         {
             var resolution = ResolveProductPolicyWrite(productId, policyId, user);
 
@@ -439,18 +512,21 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<ProductPolicyDto>.Fail(resolution.Failure.Outcome,
                     resolution.Failure.Errors, resolution.Failure.Message);
 
-            var result = await UpdateSensorPolicyAsync(resolution.Sensor.Id, policyId, dto, user);
+            var result = await UpdateSensorPolicyAsync(resolution.Sensor.Id, policyId, dto, user, write);
 
-            return result.Success
-                ? PolicyWriteResult<ProductPolicyDto>.Ok(AlertPolicyDtoMapper.ToProductDto(
-                    result.Value, resolution.Sensor))
-                : PolicyWriteResult<ProductPolicyDto>.Fail(result.Failure.Outcome, result.Failure.Errors,
-                    result.Failure.Message);
+            return result.Success && result.ChangeSetId is { } changeSet
+                ? PolicyWriteResult<ProductPolicyDto>.Ok(
+                    AlertPolicyDtoMapper.ToProductDto(result.Value, resolution.Sensor), changeSet)
+                : result.Success
+                    ? PolicyWriteResult<ProductPolicyDto>.Ok(AlertPolicyDtoMapper.ToProductDto(
+                        result.Value, resolution.Sensor))
+                    : PolicyWriteResult<ProductPolicyDto>.Fail(result.Failure.Outcome, result.Failure.Errors,
+                        result.Failure.Message);
         }
 
         /// <summary>Remove one data policy found anywhere in the product's subtree, through the owning sensor's full list.</summary>
         public async Task<PolicyWriteResult> DeleteProductPolicyAsync(Guid productId, Guid policyId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSetWriteOptions write = null)
         {
             var resolution = ResolveProductPolicyWrite(productId, policyId, user);
 
@@ -458,18 +534,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult.Fail(resolution.Failure.Outcome, resolution.Failure.Errors,
                     resolution.Failure.Message);
 
-            return await DeleteSensorPolicyAsync(resolution.Sensor.Id, policyId, user);
+            return await DeleteSensorPolicyAsync(resolution.Sensor.Id, policyId, user, write);
         }
 
         // === TTL policies on a product (product-owned) ===
 
         /// <summary>Create one TTL policy on the product itself.</summary>
         public Task<PolicyWriteResult<TtlPolicyDto>> CreateProductTtlPolicyAsync(Guid productId,
-            TtlPolicyDto dto, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableProduct(productId, user), () => CreateProductTtlPolicyCoreAsync(productId, dto, user));
+            TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user),
+                () => CreateProductTtlPolicyCoreAsync(productId, dto, user, write));
 
         private async Task<PolicyWriteResult<TtlPolicyDto>> CreateProductTtlPolicyCoreAsync(Guid productId,
-            TtlPolicyDto dto, ClaimsPrincipal user)
+            TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
 
@@ -483,21 +560,31 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("ttlPolicies"));
 
             var initiator = InitiatorOf(user);
+
+            if (write is { DryRun: true })
+                return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.ProductTtlPolicies,
+                    ChangeSetOperation.Create, product, (product.Id, product.FullPath, "create ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotProductTtlPolicies(product);
             var policyId = Guid.NewGuid();
 
             var merged = product.Policies.TTLPolicies.Select(p => CopyTtlUpdate(p, initiator)).ToList();
             merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(product)));
 
-            return await SendProductTtlUpdateAsync(product.Id, policyId, merged, initiator);
+            var sent = await SendProductTtlUpdateAsync(product.Id, policyId, merged, initiator);
+
+            return RecordProductTtlList(sent, changeSetId, initiator, ChangeSetOperation.Create, product, before);
         }
 
         /// <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
         public Task<PolicyWriteResult<TtlPolicyDto>> UpdateProductTtlPolicyAsync(Guid productId,
-            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableProduct(productId, user), () => UpdateProductTtlPolicyCoreAsync(productId, policyId, dto, user));
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user),
+                () => UpdateProductTtlPolicyCoreAsync(productId, policyId, dto, user, write));
 
         private async Task<PolicyWriteResult<TtlPolicyDto>> UpdateProductTtlPolicyCoreAsync(Guid productId,
-            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user)
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
 
@@ -513,8 +600,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
             // The TTL toggle skip of the sensor twin (#1501 round-1, F3): the
-            // core applies only the disable toggle for user-initiated updates
-            // to template-owned TTL policies.
+            // core applies only the disable toggle for user-initiated
+            // updates to template-owned TTL policies.
             long? ttlTicks = null;
 
             if (existing.TemplateId is null &&
@@ -522,6 +609,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             var initiator = InitiatorOf(user);
+
+            if (write is { DryRun: true })
+                return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.ProductTtlPolicies,
+                    ChangeSetOperation.Update, product, (product.Id, product.FullPath, "replace ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotProductTtlPolicies(product);
 
             var merged = product.Policies.TTLPolicies
                 .Where(p => p.Id != policyId)
@@ -535,16 +629,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(product),
                     existing.TemplateId, existing.TemplateAlertId));
 
-            return await SendProductTtlUpdateAsync(product.Id, policyId, merged, initiator);
+            var sent = await SendProductTtlUpdateAsync(product.Id, policyId, merged, initiator);
+
+            return RecordProductTtlList(sent, changeSetId, initiator, ChangeSetOperation.Update, product, before);
         }
 
         /// <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
         public Task<PolicyWriteResult> DeleteProductTtlPolicyAsync(Guid productId, Guid policyId,
-            ClaimsPrincipal user) =>
-            LockedWriteAsync(ResolveWritableProduct(productId, user), () => DeleteProductTtlPolicyCoreAsync(productId, policyId, user));
+            ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user),
+                () => DeleteProductTtlPolicyCoreAsync(productId, policyId, user, write));
 
         private async Task<PolicyWriteResult> DeleteProductTtlPolicyCoreAsync(Guid productId, Guid policyId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSetWriteOptions write)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
 
@@ -561,12 +658,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var initiator = InitiatorOf(user);
 
+            if (write is { DryRun: true })
+                return PreviewOf(write, ChangeSetEntryKind.ProductTtlPolicies,
+                    ChangeSetOperation.Delete, product, (product.Id, product.FullPath, "remove ttl policy"));
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+            var before = ChangeSetRecorder.SnapshotProductTtlPolicies(product);
+
             var merged = product.Policies.TTLPolicies
                 .Where(p => p.Id != policyId)
                 .Select(p => CopyTtlUpdate(p, initiator))
                 .ToList();
 
-            return SendAndVerifyRemoval(
+            var sent = SendAndVerifyRemoval(
                 await _cache.UpdateProductAsync(new ProductUpdate
                 {
                     Id = productId,
@@ -574,6 +678,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     Initiator = initiator,
                 }),
                 () => _cache.TryGetProduct(productId, out var live) && live.Policies.TTLPolicies.Any(p => p.Id == policyId));
+
+            return RecordProductTtlList(sent, changeSetId, initiator, ChangeSetOperation.Delete, product, before);
         }
 
 
@@ -685,9 +791,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // Authorization FIRST (the evaluator owns the 404/403 split), then the
         // live model lookup — an unknown id never reaches validation.
         private (BaseSensorModel Sensor, PolicyWriteFailure Failure) ResolveWritableSensor(Guid sensorId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, SensorResource(sensorId));
+            var failure = Authorize(user, SensorResource(sensorId), access);
 
             if (failure is not null)
                 return (null, failure);
@@ -698,9 +804,9 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
         private (ProductModel Product, PolicyWriteFailure Failure) ResolveWritableProduct(Guid productId,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, ProductResource(productId));
+            var failure = Authorize(user, ProductResource(productId), access);
 
             if (failure is not null)
                 return (null, failure);
@@ -1068,10 +1174,203 @@ namespace HSMServer.Model.ManagementApi.Alerts
             string.Equals(left ?? defaultWhenNull, right ?? defaultWhenNull, StringComparison.OrdinalIgnoreCase);
 
 
+        // === Rollback restore paths (#1570) ===
+
+        // Full-list restore of a sensor's data and/or TTL lists from recorded
+        // images, under the SAME per-node write gate and authorization the
+        // original write used. No journaling here — the rollback engine
+        // journals the whole rollback as its own change set, so the restores
+        // themselves must not append entries.
+        //
+        // Ownership nuance: an item whose live content ALREADY equals the
+        // image is a pure re-assert and PRESERVES its change-table owner (a
+        // re-stamp would release the CanChange protection that blocks later
+        // template applies — the CopyTtlUpdate lesson); a restored (changed
+        // or re-created) item takes the rollback caller's ownership.
+        // The access seam (web-UI rollbacks): a compensating write authorizes
+        // through the caller's IChangeSetAccess when the rollback supplies
+        // one — the cookie principal cannot travel through the token
+        // evaluator (it resolves HsmApiToken principals only and would
+        // answer NotFound for every node).
+        internal Task<PolicyWriteResult> RestoreSensorListsAsync(Guid sensorId, List<PolicyEntity> dataPolicies,
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user, access),
+                () => RestoreSensorListsCoreAsync(sensorId, dataPolicies, ttlPolicies, user, access));
+
+        private async Task<PolicyWriteResult> RestoreSensorListsCoreAsync(Guid sensorId,
+            List<PolicyEntity> dataPolicies, List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
+        {
+            var (sensor, failure) = ResolveWritableSensor(sensorId, user, access);
+
+            if (failure is not null)
+                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            var initiator = InitiatorOf(user);
+
+            var result = await _cache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensorId,
+                Initiator = initiator,
+                Policies = dataPolicies?.Select(p => ChangeSetSnapshotMapper.ToDataUpdate(
+                    p, sensor.Type, initiator, Unchanged(sensor.Policies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+                TTLPolicies = ttlPolicies?.Select(p => ChangeSetSnapshotMapper.ToTtlUpdate(
+                    p, initiator, Unchanged(sensor.Policies.TTLPolicies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+            });
+
+            return result.IsOk
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+        }
+
+        // The product's own TTL list restore — same shape, the product gate.
+        internal Task<PolicyWriteResult> RestoreProductTtlAsync(Guid productId, List<PolicyEntity> ttlPolicies,
+            ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null) =>
+            LockedWriteAsync(ResolveWritableProduct(productId, user, access),
+                () => RestoreProductTtlCoreAsync(productId, ttlPolicies, user, access));
+
+        private async Task<PolicyWriteResult> RestoreProductTtlCoreAsync(Guid productId,
+            List<PolicyEntity> ttlPolicies, ClaimsPrincipal user,
+            ChangeSets.IChangeSetAccess access = null)
+        {
+            var (product, failure) = ResolveWritableProduct(productId, user, access);
+
+            if (failure is not null)
+                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            var initiator = InitiatorOf(user);
+
+            var result = await _cache.UpdateProductAsync(new ProductUpdate
+            {
+                Id = productId,
+                Initiator = initiator,
+                TTLPolicies = ttlPolicies?.Select(p => ChangeSetSnapshotMapper.ToTtlUpdate(
+                    p, initiator, Unchanged(product.Policies.TTLPolicies.FirstOrDefault(l => l.Id == new Guid(p.Id)), p))).ToList(),
+            });
+
+            return result.IsOk
+                ? PolicyWriteResult.Ok()
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+        }
+
+        private static bool Unchanged(Policy live, PolicyEntity image) =>
+            live is not null && PolicyImageComparer.PoliciesEqual(image, live.ToEntity());
+
+        private static bool Unchanged(TTLPolicy live, PolicyEntity image) =>
+            live is not null && PolicyImageComparer.PoliciesEqual(image, live.ToEntity());
+
+
+        // === Undo-journal hooks (#1570) ===
+
+        // Dry-run arm of every policy write: validation has passed, nothing
+        // is applied. The preview names the resolved node(s) the write would
+        // touch; the effective change-set id (client id or fresh) is echoed
+        // so the caller can reference the grouping it WOULD land under.
+        private static PolicyWriteResult<T> PreviewOf<T>(ChangeSetWriteOptions write, ChangeSetEntryKind kind,
+            ChangeSetOperation operation, BaseNodeModel node,
+            params (Guid Id, string Path, string Change)[] affected) =>
+            PolicyWriteResult<T>.OkPreview(BuildPreview(write, kind, operation, node, affected));
+
+        private static PolicyWriteResult PreviewOf(ChangeSetWriteOptions write, ChangeSetEntryKind kind,
+            ChangeSetOperation operation, BaseNodeModel node,
+            params (Guid Id, string Path, string Change)[] affected) =>
+            PolicyWriteResult.OkPreview(BuildPreview(write, kind, operation, node, affected));
+
+        private static WritePreviewDto BuildPreview(ChangeSetWriteOptions write, ChangeSetEntryKind kind,
+            ChangeSetOperation operation, BaseNodeModel node, (Guid Id, string Path, string Change)[] affected) =>
+            WritePreviews.Create(write, CamelOf(kind), CamelOf(operation), node.Id, node.FullPath,
+                affected.Select(a => new PreviewAffectedEntityDto
+                {
+                    Id = a.Id.ToString(),
+                    Path = a.Path,
+                    Change = a.Change,
+                }));
+
+        // Record one sensor policy-list entry AFTER the write applied (the
+        // after-image is the state the queue just made current) and stamp the
+        // echoed change-set id. A failed write records nothing.
+        private PolicyWriteResult<T> RecordSensorList<T>(PolicyWriteResult<T> result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntryKind kind, ChangeSetOperation operation,
+            BaseSensorModel sensor, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
+
+        private PolicyWriteResult RecordSensorList(PolicyWriteResult result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntryKind kind, ChangeSetOperation operation,
+            BaseSensorModel sensor, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, SensorListEntry(kind, operation, sensor, before));
+
+        private PolicyWriteResult<T> RecordProductTtlList<T>(PolicyWriteResult<T> result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
+
+        private PolicyWriteResult RecordProductTtlList(PolicyWriteResult result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before) =>
+            RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
+
+        // The echoed change-set id is stamped ONLY when the journal entry
+        // actually landed, and it is the id the entry LANDED in — the journal
+        // forks a client-supplied id that belongs to another author or is
+        // already rolled back (Record's null = the undo point is lost;
+        // echoing nothing then never hands the client a dead undo handle).
+        private PolicyWriteResult<T> RecordList<T>(PolicyWriteResult<T> result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntry entry) =>
+            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
+                ? result
+                : result.WithChangeSet(landedId);
+
+        private PolicyWriteResult RecordList(PolicyWriteResult result, Guid changeSetId,
+            InitiatorInfo initiator, ChangeSetEntry entry) =>
+            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
+                ? result
+                : result.WithChangeSet(landedId);
+
+        private static ChangeSetEntry SensorListEntry(ChangeSetEntryKind kind, ChangeSetOperation operation,
+            BaseSensorModel sensor, List<PolicyEntity> before) =>
+            new()
+            {
+                Kind = kind,
+                Operation = operation,
+                EntityId = sensor.Id,
+                ParentId = ChangeSetRecorder.RootProductIdOf(sensor),
+                Path = sensor.FullPath,
+                Before = before,
+                After = kind == ChangeSetEntryKind.SensorDataPolicies
+                    ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                    : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor),
+            };
+
+        private static ChangeSetEntry ProductTtlListEntry(ChangeSetOperation operation, ProductModel product,
+            List<PolicyEntity> before) =>
+            new()
+            {
+                Kind = ChangeSetEntryKind.ProductTtlPolicies,
+                Operation = operation,
+                EntityId = product.Id,
+                ParentId = ChangeSetRecorder.RootProductIdOf(product),
+                Path = product.FullPath,
+                Before = before,
+                After = ChangeSetRecorder.SnapshotProductTtlPolicies(product),
+            };
+
+        private static string CamelOf<TEnum>(TEnum value) where TEnum : struct, Enum =>
+            WritePreviews.CamelOf(value);
+
+
         // === Lookups and shared helpers ===
 
-        private PolicyWriteFailure Authorize(ClaimsPrincipal user, ApiTokenResource resource)
+        private PolicyWriteFailure Authorize(ClaimsPrincipal user, ApiTokenResource resource,
+            ChangeSets.IChangeSetAccess access = null)
         {
+            if (access is not null)
+                return access.CanWrite(resource)
+                    ? null
+                    : new PolicyWriteFailure
+                    {
+                        Outcome = PolicyWriteOutcome.Forbidden,
+                        Message = PolicyWriteResult.WriteDeniedMessage,
+                    };
+
             var decision = _authorization.AuthorizeWrite(user, resource);
 
             return decision switch
@@ -1180,16 +1479,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
             return folderChats.GetAvailableChats(_chats);
         }
 
-        // The write initiator mirrors the web UI's CurrentInitiator: the token's
-        // OWNER as a user (the token acts as its owner, #1384).
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
-        }
+        // The write initiator resolves through the shared ChangeSetRecorder
+        // helper (the journal's fork rule compares the author strings).
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
+            ChangeSetRecorder.InitiatorOf(user, _users);
 
         private static Dictionary<string, string[]> ToErrors(Dictionary<string, List<string>> errorMap) =>
             errorMap.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());

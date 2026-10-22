@@ -80,7 +80,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var reader = new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object);
             var writer = new AlertScheduleAdministrationService(_schedules.Object, _cache.Object,
-                _authorization.Object, reader);
+                _authorization.Object, reader, ChangeSetTestHelpers.Recorder(), new Mock<IUserManager>().Object);
 
             return new AlertSchedulesApiController(reader, writer)
             {

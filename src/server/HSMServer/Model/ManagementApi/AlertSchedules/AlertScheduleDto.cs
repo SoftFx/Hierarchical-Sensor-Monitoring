@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel;
 
@@ -11,6 +12,12 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     [Description("An alert schedule (working-time window): name, timezone, and the YAML schedule text, plus the sensor paths using it.")]
     public sealed record AlertScheduleDto
     {
+        // #1570: the change set the write was journaled under — set on
+        // journaled write echoes (REST header and MCP structured content),
+        // absent on reads.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Guid? ChangeSetId { get; init; }
+
         /// <summary>Schedule id.</summary>
         [Description("Schedule id.")]
         public Guid Id { get; init; }

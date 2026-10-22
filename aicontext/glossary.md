@@ -50,6 +50,11 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Snapshot | Persisted or cached representation of current tree/state. | Be explicit: tree snapshot, sensor snapshot, or database snapshot. |
 | Journal | Historical sequence of sensor values or changes. | Confirm file/class-specific semantics before broad edits. |
 | Update queue | Server-side queue for propagating sensor/tree changes. | Treat ordering and idempotency as important. |
+| Change set | Group of REST/MCP configuration writes recorded as one undoable unit under a client-supplied `changeSetId` (#1570). | A write without an id forms its own single-entry change set. |
+| Before-image / After-image | Structured snapshot of an entity's configuration taken immediately before / after a journaled write. | Stored as entity rows (`PolicyEntity`, `AlertTemplateEntity`, `AlertScheduleEntity`), never secrets. |
+| Undo journal | Durable table of change sets with before/after images, powering rollback. | Separate from the presentation Journal; no time-based retention. |
+| Rollback (change set) | Replay of compensating full-list writes in reverse order, restoring before-images. | Refuses on after-image mismatch (content comparison) unless forced; configuration only — notifications/alerts/history untouched. |
+| Change-set conflict | State where an entity's current content differs from the recorded after-image at rollback time. | Detected by content comparison, not timestamps (web editor re-asserts full lists on every save). |
 
 ## Alerts And Notifications
 
