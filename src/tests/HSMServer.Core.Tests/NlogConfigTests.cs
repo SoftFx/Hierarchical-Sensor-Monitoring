@@ -25,27 +25,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void NlogConfigLoadsWithStructuredLogTarget()
         {
-            var factory = new LogFactory { ThrowConfigExceptions = true };
-
-            // The config's root element carries internalLogLevel/internalLogFile, and
-            // loading the file applies both to NLog's static InternalLogger (the
-            // hard-coded c:\temp path is a relative filename NLog would create in the
-            // working directory on the Linux CI lanes) - process-global state that
-            // parallel test classes can observe. So both attributes are stripped from
-            // the XML before the load: the test process is never touched, and no
-            // save/restore of the InternalLogger is needed. The guard assertion below
-            // fails loudly if the production config renames or adds internalLog*
-            // attributes, so the stripping cannot silently stop matching.
-            var configPath = RepoFile("src/server/HSMServer/nlog.config");
-            var strippedXml = Regex.Replace(
-                File.ReadAllText(configPath),
-                @"\sinternalLog(Level|File)\s*=\s*(""[^""]*""|'[^']*')",
-                string.Empty);
-            Assert.DoesNotContain("internalLog", strippedXml);
-
-            LoggingConfiguration config;
-            using (var reader = new StringReader(strippedXml))
-                config = new XmlLoggingConfiguration(reader, configPath, factory);
+            LoggingConfiguration config = LoadProductionConfig();
 
             // jsonfile is the single structured target: the archive file that vlagent
             // (compose 'logs' profile) tails and ships to VictoriaLogs.
@@ -55,11 +35,7 @@ namespace HSMServer.Core.Tests
             // vlagent maps the JSON fields by name (msgField/timeField flags in
             // docker-compose.yml), so the reserved names are a contract: _time and
             // _msg must stay, everything else ships as an individual log field.
-            // (The targets-level async="true" adds its own wrapper on top; walk it.)
-            var current = jsonFile;
-            for (var depth = 0; current is WrapperTargetBase wrapper && depth < 4; depth++)
-                current = wrapper.WrappedTarget;
-            var layout = ((FileTarget)current).Layout as JsonLayout;
+            var layout = UnwrapFileTarget(config, "jsonfile").Layout as JsonLayout;
             Assert.NotNull(layout);
             Assert.Contains(layout.Attributes, a => a.Name == "_time");
             Assert.Contains(layout.Attributes, a => a.Name == "_msg");
@@ -197,6 +173,108 @@ namespace HSMServer.Core.Tests
             {
                 Environment.SetEnvironmentVariable("HSM_STRUCTURED_LOGS", originalValue);
             }
+        }
+
+        // The retention contract pinned from the 2026-10 dev incident (49 GiB in Logs/,
+        // of which 22 GiB was a two-day event flood): NLog archives a file — and applies
+        // maxArchiveFiles cleanup — only when it rotates a STATIC fileName. With a
+        // ${shortdate}-dated fileName every day opens a new file and yesterday's file is
+        // abandoned in Logs/ forever (no archive move, no cleanup; 566 such files had
+        // accumulated on dev since January). Every target must therefore keep both
+        // fileName and archiveFileName event-time-independent (no date renderer in
+        // either), rotate daily AND at 100 MB, and cap the archive directory at 60
+        // files (~6 GiB per target worst case).
+        [Fact]
+        public void FileTargetsRotateStaticNamesIntoBoundedArchives()
+        {
+            var config = LoadProductionConfig();
+
+            var january = new LogEventInfo(LogLevel.Info, "NlogConfigTests", null) { TimeStamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc) };
+            var october = new LogEventInfo(LogLevel.Info, "NlogConfigTests", null) { TimeStamp = new DateTime(2026, 10, 23, 19, 30, 12, DateTimeKind.Utc) };
+
+            foreach (var name in new[] { "errorfile", "allfile", "aspfile", "jsonfile" })
+            {
+                var target = UnwrapFileTarget(config, name);
+
+                var active = target.FileName.Render(january);
+                Assert.Equal(active, target.FileName.Render(october));
+
+                var archive = target.ArchiveFileName.Render(january);
+                Assert.Equal(archive, target.ArchiveFileName.Render(october));
+                Assert.Contains("Archives", archive);
+
+                // DateAndSequence exists precisely for day+size rotation: unique
+                // date+sequence archive names for the multiple same-day archives a
+                // 100 MB size rotation produces (docker.md documents the naming).
+                // Compared via ToString: the enum's type name moves between NLog
+                // majors, its member names do not.
+                Assert.Equal("DateAndSequence", target.ArchiveNumbering.ToString());
+                Assert.Equal(FileArchivePeriod.Day, target.ArchiveEvery);
+                Assert.Equal(60, target.MaxArchiveFiles);
+                Assert.Equal(ArchiveRotationBytes, target.ArchiveAboveSize);
+            }
+
+            // vlagent can only ship what its glob in docker-compose.yml matches, so the
+            // static jsonfile name must stay inside HSM-structured-log-*.json (dated
+            // names would defeat archiving; a name outside the glob would silently stop
+            // all shipping to VictoriaLogs). Archives live in the Archives/ subdirectory,
+            // which the non-recursive glob never descends into, so only the active file
+            // ships. The compose line is parsed naively on purpose: it is a one-line
+            // scalar in the file, and any format change here should break this test
+            // rather than silently keep matching an outdated glob.
+            var jsonActive = Path.GetFileName(UnwrapFileTarget(config, "jsonfile").FileName.Render(january));
+            var composeGlob = Path.GetFileName(
+                File.ReadLines(RepoFile("docker-compose.yml"))
+                    .Single(line => line.Contains("-fileCollector.glob="))
+                    .Split('=')[^1].Trim().Trim('\'').Trim('"'));
+            Assert.Matches(
+                new Regex("^" + Regex.Escape(composeGlob).Replace(@"\*", ".*") + "$"),
+                jsonActive);
+        }
+
+        // The 100 MB per-file rotation threshold pinned by the retention-contract test
+        // below; the same value sits in every target's archiveAboveSize in nlog.config.
+        private const long ArchiveRotationBytes = 104857600L;
+
+        // Loads the real production config the way NLog does at server startup, with
+        // ThrowConfigExceptions so nothing is swallowed: a malformed file, an
+        // unresolvable extension assembly (NLog.Web.AspNetCore for ${aspnet-*},
+        // HSMServer for ${hsm-redacted}), an unknown layout renderer, or a target
+        // property NLog 6 removed would otherwise surface only when the released app
+        // image boots, not here.
+        //
+        // The config's root element carries internalLogLevel/internalLogFile, and
+        // loading the file applies both to NLog's static InternalLogger (the
+        // hard-coded c:\temp path is a relative filename NLog would create in the
+        // working directory on the Linux CI lanes) - process-global state that
+        // parallel test classes can observe. So both attributes are stripped from
+        // the XML before the load: the test process is never touched, and no
+        // save/restore of the InternalLogger is needed. The guard assertion fails
+        // loudly if the production config renames or adds internalLog* attributes,
+        // so the stripping cannot silently stop matching.
+        private static LoggingConfiguration LoadProductionConfig()
+        {
+            var factory = new LogFactory { ThrowConfigExceptions = true };
+
+            var configPath = RepoFile("src/server/HSMServer/nlog.config");
+            var strippedXml = Regex.Replace(
+                File.ReadAllText(configPath),
+                @"\sinternalLog(Level|File)\s*=\s*(""[^""]*""|'[^']*')",
+                string.Empty);
+            Assert.DoesNotContain("internalLog", strippedXml);
+
+            using var reader = new StringReader(strippedXml);
+            return new XmlLoggingConfiguration(reader, configPath, factory);
+        }
+
+        // The targets-level async="true" adds a wrapper on top of every target; walk it
+        // down to the real FileTarget.
+        private static FileTarget UnwrapFileTarget(LoggingConfiguration config, string name)
+        {
+            var current = config.FindTargetByName(name);
+            for (var depth = 0; current is WrapperTargetBase wrapper && depth < 4; depth++)
+                current = wrapper.WrappedTarget;
+            return Assert.IsType<FileTarget>(current);
         }
 
         private static string RepoFile(string relative)
