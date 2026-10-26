@@ -30,6 +30,11 @@ namespace HSMServer.Folders
         private readonly IJournalService _journalService;
         private readonly IChatsManager _chatsManager;
 
+        // #1570: folder-bound template entries of the undo journal are
+        // purged with the folder (constructed over the same DB core — the
+        // journal is a thin facade).
+        private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -49,7 +54,8 @@ namespace HSMServer.Folders
 
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService,
-                             IChatsManager chatsManager)
+                             IChatsManager chatsManager,
+                             HSMServer.Core.ChangeSets.IChangeSetJournal changeSetJournal = null)
         {
             _databaseCore = databaseCore;
 
@@ -63,6 +69,11 @@ namespace HSMServer.Folders
             _userManager.Added += AddUserHandler;
 
             _chatsManager = chatsManager;
+
+            // The SINGLETON journal when DI provides it (the process-wide
+            // read-modify-write lock must be shared with the write hooks);
+            // the local fallback serves only the mocked harnesses.
+            _changeSetJournal = changeSetJournal ?? new HSMServer.Core.ChangeSets.ChangeSetJournal(databaseCore);
         }
 
         private void FillFolderChats(FolderEventArgs e)
@@ -193,6 +204,25 @@ namespace HSMServer.Folders
                 }
 
                 result &= await base.TryRemove(remove);
+
+                // #1570: the folder's undo-journal records (folder-bound
+                // template entries) do not outlive the folder; surviving
+                // change sets go partial. Guid.Empty matches no entity id —
+                // the purge runs on the FOLDER arm only. A purge failure is
+                // logged and swallowed — the folder is already gone and the
+                // deletion must not fail over journal cleanup (the
+                // TreeValuesCache.PurgeChangeSets rule).
+                if (result)
+                {
+                    try
+                    {
+                        _changeSetJournal.PurgeReferences(Guid.Empty, remove.Id);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Change-set purge failed for folder {remove.Id}");
+                    }
+                }
             }
 
             string logFolder = folder?.Name ?? remove.Id.ToString();

@@ -93,7 +93,8 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var reader = new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object);
             var writer = new AlertTemplateAdministrationService(_cache.Object, _folders.Object, _chats.Object,
-                _schedules.Object, _authorization.Object, NullLogger<AlertTemplateAdministrationService>.Instance);
+                _schedules.Object, _authorization.Object, new Mock<IUserManager>().Object,
+                ChangeSetTestHelpers.Recorder(), NullLogger<AlertTemplateAdministrationService>.Instance);
 
             return new AlertTemplatesApiController(reader, writer)
             {
@@ -658,7 +659,12 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto(sensorType: AlertTemplateModel.AnyType) with { Policies = [] };
 
             Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
-            _cache.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Never);
+
+            // The mismatch VALIDATION still skips sensor enumeration for
+            // AnyType — but since #1570 the create journals its fan-out
+            // before-images, which enumerates the path targets exactly once
+            // per non-empty path (one path in BuildDto's default body).
+            _cache.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Once);
         }
 
         [Fact]

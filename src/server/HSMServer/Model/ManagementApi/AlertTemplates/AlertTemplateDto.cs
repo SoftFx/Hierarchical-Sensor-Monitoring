@@ -24,6 +24,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     [Description("Alert template: path patterns, sensor type, regular and TTL policies with destinations. Byte fields carry DOMAIN ENUM VALUES (documented per field) — unknown values answer 400.")]
     public sealed record AlertTemplateDto
     {
+        // #1570: the change set the write was journaled under — set on
+        // journaled write echoes (REST header and MCP structured content),
+        // absent on reads.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Guid? ChangeSetId { get; init; }
+
         /// <summary>Output-only: assigned by the server on create. On update it must equal the route id or be absent.</summary>
         [Description("Output-only: assigned by the server on create. On update it must equal the route id or be absent.")]
         public Guid Id { get; init; }

@@ -24,6 +24,10 @@ namespace HSMDatabase.AccessManager
 
         public string SnaphotsDatabaseName { get; init; }
 
+        // The undo-journal table (#1570) — a dedicated LevelDB folder,
+        // separate from the sharded presentation Journal.
+        public string ChangeSetsDatabaseName { get; init; }
+
 
         public string PathToServerLayoutDb => Path.Combine(DatabaseFolder, ServerLayoutDatabaseName);
 
@@ -32,6 +36,8 @@ namespace HSMDatabase.AccessManager
         public string PathToSnaphotsDb => Path.Combine(DatabaseFolder, SnaphotsDatabaseName);
 
         public string PathToJournalDb => Path.Combine(DatabaseFolder, JournalFolder);
+
+        public string PathToChangeSetsDb => Path.Combine(DatabaseFolder, ChangeSetsDatabaseName);
 
         public string PathToExport => Path.Combine(DatabaseFolder, ExportFolder);
 

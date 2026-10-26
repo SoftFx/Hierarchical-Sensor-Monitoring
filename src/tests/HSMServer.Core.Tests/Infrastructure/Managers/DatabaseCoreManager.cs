@@ -30,6 +30,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     SensorValuesDatabaseName = $"SensorValues{number}_{Environment.CurrentManagedThreadId}",
                     ServerLayoutDatabaseName = $"ServerLayout{number}_{Environment.CurrentManagedThreadId}",
                     JournalValuesDatabaseName = $"JournalValues{number}_{Environment.CurrentManagedThreadId}",
+                    ChangeSetsDatabaseName = $"ChangeSets{number}_{Environment.CurrentManagedThreadId}",
                 });
         }
 

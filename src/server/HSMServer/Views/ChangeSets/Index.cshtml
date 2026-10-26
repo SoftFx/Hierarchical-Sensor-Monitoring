@@ -1,0 +1,48 @@
+@using HSMServer.Model.Authentication
+
+@model object
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    // #1570: rollback is admin-only ([AuthorizeIsAdmin] on Rollback), so the
+    // Rollback controls render for admins only — non-admins keep the
+    // read-only audit page (same pattern as Views/AlertSchedules/Index.cshtml).
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
+}
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="m-2">
+            <div class="d-flex justify-content-between my-2">
+                <h5>Change Sets</h5>
+            </div>
+
+            <p class="text-muted">
+                Every configuration write through the API or MCP tools is journaled here.
+                Roll back a change set to undo it as a unit — configuration only; notifications,
+                alerts and history are untouched.
+            </p>
+
+            <div id="changeSetsTableContainer" data-user-is-admin="@userIsAdmin">
+                @await Html.PartialAsync("_ChangeSetsTable", new System.Collections.Generic.List<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto>())
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="changeSetDetailsContainer"></div>
+
+@* The rollback POST is antiforgery-validated; the token rides the jQuery
+   posts from changeSets.js (the schedules-page precedent). *@
+@Html.AntiForgeryToken()
+
+@section Scripts {
+    <script>
+        window.changeSetsUrls = {
+            table: '@Url.Action(nameof(HSMServer.Controllers.ChangeSetsController.GetChangeSetsTable))',
+            details: '@Url.Action(nameof(HSMServer.Controllers.ChangeSetsController.Details))',
+            rollback: '@Url.Action(nameof(HSMServer.Controllers.ChangeSetsController.Rollback))',
+        };
+    </script>
+}
