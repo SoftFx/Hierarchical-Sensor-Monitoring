@@ -96,10 +96,13 @@ ssh -p <port> <ssh> "sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <dir>/.env |
 git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
 ```
 
-- `COMPOSE_PROFILES` missing/without `logs` → VictoriaLogs stack does not run.
+- `COMPOSE_PROFILES` missing/without `logs` → VictoriaLogs stack does not run (and `/logs/*`
+  then answers 502: Caddy cannot see profiles).
 - `HSM_STRUCTURED_LOGS` missing → app writes no JSON log, so vlagent has nothing to ship.
-- `VL_UI_USER`/`VL_UI_PASSWORD` unset → log UI/API not exposed (that is the shipped
-  default; both must be set together, password ≥ 12 chars, to enable).
+- The log UI/API need no `.env` keys: they are served with the `logs` profile and admitted
+  only for a logged-in HSM admin (`/logs/select/vmui`, Caddy `forward_auth` against the
+  app). A `/logs/*` refusal on an old app means the app image predates the session-check
+  endpoint — update the app image.
 
 Ask the user to add the missing keys themselves; `up -d` with the machine's full
 `-f` file set applies.

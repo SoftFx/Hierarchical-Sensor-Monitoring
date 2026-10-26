@@ -26,4 +26,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0009 | Accepted | [Bar StdDev is sent by the native collector only (exception to rules #9/#10)](0009-bar-stddev-native-only.md) | 2026-10-07 |
 | 0010 | Undo journal of change sets, not staged transactions | #1570 — REST/MCP configuration writes journal before/after images; rollback replays compensating writes with content-based conflict detection |
 | 0011 | Accepted | [Static NLog file names with size-based rotation bound the Logs/ disk](0011-nlog-static-filenames-bounded-archives.md) | 2026-10-23 |
+| 0012 | Accepted | [VictoriaLogs read path is the HSM admin session at /logs/](0012-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |
