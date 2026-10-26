@@ -22,7 +22,8 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0005 | Accepted | [An API token is an eternal owner mirror with a read-only flag](0005-api-token-owner-mirror.md) | 2026-09-10 |
 | 0006 | Accepted | [Token usage sensors are keyed by owner login + token EntityId](0006-token-usage-sensors-keyed-by-owner-and-entityid.md) | 2026-09-16 |
 | 0007 | Accepted | [Distribute Caddy with DNS challenge modules as a pinned image](0007-bundled-dns-caddy-image.md) | 2026-09-24 |
-| 0008 | Accepted | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-28 |
+| 0008 | Accepted (archive-budget paragraph superseded by ADR-0011) | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-28 |
 | 0009 | Accepted | [Bar StdDev is sent by the native collector only (exception to rules #9/#10)](0009-bar-stddev-native-only.md) | 2026-10-07 |
 | 0010 | Undo journal of change sets, not staged transactions | #1570 — REST/MCP configuration writes journal before/after images; rollback replays compensating writes with content-based conflict detection |
+| 0011 | Accepted | [Static NLog file names with size-based rotation bound the Logs/ disk](0011-nlog-static-filenames-bounded-archives.md) | 2026-10-23 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |
