@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace HSMServer.Core.Tests
@@ -232,8 +233,58 @@ namespace HSMServer.Core.Tests
                 jsonActive);
         }
 
+        // The same retention contract, pinned for src/module/HSMPingModule/nlog.config.
+        // The module runs on NLog 5.2.2, and its config keeps enableArchiveFileCompression
+        // - a FileTarget property NLog 6 removed - so its file cannot go through this
+        // project's NLog 6 typed load (ThrowConfigExceptions would reject that attribute);
+        // the attributes are asserted over the raw XML instead. Weaker than the render
+        // test above (no january/october render), but it fails on exactly the regressions
+        // that would bring unbounded Logs/ growth back to the module: a date renderer in
+        // fileName (the ${shortdate} scheme ADR-0010 retired), a dropped archiveAboveSize,
+        // or a loosened archive cap.
+        [Fact]
+        public void HsmPingModuleFileTargetsFollowRetentionContract()
+        {
+            var configXml = XDocument.Load(RepoFile("src/module/HSMPingModule/nlog.config"));
+            var nlogNs = configXml.Root!.Name.Namespace;
+            var fileTargets = configXml.Root!.Element(nlogNs + "targets")!
+                .Elements(nlogNs + "target")
+                .Where(t => (string?)t.Attribute(XName.Get("type", "http://www.w3.org/2001/XMLSchema-instance")) == "File")
+                .ToList();
+
+            // The module has exactly two File targets; a new one must consciously extend
+            // this contract (or the test), not appear unnoticed.
+            Assert.Equal(
+                new[] { "allfile", "errorfile" },
+                fileTargets.Select(t => (string?)t.Attribute("name")).OrderBy(n => n));
+
+            foreach (var target in fileTargets)
+            {
+                Assert.Equal("DateAndSequence", (string?)target.Attribute("archiveNumbering"));
+                Assert.Equal("Day", (string?)target.Attribute("archiveEvery"));
+                Assert.Equal(ArchiveRotationBytes.ToString(), (string?)target.Attribute("archiveAboveSize"));
+                Assert.Equal("60", (string?)target.Attribute("maxArchiveFiles"));
+
+                // Static names: neither fileName nor archiveFileName may carry an
+                // event-time renderer - a dated name abandons files instead of
+                // rotating them (ADR-0010).
+                foreach (var attributeName in new[] { "fileName", "archiveFileName" })
+                {
+                    var name = (string?)target.Attribute(attributeName);
+                    Assert.NotNull(name);
+                    Assert.DoesNotMatch(
+                        new Regex(@"\$\{(shortdate|longdate|date|time)", RegexOptions.IgnoreCase),
+                        name);
+                }
+
+                var archiveName = (string?)target.Attribute("archiveFileName");
+                Assert.Contains("Archives", archiveName);
+                Assert.Contains("{#}", archiveName);
+            }
+        }
+
         // The 100 MB per-file rotation threshold pinned by the retention-contract test
-        // below; the same value sits in every target's archiveAboveSize in nlog.config.
+        // above; the same value sits in every target's archiveAboveSize in nlog.config.
         private const long ArchiveRotationBytes = 104857600L;
 
         // Loads the real production config the way NLog does at server startup, with
