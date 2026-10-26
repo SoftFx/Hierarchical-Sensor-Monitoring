@@ -57,7 +57,7 @@ export HSM_TLS_SNIPPET
 
 # VictoriaLogs read routes (/logs/select/*) are exposed unconditionally by the Caddyfile
 # and gated by forward_auth against the HSM admin session — there is no credential to
-# generate or validate here anymore (ADR-0011 superseded the VL_UI_* basic auth).
+# generate or validate here anymore (ADR-0012 superseded the VL_UI_* basic auth).
 
 # Compatibility with customised Caddyfiles copied from a pre-2.11.4-4 image: the docs of
 # those releases told operators to keep `import {$HSM_VL_SNIPPET}` in their copies, and

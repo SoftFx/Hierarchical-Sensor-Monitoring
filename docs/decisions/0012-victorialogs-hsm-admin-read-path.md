@@ -1,4 +1,4 @@
-# ADR-0011: VictoriaLogs read path is the HSM admin session at /logs/
+# ADR-0012: VictoriaLogs read path is the HSM admin session at /logs/
 
 **Status:** Accepted
 **Date:** 2026-10-20
