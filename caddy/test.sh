@@ -62,6 +62,23 @@ adapt_ok vl-routes -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed
 grep -F '"dial":"victorialogs:9428"' "$tmp/vl-routes.json" >/dev/null
 grep -F '"uri":"/logs-auth"' "$tmp/vl-routes.json" >/dev/null
 grep -F '"method":"GET"' "$tmp/vl-routes.json" >/dev/null
+# forward_auth's auth subrequest goes to https://app:44333, so its proxy must carry the
+# same hsm_upstream transport as the main proxies: without the TLS skip every /logs-auth
+# call fails on the app's self-signed certificate, and without the Host passthrough a
+# login redirect points browsers at the docker-internal name. Both regressions fail
+# closed (admins lose /logs/ with no error here), so pin them by count: ten proxies carry
+# the transport today — every site variant on each of the three servers pairs an auth
+# proxy with its main upstream proxy.
+transport_hits="$(grep -oF '"insecure_skip_verify":true' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
+[ "$transport_hits" -ge 10 ] || {
+    echo "expected at least 10 proxies with insecure_skip_verify, got $transport_hits" >&2
+    exit 1
+}
+host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
+[ "$host_hits" -ge 10 ] || {
+    echo "expected at least 10 Host header_up passthroughs, got $host_hits" >&2
+    exit 1
+}
 if grep -F '/insert' "$tmp/vl-routes.json" >/dev/null; then
     echo 'VictoriaLogs ingest endpoint routed through Caddy' >&2
     exit 1
@@ -88,6 +105,29 @@ if grep -F 'hsm-logs' "$tmp/vl-legacy-env.json" >/dev/null; then
 fi
 if grep -F "$vl_legacy_password" "$tmp/vl-legacy-env.json" >/dev/null; then
     echo 'ignored VL_UI_PASSWORD leaked into the adapted configuration' >&2
+    exit 1
+fi
+
+# Compatibility (#1580 review): a customised Caddyfile copied from a pre-2.11.4-4 image
+# still contains `import {$HSM_VL_SNIPPET}` (the docs of those releases told operators to
+# keep it). With the variable no longer exported, the placeholder would expand to a bare
+# `import` and Caddy would refuse to load — taking down every listener it fronts, sensor
+# ingestion included. Adapting the frozen 2.11.4-3 bundled Caddyfile through this image's
+# entrypoint must therefore succeed, keep proxying the app upstreams, and activate neither
+# the VictoriaLogs routes nor the basic-auth gate: the entrypoint pins the variable to the
+# empty snippet those copies define — fail closed.
+old_caddyfile="$(CDPATH= cd -- "$(dirname -- "$0")/testdata" && pwd)/Caddyfile.2.11.4-3"
+docker run --rm -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -v "$old_caddyfile:/etc/caddy/Caddyfile:ro" \
+    "$image" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+    >"$tmp/vl-compat-old-caddyfile.json"
+grep -F '"dial":"app:44333"' "$tmp/vl-compat-old-caddyfile.json" >/dev/null
+if grep -F '"dial":"victorialogs:9428"' "$tmp/vl-compat-old-caddyfile.json" >/dev/null; then
+    echo 'old customised Caddyfile unexpectedly activates the VictoriaLogs routes' >&2
+    exit 1
+fi
+if grep -F '"http_basic"' "$tmp/vl-compat-old-caddyfile.json" >/dev/null; then
+    echo 'old customised Caddyfile unexpectedly activates basic auth' >&2
     exit 1
 fi
 

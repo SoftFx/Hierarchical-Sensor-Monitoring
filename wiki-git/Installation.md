@@ -128,7 +128,7 @@ Caddy is recreated and HSM data is untouched. There is no automatic fallback if 
 
 ### Advanced Caddyfile customization
 
-The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the entrypoint-selected HSM_TLS_SNIPPET import and the victorialogs-routes snippet (the admin-gated /logs/ proxying). When a newer image changes the bundled Caddyfile (this release moved the VictoriaLogs routes under /logs behind the HSM admin session), re-download it and re-apply your edits to the fresh copy: a Caddyfile copied from an older release keeps working but keeps serving the old routes. To set the ACME account contact email, add this directive inside the leading global options block:
+The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the entrypoint-selected HSM_TLS_SNIPPET import and the victorialogs-routes snippet (the admin-gated /logs/ proxying). When a newer image changes the bundled Caddyfile (this release moved the VictoriaLogs routes under /logs behind the HSM admin session), re-download it and re-apply your edits to the fresh copy: a Caddyfile copied from an older release keeps starting — the entrypoint still exports the variable its old VictoriaLogs import refers to, resolving it to an empty snippet — but it serves none of the /logs/ routes until it is refreshed, and the removed basic-auth routes cannot come back. To set the ACME account contact email, add this directive inside the leading global options block:
 
 ~~~bash
 curl -o Caddyfile https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/caddy/Caddyfile
@@ -528,6 +528,8 @@ docker compose up -d
 ```
 
 Without Caddy, add `-f docker-compose.direct.yml` to each `docker compose` command. With `docker run`, stop and remove the old container, then run the `docker run` command again. Volumes are not affected.
+
+An installation with the `logs` profile updating from before hsm-caddy 2.11.4-4 also changes vlagent's remote-write URL (the store now serves everything under `/logs`). vlagent names its unsent-data buffer directory after that URL, so log lines still waiting in the buffer at the moment of the switch are not replayed into the store afterwards — the JSON files under `Logs/` and `Logs/Archives/` keep them. With a healthy stack the buffer is empty and the update loses nothing; if VictoriaLogs was down or backlogged, let the old stack run until vlagent has delivered everything, then update.
 
 ---
 

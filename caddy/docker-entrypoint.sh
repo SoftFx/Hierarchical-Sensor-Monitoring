@@ -59,4 +59,13 @@ export HSM_TLS_SNIPPET
 # and gated by forward_auth against the HSM admin session — there is no credential to
 # generate or validate here anymore (ADR-0011 superseded the VL_UI_* basic auth).
 
+# Compatibility with customised Caddyfiles copied from a pre-2.11.4-4 image: the docs of
+# those releases told operators to keep `import {$HSM_VL_SNIPPET}` in their copies, and
+# an unset variable expands to nothing, leaving a bare `import` that Caddy refuses to
+# load — taking down every listener Caddy fronts, sensor ingestion included. Those copies
+# define their own empty (victorialogs-off) snippet, so pinning the value makes them start
+# cleanly with no log routes (fail closed). The bundled Caddyfile no longer references it.
+HSM_VL_SNIPPET=victorialogs-off
+export HSM_VL_SNIPPET
+
 exec "$@"
