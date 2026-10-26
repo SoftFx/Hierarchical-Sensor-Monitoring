@@ -14,7 +14,7 @@ async function navigateToChangeSets(page: Page): Promise<void> {
 
 test('menu links to the change sets page', async ({ adminPage: page }) => {
   await page.goto('/Home');
-  await page.locator('#alertsDropdown').click();
+  await page.locator('#optionsDropdown').click();
   await page.getByRole('link', { name: 'Change Sets' }).click();
 
   await expect(page).toHaveURL(/ChangeSets/);

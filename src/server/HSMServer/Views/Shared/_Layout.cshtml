@@ -90,11 +90,6 @@
                                                         Alert Schedules
                                                     </a>
                                                 </li>
-                                                <li>
-                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ChangeSetsController)">
-                                                        Change Sets
-                                                    </a>
-                                                </li>
                                             </ul>
                                         </li>
 
@@ -134,6 +129,11 @@
                                                         </a>
                                                     </li>
                                                 }
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ChangeSetsController)">
+                                                        <i class="fas fa-history me-2"></i>Change Sets
+                                                    </a>
+                                                </li>
                                                 @if (UserRoleHelper.IsDownloadsPageAllowed((User)Context.User))
                                                 {
                                                     <li>
