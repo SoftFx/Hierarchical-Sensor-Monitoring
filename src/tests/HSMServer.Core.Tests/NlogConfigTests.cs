@@ -240,7 +240,7 @@ namespace HSMServer.Core.Tests
         // the attributes are asserted over the raw XML instead. Weaker than the render
         // test above (no january/october render), but it fails on exactly the regressions
         // that would bring unbounded Logs/ growth back to the module: a date renderer in
-        // fileName (the ${shortdate} scheme ADR-0010 retired), a dropped archiveAboveSize,
+        // fileName (the ${shortdate} scheme ADR-0011 retired), a dropped archiveAboveSize,
         // or a loosened archive cap.
         [Fact]
         public void HsmPingModuleFileTargetsFollowRetentionContract()
@@ -267,7 +267,7 @@ namespace HSMServer.Core.Tests
 
                 // Static names: neither fileName nor archiveFileName may carry an
                 // event-time renderer - a dated name abandons files instead of
-                // rotating them (ADR-0010).
+                // rotating them (ADR-0011).
                 foreach (var attributeName in new[] { "fileName", "archiveFileName" })
                 {
                     var name = (string?)target.Attribute(attributeName);

@@ -22,6 +22,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public IDashboardCollection Dashboards => _inner.Dashboards;
 
+        public IChangeSetCollection ChangeSets => _inner.ChangeSets;
+
         public ISnapshotDatabase Snapshots => _inner.Snapshots;
 
         public bool IsCompactRunning => _inner.IsCompactRunning;

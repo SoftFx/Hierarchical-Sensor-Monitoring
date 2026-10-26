@@ -20,6 +20,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
 using HSMServer.Model.Folders;
 using HSMServer.ServerConfiguration;
@@ -95,7 +96,7 @@ namespace HSMServer.Core.Tests.Controllers
         private SensorPoliciesApiController CreateController() =>
             new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object),
                 new PolicyAdministrationService(_cache.Object, _authorization.Object, _users.Object,
-                    _chats.Object, _folders.Object, _schedules.Object))
+                    _chats.Object, _folders.Object, _schedules.Object, ChangeSetTestHelpers.Recorder()))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -329,6 +330,48 @@ namespace HSMServer.Core.Tests.Controllers
             var created = await CreateController().CreatePolicy(sensor.Id, dto);
 
             Assert.Equal(201, StatusCodeOf(created));
+        }
+
+        [Fact]
+        public async Task CreatePolicy_ChangeSetHeader_IsEchoedOnTheResponse()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var controller = CreateController();
+            var changeSetId = Guid.NewGuid();
+
+            controller.Request.Headers[ChangeSetHeaders.ChangeSetId] = changeSetId.ToString();
+
+            var created = await controller.CreatePolicy(sensor.Id, DataDto());
+
+            Assert.Equal(201, StatusCodeOf(created));
+            Assert.Equal(changeSetId.ToString(),
+                controller.Response.Headers[ChangeSetHeaders.ChangeSetId].ToString());
+        }
+
+        [Fact]
+        public async Task CreatePolicy_DryRunHeader_AnswersPreviewAndAppliesNothing()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var controller = CreateController();
+
+            controller.Request.Headers[ChangeSetHeaders.DryRun] = "true";
+
+            var preview = await controller.CreatePolicy(sensor.Id, DataDto());
+
+            var ok = Assert.IsType<OkObjectResult>(preview);
+
+            Assert.Equal(200, ok.StatusCode);
+
+            var body = Assert.IsType<WritePreviewDto>(ok.Value);
+
+            Assert.True(body.DryRun);
+            Assert.Equal("sensorDataPolicies", body.Kind);
+            Assert.Equal("create", body.Operation);
+            Assert.Equal(sensor.Id.ToString(), body.EntityId);
+
+            // Nothing applied, nothing echoed beyond the grouping id.
+            Assert.Empty(sensor.Policies);
+            Assert.True(Guid.TryParse(body.ChangeSetId, out _));
         }
 
         [Fact]

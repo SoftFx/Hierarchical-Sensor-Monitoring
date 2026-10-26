@@ -227,4 +227,7 @@ releases — filter them out):
 - `docs/agents/hsm-deploy/references/migrate-to-compose.md` — one-time switch from
   the old `load.sh` container to compose, preserving all paths and data.
 - `docs/agents/hsm-deploy/references/troubleshooting.md` — failure modes and recovery.
+- `docs/agents/hsm-deploy/references/custom-certificate.md` — switch Caddy from
+  self-signed to the corporate PFX (`HSM_CERTIFICATE=custom`), incl. renewal;
+  applies after migration when corporate clients verify certificates.
 - `docs/agents/hsm-deploy/references/ssh-key-setup.md` — one-time password → key login.

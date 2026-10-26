@@ -24,6 +24,8 @@ public sealed class RestoreTempCleanupServiceTests
         public string JournalValuesDatabaseName { get; init; }
         public string SensorValuesDatabaseName { get; init; }
         public string ServerLayoutDatabaseName { get; init; }
+
+        public string ChangeSetsDatabaseName { get; init; } = "ChangeSets";
         public string EnvironmentDatabaseName { get; init; }
         public string SnaphotsDatabaseName { get; init; }
         public string PathToServerLayoutDb { get; init; }

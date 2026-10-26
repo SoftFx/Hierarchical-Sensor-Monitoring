@@ -60,7 +60,8 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             _chats.Setup(c => c.GetValues()).Returns([]);
 
             _service = new PolicyAdministrationService(_valuesCache, _authorization.Object, _users.Object,
-                _chats.Object, _folders.Object, _alertScheduleProvider);
+                _chats.Object, _folders.Object, _alertScheduleProvider,
+                ChangeSetTestHelpers.Recorder(_databaseCoreManager.DatabaseCore));
         }
 
 

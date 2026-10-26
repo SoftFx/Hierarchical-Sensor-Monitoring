@@ -1,4 +1,4 @@
-# ADR-0010: Static NLog file names with size-based rotation bound the Logs/ disk
+# ADR-0011: Static NLog file names with size-based rotation bound the Logs/ disk
 
 **Status:** Accepted
 **Date:** 2026-10-23
