@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.Controllers
         private ProductPoliciesApiController CreateController() =>
             new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object),
                 new PolicyAdministrationService(_cache.Object, _authorization.Object, _users.Object,
-                    _chats.Object, _folders.Object, _schedules.Object))
+                    _chats.Object, _folders.Object, _schedules.Object, ChangeSetTestHelpers.Recorder()))
             {
                 ControllerContext = new ControllerContext
                 {

@@ -246,4 +246,8 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
   the old `load.sh` container to compose, preserving all paths and data (includes the
   equivalence table against load.sh).
 - `docs/agents/hsm-deploy/references/troubleshooting.md` — failure modes and recovery.
+- `docs/agents/hsm-deploy/references/custom-certificate.md` — switch Caddy from
+  self-signed to the corporate PFX (`HSM_CERTIFICATE=custom`), incl. renewal;
+  apply at migration time when live served its own PFX and clients verify
+  certificates.
 - `docs/agents/hsm-deploy/references/ssh-key-setup.md` — one-time password → key login.

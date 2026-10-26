@@ -50,7 +50,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var database = WrapDatabase(_databaseCoreManager.DatabaseCore);
 
-            _valuesCache = new TreeValuesCache(database, snaphot.Object, _journalService, _alertScheduleProvider);
+            _valuesCache = new TreeValuesCache(database, snaphot.Object, _journalService, _alertScheduleProvider,
+                new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);

@@ -36,6 +36,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IDashboardCollection Dashboards { get; }
 
+        public IChangeSetCollection ChangeSets { get; }
+
         public ISnapshotDatabase Snapshots { get; }
 
         public bool IsCompactRunning { get; private set; }
@@ -85,6 +87,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
 
             Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
+            ChangeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");

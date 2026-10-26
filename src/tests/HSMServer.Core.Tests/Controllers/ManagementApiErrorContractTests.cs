@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
@@ -79,8 +80,8 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
             var writer = new AlertTemplateAdministrationService(_cache.Object, _folders.Object, _chats.Object,
-                _schedulesProvider.Object, _authorization.Object,
-                NullLogger<AlertTemplateAdministrationService>.Instance);
+                _schedulesProvider.Object, _authorization.Object, new Mock<IUserManager>().Object,
+                ChangeSetTestHelpers.Recorder(), NullLogger<AlertTemplateAdministrationService>.Instance);
 
             return new AlertTemplatesApiController(reader, writer)
             {
@@ -95,7 +96,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var reader = new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object);
             var writer = new AlertScheduleAdministrationService(_schedulesProvider.Object, _cache.Object,
-                _authorization.Object, reader);
+                _authorization.Object, reader, ChangeSetTestHelpers.Recorder(), new Mock<IUserManager>().Object);
 
             return new AlertSchedulesApiController(reader, writer)
             {

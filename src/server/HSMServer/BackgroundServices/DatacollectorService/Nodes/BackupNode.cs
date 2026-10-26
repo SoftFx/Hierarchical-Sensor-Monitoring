@@ -22,7 +22,7 @@ public record BackupSensors
     internal const string DashboardsBackupSizeName = "Dashboards backup size";
 
     internal const string NotBackedUpNote = "Only the EnvironmentData (metadata) and ServerLayout (dashboards) databases are backed up; " +
-                                            "the sensor values (History), Journals and Snapshots databases are not.";
+                                            "the sensor values (History), Journals, Snapshots and ChangeSets (undo journal) databases are not.";
 
     private static readonly TimeSpan MinBackupPeriod = TimeSpan.FromHours(1);
 

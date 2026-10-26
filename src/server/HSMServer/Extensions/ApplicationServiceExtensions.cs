@@ -62,6 +62,14 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                     .AddSingleton<IJournalService, JournalService>();
 
+            // The undo journal of change sets (#1570): durable LevelDB table
+            // behind every REST/MCP configuration write, powering rollback.
+            // Singleton like the cache and the presentation Journal it
+            // mirrors; the recorder is the stateless hook helper the
+            // administration services share.
+            services.AddSingleton<HSMServer.Core.ChangeSets.IChangeSetJournal, HSMServer.Core.ChangeSets.ChangeSetJournal>()
+                    .AddSingleton<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>();
+
             services.AddAsyncStorage<IUserManager, UserManager>()
                     .AddAsyncStorage<IFolderManager, FolderManager>()
                     .AddAsyncStorage<IChatsManager, ChatsManager>()
@@ -125,6 +133,12 @@ namespace HSMServer.ServiceExtensions
             // constructor dependency is itself a singleton and the gate
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
+
+            // The undo-journal read/rollback engine (#1570): list/get with
+            // caller-sight filtering and the rollback replay. Scoped like its
+            // readers; every stateful collaborator it touches (the journal,
+            // the recorder, the policy write gates) is singleton.
+            services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService, HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
 
             // The sensor-mute write engine (#1569): mute/unmute rendered
             // through the core's own UpdateMutedSensorStateAsync entry (the
