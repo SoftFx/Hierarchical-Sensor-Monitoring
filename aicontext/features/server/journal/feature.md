@@ -44,4 +44,6 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 
 - The global list scans the Changes-type records of the overlapping time shards and filters in memory (limit ≤ 200); the default window is 30 days.
 - Records keyed by deleted entities resolve to the admin-only Global scope for sight filtering.
+- The product filter matches the record's root product: folder-scoped and global entities (alert templates, alert schedules, folders) carry no product and do not match a product filter — filter by kind or time to audit them.
+- The MCP list tool pages client-side over the first 200 visible records (the deleted change-sets list's semantics); deep pagination uses the REST offset.
 - Schedule-delete rollback semantics are the #1570 ones (per-node full lists plus the touched template rows), now reached through the journal record.

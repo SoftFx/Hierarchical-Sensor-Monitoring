@@ -74,16 +74,19 @@
 
     // === The global Journal page ===
 
-    function filterParams() {
-        var from = $('#journalFilterFrom').val();
-        var to = $('#journalFilterTo').val();
+    // datetime-local values are naive LOCAL wall-clock strings; the server
+    // filters in UTC, so the instant is converted before it travels.
+    function toUtcIso(value) {
+        return value ? new Date(value).toISOString() : null;
+    }
 
+    function filterParams() {
         return {
             author: $('#journalFilterAuthor').val() || null,
             kind: $('#journalFilterKind').val() || null,
             productId: $('#journalFilterProduct').val() || null,
-            fromUtc: from || null,
-            toUtc: to || null,
+            fromUtc: toUtcIso($('#journalFilterFrom').val()),
+            toUtc: toUtcIso($('#journalFilterTo').val()),
             limit: 200,
         };
     }

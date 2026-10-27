@@ -1427,7 +1427,7 @@
             is a Conflict (retry re-runs the idempotent detach).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.SaveScheduleAsync(System.Security.Claims.ClaimsPrincipal,System.Nullable{System.Guid},HSMServer.Core.Model.Policies.AlertSchedule,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.SaveSchedule(System.Security.Claims.ClaimsPrincipal,System.Nullable{System.Guid},HSMServer.Core.Model.Policies.AlertSchedule,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             The web editor's save entry (#1588: the single write path): the
             form's PARSED schedule model (the view model validated the form)
@@ -2225,6 +2225,15 @@
             journal's author strings must stay consistent across transports.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.InitiatorOf(System.Security.Claims.ClaimsPrincipal,HSMServer.Authentication.IUserManager,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+            <summary>
+            The write initiator of a journaled write, stamped with the
+            request's undo-group id (#1588): the cache-layer journal records
+            copy the stamp onto the record, which is what links a policy-list
+            change to its rollback group. Shared by every administration
+            service so the stamping rule cannot drift between them.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
             <summary>
             Append one entry to the internal undo store; null when the journal
@@ -2535,6 +2544,14 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Journal.IJournalRecordAccess.IsAdmin">
             <summary>The rollback gate (#1588): on the token side the OWNER must be an admin.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.IJournalRecordAccess.ChangeSetAccess">
+            <summary>
+            The rollback engine's per-resource write seam, null on the token
+            side (the engine's evaluator default applies); the cookie twin
+            supplies its CookieUserAccess so a web rollback's compensating
+            writes authorize through the web user's roles.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Journal.JournalAdministrationService">
             <summary>

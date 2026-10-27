@@ -338,7 +338,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// and undo journaling as the DTO path. A null id creates (the id is
         /// server-generated), a known id updates.
         /// </summary>
-        public PolicyWriteResult<AlertScheduleDto> SaveScheduleAsync(ClaimsPrincipal user, Guid? id,
+        public PolicyWriteResult<AlertScheduleDto> SaveSchedule(ClaimsPrincipal user, Guid? id,
             ScheduleModel schedule, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
         {
             if (AuthorizeGlobalWrite(user, access) is { } denied)
@@ -477,15 +477,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
         // === Undo-journal hooks (#1570) ===
 
-        // The write initiator, stamped with the request's undo-group id
-        // (#1588): the cache-layer journal records (or the recorder's own
-        // record) link the write to its rollback group through it.
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null)
-        {
-            var initiator = ChangeSetRecorder.InitiatorOf(user, _users);
-
-            return write?.ChangeSetId is { } id ? initiator.AsJournaled(id) : initiator;
-        }
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            ChangeSetRecorder.InitiatorOf(user, _users, write);
 
         private WritePreviewDto SchedulePreview(ChangeSetWriteOptions write, Guid scheduleId, string name)
         {

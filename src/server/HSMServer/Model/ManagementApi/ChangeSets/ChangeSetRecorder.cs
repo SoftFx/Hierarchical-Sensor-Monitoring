@@ -63,6 +63,21 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         }
 
         /// <summary>
+        /// The write initiator of a journaled write, stamped with the
+        /// request's undo-group id (#1588): the cache-layer journal records
+        /// copy the stamp onto the record, which is what links a policy-list
+        /// change to its rollback group. Shared by every administration
+        /// service so the stamping rule cannot drift between them.
+        /// </summary>
+        public static InitiatorInfo InitiatorOf(System.Security.Claims.ClaimsPrincipal user, IUserManager users,
+            ChangeSetWriteOptions write)
+        {
+            var initiator = InitiatorOf(user, users);
+
+            return write?.ChangeSetId is { } id ? initiator.AsJournaled(id) : initiator;
+        }
+
+        /// <summary>
         /// Append one entry to the internal undo store; null when the journal
         /// write failed (the undo point is lost — logged loudly). The id is
         /// the request's group id — with server-minted ids (#1588) the entry

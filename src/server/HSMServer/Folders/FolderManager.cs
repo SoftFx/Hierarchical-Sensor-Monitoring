@@ -126,6 +126,16 @@ namespace HSMServer.Folders
                 model.GetChatName += GetChatNameById;
                 model.GetGlobalChatIds += GetGlobalChatIds;
                 model.ChangesHandler += _journalService.AddRecord;
+
+                // The tree-CRUD trace of the folder's creation (#1588):
+                // journal-visible only, no undo group.
+                _journalService.AddRecord(new JournalRecordModel(model.Id, info)
+                {
+                    Enviroment = "Create folder",
+                    PropertyName = "folder",
+                    NewValue = model.Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                });
             }
 
             return result;
@@ -228,7 +238,19 @@ namespace HSMServer.Folders
             string logFolder = folder?.Name ?? remove.Id.ToString();
 
             if (result)
+            {
                 _logger.Info($"Folder '{logFolder}' is removed");
+
+                // The tree-CRUD trace of the folder's deletion (#1588):
+                // journal-visible only, no undo group.
+                _journalService.AddRecord(new JournalRecordModel(remove.Id, remove.Initiator)
+                {
+                    Enviroment = "Remove folder",
+                    PropertyName = "folder",
+                    OldValue = logFolder,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                });
+            }
             else
                 _logger.Warn($"Folder '{logFolder}' remove is unsuccess");
 
@@ -320,6 +342,18 @@ namespace HSMServer.Folders
 
         public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator)
         {
+            // The tree-CRUD trace of the move (#1588): journal-visible only.
+            _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
+            {
+                Enviroment = "Move product",
+                PropertyName = "product",
+                OldValue = TryGetValueById(fromFolderId, out var movedFrom) ? movedFrom.Name : null,
+                NewValue = TryGetValueById(toFolderId, out var movedTo) ? movedTo.Name : null,
+                Path = product.Name,
+                Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                ProductId = product.Id.ToString(),
+            });
+
             if (TryGetValueById(fromFolderId, out var fromFolder))
             {
                 fromFolder.Products.Remove(product.Id);

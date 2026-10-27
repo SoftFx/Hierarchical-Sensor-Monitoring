@@ -29,6 +29,9 @@ namespace HSMServer.Model.ManagementApi.Journal
         // the engine's cookie seam (CookieUserAccess).
         public CookieUserAccess ChangeSetAccess => new(_user, _cache);
 
+        HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess
+            IJournalRecordAccess.ChangeSetAccess => ChangeSetAccess;
+
         public bool IsAdmin => _user is { IsAdmin: true };
 
         public bool CanRead(ApiTokenResource resource) =>

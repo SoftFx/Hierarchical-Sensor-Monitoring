@@ -157,7 +157,7 @@ namespace HSMServer.Controllers
                     schedule.Timezone = model.Timezone;
 
                     var id = model.Id == Guid.Empty ? (Guid?)null : model.Id;
-                    var result = _writer.SaveScheduleAsync(User, id, schedule, JournalWriteOptions(),
+                    var result = _writer.SaveSchedule(User, id, schedule, JournalWriteOptions(),
                         new CookieUserAccess(CurrentUser, _cache));
 
                     if (!result.Success)

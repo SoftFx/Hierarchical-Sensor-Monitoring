@@ -120,6 +120,14 @@ namespace HSMServer.Model.ManagementApi.Journal
 
         /// <summary>The rollback gate (#1588): on the token side the OWNER must be an admin.</summary>
         bool IsAdmin { get; }
+
+        /// <summary>
+        /// The rollback engine's per-resource write seam, null on the token
+        /// side (the engine's evaluator default applies); the cookie twin
+        /// supplies its CookieUserAccess so a web rollback's compensating
+        /// writes authorize through the web user's roles.
+        /// </summary>
+        ChangeSets.IChangeSetAccess ChangeSetAccess { get; }
     }
 
 
@@ -224,11 +232,7 @@ namespace HSMServer.Model.ManagementApi.Journal
 
             // The cookie twin rides the engine's compensating writes; the
             // token default flows through the evaluator verbatim.
-            var changeSetAccess = access is CookieJournalRecordAccess cookie
-                ? cookie.ChangeSetAccess
-                : null;
-
-            return _changeSets.RollbackAsync(changeSetId, user, force, dryRun, changeSetAccess);
+            return _changeSets.RollbackAsync(changeSetId, user, force, dryRun, access.ChangeSetAccess);
         }
 
         public const string JournalRollbackAccessDeniedMessage =
@@ -308,8 +312,7 @@ namespace HSMServer.Model.ManagementApi.Journal
             if (!Guid.TryParse(record.ChangeSetId, out var changeSetId))
                 return null;
 
-            var changeSetAccess = access is CookieJournalRecordAccess cookie ? cookie.ChangeSetAccess : null;
-            var details = _changeSets.GetChangeSet(changeSetId, user, changeSetAccess);
+            var details = _changeSets.GetChangeSet(changeSetId, user, access.ChangeSetAccess);
 
             return details.Success ? details.Value : null;
         }
@@ -350,6 +353,9 @@ namespace HSMServer.Model.ManagementApi.Journal
                 _authorization.AuthorizeRead(_user, resource) == ApiTokenAuthorization.Allowed;
 
             public bool IsAdmin => PrincipalIsAdmin(_user, _users);
+
+            // Null: the engine authorizes token principals through the evaluator.
+            public ChangeSets.IChangeSetAccess ChangeSetAccess => null;
         }
     }
 }

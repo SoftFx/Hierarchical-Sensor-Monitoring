@@ -698,7 +698,8 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
-        {            var fromTicks = from.Ticks;
+        {
+            var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
             IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)

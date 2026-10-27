@@ -473,15 +473,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         // The write initiator resolves through the shared ChangeSetRecorder
         // helper (the journal's fork rule compares the author strings).
-        // The write initiator, stamped with the request's undo-group id
-        // (#1588): the cache-layer journal records (or the recorder's own
-        // record) link the write to its rollback group through it.
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null)
-        {
-            var initiator = ChangeSetRecorder.InitiatorOf(user, _users);
-
-            return write?.ChangeSetId is { } id ? initiator.AsJournaled(id) : initiator;
-        }
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            ChangeSetRecorder.InitiatorOf(user, _users, write);
 
         // Dry-run preview of a template write: the fan-out target set (matched
         // by the new paths, plus stale holders the edit would prune — the old
