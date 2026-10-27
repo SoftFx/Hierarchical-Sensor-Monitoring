@@ -20,6 +20,9 @@ namespace HSMServer.Core.Tests.Infrastructure
             _shouldFail = shouldFail;
         }
 
+        public List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to) =>
+            _inner.GetAllJournalValues(from, to);
+
         public IDashboardCollection Dashboards => _inner.Dashboards;
 
         public IChangeSetCollection ChangeSets => _inner.ChangeSets;

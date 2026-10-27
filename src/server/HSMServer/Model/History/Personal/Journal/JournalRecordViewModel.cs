@@ -34,6 +34,11 @@ public sealed class JournalRecordViewModel
 
     public string Path { get; set; }
 
+    /// <summary>The wire id of the record (rollback-by-record addressing, #1588).</summary>
+    public string Id { get; set; }
+
+    public bool Rollbackable { get; set; }
+
 
     public JournalRecordViewModel(JournalRecordModel model)
     {
@@ -43,6 +48,8 @@ public sealed class JournalRecordViewModel
         TimeAsString = Time.ToDefaultFormat();
         Initiator = model.Initiator;
         Path = model.Path;
+        Id = ManagementApi.Journal.JournalRecordId.Of(model);
+        Rollbackable = Core.Journal.JournalKinds.IsRollbackable(model.Kind) && model.ChangeSetId is not null;
     }
 
 

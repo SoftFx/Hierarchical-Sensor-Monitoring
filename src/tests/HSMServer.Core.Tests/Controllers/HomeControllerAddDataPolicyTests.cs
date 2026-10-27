@@ -18,6 +18,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc;
+using HSMServer.Core.Tests.Infrastructure;
 using Moq;
 using Xunit;
 
@@ -32,6 +33,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IDatabaseCore> _databaseMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
+        private readonly Mock<HSMServer.Authentication.IApiTokenAuthorizationService> _authorizationMock = new();
         private readonly TreeViewModel _treeViewModel;
 
 
@@ -46,6 +48,18 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService CreatePolicyWriter()
+        {
+            var recorder = new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
+                Infrastructure.ChangeSetTestHelpers.Journal(),
+                Infrastructure.ChangeSetTestHelpers.JournalService(),
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>());
+
+            return new HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService(
+                _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object, _chatsMock.Object,
+                _folderManagerMock.Object, _scheduleProviderMock.Object, recorder);
+        }
+
         private HomeController CreateController() =>
             new(_cacheMock.Object,
                 _folderManagerMock.Object,
@@ -54,7 +68,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _journalMock.Object,
                 _chatsMock.Object,
                 _databaseMock.Object,
-                _scheduleProviderMock.Object);
+                _scheduleProviderMock.Object,
+                CreatePolicyWriter());
 
 
         // Regression for #1142: AddDataPolicy is also called from the Alert Template editor,

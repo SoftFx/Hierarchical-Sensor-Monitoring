@@ -49,27 +49,24 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_ForeignAuthor_ForksToAFreshId()
+        public void Append_AlwaysLandsInTheGivenId_TheForkRuleIsGone()
         {
-            // The fork rule: a change set accepts appends only from its own
-            // author — a foreign entry would distort the audit trail and
-            // block the author's rollback pre-flight, so it journals under a
-            // fresh id the echo names instead.
+            // #1588: group ids are SERVER-minted per request — one request
+            // = one group — so the #1570 fork rule (a foreign author or a
+            // terminal set forking a client-supplied id) is structurally
+            // impossible and removed: an append always lands in exactly the
+            // id it was given.
             var id = Guid.NewGuid();
 
-            _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
+            var landed = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorDataPolicies));
 
-            var forked = _journal.Append(id, InitiatorInfo.AsUser("bob"), Entry(ChangeSetEntryKind.SensorTtlPolicies));
+            Assert.Equal(id, landed);
 
-            Assert.NotEqual(id, forked);
+            var stored = _journal.Get(id);
 
-            var original = _journal.Get(id);
-            var forkSet = _journal.Get(forked);
-
-            Assert.Equal("alice", original.Author);
-            Assert.Single(original.Entries);
-            Assert.Equal("bob", forkSet.Author);
-            Assert.Single(forkSet.Entries);
+            Assert.Equal("alice", stored.Author);
+            Assert.Single(stored.Entries);
         }
 
         [Fact]
@@ -86,22 +83,21 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_RolledBackSet_ForksFurtherWritesToAFreshId()
+        public void MarkRolledBack_MakesTheSetTerminal()
         {
-            // A rolled-back set is terminal, but the write already applied —
-            // rejecting after the fact would lose its undo point. The append
-            // FORKS to a fresh id instead; the terminal set stays untouched.
+            // A rolled-back set is terminal; with server-minted request
+            // groups (#1588) no later write can arrive under its id, so the
+            // terminal mark only guards the rollback surface (a second
+            // rollback of the same set is a Conflict).
             var id = Guid.NewGuid();
 
             _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
             _journal.MarkRolledBack(id, Guid.NewGuid());
 
-            var forked = _journal.Append(id, InitiatorInfo.AsUser("alice"),
-                Entry(ChangeSetEntryKind.SensorDataPolicies));
+            var stored = _journal.Get(id);
 
-            Assert.NotEqual(id, forked);
-            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(id).Status);
-            Assert.Single(_journal.Get(forked).Entries);
+            Assert.Equal(ChangeSetStatus.RolledBack, stored.Status);
+            Assert.All(stored.Entries, e => Assert.NotNull(e.RestoredBy));
         }
 
         [Fact]

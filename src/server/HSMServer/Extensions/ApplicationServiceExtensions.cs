@@ -139,6 +139,7 @@ namespace HSMServer.ServiceExtensions
             // readers; every stateful collaborator it touches (the journal,
             // the recorder, the policy write gates) is singleton.
             services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService, HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
+            services.AddScoped<HSMServer.Model.ManagementApi.Journal.JournalAdministrationService>();
 
             // The sensor-mute write engine (#1569): mute/unmute rendered
             // through the core's own UpdateMutedSensorStateAsync entry (the

@@ -38,4 +38,7 @@ public sealed class JournalService : IJournalService
             yield return new List<JournalRecordModel>(page.Select(x => new JournalRecordModel(x.Key, x.Entity)));
         }
     }
+
+    public List<JournalRecordModel> GetRecords(DateTime from, DateTime to) =>
+        [.. _database.GetAllJournalValues(from, to).Select(x => new JournalRecordModel(x.Key, x.Entity))];
 }

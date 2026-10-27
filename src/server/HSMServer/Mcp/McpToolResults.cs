@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Model.ManagementApi.Journal;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
@@ -243,16 +244,16 @@ namespace HSMServer.Mcp
     }
 
 
-    /// <summary>Result of the list_change_sets tool.</summary>
-    [Description("Result of the list_change_sets tool: one page of visible change sets plus the effective paging echo.")]
-    public sealed record McpChangeSetsResult
+    /// <summary>Result of the list_journal_records tool.</summary>
+    [Description("Result of the list_journal_records tool: one page of visible journal records plus the effective paging echo.")]
+    public sealed record McpJournalRecordsResult
     {
-        /// <summary>The visible change sets of the served slice, newest first.</summary>
-        [Description("The visible change sets of the served slice, newest first.")]
-        public List<ChangeSetSummaryDto> ChangeSets { get; init; }
+        /// <summary>The visible journal records of the served slice, newest first.</summary>
+        [Description("The visible journal records of the served slice, newest first.")]
+        public List<JournalRecordDto> Records { get; init; }
 
-        /// <summary>Total visible change sets up to the server-side cap (200).</summary>
-        [Description("Total visible change sets up to the server-side cap (200).")]
+        /// <summary>Total visible journal records up to the server-side cap (200).</summary>
+        [Description("Total visible journal records up to the server-side cap (200).")]
         public int TotalFound { get; init; }
 
         /// <summary>The effective page size (the clamped `limit`).</summary>

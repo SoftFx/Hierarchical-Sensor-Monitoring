@@ -1,0 +1,87 @@
+@using HSMServer.Model.Authentication
+@using HSMServer.Core.Journal
+
+@model object
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    // #1588: rollback is admin-only ([AuthorizeIsAdmin] on Rollback), so the
+    // Rollback controls render for admins only — non-admins keep the
+    // read-only audit page (same pattern as Views/AlertSchedules/Index.cshtml).
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
+
+    var products = (List<(Guid Id, string Name)>)ViewBag.Products;
+}
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="m-2">
+            <div class="d-flex justify-content-between my-2">
+                <h5>Journal</h5>
+            </div>
+
+            <p class="text-muted">
+                Every configuration change of the monitoring tree — from the web editor, the API and MCP tools —
+                lands in this journal. Roll back a record to undo its request as a unit (configuration only;
+                notifications, alerts and history are untouched). Tree changes and node settings are
+                journal-visible only.
+            </p>
+
+            <div class="row g-2 mb-2" id="journalFilters">
+                <div class="col-auto">
+                    <input type="text" class="form-control form-control-sm" id="journalFilterAuthor"
+                           placeholder="Author" maxlength="100" />
+                </div>
+                <div class="col-auto">
+                    <select class="form-select form-select-sm" id="journalFilterKind">
+                        <option value="">All kinds</option>
+                        @foreach (var kind in JournalKinds.All)
+                        {
+                            <option value="@kind">@kind</option>
+                        }
+                        <option value="other">other</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <select class="form-select form-select-sm" id="journalFilterProduct">
+                        <option value="">All products</option>
+                        @foreach (var product in products)
+                        {
+                            <option value="@product.Id">@product.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <input type="datetime-local" class="form-control form-control-sm" id="journalFilterFrom" />
+                </div>
+                <div class="col-auto">
+                    <input type="datetime-local" class="form-control form-control-sm" id="journalFilterTo" />
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-sm btn-primary" id="journalFilterApply">Apply</button>
+                </div>
+            </div>
+
+            <div id="journalTableContainer" data-user-is-admin="@userIsAdmin">
+                @await Html.PartialAsync("_JournalTable", new System.Collections.Generic.List<HSMServer.Model.ManagementApi.Journal.JournalRecordDto>())
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="journalDetailsContainer"></div>
+
+@* The rollback POST is antiforgery-validated; the token rides the jQuery
+   posts from journalPage.js (the schedules-page precedent). *@
+@Html.AntiForgeryToken()
+
+@section Scripts {
+    <script>
+        window.journalUrls = {
+            table: '@Url.Action(nameof(HSMServer.Controllers.JournalController.GetJournalTable))',
+            details: '@Url.Action(nameof(HSMServer.Controllers.JournalController.Details))',
+            rollback: '@Url.Action(nameof(HSMServer.Controllers.JournalController.Rollback))',
+        };
+    </script>
+}

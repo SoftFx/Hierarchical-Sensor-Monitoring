@@ -1,0 +1,68 @@
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.ManagementApi.Journal
+
+@model List<JournalRecordDto>
+
+@{
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
+}
+
+<table class="table table-striped" id="journalTable">
+    <thead>
+        <tr>
+            <th scope="col">Time (UTC)</th>
+            <th scope="col">Author</th>
+            <th scope="col">Kind</th>
+            <th scope="col">Entity</th>
+            <th scope="col">Change</th>
+            <th scope="col">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model.Count == 0)
+        {
+            <tr><td colspan="6" class="text-muted">No journal records for the selected filters.</td></tr>
+        }
+        @foreach (var item in Model)
+        {
+            <tr data-record-id="@item.Id">
+                <td>@item.Time.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                <td>@item.Author</td>
+                <td>
+                    @if (item.Kind is null)
+                    {
+                        <span class="badge bg-light text-dark">other</span>
+                    }
+                    else if (item.Rollbackable)
+                    {
+                        <span class="badge bg-primary">@item.Kind</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">@item.Kind</span>
+                    }
+                </td>
+                <td>
+                    <div class="text-truncate" style="max-width: 320px;" title="@item.Path">@item.Path</div>
+                </td>
+                <td>
+                    <div class="text-truncate" style="max-width: 360px;" title="@item.Property">
+                        @if (!string.IsNullOrEmpty(item.OldValue))
+                        {
+                            <span class="text-muted">@item.OldValue →</span>
+                        }
+                        @item.NewValue
+                    </div>
+                </td>
+                <td>
+                    <button class="btn btn-link p-0 journal-details-btn" data-record-id="@item.Id">Details</button>
+                    @if (userIsAdmin && item.Rollbackable)
+                    {
+                        <button class="btn btn-link p-0 text-danger journal-rollback-btn"
+                                data-record-id="@item.Id">Rollback</button>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

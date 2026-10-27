@@ -42,6 +42,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IUserManager> _userManagerMock = new();
         private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
+        private readonly Mock<HSMServer.Authentication.IApiTokenAuthorizationService> _authorizationMock = new();
         private readonly TreeViewModel _treeViewModel;
         private readonly Guid _folderId = Guid.NewGuid();
 
@@ -64,6 +65,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService CreateTemplateWriter()
+        {
+            var recorder = new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
+                Infrastructure.ChangeSetTestHelpers.Journal(),
+                Infrastructure.ChangeSetTestHelpers.JournalService(),
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>());
+
+            return new HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService(
+                _cacheMock.Object, _folderManagerMock.Object, _chatsMock.Object, _scheduleProviderMock.Object,
+                _authorizationMock.Object, _userManagerMock.Object, recorder,
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService>());
+        }
+
         private AlertTemplatesController CreateController()
         {
             var controller = new AlertTemplatesController(
@@ -72,7 +86,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _treeViewModel,
                 _cacheMock.Object,
                 _userManagerMock.Object,
-                _scheduleProviderMock.Object);
+                _scheduleProviderMock.Object,
+                CreateTemplateWriter());
 
             controller.ControllerContext = new ControllerContext
             {

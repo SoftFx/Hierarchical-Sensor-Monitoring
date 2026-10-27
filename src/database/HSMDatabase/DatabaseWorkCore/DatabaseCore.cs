@@ -664,9 +664,41 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
         }
 
-        public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
+        // The global Journal read (#1588): every CHANGES-type record of the
+        // range across all nodes. The key layout is guid|type|ticks, so all
+        // Changes keys of a shard sit in ONE contiguous byte range between
+        // (empty guid, Changes, max ticks) and (max guid, Changes, min
+        // ticks) — one range read per overlapping shard, then the coarse
+        // shard bounds are refined by the record's own time.
+        public List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to)
         {
             var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var maxId = new Guid("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
+            var fromBytes = new JournalKey(Guid.Empty, DateTime.MinValue.Ticks, RecordType.Changes).GetBytes();
+            var toBytes = new JournalKey(maxId, DateTime.MaxValue.Ticks, RecordType.Changes).GetBytes();
+
+            var result = new List<(byte[], JournalRecordEntity)>();
+
+            foreach (var db in _journalValuesDatabases)
+                if (db.Overlaps(fromTicks, toTicks))
+                    foreach (var (key, value) in db.GetValuesFrom(fromBytes, toBytes))
+                    {
+                        var journalKey = JournalKey.FromBytes(key);
+
+                        if (journalKey.Time < fromTicks || journalKey.Time > toTicks)
+                            continue;
+
+                        result.Add((key, JsonSerializer.Deserialize<JournalRecordEntity>(value)));
+                    }
+
+            return result;
+        }
+
+        public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
+        {            var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
             IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)

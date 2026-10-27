@@ -1,0 +1,135 @@
+@using HSMServer.Model.ManagementApi.Journal
+
+@model JournalRecordDetailsDto
+
+<div class="modal-header">
+    <h5 class="modal-title">Journal record</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+    <p>
+        <strong>Time (UTC):</strong> @Model.Record.Time.ToString("yyyy-MM-dd HH:mm:ss")
+        &nbsp; <strong>Author:</strong> @Model.Record.Author
+        &nbsp; <strong>Kind:</strong> @(Model.Record.Kind ?? "other")
+    </p>
+    <p class="mb-1"><strong>Entity:</strong> @Model.Record.Path</p>
+    <p class="mb-2">
+        <strong>Change:</strong> @Model.Record.Property
+        @if (!string.IsNullOrEmpty(Model.Record.OldValue))
+        {
+            <span class="text-muted">@Model.Record.OldValue →</span>
+        }
+        @Model.Record.NewValue
+    </p>
+
+    @if (Model.ChangeSet is null)
+    {
+        <div class="text-muted">
+            This record is not rollbackable: its write predates the unified journal or touches an entity
+            that is journal-visible only (tree changes, node settings).
+        </div>
+    }
+    else
+    {
+        <div class="text-muted mb-2">
+            Undo group @Model.ChangeSet.Summary.Id.Substring(0, 8)… — @Model.ChangeSet.Summary.Status,
+            @Model.ChangeSet.Summary.RestoredEntryCount/@Model.ChangeSet.Summary.EntryCount entries restored.
+            Rolling back this record undoes every write of the SAME request.
+        </div>
+
+        @foreach (var entry in Model.ChangeSet.Entries)
+        {
+            <div class="card mb-2">
+                <div class="card-header d-flex justify-content-between">
+                    <span>@entry.Kind @entry.Operation</span>
+                    <span class="text-muted">@entry.Path</span>
+                </div>
+                <div class="card-body">
+                    @if (entry.Restored)
+                    {
+                        <div class="text-muted mb-1">Restored by rollback @entry.RestoredBy?.Substring(0, 8)…</div>
+                    }
+                    @if (entry.Before.Count > 0 || entry.After.Count > 0)
+                    {
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="fw-bold">Before</div>
+                                @foreach (var image in entry.Before)
+                                {
+                                    <pre class="mb-1 small">@image</pre>
+                                }
+                            </div>
+                            <div class="col-6">
+                                <div class="fw-bold">After</div>
+                                @foreach (var image in entry.After)
+                                {
+                                    <pre class="mb-1 small">@image</pre>
+                                }
+                            </div>
+                        </div>
+                    }
+                    @if (entry.BeforeTemplate is not null || entry.AfterTemplate is not null)
+                    {
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="fw-bold">Before</div>
+                                <pre class="mb-1 small">@entry.BeforeTemplate</pre>
+                            </div>
+                            <div class="col-6">
+                                <div class="fw-bold">After</div>
+                                <pre class="mb-1 small">@entry.AfterTemplate</pre>
+                            </div>
+                        </div>
+                    }
+                    @if (entry.BeforeSchedule is not null || entry.AfterSchedule is not null)
+                    {
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="fw-bold">Before</div>
+                                <pre class="mb-1 small">@entry.BeforeSchedule</pre>
+                            </div>
+                            <div class="col-6">
+                                <div class="fw-bold">After</div>
+                                <pre class="mb-1 small">@entry.AfterSchedule</pre>
+                            </div>
+                        </div>
+                    }
+                    @if (entry.Fanout is { Count: > 0 })
+                    {
+                        <div class="fw-bold mt-1">Fan-out (@entry.Fanout.Count nodes)</div>
+                        @foreach (var image in entry.Fanout)
+                        {
+                            <details class="mb-1">
+                                <summary class="text-muted">@image.Path</summary>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="fw-bold">Before</div>
+                                        @foreach (var policy in image.BeforePolicies ?? [])
+                                        {
+                                            <pre class="mb-1 small">@policy</pre>
+                                        }
+                                        @foreach (var policy in image.BeforeTtlPolicies ?? [])
+                                        {
+                                            <pre class="mb-1 small">@policy</pre>
+                                        }
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="fw-bold">After</div>
+                                        @foreach (var policy in image.AfterPolicies ?? [])
+                                        {
+                                            <pre class="mb-1 small">@policy</pre>
+                                        }
+                                        @foreach (var policy in image.AfterTtlPolicies ?? [])
+                                        {
+                                            <pre class="mb-1 small">@policy</pre>
+                                        }
+                                    </div>
+                                </div>
+                            </details>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>

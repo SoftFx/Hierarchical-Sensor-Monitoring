@@ -15,4 +15,11 @@ public interface IJournalService
     void RemoveRecords(Guid id, Guid parentId = default);
 
     IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request);
+
+    /// <summary>
+    /// Every CHANGES-type record of the time range across ALL nodes (the
+    /// global Journal surface's read, #1588) — filtering and paging belong
+    /// to the caller.
+    /// </summary>
+    List<JournalRecordModel> GetRecords(DateTime from, DateTime to);
 }

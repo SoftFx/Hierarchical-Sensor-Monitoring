@@ -39,6 +39,7 @@ namespace HSMServer.Mcp
                 .WithHttpTransport(options => options.Stateless = true)
                 .WithTools<SensorTreeMcpTools>()
                 .WithTools<AlertsMcpTools>()
+                .WithTools<JournalMcpTools>()
                 .WithTools<ChatsMcpTools>()
                 .WithTools<FoldersMcpTools>()
                 .WithTools<PoliciesMcpTools>()

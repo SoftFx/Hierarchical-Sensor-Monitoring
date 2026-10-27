@@ -226,6 +226,66 @@
             to return panel data or annotations
             </summary>
         </member>
+        <member name="T:HSMServer.Controllers.JournalApiController">
+            <summary>
+            The unified Journal surface of the management API (#1588): journal
+            records of every configuration change with filters, per-record
+            details (with the undo group's before/after images), and the
+            admin-only rollback by record.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalApiController.ListRecords(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Journal records of configuration changes visible to the caller, newest first.
+            </summary>
+            <param name="author">Author substring filter (case-insensitive).</param>
+            <param name="fromUtc">Recorded at or after (UTC ISO 8601; default now - 30 days).</param>
+            <param name="toUtc">Recorded at or before (UTC ISO 8601).</param>
+            <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder or other.</param>
+            <param name="productId">Only records of this root product.</param>
+            <param name="entityId">Only records keyed by this entity id.</param>
+            <param name="limit">Page size, 1..200 (default 100).</param>
+            <param name="offset">Skip count (default 0).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalApiController.GetRecord(System.String)">
+            <summary>
+            One journal record's details: the record plus its undo group's
+            per-entity before/after images (visible entries only). An unknown
+            or invisible record id answers 404.
+            </summary>
+            <param name="recordId">Journal record id ("{entityId}:{ticks}:{type}" as returned by the list).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalApiController.Rollback(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Roll back a journal record's request (its undo group): compensating
+            writes replayed in reverse order through the same write gates. The
+            token's owner must be an ADMIN (#1588 breaking change — Manager
+            tokens can no longer roll back). Refuses with a per-entity diff
+            when an entity changed after the write recorded it, unless forced.
+            Restores configuration only — notifications sent, alerts fired and
+            sensor history are untouched.
+            </summary>
+            <param name="recordId">Journal record id.</param>
+            <param name="force">Override content conflicts deliberately.</param>
+            <param name="dryRun">Report conflicts and the restore plan, apply nothing.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.JournalController">
+            <summary>
+            The unified Journal surface (#1588): the per-node tab's DataTables feed
+            (GetPage) and the global Journal page — every configuration change from
+            every source with author/time/kind/product filters, per-record details
+            and the admin-only rollback by record.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalController.GetJournalTable(System.String,System.String,System.Nullable{System.Guid},System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>The table page: newest configuration records visible to the caller.</summary>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalController.Details(System.String)">
+            <summary>The details view: the record plus its undo group's before/after images.</summary>
+        </member>
+        <member name="M:HSMServer.Controllers.JournalController.Rollback(System.String,System.Boolean,System.Boolean)">
+            <summary>Rollback by journal record (the record's undo group); dry-run feeds the confirmation dialog.</summary>
+        </member>
         <member name="T:HSMServer.Controllers.NodesApiController">
             <summary>
             One tree node — a root product or a nested folder — with its direct children
@@ -718,6 +778,14 @@
             rule behind both transports).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.JournalMcpTools">
+            <summary>
+            The unified-Journal tools of the MCP surface (#1588): journal records
+            of every configuration change (web editor, API and these tools alike)
+            with filters, per-record details, and the admin-only rollback by
+            record — one record addresses its request's whole undo group.
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpProductsResult">
             <summary>Result of the list_products tool.</summary>
         </member>
@@ -858,19 +926,19 @@
         <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
             <summary>Id of the deleted resource.</summary>
         </member>
-        <member name="T:HSMServer.Mcp.McpChangeSetsResult">
-            <summary>Result of the list_change_sets tool.</summary>
+        <member name="T:HSMServer.Mcp.McpJournalRecordsResult">
+            <summary>Result of the list_journal_records tool.</summary>
         </member>
-        <member name="P:HSMServer.Mcp.McpChangeSetsResult.ChangeSets">
-            <summary>The visible change sets of the served slice, newest first.</summary>
+        <member name="P:HSMServer.Mcp.McpJournalRecordsResult.Records">
+            <summary>The visible journal records of the served slice, newest first.</summary>
         </member>
-        <member name="P:HSMServer.Mcp.McpChangeSetsResult.TotalFound">
-            <summary>Total visible change sets up to the server-side cap (200).</summary>
+        <member name="P:HSMServer.Mcp.McpJournalRecordsResult.TotalFound">
+            <summary>Total visible journal records up to the server-side cap (200).</summary>
         </member>
-        <member name="P:HSMServer.Mcp.McpChangeSetsResult.Limit">
+        <member name="P:HSMServer.Mcp.McpJournalRecordsResult.Limit">
             <summary>The effective page size (the clamped `limit`).</summary>
         </member>
-        <member name="P:HSMServer.Mcp.McpChangeSetsResult.Offset">
+        <member name="P:HSMServer.Mcp.McpJournalRecordsResult.Offset">
             <summary>The skip count actually served.</summary>
         </member>
         <member name="T:HSMServer.Mcp.PoliciesMcpTools">
@@ -1327,6 +1395,9 @@
             </summary>
             <param name="means"></param>
             <returns></returns>
+        </member>
+        <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Id">
+            <summary>The wire id of the record (rollback-by-record addressing, #1588).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>
@@ -2412,6 +2483,63 @@
             <summary>
             One folder by id. Unknown and invisible ids answer the SAME
             NotFound (the area's anti-enumeration rule).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Journal.CookieJournalRecordAccess">
+            <summary>
+            The cookie-`User` twin of the token evaluator's per-record sight
+            checks (#1588 web UI): the evaluator resolves HsmApiToken principals
+            only, so the Journal page maps the web user's role predicates onto
+            the same resources. Admin sees everything; product/folder roles gate
+            their own entities; global records (schedules, unresolvable legacy
+            rows) stay admin-only.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Journal.JournalRecordId">
+            <summary>
+            The wire form of a journal record's identity: the storage key
+            (entity id, ticks, record type) rendered as "{id}:{ticks}:{type}".
+            Rollback by record (#1588) addresses the record's undo group through
+            this id.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalFilter.Kind">
+            <summary>Entity kind (JournalKinds value) or "other" for legacy/non-config records.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalFilter.ProductId">
+            <summary>Only records of this root product.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalFilter.EntityId">
+            <summary>Only records keyed by this entity id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Kind">
+            <summary>Entity kind; null on legacy and non-configuration records.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Rollbackable">
+            <summary>True when the record's write is undoable (admin-only rollback).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDetailsDto.ChangeSet">
+            <summary>The undo group's entries (before/after images) when the record is rollbackable, null otherwise.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Journal.IJournalRecordAccess">
+            <summary>
+            Per-record sight decision of the unified-journal surface (#1588): a
+            record is visible when its resolved resource (product, folder, global)
+            is in the caller's sight. The token side delegates to the evaluator;
+            the web UI maps the cookie user's role predicates onto the same
+            resources.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.IJournalRecordAccess.IsAdmin">
+            <summary>The rollback gate (#1588): on the token side the OWNER must be an admin.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Journal.JournalAdministrationService">
+            <summary>
+            The unified Journal's read and rollback surface (#1588): journal
+            records from ALL sources with author/time/kind/product filters, and
+            the admin-only rollback BY RECORD — the record's undo group replays
+            through the internal rollback engine (the #1570 mechanics, now an
+            implementation detail of the Journal).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">

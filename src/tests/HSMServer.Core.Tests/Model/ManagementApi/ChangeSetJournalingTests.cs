@@ -83,7 +83,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
 
         [Fact]
-        public async Task CreateSensorPolicy_JournalsBeforeAndAfterImages_AndEchoesChangeSetId()
+        public async Task CreateSensorPolicy_JournalsBeforeAndAfterImages_UnderTheRequestGroup()
         {
             var sensor = await CreateIntegerSensorAsync("svcJournalCreate");
 
@@ -95,7 +95,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 new ChangeSetWriteOptions { ChangeSetId = changeSetId });
 
             Assert.True(created.Success, created.Failure?.Message);
-            Assert.Equal(changeSetId, created.ChangeSetId);
 
             var stored = _journal.Get(changeSetId);
 
@@ -144,19 +143,22 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
-        public async Task WriteWithoutId_FormsItsOwnSingleEntryChangeSet()
+        public async Task TwoWrites_UnderTwoRequestGroups_FormTwoSingleEntryChangeSets()
         {
             var sensor = await CreateIntegerSensorAsync("svcJournalSolo");
+            var firstId = Guid.NewGuid();
+            var secondId = Guid.NewGuid();
 
-            var first = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
-            var second = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var first = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = firstId });
+            var second = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = secondId });
 
             Assert.True(first.Success, first.Failure?.Message);
             Assert.True(second.Success, second.Failure?.Message);
-            Assert.NotEqual(first.ChangeSetId, second.ChangeSetId);
 
-            var firstSet = _journal.Get(first.ChangeSetId.Value);
-            var secondSet = _journal.Get(second.ChangeSetId.Value);
+            var firstSet = _journal.Get(firstId);
+            var secondSet = _journal.Get(secondId);
 
             Assert.Single(firstSet.Entries);
             Assert.Single(secondSet.Entries);
@@ -179,9 +181,10 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task DryRun_AppliesNothing_AndReportsTheAffectedNode()
         {
             var sensor = await CreateIntegerSensorAsync("svcJournalDryRun");
+            var changeSetId = Guid.NewGuid();
 
             var result = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
-                new ChangeSetWriteOptions { DryRun = true, ChangeSetId = Guid.NewGuid() });
+                new ChangeSetWriteOptions { DryRun = true, ChangeSetId = changeSetId });
 
             Assert.True(result.Success);
             Assert.True(result.IsDryRun);
@@ -192,7 +195,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // Nothing applied: the sensor's list is untouched, no entry was
             // journaled.
             Assert.Empty(sensor.Policies);
-            Assert.Null(_journal.Get(Guid.Parse(result.Preview.ChangeSetId)));
+            Assert.Null(_journal.Get(changeSetId));
 
             var affected = Assert.Single(result.Preview.Affected);
 
@@ -210,7 +213,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 new ChangeSetWriteOptions { ChangeSetId = changeSetId });
 
             Assert.True(created.Success, created.Failure?.Message);
-            Assert.Equal(changeSetId, created.ChangeSetId);
 
             var entry = Assert.Single(_journal.Get(changeSetId).Entries);
 
@@ -276,7 +278,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 new ChangeSetWriteOptions { ChangeSetId = changeSetId });
 
             Assert.True(created.Success, created.Failure?.Message);
-            Assert.Equal(changeSetId, created.ChangeSetId);
 
             var entry = Assert.Single(_journal.Get(changeSetId).Entries);
 
@@ -347,7 +348,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // already applied. The template/schedule engines stamp the echoed
             // changeSetId ONLY on true (the policy engine's rule): a client
             // must never receive an undo handle that does not exist.
-            var failing = new ChangeSetRecorder(new ThrowingJournal(),
+            var failing = new ChangeSetRecorder(new ThrowingJournal(), ThrowingJournalService(),
                 NullLogger<ChangeSetRecorder>.Instance);
 
             var schedules = new AlertScheduleAdministrationService(_alertScheduleProvider, _valuesCache,
@@ -360,16 +361,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var schedule = await schedules.CreateScheduleAsync(User, ScheduleDto(),
                 new ChangeSetWriteOptions { ChangeSetId = Guid.NewGuid() });
             Assert.True(schedule.Success, schedule.Failure?.Message);
-            Assert.Null(schedule.ChangeSetId);
 
             var sensor = await CreateIntegerSensorAsync("svcJournalLost");
             var createdTemplate = await templates.CreateTemplateAsync(User, TemplateDto(paths: ["*/svcJournalLost"]));
             Assert.True(createdTemplate.Success, createdTemplate.Failure?.Message);
-            Assert.Null(createdTemplate.ChangeSetId);
 
             var deletedTemplate = await templates.DeleteTemplateAsync(createdTemplate.Value.Id, User);
             Assert.True(deletedTemplate.Success, deletedTemplate.Failure?.Message);
-            Assert.Null(deletedTemplate.ChangeSetId);
         }
 
 
@@ -486,6 +484,18 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
         // A journal whose storage is down: every Append throws, surfacing
         // Record's null path without tearing down the real test database.
+        // #1588: the recorder's unified-journal writes — unreachable while
+        // the undo append throws first, kept throwing for symmetry.
+        private static HSMServer.Core.Journal.IJournalService ThrowingJournalService()
+        {
+            var journal = new Moq.Mock<HSMServer.Core.Journal.IJournalService>();
+
+            journal.Setup(s => s.AddRecord(It.IsAny<HSMServer.Core.Model.JournalRecordModel>()))
+                .Throws(new InvalidOperationException("the journal storage is down"));
+
+            return journal.Object;
+        }
+
         private sealed class ThrowingJournal : IChangeSetJournal
         {
             public ChangeSetModel Get(Guid changeSetId) => throw new NotImplementedException();

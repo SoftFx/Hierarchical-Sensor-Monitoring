@@ -239,6 +239,14 @@ namespace HSMServer.Core.DataLayer
 
         IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count);
 
+        /// <summary>
+        /// Every CHANGES-type journal record of the time range across ALL
+        /// nodes (the global Journal page's read, #1588). The Changes-type
+        /// keys form one contiguous byte range per shard, so the scan is a
+        /// single range read per overlapping shard.
+        /// </summary>
+        List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to);
+
         #endregion
 
         void Compact();
