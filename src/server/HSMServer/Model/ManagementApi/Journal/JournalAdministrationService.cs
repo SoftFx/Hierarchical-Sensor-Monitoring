@@ -90,6 +90,9 @@ namespace HSMServer.Model.ManagementApi.Journal
 
         public string NewValue { get; init; }
 
+        /// <summary>The undo group of the write; null when the record is not rollbackable.</summary>
+        public string ChangeSetId { get; init; }
+
         /// <summary>True when the record's write is undoable (admin-only rollback).</summary>
         public bool Rollbackable { get; init; }
     }
@@ -295,6 +298,7 @@ namespace HSMServer.Model.ManagementApi.Journal
             Property = record.PropertyName,
             OldValue = record.OldValue,
             NewValue = record.NewValue,
+            ChangeSetId = JournalKinds.IsRollbackable(record.Kind) ? record.ChangeSetId : null,
             Rollbackable = JournalKinds.IsRollbackable(record.Kind) && record.ChangeSetId is not null,
         };
 

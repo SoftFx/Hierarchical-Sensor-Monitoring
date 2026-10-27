@@ -2515,6 +2515,9 @@
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Kind">
             <summary>Entity kind; null on legacy and non-configuration records.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.ChangeSetId">
+            <summary>The undo group of the write; null when the record is not rollbackable.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Rollbackable">
             <summary>True when the record's write is undoable (admin-only rollback).</summary>
         </member>

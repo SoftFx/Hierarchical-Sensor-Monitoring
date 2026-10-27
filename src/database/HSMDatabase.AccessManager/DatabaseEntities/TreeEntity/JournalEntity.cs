@@ -83,9 +83,14 @@ public readonly struct JournalKey
         var id = new Guid(bytes[..GuidSize]);
         var journalType = bytes[GuidSize];
 
-        Array.Reverse(bytes, GuidAndTypeSize, sizeof(long));
+        // Read the reversed ticks WITHOUT mutating the input buffer: keys can
+        // be parsed more than once on one pass (the global journal scan
+        // filters by time and later maps the same pair), and an in-place
+        // reverse would corrupt the second parse (#1588).
+        var reversed = bytes[GuidAndTypeSize..];
+        Array.Reverse(reversed);
 
-        var time = BitConverter.ToInt64(bytes, GuidAndTypeSize);
+        var time = BitConverter.ToInt64(reversed);
 
         return new JournalKey(id, time, (RecordType)journalType);
     }

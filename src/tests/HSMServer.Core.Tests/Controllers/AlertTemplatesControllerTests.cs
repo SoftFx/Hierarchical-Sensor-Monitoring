@@ -91,7 +91,11 @@ namespace HSMServer.Core.Tests.Controllers
 
             controller.ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext { User = new User() },
+                // The web save is admin-only ([AuthorizeIsAdmin]) and since
+                // #1588 rides the administration service through the cookie
+                // access seam — the acting user must be an admin, like in
+                // production.
+                HttpContext = new DefaultHttpContext { User = new User { IsAdmin = true } },
             };
 
             return controller;
@@ -242,8 +246,10 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<OkResult>(result);
             // Verify the mismatch check actually ran for each path — without this assertion the test
             // would still pass if the validation was silently removed, because AddAlertTemplateAsync
-            // is mocked to succeed unconditionally.
-            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(2));
+            // is mocked to succeed unconditionally. Since #1588 the save ALSO rides the
+            // administration service (whose fan-out scan enumerates the paths again), so the
+            // controller-side check is verified as at-least-once-per-path.
+            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.AtLeast(2));
         }
 
         [Fact]
