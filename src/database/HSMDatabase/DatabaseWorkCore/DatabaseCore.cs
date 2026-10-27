@@ -705,9 +705,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
             try
             {
-                var db = _journalValuesDatabases.GetDatabaseByTime(key.Time);
+                // READ-ONLY shard lookup (#1588 review round 2):
+                // GetDatabaseByTime CREATES the week's shard — a caller-
+                // crafted record id must not mint empty shards (and open
+                // handles) on the read path. Only an EXISTING overlapping
+                // shard can hold the key; everything else answers false.
+                var db = _journalValuesDatabases.FirstOrDefault(db => db.Overlaps(key.Time, key.Time));
 
-                return db.TryGet(key.GetBytes(), out var raw)
+                return db is not null && db.TryGet(key.GetBytes(), out var raw)
                     && (entity = JsonSerializer.Deserialize<JournalRecordEntity>(raw)) is not null;
             }
             catch (Exception)

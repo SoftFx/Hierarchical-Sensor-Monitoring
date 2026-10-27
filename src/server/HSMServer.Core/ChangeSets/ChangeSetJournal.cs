@@ -104,9 +104,25 @@ namespace HSMServer.Core.ChangeSets
             {
                 if (_database.ChangeSets.TryReadEntity(changeSetId, out var existing))
                 {
-                    AppendTo(ChangeSetMapper.ToModel(existing), entry, existing: true);
+                    var current = ChangeSetMapper.ToModel(existing);
 
-                    return changeSetId;
+                    // The TERMINAL half of the #1570 fork rule survives
+                    // (#1588 review round 2): a rollback can finish while the
+                    // request that owns the group is still appending (a
+                    // multi-sensor import, a long schedule delete). Appending
+                    // into the rolled-back set would strand those undo points
+                    // — the engine refuses them and nothing recreates a group.
+                    // The write still journals: under a FRESH id, which the
+                    // return names (the author half of the rule stays gone —
+                    // server-minted ids cannot collide across principals).
+                    if (current.Status == ChangeSetStatus.RolledBack)
+                        changeSetId = Guid.NewGuid();
+                    else
+                    {
+                        AppendTo(current, entry, existing: true);
+
+                        return changeSetId;
+                    }
                 }
 
                 var model = new ChangeSetModel

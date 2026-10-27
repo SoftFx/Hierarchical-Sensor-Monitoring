@@ -1200,11 +1200,25 @@ namespace HSMServer.Model.ManagementApi.Alerts
             var initiator = InitiatorOf(user, write);
             var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
 
+            // The first REJECTED list fails the save and stops the other
+            // arm (#1588 review round 2): a cache-rejected list used to
+            // vanish into a success — the alerts-import toast regressed and
+            // the meta-info form never showed the error.
             if (dataPolicies is not null)
-                await WriteSensorList(sensor, dataPolicies, dataList: true, changeSetId, initiator);
+            {
+                var data = await WriteSensorList(sensor, dataPolicies, dataList: true, changeSetId, initiator);
+
+                if (!data.Success)
+                    return data;
+            }
 
             if (ttlPolicies is not null)
-                await WriteSensorList(sensor, ttlPolicies, dataList: false, changeSetId, initiator);
+            {
+                var ttl = await WriteSensorList(sensor, ttlPolicies, dataList: false, changeSetId, initiator);
+
+                if (!ttl.Success)
+                    return ttl;
+            }
 
             return PolicyWriteResult.Ok();
         }

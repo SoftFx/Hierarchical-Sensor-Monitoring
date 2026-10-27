@@ -363,18 +363,20 @@ namespace HSMServer.Folders
                 _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
 
             // The tree-CRUD trace of the move (#1588), written AFTER the
-            // move so the journal never shows a move that did not happen.
-            // Journal-visible only.
-            _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
-            {
-                Enviroment = "Move product",
-                PropertyName = "product",
-                OldValue = fromFolder?.Name,
-                NewValue = toFolder?.Name,
-                Path = product.Name,
-                Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
-                ProductId = product.Id.ToString(),
-            });
+            // move and ONLY when a folder was actually resolved — an unknown
+            // pair journals two Warn lines and nothing else. Journal-visible
+            // only.
+            if (fromFolder is not null || toFolder is not null)
+                _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
+                {
+                    Enviroment = "Move product",
+                    PropertyName = "product",
+                    OldValue = fromFolder?.Name,
+                    NewValue = toFolder?.Name,
+                    Path = product.Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                    ProductId = product.Id.ToString(),
+                });
         }
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)

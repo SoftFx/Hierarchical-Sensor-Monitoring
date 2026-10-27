@@ -7,6 +7,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Journal;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
@@ -288,6 +289,34 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var entry = Assert.Single(details.Value.ChangeSet.Entries);
 
             Assert.Equal("sensorDataPolicies", entry.Kind);
+        }
+
+        [Fact]
+        public void GetRecord_ForAnIdInAnUnretainedWeek_IsNotFound_AndMintsNoShard()
+        {
+            // #1588 review round 2: the record id's ticks are caller-crafted;
+            // the exact-key read must not CREATE the week's shard (the write
+            // path's GetDatabaseByTime does) — an unbounded id space would
+            // otherwise mint empty LevelDB shards on the read path.
+            var ancient = new JournalKey(Guid.NewGuid(), new DateTime(2000, 1, 1).Ticks,
+                HSMDatabase.AccessManager.DatabaseEntities.RecordType.Changes);
+            var recordId = $"{ancient.Id:N}:{ancient.Time}:{(int)ancient.Type}";
+
+            var journalFolder = System.IO.Path.Combine(_databaseCoreManager.DatabaseFolder, "Journals");
+            var shardsBefore = System.IO.Directory.Exists(journalFolder)
+                ? System.IO.Directory.GetDirectories(journalFolder).Length
+                : 0;
+
+            var resolved = _journal.GetRecord(recordId, TokenUser);
+
+            Assert.False(resolved.Success);
+            Assert.Equal(PolicyWriteOutcome.NotFound, resolved.Failure.Outcome);
+
+            var shardsAfter = System.IO.Directory.Exists(journalFolder)
+                ? System.IO.Directory.GetDirectories(journalFolder).Length
+                : 0;
+
+            Assert.Equal(shardsBefore, shardsAfter);
         }
 
         [Fact]

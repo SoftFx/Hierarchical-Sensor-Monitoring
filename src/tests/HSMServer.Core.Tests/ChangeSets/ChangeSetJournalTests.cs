@@ -49,13 +49,12 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_AlwaysLandsInTheGivenId_TheForkRuleIsGone()
+        public void Append_ToAnOpenSet_LandsInTheGivenId()
         {
             // #1588: group ids are SERVER-minted per request — one request
-            // = one group — so the #1570 fork rule (a foreign author or a
-            // terminal set forking a client-supplied id) is structurally
-            // impossible and removed: an append always lands in exactly the
-            // id it was given.
+            // = one group — so the AUTHOR half of the #1570 fork rule is
+            // structurally impossible and removed: an append into an OPEN
+            // set always lands in exactly the id it was given.
             var id = Guid.NewGuid();
 
             var landed = _journal.Append(id, InitiatorInfo.AsUser("alice"),
@@ -67,6 +66,27 @@ namespace HSMServer.Core.Tests.ChangeSets
 
             Assert.Equal("alice", stored.Author);
             Assert.Single(stored.Entries);
+        }
+
+        [Fact]
+        public void Append_ToATerminalSet_ForksSoMidRequestWritesKeepTheirUndoPoint()
+        {
+            // #1588 review round 2: a rollback can finish while the request
+            // that owns the group is still appending (a multi-sensor
+            // import). The terminal half of the fork rule survives: the
+            // later writes journal under a FRESH id instead of stranding
+            // their undo points in a set the engine refuses.
+            var id = Guid.NewGuid();
+
+            _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
+            _journal.MarkRolledBack(id, Guid.NewGuid());
+
+            var forked = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorTtlPolicies));
+
+            Assert.NotEqual(id, forked);
+            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(id).Status);
+            Assert.Single(_journal.Get(forked).Entries);
         }
 
         [Fact]
