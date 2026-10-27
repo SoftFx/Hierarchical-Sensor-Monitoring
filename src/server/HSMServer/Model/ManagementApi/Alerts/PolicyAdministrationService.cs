@@ -1235,12 +1235,22 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
                 : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
 
+            // Re-stamp EVERY item with the request's undo-group-carrying
+            // initiator (#1588 review round 3): the web form builds its
+            // updates with a bare user initiator, and the TTL collection
+            // journals per-item records with the ITEM's initiator — an
+            // unstamped list would leave the sensorTtlPolicies journal
+            // records without their group link while the service journals
+            // the undo entry, making the group unreachable. The REST item
+            // writes stamp the same way at merge time.
+            var stamped = updates.Select(u => u with { Initiator = initiator }).ToList();
+
             var result = await _cache.UpdateSensorAsync(new SensorUpdate
             {
                 Id = sensor.Id,
                 Initiator = initiator,
-                Policies = dataList ? updates : null,
-                TTLPolicies = dataList ? null : updates,
+                Policies = dataList ? stamped : null,
+                TTLPolicies = dataList ? null : stamped,
             });
 
             if (!result.IsOk)
@@ -1257,46 +1267,6 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             return PolicyWriteResult.Ok();
         }
-
-        // The web editor's product form's TTL list — the product twin of the
-        // sensor full-list write above.
-        public Task<PolicyWriteResult> WriteProductTtlAsync(Guid productId,
-            List<PolicyUpdate> ttlPolicies, ClaimsPrincipal user,
-            ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null) =>
-            LockedWriteAsync(ResolveWritableProduct(productId, user, access),
-                () => WriteProductTtlCoreAsync(productId, ttlPolicies, user, write, access));
-
-        private async Task<PolicyWriteResult> WriteProductTtlCoreAsync(Guid productId,
-            List<PolicyUpdate> ttlPolicies, ClaimsPrincipal user,
-            ChangeSetWriteOptions write, ChangeSets.IChangeSetAccess access)
-        {
-            var (product, failure) = ResolveWritableProduct(productId, user, access);
-
-            if (failure is not null)
-                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
-
-            var initiator = InitiatorOf(user, write);
-            var before = ChangeSetRecorder.SnapshotProductTtlPolicies(product);
-
-            var result = await _cache.UpdateProductAsync(new ProductUpdate
-            {
-                Id = productId,
-                TTLPolicies = ttlPolicies,
-                Initiator = initiator,
-            });
-
-            if (!result.IsOk)
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
-
-            // No undo entry for an unchanged list (the sensor twin's rule).
-            if (!HSMServer.Core.ChangeSets.PolicyImageComparer.ListsEqual(before,
-                    ChangeSetRecorder.SnapshotProductTtlPolicies(product)))
-                RecordProductTtlList(PolicyWriteResult.Ok(), ChangeSetRecorder.ResolveChangeSetId(write),
-                    initiator, ChangeSetOperation.Update, product, before);
-
-            return PolicyWriteResult.Ok();
-        }
-
 
         // === Rollback restore paths (#1570) ===
 

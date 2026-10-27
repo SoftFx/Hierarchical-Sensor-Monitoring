@@ -2747,16 +2747,36 @@ namespace HSMServer.Core.Cache
 
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Settings.ChangesHandler += _journalService.AddRecord;
+            // Settings records get their root product id resolved HERE
+            // (#1588 review round 3): the settings collection has no node
+            // reference, and without the stamp the Journal's product filter
+            // hides every settings change of the product. The method group
+            // matches the -= detach below.
+            model.Settings.ChangesHandler += AddSettingsRecord;
             model.Policies.ChangesHandler += _journalService.AddRecord;
             model.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.Settings.ChangesHandler -= AddSettingsRecord;
             model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.ChangesHandler -= _journalService.AddRecord;
+        }
+
+        private void AddSettingsRecord(JournalRecordModel record)
+        {
+            record.ProductId ??= RootProductIdOfRecord(record.Key.Id)?.ToString();
+
+            _journalService.AddRecord(record);
+        }
+
+        private Guid? RootProductIdOfRecord(Guid nodeId)
+        {
+            if (TryGetProduct(nodeId, out var product))
+                return product.Root?.Id ?? product.Id;
+
+            return GetSensor(nodeId)?.Root?.Id;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)

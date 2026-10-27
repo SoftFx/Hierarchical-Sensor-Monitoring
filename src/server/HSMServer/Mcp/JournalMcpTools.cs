@@ -35,7 +35,7 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_journal_records", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Lists journal records of configuration changes touching entities visible to the token's owner, newest first. Every write of a single request (one tool call, one HTTP request, one form save) shares one undo group. Filter by author, time range, entity kind (sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, other), root product or entity id.")]
+        [Description("Lists journal records of configuration changes touching entities visible to the token's owner, newest first. Every write of a single request (one tool call, one HTTP request, one form save) shares one undo group. Filter by author, time range, entity kind (sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, other), root product or entity id. Page with limit/offset; a short or empty page is the end of the stream.")]
         public Task<McpJournalRecordsResult> ListJournalRecordsAsync(
             [Description("Author substring filter (case-insensitive).")] string author = null,
             [Description("Recorded at or after, UTC ISO 8601 (default now - 30 days).")] DateTime? fromUtc = null,
@@ -49,7 +49,12 @@ namespace HSMServer.Mcp
             var effectiveLimit = Math.Clamp(limit <= 0 ? 50 : limit, 1, 200);
             var effectiveOffset = Math.Max(offset, 0);
 
-            var visible = McpToolWriteErrors.Unwrap(_journal.ListRecords(User, new JournalFilter
+            // Exact paging through the service (#1588 review round 3): the
+            // records page the same way REST does — offset reaches past any
+            // window, and a short/empty page is the end-of-stream signal
+            // (there is no cheap total count over the shard-walking scan, so
+            // the envelope carries no totalFound).
+            var page = McpToolWriteErrors.Unwrap(_journal.ListRecords(User, new JournalFilter
             {
                 Author = author,
                 FromUtc = fromUtc,
@@ -57,13 +62,13 @@ namespace HSMServer.Mcp
                 Kind = kind,
                 ProductId = productId,
                 EntityId = entityId,
-                Limit = MaxLimit,
+                Limit = effectiveLimit,
+                Offset = effectiveOffset,
             }));
 
             return Task.FromResult(new McpJournalRecordsResult
             {
-                Records = [.. visible.Skip(effectiveOffset).Take(effectiveLimit)],
-                TotalFound = visible.Count,
+                Records = page,
                 Limit = effectiveLimit,
                 Offset = effectiveOffset,
             });

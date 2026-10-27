@@ -143,6 +143,39 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task WebEditorTtlChange_JournalRecordCarriesTheRequestGroup()
+        {
+            // #1588 review round 3: the web form's TTL updates carry a bare
+            // user initiator; the service must re-stamp the list so the
+            // sensorTtlPolicies journal record keeps its group link (the TTL
+            // collection journals per-item records with the ITEM initiator).
+            var sensor = await CreateSensorAsync("jrnWebTtl");
+            var changeSetId = Guid.NewGuid();
+
+            var seeded = await _policies.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(), TokenUser);
+            Assert.True(seeded.Success, seeded.Failure?.Message);
+
+            var webInitiator = InitiatorInfo.AsUser("web-user");
+
+            // A REAL TTL change through the web form's path: the bare-user
+            // updates drop the seeded policy (full-list semantics).
+            var cleared = new System.Collections.Generic.List<PolicyUpdate>();
+
+            var write = await _policies.WriteSensorListsAsync(sensor.Id,
+                dataPolicies: null,
+                ttlPolicies: cleared, TokenUser,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+
+            Assert.True(write.Success, write.Failure?.Message);
+
+            var record = RecordOf(changeSetId);
+
+            Assert.Equal(JournalKinds.SensorTtlPolicies, record.Kind);
+            Assert.Equal(changeSetId.ToString(), record.ChangeSetId);
+            Assert.True(record.Rollbackable);
+        }
+
+        [Fact]
         public async Task TemplateWrite_LeavesAJournalRecord()
         {
             // Templates have no cache journal hook — the recorder IS their
@@ -377,6 +410,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 },
             ],
             Notification = new AlertNotificationDto { Template = "api [$product]$path" },
+            Destination = new AlertDestinationDto { Mode = "FromParent" },
+        };
+
+        private static TtlPolicyDto TtlPolicy() => new()
+        {
+            Interval = "00:30:00",
+            Notification = new AlertNotificationDto { Template = "api ttl [$product]$path" },
             Destination = new AlertDestinationDto { Mode = "FromParent" },
         };
 

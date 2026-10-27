@@ -932,9 +932,6 @@
         <member name="P:HSMServer.Mcp.McpJournalRecordsResult.Records">
             <summary>The visible journal records of the served slice, newest first.</summary>
         </member>
-        <member name="P:HSMServer.Mcp.McpJournalRecordsResult.TotalFound">
-            <summary>Total visible journal records up to the server-side cap (200).</summary>
-        </member>
         <member name="P:HSMServer.Mcp.McpJournalRecordsResult.Limit">
             <summary>The effective page size (the clamped `limit`).</summary>
         </member>

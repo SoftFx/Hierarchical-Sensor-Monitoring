@@ -166,8 +166,11 @@ namespace HSMServer.Controllers
                             foreach (var message in messages)
                                 ModelState.AddModelError(field, message);
 
-                        if (result.Failure.Message is { } error)
-                            ModelState.AddModelError(nameof(model.Name), error);
+                        // A message-less failure (the schedule was deleted
+                        // while being edited) must not render as a silent
+                        // no-op save (#1588 review round 3).
+                        ModelState.AddModelError(nameof(model.Name),
+                            result.Failure.Message ?? "The schedule no longer exists. Refresh the list.");
 
                         return PartialView("_AlertSchedule", model);
                     }

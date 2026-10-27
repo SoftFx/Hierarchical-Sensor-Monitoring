@@ -23,8 +23,13 @@ public sealed class JournalRecordModel
     /// <summary>Entity kind of the unified journal (#1588); null on legacy rows and non-configuration records.</summary>
     public string Kind { get; init; }
 
-    /// <summary>Root product id of the touched entity (display filter of the global journal); null when not applicable.</summary>
-    public string ProductId { get; init; }
+    /// <summary>
+    /// Root product id of the touched entity (display filter of the global
+    /// journal); null when not applicable. Settable: the settings-collection
+    /// records get it enriched at the subscription seam (#1588 review round
+    /// 3) — the collection itself has no node reference.
+    /// </summary>
+    public string ProductId { get; set; }
 
     /// <summary>The undo group (internal change-set id) of the write; null when the record is not rollbackable.</summary>
     public string ChangeSetId { get; init; }

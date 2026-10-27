@@ -252,10 +252,6 @@ namespace HSMServer.Mcp
         [Description("The visible journal records of the served slice, newest first.")]
         public List<JournalRecordDto> Records { get; init; }
 
-        /// <summary>Total visible journal records up to the server-side cap (200).</summary>
-        [Description("Total visible journal records up to the server-side cap (200).")]
-        public int TotalFound { get; init; }
-
         /// <summary>The effective page size (the clamped `limit`).</summary>
         [Description("The effective page size (the clamped `limit`).")]
         public int Limit { get; init; }
