@@ -432,26 +432,28 @@ namespace HSMServer.Core.Cache
                             _productsByName.TryRemove(product.DisplayName, out _);
                     }
 
-                RemoveProduct(request.Id, request.InitiatorInfo);
+                    RemoveProduct(request.Id, request.InitiatorInfo);
 
-                RemoveProductFromCache(product);
+                    RemoveProductFromCache(product);
 
-                PurgeChangeSets(purgedEntityIds);
+                    PurgeChangeSets(purgedEntityIds);
 
-                // The tree-CRUD trace of the deletion (#1588): one record for
-                // the whole request, keyed by the SURVIVING parent (the
-                // removed subtree's own records would be keyed by dead ids).
-                // Journal-visible only — a product deletion irreversibly
-                // purges data, there is no rollback by design.
-                _journalService.AddRecord(new JournalRecordModel(product.Parent?.Id ?? product.Id,
-                    request.InitiatorInfo)
-                {
-                    Enviroment = "Remove node",
-                    PropertyName = "product",
-                    OldValue = product.FullPath,
-                    Kind = JournalKinds.TreeCrud,
-                    ProductId = product.Id.ToString(),
-                });
+                    // The tree-CRUD trace of the deletion (#1588): one record
+                    // for the whole request, keyed by the SURVIVING parent
+                    // (the removed subtree's own records would be keyed by
+                    // dead ids) and stamped with the ROOT product — the id
+                    // the product filter and the sight checks resolve.
+                    // Journal-visible only — a product deletion irreversibly
+                    // purges data, there is no rollback by design.
+                    _journalService.AddRecord(new JournalRecordModel(product.Parent?.Id ?? product.Id,
+                        request.InitiatorInfo)
+                    {
+                        Enviroment = "Remove node",
+                        PropertyName = "product",
+                        OldValue = product.FullPath,
+                        Kind = JournalKinds.TreeCrud,
+                        ProductId = (product.Root ?? product).Id.ToString(),
+                    });
 
                     if (!product.IsRoot)
                         UpdateProduct(product.Parent);

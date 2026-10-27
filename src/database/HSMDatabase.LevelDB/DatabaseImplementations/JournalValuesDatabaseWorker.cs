@@ -68,6 +68,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public bool TryGet(byte[] key, out byte[] value)
+        {
+            try
+            {
+                return _openedDb.TryRead(key, out value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed getting journal value {key.GetString()}");
+
+                value = null;
+
+                return false;
+            }
+        }
+
         public IEnumerable<(byte[] key, byte[] value)> GetValuesFrom(byte[] from, byte[] to)
         {
             try

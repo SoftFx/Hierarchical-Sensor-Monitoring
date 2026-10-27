@@ -241,11 +241,14 @@ namespace HSMServer.Core.DataLayer
 
         /// <summary>
         /// Every CHANGES-type journal record of the time range across ALL
-        /// nodes (the global Journal page's read, #1588). The Changes-type
-        /// keys form one contiguous byte range per shard, so the scan is a
-        /// single range read per overlapping shard.
+        /// nodes (the global Journal page's read, #1588). The read walks the
+        /// overlapping shards in full and refines by record type and time in
+        /// memory — the guid-major key layout leaves no narrower range.
         /// </summary>
         List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to);
+
+        /// <summary>Point read of one journal record by its exact storage key (#1588); false when absent.</summary>
+        bool TryGetJournalValue(JournalKey key, out JournalRecordEntity entity);
 
         #endregion
 

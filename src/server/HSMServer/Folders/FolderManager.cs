@@ -342,18 +342,6 @@ namespace HSMServer.Folders
 
         public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator)
         {
-            // The tree-CRUD trace of the move (#1588): journal-visible only.
-            _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
-            {
-                Enviroment = "Move product",
-                PropertyName = "product",
-                OldValue = TryGetValueById(fromFolderId, out var movedFrom) ? movedFrom.Name : null,
-                NewValue = TryGetValueById(toFolderId, out var movedTo) ? movedTo.Name : null,
-                Path = product.Name,
-                Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
-                ProductId = product.Id.ToString(),
-            });
-
             if (TryGetValueById(fromFolderId, out var fromFolder))
             {
                 fromFolder.Products.Remove(product.Id);
@@ -373,6 +361,20 @@ namespace HSMServer.Folders
             }
             else
                 _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
+
+            // The tree-CRUD trace of the move (#1588), written AFTER the
+            // move so the journal never shows a move that did not happen.
+            // Journal-visible only.
+            _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
+            {
+                Enviroment = "Move product",
+                PropertyName = "product",
+                OldValue = fromFolder?.Name,
+                NewValue = toFolder?.Name,
+                Path = product.Name,
+                Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                ProductId = product.Id.ToString(),
+            });
         }
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)

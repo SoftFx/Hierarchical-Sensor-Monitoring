@@ -1,4 +1,5 @@
 using System;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Core.DataLayer;
@@ -41,4 +42,7 @@ public sealed class JournalService : IJournalService
 
     public List<JournalRecordModel> GetRecords(DateTime from, DateTime to) =>
         [.. _database.GetAllJournalValues(from, to).Select(x => new JournalRecordModel(x.Key, x.Entity))];
+
+    public JournalRecordModel GetRecord(JournalKey key) =>
+        _database.TryGetJournalValue(key, out var entity) ? new JournalRecordModel(key.GetBytes(), entity) : null;
 }

@@ -20,6 +20,9 @@ namespace HSMServer.Core.Tests.Infrastructure
             _shouldFail = shouldFail;
         }
 
+        public bool TryGetJournalValue(JournalKey key, out JournalRecordEntity entity) =>
+            _inner.TryGetJournalValue(key, out entity);
+
         public List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to) =>
             _inner.GetAllJournalValues(from, to);
 

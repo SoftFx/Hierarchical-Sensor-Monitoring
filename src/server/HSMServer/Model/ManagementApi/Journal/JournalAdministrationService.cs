@@ -146,6 +146,12 @@ namespace HSMServer.Model.ManagementApi.Journal
 
         private static readonly TimeSpan DefaultWindow = TimeSpan.FromDays(30);
 
+        // The hard ceiling of a global-list scan (#1588 review round 1): the
+        // guid-major key layout makes every list read walk whole shards, so
+        // an unbounded caller range would deserialize the server's entire
+        // journal history per call.
+        private static readonly TimeSpan MaxWindow = TimeSpan.FromDays(90);
+
         private readonly IJournalService _journal;
         private readonly ITreeValuesCache _cache;
         private readonly HSMServer.Folders.IFolderManager _folders;
@@ -179,9 +185,15 @@ namespace HSMServer.Model.ManagementApi.Journal
             var to = filter.ToUtc ?? DateTime.UtcNow;
             var from = filter.FromUtc ?? to - DefaultWindow;
 
+            if (to - from > MaxWindow)
+                from = to - MaxWindow;
+
+            // The cheap field filter runs before the per-record resource
+            // resolution (several cache lookups each) — only survivors pay
+            // for the sight check.
             var page = _journal.GetRecords(from, to)
-                .Where(r => access.CanRead(ResourceOf(r)))
                 .Where(r => Matches(r, filter))
+                .Where(r => access.CanRead(ResourceOf(r)))
                 .OrderByDescending(r => r.Key.Time)
                 .ThenBy(r => r.Key.Id)
                 .Skip(offset)
@@ -226,9 +238,13 @@ namespace HSMServer.Model.ManagementApi.Journal
                 return Task.FromResult(PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Forbidden,
                     message: JournalRollbackAccessDeniedMessage));
 
-            if (!Guid.TryParse(record.ChangeSetId, out var changeSetId))
+            // The SAME predicate the list renders by: rollbackable is a
+            // property of the record's KIND plus its group link, and both
+            // transports must agree on it (a settings record can carry a
+            // group stamp from its request without being undoable itself).
+            if (!JournalKinds.IsRollbackable(record.Kind) || !Guid.TryParse(record.ChangeSetId, out var changeSetId))
                 return Task.FromResult(PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                    message: "The journal record is not rollbackable: its write predates the unified journal or touches an entity that is only journal-visible (tree CRUD, node settings)."));
+                    message: "The journal record is not rollbackable: its kind has no undo entry (tree CRUD, node settings) or its write predates the unified journal."));
 
             // The cookie twin rides the engine's compensating writes; the
             // token default flows through the evaluator verbatim.
@@ -248,9 +264,10 @@ namespace HSMServer.Model.ManagementApi.Journal
             if (!JournalRecordId.TryParse(recordId, out var key))
                 return false;
 
-            record = _journal.GetRecords(new DateTime(key.Time, DateTimeKind.Utc) - TimeSpan.FromSeconds(1),
-                    new DateTime(key.Time, DateTimeKind.Utc) + TimeSpan.FromSeconds(1))
-                .FirstOrDefault(r => r.Key.Equals(key));
+            // Exact-key point read (#1588 review round 1): a range scan for
+            // one record walks whole shards; the storage key addresses it
+            // directly.
+            record = _journal.GetRecord(key);
 
             // Anti-enumeration: an unknown and an invisible record answer the
             // same 404.

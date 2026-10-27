@@ -119,15 +119,15 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var changeSetId = Guid.NewGuid();
             var initiator = InitiatorInfo.AsUser("web-user");
 
-            // The web form re-asserts the full list: the seeded policy plus
-            // nothing else (full-list semantics), like the editor's save.
+            // The web form re-asserts the full list (full-list semantics),
+            // like the editor's save. The data arm CHANGES the list (the
+            // seeded policy is dropped); the TTL arm re-asserts an empty
+            // list — unchanged, so it journals nothing (#1588 review round 1).
             var seeded = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), TokenUser);
             Assert.True(seeded.Success, seeded.Failure?.Message);
 
-            var fullList = sensor.Policies.Select(p => new PolicyUpdate(p, initiator)).ToList();
-
             var write = await _policies.WriteSensorListsAsync(sensor.Id,
-                dataPolicies: fullList,
+                dataPolicies: [],
                 ttlPolicies: [], TokenUser,
                 new ChangeSetWriteOptions { ChangeSetId = changeSetId });
 
@@ -136,9 +136,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var group = new ChangeSetJournal(_databaseCoreManager.DatabaseCore).Get(changeSetId);
 
             Assert.NotNull(group);
-            Assert.Equal(2, group.Entries.Count);
-            Assert.Contains(group.Entries, e => e.Kind == ChangeSetEntryKind.SensorDataPolicies);
-            Assert.Contains(group.Entries, e => e.Kind == ChangeSetEntryKind.SensorTtlPolicies);
+            var entry = Assert.Single(group.Entries); // the changed data list only
+            Assert.Equal(ChangeSetEntryKind.SensorDataPolicies, entry.Kind);
+            Assert.Empty(sensor.Policies);
         }
 
         [Fact]

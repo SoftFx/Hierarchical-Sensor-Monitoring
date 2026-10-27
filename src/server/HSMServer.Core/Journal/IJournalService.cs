@@ -1,4 +1,5 @@
 using System;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System.Collections.Generic;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -22,4 +23,7 @@ public interface IJournalService
     /// to the caller.
     /// </summary>
     List<JournalRecordModel> GetRecords(DateTime from, DateTime to);
+
+    /// <summary>One record by its exact storage key; null when absent (#1588).</summary>
+    JournalRecordModel GetRecord(JournalKey key);
 }

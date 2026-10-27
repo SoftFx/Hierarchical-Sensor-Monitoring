@@ -59,8 +59,8 @@ public class JournalController : BaseController
 
                         // The per-node tab's rollback action (#1588): the
                         // Record cell carries the button for rollbackable
-                        // records; journalRecordRollback.js (main bundle)
-                        // wires the click on every page it appears.
+                        // records; journalPage.js (main bundle) wires the
+                        // click on every page it appears.
                         if (recordFromDb.Rollbackable && CurrentUser.IsAdmin)
                             value = $"{value}<button type=\"button\" class=\"btn btn-link p-0 text-danger journal-record-rollback\" data-record-id=\"{recordFromDb.Id}\">Rollback</button>";
                     }

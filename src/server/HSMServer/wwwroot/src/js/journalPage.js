@@ -61,6 +61,7 @@
                                     text, null);
 
                                 refreshTable();
+                                refreshNodeTabs();
                             });
                     },
                     null,
@@ -97,6 +98,16 @@
 
         $.get(window.journalUrls.table, filterParams(), function (html) {
             $('#journalTableContainer').html(html);
+        });
+    }
+
+    // The per-node Journal tabs after a rollback: the server-side DataTable
+    // rows are re-fetched so an already-rolled-back group stops offering the
+    // Rollback button.
+    function refreshNodeTabs() {
+        $('table[id^="journal_table_"]').each(function () {
+            if ($.fn.DataTable.isDataTable(this))
+                $(this).DataTable().ajax.reload(null, false);
         });
     }
 

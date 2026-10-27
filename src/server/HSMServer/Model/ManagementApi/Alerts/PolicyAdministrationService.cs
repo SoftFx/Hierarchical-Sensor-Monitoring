@@ -1201,38 +1201,45 @@ namespace HSMServer.Model.ManagementApi.Alerts
             var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
 
             if (dataPolicies is not null)
-            {
-                var before = ChangeSetRecorder.SnapshotDataPolicies(sensor);
-                var result = await _cache.UpdateSensorAsync(new SensorUpdate
-                {
-                    Id = sensorId,
-                    Policies = dataPolicies,
-                    Initiator = initiator,
-                });
-
-                if (!result.IsOk)
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
-
-                RecordSensorList(PolicyWriteResult.Ok(), changeSetId, initiator,
-                    ChangeSetEntryKind.SensorDataPolicies, ChangeSetOperation.Update, sensor, before);
-            }
+                await WriteSensorList(sensor, dataPolicies, dataList: true, changeSetId, initiator);
 
             if (ttlPolicies is not null)
+                await WriteSensorList(sensor, ttlPolicies, dataList: false, changeSetId, initiator);
+
+            return PolicyWriteResult.Ok();
+        }
+
+        // One full-list arm of the web save (#1588 review round 1): the undo
+        // entry is recorded ONLY when the list actually changed — a
+        // description-only or unit-only form save re-asserts identical
+        // lists, and no-op entries would pile up as unreachable groups (the
+        // cache layer journals nothing for an unchanged list).
+        private async Task<PolicyWriteResult> WriteSensorList(BaseSensorModel sensor,
+            List<PolicyUpdate> updates, bool dataList, Guid changeSetId, InitiatorInfo initiator)
+        {
+            var before = dataList
+                ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
+            var result = await _cache.UpdateSensorAsync(new SensorUpdate
             {
-                var before = ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
-                var result = await _cache.UpdateSensorAsync(new SensorUpdate
-                {
-                    Id = sensorId,
-                    TTLPolicies = ttlPolicies,
-                    Initiator = initiator,
-                });
+                Id = sensor.Id,
+                Initiator = initiator,
+                Policies = dataList ? updates : null,
+                TTLPolicies = dataList ? null : updates,
+            });
 
-                if (!result.IsOk)
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+            if (!result.IsOk)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
 
+            var after = dataList
+                ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
+            if (!HSMServer.Core.ChangeSets.PolicyImageComparer.ListsEqual(before, after))
                 RecordSensorList(PolicyWriteResult.Ok(), changeSetId, initiator,
-                    ChangeSetEntryKind.SensorTtlPolicies, ChangeSetOperation.Update, sensor, before);
-            }
+                    dataList ? ChangeSetEntryKind.SensorDataPolicies : ChangeSetEntryKind.SensorTtlPolicies,
+                    ChangeSetOperation.Update, sensor, before);
 
             return PolicyWriteResult.Ok();
         }
@@ -1267,8 +1274,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (!result.IsOk)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
 
-            RecordProductTtlList(PolicyWriteResult.Ok(), ChangeSetRecorder.ResolveChangeSetId(write),
-                initiator, ChangeSetOperation.Update, product, before);
+            // No undo entry for an unchanged list (the sensor twin's rule).
+            if (!HSMServer.Core.ChangeSets.PolicyImageComparer.ListsEqual(before,
+                    ChangeSetRecorder.SnapshotProductTtlPolicies(product)))
+                RecordProductTtlList(PolicyWriteResult.Ok(), ChangeSetRecorder.ResolveChangeSetId(write),
+                    initiator, ChangeSetOperation.Update, product, before);
 
             return PolicyWriteResult.Ok();
         }

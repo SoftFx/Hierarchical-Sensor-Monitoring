@@ -665,11 +665,12 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         // The global Journal read (#1588): every CHANGES-type record of the
-        // range across all nodes. The key layout is guid|type|ticks, so all
-        // Changes keys of a shard sit in ONE contiguous byte range between
-        // (empty guid, Changes, max ticks) and (max guid, Changes, min
-        // ticks) — one range read per overlapping shard, then the coarse
-        // shard bounds are refined by the record's own time.
+        // range across all nodes. The key layout is guid|type|ticks puts the
+        // GUID first, so NO byte range isolates a time window or even the
+        // Changes type — the range below spans a whole shard and the record
+        // type and time are refined in memory. The shard bounds (Overlaps)
+        // and the callers' bounded window keep the walk bounded; the cost is
+        // why the journal service clamps unbounded caller ranges.
         public List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to)
         {
             var fromTicks = from.Ticks;
@@ -688,13 +689,31 @@ namespace HSMDatabase.DatabaseWorkCore
                     {
                         var journalKey = JournalKey.FromBytes(key);
 
-                        if (journalKey.Time < fromTicks || journalKey.Time > toTicks)
+                        if (journalKey.Type != RecordType.Changes ||
+                            journalKey.Time < fromTicks || journalKey.Time > toTicks)
                             continue;
 
                         result.Add((key, JsonSerializer.Deserialize<JournalRecordEntity>(value)));
                     }
 
             return result;
+        }
+
+        public bool TryGetJournalValue(JournalKey key, out JournalRecordEntity entity)
+        {
+            entity = null;
+
+            try
+            {
+                var db = _journalValuesDatabases.GetDatabaseByTime(key.Time);
+
+                return db.TryGet(key.GetBytes(), out var raw)
+                    && (entity = JsonSerializer.Deserialize<JournalRecordEntity>(raw)) is not null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
