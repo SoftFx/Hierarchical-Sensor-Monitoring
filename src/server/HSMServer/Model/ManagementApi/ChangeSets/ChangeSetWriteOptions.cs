@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Model.ManagementApi.ChangeSets
 {
     /// <summary>
-    /// Per-request write options of the journaled management-API surface
-    /// (#1570): the client-supplied change-set grouping id and the dry-run
-    /// flag. Transport-agnostic — REST carries them as headers, MCP tools as
-    /// optional arguments, and both transports pass this record down to the
-    /// administration services.
+    /// Per-request write options of the journaled configuration surface
+    /// (#1588): the dry-run flag and the request's undo-group id. The group
+    /// id is SERVER-generated — one HTTP request (or MCP tool call, or web
+    /// form post) journals under exactly one id, so every write of a single
+    /// request rolls back together. Clients never supply or see group ids
+    /// anymore; the rollback surface addresses them through journal records.
     /// </summary>
     public sealed record ChangeSetWriteOptions
     {
@@ -19,16 +21,13 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
 
     /// <summary>
-    /// The affected-entities report of a dry-run write (#1570): validation
-    /// ran, nothing was applied. For a template write the report names every
+    /// The affected-entities report of a dry-run write: validation ran,
+    /// nothing was applied. For a template write the report names every
     /// sensor the fan-out would touch (apply or prune); for policy and
     /// schedule writes it names the resolved target nodes.
     /// </summary>
     public sealed record WritePreviewDto
     {
-        /// <summary>The change-set id the write would be journaled under.</summary>
-        public string ChangeSetId { get; init; }
-
         public bool DryRun { get; init; }
 
         /// <summary>camelCase entry kind, e.g. "sensorDataPolicies", "alertTemplate".</summary>
@@ -63,11 +62,10 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     /// </summary>
     public static class WritePreviews
     {
-        public static WritePreviewDto Create(ChangeSetWriteOptions write, string kind, string operation,
+        public static WritePreviewDto Create(string kind, string operation,
             Guid entityId, string path, IEnumerable<PreviewAffectedEntityDto> affected) =>
             new()
             {
-                ChangeSetId = ChangeSetRecorder.ResolveChangeSetId(write).ToString(),
                 DryRun = true,
                 Kind = kind,
                 Operation = operation,
@@ -86,40 +84,51 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
 
     /// <summary>
-    /// The REST transport of the write options (#1570): headers in, the
-    /// journaled change-set id echoed on every successful write response.
+    /// The REST transport of the write options: the dry-run header, and the
+    /// per-request undo-group id minted once per HTTP request and shared by
+    /// every journaled write that request performs (#1588: one request = one
+    /// rollback group).
     /// </summary>
     public static class ChangeSetHeaders
     {
-        public const string ChangeSetId = "X-HSM-Change-Set";
-
         public const string DryRun = "X-HSM-Dry-Run";
 
+        private const string RequestGroupIdItem = "Hsm.UndoGroupId";
+
         /// <summary>
-        /// Parse the write options of a management-API request. An absent or
-        /// malformed change-set id answers null options (the write stands
-        /// alone) — the header is advisory grouping, never a 400. The dry-run
-        /// header is a strict boolean: only "true" (any casing) previews,
-        /// so a "0" or "no" never silently suppresses the write.
+        /// The undo-group id of THIS request: minted on first use and cached
+        /// in HttpContext.Items, so multi-write requests (a web form post, a
+        /// batch endpoint) journal all their writes under one group. The web
+        /// controllers resolve their write options through the same helper.
         /// </summary>
-        public static ChangeSetWriteOptions WriteOptions(this Microsoft.AspNetCore.Http.HttpRequest request)
+        public static Guid RequestGroupId(HttpContext context)
         {
-            var changeSetId = Guid.TryParse(request.Headers[ChangeSetId], out var parsed) ? parsed : (Guid?)null;
+            if (context.Items[RequestGroupIdItem] is Guid cached)
+                return cached;
+
+            var minted = Guid.NewGuid();
+
+            context.Items[RequestGroupIdItem] = minted;
+
+            return minted;
+        }
+
+        /// <summary>
+        /// Parse the write options of a management-API request: the dry-run
+        /// header plus the request's implicit undo-group id. The dry-run
+        /// header is a strict boolean: only "true" (any casing) previews, so
+        /// a "0" or "no" never silently suppresses the write.
+        /// </summary>
+        public static ChangeSetWriteOptions WriteOptions(this HttpRequest request)
+        {
             var dryRun = request.Headers[DryRun].Count > 0 &&
                          bool.TryParse(request.Headers[DryRun], out var dryRunParsed) && dryRunParsed;
 
-            return changeSetId is null && !dryRun ? null : new ChangeSetWriteOptions
+            return new ChangeSetWriteOptions
             {
-                ChangeSetId = changeSetId,
+                ChangeSetId = RequestGroupId(request.HttpContext),
                 DryRun = dryRun,
             };
-        }
-
-        /// <summary>The change-set id echo on write responses (201/200/204).</summary>
-        public static void SetChangeSet(this Microsoft.AspNetCore.Http.HttpResponse response, Guid? changeSetId)
-        {
-            if (changeSetId is { } id)
-                response.Headers[ChangeSetId] = id.ToString();
         }
     }
 }

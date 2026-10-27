@@ -13,6 +13,8 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Model.AlertSchedule;
 using System.Collections.Generic;
 using HSMServer.Core.Schedule;
+using HSMServer.Model.ManagementApi.AlertSchedules;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Core.Cache;
 
 
@@ -44,6 +46,7 @@ namespace HSMServer.Controllers
         private readonly IAlertScheduleProvider _scheduleProvider;
         private readonly AlertScheduleParser _parser = new();
         private readonly ITreeValuesCache _cache;
+        private readonly AlertScheduleAdministrationService _writer;
 
         static AlertSchedulesController()
         {
@@ -53,11 +56,18 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertSchedulesController(IAlertScheduleProvider scheduleProvider, IUserManager users, ITreeValuesCache cache) : base(users)
+        public AlertSchedulesController(IAlertScheduleProvider scheduleProvider, IUserManager users,
+            ITreeValuesCache cache, AlertScheduleAdministrationService writer) : base(users)
         {
             _scheduleProvider = scheduleProvider;
             _cache = cache;
+            _writer = writer;
         }
+
+        // The web form's write options (#1588): the post's request-scoped
+        // undo group — the journaled save rides it.
+        private ChangeSetWriteOptions JournalWriteOptions() =>
+            new() { ChangeSetId = ChangeSetHeaders.RequestGroupId(HttpContext) };
 
         [HttpGet]
         public IActionResult Index()
@@ -92,17 +102,18 @@ namespace HSMServer.Controllers
             // two calls leaves the same recoverable state.
             // RequestAborted lets a browser-side timeout stop the dispatch
             // of further detach work instead of continuing with no feedback.
-            var detach = await _cache.DetachAlertScheduleFromPoliciesAsync(id, HttpContext.RequestAborted);
+            // #1588 single write path: the detach walk and the delete ride
+            // the schedule administration service — one journaled unit with
+            // its per-node before-images (the same engine REST/MCP use).
+            var result = await _writer.DeleteScheduleAsync(id, User, HttpContext.RequestAborted,
+                JournalWriteOptions(), new CookieUserAccess(CurrentUser, _cache));
 
-            if (!detach.IsOk)
+            if (!result.Success)
             {
-                TempData[TextConstants.TempDataErrorText] =
-                    $"Schedule was not deleted — not every policy reference could be cleared. Remove it again to retry. {detach.Error}";
+                TempData[TextConstants.TempDataErrorText] = result.Failure.Message;
 
                 return RedirectToAction("Index");
             }
-
-            _scheduleProvider.DeleteSchedule(id);
 
             return RedirectToAction("Index");
         }
@@ -135,18 +146,31 @@ namespace HSMServer.Controllers
 
             if (ModelState.IsValid)
             {
-                if (model.Id == Guid.Empty)
-                    model.Id = Guid.NewGuid();
-
                 try
                 {
+                    // #1588 single write path: the parsed form rides the
+                    // schedule administration service — the same uniqueness
+                    // gate, id ownership and undo journaling as REST/MCP.
                     var schedule = _parser.Parse(model.Schedule);
 
-                    schedule.Id = model.Id;
                     schedule.Name = model.Name;
                     schedule.Timezone = model.Timezone;
 
-                    _scheduleProvider.SaveSchedule(schedule);
+                    var id = model.Id == Guid.Empty ? (Guid?)null : model.Id;
+                    var result = _writer.SaveScheduleAsync(User, id, schedule, JournalWriteOptions(),
+                        new CookieUserAccess(CurrentUser, _cache));
+
+                    if (!result.Success)
+                    {
+                        foreach (var (field, messages) in result.Failure.Errors ?? new Dictionary<string, string[]>())
+                            foreach (var message in messages)
+                                ModelState.AddModelError(field, message);
+
+                        if (result.Failure.Message is { } error)
+                            ModelState.AddModelError(nameof(model.Name), error);
+
+                        return PartialView("_AlertSchedule", model);
+                    }
 
                     var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
                     return PartialView("_AlertSchedulesTable", list);

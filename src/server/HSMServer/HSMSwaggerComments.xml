@@ -148,60 +148,6 @@
             <summary>Delete a template and strip its per-sensor policies.</summary>
             <param name="id">Template id.</param>
         </member>
-        <member name="T:HSMServer.Controllers.ChangeSetsApiController">
-            <summary>
-            The change-set surface of the undo journal (#1570): list with filters,
-            per-entity before/after details, and rollback (with force and dryRun).
-            </summary>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsApiController.ListChangeSets(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Nullable{System.Guid},System.Int32,System.Int32)">
-            <summary>
-            Change sets touching entities visible to the caller, newest first.
-            Writers without a changeSetId form their own single-entry change
-            sets — every REST/MCP configuration write is listed here.
-            </summary>
-            <param name="author">Exact author name filter (case-insensitive).</param>
-            <param name="fromUtc">Created at or after (UTC ISO 8601).</param>
-            <param name="toUtc">Created at or before (UTC ISO 8601).</param>
-            <param name="status">applied | rolledBack | partial.</param>
-            <param name="entityId">Only change sets touching this entity id (sensor, product, template, schedule).</param>
-            <param name="limit">Page size, 1..200 (default 50).</param>
-            <param name="offset">Skip count (default 0).</param>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsApiController.GetChangeSet(System.Guid)">
-            <summary>
-            One change set's details: per-entity before/after images (visible
-            entries only). An unknown or invisible id answers 404.
-            </summary>
-            <param name="id">Change set id.</param>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsApiController.Rollback(System.Guid,System.Boolean,System.Boolean)">
-            <summary>
-            Roll back a change set: compensating writes replayed in reverse
-            order through the same write gates. Refuses with a per-entity diff
-            when an entity changed after the change set recorded it, unless
-            forced. Restores configuration only — notifications sent, alerts
-            fired and sensor history are untouched.
-            </summary>
-            <param name="id">Change set id.</param>
-            <param name="force">Override content conflicts deliberately.</param>
-            <param name="dryRun">Report conflicts and the restore plan, apply nothing.</param>
-        </member>
-        <member name="T:HSMServer.Controllers.ChangeSetsController">
-            <summary>
-            The change-sets page of the web UI (#1570): the undo journal's list,
-            before/after details and the rollback action with confirmation.
-            </summary>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsController.GetChangeSetsTable(System.Int32,System.Int32)">
-            <summary>The table page: newest change sets visible to the caller.</summary>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsController.Details(System.Guid)">
-            <summary>The details view: per-entity before/after images.</summary>
-        </member>
-        <member name="M:HSMServer.Controllers.ChangeSetsController.Rollback(System.Guid,System.Boolean,System.Boolean)">
-            <summary>Rollback with force; dry-run variant feeds the confirmation dialog.</summary>
-        </member>
         <member name="T:HSMServer.Controllers.ChatsApiController">
             <summary>
             Read-only surface for notification chats (epic #1347 follow-up): the id
@@ -755,13 +701,6 @@
             #1393 one-decision-two-transports pattern).
             </summary>
         </member>
-        <member name="T:HSMServer.Mcp.ChangeSetsMcpTools">
-            <summary>
-            The undo-journal tools of the MCP surface (#1570): list, details and
-            rollback of change sets — every REST/MCP configuration write is
-            journaled under a changeSetId and undoable as a unit here.
-            </summary>
-        </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
             <summary>
             The two chat tools of the MCP surface: the id source an agent needs to
@@ -918,9 +857,6 @@
         </member>
         <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
             <summary>Id of the deleted resource.</summary>
-        </member>
-        <member name="P:HSMServer.Mcp.McpDeletedResult.ChangeSetId">
-            <summary>The change set the delete was journaled under (#1570).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpChangeSetsResult">
             <summary>Result of the list_change_sets tool.</summary>
@@ -1400,24 +1336,33 @@
             controller and the MCP write tools render the same decision.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.CreateScheduleAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             Create a schedule. The server generates the id (a client cannot
             choose one — the provider's Save is an upsert by id); the response
             echoes the stored schedule.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.UpdateScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             Update a schedule (upsert semantics at a known id); the response
             echoes the stored schedule.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.DeleteScheduleAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             Delete a schedule. Detaches the id from every referencing policy
             FIRST; on an incomplete detach the schedule survives and the answer
             is a Conflict (retry re-runs the idempotent detach).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.SaveScheduleAsync(System.Security.Claims.ClaimsPrincipal,System.Nullable{System.Guid},HSMServer.Core.Model.Policies.AlertSchedule,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
+            <summary>
+            The web editor's save entry (#1588: the single write path): the
+            form's PARSED schedule model (the view model validated the form)
+            rides the same global-write authorization, name-uniqueness gate
+            and undo journaling as the DTO path. A null id creates (the id is
+            server-generated), a known id updates.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
@@ -1837,7 +1782,7 @@
             the REST controller and the MCP write tools render the same decision.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             Create a template. A client-sent id is ignored (the server generates
             one — the cache Add is an upsert by id, so honoring a client-chosen
@@ -1846,14 +1791,28 @@
             normalized ids, chat display names.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.CreateTemplateAsync(System.Security.Claims.ClaimsPrincipal,HSMServer.Core.Model.AlertTemplateModel,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
+            <summary>
+            The web editor's create entry (#1588: the single write path): the
+            form's already-validated <see cref="T:HSMServer.Core.Model.AlertTemplateModel"/> rides
+            the same authorization, gates and undo journaling as the DTO path.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>
             Update a template (upsert semantics). Moving it to another folder
             requires the owner's write access on BOTH folders; the result
             echoes the STORED template.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.UpdateTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Core.Model.AlertTemplateModel,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
+            <summary>
+            The web editor's update entry (#1588: the single write path): the
+            form's already-validated model, same authorization (both folders on
+            a move), gates and undo journaling as the DTO path.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService.DeleteTemplateAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAccess)">
             <summary>Delete a template and strip its per-sensor policies.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
@@ -2169,18 +2128,20 @@
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder">
             <summary>
             The single hook helper every journaled administration service uses
-            (#1570): resolves the effective change-set id of a write (client id or
-            a fresh one for an ungrouped write), snapshots policy lists as entity
-            images, and appends entries to the undo journal — swallowing journal
-            failures AFTER LOUD LOGGING so a write that already applied is never
-            reported failed over a lost undo point (ADR-0010 trade-off).
+            (#1570, #1588): resolves the write's undo-group id (the server-minted
+            per-request id), snapshots policy lists as entity images, appends
+            entries to the internal undo store, and writes the UNIFIED-JOURNAL
+            record for the kinds the cache-layer events do not cover (templates,
+            schedules, and every rollback entry) — swallowing journal failures
+            AFTER LOUD LOGGING so a write that already applied is never reported
+            failed over a lost undo point (ADR-0010 trade-off).
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.ResolveChangeSetId(HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
             <summary>
-            The change-set id a write journals under: the client-supplied id
-            when grouping, a fresh id when the write stands alone. Also used as
-            the dry-run echo id.
+            The undo-group id a write journals under: the request-scoped id
+            minted per HTTP request / MCP call / form post (#1588), or a fresh
+            one when the caller passes no options.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.InitiatorOf(System.Security.Claims.ClaimsPrincipal,HSMServer.Authentication.IUserManager)">
@@ -2189,40 +2150,45 @@
             (policy, template and schedule writes, the rollback engine): the
             token's OWNER as a user (the token acts as its owner, #1384); a
             cookie principal (the web UI) carries no token claims and falls to
-            the authenticated identity name. ONE helper because the journal's
-            fork rule compares the author STRINGS this produces — drifting
-            copies would silently split a user's grouped writes.
+            the authenticated identity name. ONE helper because the undo
+            journal's author strings must stay consistent across transports.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
             <summary>
-            Append one entry; null when the journal write failed (the undo
-            point is lost — logged loudly). The returned id is the set the
-            entry ACTUALLY landed in: the journal forks a client-supplied id
-            whose set belongs to another author or is already rolled back.
-            Callers echo THAT id on the write response only on success, so a
-            client never receives an undo handle that does not exist.
+            Append one entry to the internal undo store; null when the journal
+            write failed (the undo point is lost — logged loudly). The id is
+            the request's group id — with server-minted ids (#1588) the entry
+            always lands in exactly that group.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.RecordRollback(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)">
+            <summary>
+            The rollback twin of <see cref="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder.Record(System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo,HSMServer.Core.ChangeSets.ChangeSetEntry)"/> (#1588): appends the
+            compensating entry to the ROLLBACK group and always writes its
+            unified-journal record — the rollback group must be visible in the
+            journal (it is the redo handle: rolling back the rollback re-applies
+            the original writes). Policy restores also leave their per-node
+            ChangesHandler records; this record is the group's primary trace.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions">
             <summary>
-            Per-request write options of the journaled management-API surface
-            (#1570): the client-supplied change-set grouping id and the dry-run
-            flag. Transport-agnostic — REST carries them as headers, MCP tools as
-            optional arguments, and both transports pass this record down to the
-            administration services.
+            Per-request write options of the journaled configuration surface
+            (#1588): the dry-run flag and the request's undo-group id. The group
+            id is SERVER-generated — one HTTP request (or MCP tool call, or web
+            form post) journals under exactly one id, so every write of a single
+            request rolls back together. Clients never supply or see group ids
+            anymore; the rollback surface addresses them through journal records.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto">
             <summary>
-            The affected-entities report of a dry-run write (#1570): validation
-            ran, nothing was applied. For a template write the report names every
+            The affected-entities report of a dry-run write: validation ran,
+            nothing was applied. For a template write the report names every
             sensor the fan-out would touch (apply or prune); for policy and
             schedule writes it names the resolved target nodes.
             </summary>
-        </member>
-        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.ChangeSetId">
-            <summary>The change-set id the write would be journaled under.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Kind">
             <summary>camelCase entry kind, e.g. "sensorDataPolicies", "alertTemplate".</summary>
@@ -2244,21 +2210,27 @@
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders">
             <summary>
-            The REST transport of the write options (#1570): headers in, the
-            journaled change-set id echoed on every successful write response.
+            The REST transport of the write options: the dry-run header, and the
+            per-request undo-group id minted once per HTTP request and shared by
+            every journaled write that request performs (#1588: one request = one
+            rollback group).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.RequestGroupId(Microsoft.AspNetCore.Http.HttpContext)">
+            <summary>
+            The undo-group id of THIS request: minted on first use and cached
+            in HttpContext.Items, so multi-write requests (a web form post, a
+            batch endpoint) journal all their writes under one group. The web
+            controllers resolve their write options through the same helper.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.WriteOptions(Microsoft.AspNetCore.Http.HttpRequest)">
             <summary>
-            Parse the write options of a management-API request. An absent or
-            malformed change-set id answers null options (the write stands
-            alone) — the header is advisory grouping, never a 400. The dry-run
-            header is a strict boolean: only "true" (any casing) previews,
-            so a "0" or "no" never silently suppresses the write.
+            Parse the write options of a management-API request: the dry-run
+            header plus the request's implicit undo-group id. The dry-run
+            header is a strict boolean: only "true" (any casing) previews, so
+            a "0" or "no" never silently suppresses the write.
             </summary>
-        </member>
-        <member name="M:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetHeaders.SetChangeSet(Microsoft.AspNetCore.Http.HttpResponse,System.Nullable{System.Guid})">
-            <summary>The change-set id echo on write responses (201/200/204).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
             <summary>

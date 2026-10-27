@@ -240,10 +240,6 @@ namespace HSMServer.Mcp
         [Description("Id of the deleted resource.")]
         public Guid Id { get; init; }
 
-        /// <summary>The change set the delete was journaled under (#1570).</summary>
-        [Description("The change set the delete was journaled under — the undo handle.")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Guid? ChangeSetId { get; init; }
     }
 
 

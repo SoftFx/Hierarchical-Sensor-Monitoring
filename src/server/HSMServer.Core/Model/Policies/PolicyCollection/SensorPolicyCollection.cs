@@ -16,6 +16,16 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class SensorPolicyCollection : PolicyCollectionBase, IEnumerable<Policy>
     {
+
+        // The data-policy twin of the journal call (#1588): every call site
+        // of this class touches DATA policies, so the unified-journal kind is
+        // fixed here while the base resolves the TTL kinds from the owning
+        // collection.
+        protected void CallDataJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator,
+            bool isParentCall = false, bool stampOwnership = true) =>
+            CallJournal(alertId, oldValue, newValue, initiator, isParentCall, stampOwnership,
+                HSMServer.Core.Journal.JournalKinds.SensorDataPolicies);
+
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
@@ -269,7 +279,7 @@ namespace HSMServer.Core.Model.Policies
                 Uploaded?.Invoke(ActionType.Delete, oldPolicy);
 
                 if (initiator is not null)
-                    CallJournal(policyId, oldPolicy.ToString(), string.Empty, initiator);
+                    CallDataJournal(policyId, oldPolicy.ToString(), string.Empty, initiator);
             }
         }
 
@@ -291,7 +301,7 @@ namespace HSMServer.Core.Model.Policies
                             var oldPolicy = existingPolicy.ToString();
                             if (existingPolicy.TryUpdate(update, out var err))
                             {
-                                CallJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator);
+                                CallDataJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator);
                                 Uploaded?.Invoke(ActionType.Update, existingPolicy);
                             }
                             else
@@ -309,7 +319,7 @@ namespace HSMServer.Core.Model.Policies
                             {
                                 AddPolicy(policy);
 
-                                CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator);
                                 Uploaded?.Invoke(ActionType.Add, policy);
                             }
                             else
@@ -338,7 +348,7 @@ namespace HSMServer.Core.Model.Policies
                                 {
                                     var oldPolicy = policy.ToString();
                                     policy.SetDisabled(update.IsDisabled);
-                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    CallDataJournal(id, oldPolicy, policy.ToString(), initiator);
                                     Uploaded?.Invoke(ActionType.Update, policy);
                                 }
                             }
@@ -357,7 +367,7 @@ namespace HSMServer.Core.Model.Policies
                                     // owner must not be re-stamped down to the
                                     // system initiator. Every other update
                                     // stamps unconditionally, as before.
-                                    CallJournal(id, oldPolicy, policy.ToString(), initiator,
+                                    CallDataJournal(id, oldPolicy, policy.ToString(), initiator,
                                         stampOwnership: !update.PreserveChangeOwnership);
                                     Uploaded?.Invoke(ActionType.Update, policy);
                                 }
@@ -394,7 +404,7 @@ namespace HSMServer.Core.Model.Policies
                             {
                                 AddPolicy(policy);
 
-                                CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator);
                                 Uploaded?.Invoke(ActionType.Add, policy);
                             }
                             else

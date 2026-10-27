@@ -181,6 +181,9 @@ namespace HSMServer.Core.Model
 
                     PropertyName = propName,
                     Path = FullPath,
+                    Kind = JournalKinds.NodeSettings,
+                    ProductId = (Root ?? (ProductModel)this)?.Id.ToString(),
+                    ChangeSetId = initiator?.ChangeSetId?.ToString(),
                 });
 
                 infoNode.SetUpdate(initiator);

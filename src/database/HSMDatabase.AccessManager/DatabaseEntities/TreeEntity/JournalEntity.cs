@@ -25,6 +25,16 @@ public sealed record JournalRecordEntity
     public string NewValue { get; init; }
 
     public string Path { get; init; }
+
+    // Unified-journal tags (#1588); null on records written before the
+    // unification and on records that carry no configuration meaning
+    // (sensor value updates). JSON-deserialized old rows read as null.
+    public string Kind { get; init; }
+
+    public string ProductId { get; init; }
+
+    /// <summary>The undo group (internal change-set id) the record's write landed in; null when the record is not rollbackable.</summary>
+    public string ChangeSetId { get; init; }
 }
 
 

@@ -91,7 +91,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// normalized ids, chat display names.
         /// </summary>
         public async Task<PolicyWriteResult<AlertTemplateDto>> CreateTemplateAsync(ClaimsPrincipal user,
-            AlertTemplateDto dto, ChangeSetWriteOptions write = null)
+            AlertTemplateDto dto, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
         {
             // A JSON-null body reaches here only from MCP (REST's
             // [ApiController] binding rejects it with a 400 before the
@@ -109,12 +109,33 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             // The authorization target is the requested folder; no validation
             // error is reported before this decision (404-first).
-            if (AuthorizeFolder(dto.FolderId, user) is { } denied)
+            if (AuthorizeFolder(dto.FolderId, user, access) is { } denied)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(denied.Outcome, message: denied.Message);
 
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
+            return await CreateValidatedTemplateAsync(user, model, write);
+        }
+
+        /// <summary>
+        /// The web editor's create entry (#1588: the single write path): the
+        /// form's already-validated <see cref="AlertTemplateModel"/> rides
+        /// the same authorization, gates and undo journaling as the DTO path.
+        /// </summary>
+        public Task<PolicyWriteResult<AlertTemplateDto>> CreateTemplateAsync(ClaimsPrincipal user,
+            AlertTemplateModel model, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
+        {
+            if (AuthorizeFolder(model.FolderId, user, access) is { } denied)
+                return Task.FromResult(
+                    PolicyWriteResult<AlertTemplateDto>.Fail(denied.Outcome, message: denied.Message));
+
+            return CreateValidatedTemplateAsync(user, model, write);
+        }
+
+        private async Task<PolicyWriteResult<AlertTemplateDto>> CreateValidatedTemplateAsync(
+            ClaimsPrincipal user, AlertTemplateModel model, ChangeSetWriteOptions write)
+        {
             // #1570 dry-run: the template body is valid; report the fan-out
             // target set (matched sensors; a fresh id has no stale holders)
             // and apply nothing.
@@ -155,7 +176,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     // (the captured before-images, the live after-state) so
                     // the half-applied write keeps its undo point instead of
                     // leaving changed sensors no change set can explain.
-                    RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
+                    RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Create,
                         model.Id, model.FolderId, model.Name, beforeTemplate: null,
                         afterTemplate: partiallyApplied.ToEntity(), targets, beforeImages);
 
@@ -174,11 +195,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             var created = PolicyWriteResult<AlertTemplateDto>.Ok(
                 AlertTemplateDtoMapper.ToDto(stored, warnings));
 
-            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Create,
+            RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Create,
                 model.Id, model.FolderId, model.Name, beforeTemplate: null, afterTemplate: stored.ToEntity(),
-                targets, beforeImages) is { } landedId
-                ? created.WithChangeSet(landedId)
-                : created;
+                targets, beforeImages);
+
+            return created;
         }
 
 
@@ -188,7 +209,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// echoes the STORED template.
         /// </summary>
         public async Task<PolicyWriteResult<AlertTemplateDto>> UpdateTemplateAsync(Guid id, ClaimsPrincipal user,
-            AlertTemplateDto dto, ChangeSetWriteOptions write = null)
+            AlertTemplateDto dto, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
         {
             var existing = _cache.GetAlertTemplate(id);
 
@@ -200,7 +221,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // BOTH folders — the current one (the move destroys the old
             // folder's per-sensor policies) and the new one (the template
             // injects policies into its sensors).
-            if (AuthorizeFolder(existing.FolderId, user) is { } deniedCurrent)
+            if (AuthorizeFolder(existing.FolderId, user, access) is { } deniedCurrent)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(deniedCurrent.Outcome, message: deniedCurrent.Message);
 
             // AFTER authorization (a body-shape 400 must not reveal that the
@@ -216,12 +237,41 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 return ValidationFailure("folderId", "The folder id is required.");
 
             if (dto.FolderId != existing.FolderId &&
-                AuthorizeFolder(dto.FolderId, user) is { } deniedTarget)
+                AuthorizeFolder(dto.FolderId, user, access) is { } deniedTarget)
                 return PolicyWriteResult<AlertTemplateDto>.Fail(deniedTarget.Outcome, message: deniedTarget.Message);
 
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.Validation, errors);
 
+            return await UpdateValidatedTemplateAsync(id, user, model, existing, write);
+        }
+
+        /// <summary>
+        /// The web editor's update entry (#1588: the single write path): the
+        /// form's already-validated model, same authorization (both folders on
+        /// a move), gates and undo journaling as the DTO path.
+        /// </summary>
+        public async Task<PolicyWriteResult<AlertTemplateDto>> UpdateTemplateAsync(Guid id, ClaimsPrincipal user,
+            AlertTemplateModel model, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
+        {
+            var existing = _cache.GetAlertTemplate(id);
+
+            if (existing is null)
+                return PolicyWriteResult<AlertTemplateDto>.Fail(PolicyWriteOutcome.NotFound);
+
+            if (AuthorizeFolder(existing.FolderId, user, access) is { } deniedCurrent)
+                return PolicyWriteResult<AlertTemplateDto>.Fail(deniedCurrent.Outcome, message: deniedCurrent.Message);
+
+            if (model.FolderId != existing.FolderId &&
+                AuthorizeFolder(model.FolderId, user, access) is { } deniedTarget)
+                return PolicyWriteResult<AlertTemplateDto>.Fail(deniedTarget.Outcome, message: deniedTarget.Message);
+
+            return await UpdateValidatedTemplateAsync(id, user, model, existing, write);
+        }
+
+        private async Task<PolicyWriteResult<AlertTemplateDto>> UpdateValidatedTemplateAsync(Guid id,
+            ClaimsPrincipal user, AlertTemplateModel model, AlertTemplateModel existing, ChangeSetWriteOptions write)
+        {
             // #1570 dry-run: report the fan-out target set of the NEW body —
             // matched sensors plus stale holders of the id (sensors the edit
             // would prune, including the old folder's on a move).
@@ -241,7 +291,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 // an apply conflict can leave some sensors already updated —
                 // journal the partial apply (the create path's rule) with the
                 // live row and lists as the after-image.
-                RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
+                RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Update,
                     id, existing.FolderId, existing.Name, beforeTemplate,
                     _cache.GetAlertTemplate(id)?.ToEntity(), targets, beforeImages);
 
@@ -255,24 +305,23 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             var updated = PolicyWriteResult<AlertTemplateDto>.Ok(AlertTemplateDtoMapper.ToDto(stored, warnings));
 
-            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Update,
-                id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages)
-                is { } landedId
-                ? updated.WithChangeSet(landedId)
-                : updated;
+            RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Update,
+                id, existing.FolderId, existing.Name, beforeTemplate, stored.ToEntity(), targets, beforeImages);
+
+            return updated;
         }
 
 
         /// <summary>Delete a template and strip its per-sensor policies.</summary>
         public async Task<PolicyWriteResult> DeleteTemplateAsync(Guid id, ClaimsPrincipal user,
-            ChangeSetWriteOptions write = null)
+            ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
         {
             var template = _cache.GetAlertTemplate(id);
 
             if (template is null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
-            if (AuthorizeFolder(template.FolderId, user) is { } denied)
+            if (AuthorizeFolder(template.FolderId, user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             // #1570 dry-run: report the sensors the strip would touch (the
@@ -297,7 +346,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // alert policies — silent alert loss with nobody left to report
             // it to (the client is gone by definition). The delete completes
             // once accepted.
-            var removed = await RemoveTemplateCoreAsync(id, user);
+            var removed = await RemoveTemplateCoreAsync(id, user, access);
 
             if (!removed.Success)
             {
@@ -307,18 +356,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 // strip so it keeps its undo point; auth/NotFound failures
                 // changed nothing and journal nothing.
                 if (removed.Failure.Outcome == PolicyWriteOutcome.Conflict)
-                    RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
+                    RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Delete,
                         id, template.FolderId, template.Name, beforeTemplate,
                         _cache.GetAlertTemplate(id)?.ToEntity(), targets, beforeImages);
 
                 return removed;
             }
 
-            return RecordTemplateEntry(changeSetId, InitiatorOf(user), ChangeSetOperation.Delete,
-                id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages)
-                is { } landedId
-                ? PolicyWriteResult.Ok(landedId)
-                : PolicyWriteResult.Ok();
+            RecordTemplateEntry(changeSetId, InitiatorOf(user, write), ChangeSetOperation.Delete,
+                id, template.FolderId, template.Name, beforeTemplate, afterTemplate: null, targets, beforeImages);
+
+            return PolicyWriteResult.Ok();
         }
 
 
@@ -425,8 +473,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         // The write initiator resolves through the shared ChangeSetRecorder
         // helper (the journal's fork rule compares the author strings).
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
-            ChangeSetRecorder.InitiatorOf(user, _users);
+        // The write initiator, stamped with the request's undo-group id
+        // (#1588): the cache-layer journal records (or the recorder's own
+        // record) link the write to its rollback group through it.
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null)
+        {
+            var initiator = ChangeSetRecorder.InitiatorOf(user, _users);
+
+            return write?.ChangeSetId is { } id ? initiator.AsJournaled(id) : initiator;
+        }
 
         // Dry-run preview of a template write: the fan-out target set (matched
         // by the new paths, plus stale holders the edit would prune — the old
@@ -436,7 +491,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         {
             var targets = TemplateTargets(template, previousFolderId, scanPaths: operation != ChangeSetOperation.Delete);
 
-            return PolicyWriteResult<AlertTemplateDto>.OkPreview(WritePreviews.Create(write,
+            return PolicyWriteResult<AlertTemplateDto>.OkPreview(WritePreviews.Create(
                 WritePreviews.CamelOf(ChangeSetEntryKind.AlertTemplate), WritePreviews.CamelOf(operation),
                 template.Id, template.Name,
                 targets.Select(sensor => new PreviewAffectedEntityDto

@@ -65,17 +65,16 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // A value-or-failure envelope: Value is set exactly when Failure is null.
     // Delete flows use the non-generic form (no payload on success).
     //
-    // #1570 additions: ChangeSetId is the change set the write was journaled
-    // under (null only when journaling was impossible or the write never
-    // reached it — a plain Ok() without an id); Preview is set exactly when
-    // the call ran as a dry run (validation passed, nothing applied).
+    // #1588: the write's undo-group id is an internal journal concern — the
+    // results no longer carry it (no client-facing echo); Preview is set
+    // exactly when the call ran as a dry run (validation passed, nothing
+    // applied).
     public sealed class PolicyWriteResult<T>
     {
-        private PolicyWriteResult(T value, PolicyWriteFailure failure, Guid? changeSetId, WritePreviewDto preview)
+        private PolicyWriteResult(T value, PolicyWriteFailure failure, WritePreviewDto preview)
         {
             Value = value;
             Failure = failure;
-            ChangeSetId = changeSetId;
             Preview = preview;
         }
 
@@ -83,64 +82,46 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         public PolicyWriteFailure Failure { get; }
 
-        public Guid? ChangeSetId { get; }
-
         public WritePreviewDto Preview { get; }
 
         public bool Success => Failure is null;
 
         public bool IsDryRun => Preview is not null;
 
-        public static PolicyWriteResult<T> Ok(T value) => new(value, null, null, null);
+        public static PolicyWriteResult<T> Ok(T value) => new(value, null, null);
 
-        public static PolicyWriteResult<T> Ok(T value, Guid changeSetId) => new(value, null, changeSetId, null);
-
-        public static PolicyWriteResult<T> OkPreview(WritePreviewDto preview) => new(default, null, preview.ChangeSetId is { } id ? Guid.Parse(id) : null, preview);
+        public static PolicyWriteResult<T> OkPreview(WritePreviewDto preview) => new(default, null, preview);
 
         public static PolicyWriteResult<T> Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
             System.Collections.Generic.Dictionary<string, string> details = null) =>
-            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null, null);
-
-        // Attach the journaled change-set id to an already-built success (the
-        // dispatch helpers return a plain Ok; the hook records the entry only
-        // after the write applied and then stamps the echo).
-        public PolicyWriteResult<T> WithChangeSet(Guid changeSetId) =>
-            Success ? new(Value, null, changeSetId, Preview) : this;
+            new(default, new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null);
     }
 
     public sealed class PolicyWriteResult
     {
-        private PolicyWriteResult(PolicyWriteFailure failure, Guid? changeSetId, WritePreviewDto preview)
+        private PolicyWriteResult(PolicyWriteFailure failure, WritePreviewDto preview)
         {
             Failure = failure;
-            ChangeSetId = changeSetId;
             Preview = preview;
         }
 
         public PolicyWriteFailure Failure { get; }
 
-        public Guid? ChangeSetId { get; }
-
         public WritePreviewDto Preview { get; }
 
         public bool Success => Failure is null;
 
         public bool IsDryRun => Preview is not null;
 
-        public static PolicyWriteResult Ok() => new(null, null, null);
+        public static PolicyWriteResult Ok() => new(null, null);
 
-        public static PolicyWriteResult Ok(Guid changeSetId) => new(null, changeSetId, null);
-
-        public static PolicyWriteResult OkPreview(WritePreviewDto preview) => new(null, preview.ChangeSetId is { } id ? Guid.Parse(id) : null, preview);
+        public static PolicyWriteResult OkPreview(WritePreviewDto preview) => new(null, preview);
 
         public static PolicyWriteResult Fail(PolicyWriteOutcome outcome,
             System.Collections.Generic.IDictionary<string, string[]> errors = null, string message = null,
             System.Collections.Generic.Dictionary<string, string> details = null) =>
-            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null, null);
-
-        public PolicyWriteResult WithChangeSet(Guid changeSetId) =>
-            Success ? new(null, changeSetId, Preview) : this;
+            new(new PolicyWriteFailure { Outcome = outcome, Errors = errors, Message = message, Details = details }, null);
 
 
         // The single 403 message of every write denial (read-only token or the
@@ -180,31 +161,15 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 ? new OkObjectResult(result.Value)
                 : PolicyWriteResult.ToActionResult(result.Failure);
 
-        // #1570 transport arm: a dry run renders its preview (200, nothing
-        // applied) and a journaled success echoes the change-set id through
-        // the response header before the regular rendering takes over.
+        // The dry-run transport arm (#1588): a dry run renders its preview
+        // (200, nothing applied); a plain success renders like the headerless
+        // overload — the undo group is internal, there is no echo.
         public static IActionResult ToActionResult<T>(this PolicyWriteResult<T> result,
-            Microsoft.AspNetCore.Http.HttpResponse response)
-        {
-            if (result.IsDryRun)
-                return new OkObjectResult(result.Preview);
-
-            if (result.Success)
-                response.SetChangeSet(result.ChangeSetId);
-
-            return result.ToActionResult();
-        }
+            Microsoft.AspNetCore.Http.HttpResponse response) =>
+            result.IsDryRun ? new OkObjectResult(result.Preview) : result.ToActionResult();
 
         public static IActionResult ToActionResult(this PolicyWriteResult result,
-            Microsoft.AspNetCore.Http.HttpResponse response)
-        {
-            if (result.IsDryRun)
-                return new OkObjectResult(result.Preview);
-
-            if (result.Success)
-                response.SetChangeSet(result.ChangeSetId);
-
-            return PolicyWriteResult.ToActionResult(result.Failure);
-        }
+            Microsoft.AspNetCore.Http.HttpResponse response) =>
+            result.IsDryRun ? new OkObjectResult(result.Preview) : PolicyWriteResult.ToActionResult(result.Failure);
     }
 }

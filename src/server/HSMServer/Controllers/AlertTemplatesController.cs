@@ -9,6 +9,8 @@ using HSMServer.Core.Schedule;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
+using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -55,6 +57,7 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
+        private readonly AlertTemplateAdministrationService _writer;
 
 
         static AlertTemplatesController()
@@ -66,14 +69,21 @@ namespace HSMServer.Controllers
         }
 
         public AlertTemplatesController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
-                                        IUserManager users, IAlertScheduleProvider provider) : base(users)
+                                        IUserManager users, IAlertScheduleProvider provider,
+                                        AlertTemplateAdministrationService writer) : base(users)
         {
             _chats = chats;
             _folders = folders;
             _cache = cache;
             _tree = tree;
             _alertScheduleProvider = provider;
+            _writer = writer;
         }
+
+        // The web form's write options (#1588): the post's request-scoped
+        // undo group — every journaled write of the post shares it.
+        private ChangeSetWriteOptions JournalWriteOptions() =>
+            new() { ChangeSetId = ChangeSetHeaders.RequestGroupId(HttpContext) };
 
         [HttpGet]
         public IActionResult Index()
@@ -249,21 +259,30 @@ namespace HSMServer.Controllers
 
             if (ModelState.IsValid)
             {
-                var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
+                // #1588 single write path: the form's validated model rides
+                // the template administration service — the same write gates,
+                // authorization seam and undo journaling as REST/MCP writes.
+                // Upsert semantics of the old cache write: an unknown id
+                // creates, a known id updates.
+                var result = _cache.GetAlertTemplate(model.Id) is null
+                    ? await _writer.CreateTemplateAsync(User, model, JournalWriteOptions(),
+                        new CookieUserAccess(CurrentUser, _cache))
+                    : await _writer.UpdateTemplateAsync(model.Id, User, model, JournalWriteOptions(),
+                        new CookieUserAccess(CurrentUser, _cache));
 
-                if (!success)
-                    return Json(new { success = false, error = error });
+                if (!result.Success)
+                    return Json(new { success = false, error = result.Failure.Message });
 
                 // #1401: a persisting save with per-policy validation
                 // rejections is NOT a failure — the warnings name the sensors
                 // whose alerts were not (re)created and are surfaced in a
                 // post-save modal. A clean save keeps answering the empty Ok
                 // the page has always consumed.
-                if (warnings is { Count: > 0 })
+                if (result.Value?.Warnings is { Count: > 0 })
                     return Json(new
                     {
                         success = true,
-                        warnings = warnings.Select(w => $"{w.SensorPath}: {w.Reason}").ToList(),
+                        warnings = result.Value.Warnings.Select(w => $"{w.Sensor}: {w.Reason}").ToList(),
                     });
 
                 return Ok();
@@ -296,10 +315,11 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin]
         public async ValueTask<IActionResult> Remove(Guid id)
         {
-            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+            var result = await _writer.DeleteTemplateAsync(id, User, JournalWriteOptions(),
+                new CookieUserAccess(CurrentUser, _cache));
 
-            if (!success)
-                TempData[TextConstants.TempDataErrorText] = error;
+            if (!result.Success)
+                TempData[TextConstants.TempDataErrorText] = result.Failure.Message;
 
             return RedirectToAction("Index");
         }

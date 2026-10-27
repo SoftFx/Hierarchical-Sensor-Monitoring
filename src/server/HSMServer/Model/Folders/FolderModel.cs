@@ -117,6 +117,7 @@ namespace HSMServer.Model.Folders
 
                     PropertyName = propName,
                     Path = Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.Folder,
                 });
             }
 
@@ -144,6 +145,7 @@ namespace HSMServer.Model.Folders
 
                     PropertyName = "Default chats",
                     Path = Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.Folder,
                 });
             }
 
@@ -161,6 +163,7 @@ namespace HSMServer.Model.Folders
 
                     PropertyName = propName,
                     Path = Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.Folder,
                 });
 
             return newValue ?? oldValue;
@@ -183,6 +186,7 @@ namespace HSMServer.Model.Folders
 
                     PropertyName = propName,
                     Path = Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.Folder,
                 });
             }
 

@@ -98,7 +98,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return CreatedAtAction(nameof(GetPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
         }
@@ -143,7 +142,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return NoContent();
         }
@@ -200,7 +198,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return CreatedAtAction(nameof(GetTtlPolicy), new { sensorId, policyId = result.Value.Id }, result.Value);
         }
@@ -241,7 +238,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return NoContent();
         }

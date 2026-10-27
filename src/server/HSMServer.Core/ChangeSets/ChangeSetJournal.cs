@@ -35,12 +35,10 @@ namespace HSMServer.Core.ChangeSets
         /// creation time fixed by the first write). The entry's Sequence is
         /// assigned here — append order is the journal order.
         ///
-        /// Returns the id of the change set the entry ACTUALLY landed in: an
-        /// id whose existing set belongs to a DIFFERENT author, or whose set
-        /// is terminal (rolled back), FORKS to a fresh id — the write still
-        /// journals (its undo point is never lost), and the echoed id tells
-        /// the caller which set holds it. A foreign entry can therefore never
-        /// block the original author's rollback or distort its audit trail.
+        /// #1588: group ids are SERVER-minted per request (one HTTP request
+        /// or MCP call = one rollback group), so a foreign author or a
+        /// terminal set can never be appended to through a client-supplied
+        /// id — the #1570 fork rule is gone with the client ids.
         /// </summary>
         Guid Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry);
 
@@ -106,26 +104,9 @@ namespace HSMServer.Core.ChangeSets
             {
                 if (_database.ChangeSets.TryReadEntity(changeSetId, out var existing))
                 {
-                    var current = ChangeSetMapper.ToModel(existing);
+                    AppendTo(ChangeSetMapper.ToModel(existing), entry, existing: true);
 
-                    // The fork rule: a change set accepts appends only from
-                    // its own author while it is still open. A rolled-back
-                    // set is terminal, and a foreign author's entry would
-                    // both distort the audit trail and block the original
-                    // author's rollback pre-flight — either way the write
-                    // journals under a fresh id instead of being rejected
-                    // after it already applied.
-                    var foreignAuthor = author is not null &&
-                        (current.Author != author.Info || current.AuthorType != author.Type);
-
-                    if (current.Status == ChangeSetStatus.RolledBack || foreignAuthor)
-                        changeSetId = Guid.NewGuid();
-                    else
-                    {
-                        AppendTo(current, entry, existing is not null);
-
-                        return changeSetId;
-                    }
+                    return changeSetId;
                 }
 
                 var model = new ChangeSetModel

@@ -108,7 +108,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return CreatedAtAction(nameof(GetSchedule), new { id = result.Value.Id }, result.Value);
         }
@@ -154,7 +153,6 @@ namespace HSMServer.Controllers
             if (!result.Success)
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
-            Response.SetChangeSet(result.ChangeSetId);
 
             return NoContent();
         }

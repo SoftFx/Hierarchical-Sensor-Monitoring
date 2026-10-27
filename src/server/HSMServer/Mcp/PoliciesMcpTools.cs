@@ -22,6 +22,11 @@ namespace HSMServer.Mcp
     // HsmApiToken management policy rejects read-only tokens on unsafe
     // methods outright. Product-policy writes stay REST-only (a deliberate
     // bound: they route to the owning sensor's list anyway).
+    //
+    // #1588: every write journals under a server-minted per-call undo group
+    // (one tool call = one rollback group); there is no client-facing
+    // changeSetId argument or echo anymore — undo is addressed through
+    // journal records.
     [McpServerToolType]
     public sealed class PoliciesMcpTools
     {
@@ -40,14 +45,13 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> CreateSensorPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("The policy content — conditions, destination, notification, icon/status settings. Use list_chats to discover valid destination chat ids.")] PolicyDto policy,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.CreateSensorPolicyAsync(sensorId, policy, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.CreateSensorPolicyAsync(sensorId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value with { ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : result.Value;
         }
 
         [McpServerTool(Name = "update_sensor_policy", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
@@ -56,14 +60,13 @@ namespace HSMServer.Mcp
             [Description("Sensor id.")] Guid sensorId,
             [Description("Policy id to replace.")] Guid policyId,
             [Description("The new policy content.")] PolicyDto policy,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.UpdateSensorPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.UpdateSensorPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value with { ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : result.Value;
         }
 
         [McpServerTool(Name = "delete_sensor_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
@@ -71,15 +74,13 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> DeleteSensorPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("Policy id.")] Guid policyId,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.DeleteSensorPolicyAsync(sensorId, policyId, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.DeleteSensorPolicyAsync(sensorId, policyId, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview
-                : new McpDeletedResult { Id = policyId, ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : new McpDeletedResult { Id = policyId };
         }
 
 
@@ -88,14 +89,13 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> CreateSensorTtlPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("The TTL policy — `interval` (TimeSpan string) or `inherit: true`.")] TtlPolicyDto policy,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.CreateSensorTtlPolicyAsync(sensorId, policy, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.CreateSensorTtlPolicyAsync(sensorId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value with { ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : result.Value;
         }
 
         [McpServerTool(Name = "update_sensor_ttl_policy", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
@@ -104,14 +104,13 @@ namespace HSMServer.Mcp
             [Description("Sensor id.")] Guid sensorId,
             [Description("TTL policy id to replace.")] Guid policyId,
             [Description("The new TTL policy content.")] TtlPolicyDto policy,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.UpdateSensorTtlPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.UpdateSensorTtlPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value with { ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : result.Value;
         }
 
         [McpServerTool(Name = "delete_sensor_ttl_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
@@ -119,28 +118,20 @@ namespace HSMServer.Mcp
         public async System.Threading.Tasks.Task<object> DeleteSensorTtlPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("TTL policy id.")] Guid policyId,
-            [Description("Group this write under a change set id - the undo handle echoed as changeSetId. Omit to journal the write standalone.")] string changeSetId = null,
             [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
         {
-            var result = await _writer.DeleteSensorTtlPolicyAsync(sensorId, policyId, User, WriteOptionsOf(changeSetId, dryRun));
+            var result = await _writer.DeleteSensorTtlPolicyAsync(sensorId, policyId, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview
-                : new McpDeletedResult { Id = policyId, ChangeSetId = result.ChangeSetId };
+            return result.IsDryRun ? result.Preview : new McpDeletedResult { Id = policyId };
         }
 
 
-
-    // #1570 helpers shared by the journaled write tools: the optional
-    // grouping/dry-run arguments, and the success arms echoing the
-    // change-set id on the structured content.
-    internal static ChangeSetWriteOptions WriteOptionsOf(string changeSetId, bool dryRun)
-    {
-        var id = Guid.TryParse(changeSetId, out var parsed) ? parsed : (Guid?)null;
-
-        return id is null && !dryRun ? null : new ChangeSetWriteOptions { ChangeSetId = id, DryRun = dryRun };
-    }
+    // #1588: the per-call write options — every tool call journals under its
+    // own server-minted undo group (one tool call = one rollback group).
+    internal static ChangeSetWriteOptions WriteOptionsOf(bool dryRun) =>
+        new() { ChangeSetId = Guid.NewGuid(), DryRun = dryRun };
 
 
         // The shared ambient-principal accessor (see McpToolContext); a property

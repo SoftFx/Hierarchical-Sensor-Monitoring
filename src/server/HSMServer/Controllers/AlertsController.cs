@@ -22,6 +22,9 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
+
 namespace HSMServer.Controllers
 {
 
@@ -43,6 +46,7 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
+        private readonly PolicyAdministrationService _policies;
 
 
         static AlertsController()
@@ -53,7 +57,8 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertsController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
+            IUserManager users, PolicyAdministrationService policies) : base(users)
         {
             _chats = chats;
             _folders = folders;
@@ -146,23 +151,23 @@ namespace HSMServer.Controllers
             }
         }
 
+        // #1588 single write path: the import rides the policy
+        // administration service — the same write gates, authorization and
+        // undo journaling as every other configuration write (one import
+        // request = one undo group).
         private async ValueTask SendAlertUpdatesAsync(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
+            var write = new ChangeSetWriteOptions { ChangeSetId = ChangeSetHeaders.RequestGroupId(HttpContext) };
+
             foreach (var (sensorId, alertUpdates) in newAlerts)
             {
-
-                var update = new SensorUpdate()
-                {
-                    Id = sensorId,
-                    Policies = alertUpdates,
-                    Initiator = CurrentInitiator,
-                };
-
                 try
                 {
-                    var result = await _cache.UpdateSensorAsync(update);
-                    if (!result.IsOk)
-                        toast.AddError(result.Error, _tree.Sensors[sensorId].Name);
+                    var result = await _policies.WriteSensorListsAsync(sensorId, alertUpdates, ttlPolicies: null,
+                        User, write, new CookieUserAccess(CurrentUser, _cache));
+
+                    if (!result.Success)
+                        toast.AddError(result.Failure.Message ?? "The import was rejected.", _tree.Sensors[sensorId].Name);
                 }
                 catch (Exception ex)
                 {
