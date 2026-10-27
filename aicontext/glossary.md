@@ -48,13 +48,13 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Self-monitoring | The server watching itself: a dedicated product ("HSM Server Monitoring") where the server reports its own health and traffic the same way collectors report customer products. | The operator's surface for server-side performance questions; home of the token usage sensors. Say "self-monitoring", not "telemetry" (too generic) or "internal metrics". |
 | LevelDB storage | On-disk database implementation used by HSM. | Mention LMDB/native dependencies only when relevant. |
 | Snapshot | Persisted or cached representation of current tree/state. | Be explicit: tree snapshot, sensor snapshot, or database snapshot. |
-| Journal | Historical sequence of sensor values or changes. | Confirm file/class-specific semantics before broad edits. |
+| Journal | The single journal of every monitoring-tree configuration change (#1588): global page + per-node tabs + `/api/v1/journal` + MCP tools, with entity kinds, products and undo-group links. | The undo mechanics are internal; say "journal record", not "change set", on user-facing surfaces. |
+| Journal record | One journaled change with kind (`sensorDataPolicies`, `sensorTtlPolicies`, `productTtlPolicies`, `alertTemplate`, `alertSchedule`, `nodeSettings`, `treeCrud`, `folder`), root product and, for rollbackable kinds, the undo-group link. | Legacy/non-config rows have null kind ("other"); sensor value history is not part of this surface. |
+| Undo group | The server-minted per-request grouping of journaled writes (#1588): one HTTP request / MCP call / form post = one group; one rollback undoes the whole request. | Ids are never client-supplied or echoed (the #1570 `changeSetId` and fork rule are gone, ADR-0013). |
 | Update queue | Server-side queue for propagating sensor/tree changes. | Treat ordering and idempotency as important. |
-| Change set | Group of REST/MCP configuration writes recorded as one undoable unit under a client-supplied `changeSetId` (#1570). | A write without an id forms its own single-entry change set. |
-| Before-image / After-image | Structured snapshot of an entity's configuration taken immediately before / after a journaled write. | Stored as entity rows (`PolicyEntity`, `AlertTemplateEntity`, `AlertScheduleEntity`), never secrets. |
-| Undo journal | Durable table of change sets with before/after images, powering rollback. | Separate from the presentation Journal; no time-based retention. |
-| Rollback (change set) | Replay of compensating full-list writes in reverse order, restoring before-images. | Refuses on after-image mismatch (content comparison) unless forced; configuration only — notifications/alerts/history untouched. |
-| Change-set conflict | State where an entity's current content differs from the recorded after-image at rollback time. | Detected by content comparison, not timestamps (web editor re-asserts full lists on every save). |
+| Before-image / After-image | Structured snapshot of an entity's configuration taken immediately before / after a journaled write. | Stored as entity rows (`PolicyEntity`, `AlertTemplateEntity`, `AlertScheduleEntity`), never secrets; internal to the Journal's rollback machinery. |
+| Rollback (journal record) | Replay of compensating full-list writes in reverse order through the record's undo group, restoring before-images. | Admin-only everywhere (the token owner must be `IsAdmin`); refuses on after-image mismatch (content comparison) unless forced; configuration only — notifications/alerts/history untouched. |
+| Rollback conflict | State where an entity's current content differs from the recorded after-image at rollback time. | Detected by content comparison, not timestamps (editors re-assert full lists on every save). |
 
 ## Alerts And Notifications
 
