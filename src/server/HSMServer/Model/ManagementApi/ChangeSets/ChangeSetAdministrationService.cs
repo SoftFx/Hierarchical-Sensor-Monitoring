@@ -192,7 +192,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
                 if (set.Status == ChangeSetStatus.RolledBack)
                     return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                        message: "The change set was already rolled back. Roll back its rollback change set to redo it.");
+                        message: "This journal record's request was already rolled back. Roll back the ROLLBACK's journal record (the same entity, kind-tagged) to redo it.");
 
                 var pending = set.Entries.Where(e => e.RestoredBy is null).OrderBy(e => e.Sequence).ToList();
 
@@ -328,7 +328,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     Message = failures != 0
                         ? $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry."
                         : landedAny
-                            ? $"Rolled back; redo via change set {rollbackChangeSetId}."
+                            ? "Rolled back; the rollback's own journal record (same entity) is the redo handle — roll it back to re-apply."
                             : "Rolled back.",
                     RollbackChangeSetId = landedAny ? rollbackChangeSetId.ToString() : null,
                     Entries = reports,

@@ -162,15 +162,23 @@ namespace HSMServer.Controllers
 
                     if (!result.Success)
                     {
+                        var hasFieldErrors = false;
+
                         foreach (var (field, messages) in result.Failure.Errors ?? new Dictionary<string, string[]>())
                             foreach (var message in messages)
+                            {
                                 ModelState.AddModelError(field, message);
+                                hasFieldErrors = true;
+                            }
 
-                        // A message-less failure (the schedule was deleted
-                        // while being edited) must not render as a silent
-                        // no-op save (#1588 review round 3).
-                        ModelState.AddModelError(nameof(model.Name),
-                            result.Failure.Message ?? "The schedule no longer exists. Refresh the list.");
+                        // The fallback covers ONLY a message-less, error-less
+                        // failure — the schedule was deleted while being
+                        // edited (#1588 review round 4); a field-keyed
+                        // Invalid (a name raced by another admin) must not
+                        // also claim the schedule vanished.
+                        if (!hasFieldErrors)
+                            ModelState.AddModelError(nameof(model.Name),
+                                result.Failure.Message ?? "The schedule no longer exists. Refresh the list.");
 
                         return PartialView("_AlertSchedule", model);
                     }

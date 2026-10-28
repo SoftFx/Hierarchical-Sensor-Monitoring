@@ -693,7 +693,17 @@ namespace HSMDatabase.DatabaseWorkCore
                             journalKey.Time < fromTicks || journalKey.Time > toTicks)
                             continue;
 
-                        result.Add((key, JsonSerializer.Deserialize<JournalRecordEntity>(value)));
+                        // One corrupt row must not 500 the whole list
+                        // (#1588 review round 4): skip it, loudly.
+                        try
+                        {
+                            result.Add((key, JsonSerializer.Deserialize<JournalRecordEntity>(value)));
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Error(e,
+                                $"Corrupt journal row skipped for {journalKey.Id} at {journalKey.Time}");
+                        }
                     }
 
             return result;

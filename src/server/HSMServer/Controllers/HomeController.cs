@@ -719,10 +719,13 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(string.Empty,
                     policiesResult.Failure.Message ?? "The policy lists could not be saved.");
 
-                var errorModel = new SensorInfoViewModel(sensor);
-                PopulateAlertSchedules(errorModel);
+                // Re-render the SUBMITTED form (#1588 review round 4): the
+                // save is two steps now, and rebuilding from the live sensor
+                // would silently discard the user's description/unit/period
+                // edits along with the unsaved policy lists.
+                PopulateAlertSchedules(newModel);
 
-                return PartialView("_MetaInfo", errorModel);
+                return PartialView("_MetaInfo", newModel);
             }
 
             var update = new SensorUpdate

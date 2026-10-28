@@ -158,10 +158,12 @@ namespace HSMServer.Model.ManagementApi.Journal
         private readonly IApiTokenAuthorizationService _authorization;
         private readonly IUserManager _users;
         private readonly IChangeSetAdministrationService _changeSets;
+        private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
 
         public JournalAdministrationService(IJournalService journal, ITreeValuesCache cache,
             HSMServer.Folders.IFolderManager folders, IApiTokenAuthorizationService authorization,
-            IUserManager users, IChangeSetAdministrationService changeSets)
+            IUserManager users, IChangeSetAdministrationService changeSets,
+            HSMServer.Core.ChangeSets.IChangeSetJournal changeSetJournal)
         {
             _journal = journal;
             _cache = cache;
@@ -169,6 +171,7 @@ namespace HSMServer.Model.ManagementApi.Journal
             _authorization = authorization;
             _users = users;
             _changeSets = changeSets;
+            _changeSetJournal = changeSetJournal;
         }
 
 
@@ -191,6 +194,12 @@ namespace HSMServer.Model.ManagementApi.Journal
             // The cheap field filter runs before the per-record resource
             // resolution (several cache lookups each) — only survivors pay
             // for the sight check.
+            // Group status for the rendered page (#1588 review round 4):
+            // a terminal (rolled-back) group's records keep their kind and
+            // link, but the Rollback action must not come back on refresh —
+            // one cheap journal read per DISTINCT group of the page.
+            var terminalGroups = new HashSet<string>(StringComparer.Ordinal);
+
             var page = _journal.GetRecords(from, to)
                 .Where(r => Matches(r, filter))
                 .Where(r => access.CanRead(ResourceOf(r)))
@@ -198,10 +207,34 @@ namespace HSMServer.Model.ManagementApi.Journal
                 .ThenBy(r => r.Key.Id)
                 .Skip(offset)
                 .Take(limit)
-                .Select(Render)
+                .Select(r =>
+                {
+                    var dto = Render(r);
+
+                    if (dto.Rollbackable && IsTerminal(dto.ChangeSetId, terminalGroups))
+                        dto = dto with { Rollbackable = false };
+
+                    return dto;
+                })
                 .ToList();
 
             return PolicyWriteResult<List<JournalRecordDto>>.Ok(page);
+        }
+
+        private bool IsTerminal(string changeSetId, HashSet<string> terminalGroups)
+        {
+            if (terminalGroups.Contains(changeSetId))
+                return true;
+
+            if (Guid.TryParse(changeSetId, out var id) &&
+                _changeSetJournal.Get(id) is { Status: HSMServer.Core.ChangeSets.ChangeSetStatus.RolledBack })
+            {
+                terminalGroups.Add(changeSetId);
+
+                return true;
+            }
+
+            return false;
         }
 
         public PolicyWriteResult<JournalRecordDetailsDto> GetRecord(string recordId, ClaimsPrincipal user,

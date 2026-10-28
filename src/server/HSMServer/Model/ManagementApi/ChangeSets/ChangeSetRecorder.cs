@@ -89,16 +89,6 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             {
                 var landed = _journal.Append(changeSetId, author, entry);
 
-                // A landed id OTHER than the request's group means the group
-                // was already rolled back mid-request (#1588 review round 2):
-                // the remaining writes forked into a fresh group — loud log,
-                // the rollback surface sees the new group through the journal
-                // record of its entries.
-                if (landed != changeSetId)
-                    _logger.LogWarning(
-                        "Undo group {ChangeSetId} was terminal; the write ({Kind} {Operation} on {EntityId}) forked into {LandedId}",
-                        changeSetId, entry.Kind, entry.Operation, entry.EntityId, landed);
-
                 // The unified-journal record of the kinds the cache-layer
                 // events do not cover: policy lists journal through the
                 // ChangesHandler records (stamped with the group via the
@@ -106,6 +96,23 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 // hook — the recorder IS their journal writer.
                 if (entry.Kind is ChangeSetEntryKind.AlertTemplate or ChangeSetEntryKind.AlertSchedule)
                     WriteJournalRecord(landed, author, entry);
+
+                // A landed id OTHER than the request's group means the group
+                // was already rolled back mid-request (#1588 review round 2):
+                // the remaining writes forked into a fresh group. Loud log —
+                // and a journal record for the forked group EVEN for policy
+                // kinds (#1588 review round 4): the cache-layer records of
+                // this write still carry the ORIGINAL (terminal) group id, so
+                // without this record nothing in the journal addresses the
+                // forked group's undo points.
+                if (landed != changeSetId)
+                {
+                    _logger.LogWarning(
+                        "Undo group {ChangeSetId} was terminal; the write ({Kind} {Operation} on {EntityId}) forked into {LandedId}",
+                        changeSetId, entry.Kind, entry.Operation, entry.EntityId, landed);
+
+                    WriteJournalRecord(landed, author, entry);
+                }
 
                 return landed;
             }
@@ -160,6 +167,10 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 NewValue = entry.Operation != ChangeSetOperation.Delete ? entry.Path : null,
                 Path = entry.Path,
                 Kind = KindOf(entry),
+                // The recorded root product (#1588 review round 4): the redo
+                // handle must stay visible under the product filter like
+                // every other record of the entity.
+                ProductId = entry.ParentId?.ToString(),
                 ChangeSetId = changeSetId.ToString(),
             });
 

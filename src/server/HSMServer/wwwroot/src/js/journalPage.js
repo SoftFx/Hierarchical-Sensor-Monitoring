@@ -102,8 +102,9 @@
     }
 
     // The per-node Journal tabs after a rollback: the server-side DataTable
-    // rows are re-fetched so an already-rolled-back group stops offering the
-    // Rollback button.
+    // rows are re-fetched with fresh content. A terminal group's per-node
+    // button (status is only resolved on the global surface) answers the
+    // clear already-rolled-back conflict on click.
     function refreshNodeTabs() {
         $('table[id^="journal_table_"]').each(function () {
             if ($.fn.DataTable.isDataTable(this))

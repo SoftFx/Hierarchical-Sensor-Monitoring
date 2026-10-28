@@ -88,7 +88,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 _authorization.Object, _users.Object, _policies, templates, _schedules, recorder);
 
             _journal = new JournalAdministrationService(_journalService, _valuesCache, _folders.Object,
-                _authorization.Object, _users.Object, engine);
+                _authorization.Object, _users.Object, engine, changeSets);
         }
 
 

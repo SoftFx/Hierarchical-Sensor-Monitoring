@@ -16,7 +16,7 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 - **Kinds** — every record carries one: `sensorDataPolicies`, `sensorTtlPolicies`, `productTtlPolicies`, `alertTemplate`, `alertSchedule` (rollbackable); `nodeSettings` (node general info/settings), `treeCrud` (product/sensor/folder create/delete/move), `folder` (folder edits). Legacy and non-configuration rows have null kind and filter as "other".
 - **Rollbackable kinds stay the #1570 five, from all sources** — sensor data/TTL policies, product TTL, alert templates, alert schedules. The web editor's writes journal like REST/MCP writes. Tree CRUD and node settings are journal-visible only: sensor/product deletion irreversibly purges data, rollback is impossible by design.
 - **Record-to-group links** — policy writes link through the write initiator (stamped with the group id; the cache-layer records copy it); templates and schedules have no cache journal hook, so the recorder IS their journal writer; every rollback entry leaves its own record (the redo handle is visible in the journal).
-- **Rollback by record, admin-only everywhere** — the record's undo group replays through the internal engine. Web: admin-only (`[AuthorizeIsAdmin]`). REST/MCP: the token's OWNER must be `IsAdmin` (breaking change — Manager tokens are denied); per-resource write pre-flight stays as the second line of defense. A record without a group answers Conflict ("journal-visible only").
+- **Rollback by record, admin-only everywhere** — the record's undo group replays through the internal engine. Web: admin-only (`[AuthorizeIsAdmin]`). REST/MCP: the token's OWNER must be `IsAdmin` (breaking change — Manager tokens are denied); per-resource write pre-flight stays as the second line of defense. A record without a group answers Conflict ("journal-visible only"). A rollback is itself journaled — its own journal record (same entity) is the redo handle; a group that was rolled back renders non-rollbackable on the global surface, and a mid-request write whose group went terminal forks into a fresh group with its own journal record.
 - **Conflict rule is content, never timestamps** (inherited from #1570) — unchanged, internal.
 - **Rollback restores configuration only** — notifications already sent, alerts already fired and sensor history are untouched.
 - **Durability trade-off (ADR-0010)** — journal appends run AFTER the primary write succeeds; storage failures are logged loudly and never fail an applied write.
@@ -37,7 +37,7 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 | 2 | Filter the global journal by author, time, kind or product | Operator/Viewer |
 | 3 | Inspect a record: the change plus its undo group's before/after images | Operator (UI/API/MCP) |
 | 4 | Roll back a record (refuses on conflicts with a diff; force overrides) | Admin (UI/API/MCP) |
-| 5 | Redo a mistaken rollback via the rollback's own journal record | Admin |
+| 5 | Redo a mistaken rollback by rolling back the rollback's own journal record (same entity, kind-tagged) | Admin |
 | 6 | Audit what an agent/script did (author, time, kind filters) | Operator/Viewer |
 
 ## Known Limitations
