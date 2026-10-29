@@ -67,6 +67,12 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public string TrustedProxiesIgnoredInSettingsFile { get; }
 
+        // The pre-#1590 Kestrel.SensorPort/SitePort keys the settings file still holds. They no
+        // longer configure anything (the single Port replaced them), so they are ignored and
+        // reported once at startup — Program logs the warning; the resave below drops them.
+        [JsonIgnore]
+        public string LegacyKestrelPortKeysIgnored { get; }
+
         // The settings file held the pre-rename kill switch "ApiTokens.Enabled": false and
         // no "Disabled" key. It is ignored (it was also the old persisted default, the two
         // cannot be told apart), so tokens are ON after the upgrade — Program logs a warning.
@@ -117,6 +123,7 @@ namespace HSMServer.ServerConfiguration
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
             TrustedProxiesIgnoredInSettingsFile = KestrelConfig.FindTrustedProxiesInSettingsFile(configuration);
+            LegacyKestrelPortKeysIgnored = KestrelConfig.FindLegacyPortKeysInSettingsFile(configuration);
 
             var apiTokensSection = configuration.GetSection(nameof(ApiTokens));
             LegacyApiTokensKillSwitchIgnored = apiTokensSection["Enabled"] is { } legacy

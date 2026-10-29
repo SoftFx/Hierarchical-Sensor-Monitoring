@@ -12,7 +12,7 @@ namespace HSMServer.Authentication
         // with exactly one HsmApiToken identity.
         public const string ManagementPolicy = "HsmApiTokenManagement";
 
-        // Route area served by the management API. Listener-guarded: SitePort only.
+        // Route area served by the management API.
         public const string ManagementAreaPath = "/api/v1";
     }
 

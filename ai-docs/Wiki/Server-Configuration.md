@@ -11,8 +11,7 @@ Most settings can also be changed at runtime through **Configuration** in the we
 ```json
 {
   "Kestrel": {
-    "SensorPort": 44330,
-    "SitePort": 44333
+    "Port": 443
   },
   "ServerCertificate": {
     "CertificatePath": "",
@@ -47,21 +46,19 @@ Most settings can also be changed at runtime through **Configuration** in the we
 
 ```json
 "Kestrel": {
-  "SensorPort": 44330,
-  "SitePort": 44333
+  "Port": 443
 }
 ```
 
 | Setting | Default | Description |
 |---|---|---|
-| `SensorPort` | `44330` | HTTPS port for sensor data ingestion (DataCollector and REST API) |
-| `SitePort` | `44333` | HTTPS port for the web UI |
+| `Port` | `443` | The single HTTPS port the server listens on — web UI, sensor data ingestion, management API (#1590); pre-#1590 `SensorPort`/`SitePort` keys are ignored with a startup warning |
 
 To change ports, update `appsettings.json` and restart the server, or go to **Configuration → Server** in the web UI.
 
 In Docker — map these ports when running the container:
 ```bash
-docker run -p 44330:44330 -p 44333:44333 ...
+docker run -p 443:443 ...
 ```
 
 ---
@@ -190,8 +187,7 @@ docker run \
   -v /host/Config:/app/Config \
   -v /host/Databases:/app/Databases \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
-  -p 44330:44330 \
-  -p 44333:44333 \
+  -p 443:443 \
   softfx/hsm-server:latest
 ```
 
@@ -201,8 +197,7 @@ services:
   hsm:
     image: softfx/hsm-server:latest
     ports:
-      - "44330:44330"
-      - "44333:44333"
+      - "443:443"
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config

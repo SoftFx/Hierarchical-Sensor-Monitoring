@@ -150,7 +150,7 @@ namespace HSMServer.ServiceExtensions
 
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
-            // the endpoint mapping and its SitePort/bearer guards live with the
+            // the endpoint mapping and its policy guards live with the
             // pipeline configuration in this file and Program.cs.
             services.AddHsmMcpServer();
 
@@ -216,7 +216,7 @@ namespace HSMServer.ServiceExtensions
                         "(see the HsmApiToken security scheme), and every error response — 400/401/403/404/409/500 — " +
                         "carries the uniform JSON body {\"error\": <machine-readable code>, \"message\": <human summary>, " +
                         "\"details\": <field-keyed messages on 400s, traceId on 500s, resource pointers (templateId) on create 409s, else null>}. " +
-                        "Management endpoints are served on the web-UI port only.",
+                        "All surfaces are served on the server's single HTTPS port.",
                 });
 
                 o.AddSecurityDefinition(ManagementApiSecuritySwaggerFilter.SchemeName, new OpenApiSecurityScheme
@@ -267,19 +267,15 @@ namespace HSMServer.ServiceExtensions
 
         public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig config)
         {
-            // One immutable registry both drives the actual Listen calls and answers
-            // IsSitePort for the /api/v1 area guard: the guard can never disagree with
-            // what is listening, and a config change takes effect only on restart.
-            var listeners = new HsmListenerBindings(config.Kestrel.SitePort, config.Kestrel.SensorPort);
-
-            webHostBuilder.ConfigureServices(services => services.AddSingleton(listeners));
-
             webHostBuilder.ConfigureKestrel(options =>
             {
                 var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-                options.Listen(IPAddress.Any, listeners.SensorPort, kestrelListenAction);
-                options.Listen(IPAddress.Any, listeners.SitePort, kestrelListenAction);
+                // The single HTTPS listener (#1590): the Web UI and the Sensor API share one
+                // routing table, so one port serves both. Kestrel binds it only after the
+                // database has loaded (InitStorages runs before app.Run), which the container
+                // healthcheck relies on.
+                options.Listen(IPAddress.Any, config.Kestrel.Port, kestrelListenAction);
 
                 options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
                 options.Limits.MinRequestBodyDataRate = null; //???
@@ -318,18 +314,28 @@ namespace HSMServer.ServiceExtensions
 
             applicationBuilder.UseRouting();
 
+            // Deprecated-port visibility (#1590): while the 44330/44333 aliases are still
+            // published through the deprecation window, a request that arrived by one
+            // logs a rate-limited warning so operators can find the stragglers. First of
+            // the guards: it only reads the Host header, while the guards below can
+            // short-circuit (404/401) — registered after them, a rejected legacy request
+            // would never be logged.
+            applicationBuilder.UseMiddleware<LegacyPortDeprecationMiddleware>();
+
             // Management-area isolation (#1356 step 3), before authentication: the area
-            // guard allow-lists /api/v1 per endpoint (marker + policy) and SitePort-only
-            // before any controller runs, and the bearer guard keeps an hsm_pat_ credential
-            // off every legacy route with a plain non-redirecting 401.
+            // guard allow-lists /api/v1 per endpoint (marker + policy) before any
+            // controller runs, and the bearer guard keeps an hsm_pat_ credential
+            // off every legacy route with a plain non-redirecting 401. Since the single
+            // listener (#1590) there is no port dimension left to guard on: the auth rules
+            // alone carry the isolation.
             applicationBuilder.UseMiddleware<ManagementApiGuardMiddleware>();
             applicationBuilder.UseMiddleware<LegacyBearerGuardMiddleware>();
 
-            // The MCP endpoint is SitePort-only like the whole token surface
-            // (#1391) — placed with the other guards, BEFORE authentication, so
-            // a probe on the SensorPort gets the uniform 404 and never a 401
-            // that confirms the endpoint exists.
-            applicationBuilder.UseMiddleware<McpSitePortOnlyMiddleware>();
+            // The MCP endpoint's fail-closed rule (#1391, #1392): a matched endpoint
+            // under /mcp must require the management policy and never be anonymous —
+            // placed with the other guards, BEFORE authentication, so a violation
+            // answers with the uniform 404 and never a 401 that confirms the endpoint.
+            applicationBuilder.UseMiddleware<McpEndpointGuardMiddleware>();
 
             applicationBuilder.UseAuthentication();
 
@@ -344,11 +350,6 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
 
-
-            // The doc enumerates the SitePort-only management surface (#1353/#1366
-            // review): serving it on the sensor port would publish the map the area
-            // guard exists to hide. Same listener registry the guard admits by.
-            applicationBuilder.UseMiddleware<SwaggerSitePortOnlyMiddleware>();
 
             applicationBuilder.UseSwagger();
             applicationBuilder.UseSwaggerUI(c =>

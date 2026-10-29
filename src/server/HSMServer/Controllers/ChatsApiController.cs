@@ -20,7 +20,7 @@ namespace HSMServer.Controllers
     /// </summary>
     // The class attributes are exactly what ManagementApiGuardMiddleware admits
     // into the management area: [ManagementApi] + the HsmApiToken management
-    // policy (bearer token only, SitePort only, plain 401 challenge) — this
+    // policy (bearer token only, plain 401 challenge) — this
     // controller never runs under the cookie scheme. Thin on purpose: routing
     // + the uniform contract; the visibility rules live in ChatsReadService,
     // shared with the MCP chat tools (#1393 pattern).

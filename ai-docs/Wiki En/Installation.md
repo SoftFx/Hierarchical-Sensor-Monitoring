@@ -7,7 +7,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) installed and running
-- Ports `44330` and `44333` available on the host
+- Ports `80` and `443` available on the host — 443 is the single port serving the web UI and sensor ingestion (#1590); the deprecated `44330`/`44333` aliases keep answering through the deprecation window
 
 ---
 
@@ -28,8 +28,7 @@ services:
     restart: unless-stopped
     user: '0'
     ports:
-      - '44330:44330'
-      - '44333:44333'
+      - '443:443'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
@@ -45,7 +44,7 @@ docker compose up -d
 
 **3. Open the web UI:**
 
-Go to `https://localhost:44333` in your browser. Accept the self-signed certificate warning.
+Go to `https://localhost` (port 443) in your browser. Accept the self-signed certificate warning.
 
 Default credentials: login `default`, password `default`. **Change the password immediately.**
 
@@ -68,8 +67,7 @@ docker run -u 0 -d \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
   -v /host/path/DatabasesBackups:/app/DatabasesBackups \
-  -p 44330:44330 \
-  -p 44333:44333 \
+  -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
@@ -84,8 +82,7 @@ docker run -u 0 -d ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
   -v C:\HSM\DatabasesBackups:/app/DatabasesBackups ^
-  -p 44330:44330 ^
-  -p 44333:44333 ^
+  -p 443:443 ^
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
@@ -134,21 +131,20 @@ Always mount these four directories. Without them, **all data is lost** when the
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| `44330` | HTTPS | Sensor data ingestion — used by DataCollector and REST API |
-| `44333` | HTTPS | Web UI |
+| `443` | HTTPS | Everything — web UI, sensor data ingestion, management API (#1590) |
+| `44330` | HTTPS | Deprecated alias of 443 (deprecation window) |
+| `44333` | HTTPS | Deprecated alias of 443 (deprecation window) |
 
 If these ports are already in use, change them in `docker-compose.yml` and in `Config/appsettings.json`:
 
 ```yaml
 ports:
-  - '44331:44330'   # host port : container port
-  - '44334:44333'
+  - '44331:443'   # host port : container port
 ```
 
 ```json
 "Kestrel": {
-  "SensorPort": 44330,
-  "SitePort": 44333
+  "Port": 443
 }
 ```
 
@@ -175,7 +171,7 @@ Or with `docker run` — stop and remove the old container, then run the `docker
 
 ## First Login
 
-After starting the server, open `https://localhost:44333`.
+After starting the server, open `https://localhost` (port 443).
 
 - Username: `default`
 - Password: `default`

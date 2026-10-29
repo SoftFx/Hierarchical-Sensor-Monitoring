@@ -72,7 +72,7 @@ ssh -p <port> <ssh> 'docker logs hsm-server --tail 30'
 Git Bash's `curl.exe` (Windows build, schannel TLS) reports a plain connection refused
 as `schannel: failed to receive handshake` with HTTP code `000` — observed on the dev
 workstation where nothing listens on 443 at all (the local-dev compose override,
-docker-compose.local.yml, publishes only loopback 44330/44333). So a workstation-side
+docker-compose.local.yml, publishes only loopback 443). So a workstation-side
 `000` says little about the server: verify from the machine itself (the skills' verify
 commands already run there over ssh) or from a browser before investigating the server.
 

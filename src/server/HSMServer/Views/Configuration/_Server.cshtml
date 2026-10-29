@@ -9,29 +9,15 @@
 
 <div class="row mt-2">
     <div class="col-2">
-        <label class="col-form-label" asp-for="SitePort"></label>
+        <label class="col-form-label" asp-for="Port"></label>
     </div>
     <div class="col-2">
-        <input class="form-control" asp-for="SitePort">
+        <input class="form-control" asp-for="Port">
     </div>
 </div>
 <div class="row">
     <div class="offset-2 col-10">
-        <label class="note">Port on which the site is accessible. Default value is @KestrelConfig.DefaultSitePort. The setting will be applied after the server is restarted.</label>
-    </div>
-</div>
-
-<div class="row mt-2">
-    <div class="col-2 d-flex align-items-center">
-        <label class="col-form-label" asp-for="SensorsPort"></label>
-    </div>
-    <div class="col-2">
-        <input class="form-control" asp-for="SensorsPort">
-    </div>
-</div>
-<div class="row">
-    <div class="offset-2 col-10">
-        <label class="note">Port on which the API is available. Default value is @KestrelConfig.DefaultSensorPort. The setting will be applied after the server is restarted.</label>
+        <label class="note">Single HTTPS port the server listens on (the web UI and the Sensor API share it). Default value is @KestrelConfig.DefaultPort. The setting will be applied after the server is restarted.</label>
     </div>
 </div>
 

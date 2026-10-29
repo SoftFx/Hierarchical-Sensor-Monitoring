@@ -14,7 +14,7 @@
 # support in OCI images" (dotnet/sdk-container-builds#316). Nothing named health exists in the
 # SDK's container targets either (checked in 8.0.420 and 9.0.315; global.json pins 8.0.x).
 #
-# WHAT HEALTHY MEANS: the Sensor API answers an anonymous HTTPS GET from inside the container.
+# WHAT HEALTHY MEANS: the sensor API answers an anonymous HTTPS GET from inside the container.
 # HSM opens its listeners only after startup finished — Program.cs awaits InitStorages(), which
 # resolves IUserManager and with it TreeValuesCache, whose constructor loads the tree from
 # LevelDB, before app.Run() — so a 200 says the database was loaded, the server certificate was
@@ -32,17 +32,17 @@
 # public surface. It deliberately does not report per-subsystem readiness; HSM has no state in
 # which it listens without the database loaded.
 #
-# TLS: Kestrel serves HTTPS on both ports with the server's own certificate, self-signed by
-# default (ApplicationServiceExtensions.KestrelListenOptions always calls UseHttps) and there is
-# no plaintext mode, so the probe must not require that certificate to be trusted inside the
+# TLS: Kestrel serves HTTPS on the single port with the server's own certificate, self-signed
+# by default (ApplicationServiceExtensions.KestrelListenOptions always calls UseHttps) and there
+# is no plaintext mode, so the probe must not require that certificate to be trusted inside the
 # container. It talks to 127.0.0.1 and never leaves the container, so the Caddy-fronted
 # (docker-compose.yml) and direct (docker-compose.direct.yml, plain `docker run`) deployments are
 # identical from its point of view.
 #
-# 44330 is Kestrel's default Sensor API port (KestrelConfig.DefaultSensorPort), like the port
-# hardcoded in the Caddyfile. A deployment that moves it in Config/appsettings.json overrides the
-# check (`healthcheck:` in compose, `--health-cmd` in `docker run`). Overriding one field is
-# enough — the daemon keeps the image's values for the rest (verified with
+# 443 is Kestrel's default port (KestrelConfig.DefaultPort, #1590): the Web UI and the sensor
+# API share the one listener. A deployment that moves it in Config/appsettings.json overrides
+# the check (`healthcheck:` in compose, `--health-cmd` in `docker run`). Overriding one field
+# is enough — the daemon keeps the image's values for the rest (verified with
 # `docker run --health-start-period=10s`).
 #
 # docker-compose.yml repeats this check verbatim, because `depends_on: service_healthy` refuses
@@ -78,4 +78,4 @@ FROM ${BASE_IMAGE}
 # Kept on one line: a continuation inside CMD would land in the image config verbatim, and
 # `docker inspect` would print the padding as part of the command.
 HEALTHCHECK --interval=5m --timeout=5s --start-period=10m --retries=3 \
-    CMD wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1
+    CMD wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:443/api/sensors/testConnection || exit 1

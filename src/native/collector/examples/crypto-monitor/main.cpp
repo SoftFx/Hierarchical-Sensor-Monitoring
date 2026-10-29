@@ -7,7 +7,7 @@
 // collector transport).
 //
 // Usage: hsm_crypto_monitor [server_address] [port] [access_key] [seconds]
-//   defaults: https://localhost 44330 demo-key 30
+//   defaults: https://localhost 443 demo-key 30
 
 #include <hsm_collector/hsm_collector.hpp>
 
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
     namespace hc = hsm::collector;
 
     const std::string server = argc > 1 ? argv[1] : "https://localhost";
-    const int port = argc > 2 ? std::atoi(argv[2]) : 44330;
+    const int port = argc > 2 ? std::atoi(argv[2]) : 443;
     const std::string access_key = argc > 3 ? argv[3] : "demo-key";
     const int seconds = argc > 4 ? std::atoi(argv[4]) : 30;
 

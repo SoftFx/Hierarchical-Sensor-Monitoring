@@ -10,5 +10,5 @@
 FROM index.docker.io/hsmonitoring/hierarchical_sensor_monitoring_deps:latest
 WORKDIR /app
 COPY . /app/
-EXPOSE 44330 44333
+EXPOSE 443
 ENTRYPOINT ["./HSMServer"]

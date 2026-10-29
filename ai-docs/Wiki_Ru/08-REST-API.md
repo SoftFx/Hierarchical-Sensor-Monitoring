@@ -2,7 +2,7 @@
 
 HSM предоставляет HTTP API для отправки данных датчиков и запроса истории. Используйте его на любом языке или в любой среде, где пакет NuGet недоступен.
 
-Базовый URL: `https://your-hsm-server:44330/api/sensors`
+Базовый URL: `https://your-hsm-server/api/sensors` (единственный порт 443, #1590)
 
 Все запросы используют HTTPS. Аутентификация — через заголовок Key.
 
@@ -220,7 +220,7 @@ HSM предоставляет HTTP API для отправки данных д�
 
 Возвращает 200 OK, если сервер доступен. Аутентификация не требуется.
 ```bash
-curl https://your-hsm-server:44330/api/sensors/testConnection
+curl https://your-hsm-server/api/sensors/testConnection
 ```
 
 ---

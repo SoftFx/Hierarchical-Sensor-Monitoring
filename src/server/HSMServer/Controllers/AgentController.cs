@@ -79,7 +79,7 @@ namespace HSMServer.Controllers
             }
 
             var (address, port) = AgentConnectionResolver.Resolve(
-                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
+                _config.Agent.ExternalConnectionUrl, AgentConnectionResolver.FallbackPortFromHost(Request.Host.Port), Request.Scheme, Request.Host.Host);
             // README.txt (#1559) points at the Downloads page this admin can reach, preselecting this product.
             var downloadsPageUrl = Url.Action(ViewConstants.IndexAction, ViewConstants.DownloadsController, new { productId }, Request.Scheme);
             var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate, _config.Agent.EnableTopCpuProcesses, downloadsPageUrl);
@@ -129,7 +129,7 @@ namespace HSMServer.Controllers
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
 
             var (address, port) = AgentConnectionResolver.Resolve(
-                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
+                _config.Agent.ExternalConnectionUrl, AgentConnectionResolver.FallbackPortFromHost(Request.Host.Port), Request.Scheme, Request.Host.Host);
 
             var addressError = LinuxProbeInstallerBundle.ValidateServerAddress(address);
             if (addressError is not null)

@@ -7,7 +7,7 @@ namespace HSMServer.Mcp
     // because it is MCP's own concern; the guards and Program.cs reference it.
     public static class HsmMcp
     {
-        // Streamable HTTP endpoint served by HSMServer itself on the SitePort,
+        // Streamable HTTP endpoint served by HSMServer itself,
         // outside the /api/v1 area guard (JSON-RPC errors, SDK-owned handler)
         // but inside the bearer-token credential family.
         public const string EndpointPath = "/mcp";

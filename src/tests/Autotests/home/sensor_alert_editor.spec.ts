@@ -3,7 +3,7 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { uniqueName, cleanup } from '../fixtures.ts';
 
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333';
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:443';
 
 // Covers the per-sensor alert editor (Views/Home/Alerts/_DataAlert.cshtml), reached from the Home
 // tree's meta-info side panel — previously fully uncovered (docs/ui-autotests-coverage-gaps.md

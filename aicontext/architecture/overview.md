@@ -5,7 +5,7 @@
 ## Components
 
 ```
-+---------------------+          HTTPS (:44330)          +---------------------+
++---------------------+          HTTPS (:443)             +---------------------+
 |                     |  ----> /api/sensors/{type} ----> |                     |
 |  HSMDataCollector   |  <---- /api/sensors/commands <-- |     HSMServer       |
 |  (NuGet library)    |                                  |  (ASP.NET Core MVC) |
@@ -13,7 +13,7 @@
 +---------------------+                                  +---------------------+
   Embedded in user app                                     |          |
                                                            |  Web UI  |
-                                                      :44333  (:44333)
+                                                       :443     (:443)
                                                            |          |
                                                      +-----+----------+-----+
                                                      |      LevelDB         |

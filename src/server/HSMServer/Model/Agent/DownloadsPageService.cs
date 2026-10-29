@@ -10,10 +10,11 @@ namespace HSMServer.Model.Agent
     public interface IDownloadsPageService
     {
         /// <summary>
-        /// The Downloads page for <paramref name="user"/>. <paramref name="requestScheme"/> and
-        /// <paramref name="requestHost"/> are the fallback the bundles use when no agent connection URL is set.
+        /// The Downloads page for <paramref name="user"/>. <paramref name="requestScheme"/>,
+        /// <paramref name="requestHost"/> and <paramref name="requestHostPort"/> are the fallback
+        /// the bundles use when no agent connection URL is set.
         /// </summary>
-        DownloadsViewModel Build(User user, string requestScheme, string requestHost, Guid? selectedProductId = null);
+        DownloadsViewModel Build(User user, string requestScheme, string requestHost, int? requestHostPort, Guid? selectedProductId = null);
     }
 
 
@@ -24,13 +25,13 @@ namespace HSMServer.Model.Agent
     /// </summary>
     public sealed class DownloadsPageService(TreeViewModel.TreeViewModel tree, IServerConfig config, IWebHostEnvironment environment) : IDownloadsPageService
     {
-        public DownloadsViewModel Build(User user, string requestScheme, string requestHost, Guid? selectedProductId = null)
+        public DownloadsViewModel Build(User user, string requestScheme, string requestHost, int? requestHostPort, Guid? selectedProductId = null)
         {
             var products = tree.GetUserProducts(user)
                 .Select(p => new DownloadProductItem(p.Id, p.Name, (p.Parent as FolderModel)?.Name));
 
             var (address, port) = AgentConnectionResolver.Resolve(
-                config.Agent.ExternalConnectionUrl, config.Kestrel.SensorPort, requestScheme, requestHost);
+                config.Agent.ExternalConnectionUrl, AgentConnectionResolver.FallbackPortFromHost(requestHostPort), requestScheme, requestHost);
 
             return DownloadsPageBuilder.Build(products, environment.WebRootPath, address, port, selectedProductId);
         }

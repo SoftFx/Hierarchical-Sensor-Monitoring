@@ -96,7 +96,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
 
-builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
+builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.Port);
 
 builder.Services.AddApplicationServices(serverConfig)
                 .Configure<MonitoringOptions>(config.GetSection(nameof(serverConfig.MonitoringOptions)));
@@ -134,6 +134,11 @@ try
         logger.Warn($"ApiTokens.Enabled = false in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
                     "API tokens are now ON. Set ApiTokens.Disabled = true to keep them off, or run the emergency revoke-all.");
 
+    if (serverConfig.LegacyKestrelPortKeysIgnored is { } legacyPorts)
+        logger.Warn($"Kestrel keys {legacyPorts} in {ServerConfig.ConfigName} are IGNORED and have been removed from the file: " +
+                    $"the server listens on the single Kestrel.{nameof(KestrelConfig.Port)} ({serverConfig.Kestrel.Port}, default {KestrelConfig.DefaultPort}). " +
+                    "Set Kestrel.Port explicitly if you need a different port.");
+
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
         forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);
 
@@ -151,8 +156,9 @@ try
     // The MCP endpoint (#1391): Streamable HTTP at /mcp, authorized by the SAME
     // HsmApiToken bearer policy as /api/v1 but deliberately OUTSIDE the area
     // guard — the SDK handler owns the route and errors follow MCP's JSON-RPC
-    // semantics, not the uniform JSON contract. SitePort-only and bearer-exempt
-    // through the dedicated middlewares (see ApplicationServiceExtensions).
+    // semantics, not the uniform JSON contract. Fail-closed over the endpoint
+    // family and bearer-exempt through the dedicated middleware (see
+    // ApplicationServiceExtensions).
     app.MapMcp(HsmMcp.EndpointPath)
        .RequireAuthorization(HsmApiTokenDefaults.ManagementPolicy)
        // The SDK maps minimal-API endpoints; without this they would surface as

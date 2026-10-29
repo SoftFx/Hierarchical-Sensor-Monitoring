@@ -32,7 +32,7 @@ export interface TestConfig {
 
 // Base URL is taken from the CI env (PLAYWRIGHT_TEST_BASE_URL, set by the workflow) and falls back to
 // the local Docker server, so the same suite runs in CI and locally without editing this file.
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333';
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:443';
 
 export const testConfig: TestConfig = {
   URLforAPI: `${baseURL}/Home`,

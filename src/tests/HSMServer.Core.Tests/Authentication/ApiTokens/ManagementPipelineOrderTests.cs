@@ -45,13 +45,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             string[] pinnedOrder =
             [
                 "UseRouting",
+                // Deprecated-port visibility (#1590): FIRST of the guards — it only
+                // reads the Host header, and the guards below short-circuit (404/401),
+                // so a legacy-port request they reject must already have been logged.
+                "LegacyPortDeprecationMiddleware",
                 "ManagementApiGuardMiddleware",
                 "LegacyBearerGuardMiddleware",
                 // After UseRouting on purpose: the fail-closed endpoint-family
                 // check reads context.GetEndpoint(), which is null above
                 // UseRouting — moved earlier, the whole /mcp policy check
                 // silently no-ops (#1392 review, round 4).
-                "McpSitePortOnlyMiddleware",
+                "McpEndpointGuardMiddleware",
                 "UseAuthentication",
                 // Token-usage monitoring between authentication and
                 // authorization on purpose (#1402): a rejected request never
@@ -101,23 +105,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 "UseAuthentication",
                 "ApiTokenUsageMiddleware",
                 "TelemetryMiddleware",
-            ]);
-        }
-
-        [Fact]
-        public void SwaggerGate_IsRegisteredBeforeTheSwaggerMiddleware()
-        {
-            // The port gate is correct only ABOVE UseSwagger/UseSwaggerUI; below them
-            // the doc is served before the gate runs, silently republishing the
-            // management map on the sensor port while the gate's own unit tests stay
-            // green (review round 2 on #1366).
-            var body = ExtractConfigureMiddlewareBody(ReadPipelineSource());
-
-            AssertInOrder(body,
-            [
-                "SwaggerSitePortOnlyMiddleware",
-                "UseSwagger",
-                "UseSwaggerUI",
             ]);
         }
 

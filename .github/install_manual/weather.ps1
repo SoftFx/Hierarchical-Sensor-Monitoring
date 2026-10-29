@@ -23,7 +23,7 @@ function UploadDataToHSM{
 
 
 $productKey1 = "product_key"
-$address1 = "https://localhost:44333"
+$address1 = "https://localhost:443"
 $path1 = "SwapTest/Test"
 $status1 = 1
 $comment1 = "test"

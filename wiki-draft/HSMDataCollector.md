@@ -41,7 +41,7 @@ All options with their defaults:
 | Property | Default | Description |
 |---|---|---|
 | `ServerAddress` | `"localhost"` | HSM server address (include `https://`) |
-| `Port` | `44330` | HSM server sensor port |
+| `Port` | `443` | HSM server port (443 since #1590) |
 | `AccessKey` | — | **Required.** Access key from the product settings |
 | `ClientName` | — | Identifier for this collector instance |
 | `ComputerName` | — | Computer/host name shown in sensor paths |

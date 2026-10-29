@@ -843,8 +843,9 @@ namespace HSMDataCollector.Tests
         }
 
         [Theory]
-        [InlineData(false, "https://127.0.0.1:44330/api/sensors")]
-        [InlineData(true, "http://127.0.0.1:44330/api/sensors")]
+        // Default port 443 (#1590): the endpoint builder omits it from the address.
+        [InlineData(false, "https://127.0.0.1/api/sensors")]
+        [InlineData(true, "http://127.0.0.1:443/api/sensors")]
         public void Explicit_http_server_address_requires_plaintext_opt_in(bool allowPlaintextTransport, string expectedAddress)
         {
             var options = new CollectorOptions

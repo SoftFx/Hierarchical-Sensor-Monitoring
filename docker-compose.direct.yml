@@ -6,7 +6,9 @@
 # and back:
 #   docker compose -f docker-compose.direct.yml down
 #   docker compose up -d
-# Collectors and agents keep using https://<host>:44330.
+# Everything is served on the single port 443 (Web UI + Sensor API, #1590). The 44330/44333
+# mappings are deprecated aliases kept through the deprecation window for clients still
+# pointed at the old two-port scheme; the follow-up release removes them.
 # Health comes from the image itself (#1465), so `docker ps` shows starting/healthy/unhealthy here
 # too: see docker_scripts/HSMserver/Dockerfile.healthcheck.
 services:
@@ -16,8 +18,10 @@ services:
     restart: unless-stopped
     user: '0'
     ports:
-      - '44330:44330'   # Sensor API — collectors/agents send values here (https, /api/sensors/*)
-      - '44333:44333'   # Web UI — browser dashboard, admin, agent download (https)
+      - '443:443'       # single port — Web UI + Sensor API (https)
+      # Deprecated aliases (#1590), removed with the follow-up release.
+      - '44330:443'
+      - '44333:443'
     volumes:
       - ./Logs:/app/Logs                       # NLog output
       - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)

@@ -966,9 +966,19 @@
         <member name="T:HSMServer.Model.Agent.AgentConnectionResolver">
             <summary>
             Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
-            external URL (the externally-reachable Sensor-API base; the server can't infer it behind
-            Docker/NAT); when blank, falls back to the request host + the configured Sensor port. Pure
-            (primitives only) so it is unit-tested without a web host.
+            external URL (the externally-reachable base; the server can't infer it behind Docker/NAT);
+            when blank or without an explicit port, falls back to the caller-provided fallback port —
+            since #1590 that is the request host's port when it carries one (see FallbackPortFromHost),
+            else the default 443. Pure (primitives only) so it is unit-tested without a web host.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentConnectionResolver.FallbackPortFromHost(System.Nullable{System.Int32})">
+            <summary>
+            The fallback port baked into a bundle when no external URL carries an explicit one:
+            the port the requesting admin actually used, so a non-standard deployment keeps
+            working — except the deprecated 44330/44333 aliases, which must not be baked into
+            NEW bundles (they stop answering when the deprecation window closes), and a missing
+            port (the standard https://host), which both mean the default 443.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentBundleOptions">
@@ -1051,10 +1061,11 @@
             (BadRequest) so the admin fixes the key first.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.IDownloadsPageService.Build(HSMServer.Model.Authentication.User,System.String,System.String,System.Nullable{System.Guid})">
+        <member name="M:HSMServer.Model.Agent.IDownloadsPageService.Build(HSMServer.Model.Authentication.User,System.String,System.String,System.Nullable{System.Int32},System.Nullable{System.Guid})">
             <summary>
-            The Downloads page for <paramref name="user"/>. <paramref name="requestScheme"/> and
-            <paramref name="requestHost"/> are the fallback the bundles use when no agent connection URL is set.
+            The Downloads page for <paramref name="user"/>. <paramref name="requestScheme"/>,
+            <paramref name="requestHost"/> and <paramref name="requestHostPort"/> are the fallback
+            the bundles use when no agent connection URL is set.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.DownloadsPageService">

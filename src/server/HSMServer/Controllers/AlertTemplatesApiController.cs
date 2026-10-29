@@ -21,7 +21,7 @@ namespace HSMServer.Controllers
     // REST CRUD over alert templates — the first /api/v1 resource controller (#1351,
     // epic #1347). The class attributes are exactly what ManagementApiGuardMiddleware
     // admits into the management area: [ManagementApi] + the HsmApiToken management
-    // policy (bearer token only, SitePort only, plain 401 challenge) — this controller
+    // policy (bearer token only, plain 401 challenge) — this controller
     // never runs under the cookie scheme and derives from ControllerBase, not the
     // cookie-world BaseController.
     //
