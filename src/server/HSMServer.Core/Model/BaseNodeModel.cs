@@ -163,6 +163,14 @@ namespace HSMServer.Core.Model
         }
 
 
+        // The informational root product id of the journal record (#1588
+        // review round 1): Root casts THIS to ProductModel when the node has
+        // no parent, which throws for a detached sensor — display metadata
+        // must never fail the write.
+        private Guid? RootProductIdOf() => this is ProductModel product
+            ? (product.Root ?? product).Id
+            : Parent?.Root?.Id ?? Parent?.Id;
+
         protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool? forced = null, SensorUpdate update = null, BaseSensorModel oldModel = null)
         {
             var infoNode = ChangeTable.Properties[propName];
@@ -181,6 +189,9 @@ namespace HSMServer.Core.Model
 
                     PropertyName = propName,
                     Path = FullPath,
+                    Kind = JournalKinds.NodeSettings,
+                    ProductId = RootProductIdOf()?.ToString(),
+                    ChangeSetId = initiator?.ChangeSetId?.ToString(),
                 });
 
                 infoNode.SetUpdate(initiator);

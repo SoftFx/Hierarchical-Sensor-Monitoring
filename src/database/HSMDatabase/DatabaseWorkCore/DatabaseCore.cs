@@ -664,6 +664,73 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
         }
 
+        // The global Journal read (#1588): every CHANGES-type record of the
+        // range across all nodes. The key layout is guid|type|ticks puts the
+        // GUID first, so NO byte range isolates a time window or even the
+        // Changes type — the range below spans a whole shard and the record
+        // type and time are refined in memory. The shard bounds (Overlaps)
+        // and the callers' bounded window keep the walk bounded; the cost is
+        // why the journal service clamps unbounded caller ranges.
+        public List<(byte[] Key, JournalRecordEntity Entity)> GetAllJournalValues(DateTime from, DateTime to)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var maxId = new Guid("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
+            var fromBytes = new JournalKey(Guid.Empty, DateTime.MinValue.Ticks, RecordType.Changes).GetBytes();
+            var toBytes = new JournalKey(maxId, DateTime.MaxValue.Ticks, RecordType.Changes).GetBytes();
+
+            var result = new List<(byte[], JournalRecordEntity)>();
+
+            foreach (var db in _journalValuesDatabases)
+                if (db.Overlaps(fromTicks, toTicks))
+                    foreach (var (key, value) in db.GetValuesFrom(fromBytes, toBytes))
+                    {
+                        var journalKey = JournalKey.FromBytes(key);
+
+                        if (journalKey.Type != RecordType.Changes ||
+                            journalKey.Time < fromTicks || journalKey.Time > toTicks)
+                            continue;
+
+                        // One corrupt row must not 500 the whole list
+                        // (#1588 review round 4): skip it, loudly.
+                        try
+                        {
+                            result.Add((key, JsonSerializer.Deserialize<JournalRecordEntity>(value)));
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Error(e,
+                                $"Corrupt journal row skipped for {journalKey.Id} at {journalKey.Time}");
+                        }
+                    }
+
+            return result;
+        }
+
+        public bool TryGetJournalValue(JournalKey key, out JournalRecordEntity entity)
+        {
+            entity = null;
+
+            try
+            {
+                // READ-ONLY shard lookup (#1588 review round 2):
+                // GetDatabaseByTime CREATES the week's shard — a caller-
+                // crafted record id must not mint empty shards (and open
+                // handles) on the read path. Only an EXISTING overlapping
+                // shard can hold the key; everything else answers false.
+                var db = _journalValuesDatabases.FirstOrDefault(db => db.Overlaps(key.Time, key.Time));
+
+                return db is not null && db.TryGet(key.GetBytes(), out var raw)
+                    && (entity = JsonSerializer.Deserialize<JournalRecordEntity>(raw)) is not null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
         {
             var fromTicks = from.Ticks;

@@ -27,4 +27,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0010 | Undo journal of change sets, not staged transactions | #1570 — REST/MCP configuration writes journal before/after images; rollback replays compensating writes with content-based conflict detection |
 | 0011 | Accepted | [Static NLog file names with size-based rotation bound the Logs/ disk](0011-nlog-static-filenames-bounded-archives.md) | 2026-10-23 |
 | 0012 | Accepted | [VictoriaLogs read path is the HSM admin session at /logs/](0012-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
+| 0013 | Accepted | [One journal — Change Sets absorbed into the Journal, single write path, admin-only rollback](0013-unified-configuration-journal.md) | 2026-10-27 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

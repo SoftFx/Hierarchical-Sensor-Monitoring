@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -18,6 +19,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc;
+using HSMServer.Core.Tests.Infrastructure;
 using Moq;
 using Xunit;
 
@@ -32,6 +34,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IDatabaseCore> _databaseMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
+        private readonly Mock<HSMServer.Authentication.IApiTokenAuthorizationService> _authorizationMock = new();
         private readonly TreeViewModel _treeViewModel;
 
 
@@ -46,6 +49,18 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService CreatePolicyWriter()
+        {
+            var recorder = new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
+                Infrastructure.ChangeSetTestHelpers.Journal(),
+                Infrastructure.ChangeSetTestHelpers.JournalService(),
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>());
+
+            return new HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService(
+                _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object, _chatsMock.Object,
+                _folderManagerMock.Object, _scheduleProviderMock.Object, recorder);
+        }
+
         private HomeController CreateController() =>
             new(_cacheMock.Object,
                 _folderManagerMock.Object,
@@ -54,8 +69,37 @@ namespace HSMServer.Core.Tests.Controllers
                 _journalMock.Object,
                 _chatsMock.Object,
                 _databaseMock.Object,
-                _scheduleProviderMock.Object);
+                _scheduleProviderMock.Object,
+                CreatePolicyWriter());
 
+
+        // #1588 review round 4: a cache-rejected list must propagate out of
+        // the web full-list save (the alerts-import toast and the meta-info
+        // form's error branch depend on it), not vanish into a success.
+        [Fact]
+        public async Task WriteSensorLists_WhenCacheRejectsTheList_PropagatesTheFailure()
+        {
+            var sensor = HSMServer.Core.Tests.Infrastructure.SensorModelFactory.Build(new HSMDatabase.AccessManager.DatabaseEntities.SensorEntity
+            {
+                Id = Guid.NewGuid().ToString(),
+                Type = (byte)SensorType.Integer,
+            });
+
+            _cacheMock.Setup(c => c.GetSensor(sensor.Id)).Returns(sensor);
+            _cacheMock.Setup(c => c.UpdateSensorAsync(It.IsAny<HSMServer.Core.Cache.UpdateEntities.SensorUpdate>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.FromError("the node is being removed"));
+
+            var result = await CreatePolicyWriter().WriteSensorListsAsync(sensor.Id,
+                dataPolicies: [],
+                ttlPolicies: null,
+                new System.Security.Claims.ClaimsPrincipal(),
+                new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions
+                    { ChangeSetId = Guid.NewGuid() });
+
+            Assert.False(result.Success);
+            Assert.Equal(HSMServer.Model.ManagementApi.Alerts.PolicyWriteOutcome.Conflict, result.Failure.Outcome);
+            Assert.Contains("the node is being removed", result.Failure.Message);
+        }
 
         // Regression for #1142: AddDataPolicy is also called from the Alert Template editor,
         // where entityId is the template's Guid (never a sensor id). The endpoint must return

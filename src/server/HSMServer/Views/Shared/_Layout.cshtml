@@ -26,6 +26,8 @@
 
 </head>
 <body>
+@* The per-node Journal tab's rollback POST is antiforgery-validated (#1588). *@
+@Html.AntiForgeryToken()
     <div class="body-content-wrapper">
         <div class="body-content">
             <header class="sticky-top">
@@ -130,8 +132,8 @@
                                                     </li>
                                                 }
                                                 <li>
-                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ChangeSetsController)">
-                                                        <i class="fas fa-history me-2"></i>Change Sets
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.JournalController)">
+                                                        <i class="fas fa-history me-2"></i>Journal
                                                     </a>
                                                 </li>
                                                 @if (UserRoleHelper.IsDownloadsPageAllowed((User)Context.User))

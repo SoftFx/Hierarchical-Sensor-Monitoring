@@ -126,6 +126,16 @@ namespace HSMServer.Folders
                 model.GetChatName += GetChatNameById;
                 model.GetGlobalChatIds += GetGlobalChatIds;
                 model.ChangesHandler += _journalService.AddRecord;
+
+                // The tree-CRUD trace of the folder's creation (#1588):
+                // journal-visible only, no undo group.
+                _journalService.AddRecord(new JournalRecordModel(model.Id, info)
+                {
+                    Enviroment = "Create folder",
+                    PropertyName = "folder",
+                    NewValue = model.Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                });
             }
 
             return result;
@@ -228,7 +238,19 @@ namespace HSMServer.Folders
             string logFolder = folder?.Name ?? remove.Id.ToString();
 
             if (result)
+            {
                 _logger.Info($"Folder '{logFolder}' is removed");
+
+                // The tree-CRUD trace of the folder's deletion (#1588):
+                // journal-visible only, no undo group.
+                _journalService.AddRecord(new JournalRecordModel(remove.Id, remove.Initiator)
+                {
+                    Enviroment = "Remove folder",
+                    PropertyName = "folder",
+                    OldValue = logFolder,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                });
+            }
             else
                 _logger.Warn($"Folder '{logFolder}' remove is unsuccess");
 
@@ -339,6 +361,22 @@ namespace HSMServer.Folders
             }
             else
                 _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
+
+            // The tree-CRUD trace of the move (#1588), written AFTER the
+            // move and ONLY when a folder was actually resolved — an unknown
+            // pair journals two Warn lines and nothing else. Journal-visible
+            // only.
+            if (fromFolder is not null || toFolder is not null)
+                _journalService.AddRecord(new JournalRecordModel(product.Id, initiator)
+                {
+                    Enviroment = "Move product",
+                    PropertyName = "product",
+                    OldValue = fromFolder?.Name,
+                    NewValue = toFolder?.Name,
+                    Path = product.Name,
+                    Kind = HSMServer.Core.Journal.JournalKinds.TreeCrud,
+                    ProductId = product.Id.ToString(),
+                });
         }
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)

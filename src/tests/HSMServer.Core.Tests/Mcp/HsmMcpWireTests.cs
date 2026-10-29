@@ -68,20 +68,20 @@ namespace HSMServer.Core.Tests.Mcp
             "find_sensors",
             "get_alert_schedule",
             "get_alert_template",
-            "get_change_set",
             "get_chat",
             "get_folder",
+            "get_journal_record",
             "get_node",
             "get_sensor",
             "get_sensor_history",
             "list_alert_schedules",
             "list_alert_templates",
-            "list_change_sets",
             "list_chats",
             "list_folders",
+            "list_journal_records",
             "list_products",
             "mute_sensor",
-            "rollback_change_set",
+            "rollback_journal_record",
             "unmute_sensor",
             "update_alert_schedule",
             "update_alert_template",
@@ -102,6 +102,18 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
         private readonly Mock<HSMServer.Core.ChangeSets.IChangeSetJournal> _journalMock = new();
+
+        // #1588: the recorder's unified-journal writes are a no-op in this
+        // host (no DB); the journal surface itself is covered by its own
+        // suites.
+        private static HSMServer.Core.Journal.IJournalService JournalServiceOfNulls()
+        {
+            var journal = new Moq.Mock<HSMServer.Core.Journal.IJournalService>();
+
+            journal.Setup(s => s.AddRecord(It.IsAny<HSMServer.Core.Model.JournalRecordModel>()));
+
+            return journal.Object;
+        }
 
         private readonly Guid _ownerId = Guid.NewGuid();
         private readonly string _credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
@@ -507,7 +519,8 @@ namespace HSMServer.Core.Tests.Mcp
                         // the real recorder/engine over the mocked managers.
                         services.AddSingleton(_journalMock.Object);
                         services.AddSingleton(_ => new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
-                            _journalMock.Object, Microsoft.Extensions.Logging.Abstractions.NullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>.Instance));
+                            _journalMock.Object, JournalServiceOfNulls(),
+                            Microsoft.Extensions.Logging.Abstractions.NullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>.Instance));
                         services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService,
                             HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
 

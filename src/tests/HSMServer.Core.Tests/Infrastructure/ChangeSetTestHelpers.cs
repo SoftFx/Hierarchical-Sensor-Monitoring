@@ -18,7 +18,19 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static ChangeSetRecorder Recorder(IDatabaseCore database) =>
             new(database is null ? Journal() : new ChangeSetJournal(database),
+                JournalService(),
                 CommonMoqs.CreateNullLogger<ChangeSetRecorder>());
+
+        // #1588: the recorder also writes unified-journal records; suites
+        // that construct it directly get a no-op journal service.
+        internal static HSMServer.Core.Journal.IJournalService JournalService()
+        {
+            var service = new Mock<HSMServer.Core.Journal.IJournalService>();
+
+            service.Setup(s => s.AddRecord(It.IsAny<HSMServer.Core.Model.JournalRecordModel>()));
+
+            return service.Object;
+        }
 
         // The mock accepts every append under the id it was given (the real
         // journal's fork paths — foreign author, terminal set — never trigger

@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.ChangeSets;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
 using Microsoft.Extensions.Logging;
@@ -13,28 +14,33 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 {
     /// <summary>
     /// The single hook helper every journaled administration service uses
-    /// (#1570): resolves the effective change-set id of a write (client id or
-    /// a fresh one for an ungrouped write), snapshots policy lists as entity
-    /// images, and appends entries to the undo journal — swallowing journal
-    /// failures AFTER LOUD LOGGING so a write that already applied is never
-    /// reported failed over a lost undo point (ADR-0010 trade-off).
+    /// (#1570, #1588): resolves the write's undo-group id (the server-minted
+    /// per-request id), snapshots policy lists as entity images, appends
+    /// entries to the internal undo store, and writes the UNIFIED-JOURNAL
+    /// record for the kinds the cache-layer events do not cover (templates,
+    /// schedules, and every rollback entry) — swallowing journal failures
+    /// AFTER LOUD LOGGING so a write that already applied is never reported
+    /// failed over a lost undo point (ADR-0010 trade-off).
     /// </summary>
     public sealed class ChangeSetRecorder
     {
         private readonly IChangeSetJournal _journal;
+        private readonly IJournalService _journalService;
         private readonly ILogger<ChangeSetRecorder> _logger;
 
-        public ChangeSetRecorder(IChangeSetJournal journal, ILogger<ChangeSetRecorder> logger)
+        public ChangeSetRecorder(IChangeSetJournal journal, IJournalService journalService,
+            ILogger<ChangeSetRecorder> logger)
         {
             _journal = journal;
+            _journalService = journalService;
             _logger = logger;
         }
 
 
         /// <summary>
-        /// The change-set id a write journals under: the client-supplied id
-        /// when grouping, a fresh id when the write stands alone. Also used as
-        /// the dry-run echo id.
+        /// The undo-group id a write journals under: the request-scoped id
+        /// minted per HTTP request / MCP call / form post (#1588), or a fresh
+        /// one when the caller passes no options.
         /// </summary>
         public static Guid ResolveChangeSetId(ChangeSetWriteOptions write) => write?.ChangeSetId ?? Guid.NewGuid();
 
@@ -43,9 +49,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// (policy, template and schedule writes, the rollback engine): the
         /// token's OWNER as a user (the token acts as its owner, #1384); a
         /// cookie principal (the web UI) carries no token claims and falls to
-        /// the authenticated identity name. ONE helper because the journal's
-        /// fork rule compares the author STRINGS this produces — drifting
-        /// copies would silently split a user's grouped writes.
+        /// the authenticated identity name. ONE helper because the undo
+        /// journal's author strings must stay consistent across transports.
         /// </summary>
         public static InitiatorInfo InitiatorOf(System.Security.Claims.ClaimsPrincipal user, IUserManager users)
         {
@@ -58,18 +63,58 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         }
 
         /// <summary>
-        /// Append one entry; null when the journal write failed (the undo
-        /// point is lost — logged loudly). The returned id is the set the
-        /// entry ACTUALLY landed in: the journal forks a client-supplied id
-        /// whose set belongs to another author or is already rolled back.
-        /// Callers echo THAT id on the write response only on success, so a
-        /// client never receives an undo handle that does not exist.
+        /// The write initiator of a journaled write, stamped with the
+        /// request's undo-group id (#1588): the cache-layer journal records
+        /// copy the stamp onto the record, which is what links a policy-list
+        /// change to its rollback group. Shared by every administration
+        /// service so the stamping rule cannot drift between them.
+        /// </summary>
+        public static InitiatorInfo InitiatorOf(System.Security.Claims.ClaimsPrincipal user, IUserManager users,
+            ChangeSetWriteOptions write)
+        {
+            var initiator = InitiatorOf(user, users);
+
+            return write?.ChangeSetId is { } id ? initiator.AsJournaled(id) : initiator;
+        }
+
+        /// <summary>
+        /// Append one entry to the internal undo store; null when the journal
+        /// write failed (the undo point is lost — logged loudly). The id is
+        /// the request's group id — with server-minted ids (#1588) the entry
+        /// always lands in exactly that group.
         /// </summary>
         public Guid? Record(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry)
         {
             try
             {
-                return _journal.Append(changeSetId, author, entry);
+                var landed = _journal.Append(changeSetId, author, entry);
+
+                // The unified-journal record of the kinds the cache-layer
+                // events do not cover: policy lists journal through the
+                // ChangesHandler records (stamped with the group via the
+                // initiator), templates and schedules have no cache journal
+                // hook — the recorder IS their journal writer.
+                if (entry.Kind is ChangeSetEntryKind.AlertTemplate or ChangeSetEntryKind.AlertSchedule)
+                    WriteJournalRecord(landed, author, entry);
+
+                // A landed id OTHER than the request's group means the group
+                // was already rolled back mid-request (#1588 review round 2):
+                // the remaining writes forked into a fresh group. Loud log —
+                // and a journal record for the forked group EVEN for policy
+                // kinds (#1588 review round 4): the cache-layer records of
+                // this write still carry the ORIGINAL (terminal) group id, so
+                // without this record nothing in the journal addresses the
+                // forked group's undo points.
+                if (landed != changeSetId)
+                {
+                    _logger.LogWarning(
+                        "Undo group {ChangeSetId} was terminal; the write ({Kind} {Operation} on {EntityId}) forked into {LandedId}",
+                        changeSetId, entry.Kind, entry.Operation, entry.EntityId, landed);
+
+                    WriteJournalRecord(landed, author, entry);
+                }
+
+                return landed;
             }
             catch (Exception e)
             {
@@ -80,6 +125,64 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 return null;
             }
         }
+
+        /// <summary>
+        /// The rollback twin of <see cref="Record"/> (#1588): appends the
+        /// compensating entry to the ROLLBACK group and always writes its
+        /// unified-journal record — the rollback group must be visible in the
+        /// journal (it is the redo handle: rolling back the rollback re-applies
+        /// the original writes). Policy restores also leave their per-node
+        /// ChangesHandler records; this record is the group's primary trace.
+        /// </summary>
+        public bool RecordRollback(Guid rollbackChangeSetId, InitiatorInfo author, ChangeSetEntry entry)
+        {
+            try
+            {
+                _journal.Append(rollbackChangeSetId, author, entry);
+                WriteJournalRecord(rollbackChangeSetId, author, entry);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e,
+                    "Undo point lost: rollback journal append failed for change set {ChangeSetId} ({Kind} {Operation} on {EntityId})",
+                    rollbackChangeSetId, entry.Kind, entry.Operation, entry.EntityId);
+
+                return false;
+            }
+        }
+
+        private void WriteJournalRecord(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry) =>
+            _journalService.AddRecord(new JournalRecordModel(entry.EntityId, author ?? InitiatorInfo.System)
+            {
+                Enviroment = entry.Kind switch
+                {
+                    ChangeSetEntryKind.AlertTemplate => "Alert template",
+                    ChangeSetEntryKind.AlertSchedule => "Alert schedule",
+                    _ => "Rollback",
+                },
+                PropertyName = $"{entry.Kind}:{entry.Operation}",
+                OldValue = entry.Operation == ChangeSetOperation.Delete ? entry.Path : null,
+                NewValue = entry.Operation != ChangeSetOperation.Delete ? entry.Path : null,
+                Path = entry.Path,
+                Kind = KindOf(entry),
+                // The recorded root product (#1588 review round 4): the redo
+                // handle must stay visible under the product filter like
+                // every other record of the entity.
+                ProductId = entry.ParentId?.ToString(),
+                ChangeSetId = changeSetId.ToString(),
+            });
+
+        private static string KindOf(ChangeSetEntry entry) => entry.Kind switch
+        {
+            ChangeSetEntryKind.SensorDataPolicies => JournalKinds.SensorDataPolicies,
+            ChangeSetEntryKind.SensorTtlPolicies => JournalKinds.SensorTtlPolicies,
+            ChangeSetEntryKind.ProductTtlPolicies => JournalKinds.ProductTtlPolicies,
+            ChangeSetEntryKind.AlertTemplate => JournalKinds.AlertTemplate,
+            ChangeSetEntryKind.AlertSchedule => JournalKinds.AlertSchedule,
+            _ => null,
+        };
 
 
         // Policy-list snapshots: the full-list image the rollback restores.

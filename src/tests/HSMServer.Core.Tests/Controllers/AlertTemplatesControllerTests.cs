@@ -42,6 +42,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IUserManager> _userManagerMock = new();
         private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
+        private readonly Mock<HSMServer.Authentication.IApiTokenAuthorizationService> _authorizationMock = new();
         private readonly TreeViewModel _treeViewModel;
         private readonly Guid _folderId = Guid.NewGuid();
 
@@ -64,6 +65,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService CreateTemplateWriter()
+        {
+            var recorder = new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
+                Infrastructure.ChangeSetTestHelpers.Journal(),
+                Infrastructure.ChangeSetTestHelpers.JournalService(),
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>());
+
+            return new HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService(
+                _cacheMock.Object, _folderManagerMock.Object, _chatsMock.Object, _scheduleProviderMock.Object,
+                _authorizationMock.Object, _userManagerMock.Object, recorder,
+                CommonMoqs.CreateNullLogger<HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateAdministrationService>());
+        }
+
         private AlertTemplatesController CreateController()
         {
             var controller = new AlertTemplatesController(
@@ -72,11 +86,16 @@ namespace HSMServer.Core.Tests.Controllers
                 _treeViewModel,
                 _cacheMock.Object,
                 _userManagerMock.Object,
-                _scheduleProviderMock.Object);
+                _scheduleProviderMock.Object,
+                CreateTemplateWriter());
 
             controller.ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext { User = new User() },
+                // The web save is admin-only ([AuthorizeIsAdmin]) and since
+                // #1588 rides the administration service through the cookie
+                // access seam — the acting user must be an admin, like in
+                // production.
+                HttpContext = new DefaultHttpContext { User = new User { IsAdmin = true } },
             };
 
             return controller;
@@ -227,8 +246,10 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<OkResult>(result);
             // Verify the mismatch check actually ran for each path — without this assertion the test
             // would still pass if the validation was silently removed, because AddAlertTemplateAsync
-            // is mocked to succeed unconditionally.
-            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(2));
+            // is mocked to succeed unconditionally. Since #1588 the save ALSO rides the
+            // administration service (whose fan-out scan enumerates the paths again), so the
+            // controller-side check is verified as at-least-once-per-path.
+            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.AtLeast(2));
         }
 
         [Fact]

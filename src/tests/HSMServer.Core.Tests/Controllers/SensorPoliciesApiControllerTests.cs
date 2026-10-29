@@ -333,19 +333,14 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public async Task CreatePolicy_ChangeSetHeader_IsEchoedOnTheResponse()
+        public async Task CreatePolicy_NoChangeSetHeader_IsAccepted()
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
             var controller = CreateController();
-            var changeSetId = Guid.NewGuid();
-
-            controller.Request.Headers[ChangeSetHeaders.ChangeSetId] = changeSetId.ToString();
 
             var created = await controller.CreatePolicy(sensor.Id, DataDto());
 
             Assert.Equal(201, StatusCodeOf(created));
-            Assert.Equal(changeSetId.ToString(),
-                controller.Response.Headers[ChangeSetHeaders.ChangeSetId].ToString());
         }
 
         [Fact]
@@ -369,9 +364,8 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal("create", body.Operation);
             Assert.Equal(sensor.Id.ToString(), body.EntityId);
 
-            // Nothing applied, nothing echoed beyond the grouping id.
+            // Nothing applied (#1588: undo groups are internal — no echo).
             Assert.Empty(sensor.Policies);
-            Assert.True(Guid.TryParse(body.ChangeSetId, out _));
         }
 
         [Fact]

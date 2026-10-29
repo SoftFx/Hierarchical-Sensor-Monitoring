@@ -115,7 +115,7 @@ namespace HSMServer.Controllers
         public async ValueTask<IActionResult> CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                await _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id);
+                await _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id, CurrentInitiator);
 
             return PartialView("_AddProduct", product);
         }

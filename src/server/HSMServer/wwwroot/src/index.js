@@ -53,7 +53,7 @@ import './js/site.js';
 import './js/treeCollapse';
 import './js/dashboard.js'
 import './js/alertSchedule.js'
-import './js/changeSets.js'
+import './js/journalPage.js'
 
 import './css/site.css';
 import './css/accessKey.css';

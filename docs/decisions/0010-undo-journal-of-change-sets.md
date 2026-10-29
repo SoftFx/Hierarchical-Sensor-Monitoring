@@ -1,6 +1,6 @@
 # ADR-0010: Undo journal of change sets, not staged transactions
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part by ADR-0013)
 **Date:** 2026-10-19
 **Supersedes:** —
 

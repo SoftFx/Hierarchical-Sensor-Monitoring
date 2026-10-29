@@ -96,16 +96,18 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         /// echoes the stored schedule.
         /// </summary>
         public Task<PolicyWriteResult<AlertScheduleDto>> CreateScheduleAsync(ClaimsPrincipal user,
-            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null) =>
-            Task.FromResult(Write(user, id: null, dto, write));
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null,
+            ChangeSets.IChangeSetAccess access = null) =>
+            Task.FromResult(Write(user, id: null, dto, write, access));
 
         /// <summary>
         /// Update a schedule (upsert semantics at a known id); the response
         /// echoes the stored schedule.
         /// </summary>
         public Task<PolicyWriteResult<AlertScheduleDto>> UpdateScheduleAsync(Guid id, ClaimsPrincipal user,
-            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null) =>
-            Task.FromResult(Write(user, id, dto, write));
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null,
+            ChangeSets.IChangeSetAccess access = null) =>
+            Task.FromResult(Write(user, id, dto, write, access));
 
         /// <summary>
         /// Delete a schedule. Detaches the id from every referencing policy
@@ -121,9 +123,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
         // shared gate inside the core cache update paths. See
         // management-api/feature.md.
         public async Task<PolicyWriteResult> DeleteScheduleAsync(Guid id, ClaimsPrincipal user,
-            CancellationToken cancellationToken = default, ChangeSetWriteOptions write = null)
+            CancellationToken cancellationToken = default, ChangeSetWriteOptions write = null,
+            ChangeSets.IChangeSetAccess access = null)
         {
-            if (AuthorizeGlobalWrite(user) is { } denied)
+            if (AuthorizeGlobalWrite(user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
             if (_schedules.GetSchedule(id) is not { } schedule)
@@ -149,7 +152,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             // Deliberately tied to the cancellation token like the web Remove:
             // an aborted request stops the DISPATCH of further detach work;
             // the schedule is not deleted either way (see the class comment).
-            var deleted = await DeleteScheduleCoreAsync(id, user, cancellationToken: cancellationToken);
+            var deleted = await DeleteScheduleCoreAsync(id, user, access, cancellationToken);
 
             // The delete's journal entry: the row's before/after image plus
             // the per-node detach images (the fan-out afters are the LIVE
@@ -181,18 +184,14 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // point; auth/NotFound failures changed nothing and journal
                 // nothing.
                 if (deleted.Failure.Outcome == PolicyWriteOutcome.Conflict)
-                    _changeSets.Record(changeSetId, InitiatorOf(user), DeleteEntry(scheduleDeleted: false));
+                    _changeSets.Record(changeSetId, InitiatorOf(user, write), DeleteEntry(scheduleDeleted: false));
 
                 return deleted;
             }
 
-            // The echoed change-set id is stamped ONLY when the journal entry
-            // actually landed, and it is the id the entry landed in (the
-            // journal forks a foreign or terminal id; Record's null = the
-            // undo point is lost).
-            var landedId = _changeSets.Record(changeSetId, InitiatorOf(user), DeleteEntry(scheduleDeleted: true));
+            _changeSets.Record(changeSetId, InitiatorOf(user, write), DeleteEntry(scheduleDeleted: true));
 
-            return landedId is { } landed ? PolicyWriteResult.Ok(landed) : PolicyWriteResult.Ok();
+            return PolicyWriteResult.Ok();
         }
 
 
@@ -264,9 +263,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
 
         private PolicyWriteResult<AlertScheduleDto> Write(ClaimsPrincipal user, Guid? id,
-            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null)
+            AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null,
+            ChangeSets.IChangeSetAccess access = null)
         {
-            if (AuthorizeGlobalWrite(user) is { } denied)
+            if (AuthorizeGlobalWrite(user, access) is { } denied)
                 return PolicyWriteResult<AlertScheduleDto>.Fail(denied.Outcome, message: denied.Message);
 
             // Authorization precedes body validation and existence (#1500
@@ -284,7 +284,6 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             ScheduleModel schedule;
             var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
-            Guid? landedId;
 
             lock (NameUniquenessGate)
             {
@@ -305,7 +304,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // #1570 dry-run: the body is valid; report the row the write
                 // would create/replace, apply nothing.
                 if (write is { DryRun: true })
-                    return PolicyWriteResult<AlertScheduleDto>.OkPreview(WritePreviews.Create(write,
+                    return PolicyWriteResult<AlertScheduleDto>.OkPreview(WritePreviews.Create(
                         WritePreviews.CamelOf(ChangeSetEntryKind.AlertSchedule),
                         WritePreviews.CamelOf(id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update),
                         schedule.Id, schedule.Name,
@@ -314,7 +313,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 // The provider's Save is an idempotent upsert (cache + LevelDB row).
                 _schedules.SaveSchedule(schedule);
 
-                landedId = _changeSets.Record(changeSetId, InitiatorOf(user), new ChangeSetEntry
+                _changeSets.Record(changeSetId, InitiatorOf(user, write), new ChangeSetEntry
                 {
                     Kind = ChangeSetEntryKind.AlertSchedule,
                     Operation = id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update,
@@ -328,12 +327,56 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             // Echo the STORED schedule through the read mapping — sensor
             // references filtered to the owner's sight, exactly as GET does.
-            // The echoed change-set id is stamped ONLY when the journal entry
-            // actually landed, and it is the id the entry landed in (the
-            // journal forks a foreign or terminal id; null = lost undo point).
-            var result = PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
+            return PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
+        }
 
-            return landedId is { } landed ? result.WithChangeSet(landed) : result;
+
+        /// <summary>
+        /// The web editor's save entry (#1588: the single write path): the
+        /// form's PARSED schedule model (the view model validated the form)
+        /// rides the same global-write authorization, name-uniqueness gate
+        /// and undo journaling as the DTO path. A null id creates (the id is
+        /// server-generated), a known id updates.
+        /// </summary>
+        public PolicyWriteResult<AlertScheduleDto> SaveSchedule(ClaimsPrincipal user, Guid? id,
+            ScheduleModel schedule, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)
+        {
+            if (AuthorizeGlobalWrite(user, access) is { } denied)
+                return PolicyWriteResult<AlertScheduleDto>.Fail(denied.Outcome, message: denied.Message);
+
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+
+            lock (NameUniquenessGate)
+            {
+                var before = id is null ? null : _schedules.GetSchedule(id.Value);
+
+                if (id is not null && before is null)
+                    return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.NotFound);
+
+                if ((_schedules.GetAllSchedules() ?? []).Any(
+                        existing => existing.Name == schedule.Name && existing.Id != id))
+                    return PolicyWriteResult<AlertScheduleDto>.Fail(PolicyWriteOutcome.Invalid,
+                        new Dictionary<string, string[]> { ["name"] = ["The schedule name must be unique."] });
+
+                // The id is server-owned (the DTO path's rule): generated on
+                // create, the known id on update.
+                schedule.Id = id ?? Guid.NewGuid();
+
+                _schedules.SaveSchedule(schedule);
+
+                _changeSets.Record(changeSetId, InitiatorOf(user, write), new ChangeSetEntry
+                {
+                    Kind = ChangeSetEntryKind.AlertSchedule,
+                    Operation = id is null ? ChangeSetOperation.Create : ChangeSetOperation.Update,
+                    EntityId = schedule.Id,
+                    ParentId = null,
+                    Path = schedule.Name,
+                    BeforeSchedule = before?.ToEntity(),
+                    AfterSchedule = schedule.ToEntity(),
+                });
+            }
+
+            return PolicyWriteResult<AlertScheduleDto>.Ok(_reader.RenderSchedule(schedule, user));
         }
 
 
@@ -434,8 +477,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
         // === Undo-journal hooks (#1570) ===
 
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
-            ChangeSetRecorder.InitiatorOf(user, _users);
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            ChangeSetRecorder.InitiatorOf(user, _users, write);
 
         private WritePreviewDto SchedulePreview(ChangeSetWriteOptions write, Guid scheduleId, string name)
         {
@@ -469,7 +512,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 Change = "delete schedule",
             });
 
-            return WritePreviews.Create(write, WritePreviews.CamelOf(ChangeSetEntryKind.AlertSchedule),
+            return WritePreviews.Create(WritePreviews.CamelOf(ChangeSetEntryKind.AlertSchedule),
                 WritePreviews.CamelOf(ChangeSetOperation.Delete), scheduleId, name, affected);
         }
 

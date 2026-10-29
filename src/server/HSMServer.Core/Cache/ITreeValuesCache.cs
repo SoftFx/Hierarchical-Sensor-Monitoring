@@ -43,7 +43,7 @@ namespace HSMServer.Core.Cache
         List<BaseSensorModel> GetSensors(string wildcard, SensorType? type, Guid? folderId);
         List<AccessKeyModel> GetAccessKeys();
 
-        Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
+        Task<ProductModel> AddProductAsync(string productName, Guid authorId, InitiatorInfo initiator = null, CancellationToken token = default);
         Task<TaskResult> UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
         Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         TaskResult UpdateDisabledSensorGroups(Guid productId, IEnumerable<string> disabled);

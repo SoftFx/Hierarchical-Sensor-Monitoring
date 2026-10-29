@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model.NodeSettings
 
                         PropertyName = propName,
                         Path = table.Path,
+                        Kind = JournalKinds.NodeSettings,
+                        ChangeSetId = update.Initiator?.ChangeSetId?.ToString(),
                     });
 
                     nodeInfo.SetUpdate(update.Initiator);

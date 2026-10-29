@@ -92,10 +92,12 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var seeded = await SeedPoliciesAsync(sensor, RegularUpdate("seeded"));
             Assert.True(seeded.IsOk, seeded.Error);
 
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "🔥"), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "🔥"), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
-            var rolledBack = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User);
+            var rolledBack = await _changeSets.RollbackAsync(createdId, User);
 
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
             Assert.Equal("completed", rolledBack.Value.Status);
@@ -104,7 +106,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // policy is gone.
             Assert.Equal("seeded", Assert.Single(sensor.Policies).Template);
 
-            var stored = _journal.Get(created.ChangeSetId.Value);
+            var stored = _journal.Get(createdId);
 
             Assert.Equal(ChangeSetStatus.RolledBack, stored.Status);
         }
@@ -113,15 +115,19 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task Rollback_RefusesOnContentChange_WithPerEntityDiff()
         {
             var sensor = await CreateSensorAsync("rbConflict");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             // A web-editor-style intervening change on the same node: another
             // full-list write (content change, not a timestamp).
-            var intervening = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var interveningId = Guid.NewGuid();
+            var intervening = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = interveningId });
             Assert.True(intervening.Success, intervening.Failure?.Message);
 
-            var refused = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User);
+            var refused = await _changeSets.RollbackAsync(createdId, User);
 
             Assert.False(refused.Success);
             Assert.Equal(PolicyWriteOutcome.Conflict, refused.Failure.Outcome);
@@ -130,7 +136,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             // Nothing was restored.
             Assert.Equal(2, sensor.Policies.Count());
-            Assert.Equal(ChangeSetStatus.Applied, _journal.Get(created.ChangeSetId.Value).Status);
+            Assert.Equal(ChangeSetStatus.Applied, _journal.Get(createdId).Status);
         }
 
         [Fact]
@@ -152,8 +158,12 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.True(ttl.Success, ttl.Failure?.Message);
 
             // Intervening writes on BOTH lists — both entries conflict.
-            var interveningData = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
-            var interveningTtl = await _policies.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(), User);
+            var interveningDataId = Guid.NewGuid();
+            var interveningData = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = interveningDataId });
+            var interveningTtlId = Guid.NewGuid();
+            var interveningTtl = await _policies.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = interveningTtlId });
             Assert.True(interveningData.Success, interveningData.Failure?.Message);
             Assert.True(interveningTtl.Success, interveningTtl.Failure?.Message);
 
@@ -172,7 +182,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task Rollback_WebEditorStyleReAssertOfSameContent_IsNotAConflict()
         {
             var sensor = await CreateSensorAsync("rbReAssert");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             // The web editor re-asserts the FULL list on every form save —
@@ -186,7 +198,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             });
             Assert.True(reAssert.IsOk, reAssert.Error);
 
-            var rolledBack = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User);
+            var rolledBack = await _changeSets.RollbackAsync(createdId, User);
 
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
             Assert.Empty(sensor.Policies);
@@ -196,30 +208,36 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task Rollback_ForceOverridesConflicts()
         {
             var sensor = await CreateSensorAsync("rbForce");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
-            var intervening = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var interveningId = Guid.NewGuid();
+            var intervening = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = interveningId });
             Assert.True(intervening.Success, intervening.Failure?.Message);
 
-            var forced = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User, force: true);
+            var forced = await _changeSets.RollbackAsync(createdId, User, force: true);
 
             Assert.True(forced.Success, forced.Failure?.Message);
 
             // Forced restore replaces the list with the recorded before-image
             // (empty), clobbering the intervening write deliberately.
             Assert.Empty(sensor.Policies);
-            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(created.ChangeSetId.Value).Status);
+            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(createdId).Status);
         }
 
         [Fact]
         public async Task RollbackDryRun_ReportsPlanAndConflicts_AppliesNothing()
         {
             var sensor = await CreateSensorAsync("rbDryRun");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
-            var preview = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User, dryRun: true);
+            var preview = await _changeSets.RollbackAsync(createdId, User, dryRun: true);
 
             Assert.True(preview.Success, preview.Failure?.Message);
             Assert.True(preview.Value.DryRun);
@@ -228,17 +246,19 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             // Nothing applied, nothing marked restored.
             Assert.Single(sensor.Policies);
-            Assert.Null(_journal.Get(created.ChangeSetId.Value).Entries[0].RestoredBy);
+            Assert.Null(_journal.Get(createdId).Entries[0].RestoredBy);
         }
 
         [Fact]
         public async Task Rollback_IsJournaled_RedoViaRollbackOfRollback()
         {
             var sensor = await CreateSensorAsync("rbRedo");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "redo-me"), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "redo-me"), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
-            var rolledBack = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User);
+            var rolledBack = await _changeSets.RollbackAsync(createdId, User);
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
             Assert.Empty(sensor.Policies);
 
@@ -258,7 +278,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal("redo-me", Assert.Single(sensor.Policies).Icon);
 
             // And the original set is terminal — no double undo.
-            var refused = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User);
+            var refused = await _changeSets.RollbackAsync(createdId, User);
 
             Assert.False(refused.Success);
             Assert.Equal(PolicyWriteOutcome.Conflict, refused.Failure.Outcome);
@@ -296,11 +316,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.True(created.Success, created.Failure?.Message);
             var templateId = created.Value.Id;
 
-            var deleted = await _templates.DeleteTemplateAsync(templateId, User);
+            var deletedId = Guid.NewGuid();
+            var deleted = await _templates.DeleteTemplateAsync(templateId, User,
+                new ChangeSetWriteOptions { ChangeSetId = deletedId });
             Assert.True(deleted.Success, deleted.Failure?.Message);
             Assert.Empty(sensor.Policies);
 
-            var rolledBack = await _changeSets.RollbackAsync(deleted.ChangeSetId.Value, User);
+            var rolledBack = await _changeSets.RollbackAsync(deletedId, User);
 
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
 
@@ -319,18 +341,22 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var schedule = await _schedules.CreateScheduleAsync(User, ScheduleDto());
             Assert.True(schedule.Success, schedule.Failure?.Message);
 
+            var withReferenceId = Guid.NewGuid();
             var withReference = await _policies.CreateSensorPolicyAsync(sensor.Id,
-                DataPolicy(scheduleId: schedule.Value.Id), User);
+                DataPolicy(scheduleId: schedule.Value.Id), User,
+                new ChangeSetWriteOptions { ChangeSetId = withReferenceId });
             Assert.True(withReference.Success, withReference.Failure?.Message);
 
-            var deleted = await _schedules.DeleteScheduleAsync(schedule.Value.Id, User);
+            var deletedId = Guid.NewGuid();
+            var deleted = await _schedules.DeleteScheduleAsync(schedule.Value.Id, User,
+                cancellationToken: default, new ChangeSetWriteOptions { ChangeSetId = deletedId });
             Assert.True(deleted.Success, deleted.Failure?.Message);
 
             // The delete detached the reference; the policy survives without
             // it.
             Assert.Null(sensor.Policies.Single().ScheduleId);
 
-            var rolledBack = await _changeSets.RollbackAsync(deleted.ChangeSetId.Value, User);
+            var rolledBack = await _changeSets.RollbackAsync(deletedId, User);
 
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
 
@@ -344,7 +370,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task ListAndGet_FilterByCallerSightAndEntity()
         {
             var sensor = await CreateSensorAsync("rbList");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             var list = _changeSets.ListChangeSets(User,
@@ -353,11 +381,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.True(list.Success);
             var summary = Assert.Single(list.Value);
 
-            Assert.Equal(created.ChangeSetId.Value.ToString(), summary.Id);
+            Assert.Equal(createdId.ToString(), summary.Id);
             Assert.Equal("api-owner", summary.Author);
             Assert.Equal("applied", summary.Status);
 
-            var details = _changeSets.GetChangeSet(created.ChangeSetId.Value, User);
+            var details = _changeSets.GetChangeSet(createdId, User);
 
             Assert.True(details.Success);
             Assert.Single(details.Value.Entries);
@@ -376,13 +404,15 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public async Task SensorDeletion_PurgesEntries_EntrylessChangeSetIsRemoved()
         {
             var sensor = await CreateSensorAsync("rbPurgeSolo");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             await _valuesCache.RemoveSensorAsync(sensor.Id, Force);
 
             // The single-entry change set does not outlive its sensor.
-            Assert.Null(_journal.Get(created.ChangeSetId.Value));
+            Assert.Null(_journal.Get(createdId));
         }
 
         [Fact]
@@ -481,14 +511,16 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // every node), and the rollback's journal author is the login
             // name, not "api-token".
             var sensor = await CreateSensorAsync("rbCookie");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "cookie-me"), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "cookie-me"), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             var cookie = new ClaimsPrincipal(new ClaimsIdentity(
                 [new Claim(ClaimTypes.Name, "web-admin")], "Cookies"));
             var access = new CookieUserAccess(new User("web-admin") { IsAdmin = true }, _valuesCache);
 
-            var rolledBack = await _changeSets.RollbackAsync(created.ChangeSetId.Value, cookie, access: access);
+            var rolledBack = await _changeSets.RollbackAsync(createdId, cookie, access: access);
 
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
             Assert.Equal("completed", rolledBack.Value.Status);
@@ -596,13 +628,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
-        public async Task ForeignAuthorWrite_UnderAnExistingChangeSet_ForksToAFreshId()
+        public async Task ForeignAuthorWrite_JournalsUnderItsOwnRequestGroup()
         {
-            // The change-set id is client-supplied and not secret: a foreign
-            // principal's write under it must not join the set (the audit
-            // trail credits the author) nor block the author's rollback —
-            // it journals under a fresh id and the ECHO names that id. A
-            // terminal (rolled-back) id forks the same way.
+            // #1588: group ids are SERVER-minted per request, so the #1570
+            // fork rule is structurally gone — every request journals under
+            // exactly its own group, and neither set blocks the other's
+            // rollback (the other's write is an intervening change the
+            // conflict check reports).
             var users = new Mock<IUserManager>();
             users.Setup(u => u[It.IsAny<Guid>()]).Returns((Guid id) => new User($"owner-{id:N}"));
 
@@ -611,34 +643,25 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 ChangeSetTestHelpers.Recorder(_databaseCoreManager.DatabaseCore));
 
             var sensor = await CreateSensorAsync("rbFork");
-            var changeSetId = Guid.NewGuid();
-
-            var mine = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
-                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
-            Assert.True(mine.Success, mine.Failure?.Message);
-            Assert.Equal(changeSetId, mine.ChangeSetId);
-
+            var mineId = Guid.NewGuid();
+            var strangerId = Guid.NewGuid();
             var stranger = BuildPrincipal();
 
-            var forked = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), stranger,
-                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
-            Assert.True(forked.Success, forked.Failure?.Message);
-            Assert.NotEqual(changeSetId, forked.ChangeSetId);
+            var mine = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = mineId });
+            Assert.True(mine.Success, mine.Failure?.Message);
 
-            // One entry in each set; the author's set still rolls back (the
-            // foreign write is an intervening change — force over its diff,
-            // but no 403 block).
-            Assert.Single(_journal.Get(changeSetId).Entries);
-            Assert.Single(_journal.Get(forked.ChangeSetId.Value).Entries);
+            var theirs = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), stranger,
+                new ChangeSetWriteOptions { ChangeSetId = strangerId });
+            Assert.True(theirs.Success, theirs.Failure?.Message);
 
-            var rolledBack = await _changeSets.RollbackAsync(changeSetId, User, force: true);
+            // One entry in each group; the author's set still rolls back
+            // (force over the intervening change's diff, no 403 block).
+            Assert.Single(_journal.Get(mineId).Entries);
+            Assert.Single(_journal.Get(strangerId).Entries);
+
+            var rolledBack = await _changeSets.RollbackAsync(mineId, User, force: true);
             Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
-
-            // The rolled-back id is terminal: a new write under it forks too.
-            var afterRollback = await policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
-                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
-            Assert.True(afterRollback.Success, afterRollback.Failure?.Message);
-            Assert.NotEqual(changeSetId, afterRollback.ChangeSetId);
         }
 
         [Fact]
@@ -649,7 +672,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // entry actually landed in the journal — a mid-restore failure
             // that journals nothing answers without one.
             var sensor = await CreateSensorAsync("rbNoRedo");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
             // The pre-flight passes (the entry-level check allows), but every
@@ -657,7 +682,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // nothing journals.
             var access = new SelectiveAccess(canWriteResource: _ => false);
 
-            var result = await _changeSets.RollbackAsync(created.ChangeSetId.Value, User, access: access);
+            var result = await _changeSets.RollbackAsync(createdId, User, access: access);
 
             Assert.True(result.Success, result.Failure?.Message);
             Assert.Equal("partial", result.Value.Status);
@@ -673,11 +698,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // of replaying every entry and journaling an orphan rollback
             // change set whose redo would re-apply writes nobody intended.
             var sensor = await CreateSensorAsync("rbRace");
-            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            var createdId = Guid.NewGuid();
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = createdId });
             Assert.True(created.Success, created.Failure?.Message);
 
-            var first = Task.Run(() => _changeSets.RollbackAsync(created.ChangeSetId.Value, User));
-            var second = Task.Run(() => _changeSets.RollbackAsync(created.ChangeSetId.Value, User));
+            var first = Task.Run(() => _changeSets.RollbackAsync(createdId, User));
+            var second = Task.Run(() => _changeSets.RollbackAsync(createdId, User));
 
             await Task.WhenAll(first, second);
 

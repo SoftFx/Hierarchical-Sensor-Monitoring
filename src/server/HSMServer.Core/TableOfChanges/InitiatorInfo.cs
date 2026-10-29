@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Text;
 
 namespace HSMServer.Core.TableOfChanges
@@ -24,6 +25,15 @@ namespace HSMServer.Core.TableOfChanges
         public string Info { get; }
 
         public bool IsForceUpdate { get; }
+
+        /// <summary>
+        /// The undo group the write journals under (#1588): stamped by the
+        /// administration services with the per-request change-set id, read
+        /// by the cache-layer journal records so a policy-list change links
+        /// back to its rollback group. Never part of the display string or
+        /// of the persisted change-table owner.
+        /// </summary>
+        public Guid? ChangeSetId { get; init; }
 
 
         private InitiatorInfo(InitiatorType type, string info = null, bool isForce = false)
@@ -54,6 +64,9 @@ namespace HSMServer.Core.TableOfChanges
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 
         public static InitiatorInfo AsCollector(string key, bool isForce) => new(InitiatorType.DataCollector, key, isForce);
+
+        /// <summary>The same initiator stamped with the write's undo group (#1588): the cache-layer journal records link to it.</summary>
+        public InitiatorInfo AsJournaled(Guid changeSetId) => new(Type, Info, IsForceUpdate) { ChangeSetId = changeSetId };
 
         public InitiatorInfoEntity ToEntity() => new()
         {

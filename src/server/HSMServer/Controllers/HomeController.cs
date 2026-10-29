@@ -22,6 +22,8 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
@@ -56,11 +58,13 @@ namespace HSMServer.Controllers
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
+        private readonly PolicyAdministrationService _policies;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
-                              IDatabaseCore database, IAlertScheduleProvider provider) : base(userManager)
+                              IDatabaseCore database, IAlertScheduleProvider provider,
+                              PolicyAdministrationService policies) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -69,6 +73,7 @@ namespace HSMServer.Controllers
             _chatsManager = chatsManager;
             _database = database;
             _alertScheduleProvider = provider;
+            _policies = policies;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -666,6 +671,11 @@ namespace HSMServer.Controllers
             return File(Encoding.UTF8.GetBytes(content.ToString()), fileName.GetContentType(), fileName);
         }
 
+        // The web form's write options (#1588): the request-scoped undo
+        // group shared by every journaled write this post performs.
+        private ChangeSetWriteOptions JournalWriteOptions() =>
+            new() { ChangeSetId = ChangeSetHeaders.RequestGroupId(HttpContext) };
+
         [HttpPost]
         public async ValueTask<IActionResult> UpdateSensorInfo(SensorInfoViewModel newModel)
         {
@@ -696,14 +706,34 @@ namespace HSMServer.Controllers
                 };
             }).ToList() ?? [];
 
+            // #1588 single write path: the policy lists ride the same
+            // administration service (write gates, authorization seam, undo
+            // journaling) the REST/MCP writes use; the settings stay a
+            // settings-only cache update. The undo group of the service
+            // writes is this post's request group.
+            var policiesResult = await _policies.WriteSensorListsAsync(sensor.Id, policyUpdates, ttlPolicies,
+                User, JournalWriteOptions(), new CookieUserAccess(CurrentUser, _treeValuesCache));
+
+            if (!policiesResult.Success)
+            {
+                ModelState.AddModelError(string.Empty,
+                    policiesResult.Failure.Message ?? "The policy lists could not be saved.");
+
+                // Re-render the SUBMITTED form (#1588 review round 4): the
+                // save is two steps now, and rebuilding from the live sensor
+                // would silently discard the user's description/unit/period
+                // edits along with the unsaved policy lists.
+                PopulateAlertSchedules(newModel);
+
+                return PartialView("_MetaInfo", newModel);
+            }
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTLPolicies = ttlPolicies,
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                Policies = policyUpdates,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Statistics = newModel.GetOptions(),

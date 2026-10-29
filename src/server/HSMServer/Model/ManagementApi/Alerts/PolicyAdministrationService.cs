@@ -161,7 +161,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (sensor.Policies.Count() >= MaxPoliciesPerNode)
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("policies"));
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<PolicyDto>(write, ChangeSetEntryKind.SensorDataPolicies,
@@ -228,7 +228,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     out conditions, out var errors))
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<PolicyDto>(write, ChangeSetEntryKind.SensorDataPolicies,
@@ -279,7 +279,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf(write, ChangeSetEntryKind.SensorDataPolicies,
@@ -338,7 +338,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (sensor.Policies.TTLPolicies.Count >= MaxPoliciesPerNode)
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("ttlPolicies"));
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.SensorTtlPolicies,
@@ -396,7 +396,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 !TryValidateTtlDto(dto, AvailableChats(sensor), out ttlTicks, out var errors))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.SensorTtlPolicies,
@@ -448,7 +448,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf(write, ChangeSetEntryKind.SensorTtlPolicies,
@@ -514,14 +514,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var result = await UpdateSensorPolicyAsync(resolution.Sensor.Id, policyId, dto, user, write);
 
-            return result.Success && result.ChangeSetId is { } changeSet
-                ? PolicyWriteResult<ProductPolicyDto>.Ok(
-                    AlertPolicyDtoMapper.ToProductDto(result.Value, resolution.Sensor), changeSet)
-                : result.Success
-                    ? PolicyWriteResult<ProductPolicyDto>.Ok(AlertPolicyDtoMapper.ToProductDto(
-                        result.Value, resolution.Sensor))
-                    : PolicyWriteResult<ProductPolicyDto>.Fail(result.Failure.Outcome, result.Failure.Errors,
-                        result.Failure.Message);
+            return result.Success
+                ? PolicyWriteResult<ProductPolicyDto>.Ok(AlertPolicyDtoMapper.ToProductDto(
+                    result.Value, resolution.Sensor))
+                : PolicyWriteResult<ProductPolicyDto>.Fail(result.Failure.Outcome, result.Failure.Errors,
+                    result.Failure.Message);
         }
 
         /// <summary>Remove one data policy found anywhere in the product's subtree, through the owning sensor's full list.</summary>
@@ -559,7 +556,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (product.Policies.TTLPolicies.Count >= MaxPoliciesPerNode)
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, PolicyCountError("ttlPolicies"));
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.ProductTtlPolicies,
@@ -608,7 +605,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 !TryValidateTtlDto(dto, AvailableChats(product), out ttlTicks, out var errors))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf<TtlPolicyDto>(write, ChangeSetEntryKind.ProductTtlPolicies,
@@ -656,7 +653,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            var initiator = InitiatorOf(user);
+            var initiator = InitiatorOf(user, write);
 
             if (write is { DryRun: true })
                 return PreviewOf(write, ChangeSetEntryKind.ProductTtlPolicies,
@@ -1174,6 +1171,103 @@ namespace HSMServer.Model.ManagementApi.Alerts
             string.Equals(left ?? defaultWhenNull, right ?? defaultWhenNull, StringComparison.OrdinalIgnoreCase);
 
 
+        // === Web-editor full-list writes (#1588: the single write path) ===
+
+        // The web editor's sensor form submits BOTH policy lists (data and
+        // TTL) plus unrelated settings; since #1588 the lists route through
+        // THIS service — the same per-node gate, authorization seam and undo
+        // journaling the REST/MCP item writes use — while the settings ride
+        // a separate settings-only cache update. Full-list semantics, no DTO
+        // validation (the web view models validate the form); one journal
+        // entry per submitted list, both under the request's undo group.
+        public Task<PolicyWriteResult> WriteSensorListsAsync(Guid sensorId,
+            List<PolicyUpdate> dataPolicies,
+            List<PolicyUpdate> ttlPolicies, ClaimsPrincipal user,
+            ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null) =>
+            LockedWriteAsync(ResolveWritableSensor(sensorId, user, access),
+                () => WriteSensorListsCoreAsync(sensorId, dataPolicies, ttlPolicies, user, write, access));
+
+        private async Task<PolicyWriteResult> WriteSensorListsCoreAsync(Guid sensorId,
+            List<PolicyUpdate> dataPolicies,
+            List<PolicyUpdate> ttlPolicies, ClaimsPrincipal user,
+            ChangeSetWriteOptions write, ChangeSets.IChangeSetAccess access)
+        {
+            var (sensor, failure) = ResolveWritableSensor(sensorId, user, access);
+
+            if (failure is not null)
+                return PolicyWriteResult.Fail(failure.Outcome, failure.Errors, failure.Message);
+
+            var initiator = InitiatorOf(user, write);
+            var changeSetId = ChangeSetRecorder.ResolveChangeSetId(write);
+
+            // The first REJECTED list fails the save and stops the other
+            // arm (#1588 review round 2): a cache-rejected list used to
+            // vanish into a success — the alerts-import toast regressed and
+            // the meta-info form never showed the error.
+            if (dataPolicies is not null)
+            {
+                var data = await WriteSensorList(sensor, dataPolicies, dataList: true, changeSetId, initiator);
+
+                if (!data.Success)
+                    return data;
+            }
+
+            if (ttlPolicies is not null)
+            {
+                var ttl = await WriteSensorList(sensor, ttlPolicies, dataList: false, changeSetId, initiator);
+
+                if (!ttl.Success)
+                    return ttl;
+            }
+
+            return PolicyWriteResult.Ok();
+        }
+
+        // One full-list arm of the web save (#1588 review round 1): the undo
+        // entry is recorded ONLY when the list actually changed — a
+        // description-only or unit-only form save re-asserts identical
+        // lists, and no-op entries would pile up as unreachable groups (the
+        // cache layer journals nothing for an unchanged list).
+        private async Task<PolicyWriteResult> WriteSensorList(BaseSensorModel sensor,
+            List<PolicyUpdate> updates, bool dataList, Guid changeSetId, InitiatorInfo initiator)
+        {
+            var before = dataList
+                ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
+            // Re-stamp EVERY item with the request's undo-group-carrying
+            // initiator (#1588 review round 3): the web form builds its
+            // updates with a bare user initiator, and the TTL collection
+            // journals per-item records with the ITEM's initiator — an
+            // unstamped list would leave the sensorTtlPolicies journal
+            // records without their group link while the service journals
+            // the undo entry, making the group unreachable. The REST item
+            // writes stamp the same way at merge time.
+            var stamped = updates.Select(u => u with { Initiator = initiator }).ToList();
+
+            var result = await _cache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = initiator,
+                Policies = dataList ? stamped : null,
+                TTLPolicies = dataList ? null : stamped,
+            });
+
+            if (!result.IsOk)
+                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: result.Error);
+
+            var after = dataList
+                ? ChangeSetRecorder.SnapshotDataPolicies(sensor)
+                : ChangeSetRecorder.SnapshotSensorTtlPolicies(sensor);
+
+            if (!HSMServer.Core.ChangeSets.PolicyImageComparer.ListsEqual(before, after))
+                RecordSensorList(PolicyWriteResult.Ok(), changeSetId, initiator,
+                    dataList ? ChangeSetEntryKind.SensorDataPolicies : ChangeSetEntryKind.SensorTtlPolicies,
+                    ChangeSetOperation.Update, sensor, before);
+
+            return PolicyWriteResult.Ok();
+        }
+
         // === Rollback restore paths (#1570) ===
 
         // Full-list restore of a sensor's data and/or TTL lists from recorded
@@ -1279,7 +1373,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         private static WritePreviewDto BuildPreview(ChangeSetWriteOptions write, ChangeSetEntryKind kind,
             ChangeSetOperation operation, BaseNodeModel node, (Guid Id, string Path, string Change)[] affected) =>
-            WritePreviews.Create(write, CamelOf(kind), CamelOf(operation), node.Id, node.FullPath,
+            WritePreviews.Create(CamelOf(kind), CamelOf(operation), node.Id, node.FullPath,
                 affected.Select(a => new PreviewAffectedEntityDto
                 {
                     Id = a.Id.ToString(),
@@ -1308,22 +1402,26 @@ namespace HSMServer.Model.ManagementApi.Alerts
             InitiatorInfo initiator, ChangeSetOperation operation, ProductModel product, List<PolicyEntity> before) =>
             RecordList(result, changeSetId, initiator, ProductTtlListEntry(operation, product, before));
 
-        // The echoed change-set id is stamped ONLY when the journal entry
-        // actually landed, and it is the id the entry LANDED in — the journal
-        // forks a client-supplied id that belongs to another author or is
-        // already rolled back (Record's null = the undo point is lost;
-        // echoing nothing then never hands the client a dead undo handle).
+        // A failed write records nothing; the journal append is best-effort
+        // AFTER the applied write (ADR-0010's durability trade-off — Record
+        // swallows storage failures after loud logging).
         private PolicyWriteResult<T> RecordList<T>(PolicyWriteResult<T> result, Guid changeSetId,
-            InitiatorInfo initiator, ChangeSetEntry entry) =>
-            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
-                ? result
-                : result.WithChangeSet(landedId);
+            InitiatorInfo initiator, ChangeSetEntry entry)
+        {
+            if (result.Success)
+                _changeSets.Record(changeSetId, initiator, entry);
+
+            return result;
+        }
 
         private PolicyWriteResult RecordList(PolicyWriteResult result, Guid changeSetId,
-            InitiatorInfo initiator, ChangeSetEntry entry) =>
-            !result.Success || _changeSets.Record(changeSetId, initiator, entry) is not { } landedId
-                ? result
-                : result.WithChangeSet(landedId);
+            InitiatorInfo initiator, ChangeSetEntry entry)
+        {
+            if (result.Success)
+                _changeSets.Record(changeSetId, initiator, entry);
+
+            return result;
+        }
 
         private static ChangeSetEntry SensorListEntry(ChangeSetEntryKind kind, ChangeSetOperation operation,
             BaseSensorModel sensor, List<PolicyEntity> before) =>
@@ -1481,8 +1579,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
         // The write initiator resolves through the shared ChangeSetRecorder
         // helper (the journal's fork rule compares the author strings).
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
-            ChangeSetRecorder.InitiatorOf(user, _users);
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
+            ChangeSetRecorder.InitiatorOf(user, _users, write);
 
         private static Dictionary<string, string[]> ToErrors(Dictionary<string, List<string>> errorMap) =>
             errorMap.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());

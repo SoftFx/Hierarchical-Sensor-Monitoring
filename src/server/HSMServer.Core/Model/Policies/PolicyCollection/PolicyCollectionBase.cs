@@ -241,8 +241,14 @@ namespace HSMServer.Core.Model.Policies
         // system-force housekeeping initiator (schedule detach, folder chat
         // removal) would downgrade a recorded User owner and release the
         // CanChange protection that blocks later template applies.
+        //
+        // The unified-journal tags (#1588): kind names the entity kind (the
+        // data wrapper passes it; TTL calls resolve product-vs-sensor from
+        // the owning collection), ProductId is the root product of the
+        // touched node, and ChangeSetId links the record to its undo group
+        // when the write rode a journaled administration-service initiator.
         protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator,
-            bool isParentCall = false, bool stampOwnership = true)
+            bool isParentCall = false, bool stampOwnership = true, string kind = null)
         {
             if (oldValue != newValue)
             {
@@ -255,10 +261,30 @@ namespace HSMServer.Core.Model.Policies
                     OldValue = oldValue,
                     NewValue = newValue,
                     Path = _model.FullPath,
+                    Kind = kind ?? (this is ProductPolicyCollection
+                        ? JournalKinds.ProductTtlPolicies
+                        : JournalKinds.SensorTtlPolicies),
+                    ProductId = RootProductIdOf(_model),
+                    ChangeSetId = initiator?.ChangeSetId?.ToString(),
                 });
 
                 if (alertId != Guid.Empty && stampOwnership)
                     AlertChangeTable[alertId.ToString()].SetUpdate(initiator);
+            }
+        }
+
+        // The informational root product id of a touched node — the display
+        // filter of the global journal. Defensive on purpose: the journal
+        // record must never fail a write over display metadata.
+        private static string RootProductIdOf(BaseNodeModel node)
+        {
+            try
+            {
+                return (node.Root ?? node)?.Id.ToString();
+            }
+            catch
+            {
+                return node.Id.ToString();
             }
         }
     }

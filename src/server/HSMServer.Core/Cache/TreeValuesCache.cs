@@ -229,7 +229,8 @@ namespace HSMServer.Core.Cache
             return [.. _keys.Values];
         }
 
-        public async Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default)
+        public async Task<ProductModel> AddProductAsync(string productName, Guid authorId, InitiatorInfo initiator = null,
+            CancellationToken token = default)
         {
             var request = new AddProductRequest(productName, authorId);
 
@@ -282,6 +283,19 @@ namespace HSMServer.Core.Cache
                 throw new InvalidOperationException(
                     $"Cannot add root product '{productName}': {result.Error}");
             }
+
+            // The tree-CRUD trace of the creation (#1588): journal-visible
+            // only, no undo group (nothing to compensate — the delete is a
+            // data purge by design).
+            _journalService.AddRecord(new JournalRecordModel(request.ProductModel.Id,
+                initiator ?? InitiatorInfo.System)
+            {
+                Enviroment = "Create product",
+                PropertyName = "product",
+                NewValue = request.ProductModel.FullPath,
+                Kind = JournalKinds.TreeCrud,
+                ProductId = request.ProductModel.Id.ToString(),
+            });
 
             return request.ProductModel;
         }
@@ -423,6 +437,23 @@ namespace HSMServer.Core.Cache
                     RemoveProductFromCache(product);
 
                     PurgeChangeSets(purgedEntityIds);
+
+                    // The tree-CRUD trace of the deletion (#1588): one record
+                    // for the whole request, keyed by the SURVIVING parent
+                    // (the removed subtree's own records would be keyed by
+                    // dead ids) and stamped with the ROOT product — the id
+                    // the product filter and the sight checks resolve.
+                    // Journal-visible only — a product deletion irreversibly
+                    // purges data, there is no rollback by design.
+                    _journalService.AddRecord(new JournalRecordModel(product.Parent?.Id ?? product.Id,
+                        request.InitiatorInfo)
+                    {
+                        Enviroment = "Remove node",
+                        PropertyName = "product",
+                        OldValue = product.FullPath,
+                        Kind = JournalKinds.TreeCrud,
+                        ProductId = (product.Root ?? product).Id.ToString(),
+                    });
 
                     if (!product.IsRoot)
                         UpdateProduct(product.Parent);
@@ -1019,6 +1050,8 @@ namespace HSMServer.Core.Cache
                     {
                         Enviroment = "Remove sensor",
                         Path = sensor.FullPath,
+                        Kind = JournalKinds.TreeCrud,
+                        ProductId = parent?.Root?.Id.ToString() ?? sensor.Root?.Id.ToString(),
                     });
                 }
                 else
@@ -2714,16 +2747,36 @@ namespace HSMServer.Core.Cache
 
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Settings.ChangesHandler += _journalService.AddRecord;
+            // Settings records get their root product id resolved HERE
+            // (#1588 review round 3): the settings collection has no node
+            // reference, and without the stamp the Journal's product filter
+            // hides every settings change of the product. The method group
+            // matches the -= detach below.
+            model.Settings.ChangesHandler += AddSettingsRecord;
             model.Policies.ChangesHandler += _journalService.AddRecord;
             model.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.Settings.ChangesHandler -= AddSettingsRecord;
             model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.ChangesHandler -= _journalService.AddRecord;
+        }
+
+        private void AddSettingsRecord(JournalRecordModel record)
+        {
+            record.ProductId ??= RootProductIdOfRecord(record.Key.Id)?.ToString();
+
+            _journalService.AddRecord(record);
+        }
+
+        private Guid? RootProductIdOfRecord(Guid nodeId)
+        {
+            if (TryGetProduct(nodeId, out var product))
+                return product.Root?.Id ?? product.Id;
+
+            return GetSensor(nodeId)?.Root?.Id;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
@@ -3612,7 +3665,9 @@ namespace HSMServer.Core.Cache
                 _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
                 {
                     PropertyName = "sensor",
-                    NewValue = sensor.FullPath
+                    NewValue = sensor.FullPath,
+                    Kind = JournalKinds.TreeCrud,
+                    ProductId = sensor.Root?.Id.ToString(),
                 });
 
                 return true;

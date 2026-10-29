@@ -35,12 +35,10 @@ namespace HSMServer.Core.ChangeSets
         /// creation time fixed by the first write). The entry's Sequence is
         /// assigned here — append order is the journal order.
         ///
-        /// Returns the id of the change set the entry ACTUALLY landed in: an
-        /// id whose existing set belongs to a DIFFERENT author, or whose set
-        /// is terminal (rolled back), FORKS to a fresh id — the write still
-        /// journals (its undo point is never lost), and the echoed id tells
-        /// the caller which set holds it. A foreign entry can therefore never
-        /// block the original author's rollback or distort its audit trail.
+        /// #1588: group ids are SERVER-minted per request (one HTTP request
+        /// or MCP call = one rollback group), so a foreign author or a
+        /// terminal set can never be appended to through a client-supplied
+        /// id — the #1570 fork rule is gone with the client ids.
         /// </summary>
         Guid Append(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry);
 
@@ -108,21 +106,20 @@ namespace HSMServer.Core.ChangeSets
                 {
                     var current = ChangeSetMapper.ToModel(existing);
 
-                    // The fork rule: a change set accepts appends only from
-                    // its own author while it is still open. A rolled-back
-                    // set is terminal, and a foreign author's entry would
-                    // both distort the audit trail and block the original
-                    // author's rollback pre-flight — either way the write
-                    // journals under a fresh id instead of being rejected
-                    // after it already applied.
-                    var foreignAuthor = author is not null &&
-                        (current.Author != author.Info || current.AuthorType != author.Type);
-
-                    if (current.Status == ChangeSetStatus.RolledBack || foreignAuthor)
+                    // The TERMINAL half of the #1570 fork rule survives
+                    // (#1588 review round 2): a rollback can finish while the
+                    // request that owns the group is still appending (a
+                    // multi-sensor import, a long schedule delete). Appending
+                    // into the rolled-back set would strand those undo points
+                    // — the engine refuses them and nothing recreates a group.
+                    // The write still journals: under a FRESH id, which the
+                    // return names (the author half of the rule stays gone —
+                    // server-minted ids cannot collide across principals).
+                    if (current.Status == ChangeSetStatus.RolledBack)
                         changeSetId = Guid.NewGuid();
                     else
                     {
-                        AppendTo(current, entry, existing is not null);
+                        AppendTo(current, entry, existing: true);
 
                         return changeSetId;
                     }

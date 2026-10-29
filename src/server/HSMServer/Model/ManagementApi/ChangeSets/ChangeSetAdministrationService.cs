@@ -192,7 +192,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
                 if (set.Status == ChangeSetStatus.RolledBack)
                     return PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                        message: "The change set was already rolled back. Roll back its rollback change set to redo it.");
+                        message: "This journal record's request was already rolled back. Roll back the ROLLBACK's journal record (the same entity, kind-tagged) to redo it.");
 
                 var pending = set.Entries.Where(e => e.RestoredBy is null).OrderBy(e => e.Sequence).ToList();
 
@@ -328,7 +328,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                     Message = failures != 0
                         ? $"{failures} entr{(failures == 1 ? "y" : "ies")} could not be restored — see the per-entry reports and retry."
                         : landedAny
-                            ? $"Rolled back; redo via change set {rollbackChangeSetId}."
+                            ? "Rolled back; the rollback's own journal record (same entity) is the redo handle — roll it back to re-apply."
                             : "Rolled back.",
                     RollbackChangeSetId = landedAny ? rollbackChangeSetId.ToString() : null,
                     Entries = reports,
@@ -1027,8 +1027,8 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             // The rollback entry mirrors the original entry's kind and entity
             // with the INVERSE operation, so a redo (rollback of the
             // rollback) restores the rollback's own before-images. The
-            // return is Record's landed verdict — the response carries a redo
-            // handle only when at least one entry actually landed.
+            // recorder ALSO writes the rollback group's unified-journal
+            // record (#1588) — the redo handle must be visible in the journal.
             var operation = original.Operation switch
             {
                 ChangeSetOperation.Create => ChangeSetOperation.Delete,
@@ -1036,7 +1036,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 _ => ChangeSetOperation.Update,
             };
 
-            return _recorder.Record(rollbackChangeSetId, author, new ChangeSetEntry
+            return _recorder.RecordRollback(rollbackChangeSetId, author, new ChangeSetEntry
             {
                 Kind = original.Kind,
                 Operation = operation,
@@ -1050,7 +1050,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 BeforeSchedule = beforeSchedule,
                 AfterSchedule = afterSchedule,
                 Fanout = fanout,
-            }) is not null;
+            });
         }
     }
 

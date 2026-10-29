@@ -49,27 +49,44 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_ForeignAuthor_ForksToAFreshId()
+        public void Append_ToAnOpenSet_LandsInTheGivenId()
         {
-            // The fork rule: a change set accepts appends only from its own
-            // author — a foreign entry would distort the audit trail and
-            // block the author's rollback pre-flight, so it journals under a
-            // fresh id the echo names instead.
+            // #1588: group ids are SERVER-minted per request — one request
+            // = one group — so the AUTHOR half of the #1570 fork rule is
+            // structurally impossible and removed: an append into an OPEN
+            // set always lands in exactly the id it was given.
+            var id = Guid.NewGuid();
+
+            var landed = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorDataPolicies));
+
+            Assert.Equal(id, landed);
+
+            var stored = _journal.Get(id);
+
+            Assert.Equal("alice", stored.Author);
+            Assert.Single(stored.Entries);
+        }
+
+        [Fact]
+        public void Append_ToATerminalSet_ForksSoMidRequestWritesKeepTheirUndoPoint()
+        {
+            // #1588 review round 2: a rollback can finish while the request
+            // that owns the group is still appending (a multi-sensor
+            // import). The terminal half of the fork rule survives: the
+            // later writes journal under a FRESH id instead of stranding
+            // their undo points in a set the engine refuses.
             var id = Guid.NewGuid();
 
             _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
+            _journal.MarkRolledBack(id, Guid.NewGuid());
 
-            var forked = _journal.Append(id, InitiatorInfo.AsUser("bob"), Entry(ChangeSetEntryKind.SensorTtlPolicies));
+            var forked = _journal.Append(id, InitiatorInfo.AsUser("alice"),
+                Entry(ChangeSetEntryKind.SensorTtlPolicies));
 
             Assert.NotEqual(id, forked);
-
-            var original = _journal.Get(id);
-            var forkSet = _journal.Get(forked);
-
-            Assert.Equal("alice", original.Author);
-            Assert.Single(original.Entries);
-            Assert.Equal("bob", forkSet.Author);
-            Assert.Single(forkSet.Entries);
+            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(id).Status);
+            Assert.Single(_journal.Get(forked).Entries);
         }
 
         [Fact]
@@ -86,22 +103,21 @@ namespace HSMServer.Core.Tests.ChangeSets
         }
 
         [Fact]
-        public void Append_RolledBackSet_ForksFurtherWritesToAFreshId()
+        public void MarkRolledBack_MakesTheSetTerminal()
         {
-            // A rolled-back set is terminal, but the write already applied —
-            // rejecting after the fact would lose its undo point. The append
-            // FORKS to a fresh id instead; the terminal set stays untouched.
+            // A rolled-back set is terminal; with server-minted request
+            // groups (#1588) no later write can arrive under its id, so the
+            // terminal mark only guards the rollback surface (a second
+            // rollback of the same set is a Conflict).
             var id = Guid.NewGuid();
 
             _journal.Append(id, InitiatorInfo.AsUser("alice"), Entry(ChangeSetEntryKind.SensorDataPolicies));
             _journal.MarkRolledBack(id, Guid.NewGuid());
 
-            var forked = _journal.Append(id, InitiatorInfo.AsUser("alice"),
-                Entry(ChangeSetEntryKind.SensorDataPolicies));
+            var stored = _journal.Get(id);
 
-            Assert.NotEqual(id, forked);
-            Assert.Equal(ChangeSetStatus.RolledBack, _journal.Get(id).Status);
-            Assert.Single(_journal.Get(forked).Entries);
+            Assert.Equal(ChangeSetStatus.RolledBack, stored.Status);
+            Assert.All(stored.Entries, e => Assert.NotNull(e.RestoredBy));
         }
 
         [Fact]
