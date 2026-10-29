@@ -8,14 +8,25 @@ name: hsm-collector version check
 # See docs/releasing-hsm-collector.md for the release procedure.
 
 on:
+  # branches on push: without it every push to a PR branch fires both the push and the
+  # pull_request events and the PR reports two identical version-sync checks.
   push:
+    branches: [master, develop]
     paths:
-      - 'src/native/collector/**'
+      # Exactly the files scripts/check-collector-version.py reads (SOURCES) — the old
+      # 'src/native/collector/**' also fired on example/src edits that cannot move a version.
+      - 'src/native/collector/CMakeLists.txt'
+      - 'src/native/collector/include/hsm_collector/hsm_collector.h'
+      - 'src/native/collector/vcpkg-port/vcpkg.json'
+      - 'src/native/collector/conanfile.py'
       - 'scripts/check-collector-version.py'
       - '.github/workflows/hsm-collector-version-check.yml'
   pull_request:
     paths:
-      - 'src/native/collector/**'
+      - 'src/native/collector/CMakeLists.txt'
+      - 'src/native/collector/include/hsm_collector/hsm_collector.h'
+      - 'src/native/collector/vcpkg-port/vcpkg.json'
+      - 'src/native/collector/conanfile.py'
       - 'scripts/check-collector-version.py'
       - '.github/workflows/hsm-collector-version-check.yml'
   workflow_dispatch:
