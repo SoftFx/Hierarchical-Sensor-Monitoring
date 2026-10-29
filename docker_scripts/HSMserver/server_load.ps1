@@ -49,10 +49,9 @@ if ($ExpectedImageId)
 	$EnvironmentDatabaseFolder = $BaseDirectory + "Databases:/app/Databases"
 	$DatabasesBackupsFolder = $BaseDirectory + "DatabasesBackups:/app/DatabasesBackups"
 
-	$SensorDataPort = "44330:44330"
-	$SensorSitePort = "44333:44333"
+	$SensorDataPort = "443:443"
 
-	docker run -d -it -u 0 --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -v $DatabasesBackupsFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it -u 0 --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -v $DatabasesBackupsFolder -p $SensorDataPort $ExpectedImageId
 }
 else
 {

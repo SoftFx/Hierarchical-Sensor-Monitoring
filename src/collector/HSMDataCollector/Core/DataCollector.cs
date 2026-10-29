@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -112,7 +112,7 @@ namespace HSMDataCollector.Core
         /// </summary>
         /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
-        /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
+        /// <param name="port">HSM server port, which defaults to 443. Specify if your HSM server is reachable on a different port.</param>
         public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort, string clientName = null)
             : this(new CollectorOptions()
             {

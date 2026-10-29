@@ -24,7 +24,8 @@
 * Ships probe 0.9.1 (from 0.8.2): top disk I/O processes via the hsm-linux-probe-io root helper enabled by install.sh; bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log.
 
 ## Infrastructure
-* hsm-caddy 2.11.4-3 passes the client Host header through to the server upstream — redirects no longer break behind the proxy.
+* One port: everything (web UI, Sensor API, management API, MCP, downloads) is served on the standard port 443; the non-standard ports 44330/44333 keep answering as deprecated aliases through the deprecation window and will be removed in a follow-up release (#1590). The server listens on a single Kestrel port (`Kestrel.Port`, default 443 — old `SensorPort`/`SitePort` settings are ignored with a startup warning); DataCollector/agent/ping-module defaults are now 443; requests that arrive by a deprecated port log a rate-limited warning so operators can find clients to repoint. Direct deployments publish 443 (plus the deprecated aliases through the window).
+* hsm-caddy 2.11.4-5 forwards every site — the primary 443 address and the deprecated-port aliases — to the app's single 443 listener.
 * The VictoriaLogs read path moved to https://<HSM_DOMAIN>/logs/ and is admitted only for logged-in HSM admins (Caddy forward_auth against the app): the separate VL_UI_* basic-auth credential is gone, and the log routes ship enabled with the 'logs' compose profile.
 
 ## Dependencies

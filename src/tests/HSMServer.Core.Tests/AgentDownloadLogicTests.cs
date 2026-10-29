@@ -108,12 +108,12 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void Resolve_FallsBackToSensorPort_WhenExternalUrlHasNoPort()
+        public void Resolve_FallsBackToTheProvidedPort_WhenExternalUrlHasNoPort()
         {
-            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com", 44330, "http", "ignored");
+            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com", 8443, "http", "ignored");
 
             Assert.Equal("https://hsm.example.com", address);
-            Assert.Equal(44330, port);
+            Assert.Equal(8443, port);
         }
 
         [Fact]
@@ -128,8 +128,8 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void Resolve_KeepsExplicitDefaultPort()
         {
-            // ':443' is explicit (e.g. a reverse proxy) — it must survive, not be replaced by sensorPort.
-            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com:443", 44330, "http", "ignored");
+            // ':443' is explicit (e.g. a reverse proxy) — it must survive, not be replaced by the fallback port.
+            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com:443", 8443, "http", "ignored");
 
             Assert.Equal("https://hsm.example.com", address);
             Assert.Equal(443, port);
@@ -140,10 +140,10 @@ namespace HSMServer.Core.Tests
         {
             // A path prefix cannot survive: the native collector strips anything after the first '/'.
             // The resolver must NOT emit it, so the baked address matches what the agent actually hits.
-            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com/sensor-api/", 44330, "http", "ignored");
+            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com/sensor-api/", 8443, "http", "ignored");
 
             Assert.Equal("https://hsm.example.com", address);
-            Assert.Equal(44330, port);
+            Assert.Equal(8443, port);
         }
 
         [Fact]
@@ -161,10 +161,28 @@ namespace HSMServer.Core.Tests
         [InlineData(null)]
         public void Resolve_FallsBackToRequestHost_WhenExternalUrlBlank(string external)
         {
-            var (address, port) = AgentConnectionResolver.Resolve(external, 44330, "https", "req-host");
+            var (address, port) = AgentConnectionResolver.Resolve(external, 8443, "https", "req-host");
 
             Assert.Equal("https://req-host", address);
-            Assert.Equal(44330, port);
+            Assert.Equal(8443, port);
+        }
+
+        [Theory]
+        [InlineData(null)]   // https://host — the standard address since #1590
+        [InlineData(443)]    // explicit default port: same address
+        [InlineData(44330)]  // deprecated sensor alias: must not be baked into NEW bundles
+        [InlineData(44333)]  // deprecated site alias: same
+        public void FallbackPortFromHost_IsTheDefault443_ForStandardOrLegacyHosts(int? hostPort)
+        {
+            Assert.Equal(443, AgentConnectionResolver.FallbackPortFromHost(hostPort));
+        }
+
+        [Fact]
+        public void FallbackPortFromHost_KeepsANonLegacyCustomPort()
+        {
+            // An admin browsing a non-standard deployment (e.g. a custom host-port
+            // mapping) keeps that port in the bundle: it is the address that works.
+            Assert.Equal(8443, AgentConnectionResolver.FallbackPortFromHost(8443));
         }
     }
 }

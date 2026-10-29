@@ -208,7 +208,7 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    ssh -p <port> <ssh> 'cd <dir> && docker compose ps'
    ssh -p <port> <ssh> 'docker inspect hsm-server --format "{{.Image}}"'        # must differ from step 1 — unless the plan was app-image-neutral (compose-only sync, re-pinning the running version)
    ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1/api/sensors/testConnection'   # through caddy, expect 200
-   ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:44330/api/sensors/testConnection'
+   ssh -p <port> <ssh> 'curl -sk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:443/api/sensors/testConnection'
    ssh -p <port> <ssh> 'docker logs hsm-server --since 15m 2>&1 | tail -20'     # expect "Now listening", no errors
    ```
 

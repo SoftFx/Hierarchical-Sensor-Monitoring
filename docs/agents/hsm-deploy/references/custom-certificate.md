@@ -25,7 +25,7 @@ migration untouched.
 
 Out of scope: the certificate on public port 443 belongs to the gateway itself
 (`htz-gw.soft-fx.net`) and is wrong for HSM names by design. Clients connect on
-44330/44333, which are forwarded straight to Caddy — those are the ports this mode
+443 (plus the deprecated 44330/44333 aliases, #1590), which are forwarded straight to Caddy — 443 is the port this mode
 fixes.
 
 ## Preconditions
@@ -156,14 +156,14 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
    verify from outside the machine:
 
    ```bash
-   echo | openssl s_client -connect <domain>:44333 -servername <domain> 2>/dev/null \
+   echo | openssl s_client -connect <domain>:443 -servername <domain> 2>/dev/null \
      | openssl x509 -noout -subject -issuer -dates
    # expect the corporate issuer, CN/SAN = <domain>, expiry of the PFX
-   echo | openssl s_client -connect <domain>:44333 -servername <domain> -showcerts 2>/dev/null \
+   echo | openssl s_client -connect <domain>:443 -servername <domain> -showcerts 2>/dev/null \
      | grep -c -- "-----BEGIN CERTIFICATE"
    # served chain: leaf plus every intermediate (2 certs for a single-intermediate PFX)
-   curl -o /dev/null -w "%{http_code}\n" https://<domain>:44333/api/sensors/testConnection   # 200
-   curl -o /dev/null -w "%{http_code}\n" https://<domain>:44330/api/sensors/testConnection   # 200 — the DataCollector port this mode exists for
+   curl -o /dev/null -w "%{http_code}\n" https://<domain>/api/sensors/testConnection   # 200
+   curl -o /dev/null -w "%{http_code}\n" https://<domain>:44330/api/sensors/testConnection   # 200 — deprecated alias of 443 (deprecation window, #1590)
    ```
 
    From a corporate workstation the curl needs no `-k`: the Soft-FX root is already

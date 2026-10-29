@@ -210,7 +210,7 @@ namespace HSMServer.Core.Tests
 
             var service = CreateService([inFolder, loose], folder, externalUrl: "https://agents.example.com:8443", out _);
 
-            var model = service.Build(new User("admin") { IsAdmin = true }, "https", "page.example.com");
+            var model = service.Build(new User("admin") { IsAdmin = true }, "https", "page.example.com", requestHostPort: null);
 
             Assert.Equal(
                 [("Attic", (string)null), ("Garage", "Home")],
@@ -222,12 +222,12 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void Service_FallsBackToTheRequestHost_WhenNoConnectionUrlIsSet()
         {
-            var service = CreateService([], null, externalUrl: "", out var sensorPort);
+            var service = CreateService([], null, externalUrl: "", out var fallbackPort);
 
-            var model = service.Build(new User("admin") { IsAdmin = true }, "https", "page.example.com");
+            var model = service.Build(new User("admin") { IsAdmin = true }, "https", "page.example.com", requestHostPort: null);
 
             Assert.Equal("https://page.example.com", model.ServerAddress);
-            Assert.Equal(sensorPort, model.ServerPort);
+            Assert.Equal(fallbackPort, model.ServerPort);
         }
 
         [Fact]
@@ -237,7 +237,7 @@ namespace HSMServer.Core.Tests
 
             var service = CreateService([product], null, externalUrl: Address, out _);
 
-            Assert.Empty(service.Build(new User("viewer"), "https", "page.example.com").Products);
+            Assert.Empty(service.Build(new User("viewer"), "https", "page.example.com", requestHostPort: null).Products);
         }
 
         [Fact]
@@ -247,7 +247,7 @@ namespace HSMServer.Core.Tests
         }
 
 
-        private static DownloadsPageService CreateService(List<ProductModel> products, FolderModel folder, string externalUrl, out int sensorPort)
+        private static DownloadsPageService CreateService(List<ProductModel> products, FolderModel folder, string externalUrl, out int fallbackPort)
         {
             var cache = new Mock<ITreeValuesCache>();
             cache.Setup(c => c.GetProducts()).Returns(products);
@@ -260,7 +260,7 @@ namespace HSMServer.Core.Tests
             users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
 
             var kestrel = new KestrelConfig();
-            sensorPort = kestrel.SensorPort;
+            fallbackPort = AgentConnectionResolver.FallbackPortFromHost(null);
 
             var config = new Mock<IServerConfig>();
             config.Setup(c => c.Agent).Returns(new AgentConfig { ExternalConnectionUrl = externalUrl });

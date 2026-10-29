@@ -63,7 +63,7 @@ HSMCppWrapper-<ver>/
 
 Точка входа — `hsm_wrapper::DataCollectorProxy`. Конструктор: `(product_key, address, port, module)`,
 где `product_key` — ключ доступа продукта на сервере HSM (GUID), `port` — порт Sensor API (по
-умолчанию **44330**), `module` — имя модуля/узла в дереве.
+умолчанию **443**), `module` — имя модуля/узла в дереве.
 
 Минимальный сценарий:
 
@@ -71,7 +71,7 @@ HSMCppWrapper-<ver>/
 #include "HSMCppWrapper.h"
 using namespace hsm_wrapper;
 
-DataCollectorProxy collector("<product-key-guid>", "hsm.host", 44330, "Aggregator");
+DataCollectorProxy collector("<product-key-guid>", "hsm.host", 443, "Aggregator");
 collector.Initialize();                      // конфиг задаётся конструктором (см. п.5)
 
 collector.InitializeSystemMonitoring();      // готовые группы системных сенсоров

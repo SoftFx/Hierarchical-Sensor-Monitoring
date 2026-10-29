@@ -94,7 +94,7 @@ namespace
         const auto config = ParseOk(R"({ "server": { "address": "https://hsm.example.com", "accessKey": "abc123" } })");
         CheckEq(config.server_address, std::string{ "https://hsm.example.com" }, "address");
         CheckEq(config.access_key, std::string{ "abc123" }, "accessKey");
-        CheckEq(config.port, 44330, "default port");
+        CheckEq(config.port, 443, "default port");
         CheckEq(config.module, std::string{ "HSM Agent" }, "default module");
         CheckEq(config.product_version, std::string{ "1.0.0.0" }, "default version");
         Check(config.ComputerNameIsAuto(), "computer name defaults to auto");

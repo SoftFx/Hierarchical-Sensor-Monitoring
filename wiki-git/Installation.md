@@ -7,7 +7,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 ## Prerequisites
 
 - Docker with Docker Compose v2.23.1 or newer
-- Ports 44330 and 44333 available on the host. Caddy also publishes 80 and 443 for HTTP-01 validation and the standard web UI; DNS-01, self-signed, and custom certificate modes do not need port 80 for certificate issuance.
+- Ports 80 and 443 available on the host (443 serves everything: web UI and sensor data ingestion, #1590). The deprecated 44330/44333 aliases are also published while the deprecation window lasts. DNS-01, self-signed, and custom certificate modes do not need port 80 for certificate issuance.
 
 ---
 
@@ -92,11 +92,11 @@ HSM_CERTIFICATE=custom
 docker compose up -d
 ~~~
 
-**4. Open the web UI:** https://<HSM_DOMAIN> or https://<HSM_DOMAIN>:44333.
+**4. Open the web UI:** https://<HSM_DOMAIN> (port 443; the deprecated https://<HSM_DOMAIN>:44333 alias keeps answering through the deprecation window).
 
 Default credentials: login default, password default. **Change the password immediately.**
 
-Collectors and agents connect to https://<HSM_DOMAIN>:44330, as before.
+Collectors and agents connect to https://<HSM_DOMAIN> (port 443); the deprecated https://<HSM_DOMAIN>:44330 alias keeps answering through the deprecation window.
 
 **5. Check the certificate.** Run on any machine:
 
@@ -173,7 +173,7 @@ docker compose -f docker-compose.direct.yml down
 docker compose up -d
 ```
 
-Collectors and agents keep using `https://<host>:44330`, with "allow untrusted certificate" unless you installed your own `.pfx` (see [Server Configuration](Server-Configuration)). Ports `80` and `443` are not used.
+Collectors and agents use `https://<host>` (the container's single port 443 is published to host 443, plus the deprecated 44330/44333 aliases through the deprecation window), with "allow untrusted certificate" unless you installed your own `.pfx` (see [Server Configuration](Server-Configuration)).
 
 ### Reference docker-compose.yml
 
@@ -191,6 +191,13 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #   HSM_DOMAIN       the address clients use: a bare DNS name or IP address
 #                    (no https://, no port). Examples: hsm.example.com, 10.0.0.5
 #
+#   PORTS            80/443 are the stack's client-facing ports. 443 serves EVERYTHING
+#                    (Web UI + Sensor API) through the app's single listener (#1590);
+#                    44330/44333 are deprecated aliases kept through the deprecation
+#                    window for clients still pointed at the old two-port scheme — the
+#                    app logs a rate-limited warning for requests that arrive by them.
+#                    The follow-up release removes both the aliases and these mappings.
+#
 #   HSM_CERTIFICATE  which certificate clients get:
 #     letsencrypt    backward-compatible alias for letsencrypt-http
 #     letsencrypt-http trusted certificate from Let's Encrypt using HTTP-01/TLS-ALPN. Needs a
@@ -205,7 +212,12 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #
 # SWITCHING: edit .env and run `docker compose up -d` (Caddy is recreated; HSM data is untouched).
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
-# Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
+# Collectors and agents connect to https://<HSM_DOMAIN> (port 443; the deprecated
+# https://<HSM_DOMAIN>:44330 alias keeps answering through the deprecation window).
+#
+# The app listens on Kestrel.Port (default 443, Config/appsettings.json) INSIDE the
+# compose network; pre-#1590 SensorPort/SitePort keys there are ignored with a startup
+# warning and dropped on the first resave.
 #
 # The image is published by CI (server-build.yml). To run a build from local sources instead,
 # publish it to this exact tag first:
@@ -247,7 +259,7 @@ services:
       # Kestrel opens its ports only after the database has loaded, so a 200 means loaded AND
       # serving; a listening but wedged server fails this probe, while the TCP connect used here
       # before reported it healthy.
-      test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:443/api/sensors/testConnection || exit 1']
       interval: 5m
       timeout: 5s
       # Budget before caddy is skipped for good (see depends_on below): ~20 min on Docker
@@ -332,7 +344,7 @@ services:
       - 'vlagent-data:/vlagent-data'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-4'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-5'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -349,6 +361,7 @@ services:
     ports:
       - '80:80'
       - '443:443'
+      # Deprecated aliases (#1590), removed with the follow-up release.
       - '44330:44330'
       - '44333:44333'
     volumes:
@@ -366,16 +379,16 @@ What must stay as it is, if you ever adapt it:
 |---|---|
 | No ports on app | HSM is reachable only through Caddy in this compose setup. |
 | `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 5 min: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that. The conversion keeps running inside the container: wait until `docker ps` shows `hsm-server` healthy again (`docker logs hsm-server` shows `Now listening`), then run `docker compose up -d` again — repeating it earlier gives the same error, and restarting the container only starts the conversion over. |
-| Separate reverse proxies to app:44333 and app:44330 | Not a split of the UI from the Sensor API — both listeners serve the same routes, and the API answers on 44333 as well. It keeps each published port mapped to the same HSM port, so collectors and agents already configured for 44330 keep working unchanged. Only the management API, MCP, Swagger and browser sign-in are restricted to the site port, so never send the web UI to 44330. |
+| Every site proxies to the single upstream app:443 | The web UI and the Sensor API share one listener (#1590), so 443 serves both. The 44330/44333 site blocks are deprecated aliases of the same upstream kept through the deprecation window, so collectors and agents already configured for the old ports keep working unchanged; the app logs a rate-limited warning for requests that arrive by them. |
 | tls_insecure_skip_verify on the upstream | HSM serves its own HTTPS certificate inside the compose network. |
 | HSM_DOMAIN and HSM_CERTIFICATE in Caddy's environment | The entrypoint validates the mode and selects exactly one TLS source. No automatic fallback is used. |
 | Provider tokens passed as container environment | The Caddyfile reads secrets from the process environment; they are not written into its configuration or persisted Caddy state. Compose-rendered config can reveal values, so do not share it. |
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-4 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read routes (/logs/..., admitted only for logged-in HSM admins via forward_auth); passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-5 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read routes (/logs/..., admitted only for logged-in HSM admins via forward_auth); forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
 | HSM_STRUCTURED_LOGS from .env on the app service (default false) | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs. The template sets true next to COMPOSE_PROFILES=logs; the compose default is false so an upgraded compose file with an older .env never starts writing the archive on its own. The rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
-| Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
+| Published ports 80, 443, 44330, 44333 | 443 is the primary address for everything (web UI, ingestion, downloads). 44330/44333 are deprecated aliases kept through the deprecation window; downloaded agent bundles point at 443. |
 
 ### Internal DNS name
 
@@ -388,7 +401,7 @@ Nothing changes on the HSM side: it keeps its data, settings and own certificate
 **Before you stop the old stack**, check ports `80` and `443`:
 
 - **They must be free on the host.** If they are taken, Caddy cannot start after the old stack is already down. In that case, run [without Caddy](#without-caddy) until the ports are free.
-- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`, so a host that exposed only `44330`/`44333` now also answers on `80` and `443`. If the server must not be reachable on these ports, use `self-signed` and remove the `80:80` and `443:443` lines from the `caddy` service.
+- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`. If the server must not be reachable on these ports, use `self-signed` and remove the `80:80` and `443:443` lines from the `caddy` service (the deprecated `44330`/`44333` mappings can be removed at any time — only clients still pointed at the old ports use them).
 
 Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 
@@ -399,8 +412,8 @@ docker compose up -d
 
 Check the certificate (step 5 above). What happens to existing clients:
 
-- **Clients that use `HSM_DOMAIN`** (`https://hsm.example.com:44330`) get the new certificate. With `letsencrypt` it is trusted, so for them you can switch off "Allow untrusted server certificate".
-- **Clients that use any other address**, such as the server's IP or a short internal name, keep working, including already distributed agent bundles. They receive the `HSM_DOMAIN` certificate, which does not match their address, so they must keep "allow untrusted certificate" on. To give them the trusted certificate, switch them to the `HSM_DOMAIN` address. For agents, set **Agent connection URL** (Configuration → Agent) to `https://<HSM_DOMAIN>:44330` and redistribute the bundles.
+- **Clients that use `HSM_DOMAIN`** (`https://hsm.example.com` — or its deprecated `:44330` alias during the window) get the new certificate. With `letsencrypt` it is trusted, so for them you can switch off "Allow untrusted server certificate".
+- **Clients that use any other address**, such as the server's IP or a short internal name, keep working, including already distributed agent bundles. They receive the `HSM_DOMAIN` certificate, which does not match their address, so they must keep "allow untrusted certificate" on. To give them the trusted certificate, switch them to the `HSM_DOMAIN` address. For agents, set **Agent connection URL** (Configuration → Agent) to `https://<HSM_DOMAIN>` and redistribute the bundles.
 
 ---
 
@@ -421,8 +434,7 @@ docker run -u 0 -d \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
   -v /host/path/DatabasesBackups:/app/DatabasesBackups \
-  -p 44330:44330 \
-  -p 44333:44333 \
+  -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
@@ -437,8 +449,7 @@ docker run -u 0 -d ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
   -v C:\HSM\DatabasesBackups:/app/DatabasesBackups ^
-  -p 44330:44330 ^
-  -p 44333:44333 ^
+  -p 443:443 ^
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
@@ -488,29 +499,27 @@ Always mount these directories. Without them, **all data is lost** when the cont
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| `44330` | HTTPS | Sensor data ingestion — used by DataCollector and REST API |
-| `44333` | HTTPS | Web UI |
-| `443` | HTTPS | Web UI on the standard port (compose only; can be removed for IP-address setups) |
+| `443` | HTTPS | Everything — web UI, sensor data ingestion (DataCollector, REST API), management API, downloads (#1590) |
+| `44330` | HTTPS | Deprecated alias of 443 (former sensor port), kept through the deprecation window |
+| `44333` | HTTPS | Deprecated alias of 443 (former web-UI port), kept through the deprecation window |
 | `80` | HTTP | Let's Encrypt domain check and redirect to HTTPS (compose only; can be removed for IP-address setups) |
 
-With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. Keep `44330` and `44333`: downloaded agent bundles point at port `44330`. If you must use other host ports, change the left side of the mapping in the `caddy` service and set **Agent connection URL** (Configuration → Agent) to the new Sensor API address, e.g. `https://hsm.example.com:44331`.
+With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. 443 is the primary address; downloaded agent bundles point at it. If you must use another host port, change the left side of the mapping in the `caddy` service and set **Agent connection URL** (Configuration → Agent) to the new address, e.g. `https://hsm.example.com:44331`.
 
 For `docker run`, change the mapping and `Config/appsettings.json`:
 
 ```yaml
 ports:
-  - '44331:44330'   # host port : container port
-  - '44334:44333'
+  - '44331:443'   # host port : container port
 ```
 
 ```json
 "Kestrel": {
-  "SensorPort": 44330,
-  "SitePort": 44333
+  "Port": 443
 }
 ```
 
-Note: the `Kestrel` config defines the ports the server listens on inside the container. The left side of the Docker port mapping is what you expose on the host.
+Note: the `Kestrel` config defines the single port the server listens on inside the container (the pre-#1590 `SensorPort`/`SitePort` keys are ignored with a startup warning and dropped). The left side of the Docker port mapping is what you expose on the host.
 
 ---
 
@@ -535,7 +544,7 @@ An installation with the `logs` profile updating from before hsm-caddy 2.11.4-4 
 
 ## First Login
 
-After starting the server, open `https://<HSM_DOMAIN>:44333` (compose) or `https://localhost:44333` (`docker run`).
+After starting the server, open `https://<HSM_DOMAIN>` (compose) or `https://localhost` (`docker run`).
 
 - Username: `default`
 - Password: `default`

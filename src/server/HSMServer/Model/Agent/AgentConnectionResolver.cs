@@ -1,16 +1,32 @@
+using HSMServer.ServerConfiguration;
 using System;
 
 namespace HSMServer.Model.Agent
 {
     /// <summary>
     /// Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
-    /// external URL (the externally-reachable Sensor-API base; the server can't infer it behind
-    /// Docker/NAT); when blank, falls back to the request host + the configured Sensor port. Pure
-    /// (primitives only) so it is unit-tested without a web host.
+    /// external URL (the externally-reachable base; the server can't infer it behind Docker/NAT);
+    /// when blank or without an explicit port, falls back to the caller-provided fallback port —
+    /// since #1590 that is the request host's port when it carries one (see FallbackPortFromHost),
+    /// else the default 443. Pure (primitives only) so it is unit-tested without a web host.
     /// </summary>
     public static class AgentConnectionResolver
     {
-        public static (string Address, int Port) Resolve(string externalUrl, int sensorPort, string fallbackScheme, string fallbackHost)
+        /// <summary>
+        /// The fallback port baked into a bundle when no external URL carries an explicit one:
+        /// the port the requesting admin actually used, so a non-standard deployment keeps
+        /// working — except the deprecated 44330/44333 aliases, which must not be baked into
+        /// NEW bundles (they stop answering when the deprecation window closes), and a missing
+        /// port (the standard https://host), which both mean the default 443.
+        /// </summary>
+        public static int FallbackPortFromHost(int? requestHostPort) =>
+            requestHostPort is { } port
+            && port != KestrelConfig.LegacySensorPort
+            && port != KestrelConfig.LegacySitePort
+                ? port
+                : KestrelConfig.DefaultPort;
+
+        public static (string Address, int Port) Resolve(string externalUrl, int fallbackPort, string fallbackScheme, string fallbackHost)
         {
             if (!string.IsNullOrWhiteSpace(externalUrl))
             {
@@ -32,12 +48,12 @@ namespace HSMServer.Model.Agent
                     // default (e.g. :443). Uri.IsDefaultPort can't tell "no port" from "explicit
                     // default port", so inspect the raw authority instead. Only an absent port falls
                     // back to the configured Sensor port.
-                    var port = HasExplicitPort(raw) ? uri.Port : sensorPort;
+                    var port = HasExplicitPort(raw) ? uri.Port : fallbackPort;
                     return (address, port);
                 }
             }
 
-            return ($"{fallbackScheme}://{fallbackHost}", sensorPort);
+            return ($"{fallbackScheme}://{fallbackHost}", fallbackPort);
         }
 
         private static bool HasExplicitPort(string raw)

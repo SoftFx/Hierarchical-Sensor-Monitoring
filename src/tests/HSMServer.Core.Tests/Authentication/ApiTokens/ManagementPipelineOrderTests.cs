@@ -51,7 +51,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 // check reads context.GetEndpoint(), which is null above
                 // UseRouting — moved earlier, the whole /mcp policy check
                 // silently no-ops (#1392 review, round 4).
-                "McpSitePortOnlyMiddleware",
+                "McpEndpointGuardMiddleware",
+                // Deprecated-port visibility (#1590): the warning fires for legacy
+                // hosts before anything else can reject the request, so stragglers
+                // stay visible even on 401/404 answers.
+                "LegacyPortDeprecationMiddleware",
                 "UseAuthentication",
                 // Token-usage monitoring between authentication and
                 // authorization on purpose (#1402): a rejected request never
@@ -101,23 +105,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 "UseAuthentication",
                 "ApiTokenUsageMiddleware",
                 "TelemetryMiddleware",
-            ]);
-        }
-
-        [Fact]
-        public void SwaggerGate_IsRegisteredBeforeTheSwaggerMiddleware()
-        {
-            // The port gate is correct only ABOVE UseSwagger/UseSwaggerUI; below them
-            // the doc is served before the gate runs, silently republishing the
-            // management map on the sensor port while the gate's own unit tests stay
-            // green (review round 2 on #1366).
-            var body = ExtractConfigureMiddlewareBody(ReadPipelineSource());
-
-            AssertInOrder(body,
-            [
-                "SwaggerSitePortOnlyMiddleware",
-                "UseSwagger",
-                "UseSwaggerUI",
             ]);
         }
 

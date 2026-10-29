@@ -4,7 +4,7 @@
 
   "server": {
     "address": "https://your-hsm-server",
-    "port": 44330,
+    "port": 443,
     "accessKey": "<paste-the-product-access-key>",
     "allowUntrustedCertificate": false
   },

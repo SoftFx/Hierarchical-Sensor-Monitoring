@@ -1,9 +1,9 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 
 const string Address = "https://localhost";
-const int Port = 44330;
+const int Port = 443;
 
 const string Key = "1aba29cf-eee8-4376-a72f-5fb01af0f7ff";
 const string Path = "/datacollector/file";

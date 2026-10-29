@@ -77,7 +77,7 @@ Now to visualize the data, you need to copy the product key, or the master key, 
 
 ![image](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/assets/43994777/8a23c61b-8836-432a-810d-8eb56d396014)
 
-5. Fill **URL** address, for example: `https://hsm.dev.soft-fx.eu:44333` + `/grafana/jsondatasource`. Full URL: `https://hsm.dev.soft-fx.eu:44333/grafana/jsondatasource`
+5. Fill **URL** address, for example: `https://hsm.dev.soft-fx.eu` + `/grafana/jsondatasource`. Full URL: `https://hsm.dev.soft-fx.eu/grafana/jsondatasource`
 6. Check **"Skip TLS Verify"**
 7. Click **"Add header"**
 

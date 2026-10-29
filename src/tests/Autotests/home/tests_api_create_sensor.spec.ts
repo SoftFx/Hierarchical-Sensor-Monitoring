@@ -3,7 +3,7 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { uniqueName, cleanup } from '../fixtures.ts';
 
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333';
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:443';
 
 // Self-contained: create a product, read its auto-generated DefaultKey (the /AccessKeys row id is
 // `row_<key-guid>`), then post a sensor value with that key — instead of a hardcoded key that only

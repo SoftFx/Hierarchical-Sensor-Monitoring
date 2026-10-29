@@ -42,7 +42,7 @@ jobs:
         run: |
           docker run -d -it -u 0 \
             --name "${{ env.CONTAINER_NAME }}" \
-            -p 44330:44330 -p 44333:44333 \
+            -p 443:443 -p 44330:443 \
             -v "$(pwd)/container-logs:/app/logs" \
             "${{ env.DOCKER_IMAGE_NAME }}:latest"
 
@@ -53,12 +53,19 @@ jobs:
 
           echo "Waiting for HSMServer to respond..."
           # Убираем флаг -s (silent), чтобы видеть ошибку curl (например, Connection Refused)
-          # Стучимся сразу на 44333 (HTTPS), так как Playwright настроен на него
-          timeout 120s bash -c 'until curl -vk https://localhost:44333; do 
+          # Стучимся на 443 (HTTPS) — единственный порт сервера (#1590), Playwright настроен на него
+          timeout 120s bash -c 'until curl -vk https://localhost:443; do
             echo "Still waiting... Check docker logs:"
             docker logs --tail 10 "${{ env.CONTAINER_NAME }}"
             sleep 10
           done'
+
+      - name: Check the deprecated-port alias still answers
+        run: |
+          # #1590 deprecation window: the 44330 alias forwards to the same single listener,
+          # so collectors still pointed at the old port keep working. Keep this check alive
+          # until the follow-up release removes the alias.
+          curl -vk --fail https://localhost:44330/api/sensors/testConnection
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -88,7 +95,7 @@ jobs:
       - name: Run Playwright tests
         working-directory: src/tests/Autotests
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://localhost:44333
+          PLAYWRIGHT_TEST_BASE_URL: https://localhost:443
         # Headless in CI (playwright.config: headless = !!CI); no xvfb/--headed shim needed anymore.
         run: npx playwright test --project=chromium
         

@@ -1,7 +1,7 @@
 {
   "server": {
     "address": "https://localhost",
-    "port": 44330,
+    "port": 443,
     "accessKey": "<paste access key from HSM server settings>",
     "allowUntrustedCertificate": true
   },

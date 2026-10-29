@@ -27,6 +27,6 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult Index(Guid? productId) =>
-            View(_downloads.Build(CurrentUser, Request.Scheme, Request.Host.Host, productId));
+            View(_downloads.Build(CurrentUser, Request.Scheme, Request.Host.Host, Request.Host.Port, productId));
     }
 }

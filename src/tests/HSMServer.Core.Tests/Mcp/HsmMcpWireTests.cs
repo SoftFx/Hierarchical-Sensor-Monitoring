@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
-using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
@@ -19,7 +18,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -34,7 +32,7 @@ namespace HSMServer.Core.Tests.Mcp
 {
     // The wire-level smoke test of the /mcp endpoint (#1392 review, round 3):
     // a minimal in-memory host assembles the REAL pieces — MapMcp with the
-    // RequireAuthorization policy, McpSitePortOnlyMiddleware, the real
+    // RequireAuthorization policy, McpEndpointGuardMiddleware, the real
     // HsmApiToken scheme (over mocked token/user managers) and AddHsmMcpServer's
     // registrations — and a real SDK McpClient drives initialize → tools/list →
     // tools/call through the full ASP.NET pipeline. No Kestrel, LevelDB or the
@@ -53,8 +51,6 @@ namespace HSMServer.Core.Tests.Mcp
     //      initialize.
     public class HsmMcpWireTests
     {
-        private const int SitePort = 44333;
-
         private static readonly string[] SpecTools =
         [
             "create_alert_schedule",
@@ -447,26 +443,6 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
-        public async Task Wire_ToolsCallOnTheSensorPort_IsUniform404()
-        {
-            // The SitePort-only rule through the REAL endpoint metadata: on the
-            // other listener the guard short-circuits before authentication, so
-            // a perfectly valid credential gets the uniform 404 — the endpoint
-            // is dead there, confirming nothing.
-            using var host = BuildHost(localPort: 44330);
-            host.Start();
-
-            var client = host.GetTestClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _credential);
-
-            var response = await client.GetAsync(HsmMcp.EndpointPath);
-
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-            Assert.Contains("not found", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
-        }
-
-
-        [Fact]
         public async Task Wire_ReadOnlyToken_CannotReachAnyTool_NotEvenInitialize()
         {
             // Every MCP message (initialize included) is a POST, and the
@@ -487,7 +463,7 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
-        private IHost BuildHost(int localPort = SitePort)
+        private IHost BuildHost()
         {
             return Host.CreateDefaultBuilder()
                 // Development turns on ValidateScopes + ValidateOnBuild: a
@@ -534,23 +510,12 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddSingleton(_securityEvents.Object);
                         services.AddSingleton(new ApiTokensConfig { Enabled = true });
                         services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
-                        services.AddSingleton(new HsmListenerBindings(44333, 44330));
                     });
                     web.Configure(app =>
                     {
                         app.UseRouting();
 
-                        // The in-memory server has no real listener, so the
-                        // SitePort guard's registry is driven through the
-                        // connection feature — the same seam the guard tests
-                        // use, here through the real pipeline.
-                        app.Use((context, next) =>
-                        {
-                            context.Features.Set<IHttpConnectionFeature>(new FixedPortConnectionFeature(localPort));
-                            return next(context);
-                        });
-
-                        app.UseMiddleware<McpSitePortOnlyMiddleware>();
+                        app.UseMiddleware<McpEndpointGuardMiddleware>();
                         app.UseAuthentication();
                         app.UseAuthorization();
 
@@ -578,15 +543,5 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
-        private sealed class FixedPortConnectionFeature : IHttpConnectionFeature
-        {
-            public FixedPortConnectionFeature(int localPort) => LocalPort = localPort;
-
-            public string ConnectionId { get; set; }
-            public IPAddress LocalIpAddress { get; set; }
-            public int LocalPort { get; set; }
-            public IPAddress RemoteIpAddress { get; set; }
-            public int RemotePort { get; set; }
-        }
     }
 }

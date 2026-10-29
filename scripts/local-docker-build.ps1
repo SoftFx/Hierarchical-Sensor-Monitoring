@@ -239,8 +239,7 @@ services:
     image: '$localCaddyImage'
     pull_policy: never
     ports: !override
-      - '127.0.0.1:44330:44330'
-      - '127.0.0.1:44333:44333'
+      - '127.0.0.1:443:443'
 "@ | Set-Content -Path $overridePath -Encoding utf8
 
 
@@ -263,8 +262,7 @@ services:
 
     Write-Host ""
     Write-Host "HSM Server is running:" -ForegroundColor Green
-    Write-Host "  Web UI:      https://localhost:44333"
-    Write-Host "  Sensor API:  https://localhost:44330"
+    Write-Host "  Web UI + Sensor API:  https://localhost (port 443)"
     Write-Host "  Logs:        $repoRoot\Logs"
     Write-Host "  Stop:        `$env:HSM_DOMAIN='localhost'; `$env:HSM_CERTIFICATE='self-signed'; docker compose -f docker-compose.yml -f docker-compose.local.yml down"
     Write-Host "  Proxy logs:  `$env:HSM_DOMAIN='localhost'; `$env:HSM_CERTIFICATE='self-signed'; docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f caddy"

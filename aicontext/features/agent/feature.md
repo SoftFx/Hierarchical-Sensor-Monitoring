@@ -167,7 +167,7 @@ exposes no general parser and the epic mandates minimal deps. Platform-agnostic 
 tested on every CI lane. Only `server.address` + `server.accessKey` are required; everything else
 defaults. Maps onto `CollectorOptions` + runtime group gates:
 
-- `server.{address,port=44330,accessKey,allowUntrustedCertificate}` → connection options.
+- `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port).
 - `identity.computerName` (`"auto"`/blank → `GetComputerNameExW` physical DNS host name) → `computer_name`;
   `identity.module` → `module`.
 - `sensors.{computer,system,disk,network,module,process}` — `computer` is the umbrella host bundle;
@@ -330,7 +330,7 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 - Live E2E mirrors the already-proven collector recipe (#1166): against a Dockerized
   `hsmonitoring/hierarchical_sensor_monitoring:latest`, the host sensors land in the tree under
   `<computer>/.computer/...` for the key's product. In HTTP mode `SentCount()` stays 0 (in-memory
-  recorder only) — verify via `POST :44330/api/sensors/history`, not `SentCount`.
+  recorder only) — verify via `POST /api/sensors/history`, not `SentCount`.
 
 ## Pointers
 

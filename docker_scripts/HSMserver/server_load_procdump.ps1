@@ -64,8 +64,7 @@ if ($ExpectedImageId) {
         -v "${BaseDirectory}Config:/app/Config" `
         -v "${BaseDirectory}Databases:/app/Databases" `
         -v "${BaseDirectory}DatabasesBackups:/app/DatabasesBackups" `
-        -p "44330:44330" `
-        -p "44333:44333" `
+        -p "443:443" `
         $ExpectedImageId
 
     Write-Host "Container started with ID: $NewContainerId"

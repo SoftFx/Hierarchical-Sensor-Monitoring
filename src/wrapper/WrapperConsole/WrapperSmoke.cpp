@@ -22,7 +22,7 @@ int main()
 {
 	try
 	{
-		DataCollectorProxy collector("00000000-0000-0000-0000-000000000000", "127.0.0.1", 44330, "Smoke");
+		DataCollectorProxy collector("00000000-0000-0000-0000-000000000000", "127.0.0.1", 443, "Smoke");
 		collector.Initialize();
 
 		collector.InitializeSystemMonitoring(true, true, false);

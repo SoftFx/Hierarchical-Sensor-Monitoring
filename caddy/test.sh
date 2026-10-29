@@ -16,8 +16,7 @@ adapt_ok() {
     output="$tmp/$name.json"
     docker run --rm "$@" "$image" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >"$output"
     grep -F '"persist":false' "$output" >/dev/null
-    grep -F '"dial":"app:44333"' "$output" >/dev/null
-    grep -F '"dial":"app:44330"' "$output" >/dev/null
+    grep -F '"dial":"app:443"' "$output" >/dev/null
     grep -F '"default_sni":"hsm.example.com"' "$output" >/dev/null
     if grep -F '"logs"' "$output" >/dev/null; then
         echo "$name unexpectedly enables Caddy access logs" >&2
@@ -62,21 +61,44 @@ adapt_ok vl-routes -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed
 grep -F '"dial":"victorialogs:9428"' "$tmp/vl-routes.json" >/dev/null
 grep -F '"uri":"/logs-auth"' "$tmp/vl-routes.json" >/dev/null
 grep -F '"method":"GET"' "$tmp/vl-routes.json" >/dev/null
-# forward_auth's auth subrequest goes to https://app:44333, so its proxy must carry the
+# forward_auth's auth subrequest goes to https://app:443, so its proxy must carry the
 # same hsm_upstream transport as the main proxies: without the TLS skip every /logs-auth
 # call fails on the app's self-signed certificate, and without the Host passthrough a
 # login redirect points browsers at the docker-internal name. Both regressions fail
-# closed (admins lose /logs/ with no error here), so pin them by count: ten proxies carry
-# the transport today — every site variant on each of the three servers pairs an auth
-# proxy with its main upstream proxy.
+# closed (admins lose /logs/ with no error here), so pin them by count: eleven proxies
+# carry the transport today — the single app upstream (#1590) is shared by the primary
+# 443 site, the two deprecated-port aliases and the catch-all site's three addresses,
+# plus every VictoriaLogs route pairs an auth proxy with its main upstream proxy.
 transport_hits="$(grep -oF '"insecure_skip_verify":true' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
-[ "$transport_hits" -ge 10 ] || {
-    echo "expected at least 10 proxies with insecure_skip_verify, got $transport_hits" >&2
+[ "$transport_hits" -ge 11 ] || {
+    echo "expected at least 11 proxies with insecure_skip_verify, got $transport_hits" >&2
     exit 1
 }
 host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
-[ "$host_hits" -ge 10 ] || {
-    echo "expected at least 10 Host header_up passthroughs, got $host_hits" >&2
+[ "$host_hits" -ge 11 ] || {
+    echo "expected at least 11 Host header_up passthroughs, got $host_hits" >&2
+    exit 1
+}
+
+# Single upstream (#1590): every site — the primary 443 address AND the deprecated
+# 44330/44333 aliases still published through the deprecation window — forwards to the
+# app's one listener on 443. A per-port upstream here would 502 on one of the surfaces,
+# so the legacy dials must be gone while the legacy LISTENERS stay for the window's
+# stragglers.
+if grep -F '"dial":"app:44330"' "$tmp/vl-routes.json" >/dev/null; then
+    echo 'legacy per-port upstream app:44330 survived in the adapted configuration' >&2
+    exit 1
+fi
+if grep -F '"dial":"app:44333"' "$tmp/vl-routes.json" >/dev/null; then
+    echo 'legacy per-port upstream app:44333 survived in the adapted configuration' >&2
+    exit 1
+fi
+grep -F '"listen":[":44330"]' "$tmp/vl-routes.json" >/dev/null || {
+    echo 'deprecated 44330 alias listener missing from the adapted configuration' >&2
+    exit 1
+}
+grep -F '"listen":[":44333"]' "$tmp/vl-routes.json" >/dev/null || {
+    echo 'deprecated 44333 alias listener missing from the adapted configuration' >&2
     exit 1
 }
 if grep -F '/insert' "$tmp/vl-routes.json" >/dev/null; then
