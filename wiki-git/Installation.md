@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-4 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-5 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -528,6 +528,9 @@ Note: the `Kestrel` config defines the single port the server listens on inside 
 To update to the latest version:
 
 ```bash
+# Replace the compose file first (mandatory since #1590 — see the note below)
+curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
+
 # Pull the new images (HSM and Caddy)
 docker compose pull
 
@@ -536,7 +539,11 @@ docker compose down
 docker compose up -d
 ```
 
-Without Caddy, add `-f docker-compose.direct.yml` to each `docker compose` command. With `docker run`, stop and remove the old container, then run the `docker run` command again. Volumes are not affected.
+Without Caddy, add `-f docker-compose.direct.yml` to each `docker compose` command and re-download that file the same way. With `docker run`, stop and remove the old container, then run the `docker run` command again. Volumes are not affected.
+
+Replacing the compose files before pulling the new image is mandatory since #1590 (one port, 443): the deprecated 44330/44333 aliases keep answering only with the new edge files in place. The old compose healthcheck probes `https://127.0.0.1:44330` and the old Caddy image dials `app:44330`/`app:44333`, ports the new app image no longer listens on, so old files plus the new image leave the stack unhealthy (502s, ingestion included). In the other direction, the new compose files probe and dial `app:443`, so they need the new image — deploy the files and the image together.
+
+Firewall note (#1590): a setup that exposed only 44330 (ingestion) while keeping 44333 internal no longer isolates the management surface — the 44330 alias reaches the full address (login page, management API, MCP, `/logs/`) exactly like 443. Restrict it at the firewall if you relied on the old split.
 
 An installation with the `logs` profile updating from before hsm-caddy 2.11.4-4 also changes vlagent's remote-write URL (the store now serves everything under `/logs`). vlagent names its unsent-data buffer directory after that URL, so log lines still waiting in the buffer at the moment of the switch are not replayed into the store afterwards — the JSON files under `Logs/` and `Logs/Archives/` keep them. With a healthy stack the buffer is empty and the update loses nothing; if VictoriaLogs was down or backlogged, let the old stack run until vlagent has delivered everything, then update.
 

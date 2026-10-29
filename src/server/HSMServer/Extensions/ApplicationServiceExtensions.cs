@@ -314,6 +314,14 @@ namespace HSMServer.ServiceExtensions
 
             applicationBuilder.UseRouting();
 
+            // Deprecated-port visibility (#1590): while the 44330/44333 aliases are still
+            // published through the deprecation window, a request that arrived by one
+            // logs a rate-limited warning so operators can find the stragglers. First of
+            // the guards: it only reads the Host header, while the guards below can
+            // short-circuit (404/401) — registered after them, a rejected legacy request
+            // would never be logged.
+            applicationBuilder.UseMiddleware<LegacyPortDeprecationMiddleware>();
+
             // Management-area isolation (#1356 step 3), before authentication: the area
             // guard allow-lists /api/v1 per endpoint (marker + policy) before any
             // controller runs, and the bearer guard keeps an hsm_pat_ credential
@@ -328,11 +336,6 @@ namespace HSMServer.ServiceExtensions
             // placed with the other guards, BEFORE authentication, so a violation
             // answers with the uniform 404 and never a 401 that confirms the endpoint.
             applicationBuilder.UseMiddleware<McpEndpointGuardMiddleware>();
-
-            // Deprecated-port visibility (#1590): while the 44330/44333 aliases are still
-            // published through the deprecation window, a request that arrived by one
-            // logs a rate-limited warning so operators can find the stragglers.
-            applicationBuilder.UseMiddleware<LegacyPortDeprecationMiddleware>();
 
             applicationBuilder.UseAuthentication();
 

@@ -8,12 +8,12 @@
         <label class="col-form-label" asp-for="ExternalConnectionUrl"></label>
     </div>
     <div class="col">
-        <input class="form-control" asp-for="ExternalConnectionUrl" placeholder="https://hsm.company.com:44330">
+        <input class="form-control" asp-for="ExternalConnectionUrl" placeholder="https://hsm.company.com">
     </div>
 </div>
 <div class="row">
     <div class="offset-3 col-9">
-        <label class="note">The externally-reachable Sensor-API URL baked into downloaded agent bundles so a client connects with zero configuration. Behind Docker/NAT the server cannot infer this. When blank, the download falls back to the request host and the configured Sensors API port.</label>
+        <label class="note">The externally-reachable Sensor-API URL baked into downloaded agent bundles so a client connects with zero configuration. Behind Docker/NAT the server cannot infer this. When blank, the download falls back to the request host's port (443 for the primary address, and instead of a deprecated 44330/44333 alias).</label>
     </div>
 </div>
 

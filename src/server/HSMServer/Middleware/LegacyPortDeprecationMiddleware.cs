@@ -12,9 +12,11 @@ namespace HSMServer.Middleware
     // deprecation window. The public port a client used is not the connection port here — a
     // proxy (or a host-port mapping) forwards everything to the one listener — so the request
     // Host header is the only place it survives, and that is what this middleware reads.
-    // A request whose Host carries a legacy port logs a rate-limited warning: enough to spot
-    // stragglers in the log store, without one line per collector package (they send every
-    // few seconds). Port-less https://host traffic logs nothing.
+    // A request whose Host carries a legacy port logs a rate-limited warning with the
+    // remote IP (the client address once the trusted-proxy forwarded headers are
+    // applied): enough to spot stragglers in the log store and know where to repoint,
+    // without one line per collector package (they send every few seconds). Port-less
+    // https://host traffic logs nothing.
     public sealed class LegacyPortDeprecationMiddleware(RequestDelegate next, ILogger<LegacyPortDeprecationMiddleware> logger)
     {
         // How often the warning repeats while legacy traffic keeps arriving. The pipeline
@@ -29,8 +31,8 @@ namespace HSMServer.Middleware
                 ShouldWarn(DateTime.UtcNow.Ticks))
             {
                 logger.LogWarning(
-                    "Request arrived via the deprecated port {Port} (Host '{Host}'). Ports {LegacySitePort} and {LegacySensorPort} are deprecated aliases of the primary https://<HSM_DOMAIN>/ (443) address and will be removed in a future release; repoint this client.",
-                    port, context.Request.Host.Value, KestrelConfig.LegacySitePort, KestrelConfig.LegacySensorPort);
+                    "Request arrived via the deprecated port {Port} (Host '{Host}', remote IP '{RemoteIp}'). Ports {LegacySitePort} and {LegacySensorPort} are deprecated aliases of the primary https://<HSM_DOMAIN>/ (443) address and will be removed in a future release; repoint this client.",
+                    port, context.Request.Host.Value, context.Connection.RemoteIpAddress, KestrelConfig.LegacySitePort, KestrelConfig.LegacySensorPort);
             }
 
             await next(context);

@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.Middleware
         [Theory]
         [InlineData(KestrelConfig.LegacySensorPort)]
         [InlineData(KestrelConfig.LegacySitePort)]
-        public async Task LegacyHostPort_LogsWarning_AndPassesThrough(int port)
+        public async Task LegacyHostPort_LogsWarningWithRemoteIp_AndPassesThrough(int port)
         {
             var logs = new RecordingLogger();
             var context = Context(host: $"hsm.example.com:{port}");
@@ -27,6 +27,9 @@ namespace HSMServer.Core.Tests.Middleware
 
             Assert.True(context.Items.ContainsKey("reached"));
             Assert.Contains(logs.Entries, e => e.Contains("deprecated") && e.Contains(port.ToString()));
+            // The remote IP makes the warning actionable: that is the straggler to repoint
+            // (already the client address behind the trusted-proxy forwarded headers).
+            Assert.Contains(logs.Entries, e => e.Contains("127.0.0.1"));
         }
 
         [Theory]
@@ -65,6 +68,7 @@ namespace HSMServer.Core.Tests.Middleware
         {
             var context = new DefaultHttpContext();
             context.Request.Host = new HostString(host);
+            context.Connection.RemoteIpAddress = System.Net.IPAddress.Loopback;
             return context;
         }
 

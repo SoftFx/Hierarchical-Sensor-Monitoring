@@ -44,8 +44,13 @@ if [[ -n "$ExpectedImageId" ]]; then
     DatabasesBackupsFolder="$BaseDirectory/DatabasesBackups:/app/DatabasesBackups"
 
     SensorDataPort="443:443"
+    # Deprecated aliases (#1590), removed with the follow-up release: the same
+    # mappings docker-compose.direct.yml publishes, so field clients still
+    # pointed at the old two-port scheme keep answering after a redeploy.
+    SensorLegacyDataPort="44330:443"
+    SensorLegacySitePort="44333:443"
 
-    docker run -d -it -u 0 --name "${ContainerName}_$Version" -v "$LogsFolder" -v "$SensorConfigFolder" -v "$EnvironmentDatabaseFolder" -v "$DatabasesBackupsFolder" -p "$SensorDataPort" "$ExpectedImageId"
+    docker run -d -it -u 0 --name "${ContainerName}_$Version" -v "$LogsFolder" -v "$SensorConfigFolder" -v "$EnvironmentDatabaseFolder" -v "$DatabasesBackupsFolder" -p "$SensorDataPort" -p "$SensorLegacyDataPort" -p "$SensorLegacySitePort" "$ExpectedImageId"
 else
     echo "Expected image hasn't been found"
 fi

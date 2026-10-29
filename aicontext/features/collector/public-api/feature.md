@@ -12,7 +12,7 @@ Everything a host application touches: `DataCollector` construction, `CollectorO
 ## Construction & configuration
 
 - `DataCollector(CollectorOptions)` — validates options immediately (`Validate()` throws).
-- `DataCollector(productKey, address = "localhost", port = 443, clientName = null)` — convenience wrapper (default 443 since #1590; a pre-#1590 server used 44330).
+- `DataCollector(productKey, address = "localhost", port = 443, clientName = null)` — convenience wrapper (default 443 since #1590; a pre-#1590 server used 44330 — a breaking default change for consumers that relied on it). The default is a `const` baked into the optional parameter: callers compiled against a pre-#1590 package keep sending 44330 until recompiled, while `new CollectorOptions()` picks 443 up from the DLL immediately.
 - `TestConnection()` → `ConnectionResult { Code, Error, IsOk, Result (= Error empty), static Ok }`; callable in any lifecycle state.
 - `IDataSender` (`Core/IDataSender.cs`) is the transport seam: `TestConnectionAsync`, `SendDataAsync`, `SendPriorityDataAsync`, `SendCommandAsync`, `SendFileAsync`, `Dispose`. Tests and embedders substitute it via `CollectorOptions.DataSender`.
 

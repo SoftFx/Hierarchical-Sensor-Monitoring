@@ -27,7 +27,7 @@ The cost is paid everywhere: firewall exceptions for non-standard ports on every
 - The deployment topology "expose ingestion publicly while firewalling the site/management port" is no longer possible — inherent to one-port operation. The security boundary is auth: per-product access keys for ingestion, HsmApiToken bearer credentials (with per-request owner∩token grants) for management. Operators needing a hardened edge must front Caddy with their own firewall/path rules.
 - Direct (no-Caddy) deployments publish `443:443` (plus the deprecated host-port aliases through the window); the container healthcheck probes the single internal listener.
 - Agents and collectors pinned to `:44330` keep working through the window; they are repointed by reinstalling a server-generated bundle (which now carries 443) or editing config. The deprecation warning tells operators when the stragglers are gone — that is the signal to ship the alias removal.
-- Unprivileged local dev cannot bind 443: `appsettings.Development.json` pins a high port for `dotnet run`; containers run as root and use the default.
+- Unprivileged local dev cannot bind 443 on Linux/macOS: the per-developer untracked `appsettings.Development.json` (the Debug config name) can pin `Kestrel.Port` to a high port for `dotnet run` — no pin ships in the repo, so a fresh clone binds the default 443, which needs no privileges on Windows. Containers run as root and use the default.
 
 ## Alternatives Considered
 

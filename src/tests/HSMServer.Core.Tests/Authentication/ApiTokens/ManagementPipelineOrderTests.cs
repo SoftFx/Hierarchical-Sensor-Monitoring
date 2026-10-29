@@ -45,6 +45,10 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             string[] pinnedOrder =
             [
                 "UseRouting",
+                // Deprecated-port visibility (#1590): FIRST of the guards — it only
+                // reads the Host header, and the guards below short-circuit (404/401),
+                // so a legacy-port request they reject must already have been logged.
+                "LegacyPortDeprecationMiddleware",
                 "ManagementApiGuardMiddleware",
                 "LegacyBearerGuardMiddleware",
                 // After UseRouting on purpose: the fail-closed endpoint-family
@@ -52,10 +56,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 // UseRouting — moved earlier, the whole /mcp policy check
                 // silently no-ops (#1392 review, round 4).
                 "McpEndpointGuardMiddleware",
-                // Deprecated-port visibility (#1590): the warning fires for legacy
-                // hosts before anything else can reject the request, so stragglers
-                // stay visible even on 401/404 answers.
-                "LegacyPortDeprecationMiddleware",
                 "UseAuthentication",
                 // Token-usage monitoring between authentication and
                 // authorization on purpose (#1402): a rejected request never

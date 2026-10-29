@@ -23,7 +23,7 @@ export default defineConfig({
     headless: process.env.CI? true: false, 
     
     // Takes URL from GitHub Actions
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333',
+    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:443',
     
     // Ignor HTTPErrors
     ignoreHTTPSErrors: true,
