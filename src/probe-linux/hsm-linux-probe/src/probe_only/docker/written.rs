@@ -126,6 +126,8 @@ fn disks_under(sys: &Path, device: &str, depth: usize) -> Vec<String> {
             disks.push(whole);
         }
     }
+    // read_dir order depends on the filesystem; `under` is a public API and must be stable.
+    disks.sort();
     disks
 }
 
