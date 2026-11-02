@@ -1,6 +1,6 @@
 # ADR-0008: VictoriaLogs for HSM server log storage in the docker-compose deployment
 
-**Status:** Accepted (the archive-budget paragraph in Consequences is superseded by ADR-0011)
+**Status:** Superseded by ADR-0015 (the entire pipeline — store, shipper, JSON spool, read path — is removed; the archive-budget paragraph in Consequences was separately superseded by ADR-0011)
 **Date:** 2026-09-28
 **Supersedes:** —
 

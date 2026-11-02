@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-5 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-6 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -44,8 +44,6 @@ curl -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monito
 
 Before the first docker compose up, edit .env: set HSM_DOMAIN to your real host name and, because the template defaults to Cloudflare DNS-01, provide CF_API_TOKEN. The copied template cannot start with its blank token. If inbound HTTP/TLS validation is available and you prefer it, change HSM_CERTIFICATE to letsencrypt-http instead.
 
-The log storage (VictoriaLogs) also starts with the template defaults, which pair COMPOSE_PROFILES=logs with HSM_STRUCTURED_LOGS=true (the app-side JSON log that vlagent ships); an .env that predates log storage enables none of it until both settings are added. Log access needs no credentials in .env: the log UI and query API are served under https://<HSM_DOMAIN>/logs/ and Caddy admits only a logged-in HSM administrator (an anonymous browser is sent to the login page, everyone else is refused). If you later remove `logs` from COMPOSE_PROFILES, the /logs/ routes answer 502 until it is back — Caddy cannot see which profiles are active.
-
 For Cloudflare DNS validation (the documented DNS-01 example), use a scoped API token with Zone:DNS:Edit and Zone:Zone:Read for the selected zone:
 
 ~~~dotenv
@@ -71,10 +69,6 @@ HSM_CERTIFICATE=letsencrypt-http
 | HSM_DNS_PROVIDER | cloudflare or dynv6; required only for letsencrypt-dns. |
 | CF_API_TOKEN | Cloudflare token with DNS edit and zone read access; required only for Cloudflare. |
 | DYNV6_API_TOKEN | dynv6 token; required only for dynv6. |
-| COMPOSE_PROFILES | Include logs to run the log stack (VictoriaLogs + vlagent). The template ships logs; remove it to disable the log containers. |
-| HSM_STRUCTURED_LOGS | true makes the app write the structured JSON log file the log pipeline ships. Default false. |
-| VL_RETENTION_PERIOD | How long VictoriaLogs keeps log entries (e.g. 30d, 4w; minimum 1d). Default 30d. |
-| VL_RETENTION_MAX_DISK | Disk cap for VictoriaLogs storage (default 10GiB); the oldest days are dropped when it is exceeded. |
 
 Keep HSM_DOMAIN and HSM_CERTIFICATE in .env for Compose commands. DNS tokens are needed only for DNS-01.
 
@@ -128,7 +122,7 @@ Caddy is recreated and HSM data is untouched. There is no automatic fallback if 
 
 ### Advanced Caddyfile customization
 
-The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the entrypoint-selected HSM_TLS_SNIPPET import and the victorialogs-routes snippet (the admin-gated /logs/ proxying). When a newer image changes the bundled Caddyfile (this release moved the VictoriaLogs routes under /logs behind the HSM admin session), re-download it and re-apply your edits to the fresh copy: a Caddyfile copied from an older release keeps starting — the entrypoint still exports the variable its old VictoriaLogs import refers to, resolving it to an empty snippet — but it serves none of the /logs/ routes until it is refreshed, and the removed basic-auth routes cannot come back. To set the ACME account contact email, add this directive inside the leading global options block:
+The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the entrypoint-selected HSM_TLS_SNIPPET import. When a newer image changes the bundled Caddyfile (this release removed the log-store routes, #1594), re-download it and re-apply your edits to the fresh copy: a Caddyfile copied from an older release keeps starting, but a copy still carrying the removed log-store routes answers 502 on them until it is refreshed — no log store runs behind them anymore. To set the ACME account contact email, add this directive inside the leading global options block:
 
 ~~~bash
 curl -o Caddyfile https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/caddy/Caddyfile
@@ -229,18 +223,6 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #     -t hsmonitoring/hierarchical_sensor_monitoring:latest \
 #     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
 #
-# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app writes its structured
-# JSON log to Logs/ only when HSM_STRUCTURED_LOGS=true (default false, so an older .env upgraded
-# to this file never starts writing it on its own); the vlagent service then tails that file and
-# ships it to VictoriaLogs with durable delivery (checkpoints + on-disk buffer; automatic replay
-# after an outage — no manual backfill). .env.example pairs COMPOSE_PROFILES=logs with
-# HSM_STRUCTURED_LOGS=true, so fresh installs get the full pipeline.
-# Caddy exposes VictoriaLogs' UI (/logs/select/vmui) and query API (/logs/select/logsql)
-# at https://<HSM_DOMAIN>/logs/, gated by the HSM admin session (forward_auth against the
-# app): there is no separate credential, and a fresh install with the 'logs' profile serves
-# the routes to every logged-in HSM admin immediately.
-# Disable entirely by removing 'logs' from COMPOSE_PROFILES (Caddy then answers 502 on
-# /logs/ — it cannot see which profiles are active). See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -279,72 +261,14 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
-      # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
-      # Defaults to false: an .env from before log storage must not silently start writing a
-      # second JSON copy of every Info+ event plus its daily archive files with no
-      # VictoriaLogs or vlagent to read it.
-      # .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
-      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
 
-  victorialogs:
-    # Log database (upstream image, version-pinned). Reached only inside the compose network:
-    # vlagent ships the app's JSON log here, Caddy exposes the read-only paths.
-    image: 'victoriametrics/victoria-logs:v1.52.0'
-    container_name: hsm-victorialogs
-    restart: unless-stopped
-    profiles: ['logs']
-    command:
-      - '-httpListenAddr=:9428'
-      # Serve everything under /logs so Caddy can proxy the read routes pass-through (no
-      # path rewriting); vmui then generates its URLs under that prefix by itself.
-      - '-http.pathPrefix=/logs'
-      - '-storageDataPath=/victoria-logs-data'
-      - '-retentionPeriod=${VL_RETENTION_PERIOD:-30d}'
-      - '-retention.maxDiskSpaceUsageBytes=${VL_RETENTION_MAX_DISK:-10GiB}'
-    # Absolute disk cap for the log volume (default 10GiB; override VL_RETENTION_MAX_DISK in .env).
-    # When it is exceeded, VictoriaLogs drops the oldest whole per-day partitions automatically and
-    # always keeps the last two days (the cap can be exceeded if those two days alone are bigger);
-    # it operates independently of -retentionPeriod. The percent-based flag
-    # (-retention.maxDiskUsagePercent) is deliberately not used: a Docker named volume shares the
-    # host filesystem, so a percentage would count the whole host disk, not the volume (docker.md).
-    mem_limit: 512m
-    volumes:
-      - victorialogs-data:/victoria-logs-data
-    # No healthcheck: the image has no shell, so nothing can be probed in-container;
-    # /health exists on the HTTP port for external checks.
-
-  vlagent:
-    # VictoriaLogs' vendor-native agent: tails the app's JSON log file (read-only mount of
-    # ./Logs) and ships it to VictoriaLogs via the native insert endpoint. Reading-position
-    # checkpoints and the unsent-data buffer live in the vlagent-data volume, so delivery
-    # survives vlagent restarts and replays automatically after a VictoriaLogs outage.
-    # No published ports and no healthcheck: like victorialogs, the image has no shell
-    # (nothing to probe in-container); /health and metrics answer on :9429 inside the
-    # compose network only.
-    image: 'victoriametrics/vlagent:v1.52.0'
-    container_name: hsm-vlagent
-    restart: unless-stopped
-    profiles: ['logs']
-    command:
-      - '-fileCollector.glob=/logs/HSM-structured-log-*.json'
-      - '-fileCollector.msgField=_msg'
-      - '-fileCollector.timeField=_time'
-      - '-tmpDataPath=/vlagent-data'
-      # The store serves everything under /logs (-http.pathPrefix), ingest included.
-      - '-remoteWrite.url=http://victorialogs:9428/logs/insert/native'
-      - '-remoteWrite.maxDiskUsagePerURL=1024MB'
-    mem_limit: 128m
-    volumes:
-      - './Logs:/logs:ro'
-      - 'vlagent-data:/vlagent-data'
-
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-5'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-6'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -367,10 +291,6 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
-
-volumes:
-  victorialogs-data:
-  vlagent-data:
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -386,8 +306,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-5 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read routes (/logs/..., admitted only for logged-in HSM admins via forward_auth); forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
-| HSM_STRUCTURED_LOGS from .env on the app service (default false) | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs. The template sets true next to COMPOSE_PROFILES=logs; the compose default is false so an upgraded compose file with an older .env never starts writing the archive on its own. The rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-6 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
 | Published ports 80, 443, 44330, 44333 | 443 is the primary address for everything (web UI, ingestion, downloads). 44330/44333 are deprecated aliases kept through the deprecation window; downloaded agent bundles point at 443. |
 
 ### Internal DNS name
@@ -543,9 +462,9 @@ Without Caddy, add `-f docker-compose.direct.yml` to each `docker compose` comma
 
 Replacing the compose files before pulling the new image is mandatory since #1590 (one port, 443): the deprecated 44330/44333 aliases keep answering only with the new edge files in place. The old compose healthcheck probes `https://127.0.0.1:44330` and the old Caddy image dials `app:44330`/`app:44333`, ports the new app image no longer listens on, so old files plus the new image leave the stack unhealthy (502s, ingestion included). In the other direction, the new compose files probe and dial `app:443`, so they need the new image — deploy the files and the image together.
 
-Firewall note (#1590): a setup that exposed only 44330 (ingestion) while keeping 44333 internal no longer isolates the management surface — the 44330 alias reaches the full address (login page, management API, MCP, `/logs/`) exactly like 443. Restrict it at the firewall if you relied on the old split.
+Firewall note (#1590): a setup that exposed only 44330 (ingestion) while keeping 44333 internal no longer isolates the management surface — the 44330 alias reaches the full address (login page, management API, MCP) exactly like 443. Restrict it at the firewall if you relied on the old split.
 
-An installation with the `logs` profile updating from before hsm-caddy 2.11.4-4 also changes vlagent's remote-write URL (the store now serves everything under `/logs`). vlagent names its unsent-data buffer directory after that URL, so log lines still waiting in the buffer at the moment of the switch are not replayed into the store afterwards — the JSON files under `Logs/` and `Logs/Archives/` keep them. With a healthy stack the buffer is empty and the update loses nothing; if VictoriaLogs was down or backlogged, let the old stack run until vlagent has delivered everything, then update.
+Update note (#1594): the VictoriaLogs log-storage stack is removed — the `logs` compose profile (victorialogs + vlagent), the `HSM_STRUCTURED_LOGS` structured JSON log, and the `/logs/` read routes no longer exist, and nothing replaces them. After replacing docker-compose.yml, stop and remove the two containers (`docker rm -f hsm-victorialogs hsm-vlagent`); both named volumes may be deleted to reclaim disk — data in `victorialogs-data` is lost by design, while the text logs under `Logs/` (and `Logs/Archives/`) stay on disk untouched. Leftover `.env` keys (`COMPOSE_PROFILES`, `VL_RETENTION_*`, `HSM_STRUCTURED_LOGS`) are inert and can be dropped.
 
 ---
 

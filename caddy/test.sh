@@ -52,31 +52,39 @@ if grep -F "$dynv6_secret" "$tmp/dns-dynv6.json" >/dev/null; then
     exit 1
 fi
 
-# VictoriaLogs read routes (#1580): /logs/select/* is proxied behind forward_auth to the
-# app's /logs-auth session check — the HSM admin session is the only credential, so the
-# routes exist with no VL_UI_* variables at all. The adapted configuration must carry no
-# basic-auth or bcrypt artifacts, and the ingest endpoints (/insert/...) must never be
-# routed through Caddy.
-adapt_ok vl-routes -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed
-grep -F '"dial":"victorialogs:9428"' "$tmp/vl-routes.json" >/dev/null
-grep -F '"uri":"/logs-auth"' "$tmp/vl-routes.json" >/dev/null
-grep -F '"method":"GET"' "$tmp/vl-routes.json" >/dev/null
-# forward_auth's auth subrequest goes to https://app:443, so its proxy must carry the
-# same hsm_upstream transport as the main proxies: without the TLS skip every /logs-auth
-# call fails on the app's self-signed certificate, and without the Host passthrough a
-# login redirect points browsers at the docker-internal name. Both regressions fail
-# closed (admins lose /logs/ with no error here), so pin them by count: eleven proxies
-# carry the transport today — the single app upstream (#1590) is shared by the primary
-# 443 site, the two deprecated-port aliases and the catch-all site's three addresses,
-# plus every VictoriaLogs route pairs an auth proxy with its main upstream proxy.
-transport_hits="$(grep -oF '"insecure_skip_verify":true' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
-[ "$transport_hits" -ge 11 ] || {
-    echo "expected at least 11 proxies with insecure_skip_verify, got $transport_hits" >&2
+# The VictoriaLogs log-store stack is retired (#1594, ADR-0015): the bundled Caddyfile
+# carries no log routes at all — no store upstream, no forward_auth session gate — and
+# nothing derived from the leftover VL_UI_* values of an older .env may reach the
+# adapted configuration either.
+adapt_ok no-vl-routes -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=leftover-vl-password-not-for-network-use
+if grep -F '"dial":"victorialogs:9428"' "$tmp/no-vl-routes.json" >/dev/null; then
+    echo 'VictoriaLogs upstream survived in the adapted configuration' >&2
+    exit 1
+fi
+if grep -F '/logs-auth' "$tmp/no-vl-routes.json" >/dev/null; then
+    echo 'the /logs-auth forward_auth gate survived in the adapted configuration' >&2
+    exit 1
+fi
+if grep -F '/logs/select' "$tmp/no-vl-routes.json" >/dev/null; then
+    echo 'VictoriaLogs read routes survived in the adapted configuration' >&2
+    exit 1
+fi
+# Every proxy that remains is the app upstream and must carry the full hsm_upstream
+# treatment: the TLS skip (the app serves its self-signed certificate) and the Host
+# passthrough (HSM builds absolute redirects from the request Host; without it a login
+# redirect points browsers at the docker-internal name). Six proxies carry it today:
+# the primary 443 site, the two deprecated-port aliases, and the catch-all site, whose
+# three addresses each land in their port's server as a second site — one proxy per
+# site, three servers (:443, :44330, :44333).
+transport_hits="$(grep -oF '"insecure_skip_verify":true' "$tmp/no-vl-routes.json" | wc -l | tr -d ' ')"
+[ "$transport_hits" -eq 6 ] || {
+    echo "expected 6 proxies with insecure_skip_verify, got $transport_hits" >&2
     exit 1
 }
-host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/vl-routes.json" | wc -l | tr -d ' ')"
-[ "$host_hits" -ge 11 ] || {
-    echo "expected at least 11 Host header_up passthroughs, got $host_hits" >&2
+host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/no-vl-routes.json" | wc -l | tr -d ' ')"
+[ "$host_hits" -eq 6 ] || {
+    echo "expected 6 Host header_up passthroughs, got $host_hits" >&2
     exit 1
 }
 
@@ -85,59 +93,32 @@ host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/vl-routes.json"
 # app's one listener on 443. A per-port upstream here would 502 on one of the surfaces,
 # so the legacy dials must be gone while the legacy LISTENERS stay for the window's
 # stragglers.
-if grep -F '"dial":"app:44330"' "$tmp/vl-routes.json" >/dev/null; then
+if grep -F '"dial":"app:44330"' "$tmp/no-vl-routes.json" >/dev/null; then
     echo 'legacy per-port upstream app:44330 survived in the adapted configuration' >&2
     exit 1
 fi
-if grep -F '"dial":"app:44333"' "$tmp/vl-routes.json" >/dev/null; then
+if grep -F '"dial":"app:44333"' "$tmp/no-vl-routes.json" >/dev/null; then
     echo 'legacy per-port upstream app:44333 survived in the adapted configuration' >&2
     exit 1
 fi
-grep -F '"listen":[":44330"]' "$tmp/vl-routes.json" >/dev/null || {
+grep -F '"listen":[":44330"]' "$tmp/no-vl-routes.json" >/dev/null || {
     echo 'deprecated 44330 alias listener missing from the adapted configuration' >&2
     exit 1
 }
-grep -F '"listen":[":44333"]' "$tmp/vl-routes.json" >/dev/null || {
+grep -F '"listen":[":44333"]' "$tmp/no-vl-routes.json" >/dev/null || {
     echo 'deprecated 44333 alias listener missing from the adapted configuration' >&2
     exit 1
 }
-if grep -F '/insert' "$tmp/vl-routes.json" >/dev/null; then
-    echo 'VictoriaLogs ingest endpoint routed through Caddy' >&2
-    exit 1
-fi
-if grep -F '"username"' "$tmp/vl-routes.json" >/dev/null; then
-    echo 'basic-auth username present in the adapted VictoriaLogs configuration' >&2
-    exit 1
-fi
-if grep -F '$2a$' "$tmp/vl-routes.json" >/dev/null; then
-    echo 'bcrypt hash present in the adapted VictoriaLogs configuration' >&2
-    exit 1
-fi
 
-# Leftover VL_UI_* values from an older .env cannot reach this image through compose
-# anymore; passed explicitly, they must be ignored — nothing derived from them (username,
-# hash) and not the values themselves may reach the adapted configuration.
-vl_legacy_password='leftover-vl-password-not-for-network-use'
-adapt_ok vl-legacy-env -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
-    -e VL_UI_USER=hsm-logs -e "VL_UI_PASSWORD=$vl_legacy_password"
-grep -F '"dial":"victorialogs:9428"' "$tmp/vl-legacy-env.json" >/dev/null
-if grep -F 'hsm-logs' "$tmp/vl-legacy-env.json" >/dev/null; then
-    echo 'ignored VL_UI_USER leaked into the adapted configuration' >&2
-    exit 1
-fi
-if grep -F "$vl_legacy_password" "$tmp/vl-legacy-env.json" >/dev/null; then
-    echo 'ignored VL_UI_PASSWORD leaked into the adapted configuration' >&2
-    exit 1
-fi
-
-# Compatibility (#1580 review): a customised Caddyfile copied from a pre-2.11.4-4 image
-# still contains `import {$HSM_VL_SNIPPET}` (the docs of those releases told operators to
-# keep it). With the variable no longer exported, the placeholder would expand to a bare
-# `import` and Caddy would refuse to load — taking down every listener it fronts, sensor
-# ingestion included. Adapting the frozen 2.11.4-3 bundled Caddyfile through this image's
-# entrypoint must therefore succeed, keep proxying the app upstreams, and activate neither
-# the VictoriaLogs routes nor the basic-auth gate: the entrypoint pins the variable to the
-# empty snippet those copies define — fail closed.
+# Compatibility (#1580 review, kept through the #1594 removal): a customised Caddyfile
+# copied from a pre-2.11.4-4 image still contains `import {$HSM_VL_SNIPPET}` (the docs of
+# those releases told operators to keep it). With the variable no longer exported, the
+# placeholder would expand to a bare `import` and Caddy would refuse to load — taking
+# down every listener it fronts, sensor ingestion included. Adapting the frozen 2.11.4-3
+# bundled Caddyfile through this image's entrypoint must therefore succeed, keep proxying
+# the app upstreams, and activate neither the VictoriaLogs routes nor the basic-auth
+# gate: the entrypoint pins the variable to the empty snippet those copies define — fail
+# closed.
 old_caddyfile="$(CDPATH= cd -- "$(dirname -- "$0")/testdata" && pwd)/Caddyfile.2.11.4-3"
 docker run --rm -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
     -v "$old_caddyfile:/etc/caddy/Caddyfile:ro" \

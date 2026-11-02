@@ -56,7 +56,7 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
    and remove it in step 3. The PFX password travels through the environment
    (`export PW` + `-passin env:PW`), never on the command line — argv is visible
    in `/proc/<pid>/cmdline`, the same rule `caddy/docker-entrypoint.sh` follows
-   for the VictoriaLogs password. When `jq` exists the password is read as real
+   for its provider tokens. When `jq` exists the password is read as real
    JSON; the `sed` fallback cannot decode `\"`, `\\`, `\uXXXX` escapes and matches
    any `"Key"` in the file, not just `ServerCertificate`'s.
 
@@ -190,6 +190,7 @@ cert expiry) belongs on whoever runs the machine.
 
 - Never commit cert.pem/key.pem or the PFX; the PFX password stays on the machine
   it came from.
-- A custom Caddyfile's extra vhosts keep their own TLS policy: the dev mTLS vhost
-  for VictoriaLogs (`logs.<domain>`, internal CA + client certificates) is
-  untouched by this mode.
+- A custom Caddyfile's extra vhosts keep their own TLS policy and their own fate: the
+  dev mTLS vhost that used to front the log store (`logs.<domain>`, internal CA +
+  client certificates) lost its upstream when the log-storage stack was removed
+  (#1594, ADR-0015) — it answers 502 until dropped from the copy.

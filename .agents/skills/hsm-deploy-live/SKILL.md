@@ -1,12 +1,11 @@
 ---
 name: hsm-deploy-live
-description: Update and deploy the HSM server on the remote LIVE (production) machine over SSH using docker compose (app + Caddy + VictoriaLogs stack), with an optional version parameter (default latest). Always requires explicit user confirmation before any change and recommends updating dev first. Use whenever the user mentions the live/production machine — "обнови лайв", "выкатить на прод", "обнови live сервер", "поставь релиз на live". Dev machine requests belong to the hsm-deploy-dev skill.
+description: Update and deploy the HSM server on the remote LIVE (production) machine over SSH using docker compose (app + Caddy stack), with an optional version parameter (default latest). Always requires explicit user confirmation before any change and recommends updating dev first. Use whenever the user mentions the live/production machine — "обнови лайв", "выкатить на прод", "обнови live сервер", "поставь релиз на live". Dev machine requests belong to the hsm-deploy-dev skill.
 ---
 
 # HSM deploy — LIVE machine (production)
 
-Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`, plus
-`hsm-victorialogs`/`hsm-vlagent` with the `logs` profile) on the single remote **live**
+Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`) on the single remote **live**
 machine over SSH. This is production: every state-changing step is gated behind an
 explicit user confirmation, and dev should have seen the same version first.
 
@@ -53,7 +52,7 @@ Parse the target version from the request:
   If the release is marked **pre-release**, that is allowed on live ONLY when the user
   named that exact version themselves — never propose one, and surface the pre-release
   status prominently in the confirmation question.
-- The version pins only the app image; Caddy/VictoriaLogs versions come from the
+- The version pins only the app image; the Caddy version comes from the
   compose file (synced below), independent of the app version.
 
 ## Modes
@@ -153,7 +152,7 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    staged file for fresh.
 
 5. **Apply** (only after the gate passes). Order matters — swap the compose file
-   first (it carries the pinned Caddy/VictoriaLogs image versions), then pull, then up.
+   first (it carries the pinned Caddy image version), then pull, then up.
    `up -d` blocks until the app is healthy (caddy's `depends_on` waits for it), so
    during a legacy database migration one command can occupy the full budget — run
    it with a long/background timeout, or detached

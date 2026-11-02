@@ -96,23 +96,21 @@ ssh -p <port> <ssh> "sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <dir>/.env |
 git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
 ```
 
-- `COMPOSE_PROFILES` missing/without `logs` → VictoriaLogs stack does not run (and `/logs/*`
-  then answers 502: Caddy cannot see profiles).
-- `HSM_STRUCTURED_LOGS` missing → app writes no JSON log, so vlagent has nothing to ship.
-- The log UI/API need no `.env` keys: they are served with the `logs` profile and admitted
-  only for a logged-in HSM admin (`/logs/select/vmui`, Caddy `forward_auth` against the
-  app). A `/logs/*` refusal on an old app means the app image predates the session-check
-  endpoint — update the app image.
+- Removed log-storage keys (`COMPOSE_PROFILES`, `VL_RETENTION_*`, `HSM_STRUCTURED_LOGS`)
+  in an old `.env` are inert since #1594 — the stack no longer exists; the keys can be
+  dropped, and `hsm-victorialogs`/`hsm-vlagent` containers from before the upgrade can
+  be removed (`docker rm -f hsm-victorialogs hsm-vlagent`) together with their named
+  volumes.
 
 Ask the user to add the missing keys themselves; `up -d` with the machine's full
 `-f` file set applies.
 
-## Caddy / VictoriaLogs image never updates
+## Caddy image never updates
 
-`hsmonitoring/hsm-caddy` and the VictoriaLogs images are version-pinned **in the
-compose file itself**; `docker compose pull` alone never moves them. Updating the
+`hsmonitoring/hsm-caddy` is version-pinned **in the
+compose file itself**; `docker compose pull` alone never moves it. Updating the
 remote `docker-compose.yml` from `origin/master` (the compose-file sync step of the
-update flow) is how pinned versions advance. Versioned tags are immutable — if the
+update flow) is how the pinned version advances. Versioned tags are immutable — if the
 pulled caddy tag does not exist yet, the master CI workflow that publishes it has not
 finished; wait for it.
 
@@ -142,16 +140,11 @@ first and pin that.) Rollback is a decision for the user — offer it, do not de
 
 ## Disk pressure
 
-Images plus the VictoriaLogs named volume share the host filesystem. Check with
-`df -h <dir>`; the log store usage specifically:
-
-```bash
-ssh -p <port> <ssh> 'docker run --rm --volumes-from hsm-victorialogs alpine du -sh /victoria-logs-data'
-```
-
-The store self-caps at `VL_RETENTION_MAX_DISK` (default 10 GiB, oldest days dropped
-first); the app's own JSON archives under `Logs/Archives/` (up to 60 daily files) are
-outside that cap and count toward `Logs/`.
+Images share the host filesystem with the bind-mounted data directories. Check with
+`df -h <dir>`. The app's log archives under `Logs/Archives/` are self-capped at 60
+files per target (ADR-0011); on a machine upgraded from before #1594 the two removed
+log-store containers and their named volumes may still hold disk — see the note under
+"Old `.env` after a compose file upgrade".
 
 ## `docker compose pull` fails (rate limit / network)
 

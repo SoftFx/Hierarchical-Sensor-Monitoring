@@ -1,12 +1,11 @@
 ---
 name: hsm-deploy-dev
-description: Update and deploy the HSM server on the remote DEV machine over SSH using docker compose (app + Caddy + VictoriaLogs stack), with an optional version parameter (default latest, pre-releases allowed). Use whenever the user mentions the dev machine — updating to the latest or a specific version, pinning a pre-release, checking status, or migrating the old load.sh install: "обнови дев", "поставь на dev 3.42.0", "проверь dev", "обновление на дев-машине". If the user names the live machine (лайв, прод, production), that is the hsm-deploy-live skill.
+description: Update and deploy the HSM server on the remote DEV machine over SSH using docker compose (app + Caddy stack), with an optional version parameter (default latest, pre-releases allowed). Use whenever the user mentions the dev machine — updating to the latest or a specific version, pinning a pre-release, checking status, or migrating the old load.sh install: "обнови дев", "поставь на dev 3.42.0", "проверь dev", "обновление на дев-машине". If the user names the live machine (лайв, прод, production), that is the hsm-deploy-live skill.
 ---
 
 # HSM deploy — DEV machine
 
-Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`, plus
-`hsm-victorialogs`/`hsm-vlagent` with the `logs` profile) on the single remote **dev**
+Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`) on the single remote **dev**
 machine over SSH. Dev is not production: updates run immediately after a preflight
 report, no confirmation gate. The promotion path is: update dev here → verify → the
 live skill handles the live machine.
@@ -58,7 +57,7 @@ Parse the target version from the request:
   ```
 
   If the release is marked pre-release, say so in the plan message (allowed on dev).
-  The version pins only the app image; Caddy/VictoriaLogs versions come from the
+  The version pins only the app image; the Caddy version comes from the
   compose file (synced below), independent of the app version.
 
 ## Modes
@@ -115,8 +114,8 @@ releases — filter them out):
    pre-release), whether the compose file will change, then proceed. Announce each
    step's result as you go.
 
-3. **Sync `docker-compose.yml` from origin/master.** Caddy and VictoriaLogs image
-   versions are pinned *inside* the compose file, so they only advance when the file
+3. **Sync `docker-compose.yml` from origin/master.** The Caddy image version is
+   pinned *inside* the compose file, so it only advances when the file
    itself is updated. Never sync from a local branch.
 
    ```bash
@@ -141,7 +140,8 @@ releases — filter them out):
      upstream change, say so in the plan message instead of applying silently.
    - **Never modify the remote `.env`** (holds TLS tokens). Do compare its *key names*
      against `origin/master:.env.example` and report keys the user may want to add
-     (e.g. `HSM_STRUCTURED_LOGS`, `VL_RETENTION_PERIOD`). Extract names only — never `cat` the
+     or drop (e.g. the inert log-storage keys `COMPOSE_PROFILES`/`VL_RETENTION_*`/
+     `HSM_STRUCTURED_LOGS` left from before #1594). Extract names only — never `cat` the
      file (that puts tokens into the chat), never values, no
      `docker compose config`:
 

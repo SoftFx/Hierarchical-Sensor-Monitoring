@@ -55,16 +55,14 @@ case "${HSM_CERTIFICATE:-}" in
 
 export HSM_TLS_SNIPPET
 
-# VictoriaLogs read routes (/logs/select/*) are exposed unconditionally by the Caddyfile
-# and gated by forward_auth against the HSM admin session — there is no credential to
-# generate or validate here anymore (ADR-0012 superseded the VL_UI_* basic auth).
-
 # Compatibility with customised Caddyfiles copied from a pre-2.11.4-4 image: the docs of
 # those releases told operators to keep `import {$HSM_VL_SNIPPET}` in their copies, and
 # an unset variable expands to nothing, leaving a bare `import` that Caddy refuses to
 # load — taking down every listener Caddy fronts, sensor ingestion included. Those copies
 # define their own empty (victorialogs-off) snippet, so pinning the value makes them start
-# cleanly with no log routes (fail closed). The bundled Caddyfile no longer references it.
+# cleanly with no log routes (fail closed). The log-store routes themselves are gone since
+# 2.11.4-6 (ADR-0015): copies merged from 2.11.4-4/-5 carry their own snippet definition
+# and import, still load, and answer 502 on /logs/* with no store behind it.
 HSM_VL_SNIPPET=victorialogs-off
 export HSM_VL_SNIPPET
 
