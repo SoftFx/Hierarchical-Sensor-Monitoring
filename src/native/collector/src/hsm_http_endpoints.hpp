@@ -124,14 +124,11 @@ namespace hsm::http
         // endpoint is "https://<host>/api/sensors" with no ":443" (managed form pinned by
         // CollectorAdversarialTests; corpus-pinned by default_endpoint_contract, #1593).
         const bool port_is_scheme_default =
-            (detail::EqualsIgnoreCase(effective_scheme, "https") && port == 443)
-            || (detail::EqualsIgnoreCase(effective_scheme, "http") && port == 80);
+            (detail::EqualsIgnoreCase(effective_scheme, "https") && port == 443) || (detail::EqualsIgnoreCase(effective_scheme, "http") && port == 80);
 
         Endpoints endpoints;
         endpoints.connection_address =
-            effective_scheme + "://" + host
-            + (port_is_scheme_default ? std::string{} : ":" + std::to_string(port))
-            + "/api/sensors";
+            effective_scheme + "://" + host + (port_is_scheme_default ? std::string{} : ":" + std::to_string(port)) + "/api/sensors";
         return endpoints;
     }
 
