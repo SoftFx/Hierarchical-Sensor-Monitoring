@@ -21,7 +21,7 @@
 * The server reports its own database backups: result (with TTL so a missed run times out), zip sizes and duration on the Backup node, plus daily environment/dashboards database sizes.
 
 ## Linux probe
-* Ships probe 0.9.1 (from 0.8.2): top disk I/O processes via the hsm-linux-probe-io root helper enabled by install.sh; bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log.
+* Ships probe 0.10.0 (from 0.8.2): bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log; full process names in top CPU where the 15-byte kernel name was cut, e.g. `valheim_server.x86_64` (#1573); an idle container's `Disk written per hour` posts 0 instead of a gap (#1574).
 
 ## Infrastructure
 * One port: everything (web UI, Sensor API, management API, MCP, downloads) is served on the standard port 443; the non-standard ports 44330/44333 keep answering as deprecated aliases through the deprecation window and will be removed in a follow-up release (#1590). The server listens on a single Kestrel port (`Kestrel.Port`, default 443 — old `SensorPort`/`SitePort` settings are ignored with a startup warning); DataCollector/agent/ping-module defaults are now 443; requests that arrive by a deprecated port log a rate-limited warning so operators can find clients to repoint. Direct deployments publish 443 (plus the deprecated aliases through the window).
