@@ -1,12 +1,11 @@
 ---
 name: hsm-deploy-live
-description: Update and deploy the HSM server on the remote LIVE (production) machine over SSH using docker compose (app + Caddy + VictoriaLogs stack), with an optional version parameter (default latest). Always requires explicit user confirmation before any change and recommends updating dev first. Use whenever the user mentions the live/production machine — "обнови лайв", "выкатить на прод", "обнови live сервер", "поставь релиз на live". Dev machine requests belong to the hsm-deploy-dev skill.
+description: Update and deploy the HSM server on the remote LIVE (production) machine over SSH using docker compose (app + Caddy stack), with an optional version parameter (default latest). Always requires explicit user confirmation before any change and recommends updating dev first. Use whenever the user mentions the live/production machine — "обнови лайв", "выкатить на прод", "обнови live сервер", "поставь релиз на live". Dev machine requests belong to the hsm-deploy-dev skill.
 ---
 
 # HSM deploy — LIVE machine (production)
 
-Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`, plus
-`hsm-victorialogs`/`hsm-vlagent` with the `logs` profile) on the single remote **live**
+Operates the HSM compose stack (`hsm-server` behind `hsm-caddy`) on the single remote **live**
 machine over SSH. This is production: every state-changing step is gated behind an
 explicit user confirmation, and dev should have seen the same version first.
 
@@ -53,7 +52,7 @@ Parse the target version from the request:
   If the release is marked **pre-release**, that is allowed on live ONLY when the user
   named that exact version themselves — never propose one, and surface the pre-release
   status prominently in the confirmation question.
-- The version pins only the app image; Caddy/VictoriaLogs versions come from the
+- The version pins only the app image; the Caddy version comes from the
   compose file (synced below), independent of the app version.
 
 ## Modes
@@ -129,6 +128,13 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
    ```
 
+   Also detect the removed log-store containers (read-only; step 5d removes them
+   behind the gate when the new compose file drops them):
+
+   ```bash
+   ssh -p <port> <ssh> 'docker ps -a --format "{{.Names}}" | grep -E "^hsm-(victorialogs|vlagent)$" || echo none'
+   ```
+
 3. **Dev status check (read-only, best effort)**: if
    `.agents/skills/hsm-deploy-dev/machine.local.json` exists, read the dev machine's
    current version and health the same way (image label + `State.Health.Status`).
@@ -140,6 +146,10 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
      if applicable);
    - compose file: will change / already in sync (one-line diff summary);
    - `.env` key drift, if any (names only);
+   - removed log-store containers found (pre-#1594 `hsm-victorialogs`/`hsm-vlagent`),
+     if any: they will be removed right after `up -d` (step 5d) — say so explicitly,
+     and ask whether to also remove their named volumes (reclaims disk; that data is
+     log-store data, lost by design, ADR-0015);
    - dev: "healthy on 3.41.6" (target reached — the recommended path) or
      "still on 3.41.5 / not reachable" (recommend updating dev first; proceed only if
      the user insists);
@@ -153,7 +163,7 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    staged file for fresh.
 
 5. **Apply** (only after the gate passes). Order matters — swap the compose file
-   first (it carries the pinned Caddy/VictoriaLogs image versions), then pull, then up.
+   first (it carries the pinned Caddy image version), then pull, then up.
    `up -d` blocks until the app is healthy (caddy's `depends_on` waits for it), so
    during a legacy database migration one command can occupy the full budget — run
    it with a long/background timeout, or detached
@@ -185,6 +195,23 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    The same file set applies to every later compose command while the pin exists —
    a bare `docker compose up -d` skips `docker-compose.version.yml`, re-resolves
    `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
+
+   d. *One-time cleanup of the removed log-store containers (#1594).* The pre-#1594
+   compose file ran `hsm-victorialogs` and `hsm-vlagent` with
+   `restart: unless-stopped`; `up -d` with the new file only warns "Found orphan
+   containers" and leaves both running (they survive reboots). If step 2 found
+   either container and the gate confirmed, remove them (if the gate did not
+   confirm, skip and leave them):
+
+   ```bash
+   ssh -p <port> <ssh> 'for c in hsm-victorialogs hsm-vlagent; do docker rm -f "$c" 2>/dev/null && echo "removed $c"; done; true'
+   ```
+
+   Remove their named volumes only when the gate explicitly confirmed that part.
+   The orphaned structured-log JSON files are the user's to delete — never remove
+   log files yourself, just remind them:
+   `rm -f <dir>/Logs/HSM-structured-log-current.json <dir>/Logs/Archives/HSM-structured-log-*.json`
+   (see troubleshooting, "Disk pressure").
 
 6. **Wait for health.** `starting` while LevelDB loads is normal (seconds-to-minutes;
    budget ~20–25 min). Poll in short bursts of ~5 min each, repeating the call until

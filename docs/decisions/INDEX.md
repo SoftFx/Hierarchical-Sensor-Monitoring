@@ -22,11 +22,12 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0005 | Accepted | [An API token is an eternal owner mirror with a read-only flag](0005-api-token-owner-mirror.md) | 2026-09-10 |
 | 0006 | Accepted | [Token usage sensors are keyed by owner login + token EntityId](0006-token-usage-sensors-keyed-by-owner-and-entityid.md) | 2026-09-16 |
 | 0007 | Accepted | [Distribute Caddy with DNS challenge modules as a pinned image](0007-bundled-dns-caddy-image.md) | 2026-09-24 |
-| 0008 | Accepted (archive-budget paragraph superseded by ADR-0011) | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-28 |
+| 0008 | Superseded by ADR-0015 | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-28 |
 | 0009 | Accepted | [Bar StdDev is sent by the native collector only (exception to rules #9/#10)](0009-bar-stddev-native-only.md) | 2026-10-07 |
 | 0010 | Undo journal of change sets, not staged transactions | #1570 — REST/MCP configuration writes journal before/after images; rollback replays compensating writes with content-based conflict detection |
 | 0011 | Accepted | [Static NLog file names with size-based rotation bound the Logs/ disk](0011-nlog-static-filenames-bounded-archives.md) | 2026-10-23 |
-| 0012 | Accepted | [VictoriaLogs read path is the HSM admin session at /logs/](0012-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
+| 0012 | Superseded by ADR-0015 | [VictoriaLogs read path is the HSM admin session at /logs/](0012-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
 | 0013 | Accepted | [One journal — Change Sets absorbed into the Journal, single write path, admin-only rollback](0013-unified-configuration-journal.md) | 2026-10-27 |
 | 0014 | Accepted | [One port — 443 serves everything; the sensor/site port split is retired](0014-single-port-443.md) | 2026-10-29 |
+| 0015 | Accepted | [Retire the VictoriaLogs log-storage stack](0015-retire-victorialogs-log-storage.md) | 2026-11-02 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

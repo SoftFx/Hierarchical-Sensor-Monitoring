@@ -1,6 +1,6 @@
 # ADR-0012: VictoriaLogs read path is the HSM admin session at /logs/
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0015 (the whole log-storage stack, this read path included, is removed)
 **Date:** 2026-10-20
 **Supersedes:** the read-path/auth portion of ADR-0008 (its storage, shipping, retention, and redaction decisions stand)
 

@@ -1,7 +1,7 @@
 # Migrate a machine to the compose stack (one-time)
 
 Switches a remote machine from the old practice (`docker_scripts/HSMserver/load.sh` /
-plain `docker run`) to the compose stack (app behind Caddy + optional VictoriaLogs),
+plain `docker run`) to the compose stack (app behind Caddy),
 keeping every byte of data. The trick that makes this safe: the compose file bind-mounts
 `./Logs`, `./Config`, `./Databases`, `./DatabasesBackups` **relative to its own
 directory**, so dropping `docker-compose.yml` into the existing base directory reuses
@@ -109,13 +109,10 @@ more than necessary):
 - `HSM_DOMAIN` — the address clients use (bare DNS name or IP).
 - `HSM_CERTIFICATE` — mode: `letsencrypt-http` / `letsencrypt-dns` (+ `HSM_DNS_PROVIDER`
   and the matching token) / `self-signed` / `custom`.
-- Log stack: keep the shipped `COMPOSE_PROFILES=logs` + `HSM_STRUCTURED_LOGS=true`. The
-  log UI (`/logs/select/vmui`) needs no `.env` keys — it is admitted for logged-in HSM
-  admins only.
 
 ## 5. Switch over
 
-Pull **before** stopping anything — the download (app + caddy + VictoriaLogs,
+Pull **before** stopping anything — the download (app + caddy,
 several hundred MB on a fresh compose host) must not sit inside the downtime
 window, and a failed pull (Hub rate limit, flaky link, unpublished caddy tag) must
 leave the old container still serving:

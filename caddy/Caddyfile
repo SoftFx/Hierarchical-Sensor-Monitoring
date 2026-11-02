@@ -50,29 +50,10 @@
 	lb_try_duration 30s
 }
 
-# VictoriaLogs read-only exposure (docker-compose 'logs' profile). VictoriaLogs runs with
-# -http.pathPrefix=/logs, so its built-in web UI (/logs/select/vmui) and the LogSQL query
-# API (/logs/select/logsql) map 1:1 under that prefix. Only /logs/select/* is routed, and
-# only for a logged-in HSM admin: forward_auth consults the app's session-check endpoint
-# (204 admits; the endpoint's login-redirect/401/403 answers are passed back to the client
-# as-is). Ingest (/logs/insert/...), /logs/delete/* and the internal endpoints are NOT
-# routed here — shipping is done by vlagent inside the compose network.
-(victorialogs-routes) {
-	@victorialogs path /logs/select/*
-	handle @victorialogs {
-		forward_auth https://app:443 {
-			uri /logs-auth
-			import hsm_upstream
-		}
-		reverse_proxy victorialogs:9428
-	}
-}
-
 # The primary address (#1590): one port, 443, serving the Web UI and the Sensor API
 # through the app's single listener.
 {$HSM_DOMAIN} {
 	import {$HSM_TLS_SNIPPET}
-	import victorialogs-routes
 	handle {
 		reverse_proxy https://app:443 {
 			import hsm_upstream
@@ -88,7 +69,6 @@
 # docker-compose.yml) are removed in the follow-up release that closes the window.
 {$HSM_DOMAIN}:44333 {
 	import {$HSM_TLS_SNIPPET}
-	import victorialogs-routes
 	handle {
 		reverse_proxy https://app:443 {
 			import hsm_upstream
@@ -107,7 +87,6 @@
 # Preserve connections made by IP, short name, or an old CNAME. These clients receive the
 # HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
 https://:443, https://:44333, https://:44330 {
-	import victorialogs-routes
 	handle {
 		reverse_proxy https://app:443 {
 			import hsm_upstream
