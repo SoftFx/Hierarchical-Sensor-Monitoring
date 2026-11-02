@@ -1,0 +1,18 @@
+# v1
+#
+# Contract area: default connection configuration (#1593).
+#
+# The package default port moved 44330 -> 443 (#1590). This fixture pins BOTH package defaults
+# (managed CollectorOptions.Port / native hsm::collector::CollectorOptions::port) through the
+# connection address a port-less configuration produces. The scheme-default port is omitted from
+# the rendered address: the managed Uri drops :443 for https and the native endpoint builder
+# mirrors that (parity fix, #1593), so a default-configured collector talks to
+# https://localhost/api/sensors in both implementations.
+#
+# verb introduced:
+# expect_default_connection_address|expected_address - build the connection address from
+#   PACKAGE-default options (everything except the port configured) and assert it equals the
+#   expected address; managed feeds the CollectorOptions default through the HTTPS client's
+#   Endpoints builder, native the wrapper CollectorOptions default through MakeEndpoints
+#   (the C ABI demands an explicit port, so the wrapper default is the package default)
+default_endpoint_pins_the_package_default_port|expect_default_connection_address|https://localhost/api/sensors

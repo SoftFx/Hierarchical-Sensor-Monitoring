@@ -164,6 +164,10 @@ namespace HSMDataCollector.Tests
                         port: step.TryArg(2, out var port) ? int.Parse(port) : CollectorOptions.DefaultPort);
                     break;
 
+                case "expect_default_connection_address":
+                    ExpectDefaultConnectionAddress(step.Arg(0));
+                    break;
+
                 case "start":
                     await state.Collector.Start().ConfigureAwait(false);
                     break;
@@ -1307,6 +1311,24 @@ namespace HSMDataCollector.Tests
 
                 Assert.NotNull(exception);
             }
+        }
+
+        // expect_default_connection_address (#1593): pin the managed package default port — the
+        // CollectorOptions.Port default (the DefaultPort const) — through the connection address a
+        // port-less configuration produces. Everything except the port is configured, so the default
+        // must flow into the address unchanged; a drifting DefaultPort turns the address red.
+        // Endpoints is the same builder the HTTPS client consumes (InternalsVisibleTo seam).
+        private static void ExpectDefaultConnectionAddress(string expected)
+        {
+            var options = new CollectorOptions
+            {
+                AccessKey = "conformance-key",
+                ServerAddress = "https://localhost",
+            };
+
+            var connectionAddress = new HSMDataCollector.Client.Endpoints(options).ConnectionAddress.TrimEnd('/');
+
+            Assert.Equal(expected, connectionAddress);
         }
 
         private static void ExpectAddRejected(ContractState state, Action addValue)

@@ -14,15 +14,18 @@
 //
 // Faithful to the .NET behaviour for the inputs the collector actually feeds it (a bare host or
 // a "scheme://host" URL). The .NET side runs ServerUrl through UriBuilder{Port, Path="api/sensors"};
-// we reproduce the observable result — "<scheme>://<host>:<port>/api/sensors" with the scheme
-// defaulted to https unless an explicit http scheme is paired with AllowPlaintextTransport.
+// we reproduce the observable result — "<scheme>://<host>[:<port>]/api/sensors" with the scheme
+// defaulted to https unless an explicit http scheme is paired with AllowPlaintextTransport, and
+// the port dropped when it equals the effective scheme's default (https 443, http 80) exactly as
+// Uri.ToString() omits it. Since #1590 the package default port IS the https default, so the
+// default endpoint renders without ":443" (#1593).
 // UriBuilder corner cases the collector never produces (userinfo, query, embedded path) are out
 // of scope; the host is taken verbatim after the scheme is stripped.
 namespace hsm::http
 {
     struct Endpoints
     {
-        std::string connection_address; // "<scheme>://<host>:<port>/api/sensors"
+        std::string connection_address; // "<scheme>://<host>[:<port>]/api/sensors"
 
         // Command routes.
         std::string AddOrUpdateSensor() const { return connection_address + "/addOrUpdate"; }
@@ -116,9 +119,19 @@ namespace hsm::http
                 effective_scheme = scheme; // preserve an explicit https (or any non-http) scheme
         }
 
+        // Uri.ToString() parity: the .NET side omits the port from the rendered address when it
+        // equals the effective scheme's default (https 443, http 80), so the #1590 default
+        // endpoint is "https://<host>/api/sensors" with no ":443" (managed form pinned by
+        // CollectorAdversarialTests; corpus-pinned by default_endpoint_contract, #1593).
+        const bool port_is_scheme_default =
+            (detail::EqualsIgnoreCase(effective_scheme, "https") && port == 443)
+            || (detail::EqualsIgnoreCase(effective_scheme, "http") && port == 80);
+
         Endpoints endpoints;
         endpoints.connection_address =
-            effective_scheme + "://" + host + ":" + std::to_string(port) + "/api/sensors";
+            effective_scheme + "://" + host
+            + (port_is_scheme_default ? std::string{} : ":" + std::to_string(port))
+            + "/api/sensors";
         return endpoints;
     }
 
