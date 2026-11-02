@@ -10,21 +10,19 @@ Most settings can also be changed through the **Configuration** page in the web 
 
 ```json
 "Kestrel": {
-  "SensorPort": 44330,
-  "SitePort": 44333
+  "Port": 443
 }
 ```
 
 | Setting | Default | Description |
 |---|---|---|
-| `SensorPort` | `44330` | Port for sensor data ingestion (used by DataCollector and REST API) |
-| `SitePort` | `44333` | Port for the web UI |
+| `Port` | `443` | The single HTTPS port — web UI, sensor ingestion, management API (#1590) |
 
 Both ports use **HTTPS**. To change them, edit `appsettings.json` and restart the server, or update via **Configuration → Server** in the web UI.
 
 In Docker, map these ports when running the container:
 ```bash
-docker run -p 44330:44330 -p 44333:44333 ...
+docker run -p 443:443 ...
 ```
 
 ---
@@ -114,8 +112,7 @@ docker run \
   -v /host/Config:/app/Config \
   -v /host/Databases:/app/Databases \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
-  -p 44330:44330 \
-  -p 44333:44333 \
+  -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 

@@ -58,14 +58,18 @@ if ($CurrentContainerId) {
 $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
 if ($ExpectedImageId) {
     Write-Host "Starting new container..."
-    
+
+    # The 44330/44333 mappings are deprecated aliases (#1590), removed with the
+    # follow-up release: the same mappings docker-compose.direct.yml publishes,
+    # so field clients still pointed at the old two-port scheme keep answering.
     $NewContainerId = docker run -d -it -u 0 --name "${ContainerName}_$Version" `
         -v "${BaseDirectory}Logs:/app/Logs" `
         -v "${BaseDirectory}Config:/app/Config" `
         -v "${BaseDirectory}Databases:/app/Databases" `
         -v "${BaseDirectory}DatabasesBackups:/app/DatabasesBackups" `
-        -p "44330:44330" `
-        -p "44333:44333" `
+        -p "443:443" `
+        -p "44330:443" `
+        -p "44333:443" `
         $ExpectedImageId
 
     Write-Host "Container started with ID: $NewContainerId"

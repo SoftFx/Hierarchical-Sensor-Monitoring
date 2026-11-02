@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -10,7 +9,6 @@ using HSMServer.Authentication;
 using HSMServer.Mcp;
 using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
-using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
@@ -30,13 +28,7 @@ namespace HSMServer.Core.Tests.Middleware
     // HsmApiTokenHandlerTests.
     public class ApiJsonErrorContractTests
     {
-        private const int SitePort = 44333;
-        private const int SensorPort = 44330;
-
-        private static readonly HsmListenerBindings Bindings = new(SitePort, SensorPort);
-
-
-        private static HttpContext BuildContext(string path, int localPort = SitePort, Endpoint endpoint = null)
+        private static HttpContext BuildContext(string path, Endpoint endpoint = null)
         {
             var context = new DefaultHttpContext();
 
@@ -45,7 +37,6 @@ namespace HSMServer.Core.Tests.Middleware
             context.Response.Body = new MemoryStream();
 
             context.Request.Path = path;
-            context.Features.Set<IHttpConnectionFeature>(new FixedPortConnectionFeature(localPort));
             if (endpoint is not null)
                 context.SetEndpoint(endpoint);
 
@@ -144,9 +135,9 @@ namespace HSMServer.Core.Tests.Middleware
         {
             // Unmatched route in the area; the same body answers the wrong listener,
             // unmarked endpoints and anonymous endpoints.
-            var context = BuildContext("/api/v1/no-such-resource", SitePort, endpoint: null);
+            var context = BuildContext("/api/v1/no-such-resource", endpoint: null);
 
-            await new ManagementApiGuardMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
 
@@ -157,44 +148,6 @@ namespace HSMServer.Core.Tests.Middleware
             Assert.Equal(ManagementApiErrors.NotFoundCode, root.GetProperty("error").GetString());
             Assert.Equal(ManagementApiErrors.NotFoundMessage, root.GetProperty("message").GetString());
             Assert.Equal(JsonValueKind.Null, root.GetProperty("details").ValueKind);
-        }
-
-        [Fact]
-        public async Task SwaggerGate_OffSitePort_IsUniformJsonNotFound()
-        {
-            // The doc enumerates the SitePort-only management surface — serving it on
-            // the sensor port would publish the map the area guard exists to hide
-            // (review #1366). Both swagger path families are gated.
-            foreach (var path in new[] { "/swagger/0.0.0/swagger.json", "/api/swagger/index.html" })
-            {
-                var context = BuildContext(path, SensorPort);
-
-                await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
-
-                Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-                Assert.Equal(ManagementApiErrors.NotFoundCode, (await BodyAsync(context)).RootElement.GetProperty("error").GetString());
-            }
-        }
-
-        [Fact]
-        public async Task SwaggerGate_OnSitePort_PassesThrough()
-        {
-            var context = BuildContext("/api/swagger/index.html", SitePort);
-
-            await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
-
-            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
-        }
-
-        [Fact]
-        public async Task SwaggerGate_NonSwaggerPath_OnSensorPort_PassesThrough()
-        {
-            // Sensor-data traffic on the sensor port is none of this gate's business.
-            var context = BuildContext("/api/sensors/int", SensorPort);
-
-            await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
-
-            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         }
 
         [Fact]
@@ -490,21 +443,6 @@ namespace HSMServer.Core.Tests.Middleware
                 new ApiExceptionJsonMiddleware(Throw).InvokeAsync(context));
         }
 
-
-        private sealed class FixedPortConnectionFeature : IHttpConnectionFeature
-        {
-            public FixedPortConnectionFeature(int localPort) => LocalPort = localPort;
-
-            public IPAddress RemoteIpAddress { get; set; }
-
-            public int RemotePort { get; set; }
-
-            public IPAddress LocalIpAddress { get; set; }
-
-            public int LocalPort { get; set; }
-
-            public string ConnectionId { get; set; }
-        }
 
         // The only way to make a DefaultHttpContext response look "already started"
         // without going through the server.

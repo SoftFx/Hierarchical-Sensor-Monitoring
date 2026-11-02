@@ -14,11 +14,11 @@ See also: [Site Structure → Products](Site-structure#products), [Core Concepts
 
 ## API Endpoints
 
-You may use the web API, which is running on port `44330`. There are different ways to interact:
+You may use the web API, which runs on the server's single port `443` (#1590). There are different ways to interact:
 
 1. **API Testing Tools** — Use software such as [Postman](https://www.postman.com/). You need to send POST requests and add a header with `Content-Type = "application/json"`.
 2. **Programming Languages** — Use any programming language and send requests with the headers from above and a data template from the [REST API](REST-API) page.
-3. **Swagger UI** — A simple and fast way for sending data. Swagger also provides some examples of the data. Swagger UI is running on the address `{url}:44330/api/swagger/index.html`, where `url` is the address of your HSM server.
+3. **Swagger UI** — A simple and fast way for sending data. Swagger also provides some examples of the data. Swagger UI is running on the address `{url}/api/swagger/index.html`, where `url` is the address of your HSM server.
 
 ---
 

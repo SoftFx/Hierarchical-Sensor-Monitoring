@@ -68,8 +68,12 @@ if [ -n "$EXPECTED_IMAGE_ID" ]; then
     ENVIRONMENT_DATABASE_FOLDER="${BASE_DIRECTORY}Databases:/app/Databases"
     DATABASES_BACKUPS_FOLDER="${BASE_DIRECTORY}DatabasesBackups:/app/DatabasesBackups"
 
-    SENSOR_DATA_PORT="44330:44330"
-    SENSOR_SITE_PORT="44333:44333"
+    SENSOR_DATA_PORT="443:443"
+    # Deprecated aliases (#1590), removed with the follow-up release: the same
+    # mappings docker-compose.direct.yml publishes, so field clients still
+    # pointed at the old two-port scheme keep answering after a redeploy.
+    SENSOR_LEGACY_DATA_PORT="44330:443"
+    SENSOR_LEGACY_SITE_PORT="44333:443"
 
     NEW_CONTAINER_ID=$(docker run -d -it -u 0 --name "${CONTAINER_NAME}_${VERSION}" \
         -v "$LOGS_FOLDER" \
@@ -77,7 +81,8 @@ if [ -n "$EXPECTED_IMAGE_ID" ]; then
         -v "$ENVIRONMENT_DATABASE_FOLDER" \
         -v "$DATABASES_BACKUPS_FOLDER" \
         -p "$SENSOR_DATA_PORT" \
-        -p "$SENSOR_SITE_PORT" \
+        -p "$SENSOR_LEGACY_DATA_PORT" \
+        -p "$SENSOR_LEGACY_SITE_PORT" \
         "$EXPECTED_IMAGE_ID")
 
     echo "Container started with ID: $NEW_CONTAINER_ID"

@@ -12,11 +12,8 @@ namespace HSMServer.Model.Configuration
         public string CertificateKey { get; set; }
 
 
-        [Display(Name = "Sensors API port")]
-        public int SensorsPort { get; set; }
-
-        [Display(Name = "Site port")]
-        public int SitePort { get; set; }
+        [Display(Name = "Port")]
+        public int Port { get; set; }
 
 
         public ServerSettingsViewModel() { }
@@ -26,8 +23,7 @@ namespace HSMServer.Model.Configuration
             CertificateName = config.ServerCertificate.Name;
             CertificateKey = config.ServerCertificate.Key;
 
-            SensorsPort = config.Kestrel.SensorPort;
-            SitePort = config.Kestrel.SitePort;
+            Port = config.Kestrel.Port;
         }
     }
 }

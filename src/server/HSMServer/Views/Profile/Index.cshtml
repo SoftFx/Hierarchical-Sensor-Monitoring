@@ -11,8 +11,8 @@
     var avatarColor = AvatarHelper.ColorOf(Model.UserId);
     var quotaFull = Model.QuotaUsed >= Model.QuotaMax;
 
-    // The dialog runs on the SitePort, so the page's own host is the correct
-    // host for the management API, Swagger and /mcp examples.
+    // The page's own host is the correct host for the management API, Swagger
+    // and /mcp examples.
     var siteHost = Context.Request.Host.Value;
     var apiExampleUrl = $"https://{siteHost}/api/v1/products";
     var mcpEndpoint = $"https://{siteHost}/mcp";

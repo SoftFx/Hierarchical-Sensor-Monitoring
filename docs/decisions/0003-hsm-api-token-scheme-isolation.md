@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-09-01
 **Supersedes:** —
+**Partially superseded by:** [ADR-0014](0014-single-port-443.md) (the SitePort-listener clause)
 
 ---
 

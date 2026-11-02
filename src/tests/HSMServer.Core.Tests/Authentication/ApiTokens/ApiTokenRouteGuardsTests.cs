@@ -3,11 +3,9 @@ using System.Net;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Middleware;
-using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
@@ -18,24 +16,18 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
     //    BaseController cast or an [Authorize]-only legacy action. Since #1391 /mcp is
     //    exempted too: a token-authenticated route outside the area, same credential family.
     //  - ManagementApiGuardMiddleware: /api/v1 is allow-listed per endpoint (marker +
-    //    policy, never anonymous) and only on the SitePort listener; anything else in the
-    //    area is 404, so a newly added route without the metadata is unreachable by default.
-    //  - McpSitePortOnlyMiddleware (#1391): /mcp off the SitePort is the uniform 404
-    //    BEFORE authentication — the sensor port never confirms the endpoint exists.
+    //    policy, never anonymous); anything else in the area is 404, so a newly added
+    //    route without the metadata is unreachable by default. (Until #1590 the area was
+    //    also listener-gated SitePort-only; the single listener retired that dimension.)
+    //  - McpEndpointGuardMiddleware (#1391, #1392): a matched endpoint under /mcp must
+    //    require the management policy and never be anonymous — the area rule carried
+    //    over the endpoint family.
     public class ApiTokenRouteGuardsTests
     {
-        private const int SitePort = 44333;
-        private const int SensorPort = 44330;
-
-        private static readonly HsmListenerBindings Bindings = new(SitePort, SensorPort);
-
-
-        private static HttpContext BuildContext(string path, int localPort,
-            Endpoint endpoint = null, string authorization = null)
+        private static HttpContext BuildContext(string path, Endpoint endpoint = null, string authorization = null)
         {
             var context = new DefaultHttpContext();
             context.Request.Path = path;
-            context.Features.Set<IHttpConnectionFeature>(new FixedPortConnectionFeature(localPort));
             if (endpoint is not null)
                 context.SetEndpoint(endpoint);
             if (authorization is not null)
@@ -59,7 +51,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public async Task LegacyGuard_HsmBearerOutsideManagementArea_GetsPlain401AndShortCircuits()
         {
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/Home/Index", SitePort, authorization: $"Bearer {credential}");
+            var context = BuildContext("/Home/Index", authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -74,7 +66,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [InlineData("Basic dXNlcjpwYXNz")]                    // another scheme
         public async Task LegacyGuard_OtherCredentials_PassThrough(string authorization)
         {
-            var context = BuildContext("/Home/Index", SitePort, authorization: authorization);
+            var context = BuildContext("/Home/Index", authorization: authorization);
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -86,7 +78,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public async Task LegacyGuard_HsmBearerInsideManagementArea_PassesToAreaGuard()
         {
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/api/v1/products", SitePort, authorization: $"Bearer {credential}");
+            var context = BuildContext("/api/v1/products", authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -103,7 +95,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Case-insensitive like the area arm — a mixed-case POST reaches the
             // handler, so the guard must not read it as a misplaced token (#1392).
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext(path, SitePort, authorization: $"Bearer {credential}");
+            var context = BuildContext(path, authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -120,7 +112,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // the guard's 401 however routing under the prefix evolves, instead
             // of resting on "no route will ever be added there".
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/mcp/health", SitePort, authorization: $"Bearer {credential}");
+            var context = BuildContext("/mcp/health", authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -130,75 +122,63 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
-        public async Task McpSitePortGuard_OffSitePort_IsUniform404_BeforeAuthentication()
+        public async Task McpEndpointGuard_NoEndpoint_PassesThrough()
         {
-            // The sensor port must not confirm the MCP endpoint exists: the guard
-            // runs BEFORE authentication, so even a bearer-carrying probe gets the
-            // uniform 404, never a 401.
-            var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/mcp", SensorPort, authorization: $"Bearer {credential}");
+            // Unmatched paths keep the framework's own 404 — a deliberate divergence
+            // from the area guard (#1392 review, finding 6): an unmatched /mcp/**
+            // path confirms nothing about the endpoint.
+            var context = BuildContext("/mcp");
 
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
-
-            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-            Assert.False(context.Items.ContainsKey("reached"));
-        }
-
-        [Fact]
-        public async Task McpSitePortGuard_OnSitePort_PassesThrough()
-        {
-            var context = BuildContext("/mcp", SitePort);
-
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new McpEndpointGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }
 
         [Fact]
-        public async Task McpSitePortGuard_OtherPaths_PassThroughUntouched()
+        public async Task McpEndpointGuard_OtherPaths_PassThroughUntouched()
         {
-            var context = BuildContext("/not-mcp-at-all", SensorPort);
+            var context = BuildContext("/not-mcp-at-all");
 
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new McpEndpointGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }
 
         [Fact]
-        public async Task McpSitePortGuard_EndpointWithManagementPolicy_Passes()
+        public async Task McpEndpointGuard_EndpointWithManagementPolicy_Passes()
         {
             // The mapped /mcp endpoint carries RequireAuthorization(ManagementPolicy):
             // it passes the guard's fail-closed policy check (#1392 review).
             var endpoint = Endpoint(new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
-            var context = BuildContext("/mcp", SitePort, endpoint);
+            var context = BuildContext("/mcp", endpoint);
 
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new McpEndpointGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }
 
         [Fact]
-        public async Task McpSitePortGuard_EndpointWithoutManagementPolicy_Is404()
+        public async Task McpEndpointGuard_EndpointWithoutManagementPolicy_Is404()
         {
             // The area-guard rule carried over the endpoint family (#1392 review):
             // a future route mapped under /mcp without the token policy is
             // unreachable by default — never anonymously reachable.
             var endpoint = Endpoint(new AuthorizeAttribute());
-            var context = BuildContext("/mcp/health", SitePort, endpoint);
+            var context = BuildContext("/mcp/health", endpoint);
 
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new McpEndpointGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
             Assert.False(context.Items.ContainsKey("reached"));
         }
 
         [Fact]
-        public async Task McpSitePortGuard_AnonymousEndpoint_Is404()
+        public async Task McpEndpointGuard_AnonymousEndpoint_Is404()
         {
             var endpoint = Endpoint(new AllowAnonymousAttribute());
-            var context = BuildContext("/mcp", SitePort, endpoint);
+            var context = BuildContext("/mcp", endpoint);
 
-            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new McpEndpointGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
             Assert.False(context.Items.ContainsKey("reached"));
@@ -211,7 +191,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // joined string would read the scheme of the FIRST value and miss the bearer.
             // The guard inspects each header value on its own.
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/Home/Index", SitePort);
+            var context = BuildContext("/Home/Index");
             context.Request.Headers.Append("Authorization", "Basic dXNlcjpwYXNz");
             context.Request.Headers.Append("Authorization", $"Bearer {credential}");
 
@@ -222,39 +202,25 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public async Task AreaGuard_ManagementEndpointOnSitePort_Passes()
+        public async Task AreaGuard_ManagementEndpoint_Passes()
         {
             var endpoint = Endpoint(new ManagementApiAttribute(),
                 new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
-            var context = BuildContext("/api/v1/products", SitePort, endpoint);
+            var context = BuildContext("/api/v1/products", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }
 
         [Fact]
-        public async Task AreaGuard_ManagementEndpointOnSensorPort_Is404()
-        {
-            var endpoint = Endpoint(new ManagementApiAttribute(),
-                new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
-            var context = BuildContext("/api/v1/products", SensorPort, endpoint);
-
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
-
-            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-            Assert.False(context.Items.ContainsKey("reached"));
-        }
-
-        [Fact]
         public async Task AreaGuard_EndpointWithoutManagementMarker_Is404()
         {
-            // A route added under /api/v1 without the area metadata is unavailable by
-            // default, even on the SitePort listener.
+            // A route added under /api/v1 without the area metadata is unavailable by default.
             var endpoint = Endpoint(new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
-            var context = BuildContext("/api/v1/products", SitePort, endpoint);
+            var context = BuildContext("/api/v1/products", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -263,9 +229,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public async Task AreaGuard_AnonymousManagementEndpoint_Is404()
         {
             var endpoint = Endpoint(new ManagementApiAttribute(), new AllowAnonymousAttribute());
-            var context = BuildContext("/api/v1/products", SitePort, endpoint);
+            var context = BuildContext("/api/v1/products", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -276,9 +242,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Marker but bare [Authorize] (cookie default policy): still unavailable —
             // ordinary /api/v1 routes must authenticate through the HsmApiToken policy.
             var endpoint = Endpoint(new ManagementApiAttribute(), new AuthorizeAttribute());
-            var context = BuildContext("/api/v1/products", SitePort, endpoint);
+            var context = BuildContext("/api/v1/products", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -286,9 +252,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public async Task AreaGuard_NoEndpointInManagementArea_Is404()
         {
-            var context = BuildContext("/api/v1/unknown", SitePort, endpoint: null);
+            var context = BuildContext("/api/v1/unknown", endpoint: null);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -299,9 +265,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // /api/v1/api-tokens is the sole v1 cookie-only family (step 4): its endpoints
             // use the default cookie authorization, not the token policy, and must pass.
             var endpoint = Endpoint(new ManagementApiAttribute(), new AuthorizeAttribute());
-            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+            var context = BuildContext("/api/v1/api-tokens", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }
@@ -313,9 +279,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // it is just as anonymous. The reserved family must carry a cookie [Authorize]
             // to be reachable: these are the routes that mint and revoke tokens.
             var endpoint = Endpoint(new ManagementApiAttribute());
-            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+            var context = BuildContext("/api/v1/api-tokens", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
             Assert.False(context.Items.ContainsKey("reached"));
@@ -328,9 +294,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // make an endpoint under /api/v1/api-tokens reachable.
             var endpoint = Endpoint(new ManagementApiAttribute(),
                 new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
-            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+            var context = BuildContext("/api/v1/api-tokens", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -344,20 +310,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // guard admits only scheme-less bare [Authorize].
             var endpoint = Endpoint(new ManagementApiAttribute(),
                 new AuthorizeAttribute { AuthenticationSchemes = HsmApiTokenDefaults.AuthenticationScheme });
-            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+            var context = BuildContext("/api/v1/api-tokens", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
-
-            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-        }
-
-        [Fact]
-        public async Task AreaGuard_ReservedCookieOnlyTokenRoutesOnSensorPort_Are404()
-        {
-            var endpoint = Endpoint(new ManagementApiAttribute(), new AuthorizeAttribute());
-            var context = BuildContext("/api/v1/api-tokens", SensorPort, endpoint);
-
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
@@ -366,23 +321,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public async Task AreaGuard_PathOutsideManagementArea_PassesThrough()
         {
             var endpoint = Endpoint(); // even a legacy anonymous endpoint
-            var context = BuildContext("/api/sensors", SensorPort, endpoint);
+            var context = BuildContext("/api/sensors", endpoint);
 
-            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+            await new ManagementApiGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
-        }
-
-
-        private sealed class FixedPortConnectionFeature : IHttpConnectionFeature
-        {
-            public FixedPortConnectionFeature(int localPort) => LocalPort = localPort;
-
-            public string ConnectionId { get; set; }
-            public IPAddress LocalIpAddress { get; set; }
-            public int LocalPort { get; set; }
-            public IPAddress RemoteIpAddress { get; set; }
-            public int RemotePort { get; set; }
         }
     }
 }

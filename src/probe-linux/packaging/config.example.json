@@ -1,7 +1,7 @@
 {
   "hsm": {
     "address": "https://hsm.example.invalid",
-    "port": 44330,
+    "port": 443,
     "accessKeyFile": "access-key",
     "packageCollectPeriodSec": 15,
     "requestTimeoutSec": 30

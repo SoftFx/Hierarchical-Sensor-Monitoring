@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 namespace PerformanceTest
@@ -6,7 +6,7 @@ namespace PerformanceTest
     internal static class Program
     {
         internal const string Address = "https://localhost";
-        internal const int Port = 44330;
+        internal const int Port = 443;
 
         private static async Task Main(string[] _)
         {

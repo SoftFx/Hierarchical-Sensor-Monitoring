@@ -26,7 +26,7 @@ against `docker_scripts/HSMserver/load.sh` and `docker-compose.yml`:
 | Host paths | `<BaseDirectory>/{Logs,Config,Databases,DatabasesBackups}` (default `/usr/HSM/`) | `./{...}` relative to the compose file — identical **iff the compose file is placed in the same base directory** | ✅ (condition) |
 | Container user | `-u 0` (root) | `user: '0'` | ✅ |
 | Image | `hsmonitoring/hierarchical_sensor_monitoring` | same | ✅ |
-| Host ports 44330 / 44333 | published directly by the app | same numbers, published by caddy and proxied to the same app ports | ✅ numbers; clients now see Caddy's certificate (untrusted-cert flag keeps working) |
+| Host ports 44330 / 44333 | published directly by the app | same numbers plus 443 (primary, #1590), published by caddy and proxied to the app's single port | ✅ numbers; clients now see Caddy's certificate (untrusted-cert flag keeps working) |
 | Restart policy | none (down after host reboot) | `unless-stopped` | improvement |
 | Container name | `HSMServer_<version>` | `hsm-server` | ⚠ rename: update any host scripts that reference the old name |
 | Extra ports | — | 80 and 443 (caddy) | ⚠ new exposure, see step 2 |
@@ -193,10 +193,10 @@ directories were shared, so nothing else needs restoring.
   `openssl s_client -connect <HSM_DOMAIN>:443 -servername <HSM_DOMAIN> </dev/null 2>/dev/null | openssl x509 -noout -issuer -enddate`
   (self-signed mode shows Caddy's local CA; a failed Let's Encrypt issuance shows
   nothing — then `docker logs hsm-caddy`).
-- Collectors keep using `https://<host>:44330` — same port, now terminated by Caddy.
+- Collectors use `https://<HSM_DOMAIN>` (443, #1590); `https://<host>:44330` keeps answering as a deprecated alias through the deprecation window, terminated by Caddy.
   Clients that allow untrusted certificates keep working in every mode; with a trusted
   certificate they can later drop that flag.
-- Web UI: `https://<HSM_DOMAIN>` (or `:44333`).
+- Web UI: `https://<HSM_DOMAIN>`.
 - **Cleanup (only after everything above passed):** remove the kept old container
   and the state file:
 

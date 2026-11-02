@@ -1,6 +1,7 @@
 using HSMServer.Middleware;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 
@@ -8,15 +9,22 @@ namespace HSMServer.ServerConfiguration;
 
 public class KestrelConfig
 {
-    public const int DefaultSensorPort = 44330;
-    public const int DefaultSitePort = 44333;
+    // The single HTTPS listener's port (#1590). 443 inside the container (the app runs as
+    // root there); pick another value only for unprivileged local runs.
+    public const int DefaultPort = 443;
+
+    // Pre-#1590 ports, published by Caddy as deprecated aliases through the deprecation
+    // window and recognized by the legacy-key warning and the request deprecation log.
+    public const int LegacySensorPort = 44330;
+    public const int LegacySitePort = 44333;
 
     public const string TrustedProxiesKey = "Kestrel:" + nameof(TrustedProxies);
 
+    public const string SensorPortKey = "Kestrel:SensorPort";
+    public const string SitePortKey = "Kestrel:SitePort";
 
-    public int SensorPort { get; set; } = DefaultSensorPort;
 
-    public int SitePort { get; set; } = DefaultSitePort;
+    public int Port { get; set; } = DefaultPort;
 
     // Reverse proxies whose X-Forwarded-For is trusted for the client address (#1427); entry
     // syntax in TrustedProxyOptionsFactory. Empty = no forwarded headers are honoured, so a
@@ -59,6 +67,27 @@ public class KestrelConfig
 
             if (values.Count > 0)
                 return string.Join(", ", values);
+        }
+
+        return null;
+    }
+
+    // The pre-#1590 SensorPort/SitePort keys the settings file still holds (null when there
+    // are none): they no longer configure anything — Port replaced them — so their presence is
+    // reported once at startup for the log warning. The resave that follows startup removes
+    // them from the file.
+    public static string FindLegacyPortKeysInSettingsFile(IConfigurationRoot configuration)
+    {
+        foreach (var provider in configuration.Providers.OfType<FileConfigurationProvider>())
+        {
+            var found = new List<string>();
+
+            foreach (var (key, name) in new[] { (SensorPortKey, "SensorPort"), (SitePortKey, "SitePort") })
+                if (provider.TryGet(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                    found.Add($"{name}={value}");
+
+            if (found.Count > 0)
+                return string.Join(", ", found);
         }
 
         return null;

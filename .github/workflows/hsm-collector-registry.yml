@@ -6,7 +6,10 @@ name: hsm-collector vcpkg registry
 # Windows-only: the aggregator target is Windows/MSVC, and the version-DB check is platform-agnostic.
 
 on:
+  # branches on push: without it a PR touching ports/versions fires both the push and the
+  # pull_request events and runs this lane twice on the same commit.
   push:
+    branches: [master, develop]
     paths:
       - 'ports/hsm-collector/**'
       - 'versions/**'
@@ -15,7 +18,10 @@ on:
     paths:
       - 'ports/hsm-collector/**'
       - 'versions/**'
-      - 'src/native/collector/**'
+      # The port installs a TAGGED source tarball, so collector source edits in a PR never
+      # reach this lane; the only PR-source input is the standalone example it builds against
+      # the installed package.
+      - 'src/native/collector/examples/console/standalone/**'
       - '.github/workflows/hsm-collector-registry.yml'
   workflow_dispatch:
 

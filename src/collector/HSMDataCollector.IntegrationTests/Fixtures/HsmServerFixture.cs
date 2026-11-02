@@ -23,8 +23,9 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
     {
         private const string HsmImage = "hsmonitoring/hierarchical_sensor_monitoring:latest";
         private const string ToxiproxyImage = "ghcr.io/shopify/toxiproxy:latest";
-        private const int SensorPort = 44330;
-        private const int SitePort = 44333;
+        // The server's single HTTPS port (#1590): Web UI and Sensor API share it. The
+        // container runs as root, so binding 443 is fine.
+        private const int AppPort = 443;
         private const int ToxiproxyApiPort = 8474;
         private const string ProxyName = "hsm_sensor";
         private const string DefaultUsername = "default";
@@ -44,7 +45,9 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
         // All sensor traffic goes through Toxiproxy (transparent when no toxics applied)
         public ushort MappedSensorPort { get; private set; }
 
-        public ushort MappedSitePort { get; private set; }
+        // Direct container access (admin: authentication, product setup) — same port,
+        // bypassing Toxiproxy so network-failure scenarios cannot break the fixture.
+        public ushort MappedServerPort { get; private set; }
         public string AccessKey => _accessKey;
 
         public async Task InitializeAsync()
@@ -65,17 +68,16 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
             _hsmContainer = new ContainerBuilder()
                 .WithImage(testImage)
-                .WithPortBinding(SensorPort, true)
-                .WithPortBinding(SitePort, true)
+                .WithPortBinding(AppPort, true)
                 .WithNetwork(_network)
                 .WithNetworkAliases("hsm-server")
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(SensorPort))
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(AppPort))
                 .Build();
 
             _toxiproxyContainer = new ContainerBuilder()
                 .WithImage(ToxiproxyImage)
                 .WithPortBinding(ToxiproxyApiPort, true)
-                .WithPortBinding(SensorPort, true)
+                .WithPortBinding(AppPort, true)
                 .WithNetwork(_network)
                 .WithNetworkAliases("toxiproxy")
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Starting Toxiproxy HTTP server"))
@@ -83,8 +85,8 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
             await Task.WhenAll(_hsmContainer.StartAsync(), _toxiproxyContainer.StartAsync());
 
-            MappedSensorPort = _toxiproxyContainer.GetMappedPublicPort(SensorPort);
-            MappedSitePort = _hsmContainer.GetMappedPublicPort(SitePort);
+            MappedSensorPort = _toxiproxyContainer.GetMappedPublicPort(AppPort);
+            MappedServerPort = _hsmContainer.GetMappedPublicPort(AppPort);
 
             var toxiproxyApiPort = _toxiproxyContainer.GetMappedPublicPort(ToxiproxyApiPort);
             _toxiproxyClient = new HttpClient
@@ -228,8 +230,8 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
             var proxy = new
             {
                 name = ProxyName,
-                listen = $"0.0.0.0:{SensorPort}",
-                upstream = $"hsm-server:{SensorPort}",
+                listen = $"0.0.0.0:{AppPort}",
+                upstream = $"hsm-server:{AppPort}",
                 enabled = true,
             };
             var json = JsonSerializer.Serialize(proxy);
@@ -239,7 +241,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
         private async Task AuthenticateAsync()
         {
-            var siteUrl = $"https://{ServerAddress}:{MappedSitePort}";
+            var siteUrl = $"https://{ServerAddress}:{MappedServerPort}";
             var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["Username"] = DefaultUsername,
@@ -254,7 +256,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
         private async Task CreateProductAndGetAccessKeyAsync()
         {
-            var siteUrl = $"https://{ServerAddress}:{MappedSitePort}";
+            var siteUrl = $"https://{ServerAddress}:{MappedServerPort}";
 
             var createContent = new FormUrlEncodedContent(new Dictionary<string, string>
             {

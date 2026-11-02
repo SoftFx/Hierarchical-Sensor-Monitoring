@@ -28,4 +28,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0011 | Accepted | [Static NLog file names with size-based rotation bound the Logs/ disk](0011-nlog-static-filenames-bounded-archives.md) | 2026-10-23 |
 | 0012 | Accepted | [VictoriaLogs read path is the HSM admin session at /logs/](0012-victorialogs-hsm-admin-read-path.md) | 2026-10-20 |
 | 0013 | Accepted | [One journal — Change Sets absorbed into the Journal, single write path, admin-only rollback](0013-unified-configuration-journal.md) | 2026-10-27 |
+| 0014 | Accepted | [One port — 443 serves everything; the sensor/site port split is retired](0014-single-port-443.md) | 2026-10-29 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

@@ -2,7 +2,7 @@
 
 HSM exposes an HTTP API for sending sensor data and querying history. Use it from any language or environment where the NuGet package is not available.
 
-**Base URL:** `https://your-hsm-server:44330/api/sensors`
+**Base URL:** `https://your-hsm-server/api/sensors` (single port 443, #1590)
 
 All requests use **HTTPS**. Authentication is via the `Key` header.
 
@@ -251,7 +251,7 @@ Set `"isZipArchive": true` to receive the file compressed as `.zip`.
 Returns `200 OK` if the server is reachable. No authentication required.
 
 ```bash
-curl https://your-hsm-server:44330/api/sensors/testConnection
+curl https://your-hsm-server/api/sensors/testConnection
 ```
 
 ---

@@ -8,7 +8,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:44333"
+      "applicationUrl": "https://localhost:443"
     },
     "HSMServer-Production": {
       "commandName": "Project",
@@ -18,14 +18,14 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Production"
       },
-      "applicationUrl": "https://localhost:44333"
+      "applicationUrl": "https://localhost:443"
     },
     "WSL": {
       "commandName": "WSL",
       "launchBrowser": true,
-      "launchUrl": "https://localhost:44333",
+      "launchUrl": "https://localhost:443",
       "environmentVariables": {
-        "ASPNETCORE_URLS": "https://localhost:44330;https://localhost:44333",
+        "ASPNETCORE_URLS": "https://localhost:443",
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "distributionName": ""

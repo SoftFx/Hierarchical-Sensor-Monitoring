@@ -4,7 +4,7 @@
 // server. Built only with HSM_COLLECTOR_HTTP=ON on Windows.
 //
 // Usage: hsm_windows_monitor [server_address] [port] [access_key] [seconds]
-//   defaults: https://localhost 44330 demo-key 30
+//   defaults: https://localhost 443 demo-key 30
 // Writes NLog-parity log files to ./Logs (override the directory with HSM_LOG_DIR):
 // DataCollector_<date>.txt for all levels, DataCollector_error_<date>.txt for errors.
 
@@ -25,7 +25,7 @@ int main(int argc, char** argv)
     namespace hc = hsm::collector;
 
     const std::string server = argc > 1 ? argv[1] : "https://localhost";
-    const int port = argc > 2 ? std::atoi(argv[2]) : 44330;
+    const int port = argc > 2 ? std::atoi(argv[2]) : 443;
     const std::string access_key = argc > 3 ? argv[3] : "demo-key";
     const int seconds = argc > 4 ? std::atoi(argv[4]) : 30;
 

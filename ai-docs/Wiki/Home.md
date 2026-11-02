@@ -22,10 +22,10 @@ HSM is a self-hosted monitoring platform for collecting sensor data from your se
 ```
 Your Application
   └── HSMDataCollector (NuGet)
-        └── HTTPS ──► HSM Server (port 44330)
+        └── HTTPS ──► HSM Server (port 443)
                           ├── Alert Engine
                           ├── LevelDB Storage
-                          └── Web UI (port 44333)
+                          └── Web UI (same port 443)
                                 └── Telegram Bot → Your Chats
 ```
 

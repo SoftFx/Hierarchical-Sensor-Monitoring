@@ -310,7 +310,7 @@ namespace hsm::agent
     {
         bool https = true;
         std::string host;
-        int port = 44330;
+        int port = 443;
         bool ok = false;
     };
 

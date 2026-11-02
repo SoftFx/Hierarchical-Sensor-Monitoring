@@ -38,7 +38,7 @@ namespace HSMDataCollector.Tests
 
             using (var client = new HsmHttpsClient(options, new LoggerManager()))
             {
-                var servicePoint = ServicePointManager.FindServicePoint(new Uri("https://dns-staleness-test.local:44330/api/sensors"));
+                var servicePoint = ServicePointManager.FindServicePoint(new Uri("https://dns-staleness-test.local/api/sensors"));
 
                 Assert.True(servicePoint.ConnectionLeaseTimeout > 0,
                     "ConnectionLeaseTimeout must be bounded so a keep-alive connection periodically re-resolves DNS.");

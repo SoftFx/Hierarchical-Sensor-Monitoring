@@ -21,7 +21,7 @@ namespace hsm::agent
     {
         // server.*
         std::string server_address; ///< required, non-blank
-        int port = 44330;           ///< HSM Sensor API port
+        int port = 443;              ///< HSM server port
         std::string access_key;     ///< required, non-blank
         bool allow_untrusted_certificate = false;
 

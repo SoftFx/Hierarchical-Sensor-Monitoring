@@ -41,7 +41,7 @@
 	transport http {
 		tls_insecure_skip_verify
 	}
-	# Caddy >= 2.11 replaces the Host header with the upstream address ("app:44333"),
+	# Caddy >= 2.11 replaces the Host header with the upstream address ("app:443"),
 	# which only Docker's DNS resolves; HSM builds absolute redirects (login) from the
 	# request Host, so browsers would be sent to an unreachable name. Pass the
 	# client-visible Host through.
@@ -60,7 +60,7 @@
 (victorialogs-routes) {
 	@victorialogs path /logs/select/*
 	handle @victorialogs {
-		forward_auth https://app:44333 {
+		forward_auth https://app:443 {
 			uri /logs-auth
 			import hsm_upstream
 		}
@@ -68,34 +68,49 @@
 	}
 }
 
-{$HSM_DOMAIN}, {$HSM_DOMAIN}:44333 {
+# The primary address (#1590): one port, 443, serving the Web UI and the Sensor API
+# through the app's single listener.
+{$HSM_DOMAIN} {
 	import {$HSM_TLS_SNIPPET}
 	import victorialogs-routes
 	handle {
-		reverse_proxy https://app:44333 {
+		reverse_proxy https://app:443 {
+			import hsm_upstream
+		}
+	}
+}
+
+# Deprecated legacy ports (#1590): kept answering through the deprecation window so
+# clients still pointed at the old two-port scheme keep working. Both forward to the SAME
+# single upstream as the primary address — the app has no second listener anymore. A
+# request through them carries its legacy port in the Host header, which the app logs as
+# a rate-limited deprecation warning. These blocks (and their ports: entries in
+# docker-compose.yml) are removed in the follow-up release that closes the window.
+{$HSM_DOMAIN}:44333 {
+	import {$HSM_TLS_SNIPPET}
+	import victorialogs-routes
+	handle {
+		reverse_proxy https://app:443 {
 			import hsm_upstream
 		}
 	}
 }
 {$HSM_DOMAIN}:44330 {
 	import {$HSM_TLS_SNIPPET}
-	reverse_proxy https://app:44330 {
-		import hsm_upstream
+	handle {
+		reverse_proxy https://app:443 {
+			import hsm_upstream
+		}
 	}
 }
 
 # Preserve connections made by IP, short name, or an old CNAME. These clients receive the
 # HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
-https://:443, https://:44333 {
+https://:443, https://:44333, https://:44330 {
 	import victorialogs-routes
 	handle {
-		reverse_proxy https://app:44333 {
+		reverse_proxy https://app:443 {
 			import hsm_upstream
 		}
-	}
-}
-https://:44330 {
-	reverse_proxy https://app:44330 {
-		import hsm_upstream
 	}
 }

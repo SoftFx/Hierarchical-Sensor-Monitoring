@@ -51,7 +51,7 @@ Master Key может быть создан администраторами и 
 
 4. Нажмите на появившийся вариант JSON;
 
-5. Укажите URL-адрес, например — `https://hsm.dev.soft-fx.eu:44333` + `/grafana/jsondatasource`. Полный URL — `https://hsm.dev.soft-fx.eu:44333/grafana/jsondatasource`;
+5. Укажите URL-адрес, например — `https://hsm.dev.soft-fx.eu` + `/grafana/jsondatasource`. Полный URL — `https://hsm.dev.soft-fx.eu/grafana/jsondatasource`;
 6. Установите флажок "Skip TLS Verify";
 7. Нажмите "Add header";
 

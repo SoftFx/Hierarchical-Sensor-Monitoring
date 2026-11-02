@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -22,7 +22,7 @@ namespace CollectorTestApp
     public partial class MainWindow : Window
     {
         private IDataCollector _dataCollector;
-        private const int _defaultPort = 44330;
+        private const int _defaultPort = 443;
 
         public MainWindow()
         {
@@ -32,7 +32,7 @@ namespace CollectorTestApp
             //textAccessKey.Text = "3394c79c-3c6d-4617-949a-ba8bc18b1878";
 
             textAccessKey.Text = string.IsNullOrEmpty(Properties.Settings.Default.ProductID) ? "d5550f7b-c480-4d1a-8788-3f1e72452214" : Properties.Settings.Default.ProductID;
-            textPort.Text = string.IsNullOrEmpty(Properties.Settings.Default.Port) ? "44333" : Properties.Settings.Default.Port;
+            textPort.Text = string.IsNullOrEmpty(Properties.Settings.Default.Port) ? "443" : Properties.Settings.Default.Port;
             textAddress.Text = string.IsNullOrEmpty(Properties.Settings.Default.ServerAddress) ? "https://localhost/" : Properties.Settings.Default.ServerAddress;
             textModule.Text = "Main module";
 
@@ -86,7 +86,7 @@ namespace CollectorTestApp
             {
                 AccessKey = textAccessKey.Text,
                 ServerAddress = textAddress.Text,
-                Port = GetPortNumber(), //default 44330
+                Port = GetPortNumber(), //default 443
                 Module = textModule.Text
             };
 

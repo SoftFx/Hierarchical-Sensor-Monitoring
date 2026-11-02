@@ -3,7 +3,7 @@ import { testConfig } from './config.ts';
 import { login } from './login.ts';
 import { cleanup, uniqueName } from './fixtures.ts';
 
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333';
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:443';
 
 export interface AlertTemplateFixture {
   folderName: string;

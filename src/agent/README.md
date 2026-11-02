@@ -68,7 +68,7 @@ Default location: `%ProgramData%\HSM Agent\config.json` (see
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `server.address` | — (required) | HSM Sensor API base URL |
-| `server.port` | `44330` | HSM Sensor API port |
+| `server.port` | `443` | HSM server port |
 | `server.accessKey` | — (required) | per-product access key |
 | `server.allowUntrustedCertificate` | `false` | accept a self-signed server cert |
 | `identity.computerName` | `"auto"` | `"auto"`/blank → the machine host name |
@@ -83,4 +83,4 @@ Blank/missing `address` or `accessKey`, or an out-of-range `port`, make the agen
 (the error is logged to the Event Log and the file log).
 
 > Note: in HTTP mode the collector's `SentCount()` stays 0 (it counts the in-memory recorder only) —
-> verify delivery via the server history API (`POST :44330/api/sensors/history`), not `SentCount`.
+> verify delivery via the server history API (`POST /api/sensors/history`), not `SentCount`.

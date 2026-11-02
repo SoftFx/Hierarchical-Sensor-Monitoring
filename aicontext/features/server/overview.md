@@ -9,7 +9,7 @@ HSMServer is the central ASP.NET Core 8.0 MVC application that receives sensor d
 ## Architecture
 
 ```
-Browser (:44333)                 DataCollector (:44330)
+Browser                DataCollector
     |                                    |
     v                                    v
 HSMServer (ASP.NET Core MVC)     API Controllers (/api/sensors/*)

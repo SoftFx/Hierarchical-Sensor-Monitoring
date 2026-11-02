@@ -27,7 +27,7 @@ docker compose up -d
 
 **4. Open the web UI:**
 
-Navigate to `https://<HSM_DOMAIN>:44333` in your browser.
+Navigate to `https://<HSM_DOMAIN>` in your browser.
 With an IP address, accept the self-signed certificate warning if prompted.
 
 **Default credentials:**
@@ -39,8 +39,7 @@ With an IP address, accept the self-signed certificate warning if prompted.
 **Ports:**
 | Port | Purpose |
 |---|---|
-| `44333` | Web UI (HTTPS) |
-| `44330` | Sensor data ingestion (HTTPS) |
+| `443` | Web UI + sensor ingestion (HTTPS, #1590) |
 
 For other installation methods, see [Installation](Installation).
 
@@ -97,7 +96,7 @@ For full API reference, see [HSM DataCollector](HSMDataCollector).
 
 Send a double value:
 ```bash
-curl -X POST https://localhost:44330/api/sensors/double \
+curl -X POST https://localhost/api/sensors/double \
   -H "Content-Type: application/json" \
   -H "Key: YOUR_ACCESS_KEY" \
   -d '{
@@ -113,7 +112,7 @@ For all available endpoints, see [REST API](REST-API).
 
 ## Step 4 — View the Sensor in the Web UI
 
-1. Open `https://localhost:44333`
+1. Open `https://localhost`
 2. Go to **Products** → open your product
 3. You should see `MyApp/cpu_usage` in the sensor tree with the value you sent
 

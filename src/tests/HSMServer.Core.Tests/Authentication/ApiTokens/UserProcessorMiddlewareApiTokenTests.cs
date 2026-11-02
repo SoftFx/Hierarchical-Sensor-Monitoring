@@ -1,13 +1,10 @@
 using System;
-using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Middleware;
 using HSMServer.Model.Authentication;
-using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -15,14 +12,13 @@ using Xunit;
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
 {
     // UserProcessorMiddleware replaces context.User with the stored HSM user selected by
-    // Identity.Name on the SitePort listener. A token principal has no Name and must never
-    // be replaced: the middleware short-circuits for exactly the HsmApiToken identity, so
-    // authorization still sees the token principal with its owner/token claims (initiative
-    // step 3: "principal replacement can restore unrestricted owner rights").
+    // Identity.Name (until #1590 on the site listener only; with the single listener it
+    // runs for every request). A token principal has no Name and must never be replaced:
+    // the middleware short-circuits for exactly the HsmApiToken identity, so authorization
+    // still sees the token principal with its owner/token claims (initiative step 3:
+    // "principal replacement can restore unrestricted owner rights").
     public class UserProcessorMiddlewareApiTokenTests
     {
-        private const int SitePort = 44333;
-
         private static readonly Guid OwnerId = Guid.NewGuid();
 
 
@@ -36,9 +32,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 .Throws(new InvalidOperationException("token principals must not be user-resolved"));
 
             var principal = TokenPrincipal();
-            var context = SitePortContext(principal, userManager.Object);
+            var context = Context(principal, userManager.Object);
 
-            await new UserProcessorMiddleware(NextThatMarks, userManager.Object, Config()).InvokeAsync(context);
+            await new UserProcessorMiddleware(NextThatMarks, userManager.Object).InvokeAsync(context);
 
             Assert.Same(principal, context.User);
             Assert.True((bool)context.Items["reached"]);
@@ -51,9 +47,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var userManager = new Mock<IUserManager>();
             userManager.Setup(u => u["alice"]).Returns(stored);
 
-            var context = SitePortContext(CookiePrincipal("alice"), userManager.Object);
+            var context = Context(CookiePrincipal("alice"), userManager.Object);
 
-            await new UserProcessorMiddleware(_ => Task.CompletedTask, userManager.Object, Config()).InvokeAsync(context);
+            await new UserProcessorMiddleware(_ => Task.CompletedTask, userManager.Object).InvokeAsync(context);
 
             Assert.Same(stored, context.User);
         }
@@ -74,26 +70,18 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 (ClaimsIdentity)CookiePrincipal("alice").Identity,
                 (ClaimsIdentity)TokenPrincipal().Identity,
             });
-            var context = SitePortContext(principal, userManager.Object);
+            var context = Context(principal, userManager.Object);
 
-            await new UserProcessorMiddleware(NextThatMarks, userManager.Object, Config()).InvokeAsync(context);
+            await new UserProcessorMiddleware(NextThatMarks, userManager.Object).InvokeAsync(context);
 
             Assert.Same(principal, context.User);
             Assert.True((bool)context.Items["reached"]);
         }
 
 
-        private static IServerConfig Config()
-        {
-            var config = new Mock<IServerConfig>();
-            config.SetupGet(c => c.Kestrel).Returns(new KestrelConfig { SitePort = SitePort });
-            return config.Object;
-        }
-
-        private static DefaultHttpContext SitePortContext(ClaimsPrincipal user, IUserManager userManager)
+        private static DefaultHttpContext Context(ClaimsPrincipal user, IUserManager userManager)
         {
             var context = new DefaultHttpContext { User = user };
-            context.Features.Set<IHttpConnectionFeature>(new FixedPortConnectionFeature(SitePort));
             context.RequestServices = new ServiceCollection()
                 .AddSingleton(userManager)
                 .BuildServiceProvider();
@@ -115,18 +103,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         {
             context.Items["reached"] = true;
             return Task.CompletedTask;
-        }
-
-
-        private sealed class FixedPortConnectionFeature : IHttpConnectionFeature
-        {
-            public FixedPortConnectionFeature(int localPort) => LocalPort = localPort;
-
-            public string ConnectionId { get; set; }
-            public IPAddress LocalIpAddress { get; set; }
-            public int LocalPort { get; set; }
-            public IPAddress RemoteIpAddress { get; set; }
-            public int RemotePort { get; set; }
         }
     }
 }

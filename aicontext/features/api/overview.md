@@ -9,7 +9,7 @@ The Sensor API is the data contract between DataCollector (client) and HSMServer
 ## Base URL
 
 ```
-https://{server}:44330/api/sensors/
+https://{server}/api/sensors/
 ```
 
 ## Authentication
@@ -66,11 +66,11 @@ Example: `PROD-SERVER-01/MyService/CPU Usage`
 
 ## Web UI API
 
-The Web UI (:44333) has separate MVC controllers for user-facing operations (not documented here — those are standard ASP.NET MVC routes, not part of the collector API).
+The Web UI has separate MVC controllers for user-facing operations (not documented here — those are standard ASP.NET MVC routes, not part of the collector API).
 
 ## Swagger
 
-Available at `https://{server}:44333/api/swagger` — served on the web-UI port only (`SwaggerSitePortOnlyMiddleware` answers swagger paths on the sensor port with the management area's uniform 404).
+Available at `https://{server}/api/swagger` (the single port serves every surface, #1590).
 
 ## Contract Areas
 

@@ -2,7 +2,7 @@
 
 HSM ships a built-in [Model Context Protocol](https://modelcontextprotocol.io) server, so MCP-native AI agents (Claude, Cursor, …) can read your sensor tree and manage alerts without hand-writing HTTP.
 
-**Endpoint:** `https://your-hsm-server:44333/mcp` — the web-UI port (the same one as the site and `/api/swagger`), not the sensor-data port. Transport: Streamable HTTP, stateless sessions.
+**Endpoint:** `https://your-hsm-server/mcp` — the server's single port (the same one as the site and `/api/swagger`, #1590). Transport: Streamable HTTP, stateless sessions.
 
 ---
 
@@ -26,7 +26,7 @@ Every MCP client that supports remote (Streamable HTTP) servers needs two things
 {
   "mcpServers": {
     "hsm": {
-      "url": "https://your-hsm-server:44333/mcp",
+      "url": "https://your-hsm-server/mcp",
       "headers": {
         "Authorization": "Bearer hsm_pat_v1_..."
       }

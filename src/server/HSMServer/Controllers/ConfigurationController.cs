@@ -45,8 +45,7 @@ namespace HSMServer.Controllers
                 {
                     _logger.Info($"SaveServerSettings: {changes}");
 
-                    config.Kestrel.SensorPort = settings.SensorsPort;
-                    config.Kestrel.SitePort = settings.SitePort;
+                    config.Kestrel.Port = settings.Port;
 
                     config.ServerCertificate.Name = settings.CertificateName;
                     config.ServerCertificate.Key = settings.CertificateKey;
@@ -283,11 +282,8 @@ namespace HSMServer.Controllers
         {
             StringBuilder sb = new StringBuilder();
 
-            if (config.Kestrel.SensorPort != settings.SensorsPort)
-                sb.AppendLine($"SensorPort: {config.Kestrel.SensorPort} -> {settings.SensorsPort}");
-
-            if (config.Kestrel.SitePort != settings.SitePort)
-                sb.AppendLine($"SitePort: {config.Kestrel.SitePort} -> {settings.SitePort}");
+            if (config.Kestrel.Port != settings.Port)
+                sb.AppendLine($"Port: {config.Kestrel.Port} -> {settings.Port}");
 
             if (config.ServerCertificate.Name != settings.CertificateName)
                 sb.AppendLine($"ServerCertificate.Name: {config.ServerCertificate.Name} -> {settings.CertificateName}");
