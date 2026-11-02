@@ -156,6 +156,11 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.2** (#1593) — endpoint rendering parity with the managed collector, ABI unchanged. `MakeEndpoints`
+  omits a port equal to the effective scheme's default (https 443, http 80) from the connection address,
+  exactly as the managed `Uri` renders it, so the default endpoint since #1590 (port 443) is
+  `https://<host>/api/sensors` with no `:443` (native used to render the port unconditionally). Same
+  destination on the wire. Pinned by `default_endpoint_contract:default_endpoint_pins_the_package_default_port`.
 - **0.11.1** (#1528) — logging and wire-text fixes, ABI unchanged. `Registered N sensor(s) after an earlier failed
   attempt.` counts only the sensors whose earlier registration post failed: a runtime registration
   that shares the flush, or follows a retry the next Start batch already landed, is no longer

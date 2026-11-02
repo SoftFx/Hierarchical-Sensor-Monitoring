@@ -1001,12 +1001,13 @@ namespace
             hsm::collector::CollectorOptions options;
             options.access_key = "conformance-key";
             options.server_address = "https://localhost";
+            const auto expected = ExpandTextToken(step[1]);
             const auto address = hsm::http::MakeEndpoints(
                                      options.server_address, options.port, options.allow_plaintext_transport)
                                      .connection_address;
-            if (address != step[1])
+            if (address != expected)
                 throw std::runtime_error(
-                    "default connection address mismatch: expected " + step[1] + ", actual " + address);
+                    "default connection address mismatch: expected " + expected + ", actual " + address);
             return;
         }
 
