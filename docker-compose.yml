@@ -9,7 +9,7 @@
 #   HSM_DOMAIN       the address clients use: a bare DNS name or IP address
 #                    (no https://, no port). Examples: hsm.example.com, 10.0.0.5
 #
-#   PORTS            443 is the stack's client-facing port. It serves EVERYTHING
+#   PORTS            80/443 are the stack's client-facing ports. 443 serves EVERYTHING
 #                    (Web UI + Sensor API) through the app's single listener (#1590);
 #                    44330/44333 are deprecated aliases kept through the deprecation
 #                    window for clients still pointed at the old two-port scheme — the
@@ -19,11 +19,10 @@
 #   HSM_CERTIFICATE  which certificate clients get:
 #     letsencrypt    backward-compatible alias for letsencrypt-http
 #     letsencrypt-http trusted certificate from Let's Encrypt using HTTP-01/TLS-ALPN. Needs a
-#                    public DNS name and port 443 open (port 80 is no longer published, so
-#                    issuance goes through TLS-ALPN-01). There is no automatic fallback.
+#                    public DNS name and ports 80/443 open. There is no automatic fallback.
 #     letsencrypt-dns trusted Let's Encrypt certificate using a DNS challenge. Also set
 #                    HSM_DNS_PROVIDER=cloudflare and CF_API_TOKEN, or
-#                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN.
+#                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN. Port 80 is not required.
 #     self-signed    Caddy's own certificate. Browsers warn; collectors/agents need
 #                    "allow untrusted certificate".
 #     custom         your PEM certificate and key at CaddyCertificates/cert.pem and key.pem.
@@ -108,6 +107,7 @@ services:
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
     ports:
+      - '80:80'
       - '443:443'
       # Deprecated aliases (#1590), removed with the follow-up release.
       - '44330:44330'
