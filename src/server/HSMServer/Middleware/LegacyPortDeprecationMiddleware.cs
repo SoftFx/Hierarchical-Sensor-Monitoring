@@ -16,8 +16,11 @@ namespace HSMServer.Middleware
     // remote IP (the client address once the trusted-proxy forwarded headers are
     // applied): enough to spot stragglers in the log store and know where to repoint,
     // without one line per collector package (they send every few seconds). Port-less
-    // https://host traffic logs nothing.
-    public sealed class LegacyPortDeprecationMiddleware(RequestDelegate next, ILogger<LegacyPortDeprecationMiddleware> logger)
+    // https://host traffic logs nothing. A legacy port that IS the server's own listener
+    // (a proxy-less deployment that pinned Kestrel.Port to the old address) is exempt:
+    // every one of its requests would otherwise fire the warning for traffic that is
+    // reaching its configured listener, drowning the real straggler signal.
+    public sealed class LegacyPortDeprecationMiddleware(RequestDelegate next, IServerConfig config, ILogger<LegacyPortDeprecationMiddleware> logger)
     {
         // How often the warning repeats while legacy traffic keeps arriving. The pipeline
         // instantiates the middleware once, so the field throttles process-wide.
@@ -27,7 +30,7 @@ namespace HSMServer.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            if (context.Request.Host.Port is { } port && IsLegacyPort(port) &&
+            if (context.Request.Host.Port is { } port && IsLegacyPort(port) && port != config.Kestrel.Port &&
                 ShouldWarn(DateTime.UtcNow.Ticks))
             {
                 logger.LogWarning(

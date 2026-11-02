@@ -17,12 +17,15 @@ namespace HSMServer.Model.Agent
         /// the port the requesting admin actually used, so a non-standard deployment keeps
         /// working — except the deprecated 44330/44333 aliases, which must not be baked into
         /// NEW bundles (they stop answering when the deprecation window closes), and a missing
-        /// port (the standard https://host), which both mean the default 443.
+        /// port (the standard https://host), which both mean the default 443. A legacy port
+        /// that IS the server's own listener (a proxy-less deployment pinned to the old
+        /// address) is kept: it is the address that answers there, not an alias that will
+        /// disappear with the window.
         /// </summary>
-        public static int FallbackPortFromHost(int? requestHostPort) =>
+        public static int FallbackPortFromHost(int? requestHostPort, int listenerPort) =>
             requestHostPort is { } port
-            && port != KestrelConfig.LegacySensorPort
-            && port != KestrelConfig.LegacySitePort
+            && (port == listenerPort
+                || (port != KestrelConfig.LegacySensorPort && port != KestrelConfig.LegacySitePort))
                 ? port
                 : KestrelConfig.DefaultPort;
 

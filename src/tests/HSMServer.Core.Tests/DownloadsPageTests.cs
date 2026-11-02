@@ -260,7 +260,7 @@ namespace HSMServer.Core.Tests
             users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
 
             var kestrel = new KestrelConfig();
-            fallbackPort = AgentConnectionResolver.FallbackPortFromHost(null);
+            fallbackPort = AgentConnectionResolver.FallbackPortFromHost(null, kestrel.Port);
 
             var config = new Mock<IServerConfig>();
             config.Setup(c => c.Agent).Returns(new AgentConfig { ExternalConnectionUrl = externalUrl });

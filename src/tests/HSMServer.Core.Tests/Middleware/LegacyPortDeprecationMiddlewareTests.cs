@@ -2,6 +2,7 @@ using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,7 +13,8 @@ namespace HSMServer.Core.Tests.Middleware
     // The deprecated-port signal of the #1590 deprecation window: a request whose Host
     // carries 44330/44333 (the aliases still published through the window) logs a
     // rate-limited warning — the operator's signal for stragglers — while ordinary
-    // port-less 443 traffic stays silent.
+    // port-less 443 traffic stays silent, and so does a legacy port that is the
+    // server's own listener (a proxy-less deployment pinned to the old address).
     public class LegacyPortDeprecationMiddlewareTests
     {
         [Theory]
@@ -23,7 +25,7 @@ namespace HSMServer.Core.Tests.Middleware
             var logs = new RecordingLogger();
             var context = Context(host: $"hsm.example.com:{port}");
 
-            await new LegacyPortDeprecationMiddleware(NextThatMarks, logs).InvokeAsync(context);
+            await Middleware(logs).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
             Assert.Contains(logs.Entries, e => e.Contains("deprecated") && e.Contains(port.ToString()));
@@ -41,7 +43,24 @@ namespace HSMServer.Core.Tests.Middleware
             var logs = new RecordingLogger();
             var context = Context(host);
 
-            await new LegacyPortDeprecationMiddleware(NextThatMarks, logs).InvokeAsync(context);
+            await Middleware(logs).InvokeAsync(context);
+
+            Assert.True(context.Items.ContainsKey("reached"));
+            Assert.Empty(logs.Entries);
+        }
+
+        [Theory]
+        [InlineData(KestrelConfig.LegacySensorPort)]
+        [InlineData(KestrelConfig.LegacySitePort)]
+        public async Task LegacyPortThatIsTheOwnListener_LogsNothing(int port)
+        {
+            // Kestrel.Port pinned to the old address, no proxy in front: the legacy port in
+            // the Host header is the configured listener, not a straggler through an alias —
+            // warning on it would never go quiet and corrupt the phase-2 signal.
+            var logs = new RecordingLogger();
+            var context = Context(host: $"hsm.example.com:{port}");
+
+            await Middleware(logs, listenerPort: port).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
             Assert.Empty(logs.Entries);
@@ -51,7 +70,7 @@ namespace HSMServer.Core.Tests.Middleware
         public void Throttle_SecondLegacyRequestInsideTheWindow_LogsNothing()
         {
             var logs = new RecordingLogger();
-            var middleware = new LegacyPortDeprecationMiddleware(NextThatMarks, logs);
+            var middleware = Middleware(logs);
 
             var start = DateTime.UtcNow.Ticks;
 
@@ -63,6 +82,14 @@ namespace HSMServer.Core.Tests.Middleware
             Assert.True(middleware.ShouldWarn(start + TimeSpan.FromMinutes(11).Ticks));
         }
 
+
+        private static LegacyPortDeprecationMiddleware Middleware(RecordingLogger logs, int listenerPort = KestrelConfig.DefaultPort)
+        {
+            var config = new Mock<IServerConfig>();
+            config.Setup(c => c.Kestrel).Returns(new KestrelConfig { Port = listenerPort });
+
+            return new LegacyPortDeprecationMiddleware(NextThatMarks, config.Object, logs);
+        }
 
         private static DefaultHttpContext Context(string host)
         {

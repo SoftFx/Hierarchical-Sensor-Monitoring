@@ -31,7 +31,7 @@ namespace HSMServer.Model.Agent
                 .Select(p => new DownloadProductItem(p.Id, p.Name, (p.Parent as FolderModel)?.Name));
 
             var (address, port) = AgentConnectionResolver.Resolve(
-                config.Agent.ExternalConnectionUrl, AgentConnectionResolver.FallbackPortFromHost(requestHostPort), requestScheme, requestHost);
+                config.Agent.ExternalConnectionUrl, AgentConnectionResolver.FallbackPortFromHost(requestHostPort, config.Kestrel.Port), requestScheme, requestHost);
 
             return DownloadsPageBuilder.Build(products, environment.WebRootPath, address, port, selectedProductId);
         }
