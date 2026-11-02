@@ -128,6 +128,13 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | sort
    ```
 
+   Also detect the removed log-store containers (read-only; step 5d removes them
+   behind the gate when the new compose file drops them):
+
+   ```bash
+   ssh -p <port> <ssh> 'docker ps -a --format "{{.Names}}" | grep -E "^hsm-(victorialogs|vlagent)$" || echo none'
+   ```
+
 3. **Dev status check (read-only, best effort)**: if
    `.agents/skills/hsm-deploy-dev/machine.local.json` exists, read the dev machine's
    current version and health the same way (image label + `State.Health.Status`).
@@ -139,6 +146,10 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
      if applicable);
    - compose file: will change / already in sync (one-line diff summary);
    - `.env` key drift, if any (names only);
+   - removed log-store containers found (pre-#1594 `hsm-victorialogs`/`hsm-vlagent`),
+     if any: they will be removed right after `up -d` (step 5d) — say so explicitly,
+     and ask whether to also remove their named volumes (reclaims disk; that data is
+     log-store data, lost by design, ADR-0015);
    - dev: "healthy on 3.41.6" (target reached — the recommended path) or
      "still on 3.41.5 / not reachable" (recommend updating dev first; proceed only if
      the user insists);
@@ -184,6 +195,23 @@ Plus `docker logs hsm-server --tail 50` if the user asks about health/errors.
    The same file set applies to every later compose command while the pin exists —
    a bare `docker compose up -d` skips `docker-compose.version.yml`, re-resolves
    `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
+
+   d. *One-time cleanup of the removed log-store containers (#1594).* The pre-#1594
+   compose file ran `hsm-victorialogs` and `hsm-vlagent` with
+   `restart: unless-stopped`; `up -d` with the new file only warns "Found orphan
+   containers" and leaves both running (they survive reboots). If step 2 found
+   either container and the gate confirmed, remove them (if the gate did not
+   confirm, skip and leave them):
+
+   ```bash
+   ssh -p <port> <ssh> 'for c in hsm-victorialogs hsm-vlagent; do docker rm -f "$c" 2>/dev/null && echo "removed $c"; done; true'
+   ```
+
+   Remove their named volumes only when the gate explicitly confirmed that part.
+   The orphaned structured-log JSON files are the user's to delete — never remove
+   log files yourself, just remind them:
+   `rm -f <dir>/Logs/HSM-structured-log-current.json <dir>/Logs/Archives/HSM-structured-log-*.json`
+   (see troubleshooting, "Disk pressure").
 
 6. **Wait for health.** `starting` while LevelDB loads is normal (seconds-to-minutes;
    budget ~20–25 min). Poll in short bursts of ~5 min each, repeating the call until

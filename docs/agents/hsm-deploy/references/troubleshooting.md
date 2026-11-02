@@ -100,7 +100,8 @@ git show origin/master:.env.example | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\
   in an old `.env` are inert since #1594 — the stack no longer exists; the keys can be
   dropped, and `hsm-victorialogs`/`hsm-vlagent` containers from before the upgrade can
   be removed (`docker rm -f hsm-victorialogs hsm-vlagent`) together with their named
-  volumes.
+  volumes. The orphaned structured-log JSON files under `Logs/` need the same one-time
+  cleanup — see "Disk pressure".
 
 Ask the user to add the missing keys themselves; `up -d` with the machine's full
 `-f` file set applies.
@@ -141,9 +142,12 @@ first and pin that.) Rollback is a decision for the user — offer it, do not de
 ## Disk pressure
 
 Images share the host filesystem with the bind-mounted data directories. Check with
-`df -h <dir>`. The app's log archives under `Logs/Archives/` are self-capped at 60
-files per target (ADR-0011); on a machine upgraded from before #1594 the two removed
-log-store containers and their named volumes may still hold disk — see the note under
+`df -h <dir>`. The app's text log archives under `Logs/Archives/` are self-capped at
+60 files per target (ADR-0011). Two #1594 leftovers are NOT covered by that cap and
+need one-time manual removal: the structured-log JSON files (`Logs/HSM-structured-log-current.json`
+and `Logs/Archives/HSM-structured-log-*.json`, up to ~6 GiB — their NLog target was
+deleted, so nothing ever rotates them; `rm -f` them once), and the two removed
+log-store containers with their named volumes — see the note under
 "Old `.env` after a compose file upgrade".
 
 ## `docker compose pull` fails (rate limit / network)

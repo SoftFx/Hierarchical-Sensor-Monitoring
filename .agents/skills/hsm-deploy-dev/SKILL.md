@@ -174,7 +174,27 @@ releases — filter them out):
    a bare `docker compose up -d` skips `docker-compose.version.yml`, re-resolves
    `app` to `latest`, and recreates `hsm-server` (see troubleshooting).
 
-5. **Wait for health.** The app reports `starting` until the LevelDB tree is loaded —
+5. **One-time cleanup of the removed log-store containers (#1594).** The pre-#1594
+   compose file ran `hsm-victorialogs` and `hsm-vlagent` with
+   `restart: unless-stopped`; `up -d` with the new file only warns "Found orphan
+   containers" and leaves both running (they survive reboots). After the first `up -d`
+   with a post-#1594 compose file, check:
+
+   ```bash
+   ssh -p <port> <ssh> 'docker ps -a --format "{{.Names}}" | grep -E "^hsm-(victorialogs|vlagent)$" || echo none'
+   ```
+
+   If either name is listed, report it and remove the containers:
+   ```bash
+   ssh -p <port> <ssh> 'for c in hsm-victorialogs hsm-vlagent; do docker rm -f "$c" 2>/dev/null && echo "removed $c"; done; true'
+   ```
+   Their named volumes (`victorialogs-data`, `vlagent-data`) may be removed too, to
+   reclaim disk — optional, ask the user; that data is log-store data, lost by design
+   (ADR-0015). The orphaned structured-log JSON files are the user's to delete —
+   mention them (`rm -f <dir>/Logs/HSM-structured-log-current.json <dir>/Logs/Archives/HSM-structured-log-*.json`,
+   see troubleshooting, "Disk pressure").
+
+6. **Wait for health.** The app reports `starting` until the LevelDB tree is loaded —
    normally seconds-to-minutes, budget allows ~20–25 min. Poll in short bursts of
    ~5 min each, repeating the call until healthy or the budget is spent (agent shell
    tools kill commands past their own timeouts — one 30-min loop reads as a failure
@@ -188,7 +208,7 @@ releases — filter them out):
    retrying — the common causes have fixed recovery paths, and restarting
    `hsm-server` during a legacy database migration restarts the migration.
 
-6. **Verify (read-only)**:
+7. **Verify (read-only)**:
 
    ```bash
    ssh -p <port> <ssh> 'cd <dir> && docker compose ps'
@@ -201,7 +221,7 @@ releases — filter them out):
    A 200 through caddy proves caddy is up AND the app is serving (caddy starts only
    after the app healthcheck passes).
 
-7. **Report**: machine, image ID old → new (plus the version label when the image
+8. **Report**: machine, image ID old → new (plus the version label when the image
    carries one), services recreated,
    health and verification results, pin state (`latest` or pinned `X.Y.Z` — note that
    a plain "обнови дев" returns the machine to `latest`; when pinned, also say that
