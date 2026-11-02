@@ -226,6 +226,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_registration_contains\|index\|substring` | a NEGATIVE index counts back from the end (−1 = last), as for payloads; substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
+| `expect_default_connection_address\|expected_address` | (#1593) the connection address built from PACKAGE-default options — everything except the port configured. Managed feeds the `CollectorOptions` default (the `DefaultPort` const) through the HTTPS client's `Endpoints` builder; native feeds the `hsm::collector::CollectorOptions` wrapper default (the C ABI demands an explicit port, so the wrapper default IS the package default) through `MakeEndpoints`. Pins the 44330 → 443 default (#1590) in both packages; the scheme-default port is omitted from the rendered address (`https://localhost/api/sensors`) — the managed `Uri` drops it and the native builder mirrors that (#1593 parity fix) |
 
 ## Authoring rules
 

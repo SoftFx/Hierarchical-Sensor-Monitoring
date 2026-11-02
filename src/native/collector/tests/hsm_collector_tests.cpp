@@ -990,6 +990,27 @@ namespace
             return;
         }
 
+        if (action == "expect_default_connection_address")
+        {
+            // #1593: pin the native package default port — hsm::collector::CollectorOptions::port
+            // (the wrapper header default; the C ABI itself demands an explicit port) — through the
+            // connection address a port-less configuration produces. Everything except the port is
+            // configured, so the default must flow into the address exactly as the managed
+            // CollectorOptions default does (the corpus runs both drivers through this fixture).
+            Require(step.size() >= 2, "expect_default_connection_address requires the expected address");
+            hsm::collector::CollectorOptions options;
+            options.access_key = "conformance-key";
+            options.server_address = "https://localhost";
+            const auto expected = ExpandTextToken(step[1]);
+            const auto address = hsm::http::MakeEndpoints(
+                                     options.server_address, options.port, options.allow_plaintext_transport)
+                                     .connection_address;
+            if (address != expected)
+                throw std::runtime_error(
+                    "default connection address mismatch: expected " + expected + ", actual " + address);
+            return;
+        }
+
         if (action == "start")
         {
             Require(hsm_collector_start(state.collector.value) == HSM_RESULT_OK, "collector start failed");
@@ -7273,19 +7294,24 @@ namespace
     {
         // Scheme defaulting mirrors Endpoints(CollectorOptions): bare host -> https; explicit
         // http stays http ONLY with AllowPlaintextTransport, otherwise upgraded to https; the
-        // /api/sensors base path and explicit Port are always applied.
+        // /api/sensors base path and explicit Port are always applied — except that a port equal
+        // to the effective scheme's default (https 443, http 80) is dropped from the address,
+        // exactly as the managed Uri renders it (#1590 default port, #1593 parity).
         Require(hsm::http::MakeEndpoints("localhost", 44330, false).connection_address ==
                     "https://localhost:44330/api/sensors",
                 "bare host defaults to https");
         Require(hsm::http::MakeEndpoints("https://example.org", 443, false).connection_address ==
-                    "https://example.org:443/api/sensors",
-                "explicit https preserved");
+                    "https://example.org/api/sensors",
+                "explicit https preserved, scheme-default port omitted");
         Require(hsm::http::MakeEndpoints("http://example.org", 80, false).connection_address ==
                     "https://example.org:80/api/sensors",
                 "explicit http upgraded to https without plaintext opt-in");
         Require(hsm::http::MakeEndpoints("http://example.org", 8080, true).connection_address ==
                     "http://example.org:8080/api/sensors",
                 "explicit http kept only with plaintext opt-in");
+        Require(hsm::http::MakeEndpoints("http://example.org", 80, true).connection_address ==
+                    "http://example.org/api/sensors",
+                "http scheme-default port omitted with plaintext opt-in");
         // An embedded :port/path on the URL is dropped — the explicit Port wins (UriBuilder parity).
         Require(hsm::http::MakeEndpoints("https://host:1234/ignored", 44330, false).connection_address ==
                     "https://host:44330/api/sensors",
@@ -8517,6 +8543,7 @@ namespace
             { "conformance_unix_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_module_markers_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
