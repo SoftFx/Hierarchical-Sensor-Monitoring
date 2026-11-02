@@ -23,9 +23,9 @@ Choose one certificate mode in .env. There is no automatic fallback:
 
 | Mode | Required settings | Behavior |
 |---|---|---|
-| letsencrypt-http | HSM_DOMAIN | Let's Encrypt HTTP-01/TLS-ALPN; public DNS must point to this host and ports 80/443 must be reachable. |
+| letsencrypt-http | HSM_DOMAIN | Let's Encrypt HTTP-01/TLS-ALPN; public DNS must point to this host and port 443 must be reachable (port 80 is not published, so issuance goes through TLS-ALPN-01). |
 | letsencrypt | HSM_DOMAIN | Backward-compatible alias for letsencrypt-http. |
-| letsencrypt-dns | HSM_DOMAIN, HSM_DNS_PROVIDER, matching provider token | Let's Encrypt DNS-01; inbound port 80 is not required. |
+| letsencrypt-dns | HSM_DOMAIN, HSM_DNS_PROVIDER, matching provider token | Let's Encrypt DNS-01; no inbound ports beyond 443. |
 | self-signed | HSM_DOMAIN | Caddy's internal certificate; clients must trust its CA or allow untrusted TLS. |
 | custom | HSM_DOMAIN, PEM files | Uses the provided certificate chain and private key from read-only mounted files. |
 | Without Caddy | docker-compose.direct.yml | HSM serves its existing PFX certificate directly. |
@@ -185,7 +185,7 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #   HSM_DOMAIN       the address clients use: a bare DNS name or IP address
 #                    (no https://, no port). Examples: hsm.example.com, 10.0.0.5
 #
-#   PORTS            80/443 are the stack's client-facing ports. 443 serves EVERYTHING
+#   PORTS            443 is the stack's client-facing port. It serves EVERYTHING
 #                    (Web UI + Sensor API) through the app's single listener (#1590);
 #                    44330/44333 are deprecated aliases kept through the deprecation
 #                    window for clients still pointed at the old two-port scheme — the
@@ -195,10 +195,11 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #   HSM_CERTIFICATE  which certificate clients get:
 #     letsencrypt    backward-compatible alias for letsencrypt-http
 #     letsencrypt-http trusted certificate from Let's Encrypt using HTTP-01/TLS-ALPN. Needs a
-#                    public DNS name and ports 80/443 open. There is no automatic fallback.
+#                    public DNS name and port 443 open (port 80 is no longer published, so
+#                    issuance goes through TLS-ALPN-01). There is no automatic fallback.
 #     letsencrypt-dns trusted Let's Encrypt certificate using a DNS challenge. Also set
 #                    HSM_DNS_PROVIDER=cloudflare and CF_API_TOKEN, or
-#                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN. Port 80 is not required.
+#                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN.
 #     self-signed    Caddy's own certificate. Browsers warn; collectors/agents need
 #                    "allow untrusted certificate".
 #     custom         your PEM certificate and key at CaddyCertificates/cert.pem and key.pem.
@@ -283,7 +284,6 @@ services:
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
     ports:
-      - '80:80'
       - '443:443'
       # Deprecated aliases (#1590), removed with the follow-up release.
       - '44330:44330'
@@ -317,10 +317,10 @@ A publicly trusted Let's Encrypt certificate needs a publicly registered DNS nam
 
 Nothing changes on the HSM side: it keeps its data, settings and own certificate.
 
-**Before you stop the old stack**, check ports `80` and `443`:
+**Before you stop the old stack**, check port `443` (and `80`, which older stacks also publish):
 
-- **They must be free on the host.** If they are taken, Caddy cannot start after the old stack is already down. In that case, run [without Caddy](#without-caddy) until the ports are free.
-- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`. If the server must not be reachable on these ports, use `self-signed` and remove the `80:80` and `443:443` lines from the `caddy` service (the deprecated `44330`/`44333` mappings can be removed at any time — only clients still pointed at the old ports use them).
+- **It must be free on the host.** If it is taken, Caddy cannot start after the old stack is already down. In that case, run [without Caddy](#without-caddy) until the port is free.
+- **It becomes open to the network.** Docker publishes ports past host firewalls such as `ufw`. If the server must not be reachable on this port, use `self-signed` and remove the `443:443` line from the `caddy` service (the deprecated `44330`/`44333` mappings can be removed at any time — only clients still pointed at the old ports use them).
 
 Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 
