@@ -117,16 +117,40 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Core.Model.ProductModel _productA =
             new(EntitiesFactory.BuildProductEntity(name: "alpha") with { Id = Guid.NewGuid().ToString() });
 
+        // #1605: a live sensor for the write-tool wire calls — the cache mock
+        // mirrors the PoliciesMcpToolsTests harness (UpdateSensorAsync
+        // dispatches onto the live model, so a TTL write round-trips).
+        private readonly Core.Model.BaseSensorModel _sensorA =
+            Infrastructure.SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity(
+                name: "cpu", type: (byte)HSMCommon.Model.SensorType.Integer) with
+            {
+                Id = Guid.NewGuid().ToString(),
+            });
+
 
         public HsmMcpWireTests()
         {
+            _productA.AddSensor(_sensorA);
+
             _cache.Setup(c => c.GetProducts()).Returns(new List<Core.Model.ProductModel> { _productA });
-            _cache.Setup(c => c.GetSensors()).Returns(new List<Core.Model.BaseSensorModel>());
+            _cache.Setup(c => c.GetSensors()).Returns(new List<Core.Model.BaseSensorModel> { _sensorA });
             _cache.Setup(c => c.GetAlertTemplateModels()).Returns(new List<Core.Model.AlertTemplateModel>());
             _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
                 .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>()))
                 .Returns(new List<Core.Model.BaseSensorModel>());
+
+            // The write-call half of the #1605 wire pin: the TTL policy tools
+            // resolve the sensor and apply through the live model.
+            _cache.Setup(c => c.GetSensor(It.IsAny<Guid>()))
+                .Returns((Guid id) => id == _sensorA.Id ? _sensorA : null);
+            _cache.Setup(c => c.UpdateSensorAsync(It.IsAny<Core.Cache.UpdateEntities.SensorUpdate>()))
+                .ReturnsAsync((Core.Cache.UpdateEntities.SensorUpdate update) =>
+                {
+                    _sensorA.TryUpdate(update, out _);
+
+                    return HSMCommon.TaskResult.TaskResult.Ok;
+                });
 
             _schedules.Setup(s => s.GetAllSchedules())
                 .Returns(new List<Core.Model.Policies.AlertSchedule>());
@@ -138,6 +162,8 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(new List<HSMServer.Model.Folders.FolderModel>());
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
             _authorization.Setup(a => a.IsVisible(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
@@ -423,7 +449,7 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
-        public async Task Wire_LegacyProtocol_EveryToolSchemaStaysObjectShaped_NoBooleanSubSchemas()
+        public async Task Wire_LegacyProtocol_ToolSchemasAndWriteResultsStayUnwrapped()
         {
             // #1605, the Claude Code reproduction: a client that negotiates a
             // pre-2026-07-28 protocol version (Claude Code 2.1.316 negotiates
@@ -437,7 +463,10 @@ namespace HSMServer.Core.Tests.Mcp
             // concrete McpWriteResult envelopes every natural schema is
             // object-shaped, so the transform passes them through untouched:
             // pin that EVERY tool's wire schema — root and each property
-            // schema under it — is a JSON object on the legacy protocol too.
+            // schema under it — is a JSON object on the legacy protocol too,
+            // and that a write tools/call renders the envelope at the ROOT of
+            // structuredContent (the former object-typed results arrived as
+            // {"result": {...}} there, unlike the read tools).
             using var host = BuildHost();
             host.Start();
 
@@ -471,6 +500,64 @@ namespace HSMServer.Core.Tests.Mcp
                         }
                     }
                 }
+
+                // The result half of the bug: an applied write answers the
+                // envelope DIRECTLY — `value` at the root, no `result`
+                // wrapper, exactly like the read tools' DTOs.
+                var applied = await client.CallToolAsync("create_sensor_ttl_policy",
+                    new Dictionary<string, object>
+                    {
+                        ["sensorId"] = _sensorA.Id,
+                        ["policy"] = new Dictionary<string, object>
+                        {
+                            ["interval"] = "00:30:00",
+                            ["notification"] = new Dictionary<string, object> { ["template"] = "wire [$product]$path" },
+                            ["destination"] = new Dictionary<string, object> { ["mode"] = "FromParent" },
+                        },
+                    });
+
+                Assert.NotEqual(true, applied.IsError);
+                Assert.True(applied.StructuredContent.HasValue);
+
+                var appliedContent = applied.StructuredContent.Value;
+
+                Assert.False(appliedContent.TryGetProperty("result", out _), "the legacy {\"result\": …} wrapper is back");
+                Assert.True(appliedContent.TryGetProperty("value", out var value));
+                Assert.Equal("00:30:00", value.GetProperty("interval").GetString());
+                Assert.False(appliedContent.TryGetProperty("preview", out _));
+
+                // And the dry-run arm of the same envelope: `preview` at the
+                // root, `value` absent, nothing applied to the sensor.
+                var preview = await client.CallToolAsync("create_sensor_ttl_policy",
+                    new Dictionary<string, object>
+                    {
+                        ["sensorId"] = _sensorA.Id,
+                        ["dryRun"] = true,
+                        ["policy"] = new Dictionary<string, object>
+                        {
+                            ["interval"] = "01:00:00",
+                            ["notification"] = new Dictionary<string, object> { ["template"] = "wire [$product]$path" },
+                            ["destination"] = new Dictionary<string, object> { ["mode"] = "FromParent" },
+                        },
+                    });
+
+                Assert.NotEqual(true, preview.IsError);
+                Assert.True(preview.StructuredContent.HasValue);
+
+                var previewContent = preview.StructuredContent.Value;
+
+                Assert.False(previewContent.TryGetProperty("result", out _), "the legacy {\"result\": …} wrapper is back");
+                Assert.False(previewContent.TryGetProperty("value", out _));
+                Assert.True(previewContent.TryGetProperty("preview", out var previewArm));
+                Assert.True(previewArm.GetProperty("dryRun").GetBoolean());
+
+                // Exactly one sensor update rode the whole scenario — the
+                // APPLIED write's; the dry run persisted nothing. (The
+                // nothing-applied semantics beyond this are the unit suites'
+                // pin — PoliciesMcpToolsTests, against the same harness; this
+                // wire fact owns the transport shape.)
+                _cache.Verify(c => c.UpdateSensorAsync(It.IsAny<Core.Cache.UpdateEntities.SensorUpdate>()),
+                    Times.Once);
             }
         }
 
