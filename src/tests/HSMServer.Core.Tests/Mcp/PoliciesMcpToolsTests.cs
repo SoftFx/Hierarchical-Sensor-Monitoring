@@ -123,10 +123,35 @@ namespace HSMServer.Core.Tests.Mcp
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
 
-            var dto = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var envelope = await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
 
+            // The #1605 envelope: an applied write carries the DTO under
+            // `value`, the preview arm null.
+            var dto = envelope.Value;
+            Assert.Null(envelope.Preview);
             Assert.NotEqual(Guid.Empty, dto.Id);
             Assert.Single(dto.Conditions);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateSensorPolicy_DryRun_ReturnsThePreviewEnvelope_NothingApplied()
+        {
+            // #1605's envelope union, pinned on the dry-run arm: validation
+            // passes, nothing persists, and the answer carries `preview`
+            // with the value arm null (absent on the wire).
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var envelope = await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto(), dryRun: true);
+
+            Assert.Null(envelope.Value);
+            Assert.NotNull(envelope.Preview);
+            Assert.True(envelope.Preview.DryRun);
+            Assert.Equal("sensorDataPolicies", envelope.Preview.Kind);
+            Assert.Equal("create", envelope.Preview.Operation);
+            Assert.Equal(sensor.Id.ToString(), envelope.Preview.EntityId);
+
+            // Nothing applied (the REST dry-run twin's pin, on the MCP arm).
+            Assert.Empty(sensor.Policies);
         }
 
 
@@ -159,10 +184,10 @@ namespace HSMServer.Core.Tests.Mcp
         public async System.Threading.Tasks.Task UpdateSensorPolicy_ReplacesContentAndEchoes()
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
-            var created = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var created = (await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto())).Value;
 
             var replaced = DataDto() with { Icon = "✅" };
-            var updated = (PolicyDto)await CreateTools().UpdateSensorPolicyAsync(sensor.Id, created.Id, replaced);
+            var updated = (await CreateTools().UpdateSensorPolicyAsync(sensor.Id, created.Id, replaced)).Value;
 
             Assert.Equal(created.Id, updated.Id);
             Assert.Equal("✅", updated.Icon);
@@ -173,11 +198,11 @@ namespace HSMServer.Core.Tests.Mcp
         public async System.Threading.Tasks.Task DeleteSensorPolicy_ReturnsTheDeletedId()
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
-            var created = (PolicyDto)await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+            var created = (await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto())).Value;
 
-            var result = (McpDeletedResult)await CreateTools().DeleteSensorPolicyAsync(sensor.Id, created.Id);
+            var result = await CreateTools().DeleteSensorPolicyAsync(sensor.Id, created.Id);
 
-            Assert.Equal(created.Id, result.Id);
+            Assert.Equal(created.Id, result.Value.Id);
 
             // The delete tool error path: a second delete of the same id is
             // the uniform not-found text.
@@ -192,14 +217,14 @@ namespace HSMServer.Core.Tests.Mcp
         {
             var sensor = AddSensor(SensorType.Integer, "cpu");
 
-            var dto = (TtlPolicyDto)await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, new TtlPolicyDto
+            var envelope = await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, new TtlPolicyDto
             {
                 Interval = "00:30:00",
                 Notification = new AlertNotificationDto { Template = "mcp ttl" },
                 Destination = new AlertDestinationDto { Mode = "FromParent" },
             });
 
-            Assert.Equal("00:30:00", dto.Interval);
+            Assert.Equal("00:30:00", envelope.Value.Interval);
         }
 
 

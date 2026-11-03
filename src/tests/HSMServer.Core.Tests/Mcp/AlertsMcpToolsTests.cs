@@ -432,8 +432,12 @@ namespace HSMServer.Core.Tests.Mcp
                 .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
                 .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
 
-            var dto = (AlertTemplateDto)await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+            var envelope = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
 
+            // The #1605 envelope: an applied write carries the DTO under
+            // `value`, the preview arm null.
+            var dto = envelope.Value;
+            Assert.Null(envelope.Preview);
             Assert.NotEqual(Guid.Empty, dto.Id);
             Assert.Contains(_templateStore, t => t.Id == dto.Id);
         }
@@ -452,7 +456,7 @@ namespace HSMServer.Core.Tests.Mcp
                 }))
                 .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
 
-            var dto = (AlertTemplateDto)await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
+            var dto = (await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"))).Value;
 
             var warning = Assert.Single(dto.Warnings);
             Assert.Equal("Root/Product A/cpu bar", warning.Sensor);
@@ -471,11 +475,35 @@ namespace HSMServer.Core.Tests.Mcp
                     new("Root/Product B/ram bar", "Not supported property Value for DoubleBarPolicy"),
                 }));
 
-            var dto = (AlertTemplateDto)await CreateTools().UpdateAlertTemplateAsync(template.Id, TemplateDto("warned"));
+            var dto = (await CreateTools().UpdateAlertTemplateAsync(template.Id, TemplateDto("warned"))).Value;
 
             var warning = Assert.Single(dto.Warnings);
             Assert.Equal("Root/Product B/ram bar", warning.Sensor);
             Assert.Equal("Not supported property Value for DoubleBarPolicy", warning.Reason);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_DryRun_ReturnsThePreviewEnvelope_NothingApplied()
+        {
+            // #1605's envelope union, pinned on the dry-run arm: validation
+            // passes, nothing persists, and the answer carries `preview`
+            // with the value arm null (absent on the wire).
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
+                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+
+            var envelope = await CreateTools().CreateAlertTemplateAsync(
+                TemplateDto($"template-{Guid.NewGuid():N}"), dryRun: true);
+
+            Assert.Null(envelope.Value);
+            Assert.NotNull(envelope.Preview);
+            Assert.True(envelope.Preview.DryRun);
+            Assert.Equal("alertTemplate", envelope.Preview.Kind);
+            Assert.Equal("create", envelope.Preview.Operation);
+            Assert.Empty(_templateStore);
+
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
 
 
@@ -505,16 +533,17 @@ namespace HSMServer.Core.Tests.Mcp
                 .ReturnsAsync(((bool Ok, string Error))(true, null))
                 .Callback((Guid id, CancellationToken _) => _templateStore.RemoveAll(t => t.Id == id));
 
-            var result = (McpDeletedResult)await CreateTools().DeleteAlertTemplateAsync(template.Id);
+            var result = await CreateTools().DeleteAlertTemplateAsync(template.Id);
 
-            Assert.Equal(template.Id, result.Id);
+            Assert.Equal(template.Id, result.Value.Id);
+            Assert.Null(result.Preview);
         }
 
 
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertSchedule_ReturnsTheStoredSchedule()
         {
-            var dto = (AlertScheduleDto)await CreateTools().CreateAlertScheduleAsync(
+            var envelope = await CreateTools().CreateAlertScheduleAsync(
                 new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
                 {
                     Name = "night-shift",
@@ -522,8 +551,9 @@ namespace HSMServer.Core.Tests.Mcp
                     Schedule = ValidYaml,
                 });
 
-            Assert.Equal("night-shift", dto.Name);
-            Assert.Contains(_scheduleStore, s => s.Id == dto.Id);
+            Assert.Null(envelope.Preview);
+            Assert.Equal("night-shift", envelope.Value.Name);
+            Assert.Contains(_scheduleStore, s => s.Id == envelope.Value.Id);
         }
 
 
@@ -572,13 +602,13 @@ namespace HSMServer.Core.Tests.Mcp
                 {
                     try
                     {
-                        var dto = (AlertScheduleDto)await CreateTools().CreateAlertScheduleAsync(
+                        var envelope = await CreateTools().CreateAlertScheduleAsync(
                             new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
                             {
                                 Name = "same-name", Timezone = "UTC", Schedule = ValidYaml,
                             });
 
-                        return (dto, (string)null);
+                        return (envelope.Value, (string)null);
                     }
                     catch (ModelContextProtocol.McpException ex)
                     {

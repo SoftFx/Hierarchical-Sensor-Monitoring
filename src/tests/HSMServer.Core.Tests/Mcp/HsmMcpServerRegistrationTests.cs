@@ -111,6 +111,19 @@ namespace HSMServer.Core.Tests.Mcp
             // wrapping never applies whatever protocol version a client
             // negotiates. The wire twin (HsmMcpWireTests) pins the same on
             // the tools/list response and the documentation riding it.
+            //
+            // #1605: the strictness itself is load-bearing now. The write
+            // tools used to return Task<object>, whose permissive `true`
+            // schema the SDK's legacy-wire compatibility wrapped into
+            // {"type":"object","properties":{"result":true},"required":...}
+            // — valid JSON Schema, but Claude Code accepts only OBJECT
+            // sub-schemas under properties and discards the whole tools/list
+            // (0 tools, the connection still reports "connected"). The write
+            // tools return the concrete McpWriteResult<T> envelope since, so
+            // this regression walk demands: every schema root is a plain
+            // type:"object" document AND every property schema inside it is
+            // an object — a boolean (or otherwise non-object) sub-schema
+            // anywhere fails with the tool and property named.
             using var provider = new ServiceCollection().AddHsmMcpServer().BuildServiceProvider();
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
@@ -118,16 +131,22 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal(30, tools.Count);
             Assert.All(tools, tool =>
             {
-                Assert.True(tool.ProtocolTool.OutputSchema.HasValue, tool.ProtocolTool.Name);
+                var schema = tool.ProtocolTool.OutputSchema;
 
-                // #1570: the journaled write tools return a UNION — the DTO
-                // echo (plus changeSetId) or a dry-run WritePreviewDto — so
-                // their output schema is permissively `true`; every other
-                // tool keeps a plain type:"object" document (#1553).
-                var type = tool.ProtocolTool.OutputSchema.Value;
+                Assert.True(schema.HasValue, tool.ProtocolTool.Name);
+                Assert.True(schema.Value.ValueKind == JsonValueKind.Object &&
+                            schema.Value.TryGetProperty("type", out var type) &&
+                            type.ValueKind == JsonValueKind.String &&
+                            type.GetString() == "object", tool.ProtocolTool.Name);
 
-                Assert.True(type.ValueKind == JsonValueKind.True ||
-                            type.GetProperty("type").GetString() == "object", tool.ProtocolTool.Name);
+                if (schema.Value.TryGetProperty("properties", out var properties))
+                {
+                    foreach (var property in properties.EnumerateObject())
+                    {
+                        Assert.True(property.Value.ValueKind == JsonValueKind.Object,
+                            $"{tool.ProtocolTool.Name}.{property.Name}");
+                    }
+                }
             });
         }
 

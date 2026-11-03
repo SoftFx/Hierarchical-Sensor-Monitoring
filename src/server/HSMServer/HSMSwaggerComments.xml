@@ -926,6 +926,31 @@
         <member name="P:HSMServer.Mcp.McpDeletedResult.Id">
             <summary>Id of the deleted resource.</summary>
         </member>
+        <member name="T:HSMServer.Mcp.McpWriteResult`1">
+             <summary>
+             Result envelope of the twelve journaled write tools (#1605): exactly
+             one arm travels per call — `value` after an applied write (the stored
+             resource, the same DTO the REST 200/201 body carries) or `preview`
+             after a dry run (validation ran, nothing applied). The null arm is
+             ABSENT on the wire (the SDK's WhenWritingNull, see the casing note
+             above), so an agent discriminates the arms by the key that appears.
+            
+             The envelope exists so every write tool returns a CONCRETE closed
+             type: the pre-#1605 object-typed unions exported as the permissive
+             `true` schema, which the SDK's legacy-wire compatibility wrapped into
+             `{"type":"object","properties":{"result":true},"required":["result"]}`
+             — valid JSON Schema, but Claude Code accepts only object sub-schemas
+             there and discards the whole tools/list (0 tools, silently
+             "connected"). The REST arm keeps answering the bare DTO/preview: the
+             envelope is the MCP-only price of one static output schema per tool.
+             </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpWriteResult`1.Value">
+            <summary>The stored resource after an applied write; null (absent) after a dry run.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpWriteResult`1.Preview">
+            <summary>The dry-run preview (validation ran, nothing applied); null (absent) after an applied write.</summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpJournalRecordsResult">
             <summary>Result of the list_journal_records tool.</summary>
         </member>
@@ -2281,14 +2306,29 @@
             schedule writes it names the resolved target nodes.
             </summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.DryRun">
+            <summary>Always true — this is a preview, nothing was applied.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Kind">
             <summary>camelCase entry kind, e.g. "sensorDataPolicies", "alertTemplate".</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Operation">
             <summary>camelCase operation: "create", "update" or "delete".</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.EntityId">
+            <summary>Id of the primary entity of the would-be write.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Path">
             <summary>Display path of the primary entity at preview time.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.WritePreviewDto.Affected">
+            <summary>Every entity the write would touch, with what it would do there.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.PreviewAffectedEntityDto.Id">
+            <summary>Id of the affected entity.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.PreviewAffectedEntityDto.Path">
+            <summary>Display path of the affected entity.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.PreviewAffectedEntityDto.Change">
             <summary>What the write would do there, e.g. "apply", "prune", "replace".</summary>

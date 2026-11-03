@@ -282,13 +282,18 @@ namespace HSMServer.Core.Tests.Mcp
 
             // #1565, output side: the write echo's warnings field names the
             // zero-match diagnostic class, and the warning entry's sensor field
-            // documents carrying the PATTERN itself when nothing matched.
-            // #1570: create_alert_template's output is a union now, so the
-            // warning-entry docs ride the tool description instead of the
-            // (former) AlertTemplateDto output schema.
+            // documents carrying the PATTERN itself when nothing matched. The
+            // docs ride BOTH the tool description and — since the #1605
+            // envelope put the DTO back into the output schema — the schema's
+            // `value.warnings` arm.
             var templateDescription = tools["create_alert_template"].Description ?? string.Empty;
             Assert.Contains("path pattern matched NO sensors", templateDescription);
             Assert.Contains("warnings", templateDescription);
+
+            var templateOutput = string.Join("\n",
+                AllDescriptions(tools["create_alert_template"].OutputSchema!.Value));
+            Assert.Contains("path pattern that matched no sensors", templateOutput);
+            Assert.Contains("The stored resource after an applied write", templateOutput);
 
             // #1569: the mute surface — the period semantics (indefinite vs
             // auto-unmute) and the Blocked refusal travel on the TOOL
@@ -329,21 +334,17 @@ namespace HSMServer.Core.Tests.Mcp
                 .ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
 
             // Every tool opts in, and every return type is a non-nullable
-            // object, so each output schema is a plain type:"object" document
+            // object (the write tools answer the McpWriteResult envelope,
+            // #1605), so each output schema is a plain type:"object" document
             // — no legacy-wire {"result": ...} wrapping for older clients to
             // trip over, whatever protocol version they negotiate.
             foreach (var name in SpecTools)
             {
                 var schema = tools[name].OutputSchema;
                 Assert.True(schema.HasValue, $"{name} carries no output schema");
-
-                // #1570: the journaled WRITE tools return a union (the DTO
-                // echo plus changeSetId, or a dry-run preview), so their
-                // schema is permissively `true`; everything else stays a
-                // plain type:"object" document.
-                Assert.True(schema.Value.ValueKind == JsonValueKind.True ||
+                Assert.True(schema.Value.ValueKind == JsonValueKind.Object &&
                             schema.Value.GetProperty("type").GetString() == "object",
-                    $"{name} carries neither an object nor a permissive schema");
+                    $"{name} carries no plain object schema");
             }
 
             string Descriptions(ModelContextProtocol.Protocol.Tool tool) =>
@@ -417,6 +418,59 @@ namespace HSMServer.Core.Tests.Mcp
                 foreach (var item in schema.EnumerateArray())
                     foreach (var description in AllDescriptions(item))
                         yield return description;
+            }
+        }
+
+
+        [Fact]
+        public async Task Wire_LegacyProtocol_EveryToolSchemaStaysObjectShaped_NoBooleanSubSchemas()
+        {
+            // #1605, the Claude Code reproduction: a client that negotiates a
+            // pre-2026-07-28 protocol version (Claude Code 2.1.316 negotiates
+            // one) gets the SDK's legacy-wire transform on tools/list — a
+            // non-object natural schema is wrapped into
+            // {"type":"object","properties":{"result":<schema>}}. The write
+            // tools' former Task<object> exported the permissive `true`, so
+            // the wrapped document carried "result": true — valid JSON
+            // Schema, but Claude Code accepts only OBJECT sub-schemas and
+            // discarded the whole tools/list (0 tools, silently). With the
+            // concrete McpWriteResult envelopes every natural schema is
+            // object-shaped, so the transform passes them through untouched:
+            // pin that EVERY tool's wire schema — root and each property
+            // schema under it — is a JSON object on the legacy protocol too.
+            using var host = BuildHost();
+            host.Start();
+
+            var client = await ConnectAsync(host, "2025-06-18");
+            await using (client)
+            {
+                // The pin is only meaningful if the negotiation actually
+                // landed on the legacy version — a server counter-offer would
+                // otherwise silently turn this into the modern-path check.
+                Assert.Equal("2025-06-18", client.NegotiatedProtocolVersion);
+
+                var tools = await client.ListToolsAsync();
+
+                Assert.Equal(30, tools.Count);
+
+                foreach (var tool in tools)
+                {
+                    var schema = tool.ProtocolTool.OutputSchema;
+
+                    Assert.True(schema.HasValue, tool.ProtocolTool.Name);
+                    Assert.True(schema.Value.ValueKind == JsonValueKind.Object &&
+                                schema.Value.TryGetProperty("type", out var type) &&
+                                type.GetString() == "object", tool.ProtocolTool.Name);
+
+                    if (schema.Value.TryGetProperty("properties", out var properties))
+                    {
+                        foreach (var property in properties.EnumerateObject())
+                        {
+                            Assert.True(property.Value.ValueKind == JsonValueKind.Object,
+                                $"{tool.ProtocolTool.Name}.{property.Name}");
+                        }
+                    }
+                }
             }
         }
 
@@ -528,7 +582,7 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
-        private async Task<McpClient> ConnectAsync(IHost host)
+        private async Task<McpClient> ConnectAsync(IHost host, string protocolVersion = null)
         {
             var httpClient = host.GetTestClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _credential);
@@ -539,7 +593,8 @@ namespace HSMServer.Core.Tests.Mcp
                 TransportMode = HttpTransportMode.StreamableHttp,
             }, httpClient, NullLoggerFactory.Instance, ownsHttpClient: false);
 
-            return await McpClient.CreateAsync(transport);
+            return await McpClient.CreateAsync(transport,
+                protocolVersion is null ? null : new McpClientOptions { ProtocolVersion = protocolVersion });
         }
 
 
