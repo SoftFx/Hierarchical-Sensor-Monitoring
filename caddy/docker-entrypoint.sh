@@ -13,6 +13,12 @@ require_nonblank() {
     esac
 }
 
+require_bare_dns_name() {
+    case "$1" in
+        *:*|*[!A-Za-z0-9._-]*) fail "$2" ;;
+    esac
+}
+
 require_nonblank "${HSM_DOMAIN:-}" 'HSM_DOMAIN is required'
 case "$HSM_DOMAIN" in
     \[*\])
@@ -20,7 +26,7 @@ case "$HSM_DOMAIN" in
         ipv6="${ipv6%\]}"
         case "$ipv6" in *[!A-Fa-f0-9:.]*|'') fail 'HSM_DOMAIN must be a bare DNS name or IP address' ;; esac
         ;;
-    *:*|*[!A-Za-z0-9._-]*) fail 'HSM_DOMAIN must be a bare DNS name or IP address' ;;
+    *) require_bare_dns_name "$HSM_DOMAIN" 'HSM_DOMAIN must be a bare DNS name or IP address' ;;
  esac
 
 # Optional (#1585): write the DNS-01 TXT record at a delegated alias in a stub zone
@@ -38,10 +44,8 @@ case "${HSM_CERTIFICATE:-}" in
         override=''
         case "${HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN:-}" in
             *[![:space:]]*)
-                case "$HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN" in
-                    *:*|*[!A-Za-z0-9._-]*)
-                        fail 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN must be a bare DNS name such as _acme-challenge.alias.example.com' ;;
-                esac
+                require_bare_dns_name "$HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN" \
+                    'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN must be a bare DNS name such as _acme-challenge.alias.example.com'
                 override='-override'
                 ;;
         esac

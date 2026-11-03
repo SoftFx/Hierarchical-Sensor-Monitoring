@@ -55,7 +55,14 @@ CF_API_TOKEN=your-token
 
 For dynv6, set HSM_DNS_PROVIDER=dynv6 and provide DYNV6_API_TOKEN. Only the selected provider token is used. Keep .env private: docker compose config expands and prints its values, so do not share that output.
 
-**Stub-zone DNS tokens (optional).** When your Cloudflare token cannot be scoped to the zone of HSM_DOMAIN itself, SoftFx admins issue tokens for a stub zone (`soft-fx.dev`, hosted on Cloudflare) and delegate each challenge name there with a CNAME. Ask the admins for the alias of your domain/machine — each one is individual (the dev machine's `hsm.dev.soft-fx.eu` uses `_acme-challenge.hsm.dev.soft-fx.dev`), and set the override in .env:
+**Stub-zone DNS tokens (optional).** When your Cloudflare token cannot be scoped to the zone of HSM_DOMAIN itself, SoftFx admins issue tokens for a stub zone (`soft-fx.dev`, hosted on Cloudflare) and delegate each challenge name there with a CNAME. Each domain/machine gets its own alias — ask the admins for yours:
+
+| HSM_DOMAIN | Challenge TXT written at |
+|---|---|
+| `hsm.dev.soft-fx.eu` (dev) | `_acme-challenge.hsm.dev.soft-fx.dev` |
+| `hsm.soft-fx.eu` (live) | `_acme-challenge.hsm.soft-fx.dev` |
+
+The admins' table also reserves aliases for the `logs.hsm.*` names, but those sites use the internal CA today; the override applies to the single HSM_DOMAIN certificate only (no per-site mapping). Set it in .env:
 
 ~~~dotenv
 HSM_DNS_PROVIDER=cloudflare

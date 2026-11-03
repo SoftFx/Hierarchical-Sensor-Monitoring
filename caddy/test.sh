@@ -201,6 +201,10 @@ validate_dns_provider provision-cloudflare-override \
     -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
     -e HSM_DNS_PROVIDER=cloudflare -e CF_API_TOKEN=cfut_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
     -e HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.hsm.alias.example.dev
+validate_dns_provider provision-dynv6-override \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=dynv6 -e DYNV6_API_TOKEN=offline-test-token \
+    -e HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.hsm.alias.example.dev
 
 if docker run --rm --network none -e HSM_DOMAIN=hsm.example.com \
     -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare \
