@@ -23,19 +23,36 @@ case "$HSM_DOMAIN" in
     *:*|*[!A-Za-z0-9._-]*) fail 'HSM_DOMAIN must be a bare DNS name or IP address' ;;
  esac
 
+# Optional (#1585): write the DNS-01 TXT record at a delegated alias in a stub zone
+# (e.g. _acme-challenge.hsm.dev.soft-fx.dev) instead of _acme-challenge.<HSM_DOMAIN>.
+# Validated and applied only inside letsencrypt-dns below — outside it the setting is
+# ignored, like every other HSM_DNS_* variable.
 case "${HSM_CERTIFICATE:-}" in
     letsencrypt|letsencrypt-http)
         HSM_TLS_SNIPPET=tls-letsencrypt-http
         ;;
     letsencrypt-dns)
+        # Blank or whitespace-only override means "no override" (the plain snippet); a
+        # non-blank value must be a bare DNS name — the leading underscore label of a
+        # challenge name is legal, ports and schemes are not.
+        override=''
+        case "${HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN:-}" in
+            *[![:space:]]*)
+                case "$HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN" in
+                    *:*|*[!A-Za-z0-9._-]*)
+                        fail 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN must be a bare DNS name such as _acme-challenge.alias.example.com' ;;
+                esac
+                override='-override'
+                ;;
+        esac
         case "${HSM_DNS_PROVIDER:-}" in
             cloudflare)
                 require_nonblank "${CF_API_TOKEN:-}" 'CF_API_TOKEN is required for the cloudflare DNS provider'
-                HSM_TLS_SNIPPET=tls-dns-cloudflare
+                HSM_TLS_SNIPPET="tls-dns-cloudflare$override"
                 ;;
             dynv6)
                 require_nonblank "${DYNV6_API_TOKEN:-}" 'DYNV6_API_TOKEN is required for the dynv6 DNS provider'
-                HSM_TLS_SNIPPET=tls-dns-dynv6
+                HSM_TLS_SNIPPET="tls-dns-dynv6$override"
                 ;;
             '') fail 'HSM_DNS_PROVIDER is required for letsencrypt-dns' ;;
             *) fail 'HSM_DNS_PROVIDER must be cloudflare or dynv6' ;;

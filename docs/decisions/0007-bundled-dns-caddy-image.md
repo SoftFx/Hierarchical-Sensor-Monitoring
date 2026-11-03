@@ -18,6 +18,8 @@ At the pinned Cloudflare v0.2.4 source, cloudflare.go lines 42–50 resolve the 
 
 Expose DNS-01 through HSM_CERTIFICATE=letsencrypt-dns, HSM_DNS_PROVIDER=cloudflare|dynv6, and the matching CF_API_TOKEN or DYNV6_API_TOKEN. Keep letsencrypt as an alias for letsencrypt-http; retain HTTP ACME, self-signed, custom PEM, and direct HSM PFX deployment. Do not fall back automatically between certificate sources. DNS-01 validates control of the domain but does not create a route through CGNAT or otherwise enable external access.
 
+For installs whose provider token is scoped to a stub zone (a CNAME delegates the challenge name there), the optional HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN selects an `-override` variant of the provider snippet that adds `dns_challenge_override_domain` (#1585); blank keeps the plain snippet, and the value is a per-install bare DNS name validated by the entrypoint.
+
 ## Consequences
 
 - Standard deployments pull a ready-to-use image; operators do not install a local Caddy build toolchain.

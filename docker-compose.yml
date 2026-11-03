@@ -23,6 +23,8 @@
 #     letsencrypt-dns trusted Let's Encrypt certificate using a DNS challenge. Also set
 #                    HSM_DNS_PROVIDER=cloudflare and CF_API_TOKEN, or
 #                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN. Port 80 is not required.
+#                    Optional: HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN delegates the challenge
+#                    TXT to a stub-zone alias (see .env.example); leave empty for none.
 #     self-signed    Caddy's own certificate. Browsers warn; collectors/agents need
 #                    "allow untrusted certificate".
 #     custom         your PEM certificate and key at CaddyCertificates/cert.pem and key.pem.
@@ -92,7 +94,7 @@ services:
       - ./DatabasesBackups:/app/DatabasesBackups
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-6'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-7'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -106,6 +108,9 @@ services:
       HSM_DNS_PROVIDER: '${HSM_DNS_PROVIDER:-}'
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
+      # Optional (#1585): stub-zone alias for the DNS-01 TXT record; empty = write it at
+      # _acme-challenge.<HSM_DOMAIN> as before.
+      HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN: '${HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN:-}'
     ports:
       - '80:80'
       - '443:443'

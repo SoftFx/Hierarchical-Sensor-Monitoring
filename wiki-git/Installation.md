@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-6 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-7 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -55,6 +55,16 @@ CF_API_TOKEN=your-token
 
 For dynv6, set HSM_DNS_PROVIDER=dynv6 and provide DYNV6_API_TOKEN. Only the selected provider token is used. Keep .env private: docker compose config expands and prints its values, so do not share that output.
 
+**Stub-zone DNS tokens (optional).** When your Cloudflare token cannot be scoped to the zone of HSM_DOMAIN itself, SoftFx admins issue tokens for a stub zone (`soft-fx.dev`, hosted on Cloudflare) and delegate each challenge name there with a CNAME. Ask the admins for the alias of your domain/machine — each one is individual (the dev machine's `hsm.dev.soft-fx.eu` uses `_acme-challenge.hsm.dev.soft-fx.dev`), and set the override in .env:
+
+~~~dotenv
+HSM_DNS_PROVIDER=cloudflare
+CF_API_TOKEN=token-scoped-to-the-stub-zone
+HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.hsm.dev.soft-fx.dev
+~~~
+
+Caddy then writes the DNS-01 TXT record at that alias (a name inside the stub zone) instead of `_acme-challenge.<HSM_DOMAIN>`, and Let's Encrypt follows the CNAME. The token needs Zone:DNS:Edit and Zone:Zone:Read on the stub zone only. Leave the setting empty for the regular scheme, where the TXT record is written at the real `_acme-challenge.<HSM_DOMAIN>` name. The override covers the HSM_DOMAIN certificate only; it does not exist per-site.
+
 If inbound ports are reachable and you do not need DNS-01, use HTTP validation:
 
 ~~~dotenv
@@ -67,6 +77,7 @@ HSM_CERTIFICATE=letsencrypt-http
 | HSM_DOMAIN | Bare host name or IP clients use. No https://, port, or path. |
 | HSM_CERTIFICATE | letsencrypt-http (or legacy letsencrypt), letsencrypt-dns, self-signed, or custom. |
 | HSM_DNS_PROVIDER | cloudflare or dynv6; required only for letsencrypt-dns. |
+| HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN | Optional; only for letsencrypt-dns. Full delegated alias (e.g. `_acme-challenge.hsm.dev.soft-fx.dev`) at which the DNS-01 TXT record is written, for tokens scoped to a stub zone. Empty = write the TXT record at `_acme-challenge.<HSM_DOMAIN>`. |
 | CF_API_TOKEN | Cloudflare token with DNS edit and zone read access; required only for Cloudflare. |
 | DYNV6_API_TOKEN | dynv6 token; required only for dynv6. |
 
@@ -104,7 +115,7 @@ The issuer identifies the certificate authority; notAfter shows expiry. If there
 
 **letsencrypt-http (or letsencrypt alias):** Caddy uses HTTP-01 and/or TLS-ALPN validation. Public DNS must resolve to this host, and the relevant public ports must reach Caddy. Certificates and ACME state are kept in CaddyData. Caddy renews automatically and continues serving a still-valid certificate while retrying a failed renewal. If initial issuance fails, HTTPS has no certificate; inspect docker logs hsm-caddy. There is no automatic mode change.
 
-**letsencrypt-dns:** Caddy creates the required DNS TXT challenge using the selected provider token. Incoming HTTP challenge traffic is not required, so a trusted certificate can be issued when the server is behind CGNAT. DNS-01 proves control of the name for issuance only; it does not make HSM reachable from the internet. A/AAAA records, LAN routing, firewall rules, and the external access path remain separate network configuration.
+**letsencrypt-dns:** Caddy creates the required DNS TXT challenge using the selected provider token. Incoming HTTP challenge traffic is not required, so a trusted certificate can be issued when the server is behind CGNAT. DNS-01 proves control of the name for issuance only; it does not make HSM reachable from the internet. A/AAAA records, LAN routing, firewall rules, and the external access path remain separate network configuration. When HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN is set, the TXT record is written at that delegated alias (stub-zone scheme) instead of `_acme-challenge.<HSM_DOMAIN>`.
 
 **self-signed:** Caddy issues and renews its internal certificate. Browsers warn unless the Caddy local CA is installed; collectors and agents need their untrusted-certificate option if the CA is not trusted. The CA certificate is stored beside the compose file at CaddyData/caddy/pki/authorities/local/root.crt.
 
@@ -199,6 +210,8 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #     letsencrypt-dns trusted Let's Encrypt certificate using a DNS challenge. Also set
 #                    HSM_DNS_PROVIDER=cloudflare and CF_API_TOKEN, or
 #                    HSM_DNS_PROVIDER=dynv6 and DYNV6_API_TOKEN. Port 80 is not required.
+#                    Optional: HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN delegates the challenge
+#                    TXT to a stub-zone alias (see .env.example); leave empty for none.
 #     self-signed    Caddy's own certificate. Browsers warn; collectors/agents need
 #                    "allow untrusted certificate".
 #     custom         your PEM certificate and key at CaddyCertificates/cert.pem and key.pem.
@@ -268,7 +281,7 @@ services:
       - ./DatabasesBackups:/app/DatabasesBackups
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-6'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-7'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -282,6 +295,9 @@ services:
       HSM_DNS_PROVIDER: '${HSM_DNS_PROVIDER:-}'
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
+      # Optional (#1585): stub-zone alias for the DNS-01 TXT record; empty = write it at
+      # _acme-challenge.<HSM_DOMAIN> as before.
+      HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN: '${HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN:-}'
     ports:
       - '80:80'
       - '443:443'
@@ -306,7 +322,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-6 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-7 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; supports the stub-zone DNS-01 override (#1585); users do not build locally. |
 | Published ports 80, 443, 44330, 44333 | 443 is the primary address for everything (web UI, ingestion, downloads). 44330/44333 are deprecated aliases kept through the deprecation window; downloaded agent bundles point at 443. |
 
 ### Internal DNS name
