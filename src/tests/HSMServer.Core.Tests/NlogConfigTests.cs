@@ -50,14 +50,16 @@ namespace HSMServer.Core.Tests
 
         // #1613: every expected MCP tool failure (bad arguments, an unknown id, a
         // write conflict) reaches the caller correctly as isError=true, but the
-        // MCP SDK ALSO logs the tool's McpException at ERROR as "\"{tool}\" threw
-        // an unhandled exception" from its ModelContextProtocol.Server.McpServer
-        // logger - one test session alone produced 39 such entries, all client
-        // mistakes. Those entries must stay out of HSM-error-log.txt (the operator
-        // surface; noise there hides real errors) while remaining observable in
-        // HSM-all-log.txt. This drives the REAL rules end-to-end with the file
-        // targets swapped for in-memory capture, so the filter's condition is
-        // evaluated, not just asserted on paper.
+        // MCP SDK ALSO logs it at ERROR as "\"{tool}\" threw an unhandled
+        // exception" from its ModelContextProtocol.Server.McpServer logger - one
+        // test session alone produced 39 McpException + 5 ArgumentException such
+        // entries, all client mistakes (the tools throw McpException; the SDK's
+        // argument binder rejects bad arguments with ArgumentException). Those
+        // entries must stay out of HSM-error-log.txt (the operator surface; noise
+        // there hides real errors) while remaining observable in HSM-all-log.txt.
+        // This drives the REAL rules end-to-end with the file targets swapped for
+        // in-memory capture, so the filter's condition is evaluated, not just
+        // asserted on paper.
         [Fact]
         public void ExpectedMcpToolFailuresStayOutOfTheErrorLog()
         {
@@ -86,6 +88,16 @@ namespace HSMServer.Core.Tests
             Assert.Empty(capture["errorfile"].Logs);
             Assert.NotEmpty(capture["allfile"].Logs);
 
+            // The other expected-failure arm: the SDK's argument binder rejecting
+            // the caller's arguments (a missing required parameter) with an
+            // ArgumentException - same logger, same ERROR entry.
+            capture["errorfile"].Logs.Clear();
+            capture["allfile"].Logs.Clear();
+            mcpServer.Error(new ArgumentException("The arguments dictionary is missing a value for the required parameter 'sensorId'.", "arguments"), "\"get_sensor\" threw an unhandled exception.");
+            factory.Flush();
+            Assert.Empty(capture["errorfile"].Logs);
+            Assert.NotEmpty(capture["allfile"].Logs);
+
             // A genuinely unexpected exception from the same logger IS an
             // operator error and keeps reaching the error log.
             capture["errorfile"].Logs.Clear();
@@ -99,6 +111,10 @@ namespace HSMServer.Core.Tests
             factory.GetLogger("HSMServer.SomeComponent").Error(new McpException("boom"), "failed");
             factory.Flush();
             Assert.NotEmpty(capture["errorfile"].Logs);
+
+            // MCP dispatch entries are not ASP.NET framework logs: the aspfile
+            // rule (Microsoft.AspNetCore*) never picks them up.
+            Assert.Empty(capture["aspfile"].Logs);
         }
 
         // The retention contract pinned from the 2026-10 dev incident (49 GiB in Logs/,

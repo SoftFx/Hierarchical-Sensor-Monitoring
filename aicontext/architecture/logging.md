@@ -15,10 +15,12 @@ logs.
 - `Warn`: expected refusals, transient failures, degraded but recoverable states.
 - `Error`: unexpected failures, lost work, failed delivery, storage exceptions.
   An expected client refusal the caller already receives (e.g. an MCP tool's
-  validation/not-found `McpException`) is not an operator error: the MCP SDK
-  logs it at ERROR, and `src/server/HSMServer/nlog.config` filters exactly that
-  entry (the `McpException` from `ModelContextProtocol.Server.McpServer`) out
-  of `HSM-error-log.txt` while it still lands in `HSM-all-log.txt` (#1613).
+  validation/not-found `McpException`, or the SDK argument-binder's
+  `ArgumentException` for bad tool arguments) is not an operator error: the
+  MCP SDK logs both at ERROR, and `src/server/HSMServer/nlog.config` filters
+  exactly those entries (either type, from
+  `ModelContextProtocol.Server.McpServer`) out of `HSM-error-log.txt` while
+  they still land in `HSM-all-log.txt` (#1613, ADR-0016).
 
 ## Required Context
 
