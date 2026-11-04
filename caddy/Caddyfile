@@ -31,6 +31,27 @@
 		}
 	}
 }
+# Stub-zone variants (#1585): the DNS-01 TXT record is written at a delegated alias
+# (dns_challenge_override_domain) instead of _acme-challenge.<HSM_DOMAIN>, for installs
+# whose provider token is scoped to a different zone than the certificate name. Selected
+# by the entrypoint only when HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN is non-empty, so the
+# directive is never emitted with an empty value.
+(tls-dns-cloudflare-override) {
+	tls {
+		issuer acme {
+			dns cloudflare {env.CF_API_TOKEN}
+			dns_challenge_override_domain {$HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN}
+		}
+	}
+}
+(tls-dns-dynv6-override) {
+	tls {
+		issuer acme {
+			dns dynv6 {env.DYNV6_API_TOKEN}
+			dns_challenge_override_domain {$HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN}
+		}
+	}
+}
 (tls-self-signed) {
 	tls internal
 }

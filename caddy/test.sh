@@ -52,6 +52,49 @@ if grep -F "$dynv6_secret" "$tmp/dns-dynv6.json" >/dev/null; then
     exit 1
 fi
 
+# The stub-zone override (#1585): a non-empty HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN makes the
+# entrypoint select the -override snippet variant, which points the DNS-01 challenge at the
+# delegated alias instead of _acme-challenge.<HSM_DOMAIN>. Applies to both providers: the
+# directive belongs to the ACME issuer, not to the DNS provider module.
+override_domain='_acme-challenge.hsm.alias.example.dev'
+adapt_ok dns-cloudflare-override -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=cloudflare -e "CF_API_TOKEN=$cloudflare_secret" \
+    -e "HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=$override_domain"
+grep -F '"override_domain":"_acme-challenge.hsm.alias.example.dev"' "$tmp/dns-cloudflare-override.json" >/dev/null
+grep -F '"name":"cloudflare"' "$tmp/dns-cloudflare-override.json" >/dev/null
+if grep -F "$cloudflare_secret" "$tmp/dns-cloudflare-override.json" >/dev/null; then
+    echo 'Cloudflare token leaked into adapted configuration' >&2
+    exit 1
+fi
+
+adapt_ok dns-dynv6-override -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=dynv6 -e "DYNV6_API_TOKEN=$dynv6_secret" \
+    -e "HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=$override_domain"
+grep -F '"override_domain":"_acme-challenge.hsm.alias.example.dev"' "$tmp/dns-dynv6-override.json" >/dev/null
+
+# Without the override set, neither plain DNS adaptation may carry an override domain.
+if grep -F '"override_domain"' "$tmp/dns-cloudflare.json" >/dev/null; then
+    echo 'override domain leaked into the plain cloudflare adaptation' >&2
+    exit 1
+fi
+if grep -F '"override_domain"' "$tmp/dns-dynv6.json" >/dev/null; then
+    echo 'override domain leaked into the plain dynv6 adaptation' >&2
+    exit 1
+fi
+
+# A whitespace-only value means "no override": the plain snippet is selected. Compose always
+# passes the variable through (.env ships it empty), so the unset case never occurs in practice.
+adapt_ok blank-override-is-off -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=cloudflare -e "CF_API_TOKEN=$cloudflare_secret" \
+    -e 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=   '
+cmp "$tmp/blank-override-is-off.json" "$tmp/dns-cloudflare.json"
+
+# The override applies only to letsencrypt-dns: with another certificate mode the value is
+# ignored exactly like a stray provider setting, and startup must not fail.
+adapt_ok override-ignored-off-dns -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -e "HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=$override_domain"
+cmp "$tmp/override-ignored-off-dns.json" "$tmp/self-signed.json"
+
 # The VictoriaLogs log-store stack is retired (#1594, ADR-0015): the bundled Caddyfile
 # carries no log routes at all — no store upstream, no forward_auth session gate — and
 # nothing derived from the leftover VL_UI_* values of an older .env may reach the
@@ -154,6 +197,14 @@ validate_dns_provider provision-cloudflare \
 validate_dns_provider provision-dynv6 \
     -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
     -e HSM_DNS_PROVIDER=dynv6 -e DYNV6_API_TOKEN=offline-test-token
+validate_dns_provider provision-cloudflare-override \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=cloudflare -e CF_API_TOKEN=cfut_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    -e HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.hsm.alias.example.dev
+validate_dns_provider provision-dynv6-override \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=dynv6 -e DYNV6_API_TOKEN=offline-test-token \
+    -e HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.hsm.alias.example.dev
 
 if docker run --rm --network none -e HSM_DOMAIN=hsm.example.com \
     -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare \
@@ -211,6 +262,8 @@ reject missing-provider 'HSM_DNS_PROVIDER is required' -e HSM_DOMAIN=hsm.example
 reject invalid-provider 'HSM_DNS_PROVIDER must be' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=route53
 reject missing-cloudflare-token 'CF_API_TOKEN is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare
 reject missing-dynv6-token 'DYNV6_API_TOKEN is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=dynv6
+reject invalid-override 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN must be a bare DNS name' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare -e CF_API_TOKEN=cfut_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -e 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=_acme-challenge.alias.example.dev:443'
+reject invalid-override-scheme 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN must be a bare DNS name' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare -e CF_API_TOKEN=cfut_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -e 'HSM_DNS_CHALLENGE_OVERRIDE_DOMAIN=https://alias.example.dev'
 reject blank-cloudflare-token 'CF_API_TOKEN is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare -e 'CF_API_TOKEN=   '
 reject missing-custom-files 'custom mode requires readable /certs/cert.pem' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=custom
 reject invalid-domain 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=https://hsm.example.com' -e HSM_CERTIFICATE=self-signed
