@@ -917,6 +917,47 @@
         <member name="P:HSMServer.Mcp.McpFoldersResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
+        <member name="T:HSMServer.Mcp.McpSensorPoliciesResult">
+            <summary>
+            Result of the list_sensor_policies tool — the id discovery half of the
+            policy surface (#1615): without it the update/delete tools were
+            one-shot (an id exists only inside the create response of the session
+            that created it).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorPoliciesResult.Policies">
+            <summary>The sensor's data policies of the served page, ordered by policy id; template-owned ones included, with their template linkage.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorPoliciesResult.TotalFound">
+            <summary>Total data policies on the sensor, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorPoliciesResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorPoliciesResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorPoliciesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the sensor has no policies).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpSensorTtlPoliciesResult">
+            <summary>Result of the list_sensor_ttl_policies tool — the TTL twin of <see cref="T:HSMServer.Mcp.McpSensorPoliciesResult"/> (#1615).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorTtlPoliciesResult.TtlPolicies">
+            <summary>The sensor's TTL (inactivity) policies of the served page, ordered by policy id.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorTtlPoliciesResult.TotalFound">
+            <summary>Total TTL policies on the sensor, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorTtlPoliciesResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorTtlPoliciesResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorTtlPoliciesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the sensor has no TTL policies).</summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpDeletedResult">
             <summary>
             Result of the delete tools — MCP has no 204, so a delete answers an
@@ -965,10 +1006,14 @@
         </member>
         <member name="T:HSMServer.Mcp.PoliciesMcpTools">
             <summary>
-            The six policy write tools of the MCP surface (phase 2 of AI-agent
-            access): data-policy and TTL-policy CRUD on a sensor — thin
-            delegations to <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500), the
-            same engine the REST policy controllers run on.
+            The policy tools of the MCP surface: two list reads — the id
+            discovery half without which the update/delete tools were one-shot
+            (#1615; an id existed only inside the create response of the session
+            that created it) — and the six phase-2 write tools: data-policy and
+            TTL-policy CRUD on a sensor. Thin delegations to the shared services
+            (<see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> for the reads,
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500) for the writes), the
+            same engines the REST policy controllers run on.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorMuteMcpTools">

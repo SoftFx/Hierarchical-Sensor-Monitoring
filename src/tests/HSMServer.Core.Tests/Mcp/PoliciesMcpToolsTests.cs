@@ -72,7 +72,8 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         private PoliciesMcpTools CreateTools() =>
-            new(new PolicyAdministrationService(_cache.Object, _authorization.Object, _users.Object,
+            new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object),
+                new PolicyAdministrationService(_cache.Object, _authorization.Object, _users.Object,
                     _chats.Object, _folders.Object, _schedules.Object, ChangeSetTestHelpers.Recorder()), AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>
@@ -225,6 +226,152 @@ namespace HSMServer.Core.Tests.Mcp
             });
 
             Assert.Equal("00:30:00", envelope.Value.Interval);
+        }
+
+
+        // === The list reads (#1615): the id discovery half of the policy
+        // surface — without it the update/delete tools were one-shot, an id
+        // existing only inside the create response of the session that
+        // created it. The tools pin the DELEGATION (the REAL AlertReadService
+        // over the same mocked cache) and the effective-paging echo; the
+        // read semantics themselves are the service's, pinned by the REST
+        // suites.
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task ListSensorPolicies_ReturnsCreatedIds_WithPagingEcho()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var created = new List<Guid>();
+            for (var i = 0; i < 3; i++)
+                created.Add((await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto())).Value.Id);
+
+            var page1 = CreateTools().ListSensorPolicies(sensor.Id, limit: 2);
+
+            // Ordered by policy id (the service's order), the effective
+            // paging echoed — the agent divides by the limit the server
+            // applied, never the one it asked for.
+            var ordered = created.Order().ToList();
+            Assert.Equal(ordered.Take(2), page1.Policies.Select(p => p.Id));
+            Assert.Equal(3, page1.TotalFound);
+            Assert.Equal(2, page1.Limit);
+            Assert.Equal(1, page1.Page);
+            Assert.Equal(2, page1.TotalPages);
+
+            var page2 = CreateTools().ListSensorPolicies(sensor.Id, limit: 2, page: 2);
+
+            Assert.Equal([ordered.Last()], page2.Policies.Select(p => p.Id));
+            Assert.Equal(2, page2.Page);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ListSensorPolicies_IsTheIdSourceForUpdateAndDelete()
+        {
+            // The #1615 acceptance: the full lifecycle create -> list ->
+            // update -> delete over MCP alone — the listed id is the one the
+            // write tools take, so a policy created in a PREVIOUS session is
+            // reachable too (simulated by a fresh tools instance here).
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto());
+
+            var listed = Assert.Single(CreateTools().ListSensorPolicies(sensor.Id).Policies);
+            var updated = (await CreateTools().UpdateSensorPolicyAsync(sensor.Id, listed.Id, DataDto() with { Icon = "✅" })).Value;
+
+            Assert.Equal(listed.Id, updated.Id);
+            Assert.Equal("✅", updated.Icon);
+
+            var deleted = await CreateTools().DeleteSensorPolicyAsync(sensor.Id, listed.Id);
+
+            Assert.Equal(listed.Id, deleted.Value.Id);
+            Assert.Empty(CreateTools().ListSensorPolicies(sensor.Id).Policies);
+        }
+
+        [Fact]
+        public void ListSensorPolicies_UnknownSensor_IsToolError()
+        {
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().ListSensorPolicies(Guid.NewGuid()));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+        [Fact]
+        public void ListSensorPolicies_InvisibleSensor_SameToolErrorAsUnknown()
+        {
+            // The anti-enumeration rule carried into the list reads: an
+            // invisible sensor and an unknown id answer the SAME text.
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.NotFound);
+
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().ListSensorPolicies(sensor.Id));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ListSensorPolicies_IncludesTemplateOwned_WithTheLinkage()
+        {
+            // The #1615 acceptance: template-owned policies are listed WITH
+            // their linkage — the fields that tell the agent the
+            // isDisabled-only update path (the template's conflict rule)
+            // applies to this policy.
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var created = (await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto())).Value;
+
+            // Make it template-owned the way a template apply does: the
+            // linkage fields on the live model (the write tools never
+            // carry them).
+            var templateId = Guid.NewGuid();
+            var templateAlertId = Guid.NewGuid();
+            sensor.Policies.Single(p => p.Id == created.Id).TemplateId = templateId;
+            sensor.Policies.Single(p => p.Id == created.Id).TemplateAlertId = templateAlertId;
+
+            var listed = Assert.Single(CreateTools().ListSensorPolicies(sensor.Id).Policies);
+
+            Assert.Equal(created.Id, listed.Id);
+            Assert.Equal(templateId, listed.TemplateId);
+            Assert.Equal(templateAlertId, listed.TemplateAlertId);
+        }
+
+        [Fact]
+        public void ListSensorTtlPolicies_UnknownSensor_IsToolError()
+        {
+            // The data half's not-found pin, on the TTL twin — the same
+            // ResolveSensor path, but pinned where a future divergence of
+            // the two tools would land.
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().ListSensorTtlPolicies(Guid.NewGuid()));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ListSensorTtlPolicies_ReturnsCreatedIds_WithPagingEcho()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var created = new List<Guid>();
+            for (var i = 0; i < 2; i++)
+            {
+                created.Add((await CreateTools().CreateSensorTtlPolicyAsync(sensor.Id, new TtlPolicyDto
+                {
+                    Interval = "00:30:00",
+                    Notification = new AlertNotificationDto { Template = "mcp ttl" },
+                    Destination = new AlertDestinationDto { Mode = "FromParent" },
+                })).Value.Id);
+            }
+
+            var result = CreateTools().ListSensorTtlPolicies(sensor.Id);
+
+            Assert.Equal(created.Order(), result.TtlPolicies.Select(p => p.Id));
+            Assert.Equal(2, result.TotalFound);
+            Assert.Equal(HsmMcp.DefaultLimit, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(1, result.TotalPages);
         }
 
 

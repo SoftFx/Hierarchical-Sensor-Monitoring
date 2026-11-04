@@ -1,7 +1,7 @@
 # Feature: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-11-03 | Canonical: yes
-> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, and access-grouping folders (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules and sensor muting (#1569). REST stays the canonical surface; MCP is an adapter over the same implementations.
+> Owner: server | Last reviewed: 2026-11-04 | Canonical: yes
+> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, access-grouping folders and sensor policies (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules and sensor muting (#1569). REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
 
@@ -34,6 +34,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | 5 | Chat discovery for alert routing: `list_chats` / `get_chat` (the valid `destination.chats` ids) | AI agent |
 | 6 | Folder discovery for template scoping: `list_folders` / `get_folder` (the valid `folderId` values — the access-grouping entity, not the tree's nested products) | AI agent |
 | 7 | The noisy-sensor flow: `mute_sensor` / `unmute_sensor` after a diagnosis | AI agent |
+| 8 | The policy lifecycle: `list_sensor_policies` / `list_sensor_ttl_policies` → the matching `update_*` / `delete_*` tool (#1615) | AI agent |
 
 ### The read-analysis scenario (#1391 acceptance)
 
@@ -52,6 +53,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 2. `list_alert_schedules` → an existing night window, or `create_alert_schedule` (admin owner; the id is server-generated).
 3. `create_sensor_policy` on S with `destination.chats: [C]` and the `scheduleId` — 422-class tool errors flatten field-keyed ("destination: Chat ... is not available ..."), so the agent self-corrects.
 4. For many sensors at once: `list_folders` → `create_alert_template` with path patterns (folder-scoped, applies tree-wide).
+5. To rework or remove an existing policy later: `list_sensor_policies(S)` / `list_sensor_ttl_policies(S)` — the listed ids are the handles `update_*` / `delete_*` take, so policies created earlier (via REST, the Web UI, a template apply or a previous session) stay reachable (#1615 — before the list tools an id existed only inside the create response of the session that created it, making the write tools one-shot).
 
 ### The noisy-sensor scenario (#1569 acceptance)
 
@@ -77,6 +79,8 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `get_chat(chatId)` | `ChatsMcpTools.GetChat` | `ChatDto` verbatim — unknown and invisible ids answer the same error text |
 | `list_folders(limit?, page?)` | `FoldersMcpTools.ListFolders` | `{folders: FolderDto[], totalFound, limit, page, totalPages}` — the folderId source for template writes; owner-sight filter like the templates list (empty result for an unsighted owner, no caller-wide gate); the two-tier body of `FolderDto` applies (products filtered to the caller's product sight; chats/default-chats/retention detail null unless the owner is an admin or the folder's manager) |
 | `get_folder(folderId)` | `FoldersMcpTools.GetFolder` | `FolderDto` verbatim — sight-filtered products; chats, default-chats routing and retention defaults answer only an admin or the folder's manager (null otherwise); unknown and invisible ids answer the same error |
+| `list_sensor_policies(sensorId, limit?, page?)` | `PoliciesMcpTools.ListSensorPolicies` | `{policies: PolicyDto[], totalFound, limit, page, totalPages}` — the sensor's data policies ordered by policy id, template-owned included with their template linkage; the id source for `update_sensor_policy`/`delete_sensor_policy` (#1615: without it the write tools were one-shot — an id existed only inside the create response of the session that created it); reads through `AlertReadService` like the alert tools, unknown and invisible sensor ids answer the same tool error; the effective-paging echo as on every list tool |
+| `list_sensor_ttl_policies(sensorId, limit?, page?)` | `PoliciesMcpTools.ListSensorTtlPolicies` | `{ttlPolicies: TtlPolicyDto[], totalFound, limit, page, totalPages}` — the TTL twin: the id source for `update_sensor_ttl_policy`/`delete_sensor_ttl_policy` |
 | `create_sensor_policy(sensorId, policy)` | `PoliciesMcpTools.CreateSensorPolicyAsync` | `McpWriteResult` envelope (#1605): `value` = `PolicyDto` echo of the STORED policy (server id) after an applied write, `preview` = `WritePreviewDto` after `dryRun` — exactly one arm per call (the null arm is absent, WhenWritingNull); one atomic full-list sensor update; 422-class tool errors flatten field-keyed |
 | `update_sensor_policy(sensorId, policyId, policy)` / `delete_sensor_policy(sensorId, policyId)` | `PoliciesMcpTools` | The same envelope: full replace at item granularity (template-owned policies: isDisabled only, else a conflict error) / `value` = `McpDeletedResult {id}` |
 | `create_/update_/delete_sensor_ttl_policy` | `PoliciesMcpTools` | The TTL twins (`value` = `TtlPolicyDto` / `McpDeletedResult`) — `interval` (TimeSpan string) or `inherit: true`, never both |
@@ -97,7 +101,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — a thin rendering of `AlertReadService` (#1393) |
 | `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The two chat tools — a thin rendering of `ChatsReadService` (the #1393 pattern) |
 | `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |
-| `src/server/HSMServer/Mcp/PoliciesMcpTools.cs` | The six policy write tools — delegations to `PolicyAdministrationService` |
+| `src/server/HSMServer/Mcp/PoliciesMcpTools.cs` | The policy tools: the two list reads over `AlertReadService` (#1615, the id discovery half of the surface) and the six write tools — delegations to `PolicyAdministrationService` |
 | `src/server/HSMServer/Mcp/SensorMuteMcpTools.cs` | The two sensor-mute write tools (#1569) — delegations to `SensorMuteAdministrationService` |
 | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorMuteAdministrationService.cs` | The sensor-mute write engine shared with the REST `SensorMuteApiController` (#1569) |
 | `src/server/HSMServer/Mcp/McpToolWriteErrors.cs` | `PolicyWriteResult` -> tool error text, the same strings the REST arm produces (conflict detail pointers included) |
@@ -129,10 +133,12 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                        │     (owner-sight folder filter, as REST)
                        └── PoliciesMcpTools / SensorMuteMcpTools → PolicyAdministrationService /
                              SensorMuteAdministrationService → ITreeValuesCache
-                             (the write engines, as REST; errors → McpException)
+                             (the write engines, as REST; errors → McpException);
+                             PoliciesMcpTools' list reads go through AlertReadService
+                             (the sensor-boundary sight, as REST)
 ```
 
-The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service (`CancellationToken` parameters, same abort semantics as REST `RequestAborted`).
+The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service where it takes a `CancellationToken` (same abort semantics as REST `RequestAborted`); the policy lists (#1615) are synchronous snapshots over the live model and take no token — like their REST twins.
 
 ## Storage / Persistence
 
