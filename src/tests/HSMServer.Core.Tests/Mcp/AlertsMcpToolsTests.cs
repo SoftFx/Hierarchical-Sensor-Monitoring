@@ -483,6 +483,18 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
         [Fact]
+        public async System.Threading.Tasks.Task UpdateAlertTemplate_UnknownId_IsTheNotFoundError_NothingCreated()
+        {
+            // #1609: the update tool is NOT an upsert — an unknown id answers
+            // the same not-found text as the reads, and no template appears.
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                () => CreateTools().UpdateAlertTemplateAsync(Guid.NewGuid(), TemplateDto($"ghost-{Guid.NewGuid():N}")));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+        [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_DryRun_ReturnsThePreviewEnvelope_NothingApplied()
         {
             // #1605's envelope union, pinned on the dry-run arm: validation

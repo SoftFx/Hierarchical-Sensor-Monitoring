@@ -113,8 +113,9 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Update a schedule (upsert semantics at a known id); the response echoes
-        /// the stored schedule. The id never travels in the body — the route owns it.
+        /// Update an EXISTING schedule (an unknown id answers 404; nothing is created —
+        /// there is no upsert); the response echoes the stored schedule.
+        /// The id never travels in the body — the route owns it.
         /// </summary>
         /// <param name="id">Schedule id.</param>
         /// <remarks>Requires a read-write token and an ADMIN owner (the Global boundary is admin-only in the evaluator).</remarks>

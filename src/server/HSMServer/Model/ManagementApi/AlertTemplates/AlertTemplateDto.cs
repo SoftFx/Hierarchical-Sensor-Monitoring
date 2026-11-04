@@ -217,10 +217,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
         /// Condition-property availability by sensor type — exhaustive, negatives included:
         /// on the policy surface a property the type does not offer answers 422. The template
-        /// surface checks nothing against this table: only some non-offered pairs are rejected
-        /// with a template-apply warning, the rest are stored silently and fail at every
-        /// evaluation (the bar statistics on Integer, Double and Rate sensors, and Length,
-        /// Count or OriginalSize on a type that does not offer them).
+        /// write enforces this table, and more: it reconstructs every policy with the
+        /// template's sensor type (an AnyType template against a Boolean stand-in, so only
+        /// the common set below passes its write), and a property the type does not offer,
+        /// or one whose typed executor the domain cannot build (Enum's EmaValue), fails the
+        /// whole write with a parse error naming the reason (Count on a Double template
+        /// answers 'The template could not be parsed: Not supported property Count for
+        /// DoublePolicy'). Nothing non-offered is stored by a write; a policy that does
+        /// reach sensors can still be rejected per sensor at apply time, and those
+        /// rejections ride the response's `warnings` instead.
         /// every type — Status, Comment, NewSensorData
         /// Boolean — nothing beyond the common set (no Value)
         /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
