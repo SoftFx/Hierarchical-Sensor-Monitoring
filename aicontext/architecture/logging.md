@@ -1,6 +1,6 @@
 # Logging And Diagnostics
 
-> Owner: shared | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-04 | Canonical: yes
 
 ## Goals
 
@@ -14,6 +14,11 @@ logs.
 - `Info`: lifecycle events, startup/shutdown, important successful operations.
 - `Warn`: expected refusals, transient failures, degraded but recoverable states.
 - `Error`: unexpected failures, lost work, failed delivery, storage exceptions.
+  An expected client refusal the caller already receives (e.g. an MCP tool's
+  validation/not-found `McpException`) is not an operator error: the MCP SDK
+  logs it at ERROR, and `src/server/HSMServer/nlog.config` filters exactly that
+  entry (the `McpException` from `ModelContextProtocol.Server.McpServer`) out
+  of `HSM-error-log.txt` while it still lands in `HSM-all-log.txt` (#1613).
 
 ## Required Context
 

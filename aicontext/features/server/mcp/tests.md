@@ -87,6 +87,8 @@ The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuth
 
 `ApiJsonErrorContractTests` (`src/tests/HSMServer.Core.Tests/Middleware/`) additionally pins that an exception escaping the handler on `/mcp` answers the JSON-RPC error envelope (code -32603, `data.traceId`, `application/json` content type) — never the Razor error page (#1392 review, rounds 3-4).
 
+`NlogConfigTests.ExpectedMcpToolFailuresStayOutOfTheErrorLog` (the shared nlog.config guard suite at the test project root) pins the #1613 logging contract end-to-end: the production config loads, each target's FileTarget is swapped for an in-memory capture, and events logged through the REAL rules show that the SDK's ERROR entry for an MCP tool `McpException` (logger `ModelContextProtocol.Server.McpServer`) reaches `allfile` but NOT `errorfile`, while a genuinely unexpected exception from the same logger and an `McpException` from any other logger still reach `errorfile`.
+
 ## Regression — REST suites are the shared net
 
 The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiControllerTests`, `ProductsApiControllerTests`) construct the REAL `SensorTreeReadService` around the same mocks — they pin the service behavior that both transports now share (the #1391 extraction was behavior-neutral: all 47 controller tests + 10 swagger pins green unchanged).
