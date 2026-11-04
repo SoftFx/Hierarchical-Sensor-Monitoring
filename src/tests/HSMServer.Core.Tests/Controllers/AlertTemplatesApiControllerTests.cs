@@ -763,6 +763,66 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Create_UnsupportedConditionProperty_SurfacesTheDomainMessage()
+        {
+            // The #1609 repro (case C20): Count is a bar-sensor property, Double
+            // does not offer it — the whole write fails with the parse error the
+            // property-matrix header of the MCP/REST schemas now quotes verbatim.
+            var dto = BuildDto(sensorType: (byte)SensorType.Double);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "1" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = (byte)PolicyProperty.Count,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            // The FULL string the property-matrix header quotes — prefix
+            // included, so the documented quote cannot drift from the write.
+            Assert.Contains("The template could not be parsed: Not supported property Count for DoublePolicy",
+                Assert.IsType<string[]>(details["policies"]).Single());
+            Assert.Empty(_store);
+        }
+
+        [Theory]
+        [InlineData(AlertTemplateModel.AnyType, (byte)PolicyProperty.Value)]
+        [InlineData(AlertTemplateModel.AnyType, (byte)PolicyProperty.EmaValue)]
+        [InlineData(AlertTemplateModel.AnyType, (byte)PolicyProperty.Min)]
+        [InlineData(AlertTemplateModel.AnyType, (byte)PolicyProperty.Length)]
+        [InlineData((byte)SensorType.Boolean, (byte)PolicyProperty.Value)]
+        [InlineData((byte)SensorType.Enum, (byte)PolicyProperty.EmaValue)]
+        public async Task Create_NonOfferedProperty_FailsTheWrite_NothingStored(byte sensorType, byte property)
+        {
+            // The template write enforces the property matrix through the domain
+            // reconstruction (#1609): an AnyType template is rebuilt against a
+            // Boolean stand-in (only the common set passes), and Enum's EmaValue —
+            // offered by the 422 rule table — has no typed executor and fails the
+            // write the same way. Nothing is stored silently.
+            var dto = BuildDto(sensorType: sensorType);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "42" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = property,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
         public async Task Create_MismatchedTtlListLengths_Is400()
         {
             var dto = BuildDto();

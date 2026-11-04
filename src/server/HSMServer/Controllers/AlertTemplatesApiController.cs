@@ -124,8 +124,9 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Update a template (upsert semantics). Moving it to another folder requires
-        /// the owner's write access on BOTH folders; the response echoes the stored template.
+        /// Update an EXISTING template (an unknown id answers 404; nothing is created —
+        /// there is no upsert). Moving it to another folder requires the owner's write
+        /// access on BOTH folders; the response echoes the stored template.
         /// </summary>
         /// <param name="id">Template id; must equal the body id when the body carries one.</param>
         /// <remarks>Like create, the 200 body carries `warnings` when some matching sensors REJECTED individual policies at apply time (the save persisted; each warned alert was not created on its sensor).</remarks>
