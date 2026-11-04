@@ -35,7 +35,7 @@ Epic #1347 gives non-interactive clients (AI agents, scripts, resident services)
 | 1 | List templates (paginated, visible folders only) | API client (bearer token) |
 | 2 | Get one template by id | API client |
 | 3 | Create template (server id, 201 + Location) | API client |
-| 4 | Update template (upsert semantics, optional folder move) | API client |
+| 4 | Update template (existing only — an unknown id is 404, nothing is created; optional folder move) | API client |
 | 5 | Delete template (204; 409 when per-sensor policy removal fails) | API client |
 | 6 | List schedules (paginated; caller-wide alerts:read gate; sensors filtered per visibility) | API client |
 | 7 | Get one schedule by id (same gate) | API client |
@@ -83,7 +83,7 @@ The acceptance bar of the epic: an AI agent that starts from NOTHING but the Ope
 | `GET /api/v1/alertSchedules?page&pageSize` | `AlertSchedulesApiController.GetSchedules` | Read-only; 200 page; same envelope and clamps as templates; order name-then-id; 403 without an accessible `alerts:read` grant |
 | `GET /api/v1/alertSchedules/{id}` | `AlertSchedulesApiController.GetSchedule` | 200 DTO / 404 (entitled caller) / 403 (no accessible `alerts:read` grant) |
 | `POST /api/v1/alertSchedules` | `AlertSchedulesApiController.CreateSchedule` | 201 + Location + stored DTO (server id); 422 field-keyed (`name`/`timezone`/`schedule`); 403 read-only token; 404 non-admin owner |
-| `PUT /api/v1/alertSchedules/{id}` | `AlertSchedulesApiController.UpdateSchedule` | 200 + stored DTO (upsert at a known id, route-owned id); same error model |
+| `PUT /api/v1/alertSchedules/{id}` | `AlertSchedulesApiController.UpdateSchedule` | 200 + stored DTO (existing only — an unknown id is 404; route-owned id); same error model |
 | `DELETE /api/v1/alertSchedules/{id}` | `AlertSchedulesApiController.DeleteSchedule` | 204; 409 on an incomplete policy detach (schedule survives for the retry); 404 unknown id |
 | `GET /api/v1/products?page&pageSize` | `ProductsApiController.GetProducts` | 200 `ApiPageDto<ProductDto>` of visible ROOT products, ordered name-then-id; same envelope/clamps as templates |
 | `GET /api/v1/nodes/{id}?foldersPage&foldersPageSize` | `NodesApiController.GetNode` | 200 `NodeDto` (product or folder; direct sensors capped at 200 with `totalSensors`; direct folders PAGINATED — default page size 200, `totalFolders`/`foldersTotalPages` envelope fields — the only addressable surface for subfolder ids) / 400 (binding) / 403 (read-unreachable, defensive — annotated like every item endpoint) / 404 (unknown, invisible, or a sensor id — sensors are not addressable here) |

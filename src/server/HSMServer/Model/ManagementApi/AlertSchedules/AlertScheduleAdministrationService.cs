@@ -101,8 +101,9 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             Task.FromResult(Write(user, id: null, dto, write, access));
 
         /// <summary>
-        /// Update a schedule (upsert semantics at a known id); the response
-        /// echoes the stored schedule.
+        /// Update an EXISTING schedule (an unknown id answers not-found; the
+        /// provider's Save underneath is an upsert by id, but the write path
+        /// gates on existence first); the response echoes the stored schedule.
         /// </summary>
         public Task<PolicyWriteResult<AlertScheduleDto>> UpdateScheduleAsync(Guid id, ClaimsPrincipal user,
             AlertScheduleUpsertDto dto, ChangeSetWriteOptions write = null,

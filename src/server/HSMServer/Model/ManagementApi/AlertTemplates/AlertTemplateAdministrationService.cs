@@ -204,9 +204,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
 
         /// <summary>
-        /// Update a template (upsert semantics). Moving it to another folder
-        /// requires the owner's write access on BOTH folders; the result
-        /// echoes the STORED template.
+        /// Update an EXISTING template (an unknown id answers not-found; the
+        /// storage-level Add underneath is upsert-by-id, but the write path
+        /// never reaches it with an unknown id — see the PUT/DELETE race note
+        /// in the management-api docs). Moving it to another folder requires
+        /// the owner's write access on BOTH folders; the result echoes the
+        /// STORED template.
         /// </summary>
         public async Task<PolicyWriteResult<AlertTemplateDto>> UpdateTemplateAsync(Guid id, ClaimsPrincipal user,
             AlertTemplateDto dto, ChangeSetWriteOptions write = null, ChangeSets.IChangeSetAccess access = null)

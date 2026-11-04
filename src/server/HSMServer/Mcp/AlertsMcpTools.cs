@@ -116,7 +116,7 @@ namespace HSMServer.Mcp
         }
 
         [McpServerTool(Name = "update_alert_template", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Updates an alert template (upsert semantics; the route id is the identity). Moving it to another folder requires the owner's write access on BOTH folders. Re-applies policies to matching sensors; the response's `value` echoes the stored template, carrying `warnings` when some matching sensors rejected individual policies at apply time (the save persisted; each warned alert was not created on its sensor) or when a path pattern matched NO sensors (a dead pattern; check it against the `paths` matching rules).")]
+        [Description("Updates an EXISTING alert template; an unknown id answers not-found — nothing is created (the route id is the identity; there is no upsert). Moving it to another folder requires the owner's write access on BOTH folders. Re-applies policies to matching sensors; the response's `value` echoes the stored template, carrying `warnings` when some matching sensors rejected individual policies at apply time (the save persisted; each warned alert was not created on its sensor) or when a path pattern matched NO sensors (a dead pattern; check it against the `paths` matching rules).")]
         public async System.Threading.Tasks.Task<McpWriteResult<AlertTemplateDto>> UpdateAlertTemplateAsync(
             [Description("Template id.")] Guid templateId,
             [Description("The new template content; the body id, when carried, must equal templateId.")] AlertTemplateDto template,
@@ -163,7 +163,7 @@ namespace HSMServer.Mcp
         }
 
         [McpServerTool(Name = "update_alert_schedule", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Updates an alert schedule (upsert at a known id); the response's `value` echoes the stored schedule. Requires an ADMIN owner and a read-write token.")]
+        [Description("Updates an EXISTING alert schedule; an unknown id answers not-found — nothing is created. The response's `value` echoes the stored schedule. Requires an ADMIN owner and a read-write token.")]
         public async System.Threading.Tasks.Task<McpWriteResult<AlertScheduleDto>> UpdateAlertScheduleAsync(
             [Description("Schedule id.")] Guid scheduleId,
             [Description("The new schedule content — name, timezone, schedule (YAML).")] AlertScheduleUpsertDto schedule,
