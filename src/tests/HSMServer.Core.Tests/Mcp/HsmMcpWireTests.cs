@@ -117,16 +117,40 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Core.Model.ProductModel _productA =
             new(EntitiesFactory.BuildProductEntity(name: "alpha") with { Id = Guid.NewGuid().ToString() });
 
+        // #1605: a live sensor for the write-tool wire calls — the cache mock
+        // mirrors the PoliciesMcpToolsTests harness (UpdateSensorAsync
+        // dispatches onto the live model, so a TTL write round-trips).
+        private readonly Core.Model.BaseSensorModel _sensorA =
+            Infrastructure.SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity(
+                name: "cpu", type: (byte)HSMCommon.Model.SensorType.Integer) with
+            {
+                Id = Guid.NewGuid().ToString(),
+            });
+
 
         public HsmMcpWireTests()
         {
+            _productA.AddSensor(_sensorA);
+
             _cache.Setup(c => c.GetProducts()).Returns(new List<Core.Model.ProductModel> { _productA });
-            _cache.Setup(c => c.GetSensors()).Returns(new List<Core.Model.BaseSensorModel>());
+            _cache.Setup(c => c.GetSensors()).Returns(new List<Core.Model.BaseSensorModel> { _sensorA });
             _cache.Setup(c => c.GetAlertTemplateModels()).Returns(new List<Core.Model.AlertTemplateModel>());
             _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
                 .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>()))
                 .Returns(new List<Core.Model.BaseSensorModel>());
+
+            // The write-call half of the #1605 wire pin: the TTL policy tools
+            // resolve the sensor and apply through the live model.
+            _cache.Setup(c => c.GetSensor(It.IsAny<Guid>()))
+                .Returns((Guid id) => id == _sensorA.Id ? _sensorA : null);
+            _cache.Setup(c => c.UpdateSensorAsync(It.IsAny<Core.Cache.UpdateEntities.SensorUpdate>()))
+                .ReturnsAsync((Core.Cache.UpdateEntities.SensorUpdate update) =>
+                {
+                    _sensorA.TryUpdate(update, out _);
+
+                    return HSMCommon.TaskResult.TaskResult.Ok;
+                });
 
             _schedules.Setup(s => s.GetAllSchedules())
                 .Returns(new List<Core.Model.Policies.AlertSchedule>());
@@ -138,6 +162,8 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(new List<HSMServer.Model.Folders.FolderModel>());
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
             _authorization.Setup(a => a.IsVisible(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
@@ -282,13 +308,18 @@ namespace HSMServer.Core.Tests.Mcp
 
             // #1565, output side: the write echo's warnings field names the
             // zero-match diagnostic class, and the warning entry's sensor field
-            // documents carrying the PATTERN itself when nothing matched.
-            // #1570: create_alert_template's output is a union now, so the
-            // warning-entry docs ride the tool description instead of the
-            // (former) AlertTemplateDto output schema.
+            // documents carrying the PATTERN itself when nothing matched. The
+            // docs ride BOTH the tool description and — since the #1605
+            // envelope put the DTO back into the output schema — the schema's
+            // `value.warnings` arm.
             var templateDescription = tools["create_alert_template"].Description ?? string.Empty;
             Assert.Contains("path pattern matched NO sensors", templateDescription);
             Assert.Contains("warnings", templateDescription);
+
+            var templateOutput = string.Join("\n",
+                AllDescriptions(tools["create_alert_template"].OutputSchema!.Value));
+            Assert.Contains("path pattern that matched no sensors", templateOutput);
+            Assert.Contains("The stored resource after an applied write", templateOutput);
 
             // #1569: the mute surface — the period semantics (indefinite vs
             // auto-unmute) and the Blocked refusal travel on the TOOL
@@ -329,21 +360,17 @@ namespace HSMServer.Core.Tests.Mcp
                 .ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
 
             // Every tool opts in, and every return type is a non-nullable
-            // object, so each output schema is a plain type:"object" document
+            // object (the write tools answer the McpWriteResult envelope,
+            // #1605), so each output schema is a plain type:"object" document
             // — no legacy-wire {"result": ...} wrapping for older clients to
             // trip over, whatever protocol version they negotiate.
             foreach (var name in SpecTools)
             {
                 var schema = tools[name].OutputSchema;
                 Assert.True(schema.HasValue, $"{name} carries no output schema");
-
-                // #1570: the journaled WRITE tools return a union (the DTO
-                // echo plus changeSetId, or a dry-run preview), so their
-                // schema is permissively `true`; everything else stays a
-                // plain type:"object" document.
-                Assert.True(schema.Value.ValueKind == JsonValueKind.True ||
+                Assert.True(schema.Value.ValueKind == JsonValueKind.Object &&
                             schema.Value.GetProperty("type").GetString() == "object",
-                    $"{name} carries neither an object nor a permissive schema");
+                    $"{name} carries no plain object schema");
             }
 
             string Descriptions(ModelContextProtocol.Protocol.Tool tool) =>
@@ -417,6 +444,120 @@ namespace HSMServer.Core.Tests.Mcp
                 foreach (var item in schema.EnumerateArray())
                     foreach (var description in AllDescriptions(item))
                         yield return description;
+            }
+        }
+
+
+        [Fact]
+        public async Task Wire_LegacyProtocol_ToolSchemasAndWriteResultsStayUnwrapped()
+        {
+            // #1605, the Claude Code reproduction: a client that negotiates a
+            // pre-2026-07-28 protocol version (Claude Code 2.1.316 negotiates
+            // one) gets the SDK's legacy-wire transform on tools/list — a
+            // non-object natural schema is wrapped into
+            // {"type":"object","properties":{"result":<schema>}}. The write
+            // tools' former Task<object> exported the permissive `true`, so
+            // the wrapped document carried "result": true — valid JSON
+            // Schema, but Claude Code accepts only OBJECT sub-schemas and
+            // discarded the whole tools/list (0 tools, silently). With the
+            // concrete McpWriteResult envelopes every natural schema is
+            // object-shaped, so the transform passes them through untouched:
+            // pin that EVERY tool's wire schema — root and each property
+            // schema under it — is a JSON object on the legacy protocol too,
+            // and that a write tools/call renders the envelope at the ROOT of
+            // structuredContent (the former object-typed results arrived as
+            // {"result": {...}} there, unlike the read tools).
+            using var host = BuildHost();
+            host.Start();
+
+            var client = await ConnectAsync(host, "2025-06-18");
+            await using (client)
+            {
+                // The pin is only meaningful if the negotiation actually
+                // landed on the legacy version — a server counter-offer would
+                // otherwise silently turn this into the modern-path check.
+                Assert.Equal("2025-06-18", client.NegotiatedProtocolVersion);
+
+                var tools = await client.ListToolsAsync();
+
+                Assert.Equal(30, tools.Count);
+
+                foreach (var tool in tools)
+                {
+                    var schema = tool.ProtocolTool.OutputSchema;
+
+                    Assert.True(schema.HasValue, tool.ProtocolTool.Name);
+                    Assert.True(schema.Value.ValueKind == JsonValueKind.Object &&
+                                schema.Value.TryGetProperty("type", out var type) &&
+                                type.GetString() == "object", tool.ProtocolTool.Name);
+
+                    if (schema.Value.TryGetProperty("properties", out var properties))
+                    {
+                        foreach (var property in properties.EnumerateObject())
+                        {
+                            Assert.True(property.Value.ValueKind == JsonValueKind.Object,
+                                $"{tool.ProtocolTool.Name}.{property.Name}");
+                        }
+                    }
+                }
+
+                // The result half of the bug: an applied write answers the
+                // envelope DIRECTLY — `value` at the root, no `result`
+                // wrapper, exactly like the read tools' DTOs.
+                var applied = await client.CallToolAsync("create_sensor_ttl_policy",
+                    new Dictionary<string, object>
+                    {
+                        ["sensorId"] = _sensorA.Id,
+                        ["policy"] = new Dictionary<string, object>
+                        {
+                            ["interval"] = "00:30:00",
+                            ["notification"] = new Dictionary<string, object> { ["template"] = "wire [$product]$path" },
+                            ["destination"] = new Dictionary<string, object> { ["mode"] = "FromParent" },
+                        },
+                    });
+
+                Assert.NotEqual(true, applied.IsError);
+                Assert.True(applied.StructuredContent.HasValue);
+
+                var appliedContent = applied.StructuredContent.Value;
+
+                Assert.False(appliedContent.TryGetProperty("result", out _), "the legacy {\"result\": …} wrapper is back");
+                Assert.True(appliedContent.TryGetProperty("value", out var value));
+                Assert.Equal("00:30:00", value.GetProperty("interval").GetString());
+                Assert.False(appliedContent.TryGetProperty("preview", out _));
+
+                // And the dry-run arm of the same envelope: `preview` at the
+                // root, `value` absent, nothing applied to the sensor.
+                var preview = await client.CallToolAsync("create_sensor_ttl_policy",
+                    new Dictionary<string, object>
+                    {
+                        ["sensorId"] = _sensorA.Id,
+                        ["dryRun"] = true,
+                        ["policy"] = new Dictionary<string, object>
+                        {
+                            ["interval"] = "01:00:00",
+                            ["notification"] = new Dictionary<string, object> { ["template"] = "wire [$product]$path" },
+                            ["destination"] = new Dictionary<string, object> { ["mode"] = "FromParent" },
+                        },
+                    });
+
+                Assert.NotEqual(true, preview.IsError);
+                Assert.True(preview.StructuredContent.HasValue);
+
+                var previewContent = preview.StructuredContent.Value;
+
+                Assert.False(previewContent.TryGetProperty("result", out _), "the legacy {\"result\": …} wrapper is back");
+                Assert.False(previewContent.TryGetProperty("value", out _));
+                Assert.True(previewContent.TryGetProperty("preview", out var previewArm));
+                Assert.True(previewArm.GetProperty("dryRun").GetBoolean());
+
+                // Exactly one sensor update rode the whole scenario — the
+                // APPLIED write's; the dry run persisted nothing. (The
+                // nothing-applied semantics beyond this are the unit suites'
+                // pin — PoliciesMcpToolsTests, against the same harness; this
+                // wire fact owns the transport shape.)
+                _cache.Verify(c => c.UpdateSensorAsync(It.IsAny<Core.Cache.UpdateEntities.SensorUpdate>()),
+                    Times.Once);
             }
         }
 
@@ -528,7 +669,7 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
-        private async Task<McpClient> ConnectAsync(IHost host)
+        private async Task<McpClient> ConnectAsync(IHost host, string protocolVersion = null)
         {
             var httpClient = host.GetTestClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _credential);
@@ -539,7 +680,8 @@ namespace HSMServer.Core.Tests.Mcp
                 TransportMode = HttpTransportMode.StreamableHttp,
             }, httpClient, NullLoggerFactory.Instance, ownsHttpClient: false);
 
-            return await McpClient.CreateAsync(transport);
+            return await McpClient.CreateAsync(transport,
+                protocolVersion is null ? null : new McpClientOptions { ProtocolVersion = protocolVersion });
         }
 
 

@@ -15,9 +15,10 @@ namespace HSMServer.Mcp
     // Tool result envelopes of the MCP surface (#1391). Item reads return the
     // REST DTOs verbatim (SensorDto, NodeDto, SensorHistoryDto, AlertTemplateDto,
     // AlertScheduleDto) — the same types and camelCase keys on both transports;
-    // only the list tools carry MCP-specific envelopes, and only find_sensors
-    // uses a compact item shape (the full DTO embeds the current value, too
-    // heavy for a list).
+    // the list tools and the twelve write tools carry MCP-specific envelopes
+    // (McpWriteResult below — the MCP-only price of one static output schema
+    // per tool, #1605), and only find_sensors uses a compact item shape (the
+    // full DTO embeds the current value, too heavy for a list).
     //
     // Wire casing is camelCase on both transports: REST through MVC's JSON
     // options, MCP through the SDK's McpJsonUtilities.DefaultOptions (Web
@@ -241,6 +242,36 @@ namespace HSMServer.Mcp
         [Description("Id of the deleted resource.")]
         public Guid Id { get; init; }
 
+    }
+
+
+    /// <summary>
+    /// Result envelope of the twelve journaled write tools (#1605): exactly
+    /// one arm travels per call — `value` after an applied write (the stored
+    /// resource, the same DTO the REST 200/201 body carries) or `preview`
+    /// after a dry run (validation ran, nothing applied). The null arm is
+    /// ABSENT on the wire (the SDK's WhenWritingNull, see the casing note
+    /// above), so an agent discriminates the arms by the key that appears.
+    ///
+    /// The envelope exists so every write tool returns a CONCRETE closed
+    /// type: the pre-#1605 object-typed unions exported as the permissive
+    /// `true` schema, which the SDK's legacy-wire compatibility wrapped into
+    /// `{"type":"object","properties":{"result":true},"required":["result"]}`
+    /// — valid JSON Schema, but Claude Code accepts only object sub-schemas
+    /// there and discards the whole tools/list (0 tools, silently
+    /// "connected"). The REST arm keeps answering the bare DTO/preview: the
+    /// envelope is the MCP-only price of one static output schema per tool.
+    /// </summary>
+    [Description("Result of a write tool: `value` carries the stored resource after an applied write, `preview` the affected-entities report after a dry run — exactly one of the two per call.")]
+    public sealed record McpWriteResult<T>
+    {
+        /// <summary>The stored resource after an applied write; null (absent) after a dry run.</summary>
+        [Description("The stored resource after an applied write — the same DTO the REST 200/201 body carries. Absent after a dry run.")]
+        public T Value { get; init; }
+
+        /// <summary>The dry-run preview (validation ran, nothing applied); null (absent) after an applied write.</summary>
+        [Description("The dry-run preview: validation ran, nothing was applied — the kind/operation of the would-be write and every entity it would touch. Absent after an applied write.")]
+        public WritePreviewDto Preview { get; init; }
     }
 
 

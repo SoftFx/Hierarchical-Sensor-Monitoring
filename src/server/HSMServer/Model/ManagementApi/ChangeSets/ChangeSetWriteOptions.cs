@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Model.ManagementApi.ChangeSets
@@ -26,32 +27,49 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     /// sensor the fan-out would touch (apply or prune); for policy and
     /// schedule writes it names the resolved target nodes.
     /// </summary>
+    // #1605: the preview records ride the MCP write tools' OUTPUT schemas
+    // (inside the McpWriteResult envelope), so they carry [Description]s on
+    // every member like every other MCP-bound DTO (#1553).
     public sealed record WritePreviewDto
     {
+        /// <summary>Always true — this is a preview, nothing was applied.</summary>
+        [Description("Always true — this is a preview, nothing was applied.")]
         public bool DryRun { get; init; }
 
         /// <summary>camelCase entry kind, e.g. "sensorDataPolicies", "alertTemplate".</summary>
+        [Description("camelCase entry kind, e.g. \"sensorDataPolicies\", \"alertTemplate\".")]
         public string Kind { get; init; }
 
         /// <summary>camelCase operation: "create", "update" or "delete".</summary>
+        [Description("camelCase operation of the would-be write: \"create\", \"update\" or \"delete\".")]
         public string Operation { get; init; }
 
+        /// <summary>Id of the primary entity of the would-be write.</summary>
+        [Description("Id of the primary entity of the would-be write.")]
         public string EntityId { get; init; }
 
         /// <summary>Display path of the primary entity at preview time.</summary>
+        [Description("Display path of the primary entity at preview time.")]
         public string Path { get; init; }
 
+        /// <summary>Every entity the write would touch, with what it would do there.</summary>
+        [Description("Every entity the write would touch, with what it would do there.")]
         public List<PreviewAffectedEntityDto> Affected { get; init; }
     }
 
 
     public sealed record PreviewAffectedEntityDto
     {
+        /// <summary>Id of the affected entity.</summary>
+        [Description("Id of the affected entity.")]
         public string Id { get; init; }
 
+        /// <summary>Display path of the affected entity.</summary>
+        [Description("Display path of the affected entity.")]
         public string Path { get; init; }
 
         /// <summary>What the write would do there, e.g. "apply", "prune", "replace".</summary>
+        [Description("What the write would do there, e.g. \"apply\", \"prune\", \"replace\".")]
         public string Change { get; init; }
     }
 

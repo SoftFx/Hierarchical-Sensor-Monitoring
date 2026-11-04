@@ -41,90 +41,102 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "create_sensor_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Creates one data policy (alert) on a sensor — conditions, destination chats, notification schedule. The policy id is server-generated; the response echoes the STORED policy. The write merges into one atomic full-list sensor update: every other policy of the sensor rides through untouched. Fails with 422-class errors (condition-vs-type, chat availability, schedule references) and 409 for template-owned conflicts.")]
-        public async System.Threading.Tasks.Task<object> CreateSensorPolicyAsync(
+        [Description("Creates one data policy (alert) on a sensor — conditions, destination chats, notification schedule. The policy id is server-generated; the response's `value` echoes the STORED policy. The write merges into one atomic full-list sensor update: every other policy of the sensor rides through untouched. Fails with 422-class errors (condition-vs-type, chat availability, schedule references) and 409 for template-owned conflicts.")]
+        public async System.Threading.Tasks.Task<McpWriteResult<PolicyDto>> CreateSensorPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("The policy content — conditions, destination, notification, icon/status settings. Use list_chats to discover valid destination chat ids.")] PolicyDto policy,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.CreateSensorPolicyAsync(sensorId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value;
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = result.Value };
         }
 
         [McpServerTool(Name = "update_sensor_policy", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Replaces one data policy's content (full replace at item granularity; the id stays). Template-owned policies accept only the isDisabled toggle — anything else fails with a conflict. The response echoes the stored policy.")]
-        public async System.Threading.Tasks.Task<object> UpdateSensorPolicyAsync(
+        [Description("Replaces one data policy's content (full replace at item granularity; the id stays). Template-owned policies accept only the isDisabled toggle — anything else fails with a conflict. The response's `value` echoes the stored policy.")]
+        public async System.Threading.Tasks.Task<McpWriteResult<PolicyDto>> UpdateSensorPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("Policy id to replace.")] Guid policyId,
             [Description("The new policy content.")] PolicyDto policy,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.UpdateSensorPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value;
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = result.Value };
         }
 
         [McpServerTool(Name = "delete_sensor_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
         [Description("Removes one data policy; every other policy of the sensor rides through untouched.")]
-        public async System.Threading.Tasks.Task<object> DeleteSensorPolicyAsync(
+        public async System.Threading.Tasks.Task<McpWriteResult<McpDeletedResult>> DeleteSensorPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("Policy id.")] Guid policyId,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.DeleteSensorPolicyAsync(sensorId, policyId, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : new McpDeletedResult { Id = policyId };
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = new McpDeletedResult { Id = policyId } };
         }
 
 
         [McpServerTool(Name = "create_sensor_ttl_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
         [Description("Creates one TTL (inactivity) policy on a sensor: an explicit interval or inherit:true (the reset-to-parent switch) — never both, never neither.")]
-        public async System.Threading.Tasks.Task<object> CreateSensorTtlPolicyAsync(
+        public async System.Threading.Tasks.Task<McpWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("The TTL policy — `interval` (TimeSpan string) or `inherit: true`.")] TtlPolicyDto policy,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.CreateSensorTtlPolicyAsync(sensorId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value;
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = result.Value };
         }
 
         [McpServerTool(Name = "update_sensor_ttl_policy", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
         [Description("Replaces one TTL policy's content (full replace at item granularity; the id stays).")]
-        public async System.Threading.Tasks.Task<object> UpdateSensorTtlPolicyAsync(
+        public async System.Threading.Tasks.Task<McpWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("TTL policy id to replace.")] Guid policyId,
             [Description("The new TTL policy content.")] TtlPolicyDto policy,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.UpdateSensorTtlPolicyAsync(sensorId, policyId, policy, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : result.Value;
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = result.Value };
         }
 
         [McpServerTool(Name = "delete_sensor_ttl_policy", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
         [Description("Removes one TTL (inactivity) policy; every other policy of the sensor rides through untouched.")]
-        public async System.Threading.Tasks.Task<object> DeleteSensorTtlPolicyAsync(
+        public async System.Threading.Tasks.Task<McpWriteResult<McpDeletedResult>> DeleteSensorTtlPolicyAsync(
             [Description("Sensor id.")] Guid sensorId,
             [Description("TTL policy id.")] Guid policyId,
-            [Description("Validate and report the affected entities WITHOUT applying anything.")] bool dryRun = false)
+            [Description("Validate and report the affected entities WITHOUT applying anything (the answer carries `preview` instead of `value`).")] bool dryRun = false)
         {
             var result = await _writer.DeleteSensorTtlPolicyAsync(sensorId, policyId, User, WriteOptionsOf(dryRun));
 
             McpToolWriteErrors.Unwrap(result);
 
-            return result.IsDryRun ? result.Preview : new McpDeletedResult { Id = policyId };
+            return result.IsDryRun
+                ? new() { Preview = result.Preview }
+                : new() { Value = new McpDeletedResult { Id = policyId } };
         }
 
 
