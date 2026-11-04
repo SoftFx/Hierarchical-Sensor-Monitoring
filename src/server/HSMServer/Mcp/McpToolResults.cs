@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel;
 using HSMServer.Model.ManagementApi.AlertSchedules;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -227,6 +228,63 @@ namespace HSMServer.Mcp
 
         /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         [Description("Total page count at the effective limit (0 when the collection is empty).")]
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>
+    /// Result of the list_sensor_policies tool — the id discovery half of the
+    /// policy surface (#1615): without it the update/delete tools were
+    /// one-shot (an id exists only inside the create response of the session
+    /// that created it).
+    /// </summary>
+    [Description("Result of the list_sensor_policies tool: one page of the sensor's data policies plus the effective paging echo.")]
+    public sealed record McpSensorPoliciesResult
+    {
+        /// <summary>The sensor's data policies of the served page, ordered by policy id; template-owned ones included, with their template linkage.</summary>
+        [Description("The sensor's data policies of the served page, ordered by policy id; template-owned ones included, with their template linkage.")]
+        public List<PolicyDto> Policies { get; init; }
+
+        /// <summary>Total data policies on the sensor, whatever the limit.</summary>
+        [Description("Total data policies on the sensor, whatever the limit.")]
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        [Description("The effective page size (the clamped `limit`).")]
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        [Description("The 1-based page actually served (a page past the end serves the last page).")]
+        public int Page { get; init; }
+
+        /// <summary>Total page count at the effective limit (0 when the sensor has no policies).</summary>
+        [Description("Total page count at the effective limit (0 when the sensor has no policies).")]
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>Result of the list_sensor_ttl_policies tool — the TTL twin of <see cref="McpSensorPoliciesResult"/> (#1615).</summary>
+    [Description("Result of the list_sensor_ttl_policies tool: one page of the sensor's TTL policies plus the effective paging echo.")]
+    public sealed record McpSensorTtlPoliciesResult
+    {
+        /// <summary>The sensor's TTL (inactivity) policies of the served page, ordered by policy id.</summary>
+        [Description("The sensor's TTL (inactivity) policies of the served page, ordered by policy id.")]
+        public List<TtlPolicyDto> TtlPolicies { get; init; }
+
+        /// <summary>Total TTL policies on the sensor, whatever the limit.</summary>
+        [Description("Total TTL policies on the sensor, whatever the limit.")]
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        [Description("The effective page size (the clamped `limit`).")]
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        [Description("The 1-based page actually served (a page past the end serves the last page).")]
+        public int Page { get; init; }
+
+        /// <summary>Total page count at the effective limit (0 when the sensor has no TTL policies).</summary>
+        [Description("Total page count at the effective limit (0 when the sensor has no TTL policies).")]
         public int TotalPages { get; init; }
     }
 

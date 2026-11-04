@@ -76,6 +76,8 @@ namespace HSMServer.Core.Tests.Mcp
             "list_folders",
             "list_journal_records",
             "list_products",
+            "list_sensor_policies",
+            "list_sensor_ttl_policies",
             "mute_sensor",
             "rollback_journal_record",
             "unmute_sensor",
@@ -423,6 +425,13 @@ namespace HSMServer.Core.Tests.Mcp
             // folder, not the tree's nested products).
             var folder = Descriptions(tools["get_folder"]);
             Assert.Contains("NOT a tree node", folder);
+
+            // The policy list reads (#1615): the item docs of the list
+            // envelope reach the wire — the template-linkage note an agent
+            // needs before it touches a template-owned policy with the
+            // update/delete tools.
+            var policies = Descriptions(tools["list_sensor_policies"]);
+            Assert.Contains("template-owned ones included, with their template linkage", policies);
         }
 
 
@@ -480,7 +489,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(30, tools.Count);
+                Assert.Equal(32, tools.Count);
 
                 foreach (var tool in tools)
                 {

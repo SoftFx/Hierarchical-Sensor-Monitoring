@@ -58,6 +58,8 @@ namespace HSMServer.Core.Tests.Mcp
                 "list_folders",
                 "list_journal_records",
                 "list_products",
+                "list_sensor_policies",
+                "list_sensor_ttl_policies",
                 "mute_sensor",
                 "rollback_journal_record",
                 "unmute_sensor",
@@ -128,7 +130,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(30, tools.Count);
+            Assert.Equal(32, tools.Count);
             Assert.All(tools, tool =>
             {
                 var schema = tool.ProtocolTool.OutputSchema;

@@ -9,10 +9,14 @@ using ModelContextProtocol.Server;
 namespace HSMServer.Mcp
 {
     /// <summary>
-    /// The six policy write tools of the MCP surface (phase 2 of AI-agent
-    /// access): data-policy and TTL-policy CRUD on a sensor — thin
-    /// delegations to <see cref="PolicyAdministrationService"/> (#1500), the
-    /// same engine the REST policy controllers run on.
+    /// The policy tools of the MCP surface: two list reads — the id
+    /// discovery half without which the update/delete tools were one-shot
+    /// (#1615; an id existed only inside the create response of the session
+    /// that created it) — and the six phase-2 write tools: data-policy and
+    /// TTL-policy CRUD on a sensor. Thin delegations to the shared services
+    /// (<see cref="AlertReadService"/> for the reads,
+    /// <see cref="PolicyAdministrationService"/> (#1500) for the writes), the
+    /// same engines the REST policy controllers run on.
     /// </summary>
     // The authorization is REUSED, not re-implemented: every service call
     // resolves the caller's owner through IApiTokenAuthorizationService at
@@ -30,13 +34,56 @@ namespace HSMServer.Mcp
     [McpServerToolType]
     public sealed class PoliciesMcpTools
     {
+        private readonly AlertReadService _reader;
         private readonly PolicyAdministrationService _writer;
         private readonly IHttpContextAccessor _http;
 
-        public PoliciesMcpTools(PolicyAdministrationService writer, IHttpContextAccessor http)
+        public PoliciesMcpTools(AlertReadService reader, PolicyAdministrationService writer, IHttpContextAccessor http)
         {
+            _reader = reader;
             _writer = writer;
             _http = http;
+        }
+
+
+        [McpServerTool(Name = "list_sensor_policies", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Lists one sensor's data policies (alerts), ordered by policy id — every policy is listed, template-owned ones included with their template linkage. This is the id source for update_sensor_policy and delete_sensor_policy: policies created earlier (via REST, the Web UI, a template apply or a previous MCP session) are otherwise unreachable.")]
+        public McpSensorPoliciesResult ListSensorPolicies(
+            [Description("Sensor id.")] Guid sensorId,
+            [Description("Maximum policies to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1)
+        {
+            var result = McpToolErrors.Unwrap(_reader.ListSensorPolicies(User, sensorId,
+                HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit)));
+
+            return new McpSensorPoliciesResult
+            {
+                Policies = result.Items,
+                TotalFound = result.TotalCount,
+                Limit = result.PageSize,
+                Page = result.Page,
+                TotalPages = result.TotalPages,
+            };
+        }
+
+        [McpServerTool(Name = "list_sensor_ttl_policies", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Lists one sensor's TTL (inactivity) policies, ordered by policy id — the id source for update_sensor_ttl_policy and delete_sensor_ttl_policy.")]
+        public McpSensorTtlPoliciesResult ListSensorTtlPolicies(
+            [Description("Sensor id.")] Guid sensorId,
+            [Description("Maximum policies to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1)
+        {
+            var result = McpToolErrors.Unwrap(_reader.ListSensorTtlPolicies(User, sensorId,
+                HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit)));
+
+            return new McpSensorTtlPoliciesResult
+            {
+                TtlPolicies = result.Items,
+                TotalFound = result.TotalCount,
+                Limit = result.PageSize,
+                Page = result.Page,
+                TotalPages = result.TotalPages,
+            };
         }
 
 
