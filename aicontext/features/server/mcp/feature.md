@@ -138,7 +138,7 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                              (the sensor-boundary sight, as REST)
 ```
 
-The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service (`CancellationToken` parameters, same abort semantics as REST `RequestAborted`).
+The tools resolve the caller through `IHttpContextAccessor` — the stateless transport executes a `tools/call` inline within its POST, so the ambient context flows; the principal is the one `RequireAuthorization` already admitted. Cancellations flow to the service where it takes a `CancellationToken` (same abort semantics as REST `RequestAborted`); the policy lists (#1615) are synchronous snapshots over the live model and take no token — like their REST twins.
 
 ## Storage / Persistence
 

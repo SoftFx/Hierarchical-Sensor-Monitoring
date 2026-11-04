@@ -254,7 +254,6 @@ namespace HSMServer.Core.Tests.Mcp
             // applied, never the one it asked for.
             var ordered = created.Order().ToList();
             Assert.Equal(ordered.Take(2), page1.Policies.Select(p => p.Id));
-            Assert.Equal(2, page1.Policies.Count);
             Assert.Equal(3, page1.TotalFound);
             Assert.Equal(2, page1.Limit);
             Assert.Equal(1, page1.Page);
@@ -309,6 +308,43 @@ namespace HSMServer.Core.Tests.Mcp
 
             var error = Assert.Throws<ModelContextProtocol.McpException>(
                 () => CreateTools().ListSensorPolicies(sensor.Id));
+
+            Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ListSensorPolicies_IncludesTemplateOwned_WithTheLinkage()
+        {
+            // The #1615 acceptance: template-owned policies are listed WITH
+            // their linkage — the fields that tell the agent the
+            // isDisabled-only update path (the template's conflict rule)
+            // applies to this policy.
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var created = (await CreateTools().CreateSensorPolicyAsync(sensor.Id, DataDto())).Value;
+
+            // Make it template-owned the way a template apply does: the
+            // linkage fields on the live model (the write tools never
+            // carry them).
+            var templateId = Guid.NewGuid();
+            var templateAlertId = Guid.NewGuid();
+            sensor.Policies.Single(p => p.Id == created.Id).TemplateId = templateId;
+            sensor.Policies.Single(p => p.Id == created.Id).TemplateAlertId = templateAlertId;
+
+            var listed = Assert.Single(CreateTools().ListSensorPolicies(sensor.Id).Policies);
+
+            Assert.Equal(created.Id, listed.Id);
+            Assert.Equal(templateId, listed.TemplateId);
+            Assert.Equal(templateAlertId, listed.TemplateAlertId);
+        }
+
+        [Fact]
+        public void ListSensorTtlPolicies_UnknownSensor_IsToolError()
+        {
+            // The data half's not-found pin, on the TTL twin — the same
+            // ResolveSensor path, but pinned where a future divergence of
+            // the two tools would land.
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().ListSensorTtlPolicies(Guid.NewGuid()));
 
             Assert.Equal("The requested resource was not found.", error.Message);
         }
