@@ -30,4 +30,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0013 | Accepted | [One journal — Change Sets absorbed into the Journal, single write path, admin-only rollback](0013-unified-configuration-journal.md) | 2026-10-27 |
 | 0014 | Accepted | [One port — 443 serves everything; the sensor/site port split is retired](0014-single-port-443.md) | 2026-10-29 |
 | 0015 | Accepted | [Retire the VictoriaLogs log-storage stack](0015-retire-victorialogs-log-storage.md) | 2026-11-02 |
+| 0016 | Accepted | [Expected MCP tool failures are not operator errors](0016-expected-mcp-tool-failures-not-operator-errors.md) | 2026-11-04 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

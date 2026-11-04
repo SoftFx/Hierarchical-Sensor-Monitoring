@@ -1,9 +1,11 @@
+using ModelContextProtocol;
 using NLog;
 using NLog.Config;
 using NLog.Filters;
 using NLog.Targets;
 using NLog.Targets.Wrappers;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -44,6 +46,75 @@ namespace HSMServer.Core.Tests
             // sensor ingestion) out of the text targets.
             var aspFileRule = config.LoggingRules.Single(r => r.LoggerNamePattern == "Microsoft.AspNetCore*" && r.Targets.Contains(config.FindTargetByName("aspfile")));
             Assert.Equal(FilterResult.IgnoreFinal, Assert.Single(aspFileRule.Filters.OfType<ConditionBasedFilter>()).Action);
+        }
+
+        // #1613: every expected MCP tool failure (bad arguments, an unknown id, a
+        // write conflict) reaches the caller correctly as isError=true, but the
+        // MCP SDK ALSO logs it at ERROR as "\"{tool}\" threw an unhandled
+        // exception" from its ModelContextProtocol.Server.McpServer logger - one
+        // test session alone produced 39 McpException + 5 ArgumentException such
+        // entries, all client mistakes (the tools throw McpException; the SDK's
+        // argument binder rejects bad arguments with ArgumentException). Those
+        // entries must stay out of HSM-error-log.txt (the operator surface; noise
+        // there hides real errors) while remaining observable in HSM-all-log.txt.
+        // This drives the REAL rules end-to-end with the file targets swapped for
+        // in-memory capture, so the filter's condition is evaluated, not just
+        // asserted on paper.
+        [Fact]
+        public void ExpectedMcpToolFailuresStayOutOfTheErrorLog()
+        {
+            var factory = new LogFactory { ThrowConfigExceptions = true };
+            LoggingConfiguration config = LoadProductionConfig(factory);
+
+            // Swap each target's FileTarget (behind its async wrapper) for a
+            // MemoryTarget: the configured rules and filters run unmodified and
+            // nothing touches disk.
+            var capture = new Dictionary<string, MemoryTarget>();
+            foreach (var name in new[] { "errorfile", "allfile", "aspfile" })
+            {
+                var wrapper = Assert.IsAssignableFrom<WrapperTargetBase>(config.FindTargetByName(name));
+                var memory = new MemoryTarget();
+                wrapper.WrappedTarget = memory;
+                capture[name] = memory;
+            }
+            factory.Configuration = config;
+
+            // The exact entry the SDK produces for an expected tool failure:
+            // ERROR + McpException from the ModelContextProtocol.Server.McpServer
+            // logger. It must reach the general log but not the error log.
+            var mcpServer = factory.GetLogger("ModelContextProtocol.Server.McpServer");
+            mcpServer.Error(new McpException("The requested resource was not found."), "\"get_sensor\" threw an unhandled exception.");
+            factory.Flush();
+            Assert.Empty(capture["errorfile"].Logs);
+            Assert.NotEmpty(capture["allfile"].Logs);
+
+            // The other expected-failure arm: the SDK's argument binder rejecting
+            // the caller's arguments (a missing required parameter) with an
+            // ArgumentException - same logger, same ERROR entry.
+            capture["errorfile"].Logs.Clear();
+            capture["allfile"].Logs.Clear();
+            mcpServer.Error(new ArgumentException("The arguments dictionary is missing a value for the required parameter 'sensorId'.", "arguments"), "\"get_sensor\" threw an unhandled exception.");
+            factory.Flush();
+            Assert.Empty(capture["errorfile"].Logs);
+            Assert.NotEmpty(capture["allfile"].Logs);
+
+            // A genuinely unexpected exception from the same logger IS an
+            // operator error and keeps reaching the error log.
+            capture["errorfile"].Logs.Clear();
+            mcpServer.Error(new InvalidOperationException("boom"), "\"get_sensor\" threw an unhandled exception.");
+            factory.Flush();
+            Assert.NotEmpty(capture["errorfile"].Logs);
+
+            // The filter is scoped to the SDK's tool-dispatch logger: an
+            // McpException logged from anywhere else still lands in the error log.
+            capture["errorfile"].Logs.Clear();
+            factory.GetLogger("HSMServer.SomeComponent").Error(new McpException("boom"), "failed");
+            factory.Flush();
+            Assert.NotEmpty(capture["errorfile"].Logs);
+
+            // MCP dispatch entries are not ASP.NET framework logs: the aspfile
+            // rule (Microsoft.AspNetCore*) never picks them up.
+            Assert.Empty(capture["aspfile"].Logs);
         }
 
         // The retention contract pinned from the 2026-10 dev incident (49 GiB in Logs/,
@@ -156,10 +227,15 @@ namespace HSMServer.Core.Tests
         // save/restore of the InternalLogger is needed. The guard assertion fails
         // loudly if the production config renames or adds internalLog* attributes,
         // so the stripping cannot silently stop matching.
-        private static LoggingConfiguration LoadProductionConfig()
-        {
-            var factory = new LogFactory { ThrowConfigExceptions = true };
+        private static LoggingConfiguration LoadProductionConfig() =>
+            LoadProductionConfig(new LogFactory { ThrowConfigExceptions = true });
 
+        // The overload for tests that log THROUGH the loaded config: pass your
+        // own factory, mutate the returned configuration (e.g. swap targets for
+        // in-memory capture), then assign factory.Configuration = config so the
+        // factory owns and initializes it.
+        private static LoggingConfiguration LoadProductionConfig(LogFactory factory)
+        {
             var configPath = RepoFile("src/server/HSMServer/nlog.config");
             var strippedXml = Regex.Replace(
                 File.ReadAllText(configPath),
