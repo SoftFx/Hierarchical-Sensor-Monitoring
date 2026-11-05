@@ -18,12 +18,19 @@ namespace HSMServer.PathTemplates
         private const string UnnamedVariable = @"\*";
 
         private readonly ConcurrentDictionary<string, string> _namedVariables = new();
-        private Regex _regex;
 
-        // A null _regex alone cannot tell "no template was ever applied"
-        // (match everything) from "the last template failed to compile"
-        // (must match nothing) — the flag carries that difference (#1607).
-        private bool _hasFailedTemplate;
+        // The converter's whole match state in ONE reference, so a single
+        // write publishes it (#1607 review): null = "no template was ever
+        // applied" (match everything), NeverMatch = "the last template
+        // failed to compile" (match nothing — a rejected pattern must not
+        // degrade into match-all for the dashboard-panel subscriptions that
+        // keep querying the converter after a failed apply), any other
+        // regex = the applied filter. Two separately-written fields would
+        // open a brief match-all window between the writes on a failed
+        // re-apply.
+        private static readonly Regex NeverMatch = new("(?!)"); // zero-width negative lookahead: fails every input
+
+        private Regex _regex;
 
         [GeneratedRegex(UnnamedVariable)]
         private static partial Regex EmptyVariableToRegex();
@@ -42,7 +49,6 @@ namespace HSMServer.PathTemplates
         {
             _namedVariables.Clear();
             error = null;
-            _hasFailedTemplate = false;
 
             try
             {
@@ -60,8 +66,9 @@ namespace HSMServer.PathTemplates
             }
             catch (Exception ex)
             {
-                _regex = null;
-                _hasFailedTemplate = true;
+                // One write publishes the match-nothing state; a later VALID
+                // apply replaces it with a real filter.
+                _regex = NeverMatch;
                 error = ex.Message;
                 return false;
             }
@@ -69,13 +76,10 @@ namespace HSMServer.PathTemplates
 
         public bool IsMatch(string path)
         {
-            // No template ever applied: every path is a candidate. A template
-            // that FAILED to compile must instead match nothing — a rejected
-            // pattern must not silently degrade into match-all for the
-            // dashboard-panel subscriptions that keep using the converter
-            // after a failed apply (#1607 review).
+            // No template ever applied: every path is a candidate. A failed
+            // apply holds NeverMatch (see the field comment above).
             if (_regex is null)
-                return !_hasFailedTemplate;
+                return true;
 
             var match = _regex.Match(path);
 
