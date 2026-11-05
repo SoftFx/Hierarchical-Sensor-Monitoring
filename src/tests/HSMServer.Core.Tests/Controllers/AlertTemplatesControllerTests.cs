@@ -11,6 +11,7 @@ using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
@@ -53,7 +54,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
-            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null)));
 
             _userManagerMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
@@ -264,7 +265,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
 
-            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
                 {
                     new("*/futureSensor", "path pattern matched no sensors in the template's folder"),
@@ -298,7 +299,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
 
-            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
                 {
                     new("Root/Product A/cpu bar", "Not supported property Value for IntegerBarPolicy"),
@@ -399,8 +400,8 @@ namespace HSMServer.Core.Tests.Controllers
         public async Task AlertTemplate_DemotedRowWithoutOperation_SavesPolicyWithNoConditions()
         {
             AlertTemplateModel captured = null;
-            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Callback<AlertTemplateModel, CancellationToken>((m, _) => captured = m)
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Callback<AlertTemplateModel, InitiatorInfo, CancellationToken>((m, initiator, _) => captured = m)
                 .Returns(Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null)));
 
             var controller = CreateController();

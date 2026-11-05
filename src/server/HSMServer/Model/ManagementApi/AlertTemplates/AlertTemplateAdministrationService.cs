@@ -156,7 +156,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // client-triggered cancellation mid-reconcile would leave
             // half-applied state. The web UI passes no token either — the
             // write completes once accepted.
-            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
+            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model,
+                initiator: TemplateApplyInitiator(changeSetId));
 
             if (!success)
             {
@@ -286,7 +287,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             var beforeImages = CaptureBeforeImages(targets);
             var beforeTemplate = existing.ToEntity();
 
-            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model);
+            var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model,
+                initiator: TemplateApplyInitiator(changeSetId));
 
             if (!success)
             {
@@ -349,7 +351,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // alert policies — silent alert loss with nobody left to report
             // it to (the client is gone by definition). The delete completes
             // once accepted.
-            var removed = await RemoveTemplateCoreAsync(id, user, access);
+            var removed = await RemoveTemplateCoreAsync(id, user, access, TemplateApplyInitiator(changeSetId));
 
             if (!removed.Success)
             {
@@ -378,9 +380,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // Non-journaling delete core: authorization + the cache strip, no
         // capture and no journal entry. The rollback engine calls this when
         // compensating a template CREATE — it journals the whole rollback as
-        // its own change set.
+        // its own change set (and passes no initiator: the compensating
+        // strip's records must not claim a group). The public delete passes
+        // the stamped fan-out initiator so its strip records link to the
+        // request's group (#1610).
         internal async Task<PolicyWriteResult> RemoveTemplateCoreAsync(Guid id, ClaimsPrincipal user,
-            ChangeSets.IChangeSetAccess access = null)
+            ChangeSets.IChangeSetAccess access = null, InitiatorInfo initiator = null)
         {
             var template = _cache.GetAlertTemplate(id);
 
@@ -390,7 +395,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (AuthorizeFolder(template.FolderId, user, access) is { } denied)
                 return PolicyWriteResult.Fail(denied.Outcome, message: denied.Message);
 
-            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+            var (success, error) = await _cache.RemoveAlertTemplateAsync(id, initiator);
 
             return success
                 ? PolicyWriteResult.Ok()
@@ -478,6 +483,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // helper (the journal's fork rule compares the author strings).
         private InitiatorInfo InitiatorOf(ClaimsPrincipal user, ChangeSetWriteOptions write = null) =>
             ChangeSetRecorder.InitiatorOf(user, _users, write);
+
+        // The fan-out initiator of a template write (#1610): the
+        // AlertTemplate TYPE stamped with the request's undo group. The type
+        // (not the user) must stay the change-table owner and the journal
+        // author of the fan-out records — the CanChange protection that
+        // blocks user edits of template-owned policies keys on it — while the
+        // stamp links every fan-out policy record to the write's rollback
+        // group, exactly like a direct policy write links its records
+        // (#1588's linking rule: the cache-layer records copy the stamp).
+        private static InitiatorInfo TemplateApplyInitiator(Guid changeSetId) =>
+            InitiatorInfo.AlertTemplate.AsJournaled(changeSetId);
 
         // Dry-run preview of a template write: the fan-out target set (matched
         // by the new paths, plus stale holders the edit would prune — the old
