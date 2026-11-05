@@ -20,6 +20,7 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -70,6 +71,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 .AddHsmApiTokenScheme();
 
 builder.Services.AddHsmApiTokenAuthorization();
+
+// #1633: the Data Protection key ring (auth cookie + antiforgery tokens) lives in
+// the mounted Config volume, so a container recreate (image upgrade, compose change,
+// host rebuild) keeps existing sessions valid instead of losing the ring with the
+// container filesystem. Keys at rest are unencrypted - the same volume already holds
+// the TLS certificate and the LevelDB files; see features/server/authentication.
+builder.Services.AddHsmDataProtection(Path.Combine(ServerConfig.ConfigPath, HsmDataProtectionServiceCollectionExtensions.KeysFolderName));
 
 builder.Services.AddHsts(options =>
 {

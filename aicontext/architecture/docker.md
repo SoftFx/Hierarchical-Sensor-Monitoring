@@ -120,11 +120,15 @@ The searchable log-store pipeline that used to sit next to these files (store + 
 | Volume | Purpose |
 |---|---|
 | `Logs` | NLog output files |
-| `Config` | Server configuration (TLS, Telegram, backup settings) |
+| `Config` | Server configuration (TLS, Telegram, backup settings); since #1633 also the Data Protection key ring (`DataProtection-Keys/`) |
 | `Databases` | LevelDB data files (sensor history, metadata) |
 | `DatabasesBackups` | Automated SFTP backup snapshots |
 | `CaddyData` | Caddy certificates and ACME account (compose) |
 | `CaddyCertificates` | Optional custom certificate chain and key, mounted read-only at `/certs` |
+
+### What survives a container recreate (#1633)
+
+A recreate of the `app` container (image upgrade, compose change, host rebuild) keeps everything on the mounted volumes: databases, settings, logs, Caddy state — and, since #1633, the **Data Protection key ring** at `Config/DataProtection-Keys/`, which the auth cookie and antiforgery tokens are protected with. Before #1633 the ring lived in the container filesystem and every recreate silently invalidated all cookie sessions (forced re-login) and every form opened before the restart; the tell was `CryptographicException: The key {...} was not found in the key ring` in `Logs/HSM-error-log.txt`. Upgrading **to** the version that introduces persistence forces one final re-login (the first key in the new location is generated on first start); key files are not encrypted at rest — the same volume already holds the TLS certificate and the databases. The keys-at-rest trade-off, the pinned application name, and why the folder must never be "cleaned up" are in `aicontext/features/server/authentication/feature.md`.
 
 ## TLS
 

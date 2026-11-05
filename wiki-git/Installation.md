@@ -428,7 +428,7 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | Host path | Container path | Contents |
 |---|---|---|
 | `./Logs` | `/app/Logs` | Application logs |
-| `./Config` | `/app/Config` | `appsettings.json`, TLS certificates |
+| `./Config` | `/app/Config` | `appsettings.json`, TLS certificates, Data Protection keys (`DataProtection-Keys/`, keep login sessions valid across updates) |
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
@@ -488,6 +488,8 @@ Replacing the compose files before pulling the new image is mandatory since #159
 Firewall note (#1590): a setup that exposed only 44330 (ingestion) while keeping 44333 internal no longer isolates the management surface — the 44330 alias reaches the full address (login page, management API, MCP) exactly like 443. Restrict it at the firewall if you relied on the old split.
 
 Update note (#1594): the VictoriaLogs log-storage stack is removed — the `logs` compose profile (victorialogs + vlagent), the `HSM_STRUCTURED_LOGS` structured JSON log, and the `/logs/` read routes no longer exist, and nothing replaces them. After replacing docker-compose.yml, stop and remove the two containers (`docker rm -f hsm-victorialogs hsm-vlagent`); both named volumes may be deleted to reclaim disk — data in `victorialogs-data` is lost by design, while the text logs under `Logs/` (and `Logs/Archives/`) stay on disk untouched. Also delete the structured-log JSON files the old pipeline wrote — nothing rotates them anymore, so they would sit in `Logs/` forever (up to ~6 GiB): `rm -f Logs/HSM-structured-log-current.json Logs/Archives/HSM-structured-log-*.json`. Leftover `.env` keys (`COMPOSE_PROFILES`, `VL_RETENTION_*`, `HSM_STRUCTURED_LOGS`) are inert and can be dropped.
+
+Update note (#1633): login sessions and forms opened before an update are preserved from this version on — the server keeps its cookie-encryption keys (Data Protection) on the mounted `Config` volume in `Config/DataProtection-Keys/` instead of inside the container, where a recreate threw them away (before, every update forced everyone to re-login and invalidated open forms; `Logs/HSM-error-log.txt` showed `The key {...} was not found in the key ring`). The update **to** this version still logs everyone out one last time: the first key in the new location is generated on first start. Do not delete the `DataProtection-Keys` folder afterwards — later updates keep sessions alive precisely because of it. No compose change is needed: `Config` is already mounted.
 
 ---
 
