@@ -223,6 +223,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
         {
             // Without a notification there is nothing to route: the destination
             // degrades to Empty deterministically instead of keeping stale chats.
+            // Validation (#1612) rejects any effectful destination when no
+            // notification is present, so only the no-op shapes (null, Empty,
+            // a NotInitialized echo) reach this branch — the degradation is
+            // defense-in-depth, not a silent drop of caller input.
             if (!hasNotification || destination is null)
                 return new PolicyDestinationUpdate(PolicyDestinationMode.Empty);
 

@@ -1734,6 +1734,7 @@
             <summary>
             Where a fired notification goes. Required when <c>notification</c> is present.
             Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (NotInitialized = never configured; writable only as an echo of a read, never with chats).
+            Without a <c>notification</c> a destination routes nothing: only the no-op shapes (Empty, a NotInitialized echo, no chats) are accepted — anything else is a 422, never silently stored as Empty.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.PolicyDto.Notification">
@@ -1785,7 +1786,7 @@
             <summary>True = take the interval from the parent node (the explicit reset-to-parent switch; on a product it resolves against the product's own Inactivity Period setting).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Destination">
-            <summary>Where a fired notification goes. Required when <c>notification</c> is present. Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (an echo of an unconfigured destination; never with chats).</summary>
+            <summary>Where a fired notification goes. Required when <c>notification</c> is present. Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (an echo of an unconfigured destination; never with chats). Without a <c>notification</c> a destination routes nothing: only the no-op shapes (Empty, a NotInitialized echo, no chats) are accepted — anything else is a 422, never silently stored as Empty.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Notification">
             <summary>The notification effect (message template + send schedule); null means no notification.</summary>
