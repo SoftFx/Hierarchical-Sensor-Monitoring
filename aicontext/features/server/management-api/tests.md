@@ -115,7 +115,7 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 - [x] In-reach but ungranted operation → 403 (uniform JSON error, never a cookie redirect)
 - [x] Client-chosen id on POST cannot overwrite an existing template (upsert hole closed)
 - [x] Folder move gated on both source and destination folders
-- [x] Every enum byte validated before the domain casts; unsupported domain input → 400, never 500
+- [x] Every enum byte validated before the domain casts; unsupported domain input → 400, never 500; since #1607 the fields bind as `int`, so out-of-byte-range values (999/-1/256) reach the validator under their field key instead of failing JSON binding, a malformed path regex answers `paths: Invalid path template …` (eagerly compiled pattern), and a body with several mistakes reports all its fields together
 - [x] Malformed TTL parallel lists, out-of-range ticks, non-Guid chat keys rejected structurally
 - [x] Null list elements (`[null]` in policies/ttlPolicies/ttls) and null destination/schedule rejected or defaulted — never a null-deref 500
 - [x] No value that would throw inside the monitoring/evaluation loops is persistable (undefined TTL interval, out-of-range ticks)

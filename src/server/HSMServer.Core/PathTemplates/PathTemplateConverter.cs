@@ -18,7 +18,7 @@ namespace HSMServer.PathTemplates
         private const string UnnamedVariable = @"\*";
 
         private readonly ConcurrentDictionary<string, string> _namedVariables = new();
-        private string _regexPattern;
+        private Regex _regex;
 
         [GeneratedRegex(UnnamedVariable)]
         private static partial Regex EmptyVariableToRegex();
@@ -44,12 +44,17 @@ namespace HSMServer.PathTemplates
                 template = NamedVariableToRegex().Replace(template, g => $"(?<{RegisterNamedVariable(g.Value)}>{AllValidSymbols})"); // change custom variable {product} -> regex style (?<product>...)
                 template = EmptyVariableToRegex().Replace(template, AllValidSymbols); //change noname variable * to regex pattern
 
-                _regexPattern = $"^{template}$"; //set start and end string constants
+                // Compile eagerly: a malformed pattern (regex metacharacters in a
+                // constant part, e.g. an unterminated '[' set) must fail HERE with
+                // a message the caller can report, not throw RegexParseException
+                // out of IsMatch on the first candidate path (#1607).
+                _regex = new Regex($"^{template}$"); //set start and end string constants
 
                 return true;
             }
             catch (Exception ex)
             {
+                _regex = null;
                 error = ex.Message;
                 return false;
             }
@@ -57,10 +62,10 @@ namespace HSMServer.PathTemplates
 
         public bool IsMatch(string path)
         {
-            if (string.IsNullOrEmpty(_regexPattern))
+            if (_regex is null)
                 return true;
 
-            var match = Regex.Match(path, _regexPattern);
+            var match = _regex.Match(path);
 
             if (match.Success)
             {

@@ -535,6 +535,65 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        // === #1607: field-keyed errors for inputs that used to bypass the validator ===
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_InvalidRegexPath_FlattensFieldKeyedError()
+        {
+            // The #1607 repro: a malformed path regex used to escape the write
+            // engine as an unhandled RegexParseException, which the SDK masks
+            // into the bare "An error occurred invoking ..." with no field
+            // name. The eagerly compiled pattern now rides the same
+            // field-keyed channel as every other path error.
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with { Paths = ["HSM Server Monitoring/(["] }));
+
+            Assert.Contains("paths: Invalid path template", error.Message);
+            Assert.Contains("HSM Server Monitoring", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+        [Theory]
+        [InlineData(999)]
+        [InlineData(-1)]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_UnknownSensorType_OutsideTheByteRange_FlattensFieldKeyedError(int sensorType)
+        {
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with { SensorType = sensorType }));
+
+            Assert.Equal($"sensorType: Unknown sensor type {sensorType}.", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_UnknownConditionProperty_OutsideTheByteRange_FlattensFieldKeyedError()
+        {
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with
+                    {
+                        Policies = [new HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto
+                        {
+                            Conditions = [new HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto
+                            {
+                                Target = new HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto
+                                {
+                                    Type = (byte)TargetType.Const,
+                                    Value = "1",
+                                },
+                                Operation = (byte)PolicyOperation.GreaterThan,
+                                Property = 999,
+                            }],
+                        }],
+                    }));
+
+            Assert.Equal("policies[0].conditions[0].property: Unknown condition property 999.", error.Message);
+        }
+
+
         [Fact]
         public async System.Threading.Tasks.Task DeleteAlertTemplate_ReturnsTheDeletedId()
         {

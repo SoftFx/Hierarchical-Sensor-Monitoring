@@ -8,9 +8,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
     /// <summary>
     /// Alert template wire contract of the /api/v1/alertTemplates surface. The shape
-    /// mirrors the durable template one field for field; ids are Guid strings. Byte
-    /// fields carry DOMAIN ENUM VALUES (documented per field) — membership is validated
-    /// structurally, unknown values answer 400 with the offending field key.
+    /// mirrors the durable template one field for field; ids are Guid strings. Integer
+    /// fields carry DOMAIN ENUM VALUES (documented per field) — any integer binds
+    /// (values outside the enum's byte range included, #1607) and membership is
+    /// validated structurally AFTER authorization; unknown values answer 400 with
+    /// the offending field key.
     /// </summary>
     /// <remarks>
     /// Round-trip notes: a client-sent template id is IGNORED on create (server
@@ -21,7 +23,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     /// lists matched by position. `warnings` is output-only (apply diagnostics of the
     /// create/update response; ignored on writes, absent on reads).
     /// </remarks>
-    [Description("Alert template: path patterns, sensor type, regular and TTL policies with destinations. Byte fields carry DOMAIN ENUM VALUES (documented per field) — unknown values answer 400.")]
+    [Description("Alert template: path patterns, sensor type, regular and TTL policies with destinations. Integer fields carry DOMAIN ENUM VALUES (documented per field) — unknown values answer 400.")]
     public sealed record AlertTemplateDto
     {
         /// <summary>Output-only: assigned by the server on create. On update it must equal the route id or be absent.</summary>
@@ -38,7 +40,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
         /// </summary>
         [Description("SensorType enum value the template matches: 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File, 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType (match every sensor type).")]
-        public byte SensorType { get; init; }
+        public int SensorType { get; init; }
 
         /// <summary>Target folder id; required on create and update.</summary>
         [Description("Target folder id (the access-grouping Folder entity, not a tree node); required on create and update. Use list_folders to discover valid values.")]
@@ -126,7 +128,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>Status the sensor gets while the policy is triggered (HSMCommon SensorStatus): 0=Ok, 1=Error, 255=OffTime.</summary>
         [Description("Status the sensor gets while the policy is triggered: 0=Ok, 1=Error, 255=OffTime.")]
-        public byte SensorStatus { get; init; }
+        public int SensorStatus { get; init; }
 
         /// <summary>Disabled policies stay stored but never fire.</summary>
         [Description("Disabled policies stay stored but never fire.")]
@@ -199,7 +201,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>How this condition combines with the PREVIOUS one: 0=And, 1=Or.</summary>
         [Description("How this condition combines with the PREVIOUS one: 0=And (default), 1=Or; ignored on the first condition.")]
-        public byte Combination { get; init; }
+        public int Combination { get; init; }
 
         /// <summary>
         /// Comparison operation (PolicyOperation enum):
@@ -208,7 +210,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue.
         /// </summary>
         [Description("Comparison operation (PolicyOperation enum): 0=LessThanOrEqual, 1=LessThan, 2=GreaterThan, 3=GreaterThanOrEqual, 4=Equal, 5=NotEqual, 20=IsChanged, 21=IsError, 22=IsOk, 23=IsChangedToError, 24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue. Status/IsChanged/ReceivedNewValue-style operations need no target.")]
-        public byte Operation { get; init; }
+        public int Operation { get; init; }
 
         /// <summary>
         /// The sensor property compared (PolicyProperty enum):
@@ -235,7 +237,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)
         /// </summary>
         [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. " + AlertPropertyMatrixDocs.Matrix)]
-        public byte Property { get; init; }
+        public int Property { get; init; }
     }
 
     /// <summary>The right-hand side of a condition.</summary>
@@ -249,7 +251,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// (the sensor's own previous value), matching what the web UI submits for them.
         /// </summary>
         [Description("Target type: 0=Const (compare against `value`), 1=LastValue (compare against the sensor's last value). Target-less operations (IsChanged, IsError, IsOk, IsChangedToError, IsChangedToOk, ReceivedNewValue) never read the constant — a Const target on them is evaluated as the sensor's own previous value.")]
-        public byte Type { get; init; }
+        public int Type { get; init; }
 
         /// <summary>The constant compared against when type is Const; ignored for LastValue.</summary>
         [Description("The constant compared against when type is 0=Const; ignored for LastValue. A plain string — numeric properties parse it as a number.")]
@@ -303,7 +305,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 20=Hourly, 50=Daily, 100=Weekly.
         /// </summary>
         [Description("Re-send interval of a still-triggered policy (AlertRepeatMode enum): 0=Immediately, 5=FiveMinutes, 6=TenMinutes, 7=FifteenMinutes, 10=ThirtyMinutes, 20=Hourly, 50=Daily, 100=Weekly.")]
-        public byte RepeateMode { get; init; }
+        public int RepeateMode { get; init; }
     }
 
     /// <summary>

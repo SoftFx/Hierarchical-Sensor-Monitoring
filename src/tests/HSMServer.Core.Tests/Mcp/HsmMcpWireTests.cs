@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -610,6 +611,85 @@ namespace HSMServer.Core.Tests.Mcp
             await Assert.ThrowsAnyAsync<Exception>(() => ConnectAsync(host));
 
             _cache.Verify(c => c.GetProducts(), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task Wire_TemplateWriteValidationErrors_NameTheField_AfterArgumentBinding()
+        {
+            // #1607: out-of-range enum values used to die in the SDK's argument
+            // binder (JsonException on the byte fields) and a malformed path
+            // regex in an unhandled RegexParseException — both masked into the
+            // bare "An error occurred invoking 'create_alert_template'." with
+            // NO field name. The int-bound enum fields and the eagerly compiled
+            // path pattern bring both into the field-keyed validator through
+            // the REAL wire (initialize -> tools/call -> SDK binder -> tool).
+            _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<HSMCommon.Model.SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<Core.Model.BaseSensorModel>());
+
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            // Out-of-range sensorType: the binder accepts it, the validator
+            // answers the field-keyed text (pre-#1607: the bare masked error).
+            var sensorType = await client.CallToolAsync("create_alert_template",
+                new Dictionary<string, object>
+                {
+                    ["template"] = new Dictionary<string, object>
+                    {
+                        ["name"] = $"t-{Guid.NewGuid():N}",
+                        ["folderId"] = Guid.NewGuid(),
+                        ["sensorType"] = 999,
+                        ["paths"] = new[] { "*/cpu" },
+                    },
+                });
+
+            Assert.True(sensorType.IsError);
+            Assert.Contains("sensorType: Unknown sensor type 999.",
+                Assert.IsType<TextContentBlock>(Assert.Single(sensorType.Content)).Text);
+
+            // Malformed path regex: same channel, keyed under `paths`.
+            var regex = await client.CallToolAsync("create_alert_template",
+                new Dictionary<string, object>
+                {
+                    ["template"] = new Dictionary<string, object>
+                    {
+                        ["name"] = $"t-{Guid.NewGuid():N}",
+                        ["folderId"] = Guid.NewGuid(),
+                        ["sensorType"] = 1,
+                        ["paths"] = new[] { "HSM Server Monitoring/([" },
+                    },
+                });
+
+            Assert.True(regex.IsError);
+            Assert.Contains("paths: Invalid path template",
+                Assert.IsType<TextContentBlock>(Assert.Single(regex.Content)).Text);
+
+            // #1607's aggregation acceptance: several mistakes of ONE request
+            // ride the same field-keyed error text together.
+            var combined = await client.CallToolAsync("create_alert_template",
+                new Dictionary<string, object>
+                {
+                    ["template"] = new Dictionary<string, object>
+                    {
+                        ["name"] = "",
+                        ["folderId"] = Guid.NewGuid(),
+                        ["sensorType"] = 999,
+                        ["paths"] = Array.Empty<string>(),
+                    },
+                });
+
+            Assert.True(combined.IsError);
+            var combinedText = Assert.IsType<TextContentBlock>(Assert.Single(combined.Content)).Text;
+            Assert.Contains("name: The name is required.", combinedText);
+            Assert.Contains("paths: At least one path template is required.", combinedText);
+            Assert.Contains("sensorType: Unknown sensor type 999.", combinedText);
+
+            // Nothing reached the cache — every call died in validation.
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
 
 
