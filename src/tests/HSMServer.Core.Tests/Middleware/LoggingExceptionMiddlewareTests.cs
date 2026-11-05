@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Moq;
 using NLog;
@@ -19,9 +20,11 @@ namespace HSMServer.Core.Tests.Middleware
     // its POST /mcp, ~300 aborts/24h on one install) surfaces here as an
     // OperationCanceledException; logged at ERROR it flooded HSM-error-log.txt
     // (the operator surface) with entries needing no operator attention. The
-    // middleware classifies by cause — exception type AND the aborted request
-    // token — so the demotion applies to any endpoint, while an internal
-    // cancellation (token intact) and non-cancellation exceptions stay errors.
+    // middleware classifies by cause (ClientAbortDetection, shared with
+    // ApiExceptionJsonMiddleware): the aborted request token, or the transport
+    // itself reporting the dead connection — so the demotion applies to any
+    // endpoint, while an internal cancellation (token intact) and
+    // non-cancellation exceptions stay errors.
     //
     // The middleware logs through the process-global NLog LogManager, hence the
     // "NLog isolated" collection (DisableParallelization): the configuration is
@@ -72,6 +75,24 @@ namespace HSMServer.Core.Tests.Middleware
             Assert.DoesNotContain(_memory.Logs, entry => entry.StartsWith("Error|"));
         }
 
+        // The Kestrel race from #1371: the transport reports the dead
+        // connection as ConnectionAbortedException (an OCE subclass) while the
+        // request token has not fired yet — same client disconnect, same WARN
+        // (the classifier is shared with ApiExceptionJsonMiddleware).
+        [Fact]
+        public async Task ConnectionAborted_WithLiveRequestToken_LogsWarnInsteadOfError()
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = "POST";
+            context.Request.Path = "/mcp";
+            var middleware = Middleware(_ => throw new ConnectionAbortedException());
+
+            await Assert.ThrowsAsync<ConnectionAbortedException>(() => middleware.InvokeAsync(context));
+
+            Assert.Single(_memory.Logs, entry => entry.StartsWith("Warn|"));
+            Assert.DoesNotContain(_memory.Logs, entry => entry.StartsWith("Error|"));
+        }
+
         // An OperationCanceledException with the request token intact is an
         // internal timeout/cancellation, not a client going away — a potential
         // server fault an operator must look at, so it stays an Error.
@@ -113,11 +134,10 @@ namespace HSMServer.Core.Tests.Middleware
             var context = new DefaultHttpContext();
             context.Request.Method = method;
             context.Request.Path = path;
-
-            var cancelled = new CancellationTokenSource();
-            cancelled.Cancel();
-            context.RequestAborted = cancelled.Token;
-
+            // An already-cancelled token without a CancellationTokenSource to
+            // leak: the token is a value the middleware reads, never a source
+            // it disposes.
+            context.RequestAborted = new CancellationToken(canceled: true);
             return context;
         }
     }

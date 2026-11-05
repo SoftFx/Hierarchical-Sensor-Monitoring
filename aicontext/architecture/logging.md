@@ -25,10 +25,13 @@ logs.
   a client dropping the connection before the response finishes (a polling
   MCP client abandoning its `POST /mcp`, surfacing as
   `TaskCanceledException` from the transport):
-  `src/server/HSMServer/Middleware/LoggingExceptionMiddleware.cs` logs an
-  `OperationCanceledException` caught while `HttpContext.RequestAborted` is
-  cancelled at WARN — an internal cancellation (token intact) and every other
-  exception type stay at ERROR (#1632, ADR-0016).
+  `src/server/HSMServer/Middleware/LoggingExceptionMiddleware.cs` logs a
+  client abort — an `OperationCanceledException` caught while
+  `HttpContext.RequestAborted` is cancelled, or a
+  `ConnectionAbortedException` (the transport reporting the dead connection
+  before the token fires; see `ClientAbortDetection`) — at WARN; an internal
+  cancellation (token intact) and every other exception type stay at ERROR
+  (#1632, ADR-0016).
 
 ## Required Context
 
