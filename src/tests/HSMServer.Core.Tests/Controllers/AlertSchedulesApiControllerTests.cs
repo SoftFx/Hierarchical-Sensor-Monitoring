@@ -434,6 +434,42 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task CreateSchedule_NameAtMaxLength_Persists()
+        {
+            // #1597: the limit is inclusive — a name of exactly MaxNameLength
+            // chars is valid on every write surface (REST/MCP/UI), the same
+            // bound the web form's view model references.
+            var name = new string('n', AlertScheduleAdministrationService.MaxNameLength);
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = name, Timezone = "UTC", Schedule = ValidYaml,
+            });
+
+            Assert.Equal(201, StatusCodeOf(result));
+            Assert.Equal(name, Assert.Single(_store).Name);
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_NameOverMaxLength_Is422OnName_NothingPersisted()
+        {
+            // #1597 pins the API side of the contract the UI form now shares:
+            // names over MaxNameLength stay a field-keyed 422 ('name'), and
+            // nothing reaches the provider.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = new string('n', AlertScheduleAdministrationService.MaxNameLength + 1),
+                Timezone = "UTC",
+                Schedule = ValidYaml,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            _schedules.Verify(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()), Times.Never);
+        }
+
+
+        [Fact]
         public async Task CreateSchedule_InvalidYaml_Is422OnSchedule()
         {
             var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
