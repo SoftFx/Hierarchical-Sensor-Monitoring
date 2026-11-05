@@ -301,7 +301,52 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var byProduct = _journal.ListRecords(TokenUser,
                 new JournalFilter { ProductId = _fixture.ProductAId, FromUtc = DateTime.UtcNow.AddMinutes(-5) }).Value;
 
-            Assert.All(byProduct, r => Assert.Equal(_fixture.ProductAId.ToString(), r.ProductId));
+            // #1601: records without a root product (global schedules,
+            // folder-scoped templates) stay visible under a product filter;
+            // product-scoped records of other products stay hidden.
+            Assert.Contains(byProduct, r => r.ChangeSetId == groupA.ToString());
+            Assert.Contains(byProduct, r => r.ChangeSetId == groupB.ToString());
+            Assert.DoesNotContain(byProduct, r => r.ProductId == _fixture.ProductBId.ToString());
+        }
+
+        [Fact]
+        public async Task ListRecords_WithProductFilter_KeepsGlobalAndFolderScopedRecordsVisible()
+        {
+            // #1601: alert schedules are global and alert templates are
+            // folder-scoped — neither carries a root product, and a product
+            // filter must keep them visible instead of rendering the page
+            // empty; records of ANOTHER root product stay hidden.
+            var scheduleGroup = Guid.NewGuid();
+            var templateGroup = Guid.NewGuid();
+
+            var schedule = await _schedules.CreateScheduleAsync(TokenUser, ScheduleDto(),
+                new ChangeSetWriteOptions { ChangeSetId = scheduleGroup });
+            Assert.True(schedule.Success, schedule.Failure?.Message);
+
+            var template = await new AlertTemplateAdministrationService(_valuesCache, _folders.Object, _chats.Object,
+                    _alertScheduleProvider, _authorization.Object, _users.Object,
+                    new ChangeSetRecorder(new ChangeSetJournal(_databaseCoreManager.DatabaseCore), _journalService,
+                        NullLogger<ChangeSetRecorder>.Instance),
+                    NullLogger<AlertTemplateAdministrationService>.Instance)
+                .CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnGlobalKeep"]),
+                    new ChangeSetWriteOptions { ChangeSetId = templateGroup });
+            Assert.True(template.Success, template.Failure?.Message);
+
+            // A product-scoped record of another LIVE product: must stay hidden.
+            _journalService.AddRecord(new JournalRecordModel(_fixture.ProductBId, InitiatorInfo.AsUser("other-admin"))
+            {
+                Enviroment = "Create product",
+                PropertyName = "product",
+                Kind = JournalKinds.TreeCrud,
+                ProductId = _fixture.ProductBId.ToString(),
+            });
+
+            var byProduct = _journal.ListRecords(TokenUser,
+                new JournalFilter { ProductId = _fixture.ProductAId, FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            Assert.Contains(byProduct, r => r.ChangeSetId == scheduleGroup.ToString()); // global: visible
+            Assert.Contains(byProduct, r => r.ChangeSetId == templateGroup.ToString()); // folder-scoped: visible
+            Assert.DoesNotContain(byProduct, r => r.ProductId == _fixture.ProductBId.ToString()); // other product: hidden
         }
 
         [Fact]
@@ -427,6 +472,19 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             FolderId = _fixture.FolderId,
             Paths = [.. paths],
             Policies = [],
+        };
+
+        private static AlertScheduleUpsertDto ScheduleDto() => new()
+        {
+            Name = $"schedule-{Guid.NewGuid():N}",
+            Timezone = "UTC",
+            Schedule = """
+                daySchedules:
+                  - days: [mon, tue, wed, thu, fri]
+                    windows:
+                      - start: 09:00
+                        end: 18:00
+                """,
         };
     }
 }

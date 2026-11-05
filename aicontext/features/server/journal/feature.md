@@ -44,7 +44,7 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 
 - The global list scans the Changes-type records of the overlapping time shards and filters in memory (limit ≤ 200); the default window is 30 days.
 - Records keyed by deleted entities resolve to the admin-only Global scope for sight filtering.
-- The product filter matches the record's root product: folder-scoped and global entities (alert templates, alert schedules, folders) carry no product and do not match a product filter — filter by kind or time to audit them.
+- The product filter narrows product-scoped records to the selected root product; records with no root product of their own (global entities such as alert schedules, folder-scoped alert templates and folders, unscoped legacy rows) stay visible under any product filter (#1601) — a selected product must never make the page look empty while the journal holds non-product records.
 - The MCP list tool pages exactly through the service (limit ≤ 200 per call, offset unlimited); there is no total count over the shard-walking scan — a short or empty page is the end of the stream.
 - The product TTL POLICY list is authored through the API/MCP only — the web product form edits the inactivity-period SETTING (nodeSettings), not the policy list.
 - Schedule-delete rollback semantics are the #1570 ones (per-node full lists plus the touched template rows), now reached through the journal record.

@@ -333,13 +333,46 @@ namespace HSMServer.Model.ManagementApi.Journal
             return ApiTokenResource.GlobalScope;
         }
 
-        private static bool Matches(JournalRecordModel record, JournalFilter filter) =>
+        private bool Matches(JournalRecordModel record, JournalFilter filter) =>
             (filter.Author is null ||
              record.Initiator?.Contains(filter.Author, StringComparison.OrdinalIgnoreCase) == true) &&
             (filter.Kind is null ||
              string.Equals(record.Kind ?? OtherKind, filter.Kind, StringComparison.OrdinalIgnoreCase)) &&
-            (filter.ProductId is not { } product || record.ProductId == product.ToString()) &&
+            (filter.ProductId is not { } product || MatchesProductFilter(record, product)) &&
             (filter.EntityId is not { } entity || record.Key.Id == entity);
+
+        // #1601: the product filter narrows PRODUCT-scoped records to the
+        // selected root product but must not hide records that carry no
+        // root product of their own — global entities (alert schedules),
+        // folder-scoped entities (alert templates, folders) and unscoped
+        // legacy rows stay visible, otherwise the page looks empty while
+        // the journal holds the records.
+        private bool MatchesProductFilter(JournalRecordModel record, Guid product) =>
+            record.ProductId == product.ToString() ||
+            ResolvedRootProductOf(record) is not { } resolved || resolved == product;
+
+        // The record's root product, or null when the record is global or
+        // folder-scoped: the stamped id when it names a live product, else
+        // the record's entity resolved against the live tree (legacy rows
+        // carry no stamp; the stamp of a folder-scoped entity — an alert
+        // template — is its FOLDER id, not a product). Mirrors the entity
+        // resolution of ResourceOf below.
+        private Guid? ResolvedRootProductOf(JournalRecordModel record)
+        {
+            if (Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty &&
+                _cache.TryGetProduct(stamped, out _))
+                return stamped;
+
+            var id = record.Key.Id;
+
+            if (_cache.TryGetProduct(id, out _))
+                return id;
+
+            if (_cache.GetSensor(id) is { Root: { } root })
+                return root.Id;
+
+            return null;
+        }
 
         private static JournalRecordDto Render(JournalRecordModel record) => new()
         {
