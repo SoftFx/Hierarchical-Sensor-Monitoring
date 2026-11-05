@@ -20,12 +20,18 @@ namespace HSMServer.Core.Schedule
         private const string DateFormat = "yyyy-MM-dd";
         private readonly Regex _timeRegex = new Regex(@"^([0-1][0-9]|2[0-3]):[0-5][0-9]$", RegexOptions.Compiled);
 
+        // An empty (or comment-only) document deserializes to null; the
+        // message must say so instead of failing on the null dereference
+        // below (#1599).
+        private const string EmptyScheduleMessage = "The schedule is empty: provide a YAML object with a daySchedules key.";
+
         public AlertScheduleParser()
         {
             _deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithTypeConverter(new TimeSpanYamlConverter())
                 .WithTypeConverter(new DayOfWeekYamlConverter())
+                .WithTypeConverter(new DateTimeYamlConverter())
                 .IgnoreUnmatchedProperties()
                 .Build();
 
@@ -54,6 +60,9 @@ namespace HSMServer.Core.Schedule
             {
                 var schedule = _deserializer.Deserialize<AlertSchedule>(yaml);
 
+                if (schedule is null)
+                    throw new FormatException(EmptyScheduleMessage);
+
                 schedule.Schedule = yaml;
 
                 if (!Validate(schedule, out var errors))
@@ -66,7 +75,7 @@ namespace HSMServer.Core.Schedule
             }
             catch (Exception ex)
             {
-                throw new Exception($"YAML parsing error: {ex.Message}", ex);
+                throw new Exception($"YAML parsing error: {Describe(ex)}", ex);
             }
         }
 
@@ -93,13 +102,36 @@ namespace HSMServer.Core.Schedule
             try
             {
                 var schedule = _deserializer.Deserialize<AlertSchedule>(yaml);
+
+                if (schedule is null)
+                {
+                    errors.Add($"YAML parsing error: {EmptyScheduleMessage}");
+                    return false;
+                }
+
                 return Validate(schedule, out errors);
             }
             catch (Exception ex)
             {
-                errors.Add($"YAML parsing error: {ex.Message}");
+                errors.Add($"YAML parsing error: {Describe(ex)}");
                 return false;
             }
+        }
+
+        // YamlDotNet wraps every failure inside a type converter (and every
+        // shape mismatch) into one or more YamlException layers whose own
+        // message is the generic "Exception during deserialization"; the
+        // actual cause travels as the innermost InnerException. Report the
+        // cause, not the wrapper (#1599). Pure YAML syntax errors carry no
+        // inner exception and keep their own descriptive message.
+        private static string Describe(Exception exception)
+        {
+            var current = exception;
+
+            while (current is YamlException { InnerException: { } inner })
+                current = inner;
+
+            return current.Message;
         }
 
         private bool Validate(AlertSchedule schedule, out List<string> errors)
@@ -108,9 +140,9 @@ namespace HSMServer.Core.Schedule
 
             if (schedule.DaySchedules != null)
             {
-                foreach (var daySchedule in schedule.DaySchedules)
+                for (var i = 0; i < schedule.DaySchedules.Count; i++)
                 {
-                    ValidateDaySchedule(daySchedule, errors);
+                    ValidateDaySchedule(schedule.DaySchedules[i], DayScheduleLabel(schedule.DaySchedules[i], i), errors);
                 }
             }
             else
@@ -134,29 +166,36 @@ namespace HSMServer.Core.Schedule
             return !errors.Any();
         }
 
-        private void ValidateDaySchedule(DaySchedule daySchedule, List<string> errors)
+        // A day schedule is named in validation errors by its CLIENT-supplied
+        // id; without one its position (daySchedules[i]) is the only stable
+        // reference the client understands — a parser-generated Guid means
+        // nothing to the caller (#1599).
+        private static string DayScheduleLabel(DaySchedule daySchedule, int index) =>
+            string.IsNullOrEmpty(daySchedule.Id) ? $"daySchedules[{index}]" : $"'{daySchedule.Id}'";
+
+        private void ValidateDaySchedule(DaySchedule daySchedule, string label, List<string> errors)
         {
             if (daySchedule.Days == null || !daySchedule.Days.Any())
             {
-                errors.Add($"DaySchedule '{daySchedule.Id}' does not contain any days");
+                errors.Add($"DaySchedule {label} does not contain any days");
             }
 
             if (daySchedule.Windows == null || !daySchedule.Windows.Any())
             {
-                errors.Add($"DaySchedule '{daySchedule.Id}' does not contain any time windows");
+                errors.Add($"DaySchedule {label} does not contain any time windows");
             }
             else
             {
                 foreach (var window in daySchedule.Windows)
                 {
-                    ValidateTimeWindow(window, daySchedule.Id, errors);
+                    ValidateTimeWindow(window, errors);
                 }
 
-                CheckForOverlappingWindows(daySchedule.Windows, daySchedule.Id, errors);
+                CheckForOverlappingWindows(daySchedule.Windows, label, errors);
             }
         }
 
-        private void ValidateTimeWindow(TimeWindow window, string scheduleId, List<string> errors)
+        private void ValidateTimeWindow(TimeWindow window, List<string> errors)
         {
             if (window.Start < TimeSpan.Zero || window.Start >= TimeSpan.FromDays(1))
             {
@@ -172,14 +211,16 @@ namespace HSMServer.Core.Schedule
             {
                 errors.Add($"Start time {window.Start} must be less than end time {window.End}");
             }
-
-            if (window.End - window.Start < TimeSpan.FromMinutes(1))
+            else if (window.End - window.Start < TimeSpan.FromMinutes(1))
             {
+                // Only reported when start < end: a reversed or empty window
+                // already fails the start < end rule above, and repeating the
+                // duration rule for it adds no information (#1599).
                 errors.Add($"Time window too short (minimum 1 minute)");
             }
         }
 
-        private void CheckForOverlappingWindows(List<TimeWindow> windows, string scheduleId, List<string> errors)
+        private void CheckForOverlappingWindows(List<TimeWindow> windows, string label, List<string> errors)
         {
             var sortedWindows = windows.OrderBy(w => w.Start).ToList();
 
@@ -187,7 +228,7 @@ namespace HSMServer.Core.Schedule
             {
                 if (sortedWindows[i].End > sortedWindows[i + 1].Start)
                 {
-                    errors.Add($"Overlapping time windows in schedule '{scheduleId}': " +
+                    errors.Add($"Overlapping time windows in {label}: " +
                               $"{sortedWindows[i].Start}-{sortedWindows[i].End} and " +
                               $"{sortedWindows[i + 1].Start}-{sortedWindows[i + 1].End}");
                 }
@@ -252,7 +293,7 @@ namespace HSMServer.Core.Schedule
             {
                 foreach (var window in custom.Windows)
                 {
-                    ValidateTimeWindow(window, $"custom_{custom.Date:yyyy-MM-dd}", errors);
+                    ValidateTimeWindow(window, errors);
                 }
 
                 CheckForOverlappingWindows(custom.Windows, $"custom_{custom.Date:yyyy-MM-dd}", errors);
@@ -331,7 +372,15 @@ namespace HSMServer.Core.Schedule
         public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
         {
             var scalar = parser.Consume<Scalar>();
-            return TimeSpan.Parse(scalar.Value);
+
+            // Invariant culture: the accepted HH:mm / d.HH:mm forms carry no
+            // culture-dependent separators, and the error must not depend on
+            // the server's locale (#1599).
+            if (TimeSpan.TryParse(scalar.Value, CultureInfo.InvariantCulture, out var timeSpan))
+                return timeSpan;
+
+            throw new FormatException(
+                $"Invalid time '{scalar.Value}' (expected HH:mm, or 1.00:00 for the end of the day)");
         }
 
 
@@ -355,7 +404,8 @@ namespace HSMServer.Core.Schedule
         public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
         {
             var scalar = parser.Consume<Scalar>();
-            return scalar.Value.ToLower() switch
+
+            return scalar.Value.ToLowerInvariant() switch
             {
                 "mon" => DayOfWeek.Monday,
                 "tue" => DayOfWeek.Tuesday,
@@ -364,8 +414,21 @@ namespace HSMServer.Core.Schedule
                 "fri" => DayOfWeek.Friday,
                 "sat" => DayOfWeek.Saturday,
                 "sun" => DayOfWeek.Sunday,
-                _ => Enum.Parse<DayOfWeek>(scalar.Value, true)
+                _ => ParseFullName(scalar.Value)
             };
+        }
+
+        private static DayOfWeek ParseFullName(string value)
+        {
+            try
+            {
+                return Enum.Parse<DayOfWeek>(value, true);
+            }
+            catch (ArgumentException)
+            {
+                throw new FormatException(
+                    $"Unknown day '{value}' (expected mon..sun, 3-letter or full English day name)");
+            }
         }
 
         public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer)
@@ -375,5 +438,33 @@ namespace HSMServer.Core.Schedule
             emitter.Emit(new Scalar(shortName));
         }
 
+    }
+
+    // Registered on the DESERIALIZER only: it turns the default scalar-to-
+    // DateTime conversion failure (a generic FormatException wrapped into
+    // "Exception during deserialization") into a message that names the
+    // offending value and the expected format (#1599). The accepted format
+    // set is unchanged — the same invariant DateTime parse the default
+    // conversion performs. Serialization keeps YamlDotNet's default output.
+    public class DateTimeYamlConverter : IYamlTypeConverter
+    {
+        public bool Accepts(Type type) => type == typeof(DateTime);
+
+        public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
+        {
+            var scalar = parser.Consume<Scalar>();
+
+            if (DateTime.TryParse(scalar.Value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                return date;
+
+            throw new FormatException($"Invalid date '{scalar.Value}' (expected yyyy-MM-dd)");
+        }
+
+        public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer)
+        {
+            // Never registered on a serializer; present to satisfy the
+            // IYamlTypeConverter contract.
+            emitter.Emit(new Scalar(((DateTime)value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        }
     }
 }

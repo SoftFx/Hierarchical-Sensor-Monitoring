@@ -201,7 +201,12 @@ namespace HSMServer.Core.Model.Policies
     }
     public class DaySchedule
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
+        // No default id: an id the client did not send must stay absent until
+        // AlertScheduleParser.PostProcessSchedule assigns a fresh Guid AFTER
+        // validation — validation errors name an id-less entry by its
+        // position (daySchedules[i]), never by a server-generated Guid the
+        // client never sent (#1599).
+        public string Id { get; set; }
         public List<DayOfWeek> Days { get; set; } = new();
         public List<TimeWindow> Windows { get; set; } = new();
     }

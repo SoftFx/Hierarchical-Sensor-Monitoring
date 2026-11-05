@@ -466,6 +466,34 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task CreateSchedule_InvalidTime_Is422WithFieldSpecificScheduleMessage()
+        {
+            // #1599: the parser's message travels verbatim into the 422
+            // details on the `schedule` key — the offending value and the
+            // expected format, never the generic YamlDotNet wrapper text.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "bad-time",
+                Timezone = "UTC",
+                Schedule = """
+                    daySchedules:
+                        - days: [Mon]
+                          windows:
+                            - { start: "09:00", end: "24:00" }
+                    """,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Equal(ManagementApiErrors.UnprocessableEntityCode, body.Error);
+
+            var message = Assert.Single(Assert.IsType<string[]>(body.Details["schedule"]));
+            Assert.Equal("YAML parsing error: Invalid time '24:00' (expected HH:mm, or 1.00:00 for the end of the day)",
+                message);
+        }
+
+        [Fact]
         public async Task CreateSchedule_UnknownTimezone_Is422OnTimezone()
         {
             var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
