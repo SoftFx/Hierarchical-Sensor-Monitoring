@@ -72,7 +72,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 AddConditionErrors(dto.SensorType, isTtlPolicy: true, policy, $"ttlPolicies[{index}]", errors);
         }
 
-        private static void AddConditionErrors(byte templateSensorType, bool isTtlPolicy,
+        private static void AddConditionErrors(int templateSensorType, bool isTtlPolicy,
             AlertPolicyDto policy, string prefix, Dictionary<string, List<string>> errors)
         {
             foreach (var (condition, index) in (policy?.Conditions ?? []).Select((c, i) => (c, i)))
@@ -107,9 +107,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // One condition against the rule table. The out key is the field
         // SUFFIX within the condition (property/operation/target); the
         // walkers above compose the full policies[i].conditions[j].key.
-        public static bool TryValidateCondition(byte templateSensorType, PolicyConditionDto condition,
+        public static bool TryValidateCondition(int templateSensorType, PolicyConditionDto condition,
             out string key, out string message)
         {
+            // int since #1607: the DTO's SensorType is int on the wire, and
+            // this pass runs alongside structural errors, so an out-of-range
+            // value can reach here — the rule lookup then misses and the
+            // message names the raw value, while the structural pass carries
+            // the sensorType error itself.
+
             var property = (PolicyProperty)condition.Property;
             var operation = (PolicyOperation)condition.Operation;
 

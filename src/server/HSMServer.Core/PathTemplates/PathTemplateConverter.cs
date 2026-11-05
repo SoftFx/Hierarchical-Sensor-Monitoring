@@ -18,7 +18,19 @@ namespace HSMServer.PathTemplates
         private const string UnnamedVariable = @"\*";
 
         private readonly ConcurrentDictionary<string, string> _namedVariables = new();
-        private string _regexPattern;
+
+        // The converter's whole match state in ONE reference, so a single
+        // write publishes it (#1607 review): null = "no template was ever
+        // applied" (match everything), NeverMatch = "the last template
+        // failed to compile" (match nothing — a rejected pattern must not
+        // degrade into match-all for the dashboard-panel subscriptions that
+        // keep querying the converter after a failed apply), any other
+        // regex = the applied filter. Two separately-written fields would
+        // open a brief match-all window between the writes on a failed
+        // re-apply.
+        private static readonly Regex NeverMatch = new("(?!)"); // zero-width negative lookahead: fails every input
+
+        private Regex _regex;
 
         [GeneratedRegex(UnnamedVariable)]
         private static partial Regex EmptyVariableToRegex();
@@ -44,12 +56,19 @@ namespace HSMServer.PathTemplates
                 template = NamedVariableToRegex().Replace(template, g => $"(?<{RegisterNamedVariable(g.Value)}>{AllValidSymbols})"); // change custom variable {product} -> regex style (?<product>...)
                 template = EmptyVariableToRegex().Replace(template, AllValidSymbols); //change noname variable * to regex pattern
 
-                _regexPattern = $"^{template}$"; //set start and end string constants
+                // Compile eagerly: a malformed pattern (regex metacharacters in a
+                // constant part, e.g. an unterminated '[' set) must fail HERE with
+                // a message the caller can report, not throw RegexParseException
+                // out of IsMatch on the first candidate path (#1607).
+                _regex = new Regex($"^{template}$"); //set start and end string constants
 
                 return true;
             }
             catch (Exception ex)
             {
+                // One write publishes the match-nothing state; a later VALID
+                // apply replaces it with a real filter.
+                _regex = NeverMatch;
                 error = ex.Message;
                 return false;
             }
@@ -57,10 +76,12 @@ namespace HSMServer.PathTemplates
 
         public bool IsMatch(string path)
         {
-            if (string.IsNullOrEmpty(_regexPattern))
+            // No template ever applied: every path is a candidate. A failed
+            // apply holds NeverMatch (see the field comment above).
+            if (_regex is null)
                 return true;
 
-            var match = Regex.Match(path, _regexPattern);
+            var match = _regex.Match(path);
 
             if (match.Success)
             {

@@ -106,7 +106,7 @@ namespace HSMServer.Core.Tests.Controllers
             };
         }
 
-        private static AlertTemplateDto BuildDto(string name = null, byte sensorType = (byte)SensorType.Integer) => new()
+        private static AlertTemplateDto BuildDto(string name = null, int sensorType = (byte)SensorType.Integer) => new()
         {
             Name = name ?? $"template-{Guid.NewGuid():N}",
             SensorType = sensorType,
@@ -709,6 +709,111 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto(sensorType: AlertTemplateModel.AnyType) with { Policies = [] };
 
             Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
+        }
+
+
+        // === #1607: field-keyed errors for inputs that used to bypass the validator ===
+
+
+        [Fact]
+        public async Task Create_InvalidRegexPath_Is400WithPathsKey()
+        {
+            // The #1607 repro: regex metacharacters in a path constant used to
+            // escape the write engine as an unhandled RegexParseException (a
+            // REST 500); the eagerly compiled pattern now reports it as a
+            // field-keyed 400 like every other path error, naming the pattern.
+            var dto = BuildDto() with { Paths = ["HSM Server Monitoring/(["] };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            var paths = Assert.IsType<string[]>(details["paths"]);
+            Assert.Contains(paths, message => message.Contains("Invalid path template"));
+            Assert.Contains(paths, message => message.Contains("HSM Server Monitoring"));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Update_InvalidRegexPath_Is400WithPathsKey()
+        {
+            var stored = new AlertTemplateModel { Name = "regex", FolderId = Guid.NewGuid() };
+            _store[stored.Id] = stored;
+
+            var result = await CreateController().UpdateTemplate(stored.Id,
+                BuildDto() with { Paths = ["HSM Server Monitoring/(["] });
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains(Assert.IsType<string[]>(details["paths"]),
+                message => message.Contains("Invalid path template"));
+        }
+
+        [Theory]
+        [InlineData(999)]
+        [InlineData(-1)]
+        [InlineData(256)]
+        public async Task Create_UnknownSensorType_OutsideTheByteRange_Is400WithFieldKey(int sensorType)
+        {
+            // #1607: the enum-coded fields bind as int, so out-of-range values
+            // REACH the validator instead of failing JSON binding first — the
+            // error names the field and the value like the in-range unknowns.
+            var dto = BuildDto(sensorType: sensorType);
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Equal($"Unknown sensor type {sensorType}.",
+                Assert.IsType<string[]>(details["sensorType"]).Single());
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_UnknownConditionProperty_OutsideTheByteRange_Is400WithFieldKey()
+        {
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "1" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = 999,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Equal("Unknown condition property 999.",
+                Assert.IsType<string[]>(details["policies[0].conditions[0].property"]).Single());
+        }
+
+        [Fact]
+        public async Task Create_SeveralMistakes_AllFieldsReportedTogether()
+        {
+            // #1607's aggregation acceptance: binding no longer fails first on
+            // the out-of-range enum value, so one answer reports EVERY mistake
+            // of the body under its own field key.
+            var dto = BuildDto() with { Name = "", Paths = [], SensorType = 999 };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+
+            Assert.Equal("The name is required.", Assert.IsType<string[]>(details["name"]).Single());
+            Assert.Equal("At least one path template is required.",
+                Assert.IsType<string[]>(details["paths"]).Single());
+            Assert.Equal("Unknown sensor type 999.", Assert.IsType<string[]>(details["sensorType"]).Single());
+            Assert.Empty(_store);
         }
 
         [Fact]

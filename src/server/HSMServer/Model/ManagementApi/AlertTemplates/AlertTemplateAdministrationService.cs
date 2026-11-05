@@ -627,7 +627,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
                 try
                 {
-                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, chatsById));
+                    // logSkippedPathTemplates: false — this build VALIDATES client input and
+                    // answers every skipped path in the 422 details; a Warn per bad
+                    // pattern here would be operator-log noise (#1607 review).
+                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, chatsById),
+                        logSkippedPathTemplates: false);
                 }
                 catch (Exception e)
                 {
@@ -691,7 +695,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if ((dto.Policies?.Count ?? 0) + (dto.TtlPolicies?.Count ?? 0) > MaxPolicies)
                 Add(errors, "policies", $"At most {MaxPolicies} policies (regular and TTL combined) are allowed.");
 
-            if (dto.SensorType != AlertTemplateModel.AnyType && !Enum.IsDefined<SensorType>((SensorType)dto.SensorType))
+            if (dto.SensorType != AlertTemplateModel.AnyType && !IsDefinedByteEnum<SensorType>(dto.SensorType))
                 Add(errors, "sensorType", $"Unknown sensor type {dto.SensorType}.");
 
             if ((dto.TtlPolicies?.Count ?? 0) != (dto.Ttls?.Count ?? 0))
@@ -779,11 +783,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             }
         }
 
-        // Every enum byte is validated BEFORE the domain casts it: the entity
-        // reconstruction casts without checks and unknown values either throw
-        // or silently coerce (SensorStatus -> Error). Errors carry the item
-        // path (e.g. "policies[2].conditions[0].operation") so a client can
-        // locate them.
+        // Every enum-coded field is validated BEFORE the domain casts it: the
+        // entity reconstruction casts without checks and unknown values either
+        // throw or silently coerce (SensorStatus -> Error). Errors carry the
+        // item path (e.g. "policies[2].conditions[0].operation") so a client
+        // can locate them.
         private static void AddPolicyStructureErrors(AlertPolicyDto policy, string prefix,
             Dictionary<string, List<string>> errors)
         {
@@ -807,23 +811,23 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     continue;
                 }
 
-                if (!Enum.IsDefined<PolicyOperation>((PolicyOperation)condition.Operation))
+                if (!IsDefinedByteEnum<PolicyOperation>(condition.Operation))
                     Add(errors, $"{conditionPrefix}.operation", $"Unknown condition operation {condition.Operation}.");
 
-                if (!Enum.IsDefined<PolicyProperty>((PolicyProperty)condition.Property))
+                if (!IsDefinedByteEnum<PolicyProperty>(condition.Property))
                     Add(errors, $"{conditionPrefix}.property", $"Unknown condition property {condition.Property}.");
 
-                if (!Enum.IsDefined<PolicyCombination>((PolicyCombination)condition.Combination))
+                if (!IsDefinedByteEnum<PolicyCombination>(condition.Combination))
                     Add(errors, $"{conditionPrefix}.combination", $"Unknown condition combination {condition.Combination}.");
 
-                if (!Enum.IsDefined<TargetType>((TargetType)condition.Target.Type))
+                if (!IsDefinedByteEnum<TargetType>(condition.Target.Type))
                     Add(errors, $"{conditionPrefix}.target.type", $"Unknown condition target type {condition.Target.Type}.");
             }
 
-            if (!Enum.IsDefined<SensorStatus>((SensorStatus)policy.SensorStatus))
+            if (!IsDefinedByteEnum<SensorStatus>(policy.SensorStatus))
                 Add(errors, $"{prefix}.sensorStatus", $"Unknown sensor status {policy.SensorStatus}.");
 
-            if (!Enum.IsDefined<AlertRepeatMode>((AlertRepeatMode)(policy.Schedule?.RepeateMode ?? 0)))
+            if (!IsDefinedByteEnum<AlertRepeatMode>(policy.Schedule?.RepeateMode ?? 0))
                 Add(errors, $"{prefix}.schedule", $"Unknown repeat mode {policy.Schedule?.RepeateMode}.");
 
             var timeTicks = policy.Schedule?.TimeTicks ?? 0;
@@ -932,5 +936,13 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         private static void Add(Dictionary<string, List<string>> errors, string key, string message) =>
             (errors.TryGetValue(key, out var list) ? list : errors[key] = []).Add(message);
+
+        // Membership check of the enum-coded DTO fields (#1607): the fields are
+        // ints so out-of-range values BIND and reach this pass, but the domain
+        // enums are byte-backed and a plain (T)value cast TRUNCATES (256 reads
+        // as 0, the first member) — so anything outside 0..255 is unknown BY
+        // DEFINITION, before Enum.IsDefined is consulted.
+        private static bool IsDefinedByteEnum<T>(int value) where T : struct, Enum =>
+            value is >= 0 and <= byte.MaxValue && Enum.IsDefined<T>((T)Enum.ToObject(typeof(T), (byte)value));
     }
 }

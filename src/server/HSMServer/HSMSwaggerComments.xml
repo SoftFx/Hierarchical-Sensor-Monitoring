@@ -1987,9 +1987,11 @@
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
             <summary>
             Alert template wire contract of the /api/v1/alertTemplates surface. The shape
-            mirrors the durable template one field for field; ids are Guid strings. Byte
-            fields carry DOMAIN ENUM VALUES (documented per field) — membership is validated
-            structurally, unknown values answer 400 with the offending field key.
+            mirrors the durable template one field for field; ids are Guid strings. Integer
+            fields carry DOMAIN ENUM VALUES (documented per field) — any integer binds
+            (values outside the enum's byte range included, #1607) and membership is
+            validated structurally AFTER authorization; unknown values answer 400 with
+            the offending field key.
             </summary>
             <remarks>
             Round-trip notes: a client-sent template id is IGNORED on create (server
