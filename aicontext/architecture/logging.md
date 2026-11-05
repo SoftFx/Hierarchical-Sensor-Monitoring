@@ -12,7 +12,8 @@ logs.
 
 - `Trace`/`Debug`: verbose diagnostics, queue internals, per-item details.
 - `Info`: lifecycle events, startup/shutdown, important successful operations.
-- `Warn`: expected refusals, transient failures, degraded but recoverable states.
+- `Warn`: expected refusals, transient failures, degraded but recoverable states,
+  a client aborting a request mid-flight.
 - `Error`: unexpected failures, lost work, failed delivery, storage exceptions.
   An expected client refusal the caller already receives (e.g. an MCP tool's
   validation/not-found `McpException`, or the SDK argument-binder's
@@ -20,7 +21,14 @@ logs.
   MCP SDK logs both at ERROR, and `src/server/HSMServer/nlog.config` filters
   exactly those entries (either type, from
   `ModelContextProtocol.Server.McpServer`) out of `HSM-error-log.txt` while
-  they still land in `HSM-all-log.txt` (#1613, ADR-0016).
+  they still land in `HSM-all-log.txt` (#1613, ADR-0016). The same holds for
+  a client dropping the connection before the response finishes (a polling
+  MCP client abandoning its `POST /mcp`, surfacing as
+  `TaskCanceledException` from the transport):
+  `src/server/HSMServer/Middleware/LoggingExceptionMiddleware.cs` logs an
+  `OperationCanceledException` caught while `HttpContext.RequestAborted` is
+  cancelled at WARN — an internal cancellation (token intact) and every other
+  exception type stay at ERROR (#1632, ADR-0016).
 
 ## Required Context
 

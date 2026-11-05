@@ -28,7 +28,22 @@ namespace HSMServer.Middleware
                 // this record but through inner exceptions and through the outer exception
                 // handlers' own logging, so no call-site rewriting can cover it all. This
                 // middleware only logs the failure and rethrows.
-                if (context.Response.HasStarted)
+
+                // #1632: a client dropping the connection before the response finishes
+                // (a polling MCP client abandoning its POST /mcp) surfaces as an
+                // OperationCanceledException (incl. TaskCanceledException) out of the
+                // transport, with or without the response started. The aborted request
+                // token is the ground truth for "the client went away": not a server
+                // fault an operator must look at, so it logs at Warn and stays out of
+                // HSM-error-log.txt (the operator surface, ADR-0016) while still
+                // reaching HSM-all-log.txt via the Warn+ rule. An OperationCanceledException
+                // with the request token intact (an internal timeout or cancellation) is
+                // not a client disconnect and stays an Error.
+                if (ex is OperationCanceledException && context.RequestAborted.IsCancellationRequested)
+                {
+                    _logger.Warn(ex, $"Client cancelled {context.Request.Method} {context.Request.Path} request before it completed");
+                }
+                else if (context.Response.HasStarted)
                 {
                     _logger.Error(ex, "Exception occurred, but response was already started");
                 }
