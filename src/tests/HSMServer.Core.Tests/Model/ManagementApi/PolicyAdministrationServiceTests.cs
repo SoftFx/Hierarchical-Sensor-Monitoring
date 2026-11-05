@@ -581,14 +581,16 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             var target = Assert.Single(sensor.Policies.TTLPolicies);
 
-            // The GET-echo toggle body: interval and destination as read, no
+            // The GET-echo toggle body: interval and destination as read (a
+            // notification-less policy reads destination Empty — the read
+            // side normalizes the dead stored mode, #1612 review), no
             // effect, isDisabled flipped — applied without content validation
             // (the core applies only the toggle for template-owned TTL).
             var toggled = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, target.Id, new TtlPolicyDto
             {
                 IsDisabled = true,
                 Interval = "00:30:00",
-                Destination = new AlertDestinationDto { Mode = target.Destination.Mode.ToString() },
+                Destination = new AlertDestinationDto { Mode = "Empty" },
             }, User);
 
             Assert.True(toggled.Success, toggled.Failure?.Message);
@@ -632,7 +634,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             {
                 IsDisabled = true,
                 Interval = "00:30:00",
-                Destination = new AlertDestinationDto { Mode = target.Destination.Mode.ToString() },
+                // The GET-echo destination: a notification-less policy reads
+                // Empty (the dead stored mode is normalized, #1612 review).
+                Destination = new AlertDestinationDto { Mode = "Empty" },
             }, User);
 
             Assert.True(toggled.Success, toggled.Failure?.Message);
