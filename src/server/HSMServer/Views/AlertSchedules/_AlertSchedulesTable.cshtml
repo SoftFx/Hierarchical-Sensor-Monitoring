@@ -29,7 +29,12 @@
         @foreach (var item in Model)
         {
             <tr>
-                <td scope="row">@item.Name</td>
+                @* #1597: a 200-char name must not stretch the table — truncate
+                    with an ellipsis (the Journal pattern) and keep the full
+                    name reachable in the tooltip. *@
+                <td scope="row">
+                    <div class="text-truncate" style="max-width: 320px;" data-bs-toggle="tooltip" title="@item.Name">@item.Name</div>
+                </td>
                 <td>@item.Timezone</td>
                 <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class="alert-template-tooltip" title="@item.SensorsTooltip">@item.Sensors.Count</td>
                 @if (userIsAdmin)
