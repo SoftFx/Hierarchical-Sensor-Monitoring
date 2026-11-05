@@ -289,7 +289,7 @@ namespace HSMServer.Core.Model.Policies
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
             var errors = new StringBuilder(1 << 5);
 
-            if (initiator == InitiatorInfo.AlertTemplate)
+            if (initiator is { IsTemplateApply: true })
             {
                 foreach (var update in updatesList)
                 {
@@ -342,7 +342,7 @@ namespace HSMServer.Core.Model.Policies
                     {
                         if (updates.TryGetValue(id, out var update))
                         {
-                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && !initiator.IsTemplateApply)
                             {
                                 if (policy.IsDisabled != update.IsDisabled)
                                 {
@@ -377,7 +377,7 @@ namespace HSMServer.Core.Model.Policies
                         }
                         else
                         {
-                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && !initiator.IsTemplateApply)
                                 continue;
 
                             RemovePolicy(id, initiator);
@@ -396,7 +396,7 @@ namespace HSMServer.Core.Model.Policies
                         // UpdateTTLs preserves TTL entries with TemplateId, so blocking the add
                         // leaves the TTL intact (demote effectively denied). Mirrors lines 294/319.
                         if ((update.Id == Guid.Empty || !_storage.ContainsKey(update.Id))
-                            && (update.TemplateId == null || initiator.IsForceUpdate || initiator == InitiatorInfo.AlertTemplate))
+                            && (update.TemplateId == null || initiator.IsForceUpdate || initiator.IsTemplateApply))
                         {
                             var policy = new PolicyType();
 

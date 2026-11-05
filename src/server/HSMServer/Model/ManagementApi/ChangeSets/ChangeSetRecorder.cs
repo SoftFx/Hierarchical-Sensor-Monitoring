@@ -167,12 +167,23 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
                 NewValue = entry.Operation != ChangeSetOperation.Delete ? entry.Path : null,
                 Path = entry.Path,
                 Kind = KindOf(entry),
-                // The recorded root product (#1588 review round 4): the redo
-                // handle must stay visible under the product filter like
-                // every other record of the entity.
-                ProductId = entry.ParentId?.ToString(),
+                // The recorded root product of POLICY entries (#1588 review
+                // round 4): their undo handle stays visible under the product
+                // filter like every other record of the entity. A template
+                // entry's ParentId is its FOLDER, not a product — stamped
+                // here it made the record's sight resolution look up a
+                // product that does not exist and fail closed, hiding every
+                // alertTemplate record from all callers, admin included
+                // (#1610). Folder-scoped and global entities (templates,
+                // schedules) carry no product by design; their records
+                // resolve sight from the live tree instead.
+                ProductId = IsPolicyKind(entry.Kind) ? entry.ParentId?.ToString() : null,
                 ChangeSetId = changeSetId.ToString(),
             });
+
+        private static bool IsPolicyKind(ChangeSetEntryKind kind) =>
+            kind is ChangeSetEntryKind.SensorDataPolicies or ChangeSetEntryKind.SensorTtlPolicies or
+                ChangeSetEntryKind.ProductTtlPolicies;
 
         private static string KindOf(ChangeSetEntry entry) => entry.Kind switch
         {

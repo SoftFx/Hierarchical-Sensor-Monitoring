@@ -12,6 +12,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
@@ -57,14 +58,14 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((Guid id) => _store.TryGetValue(id, out var template) ? template : null);
             _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
                 });
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-                .Returns((Guid id, CancellationToken token) =>
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((Guid id, InitiatorInfo initiator, CancellationToken token) =>
                 {
                     _store.TryRemove(id, out _);
                     return Task.FromResult((true, (string)null));
@@ -359,7 +360,7 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto() with { Name = "" };
 
             Assert.Equal(404, StatusCodeOf(await CreateController().CreateTemplate(dto)));
-            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()), Times.Never);
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Theory]
@@ -471,9 +472,9 @@ namespace HSMServer.Core.Tests.Controllers
             // before reconciling and Remove strips per-sensor policies BEFORE deleting
             // the template — a client-triggered cancellation mid-loop would leave
             // half-applied state (a cancelled delete silently disarms alerts).
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Callback((AlertTemplateModel model, CancellationToken token) => Assert.False(token.CanBeCanceled))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Callback((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken token) => Assert.False(token.CanBeCanceled))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
@@ -846,7 +847,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Create_FolderWithoutProducts_Is409()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "No products found in the selected folder.", (List<TemplateApplyWarning>)null)));
 
             var result = await CreateController().CreateTemplate(BuildDto());
@@ -866,8 +867,8 @@ namespace HSMServer.Core.Tests.Controllers
             // 409 leaves a live resource behind. The conflict must disclose its id:
             // the caller cannot re-POST (name-uniqueness 400) and cannot PUT an id
             // it was never told about.
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((false, "failed to apply to some products", (List<TemplateApplyWarning>)null));
@@ -890,8 +891,8 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Create_PolicyRejectionsOnPersistingSave_Answers201WithWarnings()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
@@ -936,8 +937,8 @@ namespace HSMServer.Core.Tests.Controllers
             var stored = new AlertTemplateModel { Name = "warned", FolderId = Guid.NewGuid() };
             _store[stored.Id] = stored;
 
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
@@ -1098,7 +1099,7 @@ namespace HSMServer.Core.Tests.Controllers
             var stored = new AlertTemplateModel { Name = "stuck" };
             _store[stored.Id] = stored;
 
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "Failed to remove template from products: X")));
 
             var result = await CreateController().DeleteTemplate(stored.Id);

@@ -8,6 +8,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Controllers;
@@ -48,9 +49,9 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.GetAlertTemplate(It.IsAny<Guid>())).Returns((AlertTemplateModel)null);
             _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<System.Threading.CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((true, (string)null, (List<TemplateApplyWarning>)null));
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((true, (string)null));
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
@@ -206,7 +207,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var template = BuildStoredTemplate(Guid.NewGuid());
 
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((false, "partial per-sensor policy removal"));
 
             var (body, status) = BodyAndStatus(await CreateTemplatesController().DeleteTemplate(template.Id));

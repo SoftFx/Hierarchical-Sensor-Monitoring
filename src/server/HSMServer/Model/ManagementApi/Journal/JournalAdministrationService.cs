@@ -307,13 +307,22 @@ namespace HSMServer.Model.ManagementApi.Journal
             return record is not null && access.CanRead(ResourceOf(record));
         }
 
-        // The sight boundary of a record: the stamped root product when
-        // present (every record the unified write paths produce), else the
-        // entity resolved against the live tree — legacy records and records
-        // of deleted entities fall to the admin-only Global scope.
+        // The sight boundary of a record: the stamped root product when it
+        // resolves to a live product, else the entity resolved against the
+        // live tree — legacy records and records of deleted entities fall to
+        // the admin-only Global scope.
         private ApiTokenResource ResourceOf(JournalRecordModel record)
         {
-            if (Guid.TryParse(record.ProductId, out var productId) && productId != Guid.Empty)
+            // The stamp is trusted only when it resolves to a LIVE product
+            // (#1610): alertTemplate records written before the fix carry
+            // their FOLDER id in ProductId (the recorder stamped the entry's
+            // ParentId blindly), and a blind Product() fails boundary
+            // resolution — hiding the record from every caller, admin
+            // included. An unresolvable stamp falls through to the live-tree
+            // resolution below, which lands template ids on their folder and
+            // everything unknown on the admin-only Global scope.
+            if (Guid.TryParse(record.ProductId, out var productId) && productId != Guid.Empty &&
+                _cache.TryGetProduct(productId, out _))
                 return ApiTokenResource.Product(productId);
 
             var id = record.Key.Id;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Journal;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -21,6 +23,7 @@ using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
+using HSMServer.Model.Folders;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -51,6 +54,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
         private readonly PolicyAdministrationService _policies;
         private readonly AlertScheduleAdministrationService _schedules;
+        private readonly AlertTemplateAdministrationService _templates;
+        private readonly ChangeSetAdministrationService _engine;
+        private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
         private readonly JournalAdministrationService _journal;
         private readonly JournalService _journalService;
 
@@ -68,15 +74,15 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             _users.Setup(u => u[It.IsAny<Guid>()]).Returns(() => _owner);
             _chats.Setup(c => c.GetValues()).Returns([]);
 
-            var changeSets = new ChangeSetJournal(_databaseCoreManager.DatabaseCore);
+            _changeSetJournal = new ChangeSetJournal(_databaseCoreManager.DatabaseCore);
             _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
-            var recorder = new ChangeSetRecorder(changeSets, _journalService,
+            var recorder = new ChangeSetRecorder(_changeSetJournal, _journalService,
                 NullLogger<ChangeSetRecorder>.Instance);
 
             _policies = new PolicyAdministrationService(_valuesCache, _authorization.Object, _users.Object,
                 _chats.Object, _folders.Object, _alertScheduleProvider, recorder);
 
-            var templates = new AlertTemplateAdministrationService(_valuesCache, _folders.Object, _chats.Object,
+            _templates = new AlertTemplateAdministrationService(_valuesCache, _folders.Object, _chats.Object,
                 _alertScheduleProvider, _authorization.Object, _users.Object, recorder,
                 NullLogger<AlertTemplateAdministrationService>.Instance);
 
@@ -84,11 +90,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             _schedules = new AlertScheduleAdministrationService(_alertScheduleProvider, _valuesCache,
                 _authorization.Object, reader, recorder, _users.Object);
 
-            var engine = new ChangeSetAdministrationService(changeSets, _valuesCache, _alertScheduleProvider,
-                _authorization.Object, _users.Object, _policies, templates, _schedules, recorder);
+            _engine = new ChangeSetAdministrationService(_changeSetJournal, _valuesCache, _alertScheduleProvider,
+                _authorization.Object, _users.Object, _policies, _templates, _schedules, recorder);
 
             _journal = new JournalAdministrationService(_journalService, _valuesCache, _folders.Object,
-                _authorization.Object, _users.Object, engine, changeSets);
+                _authorization.Object, _users.Object, _engine, _changeSetJournal);
         }
 
 
@@ -196,6 +202,126 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             Assert.Equal(JournalKinds.AlertTemplate, record.Kind);
             Assert.Equal(changeSetId.ToString(), record.ChangeSetId);
+            Assert.True(record.Rollbackable);
+        }
+
+        [Fact]
+        public async Task TemplateWrite_RecordIsVisibleThroughTheRealSightEvaluator()
+        {
+            // #1610: the template record's sight must resolve like any other
+            // record — through the template's FOLDER, never through a
+            // product-stamped folder id (the stamp made boundary resolution
+            // fail closed and hid every alertTemplate record, admin
+            // included). The real evaluator replaces the always-allow mock
+            // the suite's other tests ride on.
+            var changeSetId = Guid.NewGuid();
+
+            var created = await _templates.CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnRealSight"]),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var journal = RealSightJournal(_owner);
+            var listed = journal.ListRecords(TokenUser,
+                new JournalFilter { Kind = JournalKinds.AlertTemplate, FromUtc = DateTime.UtcNow.AddMinutes(-5) }).Value;
+
+            var record = Assert.Single(listed, r => r.ChangeSetId == changeSetId.ToString());
+
+            Assert.True(record.Rollbackable);
+            Assert.Null(record.ProductId); // folder-scoped entities carry no product (journal feature.md)
+            Assert.Contains(_owner.Name, record.Author, StringComparison.Ordinal); // the token's owner is the author
+
+            var details = journal.GetRecord(record.Id, TokenUser);
+
+            Assert.True(details.Success, details.Failure?.Message);
+            Assert.NotNull(details.Value.ChangeSet);
+            var entry = Assert.Single(details.Value.ChangeSet.Entries);
+
+            Assert.Equal("alertTemplate", entry.Kind);
+            Assert.NotNull(entry.AfterTemplate); // the group image carries the template body
+        }
+
+        [Fact]
+        public async Task TemplateWrite_FanOutPolicyRecordsShareTheRequestGroup()
+        {
+            // #1610: the fan-out of a template write is a policy write of the
+            // same request — its sensorDataPolicies records must carry the
+            // request's undo group instead of standing alone, exactly like a
+            // direct policy write (#1588's linking rule).
+            var sensor = await CreateSensorAsync("jrnFanOut");
+            var changeSetId = Guid.NewGuid();
+
+            var created = await _templates.CreateTemplateAsync(TokenUser,
+                TemplateDto(["*/jrnFanOut"]) with { Policies = [TemplatePolicy()] },
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Single(sensor.Policies); // the fan-out applied a template policy
+
+            var fanOut = RawRecords(sensor.Id, JournalKinds.SensorDataPolicies);
+
+            var record = Assert.Single(fanOut, r => r.ChangeSetId == changeSetId.ToString());
+
+            // The fan-out author stays the AlertTemplate initiator (the
+            // change-table ownership type), only the group link is added.
+            Assert.Contains("AlertTemplate", record.Initiator, StringComparison.Ordinal);
+            Assert.True(JournalKinds.IsRollbackable(record.Kind));
+        }
+
+        [Fact]
+        public async Task TemplateDelete_JournalsTheRecord_AndTheStripSharesItsGroup()
+        {
+            var sensor = await CreateSensorAsync("jrnDelete");
+            var template = TemplateDto(["*/jrnDelete"]) with { Policies = [TemplatePolicy()] };
+
+            var created = await _templates.CreateTemplateAsync(TokenUser, template);
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var deleteGroup = Guid.NewGuid();
+            var deleted = await _templates.DeleteTemplateAsync(created.Value.Id, TokenUser,
+                new ChangeSetWriteOptions { ChangeSetId = deleteGroup });
+            Assert.True(deleted.Success, deleted.Failure?.Message);
+            Assert.Empty(sensor.Policies); // the strip removed the template policy
+
+            // The delete's own alertTemplate record — visible through the
+            // real sight evaluator even though the template row is gone
+            // (records keyed by deleted entities resolve to Global, the
+            // admin-only scope).
+            var journal = RealSightJournal(_owner);
+            var listed = journal.ListRecords(TokenUser,
+                new JournalFilter { Kind = JournalKinds.AlertTemplate, FromUtc = DateTime.UtcNow.AddMinutes(-5) }).Value;
+
+            var deleteRecord = Assert.Single(listed, r => r.ChangeSetId == deleteGroup.ToString());
+
+            Assert.Equal("AlertTemplate:Delete", deleteRecord.Property);
+            Assert.True(deleteRecord.Rollbackable);
+
+            // The strip's per-sensor records share the delete's group.
+            var strip = RawRecords(sensor.Id, JournalKinds.SensorDataPolicies);
+
+            Assert.Contains(strip, r => r.ChangeSetId == deleteGroup.ToString());
+        }
+
+        [Fact]
+        public void RecordStampedWithAFolderIdAsProduct_StaysVisible()
+        {
+            // #1610 repair: records written before the fix carry their FOLDER
+            // id in ProductId (the recorder stamped entry.ParentId blindly).
+            // The unresolvable stamp must not hide the stored record — sight
+            // falls through to the live-tree resolution.
+            _journalService.AddRecord(new JournalRecordModel(Guid.NewGuid(), InitiatorInfo.AsUser("legacy-writer"))
+            {
+                Enviroment = "Alert template",
+                PropertyName = "AlertTemplate:Create",
+                Path = "legacy-template",
+                Kind = JournalKinds.AlertTemplate,
+                ProductId = _fixture.FolderId.ToString(), // the pre-fix mis-stamp
+                ChangeSetId = Guid.NewGuid().ToString(),
+            });
+
+            var listed = RealSightJournal(_owner).ListRecords(TokenUser,
+                new JournalFilter { Kind = JournalKinds.AlertTemplate, FromUtc = DateTime.UtcNow.AddMinutes(-5) }).Value;
+
+            var record = Assert.Single(listed, r => r.Path == "legacy-template");
+
             Assert.True(record.Rollbackable);
         }
 
@@ -379,6 +505,46 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             return listed.Single(r => r.ChangeSetId == changeSetId.ToString());
         }
 
+        // A journal service wired to the REAL sight evaluator (#1610): the
+        // suite's always-allow authorization mock hides nothing, and the
+        // template-record regression this fix pins — a folder id stamped
+        // into ProductId failing closed under Product() boundary resolution
+        // — only reproduces through the production decision path. The owner
+        // resolves through the users manager, the token is live, the
+        // fixture's folder through the folder manager, products and sensors
+        // through the live cache.
+        private JournalAdministrationService RealSightJournal(User owner)
+        {
+            var users = new Mock<IUserManager>();
+            users.Setup(u => u[It.IsAny<Guid>()]).Returns(owner);
+
+            var tokens = new Mock<IApiTokenManager>();
+            tokens.Setup(t => t.IsTokenLive(It.IsAny<string>())).Returns(true);
+            tokens.Setup(t => t.GetToken(It.IsAny<string>())).Returns(new ApiTokenInfo { Name = "token" });
+
+            var folder = new FolderModel(EntitiesFactory.BuildFolderEntity() with
+            {
+                Id = _fixture.FolderId.ToString(),
+            });
+            var folders = new Mock<IFolderManager>();
+            folders.Setup(f => f.TryGetValue(_fixture.FolderId, out folder)).Returns(true);
+
+            var authorization = new ApiTokenAuthorizationService(users.Object, tokens.Object, folders.Object,
+                _valuesCache, new Mock<IApiTokenSecurityEventSink>().Object);
+
+            return new JournalAdministrationService(_journalService, _valuesCache, folders.Object,
+                authorization, users.Object, _engine, _changeSetJournal);
+        }
+
+        // The raw storage rows of one entity under a kind tag (#1610): the
+        // journal models straight from the core service, below the DTO
+        // rendering — the fan-out records' initiator and group link live on
+        // the raw row.
+        private List<JournalRecordModel> RawRecords(Guid entityId, string kind) =>
+            _journalService.GetRecords(DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow)
+                .Where(r => r.Key.Id == entityId && r.Kind == kind)
+                .ToList();
+
         private async Task<BaseSensorModel> CreateSensorAsync(string path)
         {
             var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, path, DateTime.UtcNow);
@@ -427,6 +593,24 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             FolderId = _fixture.FolderId,
             Paths = [.. paths],
             Policies = [],
+        };
+
+        // The template flavor of a data policy (AlertPolicyDto, not the
+        // direct-write PolicyDto): one Value > 20 condition, applied to the
+        // fan-out targets of the template's path patterns.
+        private static AlertPolicyDto TemplatePolicy() => new()
+        {
+            Conditions =
+            [
+                new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "20" },
+                    Combination = (byte)PolicyCombination.And,
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = (byte)PolicyProperty.Value,
+                },
+            ],
+            SensorStatus = (byte)SensorStatus.Ok,
         };
     }
 }

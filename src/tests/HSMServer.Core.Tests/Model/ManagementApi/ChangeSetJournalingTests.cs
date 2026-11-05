@@ -304,7 +304,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             cache.Setup(c => c.GetAlertTemplate(It.IsAny<Guid>()))
                 .Returns((Guid id) => new Core.Model.AlertTemplateModel(PersistedTemplateEntity(id)));
             cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(),
-                    It.IsAny<System.Threading.CancellationToken>()))
+                    It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((false, "Failed to apply template to products: P2",
                     new List<HSMServer.Core.Cache.TemplateApplyWarning>()));
 

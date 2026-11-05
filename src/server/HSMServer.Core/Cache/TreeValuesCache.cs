@@ -2092,6 +2092,12 @@ namespace HSMServer.Core.Cache
 
             var template = request.AlertTemplateModel;
 
+            // The journaled fan-out initiator (#1610): the administration
+            // service stamps the write's undo group onto the AlertTemplate
+            // type, so every policy record this apply journals carries the
+            // group link; every other caller keeps the canonical initiator.
+            var initiator = request.Initiator ?? InitiatorInfo.AlertTemplate;
+
             // Categorize existing sensor policies by TemplateAlertId.
             // Only track the first policy per TemplateAlertId; extras become orphans to clean up.
             var existingPoliciesWithId = sensor.Policies
@@ -2143,7 +2149,7 @@ namespace HSMServer.Core.Cache
                 if (existing != null)
                 {
                     // UPDATE in-place: preserve existing policy Id and disabled state
-                    policyUpdates.Add(new PolicyUpdate(templatePolicy, InitiatorInfo.AlertTemplate)
+                    policyUpdates.Add(new PolicyUpdate(templatePolicy, initiator)
                     {
                         Id = existing.Id,
                         TemplateId = template.Id,
@@ -2155,7 +2161,7 @@ namespace HSMServer.Core.Cache
                 else
                 {
                     // ADD new policy
-                    policyUpdates.Add(new PolicyUpdate(templatePolicy, InitiatorInfo.AlertTemplate)
+                    policyUpdates.Add(new PolicyUpdate(templatePolicy, initiator)
                     {
                         Id = Guid.NewGuid(),
                         TemplateId = template.Id,
@@ -2194,7 +2200,7 @@ namespace HSMServer.Core.Cache
 
                     if (existing != null)
                     {
-                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, initiator)
                         {
                             Id = existing.Id,
                             TemplateId = template.Id,
@@ -2206,7 +2212,7 @@ namespace HSMServer.Core.Cache
                     }
                     else
                     {
-                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, initiator)
                         {
                             Id = Guid.NewGuid(),
                             TemplateId = template.Id,
@@ -2266,10 +2272,10 @@ namespace HSMServer.Core.Cache
                 }
 
                 foreach (var id in orphanPolicyIds)
-                    sensor.Policies.RemovePolicy(id, InitiatorInfo.AlertTemplate);
+                    sensor.Policies.RemovePolicy(id, initiator);
 
                 foreach (var id in orphanTtlIds)
-                    sensor.Policies.RemoveTTLPolicy(id, InitiatorInfo.AlertTemplate);
+                    sensor.Policies.RemoveTTLPolicy(id, initiator);
 
                 sensor.Revalidate();
 
@@ -2288,7 +2294,7 @@ namespace HSMServer.Core.Cache
                     Id = sensor.Id,
                     Policies = policyUpdates,
                     TTLPolicies = ttlPolicyUpdates,
-                    Initiator = InitiatorInfo.AlertTemplate
+                    Initiator = initiator
                 };
 
                 // Keyed to the RETURN VALUE, not the out string: false means
@@ -2370,7 +2376,7 @@ namespace HSMServer.Core.Cache
         // transport renders the same list. Warnings never flip Success: a
         // save that persisted is not failed over validation noise or a dead
         // pattern.
-        public async Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
+        public async Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, InitiatorInfo initiator = null, CancellationToken token = default)
         {
             var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
 
@@ -2466,7 +2472,7 @@ namespace HSMServer.Core.Cache
                     CancellationToken = token
                 }, async (sensor, ct) =>
                 {
-                    var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel);
+                    var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel, initiator);
                     var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
 
                     if (!result.IsOk || !string.IsNullOrEmpty(request.Error))
@@ -2482,7 +2488,7 @@ namespace HSMServer.Core.Cache
                     CancellationToken = token
                 }, async (sensor, ct) =>
                 {
-                    var request = new RemoveTemplateFromSensorRequest(sensor.Id, alertTemplateModel.Id);
+                    var request = new RemoveTemplateFromSensorRequest(sensor.Id, alertTemplateModel.Id, initiator);
                     var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
 
                     if (!result.IsOk)
@@ -2536,7 +2542,7 @@ namespace HSMServer.Core.Cache
             return [.. _alertTemplates.Values];
         }
 
-        public async Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, CancellationToken token = default)
+        public async Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default)
         {
             var templateModel = GetAlertTemplate(id);
 
@@ -2571,7 +2577,7 @@ namespace HSMServer.Core.Cache
                 CancellationToken = token
             }, async (sensor, ct) =>
             {
-                var request = new RemoveTemplateFromSensorRequest(sensor.Id, id);
+                var request = new RemoveTemplateFromSensorRequest(sensor.Id, id, initiator);
                 var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
 
                 if (!result.IsOk)
@@ -2619,11 +2625,16 @@ namespace HSMServer.Core.Cache
 
             _database.UpdateSensor(targetEntity);
 
+            // The journaled strip initiator (#1610): stamped with the delete's
+            // undo group by the administration service so the strip's
+            // per-policy removal records link to its rollback group.
+            var initiator = request.Initiator ?? InitiatorInfo.AlertTemplate;
+
             foreach (var policy in sensor.Policies.Where(p => p.TemplateId == request.TemplateId).ToList())
-                sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
+                sensor.Policies.RemovePolicy(policy.Id, initiator);
 
             foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == request.TemplateId).ToList())
-                sensor.Policies.RemoveTTLPolicy(ttl.Id, InitiatorInfo.AlertTemplate);
+                sensor.Policies.RemoveTTLPolicy(ttl.Id, initiator);
 
             sensor.Revalidate();
 
