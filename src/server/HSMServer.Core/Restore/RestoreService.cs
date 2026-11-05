@@ -295,7 +295,7 @@ namespace HSMServer.Core.Restore
             try
             {
                 var existsBefore = _cache.GetAlertTemplate(item.Id) != null;
-                var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model, cancellationToken);
+                var (success, error, warnings) = await _cache.AddAlertTemplateAsync(model, token: cancellationToken);
 
                 if (!success)
                 {

@@ -3,11 +3,18 @@ using System.Collections.Generic;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TableOfChanges;
 
 
 namespace HSMServer.Core.Model.Requests
 {
-    internal sealed record ApplyTemplateRequest(Guid SensorId, AlertTemplateModel Template) : IUpdateRequest
+    // The optional Initiator (#1610): the administration service stamps the
+    // request's undo group onto the AlertTemplate-type initiator, so every
+    // fan-out policy record the apply writes links back to the template
+    // write's rollback group. Null (the default) keeps the canonical
+    // unstamped AlertTemplate initiator of the pre-journaled callers.
+    internal sealed record ApplyTemplateRequest(Guid SensorId, AlertTemplateModel Template,
+        InitiatorInfo Initiator = null) : IUpdateRequest
     {
         public AlertTemplateModel AlertTemplateModel { get; } = Template;
 

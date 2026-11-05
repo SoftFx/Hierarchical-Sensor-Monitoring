@@ -688,7 +688,7 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("sensorType: Unknown sensor type 999.", combinedText);
 
             // Nothing reached the cache — every call died in validation.
-            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()),
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<Core.TableOfChanges.InitiatorInfo>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
 
