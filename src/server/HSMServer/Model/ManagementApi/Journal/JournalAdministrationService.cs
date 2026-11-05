@@ -348,20 +348,20 @@ namespace HSMServer.Model.ManagementApi.Journal
         // legacy rows stay visible, otherwise the page looks empty while
         // the journal holds the records.
         private bool MatchesProductFilter(JournalRecordModel record, Guid product) =>
-            record.ProductId == product.ToString() ||
             ResolvedRootProductOf(record) is not { } resolved || resolved == product;
 
         // The record's root product, or null when the record is global or
-        // folder-scoped: the stamped id when it names a live product, else
-        // the record's entity resolved against the live tree (legacy rows
-        // carry no stamp; the stamp of a folder-scoped entity — an alert
-        // template — is its FOLDER id, not a product). Mirrors the entity
-        // resolution of ResourceOf below.
+        // folder-scoped. A NON-EMPTY stamp is a root product whether or not
+        // the product is still alive — a deleted product's history must not
+        // leak into every other product's filter — except the folder id an
+        // alert template stamps. Unstamped records resolve against the live
+        // tree: the entity itself (a live product), a sensor's root, else
+        // no root product (global schedules, legacy rows of deleted
+        // entities). Mirrors the entity resolution of ResourceOf below.
         private Guid? ResolvedRootProductOf(JournalRecordModel record)
         {
-            if (Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty &&
-                _cache.TryGetProduct(stamped, out _))
-                return stamped;
+            if (Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty)
+                return IsFolderStamp(record, stamped) ? null : stamped;
 
             var id = record.Key.Id;
 
@@ -373,6 +373,14 @@ namespace HSMServer.Model.ManagementApi.Journal
 
             return null;
         }
+
+        // The only non-product stamp is the FOLDER id an alert template
+        // journals under: the folder itself when live, else the record's
+        // live template naming it (folder-scoped records carry no root
+        // product of their own).
+        private bool IsFolderStamp(JournalRecordModel record, Guid stamped) =>
+            _folders.TryGetValue(stamped, out _) ||
+            _cache.GetAlertTemplate(record.Key.Id)?.FolderId == stamped;
 
         private static JournalRecordDto Render(JournalRecordModel record) => new()
         {
