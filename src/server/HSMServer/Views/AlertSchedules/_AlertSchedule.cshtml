@@ -3,6 +3,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Model.AlertSchedule
+@using HSMServer.Model.ManagementApi.AlertSchedules
 
 @model AlertScheduleViewModel
 
@@ -14,7 +15,10 @@
         <div class="row py-2 schedule-form-row">
             <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="Name"></label>
             <div class="col w-auto">
-                <input type='text' class='form-control' asp-for="Name" />
+                @* #1597: the same limit the schedule write engine enforces — the
+                    server-side [StringLength] on the view model is the authority;
+                    maxlength keeps the browser from typing past it in the first place. *@
+                <input type='text' class='form-control' asp-for="Name" maxlength="@AlertScheduleAdministrationService.MaxNameLength" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
         </div>

@@ -339,5 +339,37 @@ disabledDates: [""26-12-2026""]
             Assert.DoesNotMatch(GuidPattern, error);
         }
 
+        // #1598: the write contract makes the daySchedules key required, but
+        // the model's `new()` initializer hides the difference between an
+        // absent key and an explicit empty list — HasDaySchedulesKey is the
+        // write path's presence probe.
+        [Theory]
+        [InlineData("daySchedules:\n  - days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"18:00\" }\n", true)]
+        [InlineData("daySchedules: []\n", true)]
+        [InlineData("daySchedules:\n", false)] // explicit null value, not a list
+        [InlineData("disabledDates: [\"2026-12-25\"]\n", false)]
+        [InlineData("daySchedule:\n  - days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"18:00\" }\n", false)] // key typo
+        [InlineData("", false)]
+        [InlineData(null, false)]
+        public void HasDaySchedulesKeyDistinguishesAbsentKeyFromEmptyList(string yaml, bool expected)
+        {
+            Assert.Equal(expected, _parser.HasDaySchedulesKey(yaml));
+        }
+
+
+        // The load path keeps accepting a missing daySchedules key: rows
+        // stored before the write-path rule must keep parsing (#1598).
+        [Fact]
+        public void ParseScheduleWithoutDaySchedulesKeyStillLoads()
+        {
+            var yaml = "disabledDates: [\"2026-12-25\"]\n";
+
+            var result = _parser.Parse(yaml);
+
+            Assert.NotNull(result);
+            Assert.Empty(result.DaySchedules);
+            Assert.Equal(yaml, result.Schedule);
+        }
+
     }
 }

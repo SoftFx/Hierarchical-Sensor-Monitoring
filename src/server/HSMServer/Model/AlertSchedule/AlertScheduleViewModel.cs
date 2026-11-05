@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Model.ManagementApi.AlertSchedules;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
@@ -15,7 +16,13 @@ namespace HSMServer.Model.AlertSchedule
 
         public Guid Id { get; set; } = Guid.Empty;
 
+        // #1597: the name submitted through the UI form is bounded by the
+        // same limit the schedule write engine enforces (MaxNameLength) — a
+        // longer name used to save fine but could not be updated through the
+        // management API afterwards. The constant is referenced so the two
+        // cannot drift.
         [Required]
+        [StringLength(AlertScheduleAdministrationService.MaxNameLength, ErrorMessage = "{0} length should be less than {1}.")]
         public string Name { get; set; }
 
         [Required]
