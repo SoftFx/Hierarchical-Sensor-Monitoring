@@ -307,6 +307,20 @@ disabledDates: [""26-12-2026""]
                 "an id-less entry must still get a generated id after validation");
         }
 
+        [Theory]
+        [InlineData("hello scalar")]
+        [InlineData("daySchedules: 5")]
+        [InlineData("disabledDates: notalist")]
+        public void ParseScalarWhereStructureIsExpectedThrowsClearShapeError(string yaml)
+        {
+            var exception = Assert.Throws<Exception>(() => _parser.Parse(yaml));
+
+            Assert.Equal("YAML parsing error: The schedule structure is invalid: " +
+                         "a scalar value appears where an object or a list was expected.",
+                exception.Message);
+            Assert.DoesNotContain("Invalid cast", exception.Message);
+        }
+
         [Fact]
         public void ValidateStringOverlappingWindowsWithoutIdReportsPosition()
         {

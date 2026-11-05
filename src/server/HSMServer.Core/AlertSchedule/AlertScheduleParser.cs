@@ -75,7 +75,7 @@ namespace HSMServer.Core.Schedule
             }
             catch (Exception ex)
             {
-                throw new Exception($"YAML parsing error: {Describe(ex)}", ex);
+                throw new Exception($"YAML parsing error: {DescribeRootCause(ex)}", ex);
             }
         }
 
@@ -113,7 +113,7 @@ namespace HSMServer.Core.Schedule
             }
             catch (Exception ex)
             {
-                errors.Add($"YAML parsing error: {Describe(ex)}");
+                errors.Add($"YAML parsing error: {DescribeRootCause(ex)}");
                 return false;
             }
         }
@@ -124,12 +124,18 @@ namespace HSMServer.Core.Schedule
         // actual cause travels as the innermost InnerException. Report the
         // cause, not the wrapper (#1599). Pure YAML syntax errors carry no
         // inner exception and keep their own descriptive message.
-        private static string Describe(Exception exception)
+        private static string DescribeRootCause(Exception exception)
         {
             var current = exception;
 
             while (current is YamlException { InnerException: { } inner })
                 current = inner;
+
+            // A scalar where an object or a list belongs (a scalar root
+            // document, `daySchedules: 5`) surfaces as an InvalidCastException
+            // whose text names CLR types — nothing a client can act on.
+            if (current is InvalidCastException)
+                return "The schedule structure is invalid: a scalar value appears where an object or a list was expected.";
 
             return current.Message;
         }
