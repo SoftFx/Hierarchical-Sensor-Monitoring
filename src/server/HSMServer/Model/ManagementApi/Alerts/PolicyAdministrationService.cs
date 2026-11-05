@@ -1273,7 +1273,24 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // records without their group link while the service journals
             // the undo entry, making the group unreachable. The REST item
             // writes stamp the same way at merge time.
-            var stamped = updates.Select(u => u with { Initiator = initiator }).ToList();
+            //
+            // ONE exception (#1606 review): the cookie-UI meta-info form
+            // re-sends the sensor's WHOLE TTL list on every save, including
+            // template-owned entries it did not touch. UpdateTTLs keeps such
+            // an untouched re-assert verbatim (only IsDisabled is honored for
+            // a template-owned TTL under a user initiator), so it must not
+            // take change ownership either — PreserveChangeOwnership keeps
+            // the change table's owner intact and the CanChange gate open
+            // for the next template re-sync. A real toggle (different
+            // IsDisabled) still stamps: the operator's disable/enables keep
+            // winning over the template (#1606).
+            var ttlOwnershipById = dataList ? null : TemplateTtlOwnershipById(sensor);
+            var stamped = updates.Select(u => u with
+            {
+                Initiator = initiator,
+                PreserveChangeOwnership = ttlOwnershipById is not null &&
+                    IsUntouchedTemplateTtl(u, ttlOwnershipById),
+            }).ToList();
 
             var result = await _cache.UpdateSensorAsync(new SensorUpdate
             {
@@ -1583,6 +1600,25 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 TTL = StoredTtlTicks(policy),
                 IsDisabled = isDisabled,
             };
+
+        // The cookie-UI full-list twin of the Copy/Toggled split above (#1606
+        // review): ids and current flags of the sensor's TEMPLATE-OWNED TTL
+        // entries — the inputs to the PreserveChangeOwnership decision in
+        // WriteSensorList.
+        private static Dictionary<Guid, bool> TemplateTtlOwnershipById(BaseSensorModel sensor) =>
+            sensor.Policies.TTLPolicies
+                .Where(p => p.TemplateId != null)
+                .ToDictionary(p => p.Id, p => p.IsDisabled);
+
+        // An UNTOUCHED re-assert of a template-owned TTL: same id, same
+        // IsDisabled. UpdateTTLs keeps such an item verbatim (only IsDisabled
+        // is honored for a template-owned TTL under a user initiator), so
+        // taking ownership would change nothing but the change table — and
+        // would block the node's next template TTL re-sync through CanChange.
+        private static bool IsUntouchedTemplateTtl(PolicyUpdate update, Dictionary<Guid, bool> templateTtlFlags) =>
+            update.Id != Guid.Empty &&
+            templateTtlFlags.TryGetValue(update.Id, out var isDisabled) &&
+            isDisabled == update.IsDisabled;
 
         // The node's chat availability: every global chat plus the chats bound
         // to the folder of the node's root product — GetAvailableChats, the same

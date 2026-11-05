@@ -496,10 +496,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
 
-            // Assert: the already-applied sensor policy is disabled too.
+            // Assert: the already-applied sensor policy is disabled too — in
+            // memory AND in the persisted entity shape (TryUpdateSensor writes
+            // sensor.ToEntity() on every update; the #1394 lessons live here).
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
             var appliedAfter = Assert.Single(sensorAfter.Policies, p => p.TemplateId == template.Id);
             Assert.True(appliedAfter.IsDisabled);
+            Assert.True(appliedAfter.ToEntity().IsDisabled);
         }
 
         // The symmetric direction of the #1606 propagation: a policy created
@@ -630,10 +633,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
 
-            // Assert: the already-applied sensor TTL policy is disabled too.
+            // Assert: the already-applied sensor TTL policy is disabled too —
+            // in memory AND in the persisted entity shape (the TTL policies
+            // ride the sensor entity itself).
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
             var appliedTtlAfter = Assert.Single(sensorAfter.Policies.TTLPolicies, t => t.TemplateId == template.Id);
             Assert.True(appliedTtlAfter.IsDisabled);
+            Assert.True(appliedTtlAfter.ToEntity().IsDisabled);
+            Assert.Contains(sensorAfter.ToEntity().TTLPolicies, e => e.IsDisabled);
         }
 
         // The TTL twin of the per-sensor protection: a user-made TTL disable
