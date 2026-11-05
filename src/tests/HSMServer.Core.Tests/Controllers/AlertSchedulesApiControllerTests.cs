@@ -536,6 +536,11 @@ namespace HSMServer.Core.Tests.Controllers
             });
 
             Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var messages = Assert.IsType<string[]>(body.Details["schedule"]);
+            Assert.Contains(messages, m => m.Contains("daySchedules"));
+
             _schedules.Verify(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()), Times.Never);
         }
 
