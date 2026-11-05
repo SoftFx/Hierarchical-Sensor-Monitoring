@@ -342,13 +342,54 @@ namespace HSMServer.Model.ManagementApi.Journal
             return ApiTokenResource.GlobalScope;
         }
 
-        private static bool Matches(JournalRecordModel record, JournalFilter filter) =>
+        private bool Matches(JournalRecordModel record, JournalFilter filter) =>
             (filter.Author is null ||
              record.Initiator?.Contains(filter.Author, StringComparison.OrdinalIgnoreCase) == true) &&
             (filter.Kind is null ||
              string.Equals(record.Kind ?? OtherKind, filter.Kind, StringComparison.OrdinalIgnoreCase)) &&
-            (filter.ProductId is not { } product || record.ProductId == product.ToString()) &&
+            (filter.ProductId is not { } product || MatchesProductFilter(record, product)) &&
             (filter.EntityId is not { } entity || record.Key.Id == entity);
+
+        // #1601: the product filter narrows PRODUCT-scoped records to the
+        // selected root product but must not hide records that carry no
+        // root product of their own — global entities (alert schedules),
+        // folder-scoped entities (alert templates, folders) and unscoped
+        // legacy rows stay visible, otherwise the page looks empty while
+        // the journal holds the records.
+        private bool MatchesProductFilter(JournalRecordModel record, Guid product) =>
+            ResolvedRootProductOf(record) is not { } resolved || resolved == product;
+
+        // The record's root product, or null when the record is global or
+        // folder-scoped. A NON-EMPTY stamp is a root product whether or not
+        // the product is still alive — a deleted product's history must not
+        // leak into every other product's filter — except the folder id an
+        // alert template stamps. Unstamped records resolve against the live
+        // tree: the entity itself (a live product), a sensor's root, else
+        // no root product (global schedules, legacy rows of deleted
+        // entities). Mirrors the entity resolution of ResourceOf below.
+        private Guid? ResolvedRootProductOf(JournalRecordModel record)
+        {
+            if (Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty)
+                return IsFolderStamp(record, stamped) ? null : stamped;
+
+            var id = record.Key.Id;
+
+            if (_cache.TryGetProduct(id, out _))
+                return id;
+
+            if (_cache.GetSensor(id) is { Root: { } root })
+                return root.Id;
+
+            return null;
+        }
+
+        // The only non-product stamp is the FOLDER id an alert template
+        // journals under: the folder itself when live, else the record's
+        // live template naming it (folder-scoped records carry no root
+        // product of their own).
+        private bool IsFolderStamp(JournalRecordModel record, Guid stamped) =>
+            _folders.TryGetValue(stamped, out _) ||
+            _cache.GetAlertTemplate(record.Key.Id)?.FolderId == stamped;
 
         private static JournalRecordDto Render(JournalRecordModel record) => new()
         {
