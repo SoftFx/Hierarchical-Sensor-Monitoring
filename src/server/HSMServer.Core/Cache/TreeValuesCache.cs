@@ -2148,13 +2148,19 @@ namespace HSMServer.Core.Cache
 
                 if (existing != null)
                 {
-                    // UPDATE in-place: preserve existing policy Id and disabled state
+                    // UPDATE in-place: keep the existing policy Id; the
+                    // template's IsDisabled re-syncs the sensor policy
+                    // (#1606). A per-sensor toggle made by a user still
+                    // wins: the toggle stamps a User change-table owner and
+                    // the CanChange pre-check in TryUpdate skips the update.
+                    // The request's journaled initiator rides here as
+                    // everywhere in this apply (#1610) — AlertTemplate-typed,
+                    // carrying the write's undo group.
                     policyUpdates.Add(new PolicyUpdate(templatePolicy, initiator)
                     {
                         Id = existing.Id,
                         TemplateId = template.Id,
                         TemplateAlertId = templatePolicy.Id,
-                        IsDisabled = existing.IsDisabled,
                     });
                     matchedSensorPolicyIds.Add(existing.Id);
                 }
@@ -2200,13 +2206,18 @@ namespace HSMServer.Core.Cache
 
                     if (existing != null)
                     {
+                        // Same contract as the regular-policy arm above: the
+                        // template's IsDisabled re-syncs the sensor TTL
+                        // policy (#1606); a user's per-sensor toggle keeps
+                        // its User change-table owner and the CanChange gate
+                        // in BaseNodeModel.Update blocks the re-sync. The
+                        // journaled initiator rides as everywhere (#1610).
                         ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, initiator)
                         {
                             Id = existing.Id,
                             TemplateId = template.Id,
                             TemplateAlertId = ttlPolicy.Id,
                             TTL = ttlTicks,
-                            IsDisabled = existing.IsDisabled,
                         });
                         matchedSensorTtlIds.Add(existing.Id);
                     }

@@ -462,6 +462,239 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.DoesNotContain(sensorAfter.Policies, p => p.TemplateId == template.Id);
         }
 
+        // Regression for #1606: disabling a policy through a template edit must
+        // reach the sensor policies the template already applied. The re-apply
+        // arm used to keep the sensor's IsDisabled unconditionally, so an alert
+        // kept firing although the template said isDisabled: true.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_DisablePolicy_PropagatesToAppliedSensorPolicy()
+        {
+            // Arrange: template with one enabled regular policy, applied to a sensor.
+            var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorToggleDisable");
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorToggleDisable";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            var applied = Assert.Single(sensorBefore.Policies, p => p.TemplateId == template.Id);
+            Assert.False(applied.IsDisabled);
+
+            // Act: edit the template so the same policy is disabled (the #1606
+            // flow: update_alert_template with policies[0].isDisabled = true).
+            template.Policies[0].SetDisabled(true);
+
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the already-applied sensor policy is disabled too — in
+            // memory AND in the persisted entity shape (TryUpdateSensor writes
+            // sensor.ToEntity() on every update; the #1394 lessons live here).
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedAfter = Assert.Single(sensorAfter.Policies, p => p.TemplateId == template.Id);
+            Assert.True(appliedAfter.IsDisabled);
+            Assert.True(appliedAfter.ToEntity().IsDisabled);
+        }
+
+        // The symmetric direction of the #1606 propagation: a policy created
+        // disabled (the issue's control case) must be re-enabled on the applied
+        // sensors when the template is edited back to isDisabled: false.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_EnablePolicy_PropagatesToAppliedSensorPolicy()
+        {
+            // Arrange: template with one disabled regular policy (disabled at
+            // creation — the case that already worked before #1606).
+            var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorToggleEnable");
+            template.Policies[0].SetDisabled(true);
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorToggleEnable";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            var applied = Assert.Single(sensorBefore.Policies, p => p.TemplateId == template.Id);
+            Assert.True(applied.IsDisabled);
+
+            // Act: edit the template so the policy is enabled.
+            template.Policies[0].SetDisabled(false);
+
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the already-applied sensor policy is enabled too.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedAfter = Assert.Single(sensorAfter.Policies, p => p.TemplateId == template.Id);
+            Assert.False(appliedAfter.IsDisabled);
+        }
+
+        // The per-sensor toggle keeps winning over the template: a user-made
+        // disable stamps a User change-table owner, and the CanChange pre-check
+        // blocks the template re-apply (whose update now carries the template's
+        // differing IsDisabled) instead of overwriting the operator's toggle.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_UserDisabledSensorPolicy_SurvivesTemplateReapply()
+        {
+            // Arrange: template with one enabled regular policy, applied.
+            var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorToggleUserWins");
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorToggleUserWins";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var applied = Assert.Single(sensor.Policies, p => p.TemplateId == template.Id);
+            Assert.False(applied.IsDisabled);
+
+            // The operator's per-sensor toggle: a plain user initiator may only
+            // change IsDisabled on a template-owned policy, and that toggle
+            // stamps the User change-table owner.
+            var user = InitiatorInfo.AsUser("operator");
+            var toggle = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                Policies = [new PolicyUpdate(applied, user) { IsDisabled = true }],
+            });
+            Assert.True(toggle.IsOk, toggle.Error);
+
+            Assert.True(applied.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[applied.Id.ToString()].Initiator.Type);
+
+            // Act: re-apply the template with its policy still enabled — the
+            // update carries IsDisabled = false, differing from the sensor's
+            // user-chosen true, and must be blocked by the CanChange gate.
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the operator's disable survives the re-apply.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedAfter = Assert.Single(sensorAfter.Policies, p => p.TemplateId == template.Id);
+            Assert.True(appliedAfter.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensorAfter.ChangeTable.Policies[appliedAfter.Id.ToString()].Initiator.Type);
+        }
+
+        // The TTL twin of the #1606 propagation: disabling a template's TTL
+        // entry through a template edit must reach the already-applied sensor
+        // TTL policy.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_DisableTtlEntry_PropagatesToAppliedSensorTtlPolicy()
+        {
+            // Arrange: template with one TTL entry, applied to a sensor.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorTtlToggleDisable",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorTtlToggleDisable";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            var appliedTtl = Assert.Single(sensorBefore.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.False(appliedTtl.IsDisabled);
+
+            // Act: edit the template so the TTL entry is disabled.
+            template.TtlEntries[0].Policy.SetDisabled(true);
+
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the already-applied sensor TTL policy is disabled too —
+            // in memory AND in the persisted entity shape (the TTL policies
+            // ride the sensor entity itself).
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedTtlAfter = Assert.Single(sensorAfter.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.True(appliedTtlAfter.IsDisabled);
+            Assert.True(appliedTtlAfter.ToEntity().IsDisabled);
+            Assert.Contains(sensorAfter.ToEntity().TTLPolicies, e => e.IsDisabled);
+        }
+
+        // The TTL twin of the per-sensor protection: a user-made TTL disable
+        // keeps its User change-table owner and survives the template re-apply
+        // (the CanChange gate in BaseNodeModel.Update blocks the TTL list).
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_UserDisabledSensorTtl_SurvivesTemplateReapply()
+        {
+            // Arrange: template with one TTL entry, applied to a sensor.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorTtlToggleUserWins",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorTtlToggleUserWins";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var appliedTtl = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.False(appliedTtl.IsDisabled);
+
+            // The operator's per-sensor TTL toggle (the documented user path:
+            // re-assert the entry with its interval, only IsDisabled changed).
+            var user = InitiatorInfo.AsUser("operator");
+            var toggle = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                TTLPolicies = [new PolicyUpdate(appliedTtl, user) { TTL = appliedTtl.TTLTicks, IsDisabled = true }],
+            });
+            Assert.True(toggle.IsOk, toggle.Error);
+
+            Assert.True(appliedTtl.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[appliedTtl.Id.ToString()].Initiator.Type);
+
+            // Act: re-apply the template with its TTL entry still enabled — the
+            // update carries IsDisabled = false and must be blocked.
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the operator's disable survives the re-apply.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedTtlAfter = Assert.Single(sensorAfter.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.True(appliedTtlAfter.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensorAfter.ChangeTable.TtlPolicies[appliedTtlAfter.Id.ToString()].Initiator.Type);
+        }
 
         private async Task AddManualTtlToSensor(Guid productId, string sensorPath, TimeSpan ttl)
         {

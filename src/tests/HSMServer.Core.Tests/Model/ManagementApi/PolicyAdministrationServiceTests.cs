@@ -7,6 +7,8 @@ using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
@@ -377,6 +379,80 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
 
         // === Slice C: TTL policies on a sensor ===
+
+        // === #1606 review: the cookie-UI full-list re-assert must not take TTL ownership ===
+
+        // The cookie-UI meta-info form re-sends the sensor's WHOLE TTL list on
+        // every save (HomeController.UpdateSensorInfo), including template-owned
+        // entries it did not touch. Before the PreserveChangeOwnership decision
+        // in WriteSensorList, that re-stamped every template TTL as the user's,
+        // and the node-wide CanChange gate then silently skipped the sensor on
+        // every later template TTL re-sync — a disable that reported success but
+        // never landed on the sensor.
+        [Fact]
+        public async Task WriteSensorLists_UntouchedTemplateTtlReassert_KeepsTemplateResyncWorking()
+        {
+            // A template with one TTL entry; the sensor created after it picks
+            // the TTL entry up at registration (the NewSensor fan-out).
+            var ttlSetting = new TimeIntervalSettingProperty();
+            ttlSetting.TrySetValue(new TimeIntervalModel(TimeSpan.FromMinutes(5).Ticks));
+
+            var template = new AlertTemplateModel
+            {
+                Name = $"svc reassert template {Guid.NewGuid():N}",
+                FolderId = _fixture.FolderId,
+                SensorType = (byte)SensorType.Integer,
+                Paths = ["*/svcTtlReassertNoToggle"],
+                TtlEntries = [new TtlEntry(new TTLPolicy(ttlSetting, null), ttlSetting.Value ?? TimeIntervalModel.None)],
+            };
+            template.TryApplyPathTemplates(out _);
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            // A bare sensor path (no '/'): CreateIntegerSensorAsync's prefixed
+            // path nests a sub-product that carries no folder, and the template
+            // fan-out filters sensors by their root product's folder.
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, "svcTtlReassertNoToggle", DateTime.UtcNow);
+            var addSensor = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyAId, _fixture.ProductAId, sensorValue);
+            Assert.True(addSensor.IsOk, addSensor.Error);
+            await Task.Delay(200); // the template fan-out at registration is asynchronous
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, "svcTtlReassertNoToggle", out var sensor));
+
+            var appliedTtl = Assert.Single(sensor.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+            Assert.False(appliedTtl.IsDisabled);
+
+            // The WriteSensorList shape: a user-initiated FULL-list re-assert
+            // with NO toggle — the interval and the flag ride through unchanged.
+            var reassert = await _service.WriteSensorListsAsync(sensor.Id, [],
+                [new PolicyUpdate(appliedTtl, InitiatorInfo.AsUser("operator"))
+                {
+                    TTL = appliedTtl.TTLTicks,
+                    IsDisabled = appliedTtl.IsDisabled,
+                }],
+                User);
+            Assert.True(reassert.Success, reassert.Failure?.Message);
+
+            // The re-assert changed nothing, so it must not take ownership: the
+            // change-table owner stays non-User and the CanChange gate stays
+            // open for the template's re-sync.
+            Assert.NotEqual(InitiatorType.User,
+                sensor.ChangeTable.TtlPolicies[appliedTtl.Id.ToString()].Initiator.Type);
+
+            // The template's later TTL disable must still reach the sensor.
+            template.TtlEntries[0].Policy.SetDisabled(true);
+
+            var (editOk, editError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            Assert.True(sensor.Policies.TTLPolicies.Single(p => p.TemplateId == template.Id).IsDisabled);
+            // And the persisted shape carries the flag (TryUpdateSensor writes
+            // sensor.ToEntity(), whose TTL policies ride along).
+            Assert.True(sensor.ToEntity().TTLPolicies.Single(p => p.IsDisabled).IsDisabled);
+        }
 
         [Fact]
         public async Task CreateSensorTtlPolicy_SetsExplicitInterval_AndPreservesSiblings()
