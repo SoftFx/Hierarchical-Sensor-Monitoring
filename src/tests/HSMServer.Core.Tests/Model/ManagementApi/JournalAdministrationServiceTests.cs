@@ -265,7 +265,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
                 ProductId = productId.ToString(),
             });
 
-            var listed = _journal.ListRecords(TokenUser, new JournalFilter { ProductId = productId }).Value;
+            // The record under test, addressed uniquely: the shared fixture
+            // DB accumulates records from the whole class, and under the
+            // #1601 semantics global/folder-scoped records also match a
+            // product-only filter — so the entity id is the single-record
+            // lookup here.
+            var listed = _journal.ListRecords(TokenUser,
+                new JournalFilter { ProductId = productId, EntityId = productId }).Value;
             var record = Assert.Single(listed);
 
             Assert.False(record.Rollbackable);
@@ -298,10 +304,78 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Contains(byKind, r => r.ChangeSetId == groupB.ToString());
             Assert.All(byKind, r => Assert.Equal(JournalKinds.SensorDataPolicies, r.Kind));
 
+            // A product-scoped record of another product: must stay hidden.
+            _journalService.AddRecord(new JournalRecordModel(_fixture.ProductBId, InitiatorInfo.AsUser("b-admin"))
+            {
+                Enviroment = "Create product",
+                PropertyName = "product",
+                Kind = JournalKinds.TreeCrud,
+                ProductId = _fixture.ProductBId.ToString(),
+            });
+
             var byProduct = _journal.ListRecords(TokenUser,
                 new JournalFilter { ProductId = _fixture.ProductAId, FromUtc = DateTime.UtcNow.AddMinutes(-5) }).Value;
 
-            Assert.All(byProduct, r => Assert.Equal(_fixture.ProductAId.ToString(), r.ProductId));
+            // The own product's records stay; another product's record
+            // stays hidden. (The global/folder-scoped visibility half of
+            // the #1601 semantics is pinned by
+            // ListRecords_WithProductFilter_KeepsGlobalAndFolderScopedRecordsVisible.)
+            Assert.Contains(byProduct, r => r.ChangeSetId == groupA.ToString());
+            Assert.Contains(byProduct, r => r.ChangeSetId == groupB.ToString());
+            Assert.DoesNotContain(byProduct, r => r.ProductId == _fixture.ProductBId.ToString());
+        }
+
+        [Fact]
+        public async Task ListRecords_WithProductFilter_KeepsGlobalAndFolderScopedRecordsVisible()
+        {
+            // #1601: alert schedules are global and alert templates are
+            // folder-scoped — neither carries a root product, and a product
+            // filter must keep them visible instead of rendering the page
+            // empty; records of ANOTHER root product stay hidden.
+            var scheduleGroup = Guid.NewGuid();
+            var templateGroup = Guid.NewGuid();
+
+            var schedule = await _schedules.CreateScheduleAsync(TokenUser, ScheduleDto(),
+                new ChangeSetWriteOptions { ChangeSetId = scheduleGroup });
+            Assert.True(schedule.Success, schedule.Failure?.Message);
+
+            var template = await new AlertTemplateAdministrationService(_valuesCache, _folders.Object, _chats.Object,
+                    _alertScheduleProvider, _authorization.Object, _users.Object,
+                    new ChangeSetRecorder(new ChangeSetJournal(_databaseCoreManager.DatabaseCore), _journalService,
+                        NullLogger<ChangeSetRecorder>.Instance),
+                    NullLogger<AlertTemplateAdministrationService>.Instance)
+                .CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnGlobalKeep"]),
+                    new ChangeSetWriteOptions { ChangeSetId = templateGroup });
+            Assert.True(template.Success, template.Failure?.Message);
+
+            // A product-scoped record of another LIVE product: must stay hidden.
+            _journalService.AddRecord(new JournalRecordModel(_fixture.ProductBId, InitiatorInfo.AsUser("other-admin"))
+            {
+                Enviroment = "Create product",
+                PropertyName = "product",
+                Kind = JournalKinds.TreeCrud,
+                ProductId = _fixture.ProductBId.ToString(),
+            });
+
+            // #1624 review: a record stamped with a product that is NOT
+            // live (deleted) is still PRODUCT-scoped — its history must
+            // not leak into another product's filter.
+            var deadProductId = Guid.NewGuid();
+            _journalService.AddRecord(new JournalRecordModel(deadProductId, InitiatorInfo.AsUser("gone-admin"))
+            {
+                Enviroment = "Delete product",
+                PropertyName = "product",
+                Kind = JournalKinds.TreeCrud,
+                ProductId = deadProductId.ToString(),
+            });
+
+            var byProduct = _journal.ListRecords(TokenUser,
+                new JournalFilter { ProductId = _fixture.ProductAId, FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            Assert.Contains(byProduct, r => r.ChangeSetId == scheduleGroup.ToString()); // global: visible
+            Assert.Contains(byProduct, r => r.ChangeSetId == templateGroup.ToString()); // folder-scoped: visible
+            Assert.DoesNotContain(byProduct, r => r.ProductId == _fixture.ProductBId.ToString()); // other product: hidden
+            Assert.DoesNotContain(byProduct, r => r.ProductId == deadProductId.ToString()); // dead product: hidden too
         }
 
         [Fact]
@@ -427,6 +501,19 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             FolderId = _fixture.FolderId,
             Paths = [.. paths],
             Policies = [],
+        };
+
+        private static AlertScheduleUpsertDto ScheduleDto() => new()
+        {
+            Name = $"schedule-{Guid.NewGuid():N}",
+            Timezone = "UTC",
+            Schedule = """
+                daySchedules:
+                  - days: [mon, tue, wed, thu, fri]
+                    windows:
+                      - start: 09:00
+                        end: 18:00
+                """,
         };
     }
 }
