@@ -386,6 +386,138 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
+        // #1608: a pattern of literals without '/' can never match — every
+        // sensor full path has at least Product/SensorName — and the write
+        // rejects it with an item-indexed field key instead of storing a
+        // provably dead pattern. Patterns that MIGHT still match (a wildcard
+        // without '/', a metacharacter like '.' that crosses '/') stay
+        // accepted; their dead-or-alive verdict is the apply-time zero-match
+        // warning's business (#1565).
+        [Fact]
+        public async Task Create_LiteralPathWithoutSlash_Is400()
+        {
+            var dto = BuildDto() with { Paths = ["justliteral"] };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("paths[0]", details.Keys);
+            Assert.Empty(_store);
+        }
+
+        [Theory]
+        [InlineData("*Total CPU*")]  // no '/', but a wildcard — cannot cross '/' yet not provably dead at write time
+        [InlineData("Product.cpu")]  // no '/', but '.' stays live in the regex and matches '/' (documented)
+        [InlineData("Nope/Nope")]    // has '/' — legal; matches nothing and rides the zero-match warning
+        [InlineData("   ")]          // whitespace-only entries stay tolerated (the mapper drops them)
+        public async Task Create_PathWithoutSlashButNotPureLiteral_IsAccepted(string path)
+        {
+            var dto = BuildDto() with { Paths = [path, "*/cpu"] };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
+        }
+
+        // #1608: the message renders with string.Format over the substituted
+        // $variables, so braces in the user text throw at evaluation time or
+        // silently substitute another variable's value — the documented field
+        // contract ("curly braces are not allowed") is now enforced on write,
+        // on BOTH policy kinds (a TTL message renders through the same
+        // AlertState.BuildComment).
+        [Fact]
+        public async Task Create_CurlyBracesInMessage_Is400()
+        {
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with { Template = "bad {0} message" };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].template", details.Keys);
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_CurlyBracesInTtlMessage_Is400()
+        {
+            var dto = BuildDto();
+            dto.TtlPolicies[0] = dto.TtlPolicies[0] with { Template = "ttl } message" };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("ttlPolicies[0].template", details.Keys);
+            Assert.Empty(_store);
+        }
+
+        // #1608: TTL policies take no conditions — the trigger is the
+        // inactivity interval. Before the structural check the condition
+        // reached the domain reconstruction, whose TTLPolicy condition builder
+        // throws NotImplementedException: the write failed with the raw "The
+        // method or operation is not implemented." text on the wrong
+        // `policies` key. The clean rejection names the exact field.
+        [Fact]
+        public async Task Create_TtlPolicyWithConditions_Is400WithCleanFieldError()
+        {
+            var dto = BuildDto();
+            dto.TtlPolicies[0] = dto.TtlPolicies[0] with
+            {
+                Conditions =
+                [
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.Const },
+                        Combination = (byte)PolicyCombination.And,
+                        Operation = (byte)PolicyOperation.IsOk,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("ttlPolicies[0].conditions", details.Keys);
+            Assert.DoesNotContain("not implemented",
+                Assert.IsType<string[]>(details["ttlPolicies[0].conditions"]).Single(),
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Update_TtlPolicyWithConditions_Is400()
+        {
+            // The PUT path shares the structural validation; pin that the
+            // update answers the same field-keyed rejection.
+            var stored = new AlertTemplateModel { Name = "ttl-conditions", FolderId = Guid.NewGuid() };
+            _store[stored.Id] = stored;
+
+            var dto = BuildDto();
+            dto.TtlPolicies[0] = dto.TtlPolicies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const },
+                    Operation = (byte)PolicyOperation.IsOk,
+                    Property = (byte)PolicyProperty.Status,
+                }],
+            };
+
+            var result = await CreateController().UpdateTemplate(stored.Id, dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("ttlPolicies[0].conditions", details.Keys);
+        }
+
         [Fact]
         public async Task Create_MissingFolderId_Is400_Not404()
         {

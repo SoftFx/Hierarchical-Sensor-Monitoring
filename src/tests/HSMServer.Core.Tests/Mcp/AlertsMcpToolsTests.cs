@@ -593,6 +593,43 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal("policies[0].conditions[0].property: Unknown condition property 999.", error.Message);
         }
 
+        // #1608 (case C10b): a TTL policy carrying conditions used to reach
+        // the domain reconstruction, whose TTLPolicy condition builder throws
+        // NotImplementedException — the tool answered the leaked "The method
+        // or operation is not implemented." text on the wrong `policies` key.
+        // The structural rejection flattens with the exact field key, like
+        // every other Validation outcome.
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_TtlPolicyWithConditions_FlattensTheCleanFieldError()
+        {
+            var dto = TemplateDto($"ttl-conditions-{Guid.NewGuid():N}");
+            dto.TtlPolicies.Add(new HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto
+            {
+                SensorStatus = (byte)SensorStatus.Ok,
+                Conditions =
+                [
+                    new HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto
+                    {
+                        Target = new HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto { Type = (byte)TargetType.Const },
+                        Operation = (byte)PolicyOperation.IsOk,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            });
+            dto.Ttls.Add(new HSMServer.Model.ManagementApi.AlertTemplates.TimeIntervalDto
+            {
+                Interval = (long)HSMServer.Core.Model.TimeInterval.Ticks,
+                Ticks = TimeSpan.FromMinutes(1).Ticks,
+            });
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                () => CreateTools().CreateAlertTemplateAsync(dto));
+
+            Assert.Contains("ttlPolicies[0].conditions: TTL policies take no conditions", error.Message);
+            Assert.DoesNotContain("not implemented", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(_templateStore);
+        }
+
 
         [Fact]
         public async System.Threading.Tasks.Task DeleteAlertTemplate_ReturnsTheDeletedId()
@@ -658,6 +695,26 @@ namespace HSMServer.Core.Tests.Mcp
                 async () => await CreateTools().CreateAlertScheduleAsync(null));
 
             Assert.Equal("schedule: The schedule body is required.", error.Message);
+            Assert.Empty(_scheduleStore);
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_MissingDaySchedulesKey_IsTheFieldKeyedToolError()
+        {
+            // #1598: a YAML without the required daySchedules key used to
+            // answer success and store a silent no-working-time schedule on
+            // MCP too; the shared write engine now answers the field-keyed
+            // tool error (an explicit empty list stays valid).
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertScheduleAsync(
+                    new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                    {
+                        Name = "no-key", Timezone = "UTC", Schedule = "disabledDates: [\"2026-12-25\"]\n",
+                    }));
+
+            Assert.StartsWith("schedule: ", error.Message);
+            Assert.Contains("daySchedules", error.Message);
             Assert.Empty(_scheduleStore);
         }
 
