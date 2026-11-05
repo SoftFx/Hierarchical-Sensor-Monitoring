@@ -503,6 +503,57 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.True(sensor.Policies.Single().IsDisabled);
         }
 
+        // The collector shape: a notification-less policy whose STORED
+        // destination is FromParent (AlertUpdateRequest.DestinationMode
+        // defaults to DefaultChats, which the server maps to FromParent —
+        // .AndSetIcon(...).Build() produces exactly this); the web editor can
+        // leave a stale Custom/AllChats mode behind a removed notification
+        // the same way. The stored mode is dead (a fired alert requires a
+        // template), so the read side renders the no-op truth — the echo
+        // PATCHes back cleanly instead of tripping the #1612 rejection.
+        [Fact]
+        public async Task UpdatePolicy_CollectorShapedPolicy_GetEchoPatch_RoundTrips()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+            var policyId = Guid.NewGuid();
+
+            sensor.TryUpdate(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AsSystemForce("controller_tests"),
+                Policies =
+                [
+                    new PolicyUpdate
+                    {
+                        Id = policyId,
+                        Icon = "🔥",
+                        Destination = new PolicyDestinationUpdate(mode: PolicyDestinationMode.FromParent),
+                        Conditions =
+                        [
+                            new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.Value,
+                                new TargetValue(TargetType.Const, "10")),
+                        ],
+                    },
+                ],
+            }, out _);
+
+            var controller = CreateController();
+
+            var fetched = Assert.IsType<OkObjectResult>(controller.GetPolicy(sensor.Id, policyId)).Value as PolicyDto;
+
+            // The dead stored mode is NOT echoed — only the no-op truth is.
+            Assert.Null(fetched.Notification);
+            Assert.Equal("Empty", fetched.Destination.Mode);
+
+            // The wire hop the REST transport always performs (see above).
+            var echo = JsonSerializer.Deserialize<PolicyDto>(JsonSerializer.Serialize(fetched)) with { IsDisabled = true };
+
+            var patched = await controller.UpdatePolicy(sensor.Id, policyId, echo);
+
+            Assert.Equal(200, StatusCodeOf(patched));
+            Assert.True(sensor.Policies.Single().IsDisabled);
+        }
+
         [Fact]
         public async Task UpdatePolicy_CustomDestination_WithoutNotification_Is422()
         {
