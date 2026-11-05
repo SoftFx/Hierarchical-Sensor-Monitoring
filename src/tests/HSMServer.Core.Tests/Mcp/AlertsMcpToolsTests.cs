@@ -535,6 +535,44 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        // #1608 (case C10b): a TTL policy carrying conditions used to reach
+        // the domain reconstruction, whose TTLPolicy condition builder throws
+        // NotImplementedException — the tool answered the leaked "The method
+        // or operation is not implemented." text on the wrong `policies` key.
+        // The structural rejection flattens with the exact field key, like
+        // every other Validation outcome.
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_TtlPolicyWithConditions_FlattensTheCleanFieldError()
+        {
+            var dto = TemplateDto($"ttl-conditions-{Guid.NewGuid():N}");
+            dto.TtlPolicies.Add(new HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto
+            {
+                SensorStatus = (byte)SensorStatus.Ok,
+                Conditions =
+                [
+                    new HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto
+                    {
+                        Target = new HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto { Type = (byte)TargetType.Const },
+                        Operation = (byte)PolicyOperation.IsOk,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            });
+            dto.Ttls.Add(new HSMServer.Model.ManagementApi.AlertTemplates.TimeIntervalDto
+            {
+                Interval = (long)HSMServer.Core.Model.TimeInterval.Ticks,
+                Ticks = TimeSpan.FromMinutes(1).Ticks,
+            });
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                () => CreateTools().CreateAlertTemplateAsync(dto));
+
+            Assert.Contains("ttlPolicies[0].conditions: TTL policies take no conditions", error.Message);
+            Assert.DoesNotContain("not implemented", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(_templateStore);
+        }
+
+
         [Fact]
         public async System.Threading.Tasks.Task DeleteAlertTemplate_ReturnsTheDeletedId()
         {

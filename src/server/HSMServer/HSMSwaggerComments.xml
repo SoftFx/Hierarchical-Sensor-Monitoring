@@ -2024,11 +2024,11 @@
             guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex
             metacharacters in them stay live — notably '.' matches any character including '/', so "Product.cpu"
             (no '/') does match "Product/cpu". A pattern of literals without '/' can never match (every sensor path
-            has at least Product/SensorName).
+            has at least Product/SensorName) and answers 400.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies">
-            <summary>TTL alert policies; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls"/> (same length, matched by position).</summary>
+            <summary>TTL alert policies; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls"/> (same length, matched by position). Take no conditions — the trigger is the inactivity interval.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls">
             <summary>TTL intervals; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies"/> — the interval of TTLs[i] belongs to TtlPolicies[i].</summary>
