@@ -999,6 +999,16 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     AlertPolicyConditionValidator.Add(errors, "notification.repeat",
                         $"Unknown repeat mode '{notification.Repeat}'.");
             }
+            else if (IsEffectfulDestination(destination))
+            {
+                // #1612: a destination without a notification routes nothing —
+                // the mapper would store Empty, silently discarding the
+                // caller's chat list while the caller believes alerts are
+                // routed. Reject the write instead (the no-silent-data-loss
+                // rule); only the no-op shapes may ride along.
+                AlertPolicyConditionValidator.Add(errors, "destination",
+                    "The destination has no effect without a notification; add a notification or remove the destination.");
+            }
 
             if (status is not null && status is not "Error" and not "Ok")
                 AlertPolicyConditionValidator.Add(errors, "status", "The status effect must be \"Error\" or \"Ok\".");
@@ -1018,6 +1028,26 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (notification is null && string.IsNullOrEmpty(icon) && status != "Error")
                 AlertPolicyConditionValidator.Add(errors, "effects",
                     "At least one effect is required: a notification, an icon, or the Error status.");
+        }
+
+        // #1612: does the destination configure any routing at all? The no-op
+        // shapes — null, Empty, and a NotInitialized echo of a read (never
+        // with chats) — may ride along a notification-less policy (a GET
+        // echo PATCHes back cleanly); everything else (FromParent, AllChats,
+        // Custom, any chat list) is an attempted routing configuration that
+        // the mapper would silently store as Empty when no notification is
+        // present, so the write is rejected before it gets there.
+        private static bool IsEffectfulDestination(AlertDestinationDto destination)
+        {
+            if (destination is null)
+                return false;
+
+            if (destination.Chats is { Count: > 0 })
+                return true;
+
+            return destination.Mode is not null &&
+                   !destination.Mode.Equals(nameof(PolicyDestinationMode.Empty), StringComparison.OrdinalIgnoreCase) &&
+                   !destination.Mode.Equals(nameof(PolicyDestinationMode.NotInitialized), StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ValidateDestination(AlertDestinationDto destination,

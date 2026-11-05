@@ -181,6 +181,33 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        // === A destination without a notification routes nothing (#1612) ===
+
+        // The issue was found on this tool: a status-only body (notification
+        // null) carrying a Custom destination was accepted and the chat list
+        // silently stored as Empty. The rejection renders as tool error text
+        // keyed by the field the agent must correct.
+        [Fact]
+        public async System.Threading.Tasks.Task CreateSensorPolicy_DestinationWithoutNotification_IsToolError()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var dto = DataDto() with
+            {
+                Notification = null,
+                Icon = null,
+                Status = "Error",
+                Destination = new AlertDestinationDto { Mode = "Custom", Chats = [Guid.NewGuid()] },
+            };
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateSensorPolicyAsync(sensor.Id, dto));
+
+            Assert.Contains("destination:", error.Message);
+            Assert.Contains("no effect without a notification", error.Message);
+        }
+
+
         [Fact]
         public async System.Threading.Tasks.Task UpdateSensorPolicy_ReplacesContentAndEchoes()
         {

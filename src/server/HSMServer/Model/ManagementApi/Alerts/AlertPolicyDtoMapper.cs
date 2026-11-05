@@ -25,7 +25,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         {
             Id = policy.Id,
             Conditions = [.. policy.Conditions.Select(c => ToDto(c, sensorType))],
-            Destination = ToDto(policy.Destination),
+            Destination = ToDto(policy.Destination, !string.IsNullOrEmpty(policy.Template)),
             Notification = ToDto(policy.Template, policy.Schedule),
             Icon = string.IsNullOrEmpty(policy.Icon) ? null : policy.Icon,
             Status = policy.Status == SensorStatus.Error ? "Error" : null,
@@ -49,7 +49,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 ? System.TimeSpan.FromTicks(interval.Ticks).ToString("c", CultureInfo.InvariantCulture)
                 : null,
             Inherit = policy.IsTTLFromParent,
-            Destination = ToDto(policy.Destination),
+            Destination = ToDto(policy.Destination, !string.IsNullOrEmpty(policy.Template)),
             Notification = ToDto(policy.Template, policy.Schedule),
             Icon = string.IsNullOrEmpty(policy.Icon) ? null : policy.Icon,
             Status = policy.Status == SensorStatus.Error ? "Error" : null,
@@ -147,11 +147,23 @@ namespace HSMServer.Model.ManagementApi.Alerts
             }
         }
 
-        private static AlertDestinationDto ToDto(PolicyDestination destination) => new()
-        {
-            Mode = destination.Mode.ToString(),
-            Chats = [.. destination.Chats.Keys.OrderBy(id => id)],
-        };
+        // Read: the destination is rendered only when it routes something. A
+        // notification-less policy may still carry a stored routing mode
+        // written by another surface — the collector's default FromParent, a
+        // stale Custom/AllChats mode the web editor kept behind a removed
+        // notification, migrations — but that mode is dead (a fired alert
+        // requires a template), and the write side (#1612) rejects effectful
+        // destinations without a notification. Rendering the no-op truth
+        // (Empty) keeps the read side inside the write side's accepted range:
+        // a GET echo never carries a shape its own PATCH would reject.
+        private static AlertDestinationDto ToDto(PolicyDestination destination, bool hasNotification) =>
+            hasNotification
+                ? new AlertDestinationDto
+                {
+                    Mode = destination.Mode.ToString(),
+                    Chats = [.. destination.Chats.Keys.OrderBy(id => id)],
+                }
+                : new AlertDestinationDto { Mode = nameof(PolicyDestinationMode.Empty) };
 
         private static AlertNotificationDto ToDto(string template, PolicySchedule schedule) =>
             string.IsNullOrEmpty(template)
@@ -223,6 +235,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
         {
             // Without a notification there is nothing to route: the destination
             // degrades to Empty deterministically instead of keeping stale chats.
+            // Validation (#1612) rejects any effectful destination when no
+            // notification is present, so only the no-op shapes (null, Empty,
+            // a NotInitialized echo) reach this branch — the degradation is
+            // defense-in-depth, not a silent drop of caller input.
             if (!hasNotification || destination is null)
                 return new PolicyDestinationUpdate(PolicyDestinationMode.Empty);
 

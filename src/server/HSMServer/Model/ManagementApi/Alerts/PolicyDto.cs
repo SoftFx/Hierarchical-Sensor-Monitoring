@@ -43,8 +43,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// <summary>
         /// Where a fired notification goes. Required when <c>notification</c> is present.
         /// Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (NotInitialized = never configured; writable only as an echo of a read, never with chats).
+        /// Without a <c>notification</c> a destination routes nothing: only the no-op shapes (Empty, a NotInitialized echo, no chats) are accepted — anything else is a 422, never silently stored as Empty.
+        /// A notification-less policy always reads Empty: a dead routing mode another surface left stored (the collector's default FromParent, a stale web-editor mode) is normalized on read, so a GET echo PATCHes back cleanly.
         /// </summary>
-        [Description("Where a fired notification goes. Required when `notification` is present.")]
+        [Description("Where a fired notification goes. Required when `notification` is present. Without a notification only the no-op shapes (Empty / NotInitialized echo, no chats) are accepted — anything else answers 422 (a destination has no effect without a notification); such a policy always reads destination Empty (a dead stored routing mode is normalized).")]
         public AlertDestinationDto Destination { get; init; }
 
         /// <summary>The notification effect (message template + send schedule); null means no notification.</summary>
@@ -114,8 +116,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
         [Description("True = take the interval from the parent node (the explicit reset-to-parent switch; on a product it resolves against the product's own Inactivity Period setting).")]
         public bool Inherit { get; init; }
 
-        /// <summary>Where a fired notification goes. Required when <c>notification</c> is present. Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (an echo of an unconfigured destination; never with chats).</summary>
-        [Description("Where a fired notification goes. Required when `notification` is present.")]
+        /// <summary>Where a fired notification goes. Required when <c>notification</c> is present. Mode table: FromParent, Empty, AllChats, Custom, NotInitialized (an echo of an unconfigured destination; never with chats). Without a <c>notification</c> a destination routes nothing: only the no-op shapes (Empty, a NotInitialized echo, no chats) are accepted — anything else is a 422, never silently stored as Empty. A notification-less policy always reads Empty: a dead routing mode another surface left stored (the collector's default FromParent, a stale web-editor mode) is normalized on read, so a GET echo PATCHes back cleanly.</summary>
+        [Description("Where a fired notification goes. Required when `notification` is present. Without a notification only the no-op shapes (Empty / NotInitialized echo, no chats) are accepted — anything else answers 422 (a destination has no effect without a notification); such a policy always reads destination Empty (a dead stored routing mode is normalized).")]
         public AlertDestinationDto Destination { get; init; }
 
         /// <summary>The notification effect (message template + send schedule); null means no notification.</summary>

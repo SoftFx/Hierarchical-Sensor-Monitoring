@@ -4,8 +4,11 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     // single source both schedule DTOs reference from their [Description]s, so the
     // input schema (create/update) and the read DTOs (Swagger/IDE today; tools/list
     // output schemas once #1553 emits them) cannot drift.
-    // The text states exactly what AlertScheduleParser enforces; keep it in sync
-    // with the parser when a rule changes.
+    // The text states exactly what the schedule write paths enforce: the
+    // parser's structural rules plus the required daySchedules key, which the
+    // write engine probes on the raw YAML (#1598) because the parser's model
+    // initializer cannot tell an absent key from an explicit empty list. Keep
+    // it in sync when a rule changes.
     internal static class AlertScheduleYamlDocs
     {
         internal const string Format =
