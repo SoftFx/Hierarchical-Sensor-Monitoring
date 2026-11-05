@@ -594,7 +594,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
                 try
                 {
-                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, chatsById));
+                    // logSkippedPathTemplates: false — this build VALIDATES client input and
+                    // answers every skipped path in the 422 details; a Warn per bad
+                    // pattern here would be operator-log noise (#1607 review).
+                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, chatsById),
+                        logSkippedPathTemplates: false);
                 }
                 catch (Exception e)
                 {

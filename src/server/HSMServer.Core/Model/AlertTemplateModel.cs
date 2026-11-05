@@ -17,6 +17,8 @@ namespace HSMServer.Core.Model
 
         public const byte AnyType = 100;
 
+        private readonly bool _logSkippedPathTemplates;
+
         private volatile List<PathTemplateConverter> _pathConverters = [];
 
         public List<TtlEntry> TtlEntries { get; set; } = [];
@@ -48,8 +50,10 @@ namespace HSMServer.Core.Model
             Id = Guid.NewGuid();
         }
 
-        public AlertTemplateModel(AlertTemplateEntity entity)
+        public AlertTemplateModel(AlertTemplateEntity entity, bool logSkippedPathTemplates = true)
         {
+            _logSkippedPathTemplates = logSkippedPathTemplates;
+
             Id = new Guid(entity.Id);
             Name = entity.Name;
             SensorType = entity.SensorType;
@@ -115,7 +119,17 @@ namespace HSMServer.Core.Model
                 var converter = new PathTemplateConverter();
                 if (!converter.ApplyNewTemplate(path, out var pathError))
                 {
-                    _logger.Warn($"Alert template '{Name}': skipping invalid path template '{path}': {pathError}");
+                    // Warn is the trace for corrupt PERSISTED templates found at
+                    // load/restore time. A model built to VALIDATE client input
+                    // (API/MCP write, web-UI save) answers the same reason in its
+                    // 400/422 — logging it at Warn on every attempt would be
+                    // operator-log noise for an ordinary client error (#1607
+                    // review), so those builds log at Debug instead.
+                    if (_logSkippedPathTemplates)
+                        _logger.Warn($"Alert template '{Name}': skipping invalid path template '{path}': {pathError}");
+                    else
+                        _logger.Debug($"Alert template '{Name}': skipping invalid path template '{path}': {pathError}");
+
                     error = pathError;
                     continue;
                 }

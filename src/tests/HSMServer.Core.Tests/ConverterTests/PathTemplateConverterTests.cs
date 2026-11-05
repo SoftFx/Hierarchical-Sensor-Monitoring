@@ -29,18 +29,45 @@ namespace HSMServer.Core.Tests.ConverterTests
         }
 
         [Fact]
-        public void IsMatch_AfterFailedApply_NeverThrows()
+        public void IsMatch_AfterFailedApply_MatchesNothing()
         {
-            // The pre-#1607 failure mode: the pattern compiled lazily, so the
-            // FIRST candidate path blew up with RegexParseException. After a
-            // failed apply the converter simply holds no pattern.
+            // A failed apply must leave the converter in a match-NOTHING state:
+            // "no template was ever applied" (match everything) and "the last
+            // template was rejected" are different, and the dashboard-panel
+            // subscriptions keep querying IsMatch after a failed apply — a
+            // rejected pattern must not silently degrade into match-all
+            // (#1607 review).
             var converter = new PathTemplateConverter();
 
             Assert.False(converter.ApplyNewTemplate("HSM Server Monitoring/([", out _));
 
-            var matched = converter.IsMatch("HSM Server Monitoring/cpu");
+            Assert.False(converter.IsMatch("HSM Server Monitoring/cpu"));
+            Assert.False(converter.IsMatch("anything/else"));
+        }
 
-            Assert.True(matched); // no pattern applied: the converter's match-everything state
+        [Fact]
+        public void IsMatch_NeverAppliedTemplate_MatchesEverything()
+        {
+            // The untouched converter has no filter at all: every path is a
+            // candidate (the state a fresh PanelSubscription starts from).
+            var converter = new PathTemplateConverter();
+
+            Assert.True(converter.IsMatch("HSM Server Monitoring/cpu"));
+        }
+
+        [Fact]
+        public void IsMatch_FailedApplyThenValidApply_MatchesAgain()
+        {
+            // The failure flag is per-apply: a later VALID template must clear
+            // the match-nothing state, so editing a broken subscription
+            // template back to a working one restores the filter.
+            var converter = new PathTemplateConverter();
+
+            Assert.False(converter.ApplyNewTemplate("Root/([", out _));
+            Assert.True(converter.ApplyNewTemplate("*/cpu", out _));
+
+            Assert.True(converter.IsMatch("Root/cpu"));
+            Assert.False(converter.IsMatch("Root/mem"));
         }
 
         [Fact]
