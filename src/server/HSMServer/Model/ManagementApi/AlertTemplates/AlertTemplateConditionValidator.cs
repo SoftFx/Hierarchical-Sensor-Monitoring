@@ -87,10 +87,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 // TTL policies carry no conditions in the domain
                 // (DefaultPolicyBase.GetCondition throws for every
                 // property); the web UI never submits any — the interval
-                // rides the parallel ttls list instead.
+                // rides the parallel ttls list instead. The structural
+                // pass (#1608) already reports the whole list under
+                // "{prefix}.conditions" — only add the per-item message
+                // when it has not, so the same defect is not reported
+                // under two keys.
                 if (isTtlPolicy)
                 {
-                    Add(errors, conditionPrefix, "TTL policies do not support conditions.");
+                    if (!errors.ContainsKey($"{prefix}.conditions"))
+                        Add(errors, conditionPrefix, "TTL policies do not support conditions.");
                     continue;
                 }
 
@@ -208,10 +213,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         }
 
         // The constant of a targeted Const condition parses by the
-        // property's target kind (the domain's TargetConstConverter). One
-        // deliberate narrowing versus the raw converters: NaN and Infinity
-        // are rejected like the per-sensor surface rejects them — a
-        // comparison against them can never fire.
+        // property's target kind (the domain's TargetConstConverter).
+        // Acceptance follows the domain's double.Parse exactly: NaN and
+        // Infinity parse (the per-sensor surface rejects them only because
+        // JSON cannot express them as numbers), and templates stored with
+        // them before #1611 must keep round-tripping through GET->PUT — a
+        // comparison against them simply never fires.
         private static string TargetError(ConditionTargetKind kind, PolicyProperty property, string value) =>
             kind switch
             {
@@ -223,8 +230,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 ConditionTargetKind.Double when IsNullableDouble(property) && string.IsNullOrEmpty(value) => null,
 
                 ConditionTargetKind.Double => double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands,
-                        CultureInfo.InvariantCulture, out var number) &&
-                    !double.IsNaN(number) && !double.IsInfinity(number)
+                        CultureInfo.InvariantCulture, out _)
                         ? null
                         : "The target must be a number.",
 

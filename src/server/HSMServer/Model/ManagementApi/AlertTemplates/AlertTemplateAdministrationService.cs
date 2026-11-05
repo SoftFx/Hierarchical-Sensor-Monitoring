@@ -593,8 +593,13 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             // key. The rule table produces the sensor-policy surface's
             // field-keyed messages instead
             // (policies[0].conditions[0].property/operation/target).
-            if (errorMap.Count == 0)
-                AlertTemplateConditionValidator.AddConditionErrors(dto, errorMap);
+            // It runs ALONGSIDE structural errors (not only on a clean
+            // structural pass): the validator itself skips null conditions,
+            // null targets and undefined enum bytes, so an unrelated
+            // structural error (an over-long name, a missing folderId) must
+            // not suppress the per-condition messages — the caller would
+            // otherwise fix the payload in two rounds (#1611 review).
+            AlertTemplateConditionValidator.AddConditionErrors(dto, errorMap);
 
             if (errorMap.Count == 0)
             {

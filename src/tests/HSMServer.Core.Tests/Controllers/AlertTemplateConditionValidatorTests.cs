@@ -126,7 +126,6 @@ namespace HSMServer.Core.Tests.Controllers
         [Theory]
         [InlineData((byte)SensorType.Integer, (byte)PolicyProperty.Value, "abc", "The target must be an integer number.")]
         [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, "abc", "The target must be a number.")]
-        [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, "NaN", "The target must be a number.")]
         [InlineData((byte)SensorType.TimeSpan, (byte)PolicyProperty.Value, "abc", "The target must be a TimeSpan string, e.g. \"00:30:00\".")]
         [InlineData((byte)SensorType.Version, (byte)PolicyProperty.Value, "xx", "The target must be a version string, e.g. \"1.2.3\".")]
         [InlineData((byte)SensorType.String, (byte)PolicyProperty.Length, "abc", "The target must be an integer number.")]
@@ -151,6 +150,13 @@ namespace HSMServer.Core.Tests.Controllers
         [Theory]
         [InlineData((byte)SensorType.Integer, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "42")]
         [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "4.5e1")]
+        // Non-finite constants follow the domain's double.Parse: the
+        // per-sensor surface rejects them only because JSON cannot express
+        // them as numbers; a template stored with one before #1611 must keep
+        // round-tripping through GET->PUT (#1611 review).
+        [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "NaN")]
+        [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "Infinity")]
+        [InlineData((byte)SensorType.Double, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "-Infinity")]
         [InlineData((byte)SensorType.Double, (byte)PolicyProperty.EmaValue, (byte)PolicyOperation.LessThan, "")]
         [InlineData((byte)SensorType.TimeSpan, (byte)PolicyProperty.Value, (byte)PolicyOperation.GreaterThan, "00:30:00")]
         [InlineData((byte)SensorType.Version, (byte)PolicyProperty.Value, (byte)PolicyOperation.Equal, "1.2.3")]

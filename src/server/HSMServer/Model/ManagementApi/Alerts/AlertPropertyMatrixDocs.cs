@@ -22,7 +22,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
 every type — Status, Comment, NewSensorData
 Boolean — nothing beyond the common set (no Value)
 Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: table-offered, but the template write rejects it — no typed executor)
-TimeSpan, Version — Value (Version's Value runs the six comparisons, not the text operations)
+TimeSpan, Version — Value (Version's Value: a template write runs the six comparisons; a sensor-policy write offers the text operations instead, #1608)
 String — Value, Length
 File — OriginalSize (no Value)
 IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)";
