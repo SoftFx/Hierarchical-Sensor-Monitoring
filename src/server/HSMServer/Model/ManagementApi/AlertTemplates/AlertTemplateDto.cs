@@ -54,13 +54,13 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex
         /// metacharacters in them stay live — notably '.' matches any character including '/', so "Product.cpu"
         /// (no '/') does match "Product/cpu". A pattern of literals without '/' can never match (every sensor path
-        /// has at least Product/SensorName).
+        /// has at least Product/SensorName) and answers 400.
         /// </summary>
-        [Description("Path patterns the template applies to (e.g. \"Root/*/cpu\"); 1..100 entries. Each pattern is matched against the sensor's FULL path, anchored at both ends and including the product-name first segment (\"Root\" in the example is a product name, not a keyword). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may cover part of a segment (\"Root/To*\" matches \"Root/Total\"). There is no multi-segment or any-depth wildcard — \"**\" is two adjacent single-segment '*'s, not a glob \"any depth\". The segment rules are guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex metacharacters stay live — notably '.' matches any character including '/', so \"Product.cpu\" (no '/') does match \"Product/cpu\"; a pattern of literals without '/' can never match (every sensor path has at least Product/SensorName).")]
+        [Description("Path patterns the template applies to (e.g. \"Root/*/cpu\"); 1..100 entries. Each pattern is matched against the sensor's FULL path, anchored at both ends and including the product-name first segment (\"Root\" in the example is a product name, not a keyword). '*' matches any run of characters WITHIN one segment: it cannot cross '/' and may cover part of a segment (\"Root/To*\" matches \"Root/Total\"). There is no multi-segment or any-depth wildcard — \"**\" is two adjacent single-segment '*'s, not a glob \"any depth\". The segment rules are guaranteed for LITERAL characters only: constant parts are embedded into the regex unescaped, so regex metacharacters stay live — notably '.' matches any character including '/', so \"Product.cpu\" (no '/') does match \"Product/cpu\"; a pattern of literals without '/' can never match (every sensor path has at least Product/SensorName) and answers 400.")]
         public List<string> Paths { get; init; } = [];
 
-        /// <summary>TTL alert policies; parallel to <see cref="Ttls"/> (same length, matched by position).</summary>
-        [Description("TTL (inactivity) alert policies; parallel to `ttls` — same length, matched by position (the interval of ttls[i] belongs to ttlPolicies[i]).")]
+        /// <summary>TTL alert policies; parallel to <see cref="Ttls"/> (same length, matched by position). Take no conditions — the trigger is the inactivity interval.</summary>
+        [Description("TTL (inactivity) alert policies; parallel to `ttls` — same length, matched by position (the interval of ttls[i] belongs to ttlPolicies[i]). Take no conditions — the trigger is the inactivity interval; a TTL policy carrying conditions answers 400.")]
         public List<AlertPolicyDto> TtlPolicies { get; init; } = [];
 
         /// <summary>TTL intervals; parallel to <see cref="TtlPolicies"/> — the interval of TTLs[i] belongs to TtlPolicies[i].</summary>

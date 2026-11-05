@@ -422,6 +422,18 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
             {
                 schedule = _parser.Parse(dto.Schedule ?? string.Empty);
 
+                // #1598: the parser's model initializes DaySchedules to an
+                // empty list, so a YAML whose root has no daySchedules key
+                // parses into exactly the schedule `daySchedules: []` produces
+                // — a silent no-working-time schedule on a key typo. The
+                // documented contract requires the key (an explicit empty
+                // list stays valid), so the write path checks presence on the
+                // raw YAML; stored rows may omit the key and keep loading
+                // (Parse(AlertScheduleEntity) is untouched).
+                if (!_parser.HasDaySchedulesKey(dto.Schedule))
+                    errorMap.Add("schedule",
+                        ["The 'daySchedules' key is required (an explicit empty list — daySchedules: [] — is valid, but the key must be present)."]);
+
                 // The id is server-owned: generated on create, the route id on
                 // update — never a client-chosen value. Assigned only on the
                 // success path below.

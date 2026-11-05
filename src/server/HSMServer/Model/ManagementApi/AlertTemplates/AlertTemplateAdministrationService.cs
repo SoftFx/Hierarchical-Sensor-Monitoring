@@ -651,6 +651,27 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             else if (dto.Paths.Count > MaxPaths)
                 Add(errors, "paths", $"At most {MaxPaths} path templates are allowed.");
 
+            // #1608: a pattern of literals without '/' can never match — every
+            // sensor full path has at least Product/SensorName, and a pattern
+            // with no '/', no wildcard and no live regex metacharacter cannot
+            // produce that '/' (PathTemplateConverter embeds constant parts
+            // unescaped). Patterns that COULD still match through their
+            // metacharacters (e.g. "Product.cpu", where '.' crosses '/') or
+            // through wildcards stay accepted and ride the apply-time
+            // zero-match warning (#1565); only the provably dead shapes fail
+            // the write.
+            foreach (var (path, index) in (dto.Paths ?? []).Select((p, i) => (p, i)))
+            {
+                // Whitespace-only entries are tolerated as before (the mapper
+                // drops them); only entries that carry a real pattern are
+                // judged here.
+                if (string.IsNullOrWhiteSpace(path) || !IsPureLiteralWithoutSlash(path))
+                    continue;
+
+                Add(errors, $"paths[{index}]",
+                    "A pattern of literals without '/' can never match — every sensor path has at least Product/SensorName.");
+            }
+
             if ((dto.Policies?.Count ?? 0) + (dto.TtlPolicies?.Count ?? 0) > MaxPolicies)
                 Add(errors, "policies", $"At most {MaxPolicies} policies (regular and TTL combined) are allowed.");
 
@@ -700,6 +721,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     continue;
                 }
 
+                // #1608: TTL policies take no conditions — the trigger is the
+                // inactivity interval (TTLPolicy's condition builder is
+                // NotImplementedException by design; the web editor offers no
+                // conditions on TTL rows). Rejected HERE, before the domain
+                // reconstruction, so the write fails with a clean field-keyed
+                // error instead of the raw "The method or operation is not
+                // implemented." text on the wrong `policies` key.
+                if (policy.Conditions?.Count > 0)
+                    Add(errors, $"ttlPolicies[{index}].conditions",
+                        "TTL policies take no conditions — the trigger is the inactivity interval.");
+
                 if (policy.Id != Guid.Empty && !seenPolicyIds.Add(policy.Id))
                     Add(errors, $"ttlPolicies[{index}].id", "Duplicate policy id — ids must be unique across policies and ttlPolicies.");
 
@@ -739,6 +771,16 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         private static void AddPolicyStructureErrors(AlertPolicyDto policy, string prefix,
             Dictionary<string, List<string>> errors)
         {
+            // #1608: the message renders with string.Format over the
+            // substituted $variables (AlertState.BuildComment), so braces in
+            // the user text either throw at evaluation time ({25} and friends)
+            // or silently substitute another variable's value ({0}) — the
+            // documented field contract ("curly braces are not allowed")
+            // rejects them at write time instead.
+            if (policy.Template is { } message && (message.Contains('{') || message.Contains('}')))
+                Add(errors, $"{prefix}.template",
+                    "The message template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
+
             foreach (var (condition, conditionIndex) in (policy.Conditions ?? []).Select((c, i) => (c, i)))
             {
                 var conditionPrefix = $"{prefix}.conditions[{conditionIndex}]";
@@ -778,6 +820,26 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     if (!Guid.TryParse(chatKey, out _))
                         Add(errors, $"{prefix}.destination", $"The chat id '{chatKey}' is not a valid Guid.");
         }
+
+        // Chars PathTemplateConverter keeps as LIVE regex syntax in the built
+        // pattern: '*', '{' and '}' are the template constructs (wildcard and
+        // named variables — they expand to segment-local classes that cannot
+        // cross '/'), and '.', '?', '(', ')', '[', ']', '+', '^', '$', '|',
+        // '\' are regex metacharacters embedded unescaped into the compiled
+        // pattern (const parts are never escaped), so any of them MIGHT match
+        // a '/' — a pattern carrying one stays accepted and rides the
+        // apply-time zero-match warning instead of this check.
+        private static readonly char[] LiveRegexChars =
+            ['*', '{', '}', '.', '?', '(', ')', '[', ']', '+', '^', '$', '|', '\\'];
+
+        // True when the pattern is pure literal text with no '/': it compiles
+        // to an anchored regex matching only that exact text, which cannot
+        // contain the '/' every sensor full path has (Product/SensorName) —
+        // such a pattern can never match anything (#1608).
+        private static bool IsPureLiteralWithoutSlash(string path) =>
+            !string.IsNullOrEmpty(path) &&
+            !path.Contains('/') &&
+            path.All(c => Array.IndexOf(LiveRegexChars, c) < 0);
 
         // Semantic checks ported from the cookie controller (same order, same
         // error strings) plus the chat-availability rule the web UI enforces
