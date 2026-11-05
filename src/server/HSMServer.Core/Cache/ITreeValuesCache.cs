@@ -132,11 +132,15 @@ namespace HSMServer.Core.Cache
         // is the partial-apply/DB-failure channel the 409 renders). Warnings
         // (#1401) carry the per-policy VALIDATION rejections of an apply that
         // PERSISTED — one entry per rejected policy; they never flip Success.
-        Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
+        // The optional initiator (#1610): the write's AlertTemplate-type
+        // initiator stamped with the request's undo group — the fan-out
+        // policy records copy the group link. Null keeps the canonical
+        // unstamped initiator.
+        Task<(bool Success, string Error, List<TemplateApplyWarning> Warnings)> AddAlertTemplateAsync(AlertTemplateModel model, InitiatorInfo initiator = null, CancellationToken token = default);
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 
-        Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
+        Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
 
         Task RunSensorsSelfDestroyAsync(CancellationToken token = default);
 

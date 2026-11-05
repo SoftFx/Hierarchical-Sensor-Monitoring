@@ -68,6 +68,15 @@ namespace HSMServer.Core.TableOfChanges
         /// <summary>The same initiator stamped with the write's undo group (#1588): the cache-layer journal records link to it.</summary>
         public InitiatorInfo AsJournaled(Guid changeSetId) => new(Type, Info, IsForceUpdate) { ChangeSetId = changeSetId };
 
+        /// <summary>
+        /// The semantic "this initiator is a template apply" predicate. The
+        /// policy machinery must branch on the TYPE, never on record
+        /// equality: a journaled apply initiator — the AlertTemplate type
+        /// stamped with the request's undo group (#1610) — is value-UNEQUAL
+        /// to the canonical instance while still being a template apply.
+        /// </summary>
+        public bool IsTemplateApply => Type == InitiatorType.AlertTemplate;
+
         public InitiatorInfoEntity ToEntity() => new()
         {
             Type = (byte)Type,

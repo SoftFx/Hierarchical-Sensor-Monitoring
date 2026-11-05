@@ -12,6 +12,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
@@ -57,14 +58,14 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((Guid id) => _store.TryGetValue(id, out var template) ? template : null);
             _cache.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel>());
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
                 });
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-                .Returns((Guid id, CancellationToken token) =>
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((Guid id, InitiatorInfo initiator, CancellationToken token) =>
                 {
                     _store.TryRemove(id, out _);
                     return Task.FromResult((true, (string)null));
@@ -146,6 +147,13 @@ namespace HSMServer.Core.Tests.Controllers
                 StatusCodeResult codeResult => codeResult.StatusCode,
                 _ => throw new InvalidOperationException($"unexpected result type {result.GetType().Name}"),
             };
+
+        private static Dictionary<string, object> DetailsOf(IActionResult result)
+        {
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+
+            return Assert.IsType<Dictionary<string, object>>(body.Details);
+        }
 
         private void SetupFolderWithChats(Guid folderId, params Guid[] chatIds)
         {
@@ -359,7 +367,7 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto() with { Name = "" };
 
             Assert.Equal(404, StatusCodeOf(await CreateController().CreateTemplate(dto)));
-            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()), Times.Never);
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Theory]
@@ -603,9 +611,9 @@ namespace HSMServer.Core.Tests.Controllers
             // before reconciling and Remove strips per-sensor policies BEFORE deleting
             // the template — a client-triggered cancellation mid-loop would leave
             // half-applied state (a cancelled delete silently disarms alerts).
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Callback((AlertTemplateModel model, CancellationToken token) => Assert.False(token.CanBeCanceled))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Callback((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken token) => Assert.False(token.CanBeCanceled))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, (List<TemplateApplyWarning>)null));
@@ -740,10 +748,13 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Create_UnsupportedCondition_SurfacesTheReconstructionReason()
         {
-            // A File sensor's Value condition has no typed executor (the value is a
-            // byte[]): reconstruction throws, and the 400 must name the actual
-            // reason instead of one static sensor-type wording (#1439), so this
-            // class of failure is diagnosable from the API response alone.
+            // A File sensor's Value condition has no typed executor (the value is
+            // a byte[]): the #1439 era surfaced the reconstruction's raw throw
+            // ("The template could not be parsed: Unsupported policy property
+            // Value with type Byte[]") under a bare `policies` key; since #1611
+            // the rule-table pre-pass answers the sensor-policy surface's
+            // field-keyed message instead. The last-resort reconstruction net
+            // still carries the reason for throws nobody predicted.
             var dto = BuildDto(sensorType: (byte)SensorType.File);
 
             var result = await CreateController().CreateTemplate(dto);
@@ -752,7 +763,8 @@ namespace HSMServer.Core.Tests.Controllers
             var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
             // The typed details map (#1371): values stay message arrays.
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
-            Assert.Contains("Byte[]", Assert.IsType<string[]>(details["policies"]).Single());
+            Assert.Equal("Property 'Value' is not supported by File templates. Supported: OriginalSize, Status, Comment, NewSensorData.",
+                Assert.IsType<string[]>(details["policies[0].conditions[0].property"]).Single());
         }
 
         [Fact]
@@ -895,11 +907,13 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public async Task Create_UnsupportedConditionProperty_SurfacesTheDomainMessage()
+        public async Task Create_UnsupportedConditionProperty_IsFieldKeyed()
         {
-            // The #1609 repro (case C20): Count is a bar-sensor property, Double
-            // does not offer it — the whole write fails with the parse error the
-            // property-matrix header of the MCP/REST schemas now quotes verbatim.
+            // The #1611 shape: Count is a bar-sensor property, Double does not
+            // offer it — the write fails with the sensor-policy surface's
+            // field-keyed message (no raw domain text), and the property-matrix
+            // header of the MCP/REST schemas quotes the flattened string
+            // verbatim (pinned by AlertTemplateConditionValidatorTests).
             var dto = BuildDto(sensorType: (byte)SensorType.Double);
             dto.Policies[0] = dto.Policies[0] with
             {
@@ -916,10 +930,8 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(400, StatusCodeOf(result));
             var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
-            // The FULL string the property-matrix header quotes — prefix
-            // included, so the documented quote cannot drift from the write.
-            Assert.Contains("The template could not be parsed: Not supported property Count for DoublePolicy",
-                Assert.IsType<string[]>(details["policies"]).Single());
+            Assert.Equal("Property 'Count' is not supported by Double templates. Supported: Value, EmaValue, Status, Comment, NewSensorData.",
+                Assert.IsType<string[]>(details["policies[0].conditions[0].property"]).Single());
             Assert.Empty(_store);
         }
 
@@ -932,11 +944,11 @@ namespace HSMServer.Core.Tests.Controllers
         [InlineData((byte)SensorType.Enum, (byte)PolicyProperty.EmaValue)]
         public async Task Create_NonOfferedProperty_FailsTheWrite_NothingStored(byte sensorType, byte property)
         {
-            // The template write enforces the property matrix through the domain
-            // reconstruction (#1609): an AnyType template is rebuilt against a
-            // Boolean stand-in (only the common set passes), and Enum's EmaValue —
-            // offered by the 422 rule table — has no typed executor and fails the
-            // write the same way. Nothing is stored silently.
+            // The template write enforces the property matrix before the domain
+            // reconstruction (#1609/#1611): an AnyType template accepts only the
+            // common set (the reconstruction's Boolean stand-in), and Enum's
+            // EmaValue — offered by the 422 rule table — has no typed executor
+            // and fails the write the same way. Nothing is stored silently.
             var dto = BuildDto(sensorType: sensorType);
             dto.Policies[0] = dto.Policies[0] with
             {
@@ -952,6 +964,218 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
+        }
+
+        // The #1611 rows: every condition-level rejection the issue lists
+        // answers a field-keyed 400 with the sensor-policy surface's message
+        // catalogue — the raw .NET exception text ("The input string 'abc'
+        // was not in a correct format.", "Not supported property Value for
+        // IntegerBarPolicy", the Boolean stand-in's type name) never rides
+        // the response.
+
+        [Fact]
+        public async Task Create_AnyTypeNonCommonProperty_NamesAnyType()
+        {
+            // The AnyType repro: the reconstruction validates against a
+            // Boolean stand-in, but the error must name the template's REAL
+            // type — "Boolean" (or the raw executor text) never appears.
+            var dto = BuildDto(sensorType: AlertTemplateModel.AnyType);
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var details = DetailsOf(result);
+            var message = Assert.IsType<string[]>(details["policies[0].conditions[0].property"]).Single();
+            Assert.Equal("Property 'Value' is not supported by AnyType templates. Supported: Status, Comment, NewSensorData.", message);
+            Assert.DoesNotContain("Boolean", message);
+        }
+
+        [Fact]
+        public async Task Create_BarTemplateValueProperty_IsFieldKeyed()
+        {
+            var dto = BuildDto(sensorType: (byte)SensorType.IntegerBar);
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var message = Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].property"]).Single();
+            Assert.Equal("Property 'Value' is not supported by IntegerBar templates. Supported: Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount, Status, Comment, NewSensorData.", message);
+        }
+
+        [Fact]
+        public async Task Create_UnparsableNumericTarget_IsFieldKeyed()
+        {
+            var dto = BuildDto(sensorType: (byte)SensorType.Double);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "abc" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = (byte)PolicyProperty.Value,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Equal("The target must be a number.",
+                Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].target"]).Single());
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_UnparsableTimeSpanTarget_IsFieldKeyed()
+        {
+            // BuildDto's default "42" is a VALID TimeSpan constant (42 days) —
+            // the target must be something TimeSpan.TryParse refuses.
+            var dto = BuildDto(sensorType: (byte)SensorType.TimeSpan);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "abc" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = (byte)PolicyProperty.Value,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Equal("The target must be a TimeSpan string, e.g. \"00:30:00\".",
+                Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].target"]).Single());
+        }
+
+        [Fact]
+        public async Task Create_UnparsableVersionTarget_IsFieldKeyed()
+        {
+            var dto = BuildDto(sensorType: (byte)SensorType.Version);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "xx" },
+                    Operation = (byte)PolicyOperation.Equal,
+                    Property = (byte)PolicyProperty.Value,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Equal("The target must be a version string, e.g. \"1.2.3\".",
+                Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].target"]).Single());
+        }
+
+        [Fact]
+        public async Task Create_UnparsableIntegerTarget_IsFieldKeyed()
+        {
+            // String Length takes an integer constant — "abc" used to surface
+            // as the raw FormatException text.
+            var dto = BuildDto(sensorType: (byte)SensorType.String);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "abc" },
+                    Operation = (byte)PolicyOperation.GreaterThan,
+                    Property = (byte)PolicyProperty.Length,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Equal("The target must be an integer number.",
+                Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].target"]).Single());
+        }
+
+        [Fact]
+        public async Task Create_OperationNotValidForProperty_IsFieldKeyed()
+        {
+            var dto = BuildDto(sensorType: (byte)SensorType.Double);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions = [new PolicyConditionDto
+                {
+                    Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "5" },
+                    Operation = (byte)PolicyOperation.Contains,
+                    Property = (byte)PolicyProperty.Value,
+                }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            // The supported list prints in the rule table's own order — the
+            // same order the per-sensor 422 quotes.
+            Assert.Equal("Operation 'Contains' is not supported for property 'Value'. Supported: LessThanOrEqual, LessThan, GreaterThan, GreaterThanOrEqual, NotEqual, Equal.",
+                Assert.IsType<string[]>(DetailsOf(result)["policies[0].conditions[0].operation"]).Single());
+        }
+
+        [Fact]
+        public async Task Create_OneValidOneInvalidPolicy_ReportsTheInvalidIndexAndStoresNothing()
+        {
+            // The write is atomic (#1611's second complaint): the field key
+            // must LOCATE the offending policy, not just name the list.
+            var valid = BuildDto(sensorType: (byte)SensorType.Double);
+            var dto = valid with
+            {
+                Policies =
+                [
+                    valid.Policies[0],
+                    valid.Policies[0] with
+                    {
+                        Conditions = [new PolicyConditionDto
+                        {
+                            Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "abc" },
+                            Operation = (byte)PolicyOperation.GreaterThan,
+                            Property = (byte)PolicyProperty.Value,
+                        }],
+                    },
+                ],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var details = DetailsOf(result);
+            Assert.Equal("The target must be a number.",
+                Assert.IsType<string[]>(details["policies[1].conditions[0].target"]).Single());
+            Assert.DoesNotContain("policies[0]", details.Keys);
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_ValidConditionCombinations_StillAccepted()
+        {
+            // The pre-validation preserves the reconstruction's acceptance:
+            // a LastValue target is never parsed, and an EMA constant may be
+            // EMPTY (a null EMA comparison, PolicyNullableDoubleCondition).
+            var dto = BuildDto(sensorType: (byte)SensorType.Double);
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                Conditions =
+                [
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.LastValue },
+                        Operation = (byte)PolicyOperation.GreaterThan,
+                        Property = (byte)PolicyProperty.Value,
+                    },
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.Const, Value = "" },
+                        Combination = (byte)PolicyCombination.Or,
+                        Operation = (byte)PolicyOperation.LessThan,
+                        Property = (byte)PolicyProperty.EmaValue,
+                    },
+                ],
+            };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
+            Assert.Single(_store);
         }
 
         [Fact]
@@ -978,7 +1202,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Create_FolderWithoutProducts_Is409()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "No products found in the selected folder.", (List<TemplateApplyWarning>)null)));
 
             var result = await CreateController().CreateTemplate(BuildDto());
@@ -998,8 +1222,8 @@ namespace HSMServer.Core.Tests.Controllers
             // 409 leaves a live resource behind. The conflict must disclose its id:
             // the caller cannot re-POST (name-uniqueness 400) and cannot PUT an id
             // it was never told about.
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((false, "failed to apply to some products", (List<TemplateApplyWarning>)null));
@@ -1022,8 +1246,8 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Create_PolicyRejectionsOnPersistingSave_Answers201WithWarnings()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
@@ -1068,8 +1292,8 @@ namespace HSMServer.Core.Tests.Controllers
             var stored = new AlertTemplateModel { Name = "warned", FolderId = Guid.NewGuid() };
             _store[stored.Id] = stored;
 
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .Returns((AlertTemplateModel model, CancellationToken _) =>
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) =>
                 {
                     _store[model.Id] = model;
                     return Task.FromResult((true, (string)null, new List<TemplateApplyWarning>
@@ -1230,7 +1454,7 @@ namespace HSMServer.Core.Tests.Controllers
             var stored = new AlertTemplateModel { Name = "stuck" };
             _store[stored.Id] = stored;
 
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "Failed to remove template from products: X")));
 
             var result = await CreateController().DeleteTemplate(stored.Id);

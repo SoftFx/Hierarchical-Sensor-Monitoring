@@ -161,19 +161,23 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// The sensor property compared (PolicyProperty enum name).
         /// Condition-property availability by sensor type — exhaustive, negatives included:
         /// on the policy surface a property the type does not offer answers 422. The template
-        /// write enforces this table, and more: it reconstructs every policy with the
-        /// template's sensor type (an AnyType template against a Boolean stand-in, so only
-        /// the common set below passes its write), and a property the type does not offer,
-        /// or one whose typed executor the domain cannot build (Enum's EmaValue), fails the
-        /// whole write with a parse error naming the reason (Count on a Double template
-        /// answers 'The template could not be parsed: Not supported property Count for
-        /// DoublePolicy'). Nothing non-offered is stored by a write; a policy that does
-        /// reach sensors can still be rejected per sensor at apply time, and those
-        /// rejections ride the response's `warnings` instead.
+        /// write validates every condition against this table before reconstructing the
+        /// template (#1611): a property the type does not offer, an operation the property
+        /// does not accept, or an unparsable target value answers a field-keyed 400 carrying
+        /// this surface's message catalogue (a Count condition on a Double template answers
+        /// policies[0].conditions[0].property: Property 'Count' is not supported by Double
+        /// templates. Supported: Value, EmaValue, Status, Comment, NewSensorData.); an
+        /// AnyType template accepts only the common set below, and its errors name AnyType,
+        /// never the Boolean stand-in the reconstruction uses. Two table-offered pairs still
+        /// fail the write the same way because the domain executors cannot build them:
+        /// Enum's EmaValue, and the text operations Contains/StartsWith/EndsWith on Version's
+        /// Value (the six comparisons are what Version actually runs). Nothing non-offered is
+        /// stored by a write; a policy that does reach sensors can still be rejected per
+        /// sensor at apply time, and those rejections ride the response's `warnings` instead.
         /// every type — Status, Comment, NewSensorData
         /// Boolean — nothing beyond the common set (no Value)
-        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
-        /// TimeSpan, Version — Value
+        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: table-offered, but the template write rejects it — no typed executor)
+        /// TimeSpan, Version — Value (Version's Value runs the six comparisons, not the text operations)
         /// String — Value, Length
         /// File — OriginalSize (no Value)
         /// IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)
