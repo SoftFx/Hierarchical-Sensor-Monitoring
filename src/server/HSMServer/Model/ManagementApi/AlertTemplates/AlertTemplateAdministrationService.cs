@@ -587,10 +587,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         }
 
 
-        // Structural validation, then entity reconstruction (inside a try — the
-        // domain throws on legal-looking but unsupported input), then the
-        // semantic checks ported from the web UI controller. Any accumulated
-        // error fails the request.
+        // Structural validation, then per-condition rule-table validation
+        // (#1611), then entity reconstruction (inside a try — the domain
+        // throws on legal-looking but unsupported input), then the semantic
+        // checks ported from the web UI controller. Any accumulated error
+        // fails the request.
         private bool TryBuildValidatedTemplate(AlertTemplateDto dto, Guid id, bool isCreate,
             out AlertTemplateModel model, out Dictionary<string, string[]> errors)
         {
@@ -599,6 +600,22 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             AddStructuralErrors(dto, id, isCreate, errorMap);
 
             model = null;
+
+            // #1611: the per-condition pass runs BEFORE the reconstruction —
+            // the reconstruction's own rejections for conditions carry raw
+            // exception text ("Not supported property Value for
+            // IntegerBarPolicy", FormatException strings, an AnyType
+            // template naming its Boolean stand-in) under a bare `policies`
+            // key. The rule table produces the sensor-policy surface's
+            // field-keyed messages instead
+            // (policies[0].conditions[0].property/operation/target).
+            // It runs ALONGSIDE structural errors (not only on a clean
+            // structural pass): the validator itself skips null conditions,
+            // null targets and undefined enum bytes, so an unrelated
+            // structural error (an over-long name, a missing folderId) must
+            // not suppress the per-condition messages — the caller would
+            // otherwise fix the payload in two rounds (#1611 review).
+            AlertTemplateConditionValidator.AddConditionErrors(dto, errorMap);
 
             if (errorMap.Count == 0)
             {
@@ -614,10 +631,14 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 }
                 catch (Exception e)
                 {
-                    // e.g. Policy.Apply throws NotImplementedException for a
-                    // condition property the sensor-type policy does not support,
-                    // or FormatException for an unparseable Const target. A 400
-                    // carrying the reconstruction reason — never a 500 out of
+                    // Last-resort net after the #1611 pre-validation: the
+                    // structural and condition passes answer every known
+                    // unsupported shape (undefined enum bytes, a condition
+                    // the sensor type does not offer, an operation the
+                    // property does not accept, an unparsable target) with
+                    // field-keyed messages, so this arm fires only for
+                    // reconstruction failures nobody predicted — still a 400
+                    // carrying the reconstruction reason, never a 500 out of
                     // the API area, and never one static string masking the
                     // actual cause (#1439).
                     _logger.LogWarning(e, "API alert-template payload could not be reconstructed");
