@@ -604,6 +604,26 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async System.Threading.Tasks.Task CreateAlertSchedule_MissingDaySchedulesKey_IsTheFieldKeyedToolError()
+        {
+            // #1598: a YAML without the required daySchedules key used to
+            // answer success and store a silent no-working-time schedule on
+            // MCP too; the shared write engine now answers the field-keyed
+            // tool error (an explicit empty list stays valid).
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertScheduleAsync(
+                    new HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleUpsertDto
+                    {
+                        Name = "no-key", Timezone = "UTC", Schedule = "disabledDates: [\"2026-12-25\"]\n",
+                    }));
+
+            Assert.StartsWith("schedule: ", error.Message);
+            Assert.Contains("daySchedules", error.Message);
+            Assert.Empty(_scheduleStore);
+        }
+
+
+        [Fact]
         public async System.Threading.Tasks.Task CreateAlertSchedule_ConcurrentSameName_OnlyOnePersists()
         {
             // Round-2 review: the name-uniqueness check and the save must run as

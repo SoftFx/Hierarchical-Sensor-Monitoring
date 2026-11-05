@@ -502,6 +502,81 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task CreateSchedule_MissingDaySchedulesKey_Is422OnSchedule()
+        {
+            // #1598: the parser's model initializer turns a missing key into
+            // an empty DaySchedules list, so this used to store a silent
+            // no-working-time schedule with 201. The contract makes the key
+            // required.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "no-key", Timezone = "UTC", Schedule = "disabledDates: [\"2026-12-25\"]\n",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var messages = Assert.IsType<string[]>(body.Details["schedule"]);
+            Assert.Contains(messages, m => m.Contains("daySchedules"));
+
+            _schedules.Verify(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_DaySchedulesKeyTypo_Is422OnSchedule()
+        {
+            // A typo in the key name (daySchedule instead of daySchedules) is
+            // an unmatched property for the parser — the exact silent-empty
+            // case #1598 reports; it must answer 422, not 201.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "typo", Timezone = "UTC",
+                Schedule = "daySchedule:\n  - days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"18:00\" }\n",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var messages = Assert.IsType<string[]>(body.Details["schedule"]);
+            Assert.Contains(messages, m => m.Contains("daySchedules"));
+
+            _schedules.Verify(s => s.SaveSchedule(It.IsAny<Core.Model.Policies.AlertSchedule>()), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task CreateSchedule_EmptyDaySchedulesList_Is201()
+        {
+            // The documented valid twin of the missing key: an EXPLICIT empty
+            // list "validates but leaves no recurring working time" and stays
+            // accepted.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "empty", Timezone = "UTC", Schedule = "daySchedules: []\n",
+            });
+
+            Assert.Equal(201, StatusCodeOf(result));
+            Assert.Contains(_store, s => s.Name == "empty");
+        }
+
+
+        [Fact]
+        public async Task UpdateSchedule_MissingDaySchedulesKey_Is422()
+        {
+            var schedule = BuildSchedule("existing");
+            _store.Add(schedule);
+
+            var result = await CreateController().UpdateSchedule(schedule.Id, new AlertScheduleUpsertDto
+            {
+                Name = "existing", Timezone = "UTC", Schedule = "disabledDates: [\"2026-12-25\"]\n",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+        }
+
+
+        [Fact]
         public async Task CreateSchedule_UnknownTimezone_Is422OnTimezone()
         {
             var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto

@@ -102,6 +102,39 @@ namespace HSMServer.Core.Schedule
             }
         }
 
+        // #1598: AlertSchedule.DaySchedules is initialized to `new()`, so after
+        // a deserialization the property holds an empty list BOTH for an
+        // explicit `daySchedules: []` and for a root mapping with no
+        // daySchedules key at all — the Validate null-check cannot tell them
+        // apart. The documented YAML dialect (AlertScheduleYamlDocs) makes the
+        // key required, so WRITE paths ask the raw YAML through this nullable
+        // shape, deserialized by the same _deserializer (naming convention and
+        // key matching therefore behave exactly like the real parse).
+        // Parse(AlertScheduleEntity) deliberately does NOT consult it: rows
+        // stored before this rule may omit the key and must keep loading.
+        public bool HasDaySchedulesKey(string yaml)
+        {
+            try
+            {
+                return _deserializer.Deserialize<DaySchedulesKeyShape>(yaml ?? string.Empty)?.DaySchedules is not null;
+            }
+            catch (Exception)
+            {
+                // Unparseable YAML is rejected by Parse with the full parser
+                // message; here a parse failure just means the key cannot be
+                // confirmed present.
+                return false;
+            }
+        }
+
+        // Nullable mirror of AlertSchedule.DaySchedules: the one property
+        // whose presence must survive deserialization, so it carries no
+        // initializer.
+        private sealed class DaySchedulesKeyShape
+        {
+            public List<DaySchedule> DaySchedules { get; set; }
+        }
+
         private bool Validate(AlertSchedule schedule, out List<string> errors)
         {
             errors = new List<string>();
