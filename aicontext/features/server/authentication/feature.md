@@ -65,10 +65,11 @@ Not operator-visible. The observable signals of a lost/rotated ring are behavior
 
 ## Tests
 
-`DataProtectionKeyRingTests` (server unit tests, two ServiceProviders over the same/different directories stand in for two container lives, cookie payload produced by the framework's own `TicketDataFormat`):
+`DataProtectionKeyRingTests` (server unit tests, two ServiceProviders over the same/different directories stand in for two container lives, payloads produced by the framework's own wire formats — `CookieAuthenticationOptions.TicketDataFormat` for the cookie, `IAntiforgery.GetTokens`/`ValidateRequestAsync` for the form token):
 
 - happy path: cookie ticket from provider A validates with a fresh provider B over the same key directory, and the key file materialized in the directory;
-- negative path: the same ticket fails (null, never a false validation) over a different key directory — the #1633 symptom.
+- happy path: an antiforgery token pair issued by provider A passes `ValidateRequestAsync` on a fresh provider B over the same key directory (the exact validation whose failure produced the #1633 error log);
+- negative path: the same cookie ticket fails (null, never a false validation) over a different key directory — the #1633 symptom at the API the cookie handler consumes.
 
 ## Notes
 
