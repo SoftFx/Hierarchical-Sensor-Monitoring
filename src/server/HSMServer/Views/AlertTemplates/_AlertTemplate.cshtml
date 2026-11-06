@@ -70,7 +70,11 @@
                     <button type="button" class="btn btn-link remove-path-btn p-0 ms-1" style="@(pathTemplates.Count > 1 ? "" : "display:none")"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             }
-            <span class="text-danger field-validation-valid" data-valmsg-for="PathTemplates" data-valmsg-replace="true"></span>
+            @* #1247: server-side path errors (mixed-type #1210, invalid template, empty list)
+               must render inline like the Name error. A raw data-valmsg-for span is only filled
+               by client-side unobtrusive validation, and path inputs carry no data-val-* attributes,
+               so server ModelState errors never appeared and Save looked like a silent no-op. *@
+            <span class="text-danger" asp-validation-for="PathTemplates"></span>
         </div>
         <div class="col-auto">
             <button type="button" class="btn btn-link p-0" id="addPathBtn"><i class="fa-solid fa-plus"></i> Add path</button>
