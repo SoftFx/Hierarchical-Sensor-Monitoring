@@ -106,7 +106,7 @@ TypeScript 5.3 + Webpack 5:
 - `notifications/` - Telegram/email delivery, retries, failure handling.
 - `dashboards/` - server-owned dashboard behavior and data shaping.
 - `bar-stddev/` - per-bar standard deviation (#1509): storage (MemoryPack, appended field), exact compression of σ, Sensor API / Grafana / CSV output, the sensor page's Candlestick / Mean ± σ view and the dashboard `StdDev (σ)` property; also why the server builds against the in-repo DTO (`src/Directory.Build.targets`).
-- `auth/` - authentication, access keys, users, permissions.
+- `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
 - `database-backup-monitoring/` - self-monitoring of the server's own database backup (#1525): per-run `Backup result` (status + TTL so a missed run turns Timeout), backup file sizes, duration, and per-database sizes.
