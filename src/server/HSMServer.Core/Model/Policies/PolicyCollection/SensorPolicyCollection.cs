@@ -139,7 +139,16 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true) =>
             TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
-        internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
+        // #1563 review: the reset lives HERE as well, before the short-circuit
+        // chain — a failed type check skips CalculateStorageResult (and its
+        // own reset), and stale lines from an earlier ingestion pass must not
+        // leak into a later update's aggregate error.
+        internal bool TryRevalidate(BaseValue value)
+        {
+            _evaluationErrors.Clear();
+
+            return TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
+        }
 
         internal bool SensorTimeout(BaseValue value)
         {
