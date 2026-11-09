@@ -30,7 +30,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     // #1605: the preview records ride the MCP write tools' OUTPUT schemas
     // (inside the McpWriteResult envelope), so they carry [Description]s on
     // every member like every other MCP-bound DTO (#1553).
-    public sealed record WritePreviewDto
+    // Open for the deletion preview (#1637): a sensor deletion's dry run
+    // carries deletion-specific members (history count/size, mute state)
+    // alongside the shared affected-entities report — the derived record
+    // rides the same envelope without growing every journaled write's shape.
+    public record WritePreviewDto
     {
         /// <summary>Always true — this is a preview, nothing was applied.</summary>
         [Description("Always true — this is a preview, nothing was applied.")]

@@ -333,6 +333,29 @@ namespace HSMServer.Mcp
     }
 
 
+    /// <summary>
+    /// Result envelope of the delete_sensor tool (#1637): exactly one arm per
+    /// call — <c>value</c> after an applied deletion (the removed id, the MCP
+    /// stand-in for REST's 204) or <c>preview</c> after a dry run (everything
+    /// the real write would destroy). The McpWriteResult twin with a TYPED
+    /// preview arm: a sensor deletion's preview carries deletion-specific
+    /// members (history count/size, mute state) the generic envelope's
+    /// journaled-write preview does not, and the tool's static output schema
+    /// must show them (#1605).
+    /// </summary>
+    [Description("Result of the delete_sensor tool: `value` names the deleted id after an applied deletion, `preview` carries the everything-that-would-be-destroyed report after a dry run — exactly one of the two per call.")]
+    public sealed record McpSensorDeleteResult
+    {
+        /// <summary>The deleted sensor id after an applied deletion; null (absent) after a dry run.</summary>
+        [Description("The deleted sensor id after an applied deletion. Absent after a dry run.")]
+        public McpDeletedResult Value { get; init; }
+
+        /// <summary>The dry-run preview (nothing was applied); null (absent) after an applied deletion.</summary>
+        [Description("The dry-run preview: everything the real deletion would destroy — the sensor, its policies, its whole history. Nothing was applied. Absent after an applied deletion.")]
+        public SensorDeletePreviewDto Preview { get; init; }
+    }
+
+
     /// <summary>Result of the list_journal_records tool.</summary>
     [Description("Result of the list_journal_records tool: one page of visible journal records plus the effective paging echo.")]
     public sealed record McpJournalRecordsResult

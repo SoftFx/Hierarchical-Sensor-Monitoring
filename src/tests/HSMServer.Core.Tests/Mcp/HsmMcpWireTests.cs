@@ -60,6 +60,7 @@ namespace HSMServer.Core.Tests.Mcp
             "create_sensor_ttl_policy",
             "delete_alert_schedule",
             "delete_alert_template",
+            "delete_sensor",
             "delete_sensor_policy",
             "delete_sensor_ttl_policy",
             "find_sensors",
@@ -490,7 +491,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(32, tools.Count);
+                Assert.Equal(33, tools.Count);
 
                 foreach (var tool in tools)
                 {

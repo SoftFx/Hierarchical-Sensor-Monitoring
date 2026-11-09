@@ -148,6 +148,12 @@ namespace HSMServer.ServiceExtensions
             // no read-merge-write window needs no per-node gate.
             services.AddScoped<SensorMuteAdministrationService>();
 
+            // The sensor-deletion write engine (#1637): delete rendered through
+            // the core's own RemoveSensorAsync entry (the web UI's remove-node
+            // path). Scoped for the same reason as the mute engine — no
+            // read-merge-write window, nothing to gate.
+            services.AddScoped<SensorDeletionAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its policy guards live with the

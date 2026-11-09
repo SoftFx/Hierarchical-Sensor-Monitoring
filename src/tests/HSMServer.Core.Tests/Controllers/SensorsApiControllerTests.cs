@@ -8,9 +8,12 @@ using HSMCommon.Model;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.StatisticInfo;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -32,12 +35,15 @@ namespace HSMServer.Core.Tests.Controllers
 
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
+        private readonly Mock<IUserManager> _users = new();
 
         private readonly Core.Model.ProductModel _productA = new(EntitiesFactory.BuildProductEntity(name: "alpha") with { Id = Guid.NewGuid().ToString() });
         private readonly Core.Model.ProductModel _productB = new(EntitiesFactory.BuildProductEntity(name: "beta") with { Id = Guid.NewGuid().ToString() });
         private readonly Core.Model.ProductModel _folderA = new(EntitiesFactory.BuildProductEntity(name: "net") with { Id = Guid.NewGuid().ToString() });
 
         private readonly System.Collections.Generic.List<Core.Model.BaseSensorModel> _sensors = [];
+
+        private readonly Dictionary<Guid, SensorHistoryInfo> _historyInfo = [];
 
 
         public SensorsApiControllerTests()
@@ -48,14 +54,34 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.GetSensor(It.IsAny<Guid>()))
                 .Returns((Guid id) => _sensors.FirstOrDefault(s => s.Id == id));
 
+            // The queue-thread dispatch mirror of the deletion harness (see
+            // SensorDeletionAdministrationServiceTests): the mocked core
+            // removal takes the sensor out of the cache lists.
+            _cache.Setup(c => c.RemoveSensorAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<Guid?>(), It.IsAny<System.Threading.CancellationToken>()))
+                .Callback((Guid id, InitiatorInfo _, Guid? _, System.Threading.CancellationToken _) =>
+                {
+                    _sensors.RemoveAll(s => s.Id == id);
+                    _productA.RemoveSensor(id);
+                    _productB.RemoveSensor(id);
+                    _folderA.RemoveSensor(id);
+                })
+                .Returns(Task.CompletedTask);
+
+            _cache.Setup(c => c.GetSensorHistoryInfo(It.IsAny<Guid>()))
+                .Returns((Guid id) => _historyInfo.GetValueOrDefault(id));
+
             SetupProduct(_productA.Id, _productA);
             SetupProduct(_productB.Id, _productB);
             SetupProduct(_folderA.Id, _folderA);
 
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
+
+            _users.Setup(u => u[It.IsAny<Guid>()]).Returns(new HSMServer.Model.Authentication.User("api-owner"));
         }
 
 
@@ -73,7 +99,8 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private SensorsApiController CreateController() =>
-            new(new SensorTreeReadService(_cache.Object, _authorization.Object))
+            new(new SensorTreeReadService(_cache.Object, _authorization.Object),
+                new SensorDeletionAdministrationService(_cache.Object, _authorization.Object, _users.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -796,6 +823,60 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.False(history.ReadUnavailable);
             Assert.Empty(history.Points);
+        }
+
+
+        // === Delete (#1637): the thin REST rendering of the deletion engine ===
+
+        [Fact]
+        public async Task DeleteSensor_RemovesTheSensor_AndAnswers204()
+        {
+            var sensor = AddSensor(_productA, "legacy", "decommissioned probe");
+
+            var result = await CreateController().DeleteSensor(sensor.Id);
+
+            Assert.Equal(204, StatusCodeOf(result));
+            Assert.DoesNotContain(sensor, _sensors);
+        }
+
+        [Fact]
+        public async Task DeleteSensor_DryRunHeader_Answers200WithThePreview_AndRemovesNothing()
+        {
+            var sensor = AddSensor(_productA, "legacy", "decommissioned probe");
+
+            _historyInfo[sensor.Id] = new SensorHistoryInfo { DataCount = 7, KeysSizeBytes = 10, ValuesSizeBytes = 20 };
+
+            var controller = CreateController();
+            controller.HttpContext.Request.Headers[ChangeSetHeaders.DryRun] = "true";
+
+            var preview = Assert.IsType<SensorDeletePreviewDto>(
+                Assert.IsType<OkObjectResult>(await controller.DeleteSensor(sensor.Id)).Value);
+
+            Assert.True(preview.DryRun);
+            Assert.Equal(sensor.Id.ToString(), preview.EntityId);
+            Assert.Equal(7L, preview.HistoryValues);
+            Assert.Contains(sensor, _sensors); // nothing was applied
+        }
+
+        [Fact]
+        public async Task DeleteSensor_UnknownSensor_Is404()
+        {
+            var result = await CreateController().DeleteSensor(Guid.NewGuid());
+
+            Assert.Equal(404, StatusCodeOf(result));
+            Assert.Equal(ManagementApiErrors.NotFoundMessage, ErrorOf(result).Message);
+        }
+
+        [Fact]
+        public async Task DeleteSensor_ReadOnlyOwner_Is403()
+        {
+            var sensor = AddSensor(_productA, "legacy", "decommissioned probe");
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            Assert.Equal(403, StatusCodeOf(await CreateController().DeleteSensor(sensor.Id)));
+            Assert.Contains(sensor, _sensors); // never removed
         }
 
 

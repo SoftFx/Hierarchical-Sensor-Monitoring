@@ -407,6 +407,12 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensorHistory))] = [400, 401, 403, 404, 500],
 
+            // The sensor-deletion write (#1637): the honest-verification 409
+            // (a removal that never reached the cache answers Conflict, not a
+            // ghost 204 — the cache removal is what the post-write read
+            // verifies), otherwise the delete pattern of the policy surface.
+            [(typeof(SensorsApiController), nameof(SensorsApiController.DeleteSensor))] = [401, 403, 404, 409, 500],
+
             // The alert-administration surface (#1500). Writes carry the
             // semantic-validation 422 (condition-vs-type, chat availability,
             // schedule references, the TTL interval/inherit switch) and the

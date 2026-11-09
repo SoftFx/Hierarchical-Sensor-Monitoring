@@ -533,11 +533,12 @@
         </member>
         <member name="T:HSMServer.Controllers.SensorsApiController">
             <summary>
-            Read-only sensor surface of the management API (#1386): flat recursive
-            sensor search, one sensor with its current value, and the sensor's recent
-            history. Bearer-token authenticated only (the HsmApiToken scheme); served on
-            the web-UI port only. A token sees exactly the sensors its owner sees;
-            unknown and invisible ids answer the SAME 404.
+            Sensor surface of the management API: flat recursive sensor search, one
+            sensor with its current value, the sensor's recent history (#1386), and
+            sensor deletion (#1637). Bearer-token authenticated only (the HsmApiToken
+            scheme); served on the web-UI port only. A token sees exactly the sensors
+            its owner sees; unknown and invisible ids answer the SAME 404. Deletion
+            needs a read-write token and the owner's write access at the sensor.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.SensorsApiController.GetSensors(System.Nullable{System.Guid},System.String,System.String,System.String,System.Int32,System.Int32)">
@@ -581,6 +582,21 @@
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
             <param name="to">Window end, UTC ISO 8601; default: now.</param>
             <param name="maxPoints">Point limit, 1..10000 (default 1000); non-positive values fall back to the default.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.DeleteSensor(System.Guid)">
+            <summary>
+            Delete the sensor — IRREVERSIBLY: the cache entry, its attached
+            policies, its mute state, its whole stored history and its undo
+            change-set references are removed (a TreeCrud journal record with
+            the initiator is written; there is no undo). The 204 verifies the
+            cache removal — the persistence-side cleanup (journal record,
+            history wipe, change-set purge) is best-effort inside the core's
+            swallow-only handler and a failure there is logged server-side,
+            the same visibility the web UI's remove-node has. A dry run
+            (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
+            of everything the real write would destroy and applies nothing.
+            </summary>
+            <param name="id">Sensor id.</param>
         </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
@@ -994,6 +1010,24 @@
         <member name="P:HSMServer.Mcp.McpWriteResult`1.Preview">
             <summary>The dry-run preview (validation ran, nothing applied); null (absent) after an applied write.</summary>
         </member>
+        <member name="T:HSMServer.Mcp.McpSensorDeleteResult">
+            <summary>
+            Result envelope of the delete_sensor tool (#1637): exactly one arm per
+            call — <c>value</c> after an applied deletion (the removed id, the MCP
+            stand-in for REST's 204) or <c>preview</c> after a dry run (everything
+            the real write would destroy). The McpWriteResult twin with a TYPED
+            preview arm: a sensor deletion's preview carries deletion-specific
+            members (history count/size, mute state) the generic envelope's
+            journaled-write preview does not, and the tool's static output schema
+            must show them (#1605).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorDeleteResult.Value">
+            <summary>The deleted sensor id after an applied deletion; null (absent) after a dry run.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorDeleteResult.Preview">
+            <summary>The dry-run preview (nothing was applied); null (absent) after an applied deletion.</summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpJournalRecordsResult">
             <summary>Result of the list_journal_records tool.</summary>
         </member>
@@ -1016,6 +1050,13 @@
             (<see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> for the reads,
             <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500) for the writes), the
             same engines the REST policy controllers run on.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.SensorDeletionMcpTools">
+            <summary>
+            The sensor deletion tool of the MCP surface (#1637): delete a sensor —
+            a thin delegation to <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorDeletionAdministrationService"/>,
+            the same engine the REST delete endpoint runs on.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorMuteMcpTools">
@@ -2831,6 +2872,63 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.ProductDto.CreationDate">
             <summary>Product creation time (UTC).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto">
+            <summary>
+            The dry-run preview of a sensor deletion (#1637): everything the real
+            write would destroy — the sensor, its attached policies (the inherited
+            <c>affected</c> list), and its whole stored history. Deletion is
+            irreversible (no undo), so the preview is the only "check before you
+            pull the trigger" the surface offers.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.State">
+            <summary>
+            Sensor lifecycle state at preview time. Value table: Available, Muted,
+            Blocked — a Blocked sensor can be deleted too (same as the web UI).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.EndOfMuting">
+            <summary>
+            When the current mute lifts (UTC ISO 8601); null when the sensor is
+            not muted or muted indefinitely — <c>state</c> distinguishes the two.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.LastValueTime">
+            <summary>
+            Time of the newest stored value (UTC ISO 8601, the value's own
+            measurement time); null when the sensor has no data yet.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.HistoryValues">
+            <summary>Stored value count the deletion would erase (timeout markers
+            included; computed by a full on-disk history scan — the same scan the
+            web UI's node info runs, costly on sensors with millions of values).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.HistorySizeBytes">
+            <summary>On-disk size in bytes of the history the deletion would erase
+            (part of the same full history scan as <c>historyValues</c>).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.Product">
+            <summary>Reference to the sensor's root product.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorDeletionAdministrationService">
+            <summary>
+            The deletion write engine of the sensor surface (#1637): remove a sensor
+            — the token-side twin of the web UI's remove-node. Transport-agnostic —
+            the REST controller and the MCP write tool render its
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult"/> through the same envelopes every
+            other administration service uses.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorDeletionAdministrationService.DeleteSensorAsync(System.Guid,System.Security.Claims.ClaimsPrincipal,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions)">
+            <summary>
+            Delete the sensor: the cache entry, its policies and mute state, its
+            whole stored history and its undo change-set references — the exact
+            semantics of the web UI's remove-node, initiated by the token's
+            owner. A dry run answers a preview of everything that would be
+            removed and touches nothing.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorEnumOptionDto">
             <summary>

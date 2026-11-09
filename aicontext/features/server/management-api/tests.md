@@ -2,7 +2,7 @@
 
 > Owner: server | Last reviewed: 2026-10-19 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), the OpenAPI publication (`ManagementApiSwaggerTests`), and sensor muting (`SensorMuteApiControllerTests`).
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), the OpenAPI publication (`ManagementApiSwaggerTests`), sensor muting (`SensorMuteApiControllerTests`), and sensor deletion (`SensorDeletionAdministrationServiceTests` engine level + the delete pins inside `SensorsApiControllerTests`).
 
 ## Conventions (area admission)
 
@@ -80,6 +80,18 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 - **Blocked**: mute and unmute on a Blocked sensor → 409 `conflict` (the web flow's silent no-op surfaced as an explicit error), the sensor untouched.
 - **Semantic validation**: a past `endOfMuting` → 422 field-keyed (`details.endOfMuting`), the write never dispatched.
 - **Authorization mapping**: evaluator Forbidden → uniform 403 (both actions, write never dispatched — the read-only-token/Viewer arm); unknown id and the evaluator's NotFound answer the SAME 404 body (anti-enumeration); authorize-before-write pinned on the 404 path (no `UpdateMutedSensorStateAsync` call).
+
+## Sensor deletion (#1637)
+
+**Engine** (`SensorDeletionAdministrationServiceTests`, service level): the REAL service over a mocked cache whose `RemoveSensorAsync` mirrors the queue-thread dispatch (the sensor leaves the cache lists before the task resolves, like the core's cache-first order); `GetSensorHistoryInfo` feeds the preview's history numbers.
+
+- **Delegation**: the write goes to the core's `RemoveSensorAsync` — the SAME entry the web UI's remove-node drives — naming the token's OWNER as the InitiatorInfo (`User`/`api-owner`, the #1384 rule).
+- **Dry run**: answers the `SensorDeletePreviewDto` (kind/operation/entityId/path, product ref, state + endOfMuting with the mapper's Forever rule, lastValueTime, historyValues/historySizeBytes from the core's statistics accessor, the affected list — the sensor plus every data and TTL policy) and NOTHING is applied (no core removal call, the sensor still reads back); a MUTED sensor previews its mute state.
+- **Authorization mapping**: evaluator Forbidden → 403 (the write never runs — the read-only-token/Viewer arm); unknown id and the evaluator's NotFound answer the same 404; a repeat delete after removal → 404 with the core called once.
+- **State**: a BLOCKED sensor deletes (the web UI's remove-node rule — no state filter, unlike the mute engine).
+- **Honest verification**: a mocked core removal that does NOT apply (the queue's swallow-only failure channel — the removal never reached the cache) → 409 `conflict`, never a ghost success. The CACHE removal is everything the read can verify: a persistence-side failure inside the core's handler (after its cache-first step) is unreachable from the engine and stays a success — the Known Issues boundary, which is why the probe can only mock the never-reached case.
+
+**Controller** (the delete pins inside `SensorsApiControllerTests`, controller level — the same service-real harness): 204 on success with the sensor gone; the `X-HSM-Dry-Run: true` header → 200 + preview with nothing removed; unknown id → the uniform 404; a read-only owner → 403 with the sensor untouched.
 
 ## Uniform JSON error contract (#1353)
 
