@@ -2894,7 +2894,7 @@
             The deletion write engine of the sensor surface (#1637): remove a sensor
             — the token-side twin of the web UI's remove-node. Transport-agnostic —
             the REST controller and the MCP write tool render its
-            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through the same envelopes every
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult"/> through the same envelopes every
             other administration service uses.
             </summary>
         </member>
