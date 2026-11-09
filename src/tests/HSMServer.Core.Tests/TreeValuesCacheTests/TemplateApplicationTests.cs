@@ -549,9 +549,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // only for the toggle itself. A user-made disable stamps a User
         // change-table owner; the re-apply now re-applies the template
         // CONTENT (the #1077 fix — it used to freeze the whole policy) with
-        // the operator's IsDisabled preserved, the owner kept as the toggle
-        // marker, and a warning riding the save's warnings channel whenever
-        // the preserved choice diverges from the template's isDisabled.
+        // the operator's IsDisabled preserved and the owner kept as the
+        // toggle marker. The divergence is REPORTED only when the save
+        // carries new information (#1077 review): a content change or a
+        // template isDisabled flip — an UNCHANGED re-save like this one
+        // stays quiet instead of re-opening the warning modal on every save.
         [Fact]
         [Trait("Category", "Template application")]
         public async Task EditTemplate_UserDisabledSensorPolicy_SurvivesTemplateReapply()
@@ -590,10 +592,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(applied.IsDisabled);
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[applied.Id.ToString()].Initiator.Type);
 
-            // Act: re-apply the template with its policy still enabled — the
-            // update carries IsDisabled = false, differing from the sensor's
-            // user-chosen true: the content re-applies, the toggle survives,
-            // and the divergence is reported (#1077).
+            // Act: re-apply the template UNCHANGED — its policy still
+            // enabled, differing from the sensor's user-chosen true: the
+            // content re-applies and the toggle survives (#1077).
             var (editOk, editError, editWarnings) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
 
@@ -603,10 +604,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(appliedAfter.IsDisabled);
             Assert.Equal(InitiatorType.User, sensorAfter.ChangeTable.Policies[appliedAfter.Id.ToString()].Initiator.Type);
 
-            // The divergence rides the warnings channel: one entry naming
-            // the sensor and the preserved choice.
-            var preserved = Assert.Single(editWarnings, w => w.Reason.Contains("preserved"));
-            Assert.Contains(sensorAfter.FullPath, preserved.SensorPath);
+            // #1077 review: an unchanged re-save carries no new information —
+            // neither the content nor the template's isDisabled moved — so
+            // the preserved toggle stays quiet (no per-save warning/journal
+            // spam). The divergence reports ride only the saves that change
+            // something: pinned by the content-reapply test above and the
+            // isDisabled-flip test below.
+            Assert.DoesNotContain(editWarnings, w => w.Reason.Contains("preserved"));
         }
 
 
@@ -811,7 +815,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // disable keeps its User change-table owner and survives the template
         // re-apply — the content re-applies with the operator's IsDisabled
         // preserved (it used to freeze the whole TTL update, all-or-nothing
-        // per node), and the divergence rides the warnings channel.
+        // per node). An UNCHANGED re-save stays quiet (#1077 review): the
+        // divergence report fires only on saves that carry new information.
         [Fact]
         [Trait("Category", "Template application")]
         public async Task EditTemplate_UserDisabledSensorTtl_SurvivesTemplateReapply()
@@ -850,10 +855,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(appliedTtl.IsDisabled);
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[appliedTtl.Id.ToString()].Initiator.Type);
 
-            // Act: re-apply the template with its TTL entry still enabled — the
-            // update carries IsDisabled = false, diverging from the sensor's
-            // user-chosen true: the content re-applies, the toggle survives,
-            // the divergence is reported (#1077).
+            // Act: re-apply the template UNCHANGED — its TTL entry still
+            // enabled, diverging from the sensor's user-chosen true: the
+            // content re-applies and the toggle survives (#1077).
             var (editOk, editError, editWarnings) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(editOk, $"Failed to edit template: {editError}");
 
@@ -863,9 +867,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(appliedTtlAfter.IsDisabled);
             Assert.Equal(InitiatorType.User, sensorAfter.ChangeTable.TtlPolicies[appliedTtlAfter.Id.ToString()].Initiator.Type);
 
-            // The divergence rides the warnings channel.
-            var preserved = Assert.Single(editWarnings, w => w.Reason.Contains("preserved"));
-            Assert.Contains(sensorAfter.FullPath, preserved.SensorPath);
+            // #1077 review: the unchanged re-save reports nothing — the
+            // interval and the template's isDisabled both stand still, so
+            // the preserved toggle stays quiet (the interval-edit twin above
+            // pins the loud arm: a real content change reports).
+            Assert.DoesNotContain(editWarnings, w => w.Reason.Contains("preserved"));
         }
 
 
@@ -1006,6 +1012,223 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.Equal(TimeSpan.FromMinutes(20).Ticks, secondAfter.TTLTicks);
             Assert.False(secondAfter.IsDisabled);
+        }
+
+        // #1077 review (P2): a template apply carries only ITS OWN TTL
+        // entries — re-saving an UNRELATED template must not re-stamp the
+        // change-table owner of this template's toggled TTL entry. The
+        // pre-fix non-listed re-stamp in BaseNodeModel.Update downgraded the
+        // User toggle marker to AlertTemplate, and the NEXT save of the
+        // owning template then passed the CanChange pre-check and silently
+        // re-enabled the operator's disable.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_UserDisabledTtl_OtherTemplateResave_DoesNotReleaseTheToggle()
+        {
+            // Arrange: template A (one regular policy, no TTL entries) and
+            // template B (one TTL entry), both matching the same sensor.
+            var templateA = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorTwoTemplateToggle");
+            var templateB = BuildTemplate(SensorType.Integer, "*/sensorTwoTemplateToggle",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addA, errA, _) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            Assert.True(addA, $"Failed to add template A: {errA}");
+            var (addB, errB, _) = await _valuesCache.AddAlertTemplateAsync(templateB);
+            Assert.True(addB, $"Failed to add template B: {errB}");
+
+            var sensorPath = "sensorTwoTemplateToggle";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
+            var addResult = await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, addResult.Error);
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var ttlOfB = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == templateB.Id);
+            Assert.Single(sensor.Policies, p => p.TemplateId == templateA.Id);
+
+            // The operator disables B's TTL — the User owner is the #1077
+            // toggle marker.
+            var user = InitiatorInfo.AsUser("operator");
+            var toggle = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                TTLPolicies = [new PolicyUpdate(ttlOfB, user) { TTL = ttlOfB.TTLTicks, IsDisabled = true }],
+            });
+            Assert.True(toggle.IsOk, toggle.Error);
+            Assert.True(ttlOfB.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[ttlOfB.Id.ToString()].Initiator.Type);
+
+            // Act 1: re-save template A unchanged. Its TTL list is EMPTY
+            // (the finding's shape: the empty list used to re-stamp every
+            // non-listed TTL — B's included — down to AlertTemplate).
+            var (resaveA, resaveAError, _) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            Assert.True(resaveA, $"Failed to re-save template A: {resaveAError}");
+
+            // Assert 1: B's TTL keeps BOTH the operator's disable and the
+            // User toggle marker — A's apply did not touch it.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var afterA));
+            var ttlAfterA = Assert.Single(afterA.Policies.TTLPolicies, t => t.TemplateId == templateB.Id);
+            Assert.True(ttlAfterA.IsDisabled);
+            Assert.Equal(InitiatorType.User, afterA.ChangeTable.TtlPolicies[ttlAfterA.Id.ToString()].Initiator.Type);
+
+            // Act 2: re-save template B unchanged — the save whose pre-fix
+            // behaviour silently re-enabled the operator's disable.
+            var (resaveB, resaveBError, _) = await _valuesCache.AddAlertTemplateAsync(templateB);
+            Assert.True(resaveB, $"Failed to re-save template B: {resaveBError}");
+
+            // Assert 2: the operator's disable survives B's own re-apply.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var afterB));
+            var ttlAfterB = Assert.Single(afterB.Policies.TTLPolicies, t => t.TemplateId == templateB.Id);
+            Assert.True(ttlAfterB.IsDisabled);
+            Assert.Equal(InitiatorType.User, afterB.ChangeTable.TtlPolicies[ttlAfterB.Id.ToString()].Initiator.Type);
+        }
+
+        // #1077 review: a higher-priority owner that is NOT a user — the
+        // ServerMigration soft migrator stamping a template-owned TTL — is
+        // machinery, not an operator toggle. The next apply of the template
+        // reclaims the entry: the template's isDisabled lands, the ownership
+        // returns to the template, and no phantom "operator's choice
+        // preserved" is reported (the PR as shipped froze the flag and
+        // reported the migration stamp as an operator toggle).
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_MigrationOwnedTtl_FollowsTemplate_NotFrozenAsOperatorToggle()
+        {
+            // Arrange: template with one TTL entry, applied.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorTtlMigrationOwner",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorTtlMigrationOwner";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
+            var addResult = await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, addResult.Error);
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var appliedTtl = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.False(appliedTtl.IsDisabled);
+
+            // The migration stamp: a soft-migrator full-list TTL re-assert
+            // (the MigrationManager write shape) re-stamps the entry's
+            // change-table owner to ServerMigration (20) — above
+            // AlertTemplate (15), but not an operator's choice.
+            var migration = InitiatorInfo.AsSoftSystemMigrator();
+            var reassert = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = migration,
+                TTLPolicies = [new PolicyUpdate(appliedTtl, migration) { TTL = appliedTtl.TTLTicks }],
+            });
+            Assert.True(reassert.IsOk, reassert.Error);
+            Assert.Equal(InitiatorType.ServerMigration, sensor.ChangeTable.TtlPolicies[appliedTtl.Id.ToString()].Initiator.Type);
+
+            // Act: edit the template so the TTL entry is disabled and re-save.
+            template.TtlEntries[0].Policy.SetDisabled(true);
+
+            var (editOk, editError, editWarnings) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert: the entry follows the template — disabled — and the
+            // ownership returns to AlertTemplate (the reclaim); nothing is
+            // misreported as a preserved operator toggle.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var ttlAfter = Assert.Single(sensorAfter.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.True(ttlAfter.IsDisabled);
+            Assert.Equal(InitiatorType.AlertTemplate, sensorAfter.ChangeTable.TtlPolicies[ttlAfter.Id.ToString()].Initiator.Type);
+            Assert.DoesNotContain(editWarnings, w => w.Reason.Contains("preserved"));
+        }
+
+        // #1077 review: the divergence report also fires when the save's new
+        // information is the template's OWN isDisabled flip — the admin
+        // re-enabled the entry while the operator's preserved disable
+        // disagrees with it, and that disagreement must not pass silently.
+        // The saves go through fresh template instances (the production
+        // controller shape) so the previous-template diff sees the flip.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_UserDisabledSensorPolicy_TemplateIsDisabledFlip_ReportsDivergence()
+        {
+            // Arrange: template with one enabled regular policy, applied.
+            var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorToggleFlipReport");
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorToggleFlipReport";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
+            var addResult = await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, addResult.Error);
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var applied = Assert.Single(sensor.Policies, p => p.TemplateId == template.Id);
+
+            // The operator's per-sensor disable toggle.
+            var user = InitiatorInfo.AsUser("operator");
+            var toggle = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                Policies = [new PolicyUpdate(applied, user) { IsDisabled = true }],
+            });
+            Assert.True(toggle.IsOk, toggle.Error);
+            Assert.True(applied.IsDisabled);
+
+            // Act 1: save the template with the entry DISABLED — the flip
+            // agrees with the operator's preserved disable, so nothing is
+            // reported.
+            var agreeingSave = CloneTemplateWithPolicy(template, policyDisabled: true);
+            var (ok1, err1, warnings1) = await _valuesCache.AddAlertTemplateAsync(agreeingSave);
+            Assert.True(ok1, $"Failed to save the agreeing template: {err1}");
+            Assert.DoesNotContain(warnings1, w => w.Reason.Contains("preserved"));
+
+            // Act 2: flip the template's entry back to ENABLED — the save
+            // carries new information (the isDisabled flip) while the
+            // operator's preserved disable diverges from it: the divergence
+            // is reported, the toggle still survives.
+            var divergingSave = CloneTemplateWithPolicy(template, policyDisabled: false);
+            var (ok2, err2, warnings2) = await _valuesCache.AddAlertTemplateAsync(divergingSave);
+            Assert.True(ok2, $"Failed to save the diverging template: {err2}");
+
+            // Assert: the toggle survives and the divergence rides the
+            // warnings channel, naming the sensor and the policy.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedAfter = Assert.Single(sensorAfter.Policies, p => p.TemplateId == template.Id);
+            Assert.True(appliedAfter.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensorAfter.ChangeTable.Policies[appliedAfter.Id.ToString()].Initiator.Type);
+
+            var preserved = Assert.Single(warnings2, w => w.Reason.Contains("preserved"));
+            Assert.Contains(sensorAfter.FullPath, preserved.SensorPath);
+            Assert.Contains(appliedAfter.Id.ToString(), preserved.Reason);
+        }
+
+        // A fresh AlertTemplateModel per save with the SAME policy id and
+        // content (the controller's data.ToModel shape) — mutating a shared
+        // template instance would hide the isDisabled flip from the
+        // previous-template diff AddAlertTemplateAsync computes.
+        private static AlertTemplateModel CloneTemplateWithPolicy(AlertTemplateModel source, bool policyDisabled)
+        {
+            var entity = source.Policies[0].ToEntity() with { IsDisabled = policyDisabled };
+
+            var policy = Policy.BuildPolicy(source.SensorType);
+            policy.Apply(entity);
+
+            var clone = new AlertTemplateModel
+            {
+                Id = source.Id,
+                Name = source.Name,
+                FolderId = source.FolderId,
+                SensorType = source.SensorType,
+                Paths = [.. source.Paths],
+                Policies = [policy],
+            };
+            clone.TryApplyPathTemplates(out _);
+
+            return clone;
         }
 
         private static TtlEntry BuildTtlEntry(TimeSpan interval)

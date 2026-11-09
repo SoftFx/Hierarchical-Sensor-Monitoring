@@ -298,7 +298,14 @@ namespace HSMServer.Core.Model.Policies
                     // template owns the content, the operator owns the
                     // disable toggle, so the re-apply goes through instead of
                     // freezing the policy at its pre-toggle content.
-                    if (AlertChangeTable[update.Id.ToString()].CanChange(initiator) || update.PreservesOperatorToggle)
+                    // #1077 review: a higher-priority owner that is NOT a
+                    // user (the ServerMigration soft migrator) is machinery,
+                    // not an operator toggle — a template apply reclaims its
+                    // own policy instead of skipping it forever.
+                    var changeInfo = AlertChangeTable[update.Id.ToString()];
+
+                    if (changeInfo.CanChange(initiator) || update.PreservesOperatorToggle ||
+                        (initiator.IsTemplateApply && changeInfo.Initiator.Type != InitiatorType.User))
                     {
                         if (_storage.TryGetValue(update.Id, out var existingPolicy))
                         {

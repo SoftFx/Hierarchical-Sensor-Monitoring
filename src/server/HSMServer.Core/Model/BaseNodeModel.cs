@@ -123,7 +123,13 @@ namespace HSMServer.Core.Model
                         // disable toggle — and must not abort the whole list
                         // update (one toggle used to freeze every TTL entry
                         // of the node, all-or-nothing).
-                        if (ttlUpdate.PreservesOperatorToggle)
+                        // #1077 review: only a USER owner marks an operator's
+                        // toggle. Any other higher-priority owner (the
+                        // ServerMigration soft migrator) is machinery, not an
+                        // operator choice — a template apply reclaims its own
+                        // entry instead of freezing it as a preserved toggle.
+                        if (ttlUpdate.PreservesOperatorToggle ||
+                            (update.Initiator.IsTemplateApply && ChangeTable.TtlPolicies[key].Initiator.Type != InitiatorType.User))
                             continue;
 
                         canChange = false;
@@ -138,9 +144,21 @@ namespace HSMServer.Core.Model
                             .Where(u => u.Id != Guid.Empty)
                             .Select(u => u.Id.ToString()));
 
-                    foreach (var existing in Policies.TTLPolicies)
-                        if (!updateIds.Contains(existing.Id.ToString()))
-                            ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
+                    // #1077 review: a template apply carries only ITS OWN TTL
+                    // entries (UpdateTTLs preserves every other TTL of the
+                    // node untouched), so it must not re-stamp the
+                    // change-table owner of entries it did not list: the
+                    // stamp downgraded every non-listed owner to
+                    // AlertTemplate, releasing the User toggle marker of
+                    // ANOTHER template's policy (or a hand-made TTL) — the
+                    // next apply of that template then silently re-enabled
+                    // the operator's disable. Non-template updates keep the
+                    // stamp: their full-list semantics rewrite the surviving
+                    // list, and the stamp records who wrote it.
+                    if (!update.Initiator.IsTemplateApply)
+                        foreach (var existing in Policies.TTLPolicies)
+                            if (!updateIds.Contains(existing.Id.ToString()))
+                                ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
 
                     UpdateTTLs(update.TTLPolicies, update.Initiator);
 
