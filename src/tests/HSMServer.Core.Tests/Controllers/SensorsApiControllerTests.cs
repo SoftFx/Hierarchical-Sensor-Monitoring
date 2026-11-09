@@ -626,6 +626,9 @@ namespace HSMServer.Core.Tests.Controllers
             var values = new List<BaseValue>
             {
                 new DoubleBarValue { Min = 1, Max = 3, Mean = 2, StdDev = 0.5, Count = 4, Time = from },
+                // σ = 0 is a real measurement (all samples equal) and survives
+                // Normalize's `>= 0` boundary — 0 is distinct from unknown.
+                new DoubleBarValue { Min = 4, Max = 4, Mean = 4, StdDev = 0, Count = 2, Time = from.AddSeconds(30) },
                 // No StdDev — the managed collector's bars never carry one.
                 new DoubleBarValue { Min = 5, Max = 7, Mean = 6, Count = 2, Time = from.AddMinutes(1) },
                 // A negative stored σ must not reach an agent as a number.
@@ -641,7 +644,7 @@ namespace HSMServer.Core.Tests.Controllers
             var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 10)).Value as SensorHistoryDto;
 
             var bars = history.Points.Select(p => Assert.IsType<BarValueDto>(p.Value)).ToList();
-            Assert.Equal([0.5, null, null, 2.75], bars.Select(bar => bar.StdDev));
+            Assert.Equal([0.5, 0, null, null, 2.75], bars.Select(bar => bar.StdDev));
         }
 
 
