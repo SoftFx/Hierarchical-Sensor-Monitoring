@@ -63,6 +63,9 @@ ClientBin/
 [Ss]tyle[Cc]op.*
 ~$*
 *~
+*.orig
+*.rej
+*.bak
 *.dbmdl
 *.dbproj.schemaview
 *.publishsettings
