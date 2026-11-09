@@ -16,7 +16,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// The deletion write engine of the sensor surface (#1637): remove a sensor
     /// — the token-side twin of the web UI's remove-node. Transport-agnostic —
     /// the REST controller and the MCP write tool render its
-    /// <see cref="PolicyWriteResult{T}"/> through the same envelopes every
+    /// <see cref="PolicyWriteResult"/> through the same envelopes every
     /// other administration service uses.
     /// </summary>
     // DESIGN: the removal semantics stay in the core — this service only
@@ -79,7 +79,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             if (write is { DryRun: true })
                 return PolicyWriteResult.OkPreview(PreviewOf(sensor));
 
-            await _cache.RemoveSensorAsync(sensorId, InitiatorOf(user));
+            await _cache.RemoveSensorAsync(sensorId, ChangeSetRecorder.InitiatorOf(user, _users));
 
             // The queue completes the in-memory removal before its task
             // resolves, so this read observes the outcome — a sensor still
@@ -147,18 +147,6 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             return _cache.GetSensor(sensorId) is null
                 ? new PolicyWriteFailure { Outcome = PolicyWriteOutcome.NotFound }
                 : null;
-        }
-
-        // The write initiator mirrors the web UI's CurrentInitiator: the token's
-        // OWNER as a user (the token acts as its owner, #1384) — the audit trail
-        // names the token owner, like every other management write.
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
-        {
-            var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
-
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
         }
     }
 }
