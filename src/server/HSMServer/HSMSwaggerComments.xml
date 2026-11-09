@@ -3194,6 +3194,13 @@
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Mean">
             <summary>Mean of the period.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.StdDev">
+            <summary>
+            Population standard deviation of the period's samples (#1509); null =
+            unknown (a collector that does not send it, a row stored before the
+            field existed) — unknown is never reported as 0.
+            </summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Count">
             <summary>Number of aggregated values in the period.</summary>
         </member>

@@ -1,6 +1,6 @@
 # Feature: Bar standard deviation (StdDev, σ)
 
-> Owner: shared | Last reviewed: 2026-10-06 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-09 | Canonical: yes
 > Scope: the per-bar population standard deviation — how the server receives, stores, compresses and exposes it, and how the sensor page and dashboards draw it (#1509).
 
 ---
@@ -25,7 +25,7 @@ tails stay visible.
   does not send it (the managed collector, native < 0.11.0, any other sender), a row stored before the
   field existed, or a bar built from pre-aggregated partials (`AddPartial` carries no spread). Nothing
   draws, plots or reports an unknown σ as 0. An incoming σ that is negative, NaN or infinite is stored
-  as unknown too (`BarStdDev.Normalize`, applied in both `ApiConverters` sites — `HSMServer.Core.ApiObjectsConverters` and `HSMServer.ApiObjectsConverters`).
+  as unknown too (`BarStdDev.Normalize`, applied in both `ApiConverters` sites — `HSMServer.Core.Extensions.ApiConverters` and `HSMServer.ApiObjectsConverters` — and in the management API's `SensorTreeDtoMapper` (#1620)).
 - **Additive on the wire.** Wire and DTO only gain an optional field: older collectors keep working
   with a newer server, and older servers ignore the field from newer collectors. **Storage is not
   backward compatible** — see the next point.
@@ -78,6 +78,7 @@ tails stay visible.
 | 3 | Sensor page: the bar picker switches **Candlestick** / **Mean ± σ** | operator |
 | 4 | Dashboard: a bar source plots the `StdDev (σ)` property | operator |
 | 5 | Sensor API `/api/sensors/history` (JSON), `historyFile` (CSV), Grafana JSON datasource read σ | integrator |
+| 6 | Management API `GET /api/v1/sensors/{id}/history` and MCP `get_sensor_history` serve σ in every bar point (#1620) | AI agent |
 
 ## API / Public Contracts
 
@@ -86,6 +87,7 @@ tails stay visible.
 | `IntBarSensorValue.StdDev` / `DoubleBarSensorValue.StdDev` (`double?`) | `src/api/HSMSensorDataObjects/SensorValueRequests/{Int,Double}BarSensorValue.cs` | wire field, right after `Type`; DTO 3.2.0; not on `BarSensorValueBase<T>`, so the managed collector's bars never carry it |
 | `BarBaseValue<T>.StdDev` (`double?`) | `src/server/HSMCommon/SensorValues/BarBaseValue.cs` | stored; last MemoryPack member |
 | `BarSensorHistory.StdDev` (`string`, null = unknown) | `src/server/HSMServer.Core/Model/HistoryValues/BarSensorHistory.cs` | Sensor API JSON history, formatted like `Mean` |
+| `BarValueDto.StdDev` (`double?`, null = unknown) | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorValueDto.cs` | management API history/lastValue bar point and MCP `get_sensor_history` (#1620); normalized in `SensorTreeDtoMapper.BoxValue` |
 | CSV column `StdDev` (the LAST column of the bar export, so existing columns keep their positions) | `src/server/HSMServer/ApiObjectsConverters/ApiCsvConverters.cs` | empty cell when unknown |
 | Grafana table column `StdDev` (the LAST column, after `Comment`, so existing columns keep their positions) | `.../GrafanaDatasources/JsonSource/JsonHistoryResponse/BarHistoryTableResponse.cs` | `null` when unknown |
 | `PlottedProperty.StdDev = 57` | `src/server/HSMServer/Dashboards/Panels/Modules/BasePlotPanelModule.cs` | persisted panel property value; never renumber |
@@ -138,7 +140,7 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
 ## Dependencies
 
 - Depends on: the native collector's bar accumulation (0.11.0; the managed collector sends no σ, #1529), `HSMSensorDataObjects` 3.2.0.
-- Used by: sensor page chart, dashboards, Sensor API history, Grafana datasource.
+- Used by: sensor page chart, dashboards, Sensor API history, Grafana datasource, management API history + MCP `get_sensor_history` (#1620).
 
 ## Tests
 
@@ -148,6 +150,8 @@ A version-tolerant layout was deliberately not introduced (it would rewrite ever
 - `src/tests/HSMDatabase.LevelDB.Tests/SensorValuesDBTests/MemoryPackFormatterTests.cs` — pre-#1509 rows
   read with σ unknown; σ round-trips.
 - `ApiSensorValuesToServerValuesConverterTests` — the DTO → stored value conversion carries σ.
+- `SensorsApiControllerTests` / `SensorTreeMcpToolsTests` — the management projection (`BarValueDto`) carries σ,
+  null when unknown or invalid (#1620).
 
 ## Notes
 
