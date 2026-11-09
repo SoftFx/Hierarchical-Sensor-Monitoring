@@ -14,15 +14,22 @@ export interface AlertTemplateFixture {
   path: string;
 }
 
-// An alert template can only be saved for a folder that CONTAINS a product with matching sensors
-// (the server rejects with "No products found in the selected folder."). This builds that fixture:
-// a product with one sensor (posted via the API), placed into a fresh folder. Assumes an admin session
-// is NOT yet established — it logs in.
-export async function buildAlertTemplateFixture(page: Page): Promise<AlertTemplateFixture> {
-  const productName = uniqueName('ATProd');
-  const folderName = uniqueName('ATFold');
-  const leaf = '.module/Service alive';
+/** #1247 fixture: the same folder+product skeleton, but with Integer and Double sensors for the
+ *  #1210 mixed-type validation (an Integer-typed template whose second path matches Double sensors). */
+export interface MixedTypeAlertTemplateFixture extends AlertTemplateFixture {
+  /** Path of the Integer sensor — matches the template's concrete type. */
+  intPath: string;
+  /** Path of the Double sensor — mismatched under an Integer template. */
+  dblPath: string;
+}
 
+// Shared skeleton of both fixtures: a product, its DefaultKey (for sensor seeding via the API),
+// and a folder containing that product. Assumes an admin session is NOT yet established — it logs in.
+async function createFolderedProduct(
+  page: Page,
+  productName: string,
+  folderName: string,
+): Promise<{ folderId: string; key: string }> {
   await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
 
   // 1) product
@@ -32,15 +39,11 @@ export async function buildAlertTemplateFixture(page: Page): Promise<AlertTempla
   await page.getByRole('button', { name: 'Add' }).click();
   await expect(page.getByRole('link', { name: productName, exact: true })).toBeVisible({ timeout: 10000 });
 
-  // 2) read the product's DefaultKey and post a sensor through the API
+  // 2) read the product's DefaultKey
   await page.goto('/AccessKeys');
   const rowId = await page.getByRole('row').filter({ hasText: productName }).first().getAttribute('id');
   const key = (rowId ?? '').replace('row_', '');
   expect(key).not.toBe('');
-  const api = await request.newContext({ baseURL, ignoreHTTPSErrors: true });
-  const resp = await api.post('/api/Sensors/bool', { headers: { Key: key, ClientName: 'e2e' }, data: { path: leaf, value: true } });
-  expect(resp.ok()).toBeTruthy();
-  await api.dispose();
 
   // 3) folder -> add the product to it (Save lands on EditFolder with the #productsSelect multiselect)
   await page.goto('/Product/Index');
@@ -54,7 +57,53 @@ export async function buildAlertTemplateFixture(page: Page): Promise<AlertTempla
   await page.getByRole('button', { name: 'Save' }).click();
   await page.waitForTimeout(1000);
 
+  return { folderId, key };
+}
+
+// An alert template can only be saved for a folder that CONTAINS a product with matching sensors
+// (the server rejects with "No products found in the selected folder."). This builds that fixture:
+// a product with one sensor (posted via the API), placed into a fresh folder.
+export async function buildAlertTemplateFixture(page: Page): Promise<AlertTemplateFixture> {
+  const productName = uniqueName('ATProd');
+  const folderName = uniqueName('ATFold');
+  const leaf = '.module/Service alive';
+
+  const { folderId, key } = await createFolderedProduct(page, productName, folderName);
+
+  const api = await request.newContext({ baseURL, ignoreHTTPSErrors: true });
+  const resp = await api.post('/api/Sensors/bool', { headers: { Key: key, ClientName: 'e2e' }, data: { path: leaf, value: true } });
+  expect(resp.ok()).toBeTruthy();
+  await api.dispose();
+
   return { folderName, productName, folderId, path: `${productName}/${leaf}` };
+}
+
+// #1247/#1210 fixture: the same skeleton, but with two sensors of different types so an
+// Integer-typed template holding both paths trips the mixed-type validation on Save.
+export async function buildMixedTypeAlertTemplateFixture(page: Page): Promise<MixedTypeAlertTemplateFixture> {
+  const productName = uniqueName('ATProd');
+  const folderName = uniqueName('ATFold');
+  const intLeaf = '.module/Int sensor';
+  const dblLeaf = '.module/Dbl sensor';
+
+  const { folderId, key } = await createFolderedProduct(page, productName, folderName);
+
+  const api = await request.newContext({ baseURL, ignoreHTTPSErrors: true });
+  const intResp = await api.post('/api/Sensors/int', { headers: { Key: key, ClientName: 'e2e' }, data: { path: intLeaf, value: 42 } });
+  expect(intResp.ok()).toBeTruthy();
+  const dblResp = await api.post('/api/Sensors/double', { headers: { Key: key, ClientName: 'e2e' }, data: { path: dblLeaf, value: 4.2 } });
+  expect(dblResp.ok()).toBeTruthy();
+  await api.dispose();
+
+  const intPath = `${productName}/${intLeaf}`;
+  return {
+    folderName,
+    productName,
+    folderId,
+    path: intPath,
+    intPath,
+    dblPath: `${productName}/${dblLeaf}`,
+  };
 }
 
 // Fill the New/Edit Alert Template form (folder + one path + name) and submit.
