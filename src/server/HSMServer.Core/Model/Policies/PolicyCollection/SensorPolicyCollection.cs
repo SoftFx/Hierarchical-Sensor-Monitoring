@@ -10,6 +10,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.TableOfChanges;
+using NLog;
 
 
 namespace HSMServer.Core.Model.Policies
@@ -84,10 +85,20 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
+        private protected readonly Logger _logger = LogManager.GetLogger(nameof(SensorPolicyCollection));
+
         private protected CorrectTypePolicy<T> _typePolicy;
         private protected BaseSensorModel _sensor;
 
         protected readonly IAlertScheduleProvider _scheduleProvider;
+
+        // #1563: error lines of the policies whose evaluator threw during the
+        // last CalculateStorageResult pass. Consumed by TryUpdate after the
+        // post-update revalidation, so a failed revalidation reports through
+        // the same aggregate error string as a rejected policy update — while
+        // the exception itself stays isolated (the caller's catch-all would
+        // otherwise skip the DB write over an already-updated cache).
+        private protected readonly List<string> _evaluationErrors = new();
 
 
         public SensorPolicyCollection(IAlertScheduleProvider provider)
@@ -219,6 +230,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new();
             NotificationResult = new();
             ConfimationResult = new();
+            _evaluationErrors.Clear();
 
             if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
@@ -227,34 +239,62 @@ namespace HSMServer.Core.Model.Policies
                     if (policy.IsDisabled)
                         continue;
 
-                    bool schedulePassed = true;
-                    if (policy.ScheduleId.HasValue)
+                    // #1563: per-policy isolation. An evaluator exception (e.g.
+                    // the Length executor on a stored null string) used to
+                    // escape the whole pass: on the post-update revalidation
+                    // path the in-memory policy updates had already happened,
+                    // so the caller's catch-all skipped the DB write and left
+                    // memory and storage diverged. A broken policy is now
+                    // marked, logged, and skipped for this pass — the siblings
+                    // below still evaluate, and no value/update is rejected
+                    // over a policy it cannot control.
+                    try
                     {
-                        if (value is BarBaseValue barValue)
-                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, barValue.OpenTime, barValue.CloseTime);
+                        bool schedulePassed = true;
+                        if (policy.ScheduleId.HasValue)
+                        {
+                            if (value is BarBaseValue barValue)
+                                schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, barValue.OpenTime, barValue.CloseTime);
+                            else
+                                schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
+                        }
+
+                        if (!schedulePassed)
+                            continue;
+
+                        if (policy.Validate(value))
+                        {
+                            PolicyResult.AddAlert(policy);
+
+                            if (isLastValue)
+                                SensorResult += policy.SensorResult;
+
+                            if (isReplace)
+                                NotificationResult.AddSingleAlert(policy);
+                            else
+                                NotificationResult.AddAlert(policy);
+                        }
                         else
-                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
+                        {
+                            if (policy.ConfirmationPeriod is not null)
+                                ConfimationResult.AddAlert(policy);
+                        }
                     }
-
-                    if (!schedulePassed)
-                        continue;
-
-                    if (policy.Validate(value))
+                    catch (Exception ex)
                     {
-                        PolicyResult.AddAlert(policy);
+                        var message = $"Failed to evaluate alert {policy.Id} on sensor {_sensor?.Id}: {ex.Message}";
+
+                        // Warn on the TRANSITION into the failure only
+                        // (HasEvaluationError): the marking below repeats on
+                        // every pass, and a hot sensor would flood the log.
+                        if (!policy.HasEvaluationError)
+                            _logger.Warn(ex, message);
+
+                        policy.SetEvaluationError(message);
+                        _evaluationErrors.Add(message);
 
                         if (isLastValue)
                             SensorResult += policy.SensorResult;
-
-                        if (isReplace)
-                            NotificationResult.AddSingleAlert(policy);
-                        else
-                            NotificationResult.AddAlert(policy);
-                    }
-                    else
-                    {
-                        if (policy.ConfirmationPeriod is not null)
-                            ConfimationResult.AddAlert(policy);
                     }
                 }
             }
@@ -415,6 +455,14 @@ namespace HSMServer.Core.Model.Policies
 
             if (_sensor?.LastValue is ValueType valueT)
                 TryRevalidate(valueT);
+
+            // #1563: a policy that failed the post-update revalidation reports
+            // through the same aggregate error as a rejected update above. The
+            // update itself (and the caller's DB write) is NOT rolled back:
+            // the revalidation verdict is advisory marking, and aborting here
+            // would again diverge memory from storage.
+            foreach (var evaluationError in _evaluationErrors)
+                errors.AppendLine(evaluationError);
 
             error = errors.Length > 0 ? errors.ToString() : null;
 

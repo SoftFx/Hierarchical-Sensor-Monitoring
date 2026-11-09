@@ -169,6 +169,8 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new PolicyResult(this);
             SensorResult = new SensorResult(Status, Comment);
 
+            HasEvaluationError = false;
+
             return Comment;
         }
 
@@ -319,6 +321,29 @@ namespace HSMServer.Core.Model.Policies
 
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
+
+            HasEvaluationError = false;
+        }
+
+
+        // #1563: the evaluation threw, so the condition verdict is unknown —
+        // neither firing nor recovered. The policy is marked failed instead of
+        // being left half-evaluated: its SensorResult surfaces the failure
+        // through the sensor's error status (no alert/notification entry is
+        // fabricated — the broken policy adds nothing to PolicyResult), and
+        // the same message names it in the collection's aggregate error.
+        // HasEvaluationError gates the collection's WARN to the transition
+        // into the failure (RebuildState/ResetState clear it on every
+        // successful evaluation or re-save), so a hot sensor with a broken
+        // policy marks every pass without flooding the log per value.
+        internal bool HasEvaluationError { get; private set; }
+
+        internal void SetEvaluationError(string message)
+        {
+            Comment = message;
+            SensorResult = new SensorResult(SensorStatus.Error, message);
+
+            HasEvaluationError = true;
         }
 
 

@@ -921,6 +921,15 @@ namespace HSMServer.Core.Cache
 
                 SensorUpdateView(sensor);
 
+                // #1563: SOFT failure — applied AND persisted, but a policy was
+                // rejected or its post-update revalidation failed. The
+                // template-apply path (rejectedPolicies != null) reports these
+                // through its own warnings channel; every other caller —
+                // including the generic SensorUpdate queue case, which logs
+                // only the hard failure — used to drop the error silently.
+                if (!string.IsNullOrEmpty(error) && rejectedPolicies is null)
+                    _logger.Warn($"Sensor {update.Id} updated with policy errors: {error}");
+
                 return true;
             }
             catch (Exception ex)

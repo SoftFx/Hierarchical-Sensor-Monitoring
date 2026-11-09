@@ -419,6 +419,115 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === #1563: a throwing evaluator must not escape the collection ===
+
+        // The Length executor reads ((StringValue)v).Value.Length, so a stored
+        // null string makes the evaluator throw — the exact post-update
+        // revalidation hazard of #1563: TryUpdate has already applied the
+        // in-memory policy changes, so an escaping exception makes
+        // TryUpdateSensor return false and skip the DB write.
+        private static StringSensorModel BuildStringSensorWithNullValue()
+        {
+            var sensor = new StringSensorModel(
+                EntitiesFactory.BuildSensorEntity(type: (byte)SensorType.String),
+                null, new Mock<IAlertScheduleProvider>().Object);
+
+            sensor.TryAddValue(new StringValue { Time = DateTime.UtcNow });
+
+            return sensor;
+        }
+
+        private static PolicyUpdate BuildLengthUpdate(Guid id) => new()
+        {
+            Id = id,
+            Template = "length check",
+            Status = SensorStatus.Error,
+            Destination = new PolicyDestinationUpdate(),
+            Conditions =
+            [
+                new PolicyConditionUpdate(
+                    PolicyOperation.GreaterThan,
+                    PolicyProperty.Length,
+                    new TargetValue(TargetType.Const, "3"))
+            ],
+        };
+
+        [Fact]
+        public void TryUpdate_ThrowingEvaluator_IsIsolatedAndReported()
+        {
+            var sensor = BuildStringSensorWithNullValue();
+            var throwingId = Guid.NewGuid();
+
+            // Pre-fix: the NullReferenceException escaped TryUpdate here.
+            string updateError = null;
+            var result = false;
+            var ex = Record.Exception(() =>
+                result = sensor.Policies.TryUpdate([BuildLengthUpdate(throwingId)], InitiatorInfo.AsUser("test"), out updateError));
+
+            Assert.Null(ex);
+
+            // The failure is reported like a rejected update: named in the
+            // aggregate error, and surfaced through the sensor error status.
+            Assert.False(result);
+            Assert.Contains(throwingId.ToString(), updateError);
+            Assert.True(sensor.Policies.SensorResult.HasError);
+            Assert.Contains(throwingId.ToString(), sensor.Policies.SensorResult.Message);
+        }
+
+        [Fact]
+        public void TryUpdate_ThrowingEvaluator_SiblingPoliciesStillEvaluated()
+        {
+            var sensor = BuildStringSensorWithNullValue();
+            var throwingId = Guid.NewGuid();
+
+            var firingId = Guid.NewGuid();
+            var firingUpdate = new PolicyUpdate
+            {
+                Id = firingId,
+                Template = "status ok",
+                Status = SensorStatus.Error,
+                Destination = new PolicyDestinationUpdate(),
+                Conditions =
+                [
+                    new PolicyConditionUpdate(
+                        PolicyOperation.IsOk,
+                        PolicyProperty.Status,
+                        new TargetValue(TargetType.LastValue, sensor.Id.ToString()))
+                ],
+            };
+
+            var result = sensor.Policies.TryUpdate([BuildLengthUpdate(throwingId), firingUpdate],
+                InitiatorInfo.AsUser("test"), out var error);
+
+            // The sibling fired despite the throwing policy ahead of it, and
+            // the broken policy itself produced no alert (its condition is
+            // unevaluable, not fulfilled).
+            Assert.False(result);
+            Assert.Contains(firingId, sensor.Policies.PolicyResult.Alerts.Keys);
+            Assert.DoesNotContain(throwingId, sensor.Policies.PolicyResult.Alerts.Keys);
+        }
+
+        [Fact]
+        public void TryAddValue_ThrowingEvaluator_ValueStoredAndErrorMarked()
+        {
+            var sensor = new StringSensorModel(
+                EntitiesFactory.BuildSensorEntity(type: (byte)SensorType.String),
+                null, new Mock<IAlertScheduleProvider>().Object);
+
+            // No last value yet: the post-update revalidation is skipped, so
+            // the broken policy attaches cleanly.
+            Assert.True(sensor.Policies.TryUpdate([BuildLengthUpdate(Guid.NewGuid())],
+                InitiatorInfo.AsUser("test"), out _));
+
+            // Ingestion through TryValidate evaluates the same executor; the
+            // value must be stored and the failure marked, not thrown.
+            var stored = sensor.TryAddValue(new StringValue { Time = DateTime.UtcNow });
+
+            Assert.True(stored);
+            Assert.True(sensor.Policies.SensorResult.HasError);
+        }
+
+
         // === Helper methods ===
 
         private Guid AddTemplatePolicy(Guid? templateId = null, bool isDisabled = false,
