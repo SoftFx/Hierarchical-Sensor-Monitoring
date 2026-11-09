@@ -1,7 +1,7 @@
 # Feature: MCP server (AI-agent tools)
 
 > Owner: server | Last reviewed: 2026-11-04 | Canonical: yes
-> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, access-grouping folders and sensor policies (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules and sensor muting (#1569). REST stays the canonical surface; MCP is an adapter over the same implementations.
+> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, access-grouping folders and sensor policies (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules, sensor muting (#1569) and sensor deletion (#1637). REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
 
@@ -36,6 +36,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | 6 | Folder discovery for template scoping: `list_folders` / `get_folder` (the valid `folderId` values — the access-grouping entity, not the tree's nested products) | AI agent |
 | 7 | The noisy-sensor flow: `mute_sensor` / `unmute_sensor` after a diagnosis | AI agent |
 | 8 | The policy lifecycle: `list_sensor_policies` / `list_sensor_ttl_policies` → the matching `update_*` / `delete_*` tool (#1615) | AI agent |
+| 9 | The decommission flow: `delete_sensor` — with `dryRun` first to preview everything that would be destroyed (#1637) | AI agent |
 
 ### The read-analysis scenario (#1391 acceptance)
 
@@ -87,6 +88,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `create_/update_/delete_sensor_ttl_policy` | `PoliciesMcpTools` | The TTL twins (`value` = `TtlPolicyDto` / `McpDeletedResult`) — `interval` (TimeSpan string) or `inherit: true`, never both |
 | `mute_sensor(sensorId, endOfMuting?)` | `SensorMuteMcpTools.MuteSensorAsync` | `SensorDto` echo of the resulting sensor (`state: Muted`, `endOfMuting`); omitted/`null` `endOfMuting` = indefinitely, a future UTC ISO 8601 instant = until it (auto-unmuted at expiry by the core's sweep); a Blocked sensor answers a conflict tool error, a past instant the field-keyed validation error; delegates to `SensorMuteAdministrationService` — the same engine as `POST /api/v1/sensors/{id}/mute` (#1569) |
 | `unmute_sensor(sensorId)` | `SensorMuteMcpTools.UnmuteSensorAsync` | `SensorDto` echo; a not-muted sensor answers its unchanged state (idempotent); the same engine as `DELETE /api/v1/sensors/{id}/mute` |
+| `delete_sensor(sensorId, dryRun?)` | `SensorDeletionMcpTools.DeleteSensorAsync` | `McpSensorDeleteResult` envelope (#1637): `value` = `McpDeletedResult {id}` after an applied deletion, `preview` = `SensorDeletePreviewDto` after `dryRun` (the sensor identity/product/state, every attached policy, the stored value count + on-disk size, the newest value's time) — exactly one arm per call. IRREVERSIBLE: the cache entry, policies, mute state, the WHOLE history and undo references go through the core's `RemoveSensorAsync` (the web UI's remove-node semantics; a TreeCrud journal record names the initiator). `Idempotent=false` (a repeat answers not-found); unknown/invisible id → the same tool error as every item tool; delegates to `SensorDeletionAdministrationService` — the same engine as `DELETE /api/v1/sensors/{id}` |
 | `create_alert_template(template)` | `AlertsMcpTools.CreateAlertTemplateAsync` | `McpWriteResult` envelope (#1605): `value` = `AlertTemplateDto` echo (server id, canonical chat names), `preview` = `WritePreviewDto` after `dryRun` (exactly one arm per call); applies policies tree-wide; requires the owner's write access at the target folder; #1401: the echo carries `warnings` (`[{sensor, reason}]`) when matching sensors REJECTED individual policies at apply time — the same strings the REST 201 body carries; #1565: `warnings` also carries one entry per path pattern that matched NO sensors (`sensor` = the pattern itself) — the dead-pattern feedback loop the schema text of `paths` (anchored full-path match, segment-local `*`, fixed depth, no any-depth wildcard) exists to prevent |
 | `update_alert_template(templateId, template)` / `delete_alert_template(templateId)` | `AlertsMcpTools` | The same envelope: update of an EXISTING template (an unknown id answers the not-found tool error, nothing is created — no upsert) with the both-folders move rule (the `warnings` echo of create applies to the update result too, #1401 and #1565) / tree-wide policy strip + `value` = `McpDeletedResult {id}` |
 | `create_alert_schedule(schedule)` | `AlertsMcpTools.CreateAlertScheduleAsync` | The same envelope (`value` = `AlertScheduleDto` echo); ADMIN owner + read-write token (the Global boundary is admin-only); name-unique, parser-validated YAML with the `daySchedules` key required (an explicit empty list is valid, #1598), system timezone id (IANA or Windows) |
@@ -104,10 +106,12 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |
 | `src/server/HSMServer/Mcp/PoliciesMcpTools.cs` | The policy tools: the two list reads over `AlertReadService` (#1615, the id discovery half of the surface) and the six write tools — delegations to `PolicyAdministrationService` |
 | `src/server/HSMServer/Mcp/SensorMuteMcpTools.cs` | The two sensor-mute write tools (#1569) — delegations to `SensorMuteAdministrationService` |
+| `src/server/HSMServer/Mcp/SensorDeletionMcpTools.cs` | The sensor-deletion write tool (#1637) — a delegation to `SensorDeletionAdministrationService` |
 | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorMuteAdministrationService.cs` | The sensor-mute write engine shared with the REST `SensorMuteApiController` (#1569) |
+| `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorDeletionAdministrationService.cs` | The sensor-deletion write engine shared with the REST `SensorsApiController` DELETE (#1637) |
 | `src/server/HSMServer/Mcp/McpToolWriteErrors.cs` | `PolicyWriteResult` -> tool error text, the same strings the REST arm produces (conflict detail pointers included) |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
-| `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes, the compact `McpSensorSummary` and the write-tool `McpWriteResult` envelope (#1605); item DTOs are the REST ones |
+| `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes, the compact `McpSensorSummary`, the write-tool `McpWriteResult` envelope (#1605) and the `McpSensorDeleteResult` twin with the typed deletion preview (#1637); item DTOs are the REST ones |
 | `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleYamlDocs.cs` | The schedule YAML grammar text (`[Description]` payload) shared by the schedule upsert/read DTOs — keep in sync with `AlertScheduleParser` |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertVariablesDocs.cs` | The alert-template variable table (`[Description]` payload) shared by both template-bearing DTOs — keep in sync with `AlertState`'s `[AlertVariable]s` (#1556) |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertPropertyMatrixDocs.cs` | The condition-property x sensor-type availability matrix (`[Description]` payload) shared by both condition DTOs — keep in sync with `AlertPolicyConditionRules` (#1556) |
@@ -132,8 +136,9 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                        │     (caller-wide gate + global-or-visible-folder chat sight, as REST)
                        ├── FoldersMcpTools → FoldersReadService → IFolderManager
                        │     (owner-sight folder filter, as REST)
-                       └── PoliciesMcpTools / SensorMuteMcpTools → PolicyAdministrationService /
-                             SensorMuteAdministrationService → ITreeValuesCache
+                       └── PoliciesMcpTools / SensorMuteMcpTools / SensorDeletionMcpTools →
+                             PolicyAdministrationService / SensorMuteAdministrationService /
+                             SensorDeletionAdministrationService → ITreeValuesCache
                              (the write engines, as REST; errors → McpException);
                              PoliciesMcpTools' list reads go through AlertReadService
                              (the sensor-boundary sight, as REST)
@@ -167,7 +172,7 @@ No dedicated UI. Operators provision the same personal API tokens as for REST (P
 
 ## Known Issues / Limitations
 
-- ~~v1 is read-only (write tools are phase 2 of AI-agent access)~~ — RESOLVED: the phase-2 write tools (sensor policies, alert templates, alert schedules) landed on top of the shared write services. Still missing: product-policy write tools (REST keeps them; they route to the owning sensor list anyway), folder/chat lifecycle tools (web-UI only), MCP resources/prompts primitives.
+- ~~v1 is read-only (write tools are phase 2 of AI-agent access)~~ — RESOLVED: the phase-2 write tools (sensor policies, alert templates, alert schedules) landed on top of the shared write services, joined by sensor muting (#1569) and sensor deletion (#1637). Still missing: product-policy write tools (REST keeps them; they route to the owning sensor list anyway), folder/chat lifecycle tools (web-UI only), MCP resources/prompts primitives.
 - ~~The alert tools mirror the REST controllers' list/get logic directly~~ — RESOLVED by #1393: both surfaces render `AlertReadService` (Model/ManagementApi/Alerts/), the visibility rules exist in one place.
 - No `Origin`-header validation (the MCP spec's DNS-rebinding defence for Streamable HTTP servers). Deliberate: the endpoint admits only the HsmApiToken bearer — a browser page can neither attach that credential nor satisfy `ManagementPolicy` with cookies — so the browser-based rebinding vector has no credential to ride. Revisit if a browser-reachable credential kind is ever admitted to `/mcp`.
 - No E2E/Playwright coverage yet; the wire-level MCP handshake (protocol headers, JSON-RPC envelope) is the SDK's tested surface, ours starts at the tool classes.

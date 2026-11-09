@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -10,17 +12,22 @@ using Microsoft.AspNetCore.Mvc;
 namespace HSMServer.Controllers
 {
     /// <summary>
-    /// Read-only sensor surface of the management API (#1386): flat recursive
-    /// sensor search, one sensor with its current value, and the sensor's recent
-    /// history. Bearer-token authenticated only (the HsmApiToken scheme); served on
-    /// the web-UI port only. A token sees exactly the sensors its owner sees;
-    /// unknown and invisible ids answer the SAME 404.
+    /// Sensor surface of the management API: flat recursive sensor search, one
+    /// sensor with its current value, the sensor's recent history (#1386), and
+    /// sensor deletion (#1637). Bearer-token authenticated only (the HsmApiToken
+    /// scheme); served on the web-UI port only. A token sees exactly the sensors
+    /// its owner sees; unknown and invisible ids answer the SAME 404. Deletion
+    /// needs a read-write token and the owner's write access at the sensor.
     /// </summary>
     // The AI-agent workhorse: "find network sensors in product X" is
     // GET /api/v1/sensors?product={X}&amp;search=network. Since #1391 the read
     // logic lives in SensorTreeReadService, shared with the MCP tools; this
     // controller is the REST rendering of it — its suites are the regression net
-    // for the service's behavior.
+    // for the service's behavior. The DELETE renders
+    // SensorDeletionAdministrationService, the same engine the MCP delete tool
+    // runs on (#1637) — the removal semantics (cache, policies, history, the
+    // TreeCrud journal record) live in the core, the same entry the web UI's
+    // remove-node drives.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -29,10 +36,12 @@ namespace HSMServer.Controllers
     public sealed class SensorsApiController : ControllerBase
     {
         private readonly SensorTreeReadService _reader;
+        private readonly SensorDeletionAdministrationService _deleter;
 
-        public SensorsApiController(SensorTreeReadService reader)
+        public SensorsApiController(SensorTreeReadService reader, SensorDeletionAdministrationService deleter)
         {
             _reader = reader;
+            _deleter = deleter;
         }
 
 
@@ -107,5 +116,37 @@ namespace HSMServer.Controllers
             int maxPoints = SensorTreeReadService.DefaultMaxPoints) =>
             (await _reader.GetSensorHistoryAsync(id, from, to, maxPoints, User, HttpContext.RequestAborted))
                 .ToActionResult();
+
+
+        /// <summary>
+        /// Delete the sensor — IRREVERSIBLY: the cache entry, its attached
+        /// policies, its mute state, its whole stored history and its undo
+        /// change-set references are removed (a TreeCrud journal record with
+        /// the initiator is written; there is no undo). A dry run
+        /// (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
+        /// of everything the real write would destroy and applies nothing.
+        /// </summary>
+        /// <param name="id">Sensor id.</param>
+        [HttpDelete("{id:guid}")]
+        [ProducesResponseType(typeof(SensorDeletePreviewDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteSensor(Guid id)
+        {
+            var result = await _deleter.DeleteSensorAsync(id, User, Request.WriteOptions());
+
+            if (result.IsDryRun)
+                return Ok(result.Preview);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+
+            return NoContent();
+        }
     }
 }

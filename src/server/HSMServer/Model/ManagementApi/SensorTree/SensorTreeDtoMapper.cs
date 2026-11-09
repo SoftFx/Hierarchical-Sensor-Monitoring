@@ -193,7 +193,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // The mute lifts at this instant; the core stores an indefinite mute as
         // DateTime.MaxValue (the web UI's "Forever" rule), which renders as null —
         // the DTO's `state` distinguishes "not muted" from "muted indefinitely".
-        private static DateTime? MutedUntilOf(BaseSensorModel sensor) =>
+        // Public so the deletion preview resolves the SAME instant the full DTO
+        // would (UnitOf's rule) — a private copy could drift.
+        public static DateTime? MutedUntilOf(BaseSensorModel sensor) =>
             sensor.EndOfMuting is { } end && end != DateTime.MaxValue ? end.ToUtcInstant() : null;
 
         // The node endpoint's response bound, matching the area's list ceiling:
