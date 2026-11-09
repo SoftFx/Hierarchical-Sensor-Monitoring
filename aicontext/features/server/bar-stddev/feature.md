@@ -25,7 +25,7 @@ tails stay visible.
   does not send it (the managed collector, native < 0.11.0, any other sender), a row stored before the
   field existed, or a bar built from pre-aggregated partials (`AddPartial` carries no spread). Nothing
   draws, plots or reports an unknown σ as 0. An incoming σ that is negative, NaN or infinite is stored
-  as unknown too (`BarStdDev.Normalize`, applied in both `ApiConverters` sites — `HSMServer.Core.Extensions.ApiConverters` and `HSMServer.ApiObjectsConverters` — and in the management API's `SensorTreeDtoMapper` (#1620)).
+  as unknown too (`BarStdDev.Normalize`, applied in both `ApiConverters` sites — `HSMServer.Core.ApiObjectsConverters.ApiConverters` and `HSMServer.ApiObjectsConverters.ApiConverters` — and in the management API's `SensorTreeDtoMapper` (#1620)).
 - **Additive on the wire.** Wire and DTO only gain an optional field: older collectors keep working
   with a newer server, and older servers ignore the field from newer collectors. **Storage is not
   backward compatible** — see the next point.

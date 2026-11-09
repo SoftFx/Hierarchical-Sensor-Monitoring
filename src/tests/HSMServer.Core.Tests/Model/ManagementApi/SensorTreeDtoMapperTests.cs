@@ -76,16 +76,31 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         public void ToValueDto_Bars_MapStatistics()
         {
             var intBar = SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.IntegerBar),
-                new IntegerBarValue { Min = 1, Max = 9, Mean = 5, Count = 4, Time = Time }).Value;
-            Assert.Equal((1d, 9d, 5d, 4), (Assert.IsType<BarValueDto>(intBar).Min,
+                new IntegerBarValue { Min = 1, Max = 9, Mean = 5, StdDev = 2, Count = 4, Time = Time }).Value;
+            Assert.Equal((1d, 9d, 5d, (double?)2d, 4), (Assert.IsType<BarValueDto>(intBar).Min,
                 Assert.IsType<BarValueDto>(intBar).Max, Assert.IsType<BarValueDto>(intBar).Mean,
-                Assert.IsType<BarValueDto>(intBar).Count));
+                Assert.IsType<BarValueDto>(intBar).StdDev, Assert.IsType<BarValueDto>(intBar).Count));
 
             var doubleBar = SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.DoubleBar),
-                new DoubleBarValue { Min = 0.5, Max = 2.5, Mean = 1.5, Count = 8, Time = Time }).Value;
-            Assert.Equal((0.5, 2.5, 1.5, 8), (Assert.IsType<BarValueDto>(doubleBar).Min,
+                new DoubleBarValue { Min = 0.5, Max = 2.5, Mean = 1.5, StdDev = 0.25, Count = 8, Time = Time }).Value;
+            Assert.Equal((0.5, 2.5, 1.5, (double?)0.25, 8), (Assert.IsType<BarValueDto>(doubleBar).Min,
                 Assert.IsType<BarValueDto>(doubleBar).Max, Assert.IsType<BarValueDto>(doubleBar).Mean,
-                Assert.IsType<BarValueDto>(doubleBar).Count));
+                Assert.IsType<BarValueDto>(doubleBar).StdDev, Assert.IsType<BarValueDto>(doubleBar).Count));
+        }
+
+
+        [Fact]
+        public void ToValueDto_Bars_NonFiniteStdDev_MapsToNull()
+        {
+            // A stored non-finite σ maps to unknown (null) in both bar arms: a raw
+            // NaN/∞ would fail JSON serialization instead of coming back as a number.
+            var nanBar = SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.IntegerBar),
+                new IntegerBarValue { Min = 1, Max = 9, Mean = 5, Count = 4, StdDev = double.NaN, Time = Time }).Value;
+            Assert.Null(Assert.IsType<BarValueDto>(nanBar).StdDev);
+
+            var infiniteBar = SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.DoubleBar),
+                new DoubleBarValue { Min = 0.5, Max = 2.5, Mean = 1.5, Count = 8, StdDev = double.PositiveInfinity, Time = Time }).Value;
+            Assert.Null(Assert.IsType<BarValueDto>(infiniteBar).StdDev);
         }
 
 
