@@ -78,7 +78,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator)
         {
-            if (updates == null || (updates.Count == 0 && initiator == InitiatorInfo.AlertTemplate))
+            if (updates == null || (updates.Count == 0 && initiator is { IsTemplateApply: true }))
                 return;
 
             var updatesDict = updates
@@ -86,7 +86,7 @@ namespace HSMServer.Core.Model.Policies
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
-            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate;
+            var isTemplateInitiated = initiator is { IsTemplateApply: true };
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
             // Policies the full-list semantics DROP (not in the update list,
@@ -112,7 +112,7 @@ namespace HSMServer.Core.Model.Policies
                     {
                         var oldValue = policy.ToString();
 
-                        if (policy.TemplateId != null && !update.Initiator.IsForceUpdate && update.Initiator != InitiatorInfo.AlertTemplate)
+                        if (policy.TemplateId != null && !update.Initiator.IsForceUpdate && !update.Initiator.IsTemplateApply)
                         {
                             if (policy.IsDisabled != update.IsDisabled)
                             {

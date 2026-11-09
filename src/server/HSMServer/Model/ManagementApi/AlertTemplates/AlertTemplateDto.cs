@@ -8,9 +8,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
     /// <summary>
     /// Alert template wire contract of the /api/v1/alertTemplates surface. The shape
-    /// mirrors the durable template one field for field; ids are Guid strings. Byte
-    /// fields carry DOMAIN ENUM VALUES (documented per field) — membership is validated
-    /// structurally, unknown values answer 400 with the offending field key.
+    /// mirrors the durable template one field for field; ids are Guid strings. Integer
+    /// fields carry DOMAIN ENUM VALUES (documented per field) — any integer binds
+    /// (values outside the enum's byte range included, #1607) and membership is
+    /// validated structurally AFTER authorization; unknown values answer 400 with
+    /// the offending field key.
     /// </summary>
     /// <remarks>
     /// Round-trip notes: a client-sent template id is IGNORED on create (server
@@ -21,7 +23,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     /// lists matched by position. `warnings` is output-only (apply diagnostics of the
     /// create/update response; ignored on writes, absent on reads).
     /// </remarks>
-    [Description("Alert template: path patterns, sensor type, regular and TTL policies with destinations. Byte fields carry DOMAIN ENUM VALUES (documented per field) — unknown values answer 400.")]
+    [Description("Alert template: path patterns, sensor type, regular and TTL policies with destinations. Integer fields carry DOMAIN ENUM VALUES (documented per field) — unknown values answer 400.")]
     public sealed record AlertTemplateDto
     {
         /// <summary>Output-only: assigned by the server on create. On update it must equal the route id or be absent.</summary>
@@ -38,7 +40,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
         /// </summary>
         [Description("SensorType enum value the template matches: 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File, 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType (match every sensor type).")]
-        public byte SensorType { get; init; }
+        public int SensorType { get; init; }
 
         /// <summary>Target folder id; required on create and update.</summary>
         [Description("Target folder id (the access-grouping Folder entity, not a tree node); required on create and update. Use list_folders to discover valid values.")]
@@ -126,7 +128,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>Status the sensor gets while the policy is triggered (HSMCommon SensorStatus): 0=Ok, 1=Error, 255=OffTime.</summary>
         [Description("Status the sensor gets while the policy is triggered: 0=Ok, 1=Error, 255=OffTime.")]
-        public byte SensorStatus { get; init; }
+        public int SensorStatus { get; init; }
 
         /// <summary>Disabled policies stay stored but never fire.</summary>
         [Description("Disabled policies stay stored but never fire.")]
@@ -190,7 +192,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
     }
 
     /// <summary>One condition of a policy: property, comparison operation, target value.</summary>
-    [Description("One condition of a policy: property, comparison operation, target value. The property/operation pair must be one the SENSOR'S TYPE offers — mismatches are reported as apply warnings.")]
+    [Description("One condition of a policy: property, comparison operation, target value. The property/operation/target combination must be one the TEMPLATE'S SENSOR TYPE offers — a mismatch answers a field-keyed 400 (policies[i].conditions[j].property/operation/target); per-sensor rejections at apply time ride the response's `warnings` instead.")]
     public sealed record PolicyConditionDto
     {
         /// <summary>The value the property is compared against (constant, or the sensor's last value).</summary>
@@ -199,16 +201,22 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>How this condition combines with the PREVIOUS one: 0=And, 1=Or.</summary>
         [Description("How this condition combines with the PREVIOUS one: 0=And (default), 1=Or; ignored on the first condition.")]
-        public byte Combination { get; init; }
+        public int Combination { get; init; }
 
         /// <summary>
         /// Comparison operation (PolicyOperation enum):
         /// 0=LessThanOrEqual, 1=LessThan, 2=GreaterThan, 3=GreaterThanOrEqual, 4=Equal,
         /// 5=NotEqual, 20=IsChanged, 21=IsError, 22=IsOk, 23=IsChangedToError,
         /// 24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue.
+        /// Which operations a property accepts follows the template's sensor type —
+        /// a mismatch answers a field-keyed 400. Notable: Version's Value accepts the
+        /// six comparisons only (none of the text operations); NewSensorData accepts
+        /// any operation (a constant target only on its target-less operations — its
+        /// executor compares against the sensor's own values); String's Value also
+        /// accepts IsChanged.
         /// </summary>
-        [Description("Comparison operation (PolicyOperation enum): 0=LessThanOrEqual, 1=LessThan, 2=GreaterThan, 3=GreaterThanOrEqual, 4=Equal, 5=NotEqual, 20=IsChanged, 21=IsError, 22=IsOk, 23=IsChangedToError, 24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue. Status/IsChanged/ReceivedNewValue-style operations need no target.")]
-        public byte Operation { get; init; }
+        [Description("Comparison operation (PolicyOperation enum): 0=LessThanOrEqual, 1=LessThan, 2=GreaterThan, 3=GreaterThanOrEqual, 4=Equal, 5=NotEqual, 20=IsChanged, 21=IsError, 22=IsOk, 23=IsChangedToError, 24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue. Status/IsChanged/ReceivedNewValue-style operations need no target. Which operations a property accepts follows the template's sensor type (a mismatch answers a field-keyed 400): Version's Value accepts the six comparisons only, NewSensorData accepts any operation (a constant target only on its target-less operations), String's Value also accepts IsChanged.")]
+        public int Operation { get; init; }
 
         /// <summary>
         /// The sensor property compared (PolicyProperty enum):
@@ -217,25 +225,29 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
         /// Condition-property availability by sensor type — exhaustive, negatives included:
         /// on the policy surface a property the type does not offer answers 422. The template
-        /// write enforces this table, and more: it reconstructs every policy with the
-        /// template's sensor type (an AnyType template against a Boolean stand-in, so only
-        /// the common set below passes its write), and a property the type does not offer,
-        /// or one whose typed executor the domain cannot build (Enum's EmaValue), fails the
-        /// whole write with a parse error naming the reason (Count on a Double template
-        /// answers 'The template could not be parsed: Not supported property Count for
-        /// DoublePolicy'). Nothing non-offered is stored by a write; a policy that does
-        /// reach sensors can still be rejected per sensor at apply time, and those
-        /// rejections ride the response's `warnings` instead.
+        /// write validates every condition against this table before reconstructing the
+        /// template (#1611): a property the type does not offer, an operation the property
+        /// does not accept, or an unparsable target value answers a field-keyed 400 carrying
+        /// this surface's message catalogue (a Count condition on a Double template answers
+        /// policies[0].conditions[0].property: Property 'Count' is not supported by Double
+        /// templates. Supported: Value, EmaValue, Status, Comment, NewSensorData.); an
+        /// AnyType template accepts only the common set below, and its errors name AnyType,
+        /// never the Boolean stand-in the reconstruction uses. Two table-offered pairs still
+        /// fail the write the same way because the domain executors cannot build them:
+        /// Enum's EmaValue, and the text operations Contains/StartsWith/EndsWith on Version's
+        /// Value (the six comparisons are what Version actually runs). Nothing non-offered is
+        /// stored by a write; a policy that does reach sensors can still be rejected per
+        /// sensor at apply time, and those rejections ride the response's `warnings` instead.
         /// every type — Status, Comment, NewSensorData
         /// Boolean — nothing beyond the common set (no Value)
-        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: accepted by validation, currently fails at apply time)
-        /// TimeSpan, Version — Value
+        /// Integer, Double, Rate, Enum — Value, EmaValue (Enum EmaValue: table-offered, but the template write rejects it — no typed executor)
+        /// TimeSpan, Version — Value (Version's Value runs the six comparisons, not the text operations)
         /// String — Value, Length
         /// File — OriginalSize (no Value)
         /// IntegerBar, DoubleBar — Min, Max, Mean, Count, FirstValue, LastValue, EmaMin, EmaMax, EmaMean, EmaCount (no Value; none of the bar statistics is offered by a single-value type)
         /// </summary>
         [Description("The sensor property compared (PolicyProperty enum): 0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count, 105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize (File), 200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount. " + AlertPropertyMatrixDocs.Matrix)]
-        public byte Property { get; init; }
+        public int Property { get; init; }
     }
 
     /// <summary>The right-hand side of a condition.</summary>
@@ -249,10 +261,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// (the sensor's own previous value), matching what the web UI submits for them.
         /// </summary>
         [Description("Target type: 0=Const (compare against `value`), 1=LastValue (compare against the sensor's last value). Target-less operations (IsChanged, IsError, IsOk, IsChangedToError, IsChangedToOk, ReceivedNewValue) never read the constant — a Const target on them is evaluated as the sensor's own previous value.")]
-        public byte Type { get; init; }
+        public int Type { get; init; }
 
-        /// <summary>The constant compared against when type is Const; ignored for LastValue.</summary>
-        [Description("The constant compared against when type is 0=Const; ignored for LastValue. A plain string — numeric properties parse it as a number.")]
+        /// <summary>The constant compared against when type is Const; ignored for LastValue. An unparsable constant answers a field-keyed 400.</summary>
+        [Description("The constant compared against when type is 0=Const; ignored for LastValue. A plain string — the property's type parses it (a number, a TimeSpan string, a version string); an unparsable one answers a field-keyed 400 (conditions[j].target).")]
         public string Value { get; init; }
     }
 
@@ -303,7 +315,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// 20=Hourly, 50=Daily, 100=Weekly.
         /// </summary>
         [Description("Re-send interval of a still-triggered policy (AlertRepeatMode enum): 0=Immediately, 5=FiveMinutes, 6=TenMinutes, 7=FifteenMinutes, 10=ThirtyMinutes, 20=Hourly, 50=Daily, 100=Weekly.")]
-        public byte RepeateMode { get; init; }
+        public int RepeateMode { get; init; }
     }
 
     /// <summary>

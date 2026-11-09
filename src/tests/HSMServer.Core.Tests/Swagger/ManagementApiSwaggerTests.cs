@@ -506,29 +506,30 @@ namespace HSMServer.Core.Tests.Swagger
 
 
         // The enum value tables published in the DTO XML remarks are the agent-facing
-        // source of truth (the fields stay bytes so their validation runs AFTER
-        // authorization — see feature.md). This suite parses the remarks out of the
-        // source and pins them against the domain enums the controller validates with:
-        // a renamed/added/removed member — or a wrong table, like the sensorStatus
-        // inversion this test was written after (review round 2 on #1366) — fails here
-        // instead of corrupting agent payloads silently.
+        // source of truth (the fields stay plain integers — byte range included — so
+        // their validation runs AFTER authorization, #1607; see feature.md). This
+        // suite parses the remarks out of the source and pins them against the domain
+        // enums the controller validates with: a renamed/added/removed member — or a
+        // wrong table, like the sensorStatus inversion this test was written after
+        // (review round 2 on #1366) — fails here instead of corrupting agent payloads
+        // silently.
         [Fact]
         public void DocumentedEnumTables_MatchTheDomainEnums()
         {
             var source = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs");
 
-            AssertTable(source, "public byte SensorType { get; init; }",
+            AssertTable(source, "public int SensorType { get; init; }",
                 typeof(HSMCommon.Model.SensorType),
                 extras: [(100L, nameof(HSMServer.Core.Model.AlertTemplateModel.AnyType))]);
 
-            AssertTable(source, "public byte SensorStatus { get; init; }",
+            AssertTable(source, "public int SensorStatus { get; init; }",
                 typeof(HSMCommon.Model.SensorStatus));
 
-            AssertTable(source, "public byte Combination { get; init; }", typeof(PolicyCombination));
-            AssertTable(source, "public byte Operation { get; init; }", typeof(PolicyOperation));
-            AssertTable(source, "public byte Property { get; init; }", typeof(PolicyProperty));
-            AssertTable(source, "public byte Type { get; init; }", typeof(TargetType));
-            AssertTable(source, "public byte RepeateMode { get; init; }",
+            AssertTable(source, "public int Combination { get; init; }", typeof(PolicyCombination));
+            AssertTable(source, "public int Operation { get; init; }", typeof(PolicyOperation));
+            AssertTable(source, "public int Property { get; init; }", typeof(PolicyProperty));
+            AssertTable(source, "public int Type { get; init; }", typeof(TargetType));
+            AssertTable(source, "public int RepeateMode { get; init; }",
                 typeof(HSMServer.Core.Model.Policies.AlertRepeatMode));
 
             // The sparse TimeInterval table lives in the RECORD summary (it documents

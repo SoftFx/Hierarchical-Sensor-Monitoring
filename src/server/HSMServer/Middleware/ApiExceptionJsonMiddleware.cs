@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using HSMServer.Mcp;
-using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
@@ -23,24 +22,18 @@ namespace HSMServer.Middleware
             {
                 await next(context);
             }
-            // Cancellation is not a server error ONLY when the CLIENT is gone: an
-            // aborted request surfaces as OperationCanceledException from the
-            // framework's body/abort plumbing, and writing a 500 to a dead
-            // connection would only throw again and REPLACE the original exception
-            // in the outer handler's logging. Kestrel does not cancel
-            // RequestAborted inline — the callback is queued to the thread pool —
-            // so a body read can throw ConnectionAbortedException (an OCE
-            // subclass) while the token still reports not-cancelled; that
-            // exception IS the transport reporting the dead connection, so it
-            // counts as a client abort regardless of the token state. A
-            // server-side cancel — e.g. an HttpClient timeout inside a handler
-            // throws OperationCanceledException while RequestAborted is NOT set —
-            // is an ordinary failure of a live request: it must render the JSON
-            // error on /api paths, not fall through to the Razor error page
-            // (#1371).
-            catch (Exception exception) when (!(exception is OperationCanceledException &&
-                                                (context.RequestAborted.IsCancellationRequested ||
-                                                 exception is ConnectionAbortedException)) &&
+            // Cancellation is not a server error ONLY when the CLIENT is gone:
+            // writing a 500 to a dead connection would only throw again and
+            // REPLACE the original exception in the outer handler's logging.
+            // ClientAbortDetection carries the full reasoning — the aborted
+            // request token, plus the Kestrel race where the transport reports
+            // the dead connection as ConnectionAbortedException before the
+            // token fires. A server-side cancel — e.g. an HttpClient timeout
+            // inside a handler throws OperationCanceledException while
+            // RequestAborted is NOT set — is an ordinary failure of a live
+            // request: it must render the JSON error on /api paths, not fall
+            // through to the Razor error page (#1371).
+            catch (Exception exception) when (!ClientAbortDetection.IsClientAbort(exception, context) &&
                                               IsApiPath(context.Request.Path) &&
                                               !context.Response.HasStarted)
             {

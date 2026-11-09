@@ -61,7 +61,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             {
                 Id = id.ToByteArray(),
                 Name = dto.Name,
-                SensorType = dto.SensorType,
+                // The DTO carries the enum-coded fields as int so out-of-range
+                // values BIND and reach the validator (#1607); by the time the
+                // entity is built the structural pass has already proved every
+                // value is a defined enum member, so the narrowing cast is safe.
+                SensorType = (byte)dto.SensorType,
                 FolderId = dto.FolderId,
                 Paths = dto.Paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [],
                 TTLPolicies = [.. (dto.TtlPolicies ?? []).Select(p => ToEntity(p, chatsById))],
@@ -105,7 +109,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
                 Schedule = ToEntity(policy.Schedule ?? new()),
 
-                SensorStatus = policy.SensorStatus,
+                SensorStatus = (byte)policy.SensorStatus,
                 IsDisabled = policy.IsDisabled,
                 Template = policy.Template,
                 Icon = policy.Icon,
@@ -126,10 +130,10 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         private static PolicyConditionEntity ToEntity(PolicyConditionDto condition) => new()
         {
-            Target = new PolicyTargetEntity(condition.Target.Type, condition.Target.Value),
-            Combination = condition.Combination,
-            Operation = condition.Operation,
-            Property = condition.Property,
+            Target = new PolicyTargetEntity((byte)condition.Target.Type, condition.Target.Value),
+            Combination = (byte)condition.Combination,
+            Operation = (byte)condition.Operation,
+            Property = (byte)condition.Property,
         };
 
         private static PolicyDestinationDto ToDto(PolicyDestinationEntity destination) => new()
@@ -170,7 +174,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         {
             TimeTicks = schedule.TimeTicks,
             InstantSend = schedule.InstantSend,
-            RepeateMode = schedule.RepeateMode,
+            RepeateMode = (byte)schedule.RepeateMode,
         };
 
         private static TimeIntervalDto ToDto(TimeIntervalEntity interval) => new()

@@ -7,6 +7,7 @@ using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
@@ -428,9 +429,9 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_ReturnsTheStoredTemplate()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
-                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+                .Callback((Core.Model.AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) => _templateStore.Add(model));
 
             var envelope = await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"));
 
@@ -449,12 +450,12 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_PolicyRejections_RenderTheRestWarningStrings()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((true, (string)null, new List<TemplateApplyWarning>
                 {
                     new("Root/Product A/cpu bar", "Not supported property Value for IntegerBarPolicy"),
                 }))
-                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+                .Callback((Core.Model.AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) => _templateStore.Add(model));
 
             var dto = (await CreateTools().CreateAlertTemplateAsync(TemplateDto($"template-{Guid.NewGuid():N}"))).Value;
 
@@ -469,7 +470,7 @@ namespace HSMServer.Core.Tests.Mcp
             var template = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "warned", FolderId = Guid.NewGuid() };
             _templateStore.Add(template);
 
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((true, (string)null, new List<TemplateApplyWarning>
                 {
                     new("Root/Product B/ram bar", "Not supported property Value for DoubleBarPolicy"),
@@ -500,9 +501,9 @@ namespace HSMServer.Core.Tests.Mcp
             // #1605's envelope union, pinned on the dry-run arm: validation
             // passes, nothing persists, and the answer carries `preview`
             // with the value arm null (absent on the wire).
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null))
-                .Callback((Core.Model.AlertTemplateModel model, CancellationToken _) => _templateStore.Add(model));
+                .Callback((Core.Model.AlertTemplateModel model, InitiatorInfo initiator, CancellationToken _) => _templateStore.Add(model));
 
             var envelope = await CreateTools().CreateAlertTemplateAsync(
                 TemplateDto($"template-{Guid.NewGuid():N}"), dryRun: true);
@@ -514,7 +515,7 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal("create", envelope.Preview.Operation);
             Assert.Empty(_templateStore);
 
-            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()),
+            _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
 
@@ -522,7 +523,7 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public async System.Threading.Tasks.Task CreateAlertTemplate_DuplicateName_FlattensFieldKeyedError()
         {
-            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<Core.Model.AlertTemplateModel>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(((bool Ok, string Error, List<TemplateApplyWarning> Warnings))(true, null, null));
 
             var existing = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "taken", FolderId = Guid.NewGuid() };
@@ -534,6 +535,64 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("name: The name must be unique.", error.Message);
         }
 
+
+        // === #1607: field-keyed errors for inputs that used to bypass the validator ===
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_InvalidRegexPath_FlattensFieldKeyedError()
+        {
+            // The #1607 repro: a malformed path regex used to escape the write
+            // engine as an unhandled RegexParseException, which the SDK masks
+            // into the bare "An error occurred invoking ..." with no field
+            // name. The eagerly compiled pattern now rides the same
+            // field-keyed channel as every other path error.
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with { Paths = ["HSM Server Monitoring/(["] }));
+
+            Assert.Contains("paths: Invalid path template", error.Message);
+            Assert.Contains("HSM Server Monitoring", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+        [Theory]
+        [InlineData(999)]
+        [InlineData(-1)]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_UnknownSensorType_OutsideTheByteRange_FlattensFieldKeyedError(int sensorType)
+        {
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with { SensorType = sensorType }));
+
+            Assert.Equal($"sensorType: Unknown sensor type {sensorType}.", error.Message);
+            Assert.Empty(_templateStore);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateAlertTemplate_UnknownConditionProperty_OutsideTheByteRange_FlattensFieldKeyedError()
+        {
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                async () => await CreateTools().CreateAlertTemplateAsync(
+                    TemplateDto($"t-{Guid.NewGuid():N}") with
+                    {
+                        Policies = [new HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto
+                        {
+                            Conditions = [new HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto
+                            {
+                                Target = new HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto
+                                {
+                                    Type = (byte)TargetType.Const,
+                                    Value = "1",
+                                },
+                                Operation = (byte)PolicyOperation.GreaterThan,
+                                Property = 999,
+                            }],
+                        }],
+                    }));
+
+            Assert.Equal("policies[0].conditions[0].property: Unknown condition property 999.", error.Message);
+        }
 
         // #1608 (case C10b): a TTL policy carrying conditions used to reach
         // the domain reconstruction, whose TTLPolicy condition builder throws
@@ -579,9 +638,9 @@ namespace HSMServer.Core.Tests.Mcp
             var template = new AlertTemplateModel { Id = Guid.NewGuid(), Name = "gone", FolderId = Guid.NewGuid() };
             _templateStore.Add(template);
 
-            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(((bool Ok, string Error))(true, null))
-                .Callback((Guid id, CancellationToken _) => _templateStore.RemoveAll(t => t.Id == id));
+                .Callback((Guid id, InitiatorInfo initiator, CancellationToken _) => _templateStore.RemoveAll(t => t.Id == id));
 
             var result = await CreateTools().DeleteAlertTemplateAsync(template.Id);
 
