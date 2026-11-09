@@ -56,15 +56,18 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error) =>
             TryUpdate(updates, initiator, out error, null);
 
-        // #1401: the same update carrying a per-policy rejection collector.
+        // #1401: the same update carrying a per-policy failure collector.
         // The aggregate `error` string cannot name the individual policies a
-        // sensor refused, and the template-apply path must tell the CALLER
-        // which alerts were not (re)created on which sensor. The collector is
-        // passed PER CALL (a fresh list by the apply path) — never shared
-        // mutable state; null callers (every other update path) collect
-        // nothing, and the aggregate error string keeps its exact shape.
+        // sensor refused or failed to re-evaluate, and the template-apply
+        // path must tell the CALLER which alerts were not (re)created on
+        // which sensor. The collector is passed PER CALL (a fresh list by
+        // the apply path) — never shared mutable state; null callers (every
+        // other update path) collect nothing, and the aggregate error
+        // string keeps its exact shape. Since the #1563 review the entries
+        // are typed: Rejected for a refused update, EvaluationError for a
+        // policy that applied but whose revalidation threw.
         internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error,
-            List<string> rejectedPolicies);
+            List<PolicyUpdateFailure> policyFailures);
 
         internal abstract void RemovePolicy(Guid policyId, InitiatorInfo initiator = null);
 
@@ -139,16 +142,11 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true) =>
             TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
-        // #1563 review: the reset lives HERE as well, before the short-circuit
-        // chain — a failed type check skips CalculateStorageResult (and its
-        // own reset), and stale lines from an earlier ingestion pass must not
-        // leak into a later update's aggregate error.
-        internal bool TryRevalidate(BaseValue value)
-        {
-            _evaluationErrors.Clear();
-
-            return TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
-        }
+        // The #1563-review reset of _evaluationErrors lives in TryUpdate (before
+        // the LastValue gate): TryRevalidate itself never reads the list, and
+        // CalculateStorageResult clears it again at the top of every evaluation.
+        internal bool TryRevalidate(BaseValue value) =>
+            TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
 
         internal bool SensorTimeout(BaseValue value)
         {
@@ -333,7 +331,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
         internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error,
-            List<string> rejectedPolicies)
+            List<PolicyUpdateFailure> policyFailures)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
             var errors = new StringBuilder(1 << 5);
@@ -356,7 +354,7 @@ namespace HSMServer.Core.Model.Policies
                             else
                             {
                                 errors.AppendLine(err);
-                                rejectedPolicies?.Add(err);
+                                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.Rejected, err));
                             }
                         }
                         else
@@ -378,7 +376,7 @@ namespace HSMServer.Core.Model.Policies
                                 // save reports success. The collector (#1401)
                                 // names it for the caller's warnings channel.
                                 errors.AppendLine(err);
-                                rejectedPolicies?.Add(err);
+                                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.Rejected, err));
                             }
                         }
                     }
@@ -462,16 +460,29 @@ namespace HSMServer.Core.Model.Policies
                 }
             }
 
+            // #1563 review: reset BEFORE the LastValue gate — a sensor with no
+            // last value skips TryRevalidate (and CalculateStorageResult's own
+            // reset), and stale lines from an earlier ingestion pass must not
+            // leak into this update's aggregate error, naming policies this
+            // update may have just removed.
+            _evaluationErrors.Clear();
+
             if (_sensor?.LastValue is ValueType valueT)
                 TryRevalidate(valueT);
 
             // #1563: a policy that failed the post-update revalidation reports
-            // through the same aggregate error as a rejected update above. The
-            // update itself (and the caller's DB write) is NOT rolled back:
-            // the revalidation verdict is advisory marking, and aborting here
-            // would again diverge memory from storage.
+            // through the same aggregate error as a rejected update above, and
+            // rides the caller's collector as an EvaluationError — the policy
+            // APPLIED and persisted, so the template path must not report it
+            // as "not applied". The update itself (and the caller's DB write)
+            // is NOT rolled back: the revalidation verdict is advisory
+            // marking, and aborting here would again diverge memory from
+            // storage.
             foreach (var evaluationError in _evaluationErrors)
+            {
                 errors.AppendLine(evaluationError);
+                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.EvaluationError, evaluationError));
+            }
 
             error = errors.Length > 0 ? errors.ToString() : null;
 

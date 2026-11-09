@@ -527,6 +527,68 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(sensor.Policies.SensorResult.HasError);
         }
 
+        [Fact]
+        public void TryUpdate_ThrowingEvaluator_RidesFailureCollectorAsEvaluationError()
+        {
+            // #1563 review: the template-apply path's collector must carry
+            // the evaluation failure too — as an EvaluationError, NOT a
+            // Rejected entry: the policy applied and persisted, so the
+            // template channel must be able to word its report accordingly.
+            var sensor = BuildStringSensorWithNullValue();
+            var throwingId = Guid.NewGuid();
+
+            var failures = new List<PolicyUpdateFailure>();
+
+            var result = sensor.Policies.TryUpdate([BuildLengthUpdate(throwingId)],
+                InitiatorInfo.AlertTemplate, out var error, failures);
+
+            // A soft failure still reports through the aggregate error...
+            Assert.False(result);
+            Assert.Contains(throwingId.ToString(), error);
+
+            // ...and through the collector, with the kind that says
+            // "applied but not evaluable", never "not applied".
+            var failure = Assert.Single(failures);
+            Assert.Equal(PolicyUpdateFailureKind.EvaluationError, failure.Kind);
+            Assert.Contains(throwingId.ToString(), failure.Reason);
+        }
+
+        [Fact]
+        public void TryUpdate_AfterHistoryClear_NoStaleEvaluationErrorLeaks()
+        {
+            // #1563 review: the reset must live BEFORE the LastValue gate in
+            // TryUpdate. A broken policy throws during ingestion (populating
+            // the collection's evaluation-error lines); the history clear
+            // nulls the last value, so the next update skips the
+            // revalidation — the stale lines from the ingestion pass must
+            // not leak into this update's error, naming a policy the update
+            // just removed.
+            var sensor = new StringSensorModel(
+                EntitiesFactory.BuildSensorEntity(type: (byte)SensorType.String),
+                null, new Mock<IAlertScheduleProvider>().Object);
+
+            var brokenId = Guid.NewGuid();
+
+            // Attach while no last value exists, then ingest: the evaluator
+            // throws, the value is stored, the failure line is recorded.
+            Assert.True(sensor.Policies.TryUpdate([BuildLengthUpdate(brokenId)],
+                InitiatorInfo.AsUser("test"), out _));
+            Assert.True(sensor.TryAddValue(new StringValue { Time = DateTime.UtcNow }));
+
+            // History clear (ResetSensor -> Storage.Clear): LastValue becomes
+            // null, the revalidation is skipped on the next update.
+            sensor.ResetSensor();
+            Assert.Null(sensor.LastValue);
+
+            // Removing the broken policy must answer CLEAN: pre-fix this
+            // returned false with "Failed to evaluate alert {brokenId}".
+            var removed = sensor.Policies.TryUpdate([], InitiatorInfo.AsUser("test"), out var error);
+
+            Assert.True(removed);
+            Assert.Null(error);
+            Assert.DoesNotContain(sensor.Policies, p => p.Id == brokenId);
+        }
+
 
         // === Helper methods ===
 
