@@ -23,7 +23,10 @@ namespace HSMServer.Mcp
     // The removal semantics stay core-owned (the same RemoveSensorAsync the
     // web UI's remove-node drives): cache, policies, mute state, the WHOLE
     // stored history and the undo change-set references — irreversible by
-    // design, hence the dryRun preview arm of the envelope.
+    // design, hence the dryRun preview arm of the envelope. The success
+    // answer verifies the cache removal alone; the persistence-side cleanup
+    // is best-effort inside the core's swallow-only handler (the web UI's
+    // visibility — the engine's post-write read cannot reach it).
     [McpServerToolType]
     public sealed class SensorDeletionMcpTools
     {
@@ -40,10 +43,10 @@ namespace HSMServer.Mcp
         // Idempotent=false: a create/delete hazard flag — re-running a delete
         // against an already-deleted id answers not-found, not a repeat success.
         [McpServerTool(Name = "delete_sensor", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Deletes a sensor IRREVERSIBLY: its cache entry, attached data and TTL policies, mute state, its WHOLE stored history and its undo references are removed (a journal record with the initiator is kept; there is no undo). Use dryRun first to preview everything the deletion would destroy. Fails on an unknown/invisible sensor id and for read-only tokens.")]
+        [Description("Deletes a sensor IRREVERSIBLY: its cache entry, attached data and TTL policies, mute state, its WHOLE stored history and its undo references are removed (a journal record with the initiator is kept; there is no undo). Success confirms the in-memory removal — the on-disk history wipe is best-effort and server-logged. Use dryRun first to preview everything the deletion would destroy. Fails on an unknown/invisible sensor id and for read-only tokens.")]
         public async System.Threading.Tasks.Task<McpSensorDeleteResult> DeleteSensorAsync(
             [Description("Sensor id.")] Guid sensorId,
-            [Description("Preview everything the deletion would destroy (the sensor, its policies, its history size) WITHOUT deleting anything — the answer carries `preview` instead of `value`.")] bool dryRun = false)
+            [Description("Preview everything the deletion would destroy (the sensor, its policies, its history size — computed by a full on-disk history scan, costly on sensors with millions of values) WITHOUT deleting anything — the answer carries `preview` instead of `value`.")] bool dryRun = false)
         {
             // A deletion journals no undo entry (it PURGES change-set
             // references instead, #1570), so no undo group is minted — only

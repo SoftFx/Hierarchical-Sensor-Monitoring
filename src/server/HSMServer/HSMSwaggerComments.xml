@@ -588,7 +588,11 @@
             Delete the sensor — IRREVERSIBLY: the cache entry, its attached
             policies, its mute state, its whole stored history and its undo
             change-set references are removed (a TreeCrud journal record with
-            the initiator is written; there is no undo). A dry run
+            the initiator is written; there is no undo). The 204 verifies the
+            cache removal — the persistence-side cleanup (journal record,
+            history wipe, change-set purge) is best-effort inside the core's
+            swallow-only handler and a failure there is logged server-side,
+            the same visibility the web UI's remove-node has. A dry run
             (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
             of everything the real write would destroy and applies nothing.
             </summary>
@@ -2897,10 +2901,13 @@
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.HistoryValues">
-            <summary>Stored value count the deletion would erase (timeout markers included).</summary>
+            <summary>Stored value count the deletion would erase (timeout markers
+            included; computed by a full on-disk history scan — the same scan the
+            web UI's node info runs, costly on sensors with millions of values).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.HistorySizeBytes">
-            <summary>On-disk size in bytes of the history the deletion would erase.</summary>
+            <summary>On-disk size in bytes of the history the deletion would erase
+            (part of the same full history scan as <c>historyValues</c>).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDeletePreviewDto.Product">
             <summary>Reference to the sensor's root product.</summary>

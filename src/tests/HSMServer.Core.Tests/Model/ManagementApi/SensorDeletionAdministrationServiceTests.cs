@@ -27,8 +27,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
     // the sensor from the cache lists, like the queue-thread dispatch does).
     // The suite pins the delegation (the SAME RemoveSensorAsync the web UI's
     // remove-node drives, with the token owner as initiator), the honest
-    // post-write verification (a removal that did not apply answers Conflict,
-    // never a ghost success), the dry-run preview (nothing delegated), and the
+    // post-write verification (a removal that never reached the cache answers
+    // Conflict, never a ghost success — the CACHE removal is everything the
+    // read can see; a persistence-side failure inside the core's swallow-only
+    // handler is unreachable from the engine, see the management-api Known
+    // Issues), the dry-run preview (nothing delegated), and the
     // authorization mapping (read-only/Viewer -> 403, unknown/invisible -> the
     // same 404).
     public class SensorDeletionAdministrationServiceTests
@@ -283,7 +286,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         {
             // RemoveSensorAsync swallows its failures and returns void — the
             // post-write read is the honest-reporting channel (the policy
-            // deletes' SendAndVerifyRemoval rule, inverted).
+            // deletes' SendAndVerifyRemoval rule, inverted). The mocked probe
+            // is the one failure the read CAN see: the removal never reached
+            // the cache (the queue's error return); a failure inside the
+            // core's handler AFTER its cache-first step stays a success — the
+            // management-api Known Issues pin that boundary.
             var sensor = AddSensor("cpu");
 
             _removalDoesNotApply = true;

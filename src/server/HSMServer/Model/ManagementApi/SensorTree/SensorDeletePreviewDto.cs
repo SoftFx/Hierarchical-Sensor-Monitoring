@@ -41,12 +41,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         [Description("Time of the newest stored value (UTC ISO 8601, the value's own measurement time); null when the sensor has no data yet.")]
         public DateTime? LastValueTime { get; init; }
 
-        /// <summary>Stored value count the deletion would erase (timeout markers included).</summary>
-        [Description("Stored value count the deletion would erase (timeout markers included).")]
+        /// <summary>Stored value count the deletion would erase (timeout markers
+        /// included; computed by a full on-disk history scan — the same scan the
+        /// web UI's node info runs, costly on sensors with millions of values).</summary>
+        [Description("Stored value count the deletion would erase (timeout markers included; computed by a full on-disk history scan — costly on sensors with millions of values).")]
         public long HistoryValues { get; init; }
 
-        /// <summary>On-disk size in bytes of the history the deletion would erase.</summary>
-        [Description("On-disk size in bytes of the history the deletion would erase.")]
+        /// <summary>On-disk size in bytes of the history the deletion would erase
+        /// (part of the same full history scan as <c>historyValues</c>).</summary>
+        [Description("On-disk size in bytes of the history the deletion would erase (part of the same full history scan as `historyValues`).")]
         public long HistorySizeBytes { get; init; }
 
         /// <summary>Reference to the sensor's root product.</summary>

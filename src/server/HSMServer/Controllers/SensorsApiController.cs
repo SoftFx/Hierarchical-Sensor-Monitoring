@@ -122,7 +122,11 @@ namespace HSMServer.Controllers
         /// Delete the sensor — IRREVERSIBLY: the cache entry, its attached
         /// policies, its mute state, its whole stored history and its undo
         /// change-set references are removed (a TreeCrud journal record with
-        /// the initiator is written; there is no undo). A dry run
+        /// the initiator is written; there is no undo). The 204 verifies the
+        /// cache removal — the persistence-side cleanup (journal record,
+        /// history wipe, change-set purge) is best-effort inside the core's
+        /// swallow-only handler and a failure there is logged server-side,
+        /// the same visibility the web UI's remove-node has. A dry run
         /// (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
         /// of everything the real write would destroy and applies nothing.
         /// </summary>

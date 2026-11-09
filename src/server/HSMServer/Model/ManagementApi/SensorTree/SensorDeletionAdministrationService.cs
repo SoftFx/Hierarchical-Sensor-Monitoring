@@ -38,6 +38,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // RemoveSensorAsync swallows its failures (the queue's handler logs
         // and drops) and returns void — the honest-reporting rule needs an
         // observable outcome, so the post-write read verifies the removal.
+        // WHAT it verifies is the CACHE removal alone: the core's RemoveSensor
+        // removes from the cache FIRST, then journals, wipes the DB history
+        // and purges the change-set references behind the same swallow-only
+        // catch — a persistence-side failure there is logged by the core and
+        // the removal still answers success (the web UI's remove-node
+        // visibility; the management-api Known Issues pin it). The 409 fires
+        // only when the removal never reached the cache at all (the queue's
+        // error return before the handler runs).
         private const string NotRemovedMessage = "The sensor could not be removed.";
 
         private readonly ITreeValuesCache _cache;
@@ -82,10 +90,13 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             await _cache.RemoveSensorAsync(sensorId, ChangeSetRecorder.InitiatorOf(user, _users));
 
             // The queue completes the in-memory removal before its task
-            // resolves, so this read observes the outcome — a sensor still
-            // present after the write (a swallowed core failure) answers an
-            // explicit conflict instead of a ghost success, the same
-            // honest-reporting rule the policy deletes apply inverted.
+            // resolves, so this read observes the cache outcome — a sensor
+            // still present after the write (the removal never reached the
+            // cache: the queue's error return) answers an explicit conflict
+            // instead of a ghost success, the same honest-reporting rule the
+            // policy deletes apply inverted. The cache removal is EVERYTHING
+            // this read can see — the persistence-side boundary lives in the
+            // NotRemovedMessage note above.
             return _cache.GetSensor(sensorId) is null
                 ? PolicyWriteResult.Ok()
                 : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: NotRemovedMessage);

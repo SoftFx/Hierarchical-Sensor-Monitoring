@@ -89,7 +89,7 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 - **Dry run**: answers the `SensorDeletePreviewDto` (kind/operation/entityId/path, product ref, state + endOfMuting with the mapper's Forever rule, lastValueTime, historyValues/historySizeBytes from the core's statistics accessor, the affected list — the sensor plus every data and TTL policy) and NOTHING is applied (no core removal call, the sensor still reads back); a MUTED sensor previews its mute state.
 - **Authorization mapping**: evaluator Forbidden → 403 (the write never runs — the read-only-token/Viewer arm); unknown id and the evaluator's NotFound answer the same 404; a repeat delete after removal → 404 with the core called once.
 - **State**: a BLOCKED sensor deletes (the web UI's remove-node rule — no state filter, unlike the mute engine).
-- **Honest verification**: a mocked core removal that does NOT apply (the queue's swallow-only failure channel) → 409 `conflict`, never a ghost success.
+- **Honest verification**: a mocked core removal that does NOT apply (the queue's swallow-only failure channel — the removal never reached the cache) → 409 `conflict`, never a ghost success. The CACHE removal is everything the read can verify: a persistence-side failure inside the core's handler (after its cache-first step) is unreachable from the engine and stays a success — the Known Issues boundary, which is why the probe can only mock the never-reached case.
 
 **Controller** (the delete pins inside `SensorsApiControllerTests`, controller level — the same service-real harness): 204 on success with the sensor gone; the `X-HSM-Dry-Run: true` header → 200 + preview with nothing removed; unknown id → the uniform 404; a read-only owner → 403 with the sensor untouched.
 
