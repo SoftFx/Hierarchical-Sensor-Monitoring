@@ -100,6 +100,17 @@ namespace HSMServer.Core.Cache.UpdateEntities
         // never suppressed — only the ownership stamp.
         internal bool PreserveChangeOwnership { get; init; }
 
+        // #1077: set by ApplyTemplateToSensor on an update whose target is a
+        // template-owned policy with a higher-priority change-table owner (a
+        // user's per-sensor disable toggle). The update carries the STORED
+        // IsDisabled (the operator's choice preserved), and the CanChange
+        // gates let it through instead of skipping the whole re-apply: the
+        // template owns the CONTENT, the operator owns the toggle. Must ride
+        // together with PreserveChangeOwnership — the re-apply must not
+        // re-stamp the owner, or the toggle marker would be lost and the next
+        // apply would overwrite the operator's choice.
+        internal bool PreservesOperatorToggle { get; init; }
+
         public PolicyUpdate() { }
 
         public PolicyUpdate (Policy policy, InitiatorInfo initiator = null)

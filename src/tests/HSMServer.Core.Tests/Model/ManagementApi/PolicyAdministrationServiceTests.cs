@@ -725,11 +725,14 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // owns the policy's change-table entry now.
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[target.Id.ToString()].Initiator.Type);
 
-            // Consequence, pinned end-to-end: the next template apply
-            // (AlertTemplate, type 15) fails the node's CanChange pre-check
-            // (owner User 100 > 15) and the user's disable survives it —
-            // before the fix the un-stamped toggle let the template overwrite
-            // the disable without the pre-check noticing.
+            // Consequence, pinned end-to-end: a RAW template-typed list
+            // update (AlertTemplate, type 15) without the #1077 preserve
+            // marking fails the node's CanChange pre-check (owner User
+            // 100 > 15) and the user's disable survives it — the low-level
+            // defense stays intact for any sender that does not mark the
+            // update. The REAL apply path (ApplyTemplateToSensor) re-applies
+            // the content with the toggle preserved — pinned in
+            // TemplateApplicationTests (#1077).
             var reapply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
             {
                 Id = sensor.Id,

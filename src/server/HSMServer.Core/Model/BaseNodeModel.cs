@@ -117,6 +117,15 @@ namespace HSMServer.Core.Model
                     var key = ttlUpdate.Id.ToString();
                     if (ttlUpdate.Id != Guid.Empty && !ChangeTable.TtlPolicies[key].CanChange(update.Initiator))
                     {
+                        // #1077: an entry the apply built for a user-toggled
+                        // TTL policy carries PreservesOperatorToggle — the
+                        // template owns the content, the operator owns the
+                        // disable toggle — and must not abort the whole list
+                        // update (one toggle used to freeze every TTL entry
+                        // of the node, all-or-nothing).
+                        if (ttlUpdate.PreservesOperatorToggle)
+                            continue;
+
                         canChange = false;
                         break;
                     }
@@ -139,10 +148,11 @@ namespace HSMServer.Core.Model
                     {
                         // #1409/#1451: updates carrying
                         // PreserveChangeOwnership (the schedule detach, the
-                        // folder chat removal) do not take ownership — both
-                        // are system housekeeping that must not downgrade a
-                        // recorded User owner and release the CanChange
-                        // gate that keeps later template applies blocked.
+                        // folder chat removal, and the #1077 toggle-preserving
+                        // template re-apply) do not take ownership — a
+                        // re-stamp here would downgrade a recorded User owner
+                        // and release the change-table marker that keeps the
+                        // operator's disable toggle preserved.
                         // Every OTHER update stamps its targeted policies
                         // unconditionally (pre-#1409 behaviour), including
                         // edits the change journal itself does not render

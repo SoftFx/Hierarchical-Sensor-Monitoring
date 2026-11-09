@@ -2150,18 +2150,32 @@ namespace HSMServer.Core.Cache
                 {
                     // UPDATE in-place: keep the existing policy Id; the
                     // template's IsDisabled re-syncs the sensor policy
-                    // (#1606). A per-sensor toggle made by a user still
-                    // wins: the toggle stamps a User change-table owner and
-                    // the CanChange pre-check in TryUpdate skips the update.
-                    // The request's journaled initiator rides here as
-                    // everywhere in this apply (#1610) — AlertTemplate-typed,
-                    // carrying the write's undo group.
+                    // (#1606) — UNLESS a user made a per-sensor toggle: the
+                    // toggle stamps a User change-table owner, and the
+                    // operator's choice of IsDisabled wins over the template
+                    // while the template's CONTENT still re-applies (#1077).
+                    // The flags ride the update: PreservesOperatorToggle
+                    // opens the CanChange gates, PreserveChangeOwnership
+                    // keeps the User owner stamped as the toggle marker for
+                    // the next apply. The request's journaled initiator rides
+                    // here as everywhere in this apply (#1610) —
+                    // AlertTemplate-typed, carrying the write's undo group.
+                    var preserveToggle = !sensor.ChangeTable.Policies[existing.Id.ToString()].CanChange(initiator);
+
                     policyUpdates.Add(new PolicyUpdate(templatePolicy, initiator)
                     {
                         Id = existing.Id,
                         TemplateId = template.Id,
                         TemplateAlertId = templatePolicy.Id,
+                        IsDisabled = preserveToggle ? existing.IsDisabled : templatePolicy.IsDisabled,
+                        PreserveChangeOwnership = preserveToggle,
+                        PreservesOperatorToggle = preserveToggle,
                     });
+
+                    if (preserveToggle)
+                        ReportPreservedOperatorToggle(request, sensor, existing.Id, existing.IsDisabled,
+                            templatePolicy.IsDisabled, initiator, isTtl: false);
+
                     matchedSensorPolicyIds.Add(existing.Id);
                 }
                 else
@@ -2208,17 +2222,30 @@ namespace HSMServer.Core.Cache
                     {
                         // Same contract as the regular-policy arm above: the
                         // template's IsDisabled re-syncs the sensor TTL
-                        // policy (#1606); a user's per-sensor toggle keeps
-                        // its User change-table owner and the CanChange gate
-                        // in BaseNodeModel.Update blocks the re-sync. The
-                        // journaled initiator rides as everywhere (#1610).
+                        // policy (#1606) unless a user's per-sensor toggle
+                        // holds a User change-table owner — then the
+                        // operator's IsDisabled wins while the template's
+                        // content (interval included) still re-applies
+                        // (#1077), per-entry instead of the old
+                        // all-or-nothing node freeze. The journaled
+                        // initiator rides as everywhere (#1610).
+                        var preserveToggle = !sensor.ChangeTable.TtlPolicies[existing.Id.ToString()].CanChange(initiator);
+
                         ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, initiator)
                         {
                             Id = existing.Id,
                             TemplateId = template.Id,
                             TemplateAlertId = ttlPolicy.Id,
                             TTL = ttlTicks,
+                            IsDisabled = preserveToggle ? existing.IsDisabled : ttlPolicy.IsDisabled,
+                            PreserveChangeOwnership = preserveToggle,
+                            PreservesOperatorToggle = preserveToggle,
                         });
+
+                        if (preserveToggle)
+                            ReportPreservedOperatorToggle(request, sensor, existing.Id, existing.IsDisabled,
+                                ttlPolicy.IsDisabled, initiator, isTtl: true);
+
                         matchedSensorTtlIds.Add(existing.Id);
                     }
                     else
@@ -2349,6 +2376,38 @@ namespace HSMServer.Core.Cache
                     }
                 }
             }
+        }
+
+
+        // #1077: the apply re-applied a template policy whose change-table
+        // owner outranks the template (a user's per-sensor disable toggle) —
+        // the operator's IsDisabled was kept, the template's content landed.
+        // The disagreement is reported, never silent: when the kept choice
+        // DIVERGES from the template's isDisabled, one warning rides the
+        // #1401 channel (rendered by every transport of AddAlertTemplateAsync)
+        // and one journal record lands in the same "Alert" record shape the
+        // rejection records above use. When the choices agree there is
+        // nothing to report — the toggle marker still rides the change table
+        // for the next apply.
+        private void ReportPreservedOperatorToggle(ApplyTemplateRequest request, BaseSensorModel sensor, Guid policyId,
+            bool preservedIsDisabled, bool templateIsDisabled, InitiatorInfo initiator, bool isTtl)
+        {
+            if (preservedIsDisabled == templateIsDisabled)
+                return;
+
+            var kind = isTtl ? "ttl policy" : "policy";
+
+            request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath,
+                $"{kind} {policyId}: operator's per-sensor enable/disable choice preserved; template isDisabled={templateIsDisabled} not applied"));
+
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, initiator)
+            {
+                Enviroment = "Alert collection",
+                PropertyName = "Alert",
+                OldValue = string.Empty,
+                NewValue = $"operator toggle preserved: {kind} {policyId} keeps isDisabled={preservedIsDisabled}; template isDisabled={templateIsDisabled} not applied",
+                Path = sensor.FullPath,
+            });
         }
 
         public async Task SaveLastStateToDbAsync(CancellationToken token = default)

@@ -361,11 +361,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[templateTtl.Id.ToString()].Initiator.Type);
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[carrier.Id.ToString()].Initiator.Type);
 
-            // Consequence, pinned end-to-end (the #1409 shape): a
-            // template-initiated apply (AlertTemplate, type 15) targeting
-            // the user-owned policy is still rejected by the CanChange gate
-            // (100 <= 15 is false) — the interval and the operator's
-            // disable toggle survive.
+            // Consequence, pinned end-to-end (the #1409 shape): a RAW
+            // template-typed list update (AlertTemplate, type 15) without
+            // the #1077 preserve marking is still rejected by the CanChange
+            // gate (100 <= 15 is false) — the interval and the operator's
+            // disable toggle survive. The REAL apply path
+            // (ApplyTemplateToSensor) marks toggled policies and re-applies
+            // the template content instead — pinned in
+            // TemplateApplicationTests (#1077).
             var templateApply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
             {
                 Id = sensor.Id,
@@ -488,10 +491,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
 
             // Consequence, pinned end-to-end (the round-2 shape, regular
-            // arm): a template-initiated apply (AlertTemplate, type 15)
-            // targeting the user-owned policy is rejected by the CanChange
-            // gate (100 <= 15 is false) — the operator's disable toggle
-            // survives the apply instead of being silently overwritten.
+            // arm): a RAW template-typed list update (AlertTemplate, type
+            // 15) without the #1077 preserve marking is rejected by the
+            // CanChange gate (100 <= 15 is false) — the operator's disable
+            // toggle survives it. The REAL apply path marks toggled
+            // policies and re-applies the template content with the toggle
+            // preserved — pinned in TemplateApplicationTests (#1077).
             var templateApply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
             {
                 Id = sensor.Id,
