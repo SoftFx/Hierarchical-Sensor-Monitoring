@@ -1,37 +1,37 @@
 # HSM Server
 
-## Alerts
-* Alert templates warn at save time about per-policy validation problems — including a path pattern that matches no sensors, or a condition the matched sensor types do not offer; template path-pattern semantics are documented.
-
-## Sensor history
-* Bar standard deviation is stored, compressed and served: the history table shows a σ column and the CSV export appends StdDev (timeout rows excluded).
+## Management API
+* Sensor deletion: `DELETE /api/v1/sensors/{id}` removes a sensor irreversibly — cache entry, attached policies and mute state, the whole stored history and undo references — through the same engine the web UI's remove-node uses; `X-HSM-Dry-Run: true` answers 200 with a preview (identity, product, state, affected policies, history size and last-value time) and applies nothing; a removal that never reached the cache answers 409 instead of a ghost success (#1637).
+* Bar sensor values now carry `StdDev` in `GET /api/v1/sensors/{id}/history` and in the sensor's `lastValue` — normalized like every other surface: unknown, negative and non-finite σ render as `null`, 0 stays 0 (#1620).
+* Policy writes that carry an effectful destination but no notification are rejected with a field-keyed 422 instead of being silently stored as an empty destination — a caller can no longer believe alerts route to a chat while nothing is ever sent (#1612).
 
 ## MCP
-* Write tools for sensor policies, alert templates and alert schedules; read tools for chats and folders (list/get).
-* Tool schemas now carry field-value documentation, output schemas via structured content, and the documented alert-variable and property × sensor-type matrices.
+* New `delete_sensor` tool (33 tools now) with a `dryRun` parameter mirroring the REST preview/value envelope and error parity (#1637).
+* `get_sensor_history` and `get_sensor` bar points carry `StdDev` (#1620).
+* A client aborting its request before the response finishes (any endpoint, the noisy case being a polling MCP client) is logged at Warn, not ERROR — client disconnects no longer flood `HSM-error-log.txt` (one 3.41.9 install saw ~300 entries per 24h); internal cancellations and real errors stay at ERROR (#1632).
 
-## Management API
-* New REST surface: read-only /api/v1/chats and /api/v1/folders, and CRUD on /api/v1/alertSchedules — one read envelope (ManagementReadResult) and a tightened error contract with typed Details.
+## Alerts — templates
+* Template `isDisabled` edits now propagate to the sensor policies the template already applied; a deliberate per-sensor toggle still wins and is never overwritten (#1606).
+* After a per-sensor toggle the template is applied again on its next save: new conditions, message and interval land, the operator's disable choice survives — previously the template never re-applied to a toggled policy and the drift went unreported. The preservation is reported (a save warning + journal record) only when the kept choice carries new information; a collector re-registration can no longer release the operator's TTL toggle (#1077).
+* A throwing policy evaluator (e.g. a `Length` condition over a stored null string) no longer breaks the policy update or diverges memory from the database: the failing policy is skipped for the evaluation pass, marked with an error naming the policy id, and its siblings still evaluate; the update and the DB write proceed (#1563).
+* Write-time validation, REST and MCP alike: a path pattern of literals without `/` (provably dead — it can never match) answers 400 (#1608); curly braces in a policy message answer 400 per the `string.Format` contract (#1608); a TTL policy carrying conditions answers a clean field-keyed 400 instead of a leaked `NotImplementedException` (#1608).
+* Condition rejections are field-keyed validation errors naming the exact policy, condition and field (`policies[0].conditions[0].property: ...`) with the same message catalogue the per-sensor surface uses — no more raw .NET exception text under one bare `policies` prefix, and AnyType errors name AnyType, never the internal stand-in (#1611).
+* Malformed path regexes and out-of-range enum values are rejected with field names before binding fails, and a body with several mistakes reports every field instead of one generic error (#1607).
+* Web UI: server-side path validation errors (the mixed-type template check, invalid patterns, empty list) render inline over the preserved input on a blocked Save — the form no longer silently re-renders unchanged (#1247).
 
-## UI
-* New admin Downloads page with the Windows agent and Linux probe bundles and per-product install commands.
-* Personal tokens: fresh tokens point at the management API and MCP; Esc closes the token dialogs; the disabled-tokens banner is informational.
+## Alerts — schedules
+* YAML validation 422s are deterministic and field-specific: no raw .NET exception text, no server-generated GUIDs in messages; empty YAML, bad times, unknown days, malformed dates and reversed/overlapping windows each name their exact defect (#1599).
+* A schedule YAML missing the required `daySchedules` key is rejected on the write path (a typo could silently store a "never working" schedule); schedules stored before this rule keep loading (#1598).
+* The web UI name limit aligns with the API's 200-char contract (input `maxlength`, server-side check), and long names truncate with a tooltip instead of stretching the schedule table (#1597).
 
-## Self-monitoring
-* The server reports its own database backups: result (with TTL so a missed run times out), zip sizes and duration on the Backup node, plus daily environment/dashboards database sizes.
-
-## Linux probe
-* Ships probe 0.10.0 (from 0.8.2): bar StdDev posting; .NET Core double payload layout; hardened registration retry and recovery log; full process names in top CPU where the 15-byte kernel name was cut, e.g. `valheim_server.x86_64` (#1573); an idle container's `Disk written per hour` posts 0 instead of a gap (#1574).
+## Journal
+* Alert template writes produce visible, rollbackable `alertTemplate` journal records — previously they were invisible to every caller including admins; the per-sensor fan-out records carry the write's undo-group link and the true author (#1610).
+* Global and folder-scoped records (alert schedules, alert templates) stay visible when a product filter is selected — selecting a product can no longer make the journal page look empty while it holds records (#1601).
 
 ## Infrastructure
-* One port: everything (web UI, Sensor API, management API, MCP, downloads) is served on the standard port 443; the non-standard ports 44330/44333 keep answering as deprecated aliases through the deprecation window and will be removed in a follow-up release (#1590). The server listens on a single Kestrel port (`Kestrel.Port`, default 443 — old `SensorPort`/`SitePort` settings are ignored with a startup warning); DataCollector/agent/ping-module defaults are now 443; requests that arrive by a deprecated port log a rate-limited warning so operators can find clients to repoint. Direct deployments publish 443 (plus the deprecated aliases through the window).
-* Non-container upgrade note (#1590): the deprecation aliases exist only at the edge (Caddy sites / compose port mappings) — a server run directly (Windows service, `dotnet HSMServer.dll`) has no alias layer. If clients reach such a server on 44330/44333 today, set `Kestrel.Port` to that port **before** upgrading: otherwise the listener moves to the default 443 (on Linux that bind also needs root/`CAP_NET_BIND_SERVICE`) and those clients stop connecting. A server pinned this way keeps serving its old address (bundles bake it, and it is not warned as a straggler).
-* Mandatory upgrade step (#1590): replace the compose files (docker-compose.yml — which pins hsm-caddy 2.11.4-6 — and docker-compose.direct.yml) before pulling the new app image. The deprecated aliases keep answering only with the new edge files: the old compose healthcheck probes `https://127.0.0.1:44330` and the old Caddy image dials `app:44330`/`app:44333`, ports the new image no longer listens on, so old edge files plus the new image leave the stack unhealthy (502s, ingestion included). In the other direction, the new compose files probe and dial `app:443`, so they need the new image — deploy the files and the image together.
-* Security note (#1590): a firewall setup that exposed only 44330 (ingestion) while keeping 44333 internal no longer isolates the management surface — the 44330 alias reaches the full address (login page, management API, MCP) exactly like 443. Filter at the firewall if you relied on the old split.
-* DataCollector default port: the convenience `DataCollector` constructor and `CollectorOptions` now default to 443 (was 44330); code that relies on the default must point at a server that serves 443. Callers compiled against a pre-#1590 package keep the old 44330 value baked into the optional `port` parameter until they are recompiled.
-* hsm-caddy 2.11.4-3 passes the client Host header through to the server upstream — redirects no longer break behind the proxy.
-* hsm-caddy 2.11.4-6 forwards every site — the primary 443 address and the deprecated-port aliases — to the app's single 443 listener.
-* The VictoriaLogs log-storage stack is removed (#1594, ADR-0015): the compose `logs` profile (victorialogs + vlagent), the `HSM_STRUCTURED_LOGS` structured JSON log, and the `/logs/` read routes are gone, and nothing replaces them — the text logs under `Logs/` (with `Logs/Archives/`) remain the source of truth. Migration for existing installs: after upgrading the compose files, stop and remove the two containers (`docker rm -f hsm-victorialogs hsm-vlagent`); both named volumes may be deleted to reclaim disk — data in `victorialogs-data` is lost by design. Delete the structured-log JSON files too: nothing rotates them anymore, so `rm -f Logs/HSM-structured-log-current.json Logs/Archives/HSM-structured-log-*.json` (up to ~6 GiB otherwise left on disk permanently). Leftover `.env` keys (`COMPOSE_PROFILES`, `VL_RETENTION_*`, `HSM_STRUCTURED_LOGS`) are inert and can be dropped.
+* The ASP.NET Core Data Protection key ring (auth cookies, antiforgery tokens) persists in the mounted `Config/DataProtection-Keys/` — cookie sessions and form submits survive a container recreate (image upgrade, compose change). Existing installs need no compose change; the update **to** this version performs one final forced re-login. Do not delete `Config/DataProtection-Keys/` afterwards (#1633).
+* Chrome no longer logs a Permissions-policy violation on tree pages (deprecated `unload` handler removed) (#1579).
+* A stale merge-conflict artifact (`_AlertSchedule.cshtml.orig`) no longer ships in clones; `*.orig`/`*.rej`/`*.bak` are git-ignored (#1640).
 
 ## Dependencies
-* Bundled HSMDataCollector 3.5.0 and HsmAgent 0.5.28 (both unchanged since 3.41.6).
+* Bundled HSMDataCollector 3.5.0, HsmAgent 0.5.28 and the Linux probe 0.10.0 — all unchanged since 3.41.9.
