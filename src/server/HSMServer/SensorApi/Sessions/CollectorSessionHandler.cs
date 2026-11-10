@@ -311,12 +311,15 @@ namespace HSMServer.SensorApi.Sessions
                     return false;
                 }
 
-                var isPing = request.Id is null && request.Op == SessionProtocol.OpPing;
+                // A heartbeat is known by its op. The contract gives it no id, but one that
+                // carries an id is still a heartbeat, not an unknown request.
+                var isPing = request.Op == SessionProtocol.OpPing;
+
+                if (request.Op == SessionProtocol.OpPong)
+                    return true;
 
                 if (request.Id is null && !isPing)
                 {
-                    if (request.Op == SessionProtocol.OpPong)
-                        return true;
 
                     // Without an id there is nothing to acknowledge, so the collector could
                     // never learn what became of the frame. Refuse loudly instead of

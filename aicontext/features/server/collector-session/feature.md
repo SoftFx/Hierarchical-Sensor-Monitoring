@@ -50,6 +50,8 @@ Which transport a collector uses is a setting of the collector (`http` or `sessi
 
 ### Refusals of the upgrade
 
+The access key is resolved first, by the same middleware as for every Sensor API request, so an unknown or malformed key is `406` whatever else is true, also when sessions are off.
+
 | Condition | Status |
 |---|---|
 | Sessions are off (`MaxSessions = 0`) | 404 |
@@ -140,6 +142,7 @@ Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSoc
 
 ## Known Issues / Limitations
 
+- **One key can take every slot.** The cap counts sessions on the whole server, and nothing limits how many one access key, product or address holds. A collector that reconnects in a loop without closing, or anyone holding one valid key, can fill the cap and stop every other collector on a session from delivering. A limit per key does not fit as it is, because all collectors of a product normally share one key. What the limit should be per is an open decision.
 - The registry is not shown anywhere in the UI.
 - `Open sessions` has no default alert for approaching the cap; the `Warn` above and the sensor's value are the signals.
 - A connection that dies without a close keeps its slot until the silence limit (90 seconds by default). After a network event that drops many connections at once, collectors that reconnect within that time can be refused while the cap is not really reached; they keep their data and try again.

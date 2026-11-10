@@ -278,6 +278,11 @@ namespace HSMServer.Core.Tests.SensorApi
             await SendAsync(socket, "{\"op\":\"ping\"}");
 
             Assert.Equal("{\"op\":\"pong\"}", await ReceiveTextAsync(socket));
+
+            // A collector that numbers every frame it sends: still a heartbeat, not a request.
+            await SendAsync(socket, "{\"id\":41,\"op\":\"ping\"}");
+
+            Assert.Equal("{\"op\":\"pong\"}", await ReceiveTextAsync(socket));
         }
 
         [Theory]
