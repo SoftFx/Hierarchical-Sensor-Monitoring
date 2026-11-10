@@ -249,6 +249,12 @@ namespace HSMServer.SensorApi.Sessions
 
                 silence.Disarm();
 
+                // The watch may have fired just as the frame completed: the session is then
+                // over, and acting on the frame would store a batch whose ack can no longer
+                // be sent. Left alone, the collector sends it again and nothing is doubled.
+                if (session.EndReason is not null)
+                    return;
+
                 switch (frame.Kind)
                 {
                     case SessionFrameKind.Close:
@@ -461,8 +467,12 @@ namespace HSMServer.SensorApi.Sessions
             {
                 body = request.Body.Deserialize<T>(options);
             }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or NotSupportedException)
+            catch (Exception)
             {
+                // Whatever a converter throws on a body it cannot read: the hand-written ones
+                // parse fields themselves and throw ArgumentException, OverflowException and
+                // others besides JsonException. All of it is a malformed body, answered with
+                // 400; none of it may end the session.
                 return false;
             }
 

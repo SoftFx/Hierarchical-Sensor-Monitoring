@@ -211,6 +211,17 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(400, (int)missing["status"]);
             Assert.Equal("malformed body", (string)missing["error"]);
 
+            // A value the hand-written version converter cannot read throws something other
+            // than a JSON error. It is a malformed body all the same, not the end of the session.
+            foreach (var version in new[] { "{\"Type\":8,\"Value\":\"abc\",\"Time\":\"2026-11-10T10:00:00Z\",\"Status\":1,\"Path\":\"failure/version\"}", "{\"Type\":8,\"Value\":\"1.2.3\",\"Path\":\"failure/version\"}" })
+            {
+                await SendAsync(socket, $"{{\"id\":6,\"op\":\"list\",\"body\":[{version}]}}");
+                var refused = await ReceiveAsync(socket);
+
+                Assert.Equal(400, (int)refused["status"]);
+                Assert.Equal("malformed body", (string)refused["error"]);
+            }
+
             // The session survives a refused request.
             await SendAsync(socket, "{\"op\":\"ping\"}");
             Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
