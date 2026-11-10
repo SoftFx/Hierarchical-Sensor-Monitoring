@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.11.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.11.3 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -272,6 +272,19 @@ enable_testing()
 if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_transport_posts_to_capture_server
+    )
+    # #1653: connection reuse across requests (handle pool), and its failure modes.
+    add_test(NAME native_http_transport_reuses_connection
+        COMMAND hsm_collector_tests native_http_transport_reuses_connection
+    )
+    add_test(NAME native_http_transport_concurrent_posts_reuse_connections
+        COMMAND hsm_collector_tests native_http_transport_concurrent_posts_reuse_connections
+    )
+    add_test(NAME native_http_transport_drops_handle_after_cancel
+        COMMAND hsm_collector_tests native_http_transport_drops_handle_after_cancel
+    )
+    add_test(NAME native_http_transport_survives_server_dropping_kept_connection
+        COMMAND hsm_collector_tests native_http_transport_survives_server_dropping_kept_connection
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server

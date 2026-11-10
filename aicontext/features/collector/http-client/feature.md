@@ -1,6 +1,6 @@
 # Feature: HTTP Client
 
-> Owner: collector | Last reviewed: 2026-06-23 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-11-10 | Canonical: yes
 > Scope: Collector - HTTPS transport with Polly retry for sending sensor data
 
 ---
@@ -17,6 +17,7 @@
 - `AllowUntrustedServerCertificate` must be explicitly set to `true` to bypass TLS validation. Default is `false` (secure by default).
 - Auth headers on every request: `Key: <AccessKey>`, `ClientName: <ClientName>`.
 - `RequestTimeout` (default 30s) is set on `HttpClient.Timeout`.
+- **Connection reuse (both collectors).** Sends ride a kept connection, not a new TCP+TLS handshake per request. Managed: one pooled `HttpClient` connection, retired after 5 minutes (`PooledConnectionLifetime`; `ServicePoint.ConnectionLeaseTimeout` on net472) so DNS is resolved again (#1102-E4). Native: `HttpTransport` pools its libcurl easy handles (at most two idle) and resets them between requests, with the same 5-minute bound (`CURLOPT_MAXLIFETIME_CONN`) and TCP keep-alive on; a handle whose transfer failed or was cancelled is destroyed, never pooled (#1653). There is still no application-level session: the server cannot push to a collector and learns that one went away only from TTL.
 - `HttpResponseMessage` is always disposed after use (`using` blocks).
 - `HttpContent` is disposed after sending (in `ExecutePipelineAsync`).
 - Polly retry per handler: data/priority/file — 10 attempts, exponential backoff 1 s → 2 min; commands — `int.MaxValue` attempts, linear backoff.
@@ -63,7 +64,7 @@ All under `https://{server}:{port}/api/sensors/`:
 
 The native collector (`src/native/collector`) emits the **byte-identical** wire stream (see `../../api/wire-contract/feature.md`) and ships a real HTTP transport that mirrors this client:
 
-- `hsm_http_transport.{hpp,cpp}` — a libcurl easy-handle wrapper (`Post`/`Get`), confined to one TU so the rest of the core never sees `<curl/curl.h>` and the `-Werror`/`/WX` gate stays green. `CURLOPT_TIMEOUT_MS` ↔ `RequestTimeout`, `CURLOPT_SSL_VERIFYPEER` ↔ `AllowUntrustedServerCertificate`, `CURLOPT_XFERINFOFUNCTION`-abort ↔ `CancelPendingRequests`. Built only when `HSM_COLLECTOR_HTTP=ON` (curl via vcpkg manifest); the default build is curl-free.
+- `hsm_http_transport.{hpp,cpp}` — a libcurl easy-handle wrapper (`Post`/`Get`) with a small pool of kept handles (#1653: before 0.11.3 every request created and destroyed its own handle, i.e. its own connection), confined to one TU so the rest of the core never sees `<curl/curl.h>` and the `-Werror`/`/WX` gate stays green. `CURLOPT_TIMEOUT_MS` ↔ `RequestTimeout`, `CURLOPT_SSL_VERIFYPEER` ↔ `AllowUntrustedServerCertificate`, `CURLOPT_XFERINFOFUNCTION`-abort ↔ `CancelPendingRequests`. Built only when `HSM_COLLECTOR_HTTP=ON` (curl via vcpkg manifest); the default build is curl-free.
 - `hsm_http_endpoints.hpp` — pure route table + scheme defaulting (bare host → https; explicit `http` kept only with `AllowPlaintextTransport`), and per-kind / batch / command routing identical to `DataHandlers`/`CommandHandler.GetUri`.
 - `hsm_http_retry.hpp` — the retry policy with the same `ShouldRetry` semantics (bounded 5xx retry, unbounded commands exceptions-only, 4xx never).
 

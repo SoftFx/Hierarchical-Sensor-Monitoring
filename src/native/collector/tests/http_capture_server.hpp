@@ -337,6 +337,8 @@ namespace hsm::test
         }
 
     private:
+        friend class HttpKeepAliveServer; // reuses ReadRequest
+
         void AcceptLoop()
         {
             while (!stop_.load(std::memory_order_acquire))
@@ -473,5 +475,157 @@ namespace hsm::test
         std::vector<Recorded> requests_;
         std::string fail_path_prefix_; // guarded by mutex_
         int fail_remaining_ = 0;       // guarded by mutex_
+    };
+
+    // Keep-alive variant for the connection-reuse tests (#1653). Every request is answered 200
+    // WITHOUT `Connection: close`, so an HTTP/1.1 client may keep the connection, and ACCEPTED
+    // CONNECTIONS are counted separately from requests: the only way a test can tell "N requests
+    // on one connection" from "N connections". Each connection is served on its own thread, so
+    // concurrent clients are fine (unlike HttpRecordingServer).
+    // `drop_after_response`: still answer without `Connection: close`, then close the socket. That
+    // is a server or proxy dropping a kept connection without telling the client.
+    class HttpKeepAliveServer
+    {
+    public:
+        explicit HttpKeepAliveServer(bool drop_after_response = false)
+            : drop_after_response_(drop_after_response)
+        {
+#if defined(_WIN32)
+            WSADATA wsa;
+            WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+            listen_ = socket(AF_INET, SOCK_STREAM, 0);
+            if (listen_ == INVALID_SOCKET)
+                return; // Port() stays 0: the test fails on the first connect
+
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = 0; // ephemeral
+
+            int yes = 1;
+            setsockopt(listen_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
+            if (bind(listen_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 || listen(listen_, 16) != 0)
+            {
+                closesocket(listen_);
+                listen_ = INVALID_SOCKET;
+                return;
+            }
+
+            sockaddr_in bound{};
+            socklen_t len = sizeof(bound);
+            getsockname(listen_, reinterpret_cast<sockaddr*>(&bound), &len);
+            port_ = ntohs(bound.sin_port);
+
+            worker_ = std::thread([this] { AcceptLoop(); });
+        }
+
+        ~HttpKeepAliveServer()
+        {
+            stop_.store(true, std::memory_order_release);
+            if (worker_.joinable())
+                worker_.join();
+            for (auto& connection : connections_)
+                if (connection.joinable())
+                    connection.join();
+            if (listen_ != INVALID_SOCKET)
+                closesocket(listen_);
+#if defined(_WIN32)
+            WSACleanup();
+#endif
+        }
+
+        HttpKeepAliveServer(const HttpKeepAliveServer&) = delete;
+        HttpKeepAliveServer& operator=(const HttpKeepAliveServer&) = delete;
+
+        int Port() const { return port_; }
+
+        // Connections accepted so far (not the number currently open).
+        int Connections() const { return accepted_.load(std::memory_order_acquire); }
+
+        std::vector<HttpRecordingServer::Recorded> Requests() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return requests_;
+        }
+
+    private:
+        // Wait until `sock` is readable; false when the server is stopping or the socket failed.
+        bool WaitReadable(socket_t sock) const
+        {
+            while (!stop_.load(std::memory_order_acquire))
+            {
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(sock, &readfds);
+
+                timeval tv{};
+                tv.tv_sec = 0;
+                tv.tv_usec = 50000; // 50 ms, then re-check stop_
+
+#if defined(_WIN32)
+                const int nfds = 0;
+#else
+                const int nfds = sock + 1;
+#endif
+                const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
+                if (ready < 0)
+                {
+#if !defined(_WIN32)
+                    if (errno == EINTR)
+                        continue;
+#endif
+                    return false;
+                }
+                if (ready > 0)
+                    return true;
+            }
+            return false;
+        }
+
+        void AcceptLoop()
+        {
+            while (WaitReadable(listen_))
+            {
+                const socket_t conn = accept(listen_, nullptr, nullptr);
+                if (conn == INVALID_SOCKET)
+                    continue;
+
+                accepted_.fetch_add(1, std::memory_order_release);
+                connections_.emplace_back([this, conn] { ServeConnection(conn); });
+            }
+        }
+
+        // Serve requests on one connection until the peer closes it or the server stops.
+        void ServeConnection(socket_t conn)
+        {
+            while (WaitReadable(conn))
+            {
+                HttpRecordingServer::Recorded recorded;
+                if (!HttpRecordingServer::ReadRequest(conn, recorded))
+                    break; // peer closed (recv 0) or sent something unparseable
+
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    requests_.push_back(std::move(recorded));
+                }
+
+                static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+                send(conn, ok.c_str(), static_cast<int>(ok.size()), 0);
+                if (drop_after_response_)
+                    break;
+            }
+            closesocket(conn);
+        }
+
+        bool drop_after_response_;
+        socket_t listen_ = INVALID_SOCKET;
+        int port_ = 0;
+        std::atomic<bool> stop_{ false };
+        std::atomic<int> accepted_{ 0 };
+        std::thread worker_;
+        std::vector<std::thread> connections_; // accept-thread only until the join in the destructor
+        mutable std::mutex mutex_;
+        std::vector<HttpRecordingServer::Recorded> requests_;
     };
 } // namespace hsm::test

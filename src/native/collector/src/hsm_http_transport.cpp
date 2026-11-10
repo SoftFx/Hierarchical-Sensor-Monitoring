@@ -62,80 +62,124 @@ namespace hsm::http
         {
             return static_cast<std::atomic<bool>*>(clientp)->load() ? 1 : 0;
         }
+    } // namespace
 
-        HttpResponse Perform(
-            const std::string& url,
-            const std::vector<HttpHeader>& headers,
-            int64_t timeout_ms,
-            bool verify_peer,
-            std::atomic<bool>& cancelled,
-            bool is_post,
-            const std::string& body)
+    void* HttpTransport::AcquireHandle()
+    {
         {
-            HttpResponse response;
-
-            CURL* curl = curl_easy_init();
-            if (curl == nullptr)
+            std::lock_guard<std::mutex> guard(idle_mutex_);
+            if (!idle_handles_.empty())
             {
-                response.error = "curl_easy_init failed";
-                return response;
+                void* handle = idle_handles_.back();
+                idle_handles_.pop_back();
+                return handle;
             }
+        }
+        return curl_easy_init();
+    }
 
-            // curl_slist_append returns nullptr on allocation failure WITHOUT freeing the existing
-            // list — overwriting header_list with that null would leak the earlier nodes and
-            // silently drop already-appended headers. Append into a temp and only commit on success.
-            curl_slist* header_list = nullptr;
-            for (const auto& header : headers)
+    void HttpTransport::ReleaseHandle(void* handle, bool reusable)
+    {
+        if (reusable)
+        {
+            std::lock_guard<std::mutex> guard(idle_mutex_);
+            if (idle_handles_.size() < kMaxIdleHandles)
             {
-                curl_slist* appended = curl_slist_append(header_list, (header.name + ": " + header.value).c_str());
-                if (appended == nullptr)
-                {
-                    curl_slist_free_all(header_list);
-                    curl_easy_cleanup(curl);
-                    response.error = "curl_slist_append failed";
-                    return response;
-                }
-                header_list = appended;
+                idle_handles_.push_back(handle);
+                return;
             }
+        }
+        // Not reusable (failed/cancelled transfer) or the pool is full: closing the handle closes
+        // its connection. Done outside the lock — it can block on a TLS shutdown.
+        curl_easy_cleanup(static_cast<CURL*>(handle));
+    }
 
-            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
-            curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallback);
-            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response.response_headers);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_ms));
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer ? 1L : 0L);
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_peer ? 2L : 0L);
-            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, XferCallback);
-            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cancelled);
+    HttpResponse HttpTransport::Perform(
+        const std::string& url,
+        const std::vector<HttpHeader>& headers,
+        int64_t timeout_ms,
+        bool is_post,
+        const std::string& body)
+    {
+        HttpResponse response;
 
-            if (is_post)
-            {
-                curl_easy_setopt(curl, CURLOPT_POST, 1L);
-                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-                curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-            }
-
-            const CURLcode rc = curl_easy_perform(curl);
-            if (rc == CURLE_OK)
-            {
-                long code = 0;
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-                response.transport_ok = true;
-                response.status_code = code;
-            }
-            else
-            {
-                response.error = curl_easy_strerror(rc);
-            }
-
-            curl_slist_free_all(header_list);
-            curl_easy_cleanup(curl);
+        CURL* curl = static_cast<CURL*>(AcquireHandle());
+        if (curl == nullptr)
+        {
+            response.error = "curl_easy_init failed";
             return response;
         }
-    } // namespace
+        // A pooled handle still carries the previous request's options (URL, headers, POST
+        // body pointers into freed memory). Reset drops every option but keeps what makes the
+        // handle worth pooling: live connections, the TLS session cache and the DNS cache.
+        curl_easy_reset(curl);
+
+        // curl_slist_append returns nullptr on allocation failure WITHOUT freeing the existing
+        // list — overwriting header_list with that null would leak the earlier nodes and
+        // silently drop already-appended headers. Append into a temp and only commit on success.
+        curl_slist* header_list = nullptr;
+        for (const auto& header : headers)
+        {
+            curl_slist* appended = curl_slist_append(header_list, (header.name + ": " + header.value).c_str());
+            if (appended == nullptr)
+            {
+                curl_slist_free_all(header_list);
+                ReleaseHandle(curl, /*reusable=*/true); // nothing was sent; the handle is intact
+                response.error = "curl_slist_append failed";
+                return response;
+            }
+            header_list = appended;
+        }
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response.response_headers);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_ms));
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer_ ? 1L : 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_peer_ ? 2L : 0L);
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, XferCallback);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cancelled_);
+        // Kept-connection hygiene (#1653). TCP keep-alive probes let the stack notice a dead
+        // peer between sends; the lifetime bound retires a busy connection so a moved server
+        // (new DNS answer) is picked up, as the managed client does every 5 minutes.
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+#if LIBCURL_VERSION_NUM >= 0x075000 // CURLOPT_MAXLIFETIME_CONN: libcurl 7.80.0+
+        curl_easy_setopt(curl, CURLOPT_MAXLIFETIME_CONN, kConnectionLifetimeSeconds);
+#endif
+
+        if (is_post)
+        {
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+        }
+
+        const CURLcode rc = curl_easy_perform(curl);
+        if (rc == CURLE_OK)
+        {
+            long code = 0;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+            response.transport_ok = true;
+            response.status_code = code;
+        }
+        else
+        {
+            response.error = curl_easy_strerror(rc);
+        }
+
+        curl_slist_free_all(header_list);
+        // The header list is freed above, so the handle must not be performed again without
+        // the reset at the top of this function. A transfer that failed at the transport level
+        // (connect error, timeout, cancel) may leave a half-dead connection in the handle's
+        // cache: destroy it rather than pool it. An HTTP error status is a completed exchange
+        // on a healthy connection and keeps the handle.
+        ReleaseHandle(curl, /*reusable=*/rc == CURLE_OK);
+        return response;
+    }
 
     HttpTransport::HttpTransport(int64_t timeout_ms, bool verify_peer)
         : timeout_ms_(timeout_ms), verify_peer_(verify_peer)
@@ -143,7 +187,13 @@ namespace hsm::http
         EnsureCurlGlobal();
     }
 
-    HttpTransport::~HttpTransport() = default;
+    HttpTransport::~HttpTransport()
+    {
+        // No request is in flight here: the collector joins its senders before dropping the
+        // transport (the same contract cancelled_ already relied on).
+        for (void* handle : idle_handles_)
+            curl_easy_cleanup(static_cast<CURL*>(handle));
+    }
 
     void HttpTransport::Cancel()
     {
@@ -157,7 +207,7 @@ namespace hsm::http
 
     HttpResponse HttpTransport::Post(const std::string& url, const std::string& json_body, const std::vector<HttpHeader>& headers)
     {
-        return Perform(url, headers, timeout_ms_, verify_peer_, cancelled_, /*is_post=*/true, json_body);
+        return Perform(url, headers, timeout_ms_, /*is_post=*/true, json_body);
     }
 
     HttpResponse HttpTransport::Post(
@@ -172,11 +222,11 @@ namespace hsm::http
         // routine path. Caveat for sub-second values: with libcurl's standard synchronous resolver
         // (no threaded resolver / c-ares) the DNS phase keeps whole-second resolution, so a build
         // configured that way can overshoot a sub-second budget by up to ~1 s on a name lookup.
-        return Perform(url, headers, timeout_ms > 0 ? timeout_ms : 1, verify_peer_, cancelled_, /*is_post=*/true, json_body);
+        return Perform(url, headers, timeout_ms > 0 ? timeout_ms : 1, /*is_post=*/true, json_body);
     }
 
     HttpResponse HttpTransport::Get(const std::string& url, const std::vector<HttpHeader>& headers)
     {
-        return Perform(url, headers, timeout_ms_, verify_peer_, cancelled_, /*is_post=*/false, std::string{});
+        return Perform(url, headers, timeout_ms_, /*is_post=*/false, std::string{});
     }
 } // namespace hsm::http

@@ -156,6 +156,16 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.3** (#1653) — transport change, ABI unchanged. The HTTP transport keeps its connection
+  between requests instead of opening a new TCP+TLS connection for every send: libcurl easy handles
+  are pooled per `HttpTransport` (two idle at most) and reset between requests, so sequential sends
+  ride one connection, as the managed client's pooled keep-alive connection does. A kept connection
+  is retired after 5 minutes so DNS is resolved again (the managed `PooledConnectionLifetime`
+  bound), TCP keep-alive is on, and a handle whose transfer failed or was cancelled is destroyed
+  rather than pooled. Pinned by `native_http_transport_reuses_connection`,
+  `native_http_transport_concurrent_posts_reuse_connections`,
+  `native_http_transport_drops_handle_after_cancel` and
+  `native_http_transport_survives_server_dropping_kept_connection`.
 - **0.11.2** (#1593) — endpoint rendering parity with the managed collector, ABI unchanged. `MakeEndpoints`
   omits a port equal to the effective scheme's default (https 443, http 80) from the connection address,
   exactly as the managed `Uri` renders it, so the default endpoint since #1590 (port 443) is

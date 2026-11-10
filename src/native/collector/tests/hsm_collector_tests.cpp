@@ -6178,6 +6178,106 @@ namespace
         Require(request.body == body, "captured body must be the exact wire bytes sent");
     }
 
+    // #1653: sequential requests through one transport ride ONE kept connection. Before the fix
+    // every request used a fresh easy handle, i.e. a fresh TCP (and, in production, TLS) handshake
+    // per send. The trailing GET also proves the pooled handle is reset between requests: without
+    // the reset it would repeat the previous POST.
+    void NativeHttpTransportReusesConnection()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string base = "http://127.0.0.1:" + std::to_string(server.Port());
+        const std::vector<hsm::http::HttpHeader> headers{ hsm::http::HttpHeader{ "Content-Type", "application/json" } };
+
+        for (int i = 0; i < 5; ++i)
+        {
+            const auto response = transport.Post(base + "/api/sensors/list", "[" + std::to_string(i) + "]", headers);
+            Require(response.IsSuccess(), ("kept-connection POST must succeed: " + response.error).c_str());
+        }
+
+        const auto probe = transport.Get(base + "/api/sensors/testConnection", {});
+        Require(probe.IsSuccess(), ("GET on the reused handle must succeed: " + probe.error).c_str());
+
+        const auto requests = server.Requests();
+        Require(requests.size() == 6, "the server must have seen all six requests");
+        for (size_t i = 0; i < 5; ++i)
+            Require(requests[i].body == "[" + std::to_string(i) + "]", "each POST must carry its own body");
+        Require(requests[5].path == "/api/sensors/testConnection", "the last request must be the GET");
+        Require(requests[5].body.empty(), "the GET must not repeat the previous POST body");
+        Require(server.Connections() == 1, "sequential requests must reuse one connection");
+    }
+
+    // #1653: concurrent callers still get a handle each (no shared easy handle), and the pool never
+    // grows past the number of concurrent callers: two threads mean at most two connections.
+    void NativeHttpTransportConcurrentPostsReuseConnections()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+        constexpr int kPostsPerThread = 20;
+        std::atomic<int> failures{ 0 };
+
+        const auto run = [&] {
+            for (int i = 0; i < kPostsPerThread; ++i)
+                if (!transport.Post(url, "[]", {}).IsSuccess())
+                    failures.fetch_add(1);
+        };
+        std::thread first(run);
+        std::thread second(run);
+        first.join();
+        second.join();
+
+        Require(failures.load() == 0, "every concurrent POST must succeed");
+        Require(server.Requests().size() == 2 * kPostsPerThread, "the server must have seen every POST");
+        Require(server.Connections() >= 1 && server.Connections() <= 2, "two callers must use at most two connections");
+    }
+
+    // #1653: a handle whose transfer was cancelled is destroyed, not pooled, so the send after
+    // ResetCancel() starts on a fresh connection instead of whatever the aborted one left behind.
+    void NativeHttpTransportDropsHandleAfterCancel()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+
+        Require(transport.Post(url, "[1]", {}).IsSuccess(), "the first POST must succeed");
+        Require(server.Connections() == 1, "the first POST opens the connection");
+
+        transport.Cancel();
+        Require(!transport.Post(url, "[2]", {}).transport_ok, "a POST started while cancelled must be aborted");
+        transport.ResetCancel();
+
+        const auto response = transport.Post(url, "[3]", {});
+        Require(response.IsSuccess(), ("the POST after ResetCancel must succeed: " + response.error).c_str());
+        Require(server.Connections() == 2, "the POST after a cancel must not reuse the aborted handle's connection");
+    }
+
+    // #1653: the price of keeping a connection is that the server may drop it while it is idle
+    // (proxy idle timeout, server restart). The send that finds it dead must still succeed (the
+    // transport reconnects) rather than surface a failure for every dropped connection.
+    void NativeHttpTransportSurvivesServerDroppingKeptConnection()
+    {
+        hsm::test::HttpKeepAliveServer server(/*drop_after_response=*/true);
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto response = transport.Post(url, "[" + std::to_string(i) + "]", {});
+            Require(response.IsSuccess(), ("a POST over a dropped kept connection must reconnect: " + response.error).c_str());
+        }
+
+        const auto requests = server.Requests();
+        Require(requests.size() == 3, "each POST must be delivered exactly once");
+        for (size_t i = 0; i < 3; ++i)
+            Require(requests[i].body == "[" + std::to_string(i) + "]", "POSTs must arrive in order, none duplicated");
+        Require(server.Connections() == 3, "each POST after a drop must open a new connection");
+    }
+
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
     // with the libcurl transport installed, and assert the capture server saw the live POST. This
     // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
@@ -8303,6 +8403,10 @@ namespace
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
+            { "native_http_transport_reuses_connection", [](const std::string&) { NativeHttpTransportReusesConnection(); } },
+            { "native_http_transport_concurrent_posts_reuse_connections", [](const std::string&) { NativeHttpTransportConcurrentPostsReuseConnections(); } },
+            { "native_http_transport_drops_handle_after_cancel", [](const std::string&) { NativeHttpTransportDropsHandleAfterCancel(); } },
+            { "native_http_transport_survives_server_dropping_kept_connection", [](const std::string&) { NativeHttpTransportSurvivesServerDroppingKeptConnection(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
