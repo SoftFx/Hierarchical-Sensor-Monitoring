@@ -65,7 +65,7 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 
 **Wire shapes** (`SensorTreeDtoMapperTests`):
 
-- The typed value envelope for every sensor type: scalars native (bool/int/double/string, TimeSpan "7.02:03:04", Version "1.2.3.4", Rate double); Enum `{value, label}` with the label resolved from registered options and NULL for unregistered; Bar `{min,max,mean,count}` for IntegerBar and DoubleBar; File metadata only (`{name, extension, size}` — never a `byte[]`, asserted by type).
+- The typed value envelope for every sensor type: scalars native (bool/int/double/string, TimeSpan "7.02:03:04", Version "1.2.3.4", Rate double); Enum `{value, label}` with the label resolved from registered options and NULL for unregistered; Bar `{min,max,mean,stdDev,count}` for IntegerBar and DoubleBar (`stdDev` NULL when unknown or non-finite); File metadata only (`{name, extension, size}` — never a `byte[]`, asserted by type).
 - Envelope carries time/status/comment with the UTC kind pinned.
 - Unit resolution: `OriginalUnit` display name ("%"), the Rate default denominator ("# per sec"), null otherwise.
 - Enum options mapped ordered by value with label+description; null `enumOptions` for non-Enum sensors.
