@@ -116,7 +116,7 @@ namespace hsm::http
         void RunLoop();
         // Serves one open session until it ends. Returns why it ended, empty when stopping.
         std::string Serve(WebSocketConnection& connection);
-        bool ReadHello(WebSocketConnection& connection, std::string& why);
+        bool ReadHello(WebSocketConnection& connection, int64_t timeout_ms, std::string& why);
         void HandleFrame(const std::string& text);
         void FailAll(const std::string& why);
         // Waits before the next attempt; false when stopping.
@@ -131,7 +131,7 @@ namespace hsm::http
         std::unordered_map<uint64_t, std::shared_ptr<Pending>> pending_; // requests waiting for an ack
         std::shared_ptr<WebSocketConnection> connection_;                // the one being opened or served
         std::string down_reason_;                                        // why there is no session, for the error of a refused request
-        uint64_t next_id_ = 1;
+        std::atomic<uint64_t> next_id_{ 1 };
         size_t max_frame_bytes_ = 0;
         int64_t heartbeat_ms_ = 30000;
         int64_t linger_ms_ = 0;

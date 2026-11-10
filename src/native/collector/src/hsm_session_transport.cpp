@@ -19,13 +19,19 @@ namespace hsm::http
 
         // How long the session thread waits for an inbound frame before it looks at the outgoing
         // queue again. It is also the longest a request waits before its frame is written: the
-        // connection has no wake-up for outgoing data.
-        constexpr int64_t kPollMs = 50;
+        // connection has no wake-up for outgoing data. While requests are waiting for acks more
+        // frames are likely to follow (a batch sent in several), so the wait is short then.
+        constexpr int64_t kIdlePollMs = 50;
+        constexpr int64_t kBusyPollMs = 5;
         // One frame must be written within this, or the session is given up.
         constexpr int64_t kSendTimeoutMs = 10000;
 
         constexpr int64_t kMinBackoffMs = 1000;
         constexpr int64_t kMaxBackoffMs = 60000;
+        // A session that lasted this long was a working one: the next reconnect starts the
+        // backoff again. One that ends sooner (the server takes the upgrade and then closes on
+        // the first frame) keeps backing off, or it would be reopened every second for ever.
+        constexpr int64_t kStableSessionMs = 60000;
         // What Stop gives the session thread on top of the linger before it cancels the connection.
         constexpr int64_t kStopGraceMs = 1000;
 
@@ -166,7 +172,13 @@ namespace hsm::http
     {
         SessionResult failed;
         std::shared_ptr<Pending> pending;
-        uint64_t id = 0;
+
+        // Built before the lock: a frame can be megabytes, and the session thread needs the lock
+        // to complete acks. An id spent on a request that is then refused is harmless.
+        const uint64_t id = next_id_.fetch_add(1, std::memory_order_relaxed);
+        std::string frame = "{\"id\":" + std::to_string(id) + ",\"op\":\"" + op + "\",\"body\":";
+        frame += body;
+        frame += '}';
 
         std::unique_lock<std::mutex> lock(mutex_);
         if (cancelled_)
@@ -179,11 +191,6 @@ namespace hsm::http
             failed.error = down_reason_.empty() ? std::string(kNoSession) : std::string(kNoSession) + ": " + down_reason_;
             return failed;
         }
-
-        id = next_id_++;
-        std::string frame = "{\"id\":" + std::to_string(id) + ",\"op\":\"" + op + "\",\"body\":";
-        frame += body;
-        frame += '}';
         if (frame.size() > max_frame_bytes_)
         {
             failed.error = "the frame is larger than the session allows";
@@ -241,11 +248,11 @@ namespace hsm::http
         return !cv_.wait_for(lock, std::chrono::milliseconds(delay), [this] { return stop_; });
     }
 
-    bool SessionTransport::ReadHello(WebSocketConnection& connection, std::string& why)
+    bool SessionTransport::ReadHello(WebSocketConnection& connection, int64_t timeout_ms, std::string& why)
     {
         std::string text;
         std::string error;
-        if (connection.Receive(text, options_.open_timeout_ms, error) != WebSocketReceive::Text)
+        if (connection.Receive(text, timeout_ms, error) != WebSocketReceive::Text)
         {
             why = "no hello frame from the server" + (error.empty() ? std::string{} : ": " + error);
             return false;
@@ -309,6 +316,7 @@ namespace hsm::http
         {
             std::deque<std::pair<uint64_t, std::string>> to_send;
             int64_t heartbeat_ms = 0;
+            bool awaiting_acks = false;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
                 if (stop_)
@@ -320,6 +328,7 @@ namespace hsm::http
                 }
                 to_send.swap(outgoing_);
                 heartbeat_ms = heartbeat_ms_;
+                awaiting_acks = !pending_.empty();
             }
 
             std::string error;
@@ -331,7 +340,7 @@ namespace hsm::http
             }
 
             std::string text;
-            switch (connection.Receive(text, kPollMs, error))
+            switch (connection.Receive(text, awaiting_acks ? kBusyPollMs : kIdlePollMs, error))
             {
             case WebSocketReceive::Text:
                 last_in = Clock::now();
@@ -411,13 +420,15 @@ namespace hsm::http
             }
 
             std::string why;
+            const auto open_started = Clock::now();
             const auto opened = connection->Open(options_.url, options_.headers, kSubprotocol, options_.open_timeout_ms);
             bool up = opened.ok;
             if (!up)
                 why = "the upgrade failed" + (opened.status_code != 0 ? " with HTTP " + std::to_string(opened.status_code) : std::string{}) +
                       (opened.error.empty() ? std::string{} : ": " + opened.error);
             else
-                up = ReadHello(*connection, why);
+                // The hello gets what the open left of the attempt's budget, and at least a second.
+                up = ReadHello(*connection, (std::max<int64_t>)(options_.open_timeout_ms - ElapsedMs(open_started), 1000), why);
 
             if (up)
             {
@@ -427,15 +438,20 @@ namespace hsm::http
                     std::lock_guard<std::mutex> guard(mutex_);
                     up_ = true;
                     down_reason_.clear();
+                    // A request that gave up on the previous session after that session had
+                    // already ended must not end this one.
+                    reset_requested_ = false;
                     frame_bytes = max_frame_bytes_;
                     heartbeat_ms = heartbeat_ms_;
                 }
                 Log(SessionLogLevel::Info, "The collector session is up (frame limit " + std::to_string(frame_bytes) + " bytes, heartbeat " +
                                                std::to_string(heartbeat_ms / 1000) + " s).");
-                attempt = 0;
                 reported.clear();
 
+                const auto served_since = Clock::now();
                 why = Serve(*connection);
+                if (ElapsedMs(served_since) >= kStableSessionMs)
+                    attempt = 0;
 
                 int64_t linger_ms = 0;
                 bool stopping = false;

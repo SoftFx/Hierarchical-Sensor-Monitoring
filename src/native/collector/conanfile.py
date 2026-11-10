@@ -38,6 +38,8 @@ class HsmCollectorConan(ConanFile):
     def requirements(self):
         # libcurl is a private dependency of the static core, pulled in only for the HTTP transport.
         if self.options.http:
+            # 8.10.1 is older than the 8.14.0 a collector session needs: a Conan build has the HTTP
+            # transport only, and hsm_collector_use_session_transport reports that at Start.
             self.requires("libcurl/8.10.1")
             # The session transport reads the server's JSON frames with it. Header-only.
             self.requires("nlohmann_json/3.11.3")

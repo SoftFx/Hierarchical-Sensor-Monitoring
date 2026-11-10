@@ -167,8 +167,8 @@ Version history:
   session. The collector reconnects with a jittered backoff (1 s to 60 s), sends a heartbeat when
   it has been quiet for the interval the server announced, and gives a session up after two and a
   half intervals of server silence or when a request gets no ack within the request timeout. A
-  batch larger than the server's frame limit travels in several frames; if a later frame fails,
-  only the unacknowledged part goes back to the queue. File values are refused before the queue
+  batch larger than the server's frame limit travels in several frames (values and registrations
+  alike); if a later frame fails, only the unacknowledged part goes back to the queue. File values are refused before the queue
   (counted in `Queue overflow`): the session has no op for them yet. Needs a libcurl with WebSocket
   (8.14.0 or newer); with an older one Start logs one error and nothing is delivered until the
   setting or libcurl changes. The HTTP build gains a build dependency, the header-only

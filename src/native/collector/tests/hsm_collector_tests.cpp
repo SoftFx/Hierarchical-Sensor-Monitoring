@@ -7152,6 +7152,110 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
 
+    // A registration batch larger than the frame the server allows is posted in several frames,
+    // every one within the limit, and every sensor is registered.
+    void NativeSessionSplitsARegistrationBatchToTheFrameLimit()
+    {
+        if (!WsAvailable("native_session_splits_a_registration_batch_to_the_frame_limit"))
+            return;
+
+        constexpr int kFrameBytes = 2048;
+        constexpr int kSensors = 24;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+
+        std::vector<SensorHandle> sensors;
+        std::vector<std::string> paths;
+        for (int i = 0; i < kSensors; ++i)
+        {
+            paths.push_back("session/registration/a-sensor-with-a-long-enough-path/number-" + std::to_string(100 + i));
+            sensors.push_back(CreateIntSensor(collector.value, paths.back().c_str()));
+        }
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        for (const auto& path : paths)
+        {
+            const std::string marker = "\"Path\":\"" + path + "\"";
+            Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", marker.c_str() }) >= 1; }, 20000),
+                    ("every sensor of a split registration batch must be registered: " + path).c_str());
+        }
+
+        size_t command_frames = 0;
+        for (const auto& frame : server.Received())
+        {
+            Require(frame.size() <= static_cast<size_t>(kFrameBytes), "no frame may exceed the limit the server announced");
+            command_frames += frame.find("\"op\":\"commands\"") != std::string::npos ? 1 : 0;
+        }
+        Require(command_frames >= 2, "a registration batch that does not fit one frame must travel in several");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A value that cannot fit a frame is dropped and reported once, even when the frame built
+    // around it fails and the rest of the batch goes back to the queue.
+    void NativeSessionOversizedValueIsDroppedOnce()
+    {
+        if (!WsAvailable("native_session_oversized_value_is_dropped_once"))
+            return;
+
+        struct Drops
+        {
+            std::mutex mutex;
+            int count = 0;
+        } drops;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 1024;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 200; // long enough for both values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* user_data) {
+                if (std::string(message).find("larger than a collector session frame") != std::string::npos)
+                {
+                    auto* seen = static_cast<Drops*>(user_data);
+                    std::lock_guard<std::mutex> guard(seen->mutex);
+                    ++seen->count;
+                }
+            },
+            &drops);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle text = CreateStringSensor(collector.value, "session/oversized/text");
+        SensorHandle number = CreateIntSensor(collector.value, "session/oversized/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/oversized/number" }) >= 1; }, 15000),
+                "the session must be up before the batch is built");
+
+        // Every list frame is refused for now, so the frame around the oversized value fails.
+        server.AcceptListFrames(0);
+        const std::string large(3000, 'x');
+        Require(hsm_sensor_add_string(text.value, large.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string value failed");
+        Require(hsm_sensor_add_int(number.value, 4242, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" }) >= 3; }, 20000),
+                "the refused frame must have been retried");
+        server.AcceptListFrames(-1);
+
+        const size_t refused = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" });
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" }) > refused; }, 20000),
+                "the value behind the oversized one must be delivered once the server accepts again");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        Require(SessionFrames(server, { "xxxxxxxxxx" }) == 0, "a value larger than a frame must never be sent");
+        std::lock_guard<std::mutex> guard(drops.mutex);
+        Require(drops.count == 1, ("an oversized value must be dropped and reported exactly once, got " + std::to_string(drops.count)).c_str());
+    }
+
     // The transport on its own: no session means a request fails at once (the caller keeps its
     // data), an ack carries the server's status, and a cancel ends a wait.
     void NativeSessionTransportRequestContract()
@@ -9350,6 +9454,8 @@ namespace
             { "native_session_ack_timeout_reopens_and_resends", [](const std::string&) { NativeSessionAckTimeoutReopensAndResends(); } },
             { "native_session_splits_a_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsABatchToTheFrameLimit(); } },
             { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },
+            { "native_session_splits_a_registration_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsARegistrationBatchToTheFrameLimit(); } },
+            { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
             { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },

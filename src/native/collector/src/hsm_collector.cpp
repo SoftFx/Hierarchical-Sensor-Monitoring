@@ -2765,15 +2765,17 @@ namespace
                 response.error = "no session";
                 return response;
             }
-            // A batch that cannot fit a frame has no way to the server, and trying again does
-            // not change that: answered here as the 413 an HTTP server would give, which the
-            // caller treats as final. Zero room means no session, which is the transport's to say.
+            // The caller has already split a batch down to what fits. What is left too large is
+            // one registration that cannot fit a frame on its own: it has no way to the server and
+            // trying again does not change that, so it is answered here as the 413 an HTTP server
+            // would give, which the caller treats as final. Zero room means no session, which is
+            // the transport's to say.
             const size_t room = session_transport_->MaxBodyBytes();
             if (room != 0 && body.size() > room)
             {
                 response.transport_ok = true;
                 response.status_code = 413;
-                response.error = "the registration batch is larger than a collector session frame";
+                response.error = "the registration is larger than a collector session frame";
                 return response;
             }
             const auto result = session_transport_->Request("commands", body, timeout_ms);
@@ -2817,6 +2819,15 @@ namespace
             if (sensors.empty())
                 return RegistrationPost::Accepted;
 
+            // No session: nothing can be sent, so nothing is serialized. The session reports its
+            // own state; this is the retry the caller already does for an unreachable server.
+            if (use_session_ && (!session_transport_ || !session_transport_->IsUp()))
+            {
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Not registered " + std::to_string(sensors.size()) +
+                                                    " sensor(s): no collector session; retrying on the next send cycle.");
+                return RegistrationPost::Retry;
+            }
+
             std::vector<uint64_t> versions;
             versions.reserve(sensors.size());
             std::string body = "[";
@@ -2829,6 +2840,24 @@ namespace
                 versions.push_back(snapshot.second);
             }
             body += "]";
+
+            // A batch that does not fit one session frame is posted in halves, each acknowledged
+            // and recorded on its own. One registration that does not fit on its own goes on and
+            // is answered 413 by PostCommands.
+            if (use_session_ && sensors.size() > 1)
+            {
+                const size_t room = session_transport_->MaxBodyBytes();
+                if (room != 0 && body.size() > room)
+                {
+                    const auto middle = sensors.begin() + static_cast<std::ptrdiff_t>(sensors.size() / 2);
+                    const RegistrationPost first = PostRegistrationsWire({ sensors.begin(), middle }, runtime);
+                    const RegistrationPost second = PostRegistrationsWire({ middle, sensors.end() }, runtime);
+                    if (first == RegistrationPost::Retry || second == RegistrationPost::Retry)
+                        return RegistrationPost::Retry;
+                    return first == RegistrationPost::Rejected || second == RegistrationPost::Rejected ? RegistrationPost::Rejected
+                                                                                                       : RegistrationPost::Accepted;
+                }
+            }
 
             const std::vector<hsm::http::HttpHeader> headers = {
                 { "Key", access_key_ },
@@ -5852,16 +5881,22 @@ namespace
                     // A sender that delivers a batch in parts (the session, when the batch does
                     // not fit one frame) says how many leading values are settled; only the rest
                     // goes back, or the delivered part would arrive twice.
+                    // A value the sender emptied is settled too (dropped and counted by it).
                     const size_t handled = (std::min)(batch_handled_, batch.size());
                     if (clear_remainder_on_failure)
                     {
-                        const size_t dropped = batch.size() - handled + queue_.size();
+                        size_t dropped = queue_.size();
+                        for (size_t index = handled; index < batch.size(); ++index)
+                            dropped += batch[index].empty() ? 0 : 1;
                         queue_.clear();
                         return dropped;
                     }
 
                     for (size_t index = handled; index < batch.size(); ++index)
-                        ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    {
+                        if (!batch[index].empty())
+                            ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    }
 
                     return 0;
                 }
@@ -6047,6 +6082,9 @@ namespace
                         LogError("Dropped a value of " + std::to_string(element.size()) +
                                  " bytes: it is larger than a collector session frame (" + std::to_string(room) + " bytes).");
                         queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                        // Emptied: settled, whatever happens to the frame around it (the
+                        // dispatcher neither re-enqueues nor counts an emptied value).
+                        batch[index].clear();
                         ++index;
                         continue;
                     }
