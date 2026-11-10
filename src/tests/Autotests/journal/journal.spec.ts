@@ -37,6 +37,9 @@ test('table loads through the partial endpoint', async ({ adminPage: page }) => 
 
   await expect(page.locator('#journalTable thead')).toContainText('Author');
   await expect(page.locator('#journalTable thead')).toContainText('Kind');
+  // #1638: the operation column names each write (Create / Update / Delete /
+  // Rollback) without opening Details or hovering.
+  await expect(page.locator('#journalTable thead')).toContainText('Operation');
   await expect(page.locator('#journalTable thead')).toContainText('Actions');
 });
 

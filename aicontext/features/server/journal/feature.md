@@ -1,6 +1,6 @@
 # Feature: Journal (unified configuration journal with rollback)
 
-> Owner: server | Last reviewed: 2026-10-27 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-10 | Canonical: yes
 > Scope: the single journal of every monitoring-tree configuration change (#1588) — the global Journal page, the per-node Journal tabs, the `/api/v1/journal` surface, the `list/get/rollback_journal_record` MCP tools, the entity-kind/product/undo-group tags on journal records, and the admin-only rollback by record. The undo mechanics of #1570 (before/after images, compensating writes, conflict detection) live on as internal machinery of this feature, addressed through journal records. Decision record: ADR-0013 (supersedes the surface decisions of ADR-0010).
 
 ---
@@ -21,10 +21,11 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 - **Rollback restores configuration only** — notifications already sent, alerts already fired and sensor history are untouched.
 - **Durability trade-off (ADR-0010)** — journal appends run AFTER the primary write succeeds; storage failures are logged loudly and never fail an applied write.
 - **No backfill** — records written before #1588 deserialize with null tags and show as "other"; pre-unification change sets are unreachable inert history in the internal store.
+- **Operation tag (#1638)** — every row names what kind of write it is — `create` / `update` / `delete` / `rollback` — in the table's Operation column and on the wire (`operation` field of the record DTO, additive; `property` keeps its format). A rollback row (the redo handle) is tagged `rollback`, never the compensating operation its property carries. A record whose undo group went terminal additionally renders `rolledBack: true` (and keeps its non-rollbackable list rendering). The tag is DERIVED at read time (`JournalOperations`), never stored: the rollback rows by their enviroment marker, template/schedule rows by the operation part of their property, policy rows by their undo-group entry, tree-CRUD and node-settings rows by the legacy enviroment wording; rows where nothing says render without a badge and with `operation: null`.
 
 ## Surfaces
 
-- **Web** (`/Journal`, Configuration menu): the global page with author/time/kind/product filters, details modal (the record plus its undo group's before/after images), admin-only Rollback with the dry-run-backed confirmation dialog; the per-node Journal tabs show the same records for the node, with a Rollback button on rollbackable rows for admins.
+- **Web** (`/Journal`, Configuration menu): the global page with author/time/kind/product filters, an Operation column (Create / Update / Delete / Rollback badges plus the "rolled back" marker on undone writes), details modal (the record plus its undo group's before/after images), admin-only Rollback with the dry-run-backed confirmation dialog; the per-node Journal tabs show the same records for the node with the same operation badge on record-local derivations (see Known Limitations), and a Rollback button on rollbackable rows for admins.
 - **REST**: `GET /api/v1/journal` (author/fromUtc/toUtc/kind/productId/entityId filters, limit ≤ 200 + offset), `GET /api/v1/journal/{recordId}` (record + undo-group details), `POST /api/v1/journal/{recordId}/rollback?force=&dryRun=` (admin owner only).
 - **MCP**: `list_journal_records` (paged envelope), `get_journal_record`, `rollback_journal_record` (force/dryRun, admin owner only).
 - **Internal (no external surface)**: the change-set store (`Databases/ChangeSets` LevelDB folder), `ChangeSetJournal`, `ChangeSetRecorder`, the rollback engine — reachable only through journal records.
@@ -48,3 +49,5 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 - The MCP list tool pages exactly through the service (limit ≤ 200 per call, offset unlimited); there is no total count over the shard-walking scan — a short or empty page is the end of the stream.
 - The product TTL POLICY list is authored through the API/MCP only — the web product form edits the inactivity-period SETTING (nodeSettings), not the policy list.
 - Schedule-delete rollback semantics are the #1570 ones (per-node full lists plus the touched template rows), now reached through the journal record.
+- The per-node Journal tab derives the operation badge from the record's own data only (rollback marker, property format, legacy enviroment wording) — the tab streams records without undo-group access, so policy rows, whose operation lives on the group entry, render no operation badge there, and no "rolled back" marker exists on the tab; the global page (one group read per distinct group of the page) names both.
+- Operation tags are derived, not backfilled: rows written before #1638 render whatever their stored data says. Template/schedule ROLLBACK rows written before the marker (their enviroment read "Alert template"/"Alert schedule", their property the compensating operation) render as that compensating operation — an update/delete, not a rollback; and the pre-#1638 recorder stamped forked policy rows with the same "Rollback" enviroment as true rollback rows, so those render as rollbacks. Both populations stop growing with #1638; the rows themselves are indistinguishable after the fact.
