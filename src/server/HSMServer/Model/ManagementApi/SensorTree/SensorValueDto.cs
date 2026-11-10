@@ -65,6 +65,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         [Description("Mean of the period.")]
         public double Mean { get; init; }
 
+        /// <summary>
+        /// Population standard deviation of the period's samples (#1509); null =
+        /// unknown (a collector that does not send it, a row stored before the
+        /// field existed) — unknown is never reported as 0.
+        /// </summary>
+        [Description("Population standard deviation of the period's samples; null = unknown (a collector that does not send it, a row stored before the field existed) — unknown is never reported as 0.")]
+        public double? StdDev { get; init; }
+
         /// <summary>Number of aggregated values in the period.</summary>
         [Description("Number of aggregated values in the period.")]
         public int Count { get; init; }

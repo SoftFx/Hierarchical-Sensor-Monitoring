@@ -388,11 +388,13 @@ namespace HSMServer.Core.Model
         internal abstract void Initialize();
 
 
-        // rejectedPolicies (#1401): optional per-policy rejection collector of
-        // the template-apply path — one entry per update the sensor's policy
-        // collection refused. Null for every other caller (the aggregate
-        // error string is all they ever had).
-        internal bool TryUpdate(SensorUpdate update, out string error, List<string> rejectedPolicies = null)
+        // policyFailures (#1401/#1563): optional per-policy failure collector
+        // of the template-apply path — one entry per update the sensor's
+        // policy collection refused (Rejected) or failed to re-evaluate after
+        // applying it (EvaluationError; the policy applied and persisted).
+        // Null for every other caller (the aggregate error string is all they
+        // ever had).
+        internal bool TryUpdate(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null)
         {
             Update(update);
 
@@ -415,7 +417,7 @@ namespace HSMServer.Core.Model
             error = null;
 
             if (update.Policies != null)
-                Policies.TryUpdate(update.Policies, update.Initiator, out error, rejectedPolicies);
+                Policies.TryUpdate(update.Policies, update.Initiator, out error, policyFailures);
 
 
             if (update.EnumOptions != null)

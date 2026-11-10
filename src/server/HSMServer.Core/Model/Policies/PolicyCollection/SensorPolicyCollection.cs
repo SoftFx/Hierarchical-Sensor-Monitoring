@@ -10,6 +10,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.TableOfChanges;
+using NLog;
 
 
 namespace HSMServer.Core.Model.Policies
@@ -55,15 +56,18 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error) =>
             TryUpdate(updates, initiator, out error, null);
 
-        // #1401: the same update carrying a per-policy rejection collector.
+        // #1401: the same update carrying a per-policy failure collector.
         // The aggregate `error` string cannot name the individual policies a
-        // sensor refused, and the template-apply path must tell the CALLER
-        // which alerts were not (re)created on which sensor. The collector is
-        // passed PER CALL (a fresh list by the apply path) — never shared
-        // mutable state; null callers (every other update path) collect
-        // nothing, and the aggregate error string keeps its exact shape.
+        // sensor refused or failed to re-evaluate, and the template-apply
+        // path must tell the CALLER which alerts were not (re)created on
+        // which sensor. The collector is passed PER CALL (a fresh list by
+        // the apply path) — never shared mutable state; null callers (every
+        // other update path) collect nothing, and the aggregate error
+        // string keeps its exact shape. Since the #1563 review the entries
+        // are typed: Rejected for a refused update, EvaluationError for a
+        // policy that applied but whose revalidation threw.
         internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error,
-            List<string> rejectedPolicies);
+            List<PolicyUpdateFailure> policyFailures);
 
         internal abstract void RemovePolicy(Guid policyId, InitiatorInfo initiator = null);
 
@@ -84,10 +88,20 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
+        private protected readonly Logger _logger = LogManager.GetLogger(nameof(SensorPolicyCollection));
+
         private protected CorrectTypePolicy<T> _typePolicy;
         private protected BaseSensorModel _sensor;
 
         protected readonly IAlertScheduleProvider _scheduleProvider;
+
+        // #1563: error lines of the policies whose evaluator threw during the
+        // last CalculateStorageResult pass. Consumed by TryUpdate after the
+        // post-update revalidation, so a failed revalidation reports through
+        // the same aggregate error string as a rejected policy update — while
+        // the exception itself stays isolated (the caller's catch-all would
+        // otherwise skip the DB write over an already-updated cache).
+        private protected readonly List<string> _evaluationErrors = new();
 
 
         public SensorPolicyCollection(IAlertScheduleProvider provider)
@@ -128,7 +142,11 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true) =>
             TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
-        internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
+        // The #1563-review reset of _evaluationErrors lives in TryUpdate (before
+        // the LastValue gate): TryRevalidate itself never reads the list, and
+        // CalculateStorageResult clears it again at the top of every evaluation.
+        internal bool TryRevalidate(BaseValue value) =>
+            TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
 
         internal bool SensorTimeout(BaseValue value)
         {
@@ -219,6 +237,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new();
             NotificationResult = new();
             ConfimationResult = new();
+            _evaluationErrors.Clear();
 
             if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
@@ -227,34 +246,73 @@ namespace HSMServer.Core.Model.Policies
                     if (policy.IsDisabled)
                         continue;
 
-                    bool schedulePassed = true;
-                    if (policy.ScheduleId.HasValue)
+                    // #1563: per-policy isolation. An evaluator exception (e.g.
+                    // the Length executor on a stored null string) used to
+                    // escape the whole pass: on the post-update revalidation
+                    // path the in-memory policy updates had already happened,
+                    // so the caller's catch-all skipped the DB write and left
+                    // memory and storage diverged. A broken policy is now
+                    // marked, logged, and skipped for this pass — the siblings
+                    // below still evaluate, and no value/update is rejected
+                    // over a policy it cannot control.
+                    try
                     {
-                        if (value is BarBaseValue barValue)
-                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, barValue.OpenTime, barValue.CloseTime);
+                        bool schedulePassed = true;
+                        if (policy.ScheduleId.HasValue)
+                        {
+                            if (value is BarBaseValue barValue)
+                                schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, barValue.OpenTime, barValue.CloseTime);
+                            else
+                                schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
+                        }
+
+                        if (!schedulePassed)
+                            continue;
+
+                        if (policy.Validate(value))
+                        {
+                            PolicyResult.AddAlert(policy);
+
+                            if (isLastValue)
+                                SensorResult += policy.SensorResult;
+
+                            if (isReplace)
+                                NotificationResult.AddSingleAlert(policy);
+                            else
+                                NotificationResult.AddAlert(policy);
+                        }
                         else
-                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
+                        {
+                            if (policy.ConfirmationPeriod is not null)
+                                ConfimationResult.AddAlert(policy);
+                        }
                     }
-
-                    if (!schedulePassed)
-                        continue;
-
-                    if (policy.Validate(value))
+                    catch (Exception ex)
                     {
-                        PolicyResult.AddAlert(policy);
+                        // #1563 review: the message split. The raw ex.Message
+                        // ("Object reference not set to an instance of an
+                        // object.") is operator context — it stays in the log
+                        // warn below, with the exception attached. Every
+                        // user-facing consumer of this failure (the sensor's
+                        // Error status via SetEvaluationError, the aggregate
+                        // update error, the template warning, the journal
+                        // record) gets a text a user can act on instead: the
+                        // alert named by its RULE (Condition + actions, the
+                        // same rendering the journal uses for policy edits),
+                        // not by a GUID plus a runtime detail.
+                        var message = $"Alert '{policy}' could not be evaluated for the current value";
+
+                        // Warn on the TRANSITION into the failure only
+                        // (HasEvaluationError): the marking below repeats on
+                        // every pass, and a hot sensor would flood the log.
+                        if (!policy.HasEvaluationError)
+                            _logger.Warn(ex, $"Failed to evaluate alert {policy.Id} on sensor {_sensor?.Id}: {ex.Message}");
+
+                        policy.SetEvaluationError(message);
+                        _evaluationErrors.Add(message);
 
                         if (isLastValue)
                             SensorResult += policy.SensorResult;
-
-                        if (isReplace)
-                            NotificationResult.AddSingleAlert(policy);
-                        else
-                            NotificationResult.AddAlert(policy);
-                    }
-                    else
-                    {
-                        if (policy.ConfirmationPeriod is not null)
-                            ConfimationResult.AddAlert(policy);
                     }
                 }
             }
@@ -284,7 +342,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
         internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error,
-            List<string> rejectedPolicies)
+            List<PolicyUpdateFailure> policyFailures)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
             var errors = new StringBuilder(1 << 5);
@@ -320,7 +378,7 @@ namespace HSMServer.Core.Model.Policies
                             else
                             {
                                 errors.AppendLine(err);
-                                rejectedPolicies?.Add(err);
+                                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.Rejected, err));
                             }
                         }
                         else
@@ -342,7 +400,7 @@ namespace HSMServer.Core.Model.Policies
                                 // save reports success. The collector (#1401)
                                 // names it for the caller's warnings channel.
                                 errors.AppendLine(err);
-                                rejectedPolicies?.Add(err);
+                                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.Rejected, err));
                             }
                         }
                     }
@@ -426,8 +484,29 @@ namespace HSMServer.Core.Model.Policies
                 }
             }
 
+            // #1563 review: reset BEFORE the LastValue gate — a sensor with no
+            // last value skips TryRevalidate (and CalculateStorageResult's own
+            // reset), and stale lines from an earlier ingestion pass must not
+            // leak into this update's aggregate error, naming policies this
+            // update may have just removed.
+            _evaluationErrors.Clear();
+
             if (_sensor?.LastValue is ValueType valueT)
                 TryRevalidate(valueT);
+
+            // #1563: a policy that failed the post-update revalidation reports
+            // through the same aggregate error as a rejected update above, and
+            // rides the caller's collector as an EvaluationError — the policy
+            // APPLIED and persisted, so the template path must not report it
+            // as "not applied". The update itself (and the caller's DB write)
+            // is NOT rolled back: the revalidation verdict is advisory
+            // marking, and aborting here would again diverge memory from
+            // storage.
+            foreach (var evaluationError in _evaluationErrors)
+            {
+                errors.AppendLine(evaluationError);
+                policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.EvaluationError, evaluationError));
+            }
 
             error = errors.Length > 0 ? errors.ToString() : null;
 
