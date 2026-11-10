@@ -60,8 +60,9 @@ The access key is resolved first, by the same middleware as for every Sensor API
 | Any method but `GET` and `CONNECT` | 405 |
 | No `Key` header, unknown or malformed key, key blocked, expired or without `CanSendSensorData` | 406 (the Sensor API's access error) |
 | `Sec-WebSocket-Protocol` does not offer `hsm.sensors.v1` | 400 |
-| The address already holds `MaxSessionsPerAddress` sessions | 429 |
-| The session cap is reached, or the server is shutting down | 503 |
+| The address already holds `MaxSessionsPerAddress` sessions | 429, with `Retry-After` |
+| The session cap is reached | 503, with `Retry-After` |
+| The server is shutting down | 503 |
 
 ### Ways a session ends
 
@@ -82,7 +83,7 @@ The access key is resolved first, by the same middleware as for every Sensor API
 | Key | Default | Meaning |
 |---|---|---|
 | `MaxSessions` | 1000 | Server-wide cap on open sessions. One session is one collector process. `0` turns sessions off: the endpoint answers 404. A collector over the cap cannot send, so set it well above the number of collectors. |
-| `MaxSessionsPerAddress` | 20 | Connection limit per client address. `0` means no limit per address. Behind a reverse proxy the address is the client's only when `Kestrel.TrustedProxies` names the proxy; otherwise all collectors share the proxy's address and this limit. |
+| `MaxSessionsPerAddress` | 20 | Connection limit per client address; an IPv6 client is counted by its /64. Checked before the server-wide cap. `0` means no limit per address. Behind a reverse proxy the address is the client's only when `Kestrel.TrustedProxies` names the proxy; otherwise all collectors share the proxy's address and this limit. |
 | `HeartbeatSeconds` | 30 | Announced in `hello`. The server drops a session after 3 × this without any inbound frame. Also the WebSocket keep-alive interval. 5..3600. |
 | `MaxFrameBytes` | 4194304 | Announced in `hello`. A larger frame closes the session with `1009`. 65536..67108864. |
 
@@ -145,9 +146,10 @@ Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSoc
 
 ## Known Issues / Limitations
 
-- **The limit per address is per address, not per collector.** Hosts behind one NAT share it, and so do all collectors behind a reverse proxy that the server does not trust (`Kestrel.TrustedProxies`): there the limit of 20 would cap the whole server at 20 sessions. The server names the address in its `Warn` when the limit is hit. Many addresses holding one key can still fill the server-wide cap together.
+- **The limit per address is per address, not per collector.** Hosts behind one NAT share it, and so do all collectors behind a reverse proxy that the server does not trust (`Kestrel.TrustedProxies`): there the limit of 20 would cap the whole server at 20 sessions. The server names the address in its `Warn` when the limit is hit, at most once a minute for each address. Many addresses holding one key can still fill the server-wide cap together.
 - The registry is not shown anywhere in the UI.
 - `Open sessions` has no default alert for approaching the cap; the `Warn` above and the sensor's value are the signals.
 - A connection that dies without a close keeps its slot until the silence limit (90 seconds by default). After a network event that drops many connections at once, collectors that reconnect within that time can be refused while the cap is not really reached; they keep their data and try again.
 - `Open sessions` is a 5-minute sample, not a live gauge.
-- `HeartbeatSeconds`, `MaxFrameBytes` and `MaxSessions` are read at startup; a change needs a restart.
+- `HeartbeatSeconds`, `MaxFrameBytes`, `MaxSessions` and `MaxSessionsPerAddress` are read at startup; a change needs a restart.
+- A `MaxSessionsPerAddress` that is not below `MaxSessions` limits nothing, and nothing says so at startup.

@@ -364,6 +364,18 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(2, host.Registry.Count);
         }
 
+        [Theory]
+        [InlineData("203.0.113.7", "203.0.113.7")]
+        [InlineData("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64")]
+        [InlineData("2001:db8:1:2::1", "2001:db8:1:2::/64")]
+        [InlineData("2001:db8:1:3::1", "2001:db8:1:3::/64")]
+        public void AddressLimit_CountsAnIPv6HostByItsPrefix(string address, string countedAs)
+        {
+            // An IPv6 host can choose any source address in its /64; counted one by one it
+            // would never reach the limit.
+            Assert.Equal(countedAs, HSMServer.SensorApi.Sessions.CollectorSessionRegistry.AddressKey(address));
+        }
+
         [Fact]
         public async Task AddressLimit_OfZero_IsNoLimit()
         {

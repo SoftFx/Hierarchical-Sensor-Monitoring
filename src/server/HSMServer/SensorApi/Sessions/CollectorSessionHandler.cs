@@ -43,6 +43,10 @@ namespace HSMServer.SensorApi.Sessions
         // off. The web server's own shutdown would otherwise wait for these connections.
         private static readonly TimeSpan ShutdownBudget = TimeSpan.FromSeconds(3);
 
+        // Sent as Retry-After with the refusals that a wait can cure (a full server, a full
+        // address).
+        private const int RetryAfterSeconds = 60;
+
         // A frame that is still arriving keeps the silence limit away, but not for ever: this
         // many silence limits after its first byte it has to be complete. Without the bound
         // a collector could hold a session, and its slot, with a frame that never ends, and
@@ -65,7 +69,6 @@ namespace HSMServer.SensorApi.Sessions
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
-        private long _addressWarnedAtTicks;
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
@@ -128,18 +131,19 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            switch (_registry.TryReserve(caller.RemoteIP, _config.MaxSessions, _config.MaxSessionsPerAddress))
+            switch (_registry.TryReserve(caller.RemoteIP, _config.MaxSessions, _config.MaxSessionsPerAddress, _time.GetUtcNow().UtcTicks, out var worthLogging))
             {
+                case SlotRefusal.AddressFull:
+                    if (worthLogging)
+                        WarnAddressLimitReached(caller);
+
+                    await Refuse(context, StatusCodes.Status429TooManyRequests, "The session limit for this address is reached", RetryAfterSeconds);
+                    return;
+
                 case SlotRefusal.ServerFull:
                     WarnCapReached(caller);
 
-                    await Refuse(context, StatusCodes.Status503ServiceUnavailable, "The session limit of this server is reached");
-                    return;
-
-                case SlotRefusal.AddressFull:
-                    WarnAddressLimitReached(caller);
-
-                    await Refuse(context, StatusCodes.Status429TooManyRequests, "The session limit for this address is reached");
+                    await Refuse(context, StatusCodes.Status503ServiceUnavailable, "The session limit of this server is reached", RetryAfterSeconds);
                     return;
             }
 
@@ -522,9 +526,6 @@ namespace HSMServer.SensorApi.Sessions
         // comes from the proxy's address and they share one limit.
         private void WarnAddressLimitReached(PublicApiRequestInfo caller)
         {
-            if (!IsTimeToWarn(ref _addressWarnedAtTicks))
-                return;
-
             _logger.Warn($"The collector session limit per address is reached (CollectorSessions.MaxSessionsPerAddress = {_config.MaxSessionsPerAddress}): the upgrade of {caller.TelemetryPath} " +
                          $"from {caller.RemoteIP} is refused with 429. Either that host opens sessions without closing them, or {caller.RemoteIP} is a reverse proxy " +
                          "that is not listed in Kestrel.TrustedProxies, so all collectors share its address.");
@@ -557,9 +558,14 @@ namespace HSMServer.SensorApi.Sessions
         }
 
 
-        private static Task Refuse(HttpContext context, int status, string reason)
+        // `retryAfterSeconds` is for the refusals that pass by themselves: a hint not to come
+        // back at once. A collector has its own backoff; this only says the wait is expected.
+        private static Task Refuse(HttpContext context, int status, string reason, int? retryAfterSeconds = null)
         {
             context.Response.StatusCode = status;
+
+            if (retryAfterSeconds is { } seconds)
+                context.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             return context.Response.WriteAsync(reason);
         }
