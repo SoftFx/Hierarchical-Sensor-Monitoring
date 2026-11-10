@@ -171,8 +171,8 @@ jobs:
     # Builds the optional libcurl HTTP transport (HSM_COLLECTOR_HTTP=ON) and runs the
     # transport-only tests: the in-proc capture-server E2E, the endpoint route table, and the
     # retry policy. curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so
-    # the baseline there must stay an upstream microsoft/vcpkg commit. ssl-only feature set →
-    # Schannel on Windows / OpenSSL on Linux, no heavyweight TLS build.
+    # the baseline there must stay an upstream microsoft/vcpkg commit. Feature set ssl +
+    # websockets → Schannel on Windows / OpenSSL on Linux, no heavyweight TLS build.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
@@ -222,10 +222,15 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         run: cmake --build build/native-http --config Release --parallel
 
-      # Transport E2E (real libcurl against a loopback capture server), route table, retry policy.
+      # Transport E2E (real libcurl against a loopback capture server), route table, retry policy,
+      # and the WebSocket connection (#1662). The vcpkg curl of this lane is built with the
+      # `websockets` feature on both platforms, so HSM_REQUIRE_WEBSOCKET turns "libcurl has no
+      # WebSocket" from a skip into a failure: the native_ws_* tests cannot pass by not running.
       - name: Test (HTTP lane)
         if: steps.changes.outputs.run == 'true'
-        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http"
+        env:
+          HSM_REQUIRE_WEBSOCKET: '1'
+        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws"
 
       - name: Upload HTTP transport logs on failure
         if: failure()

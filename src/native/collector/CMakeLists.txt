@@ -150,9 +150,10 @@ if(NOT MSVC)
 endif()
 
 # libcurl HTTP transport (#1096 §12). Opt-in so the serialization/behavior build and the existing
-# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides curl[ssl] —
-# Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the -Werror gate ignores
-# them; only hsm_http_transport.cpp and hsm_ws_connection.cpp include <curl/curl.h>.
+# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides
+# curl[ssl,websockets] — Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the
+# -Werror gate ignores them; only hsm_http_transport.cpp and hsm_ws_connection.cpp include
+# <curl/curl.h>.
 option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
 if(HSM_COLLECTOR_HTTP)
     find_package(CURL REQUIRED)
@@ -291,6 +292,12 @@ if(HSM_COLLECTOR_HTTP)
     )
     # #1662: native WebSocket client over a plain libcurl connection (collector session step 1,
     # ADR-0017). Needs no libcurl WebSocket feature, so these run against every lane's curl.
+    add_test(NAME native_ws_reports_libcurl_support
+        COMMAND hsm_collector_tests native_ws_reports_libcurl_support
+    )
+    add_test(NAME native_ws_fixture_accept_key_matches_rfc
+        COMMAND hsm_collector_tests native_ws_fixture_accept_key_matches_rfc
+    )
     add_test(NAME native_ws_opens_with_headers_and_subprotocol
         COMMAND hsm_collector_tests native_ws_opens_with_headers_and_subprotocol
     )
@@ -317,6 +324,9 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_ws_cancel_unblocks_receive
         COMMAND hsm_collector_tests native_ws_cancel_unblocks_receive
+    )
+    add_test(NAME native_ws_refuses_binary_and_oversized_messages
+        COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
@@ -504,8 +514,6 @@ set(NATIVE_REGRESSION_TESTS
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
-    native_ws_codec_handshake_digest_matches_rfc
-    native_ws_codec_frames_match_rfc
     native_lifecycle_listener_can_register_another_listener
     native_test_connection_reports_reachable
     native_max_sensors_cap_rejects_beyond_limit

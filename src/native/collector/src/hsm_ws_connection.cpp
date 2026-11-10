@@ -1,11 +1,10 @@
 #include "hsm_ws_connection.hpp"
 
 #include "hsm_curl_support.hpp"
-#include "hsm_ws_codec.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
+#include <cstring>
 #include <string_view>
 
 #if defined(_WIN32)
@@ -20,6 +19,11 @@
 #include <cerrno>
 #include <poll.h>
 #endif
+
+// The API used below is complete in the headers of libcurl 8.14.0 (see kMinCurlVersion). Against
+// older headers the class is compiled as the stub at the end of this file: it reports
+// "unsupported" and never opens, so the collector stays on HTTP.
+#if LIBCURL_VERSION_NUM >= 0x080e00
 
 namespace hsm::http
 {
@@ -41,53 +45,30 @@ namespace hsm::http
             }
         }
 
-        // Status code of a response head ("HTTP/1.1 101 Switching Protocols\r\n...").
-        bool ParseStatusLine(const std::string& head, long& status)
-        {
-            const size_t space = head.find(' ');
-            if (head.compare(0, 5, "HTTP/") != 0 || space == std::string::npos || head.size() < space + 4)
-                return false;
-            status = 0;
-            for (size_t i = space + 1; i < space + 4; ++i)
-            {
-                if (head[i] < '0' || head[i] > '9')
-                    return false;
-                status = status * 10 + (head[i] - '0');
-            }
-            return true;
-        }
-
-        std::string ToLower(std::string value)
-        {
-            for (auto& c : value)
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            return value;
-        }
-
-        std::string Trim(const std::string& value)
-        {
-            const size_t first = value.find_first_not_of(" \t\r\n");
-            if (first == std::string::npos)
-                return {};
-            const size_t last = value.find_last_not_of(" \t\r\n");
-            return value.substr(first, last - first + 1);
-        }
-
         bool HasLineBreak(const std::string& value)
         {
             return value.find('\r') != std::string::npos || value.find('\n') != std::string::npos;
         }
 
-        // Value of a header in a response head ("HTTP/1.1 101 ...\r\nName: value\r\n...\r\n\r\n").
-        std::string HeaderValue(const std::string& head, const std::string& name_lower)
+        bool StartsWithNoCase(std::string_view text, std::string_view lower_prefix)
         {
-            const std::string lower = ToLower(head);
-            const size_t pos = lower.find("\r\n" + name_lower + ":");
-            if (pos == std::string::npos)
+            if (text.size() < lower_prefix.size())
+                return false;
+            for (size_t i = 0; i < lower_prefix.size(); ++i)
+            {
+                if (static_cast<char>(std::tolower(static_cast<unsigned char>(text[i]))) != lower_prefix[i])
+                    return false;
+            }
+            return true;
+        }
+
+        std::string_view Trim(std::string_view value)
+        {
+            const size_t first = value.find_first_not_of(" \t\r\n");
+            if (first == std::string_view::npos)
                 return {};
-            const size_t start = pos + 2 + name_lower.size() + 1;
-            const size_t end = head.find("\r\n", start);
-            return Trim(head.substr(start, end == std::string::npos ? std::string::npos : end - start));
+            const size_t last = value.find_last_not_of(" \t\r\n");
+            return value.substr(first, last - first + 1);
         }
 
         int64_t RemainingMs(std::chrono::steady_clock::time_point deadline)
@@ -96,95 +77,83 @@ namespace hsm::http
             return left.count() > 0 ? static_cast<int64_t>(left.count()) : 0;
         }
 
-        struct Target
+        // What the upgrade response said, collected by OnUpgradeHeader.
+        struct UpgradeHead
         {
-            std::string curl_url;     // http(s):// form of the ws(s):// URL, for libcurl to connect to
-            std::string host_header;  // host[:port], port only when it is not the scheme default
-            std::string request_path; // path[?query]
+            std::string subprotocol;
         };
 
-        // Splits a ws:// or wss:// URL. libcurl's own URL parser is not used: a libcurl built
-        // without WebSocket support refuses those schemes.
-        bool ParseTarget(const std::string& url, Target& target, std::string& error)
+        // CURLOPT_HEADERFUNCTION: one call per header line of every response on the way to the
+        // upgrade. libcurl validates the upgrade itself but does not look at the subprotocol, so
+        // that one value is picked up here. Returning anything but the line length aborts the
+        // transfer, which is what an exception turns into: nothing may escape into libcurl's C.
+        size_t OnUpgradeHeader(char* buffer, size_t size, size_t nitems, void* userdata)
         {
-            const std::string lower = ToLower(url.substr(0, 6));
-            bool secure = false;
-            size_t authority_start = 0;
-            if (lower.compare(0, 5, "ws://") == 0)
+            const size_t total = size * nitems;
+            try
             {
-                authority_start = 5;
-            }
-            else if (lower.compare(0, 6, "wss://") == 0)
-            {
-                secure = true;
-                authority_start = 6;
-            }
-            else
-            {
-                error = "the URL must start with ws:// or wss://";
-                return false;
-            }
+                auto* head = static_cast<UpgradeHead*>(userdata);
+                const std::string_view line(buffer, total);
+                constexpr std::string_view kName = "sec-websocket-protocol:";
 
-            const size_t path_start = url.find_first_of("/?#", authority_start);
-            const std::string authority =
-                url.substr(authority_start, path_start == std::string::npos ? std::string::npos : path_start - authority_start);
-            std::string path = path_start == std::string::npos ? std::string{} : url.substr(path_start);
-            const size_t fragment = path.find('#');
-            if (fragment != std::string::npos)
-                path.erase(fragment);
-            if (path.empty() || path[0] != '/')
-                path.insert(path.begin(), '/');
-
-            if (authority.empty() || authority.find('@') != std::string::npos || HasLineBreak(authority) || HasLineBreak(path) ||
-                authority.find(' ') != std::string::npos || path.find(' ') != std::string::npos)
-            {
-                error = "the URL has no usable host";
-                return false;
+                if (StartsWithNoCase(line, "http/"))
+                    head->subprotocol.clear(); // a new response head: an interim 1xx can precede the 101
+                else if (StartsWithNoCase(line, kName))
+                    head->subprotocol = std::string(Trim(line.substr(kName.size())));
+                return total;
             }
-
-            // Drop a port that equals the scheme default from the Host header (RFC 9110 7.2). An
-            // IPv6 literal keeps its brackets; its colons are not a port separator.
-            std::string host_header = authority;
-            const size_t bracket = authority.rfind(']');
-            const size_t colon = authority.rfind(':');
-            if (colon != std::string::npos && (bracket == std::string::npos || colon > bracket))
+            catch (...)
             {
-                const std::string port = authority.substr(colon + 1);
-                if (port == (secure ? "443" : "80"))
-                    host_header = authority.substr(0, colon);
+                return total == 0 ? 1 : 0;
             }
+        }
 
-            target.curl_url = std::string(secure ? "https://" : "http://") + authority + path;
-            target.host_header = host_header;
-            target.request_path = path;
-            return true;
+        // CURLOPT_WRITEFUNCTION: the body of a refused upgrade (a 404 page) is dropped. Without
+        // this libcurl would write it to stdout of the host process.
+        size_t DiscardBody(char*, size_t size, size_t nitems, void*)
+        {
+            return size * nitems;
         }
     } // namespace
+
+    bool WebSocketConnection::Supported(std::string* reason) noexcept
+    {
+        try
+        {
+            EnsureCurlGlobal();
+            const curl_version_info_data* info = curl_version_info(CURLVERSION_NOW);
+            if (info == nullptr)
+            {
+                if (reason != nullptr)
+                    *reason = "libcurl does not report its version";
+                return false;
+            }
+            if (info->version_num < kMinCurlVersion)
+            {
+                if (reason != nullptr)
+                    *reason = std::string("libcurl ") + (info->version != nullptr ? info->version : "?") +
+                              " is older than 8.14.0, the oldest whose WebSocket support is accepted";
+                return false;
+            }
+            for (const char* const* protocol = info->protocols; protocol != nullptr && *protocol != nullptr; ++protocol)
+            {
+                if (std::strcmp(*protocol, "ws") == 0)
+                    return true;
+            }
+            if (reason != nullptr)
+                *reason = "this libcurl was built without WebSocket support";
+            return false;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
 
     WebSocketConnection::WebSocketConnection(bool verify_peer)
         : verify_peer_(verify_peer)
     {
         EnsureCurlGlobal();
-
-        // One generator per connection, seeded once. std::random_device can throw where there is
-        // no entropy source (a bare container, descriptor exhaustion); the masks then fall back to
-        // a clock-and-address seed. Masking exists to stop a hostile PAGE from choosing the bytes a
-        // caching proxy sees; this client chooses its own payloads, so an unpredictable-enough
-        // stream that never crashes the host is the right trade.
-        try
-        {
-            std::random_device device;
-            std::seed_seq seed{ device(), device(), device(), device() };
-            random_.seed(seed);
-        }
-        catch (...)
-        {
-            const auto ticks = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-            const auto self = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-            std::seed_seq seed{ static_cast<uint32_t>(ticks), static_cast<uint32_t>(ticks >> 32), static_cast<uint32_t>(self),
-                static_cast<uint32_t>(self >> 32) };
-            random_.seed(seed);
-        }
     }
 
     WebSocketConnection::~WebSocketConnection()
@@ -210,18 +179,23 @@ namespace hsm::http
             curl_easy_cleanup(static_cast<CURL*>(curl_));
             curl_ = nullptr;
         }
-        inbuf_.clear();
-        inpos_ = 0;
-        message_.clear();
-        assembling_ = false;
+        if (headers_ != nullptr)
+        {
+            curl_slist_free_all(static_cast<curl_slist*>(headers_));
+            headers_ = nullptr;
+        }
+        detail_.clear(); // after the cleanup above: the handle pointed into it
+        // swap, not clear: a large message must not pin its buffer for the life of the object.
+        std::string().swap(message_);
     }
 
-    std::string WebSocketConnection::MaskedFrame(uint8_t opcode, const std::string& payload)
+    // libcurl's own description of the last failure on this handle when it gave one (it names the
+    // protocol violation, the refused status, the TLS problem), else the generic text of the code.
+    std::string WebSocketConnection::Describe(int curl_code) const
     {
-        const uint32_t word = static_cast<uint32_t>(random_());
-        const std::array<uint8_t, 4> mask{ static_cast<uint8_t>(word & 0xFFu), static_cast<uint8_t>((word >> 8) & 0xFFu),
-            static_cast<uint8_t>((word >> 16) & 0xFFu), static_cast<uint8_t>((word >> 24) & 0xFFu) };
-        return ws::EncodeClientFrame(opcode, payload, mask);
+        if (!detail_.empty() && detail_[0] != '\0')
+            return std::string(detail_.data());
+        return curl_easy_strerror(static_cast<CURLcode>(curl_code));
     }
 
     // Waits until the connection's socket is readable/writable, the deadline passes or Cancel() is
@@ -277,31 +251,34 @@ namespace hsm::http
         }
     }
 
-    WebSocketConnection::Io WebSocketConnection::SendAll(const std::string& data, Deadline deadline, std::string& error)
+    // Writes one whole frame. libcurl encodes it; when the socket blocks part-way, curl_ws_send
+    // reports how much of the payload it took and expects the rest of the SAME frame next, so the
+    // loop below only ever continues a frame it started.
+    bool WebSocketConnection::SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error)
     {
         CURL* curl = static_cast<CURL*>(curl_);
         size_t offset = 0;
-        while (offset < data.size())
+        for (;;)
         {
             if (cancelled_.load())
             {
                 error = kCancelled;
-                return Io::Error;
+                return false;
             }
 
             size_t sent = 0;
-            const CURLcode rc = curl_easy_send(curl, data.data() + offset, data.size() - offset, &sent);
-            if (rc == CURLE_OK && sent > 0)
+            const CURLcode rc = curl_ws_send(curl, data + offset, size - offset, &sent, 0, flags);
+            if (rc == CURLE_OK)
             {
-                offset += sent;
-                continue;
+                offset += (std::min)(sent, size - offset);
+                if (offset >= size)
+                    return true;
+                // A partial write means the socket blocked: wait for it below.
             }
-            // CURLE_OK with nothing written is treated like CURLE_AGAIN: wait for the socket under
-            // the deadline instead of looping without one.
-            if (rc != CURLE_AGAIN && rc != CURLE_OK)
+            else if (rc != CURLE_AGAIN)
             {
-                error = curl_easy_strerror(rc);
-                return Io::Error;
+                error = Describe(rc);
+                return false;
             }
 
             switch (WaitForSocket(/*for_read=*/false, deadline))
@@ -310,74 +287,13 @@ namespace hsm::http
                 break;
             case Wait::Timeout:
                 error = "send timed out";
-                return Io::Timeout;
+                return false;
             case Wait::Cancelled:
                 error = kCancelled;
-                return Io::Error;
+                return false;
             case Wait::Failed:
                 error = "waiting on the connection failed";
-                return Io::Error;
-            }
-        }
-        return Io::Ok;
-    }
-
-    // Appends whatever the connection has to inbuf_, waiting up to the deadline for the first byte.
-    // With the deadline already passed it makes exactly one non-blocking read attempt.
-    WebSocketConnection::Io WebSocketConnection::ReadMore(Deadline deadline, std::string& error)
-    {
-        // Drop the parsed prefix before growing the buffer, so it never holds more than what is
-        // still unparsed plus one read.
-        if (inpos_ > 0)
-        {
-            inbuf_.erase(0, inpos_);
-            inpos_ = 0;
-        }
-        // erase keeps the capacity: without this one large message would pin megabytes for the
-        // life of a connection that otherwise carries small frames.
-        if (inbuf_.capacity() > kShrinkAboveBytes && inbuf_.size() < kShrinkAboveBytes / 4)
-            inbuf_.shrink_to_fit();
-
-        CURL* curl = static_cast<CURL*>(curl_);
-        for (;;)
-        {
-            if (cancelled_.load())
-            {
-                error = kCancelled;
-                return Io::Error;
-            }
-
-            char buffer[16384];
-            size_t received = 0;
-            // Always try the read first: with TLS, bytes can sit decrypted inside libcurl while the
-            // socket itself is not readable, so waiting on the socket before reading could stall.
-            const CURLcode rc = curl_easy_recv(curl, buffer, sizeof(buffer), &received);
-            if (rc == CURLE_OK)
-            {
-                if (received == 0)
-                    return Io::Closed; // orderly TCP close by the peer
-                inbuf_.append(buffer, received);
-                return Io::Ok;
-            }
-            if (rc != CURLE_AGAIN)
-            {
-                error = curl_easy_strerror(rc);
-                return Io::Error;
-            }
-            if (RemainingMs(deadline) <= 0)
-                return Io::Timeout;
-
-            switch (WaitForSocket(/*for_read=*/true, deadline))
-            {
-            case Wait::Ready:
-            case Wait::Timeout:
-                break; // read once more; a passed deadline is reported above after that read
-            case Wait::Cancelled:
-                error = kCancelled;
-                return Io::Error;
-            case Wait::Failed:
-                error = "waiting on the connection failed";
-                return Io::Error;
+                return false;
             }
         }
     }
@@ -398,10 +314,19 @@ namespace hsm::http
                 result.error = kCancelled;
                 return result;
             }
-
-            Target target;
-            if (!ParseTarget(url, target, result.error))
+            if (!Supported(&result.error))
+            {
+                if (result.error.empty())
+                    result.error = "libcurl cannot carry a WebSocket";
                 return result;
+            }
+
+            if ((!StartsWithNoCase(url, "ws://") && !StartsWithNoCase(url, "wss://")) || HasLineBreak(url) ||
+                url.find(' ') != std::string::npos)
+            {
+                result.error = "the URL must be a ws:// or wss:// URL";
+                return result;
+            }
 
             // A header that carries a line break would let its value smuggle extra header lines
             // (or a second request) into the upgrade. Refuse rather than sanitize.
@@ -420,10 +345,6 @@ namespace hsm::http
                 }
             }
 
-            // At least 1 ms: libcurl reads 0 as "no timeout".
-            const int64_t open_timeout_ms = std::min<int64_t>(std::max<int64_t>(timeout_ms, 1), kMaxTimeoutMs);
-            const Deadline deadline = DeadlineIn(open_timeout_ms);
-
             CURL* curl = curl_easy_init();
             if (curl == nullptr)
             {
@@ -432,22 +353,55 @@ namespace hsm::http
             }
             curl_ = curl;
 
-            curl_easy_setopt(curl, CURLOPT_URL, target.curl_url.c_str());
-            // 1 = connect (TCP, TLS, proxy tunnel) and stop: no HTTP request is sent by libcurl.
-            // The upgrade request and everything after it go through curl_easy_send / _recv.
-            curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
-            // MANDATORY, do not remove. The upgrade below is written by hand as HTTP/1.1. Without
-            // this pin a libcurl built with HTTP/2 (every distribution build) offers `h2` in the
-            // TLS ALPN and the server selects it. The request then lands on a connection the
-            // server reads as HTTP/2, and worse: libcurl 8.14.1 installs its HTTP/2 filter on the
-            // CONNECT_ONLY connection and curl_easy_recv crashes inside it (SIGSEGV under
-            // nghttp2_session_mem_recv2; reproduced on Debian 13 against an HTTP/2 server by
-            // deleting this line). Pinning 1.1 makes libcurl offer only `http/1.1`, and a server
-            // cannot select a protocol the client did not offer.
+            // The list is owned through headers_ from the first node on, so every exit below
+            // frees it in Release().
+            const auto add_header = [this](const std::string& line) {
+                curl_slist* grown = curl_slist_append(static_cast<curl_slist*>(headers_), line.c_str());
+                if (grown == nullptr)
+                    return false;
+                headers_ = grown;
+                return true;
+            };
+            bool listed = subprotocol.empty() || add_header("Sec-WebSocket-Protocol: " + subprotocol);
+            for (const auto& header : headers)
+            {
+                // "Name;" is libcurl's spelling of a header with an empty value; "Name:" removes it.
+                listed = listed && add_header(header.value.empty() ? header.name + ";" : header.name + ": " + header.value);
+            }
+            if (!listed)
+            {
+                result.error = "out of memory building the upgrade request";
+                Release();
+                return result;
+            }
+
+            // At least 1 ms: libcurl reads 0 as "no timeout".
+            const int64_t open_timeout_ms = std::min<int64_t>(std::max<int64_t>(timeout_ms, 1), kMaxTimeoutMs);
+
+            UpgradeHead head;
+            detail_.assign(CURL_ERROR_SIZE, '\0');
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            // 2 = connect, send the WebSocket upgrade, verify the answer and stop. From then on
+            // the handle is driven with curl_ws_send / curl_ws_recv.
+            curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L);
+            // Pings are answered in Receive, at once. libcurl's automatic pong can sit in its
+            // queue until the next send (see kMinCurlVersion).
+            curl_easy_setopt(curl, CURLOPT_WS_OPTIONS, static_cast<long>(CURLWS_NOAUTOPONG));
+            // Nothing but a WebSocket may come out of this handle, whatever the URL says.
+            curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "ws,wss");
+            // libcurl speaks the upgrade over HTTP/1.1 only and pins that itself. Stated here as
+            // well so the session does not start depending on what a later libcurl negotiates.
             curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, static_cast<long>(CURL_HTTP_VERSION_1_1));
             // Through an HTTP proxy the connection must be a CONNECT tunnel, or the frames would be
             // interpreted by the proxy.
             curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1L);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, static_cast<curl_slist*>(headers_));
+            curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, OnUpgradeHeader);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &head);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, DiscardBody);
+            curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, detail_.data());
+            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
             curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(open_timeout_ms));
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(open_timeout_ms));
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer_ ? 1L : 0L);
@@ -460,141 +414,43 @@ namespace hsm::http
             curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 15L);
 
             const CURLcode rc = curl_easy_perform(curl);
-            if (rc != CURLE_OK)
-            {
-                result.error = curl_easy_strerror(rc);
-                Release();
-                return result;
-            }
-            // The transfer timeout bounded the connect above. It must not stay armed on a handle
-            // that lives for hours: a filter that consulted it in curl_easy_send / curl_easy_recv
-            // would fail a healthy idle connection once the open timeout had elapsed.
+
+            // `head` lives on this stack frame; the handle outlives it.
+            curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, nullptr);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, nullptr);
+            // The transfer timeout bounded the open above. It must not stay armed on a handle that
+            // lives for hours: it would fail a healthy idle connection once it had elapsed.
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 0L);
 
-            std::array<uint8_t, 16> key_bytes{};
-            for (size_t i = 0; i < key_bytes.size(); i += 4)
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status_code);
+            if (rc != CURLE_OK)
             {
-                const uint32_t word = static_cast<uint32_t>(random_());
-                for (size_t j = 0; j < 4; ++j)
-                    key_bytes[i + j] = static_cast<uint8_t>((word >> (8 * j)) & 0xFFu);
-            }
-            const std::string key = ws::Base64(key_bytes.data(), key_bytes.size());
-
-            std::string request = "GET " + target.request_path + " HTTP/1.1\r\n";
-            request += "Host: " + target.host_header + "\r\n";
-            request += "Upgrade: websocket\r\n";
-            request += "Connection: Upgrade\r\n";
-            request += "Sec-WebSocket-Key: " + key + "\r\n";
-            request += "Sec-WebSocket-Version: 13\r\n";
-            if (!subprotocol.empty())
-                request += "Sec-WebSocket-Protocol: " + subprotocol + "\r\n";
-            for (const auto& header : headers)
-                request += header.name + ": " + header.value + "\r\n";
-            request += "\r\n";
-
-            if (SendAll(request, deadline, result.error) != Io::Ok)
-            {
+                if (cancelled_.load())
+                    result.error = kCancelled;
+                else
+                    result.error = Describe(rc);
                 Release();
                 return result;
             }
 
-            // Read response heads until a final one. An intermediary may put interim responses
-            // (100 Continue, 103 Early Hints) in front of the 101.
-            std::string head;
-            long status = 0;
-            for (int interim = 0;; ++interim)
-            {
-                size_t head_end = std::string::npos;
-                while ((head_end = inbuf_.find("\r\n\r\n", inpos_)) == std::string::npos)
-                {
-                    if (inbuf_.size() - inpos_ > kMaxHandshakeBytes)
-                    {
-                        result.error = "the upgrade response is too large";
-                        Release();
-                        return result;
-                    }
-                    const Io io = ReadMore(deadline, result.error);
-                    if (io != Io::Ok)
-                    {
-                        if (io == Io::Timeout)
-                            result.error = "the upgrade timed out";
-                        else if (io == Io::Closed)
-                            result.error = "the server closed the connection during the upgrade";
-                        Release();
-                        return result;
-                    }
-                }
-                // The loop above stops as soon as the terminator is in the buffer, which can be up
-                // to one read past the limit: bound the head itself.
-                if (head_end + 4 - inpos_ > kMaxHandshakeBytes)
-                {
-                    result.error = "the upgrade response is too large";
-                    Release();
-                    return result;
-                }
-
-                head = inbuf_.substr(inpos_, head_end + 4 - inpos_);
-                inpos_ = head_end + 4; // what follows is the next head or already frame data
-
-                if (!ParseStatusLine(head, status))
-                {
-                    result.error = "the upgrade response is not HTTP";
-                    Release();
-                    return result;
-                }
-                if (status == 101 || status < 100 || status >= 200)
-                    break;
-                if (interim >= kMaxInterimResponses)
-                {
-                    result.error = "too many interim responses before the upgrade";
-                    Release();
-                    return result;
-                }
-            }
-            result.status_code = status;
-            result.subprotocol = HeaderValue(head, "sec-websocket-protocol");
-
-            if (status != 101)
-            {
-                result.error = "the server refused the upgrade with HTTP " + std::to_string(status);
-                Release();
-                return result;
-            }
-            // RFC 6455 4.1: the response must carry Upgrade: websocket and Connection: Upgrade.
-            if (ToLower(HeaderValue(head, "upgrade")) != "websocket" ||
-                ToLower(HeaderValue(head, "connection")).find("upgrade") == std::string::npos)
-            {
-                result.error = "the upgrade response does not switch to websocket";
-                Release();
-                return result;
-            }
-            // Proof that the peer understood this handshake and is not replaying a cached response.
-            if (HeaderValue(head, "sec-websocket-accept") != ws::AcceptKey(key))
-            {
-                result.error = "the upgrade response carries a wrong Sec-WebSocket-Accept";
-                Release();
-                return result;
-            }
-            // The selected subprotocol must be the offered one, and none may be selected when none
-            // was offered (RFC 6455 4.1): otherwise the two sides disagree on what the frames mean.
-            if (result.subprotocol != subprotocol)
+            result.subprotocol = head.subprotocol;
+            if (head.subprotocol != subprotocol)
             {
                 result.error = subprotocol.empty() ? "the server selected a subprotocol that was not offered"
-                                                   : "the server did not select subprotocol '" + subprotocol + "'";
+                                                   : "the server did not select the offered subprotocol";
                 Close();
                 return result;
             }
 
             result.ok = true;
-            return result;
         }
         catch (...)
         {
+            SetInternalError(result.error);
             Release();
             result.ok = false;
-            SetInternalError(result.error);
-            return result;
         }
+        return result;
     }
 
     bool WebSocketConnection::SendText(const std::string& text, int64_t timeout_ms, std::string& error)
@@ -603,18 +459,21 @@ namespace hsm::http
         {
             if (curl_ == nullptr)
             {
-                error = "the connection is not open";
+                error = "not connected";
                 return false;
             }
-            if (SendAll(MaskedFrame(ws::kText, text), DeadlineIn(timeout_ms), error) == Io::Ok)
+            if (SendFrame(text.data(), text.size(), CURLWS_TEXT, DeadlineIn(timeout_ms), error))
                 return true;
+            // The frame may be half-written: the connection cannot carry another one.
+            Release();
+            return false;
         }
         catch (...)
         {
             SetInternalError(error);
+            Release();
+            return false;
         }
-        Release(); // a frame may be half-written: the stream is no longer in a known state
-        return false;
     }
 
     WebSocketReceive WebSocketConnection::Receive(std::string& text, int64_t timeout_ms, std::string& error)
@@ -624,112 +483,101 @@ namespace hsm::http
             text.clear();
             if (curl_ == nullptr)
             {
-                error = "the connection is not open";
+                error = "not connected";
                 return WebSocketReceive::Error;
             }
 
+            CURL* curl = static_cast<CURL*>(curl_);
             const Deadline deadline = DeadlineIn(timeout_ms);
-            // Once the deadline has passed, one more read is allowed and then the call returns:
-            // a peer that keeps the socket busy (a stream of pings, say) cannot hold Receive
-            // beyond its timeout by more than one read's worth of frames.
-            bool read_after_deadline = false;
-
             for (;;)
             {
-                ws::Frame frame;
-                size_t consumed = 0;
-                const ws::ParseStatus status =
-                    ws::ParseServerFrame(std::string_view(inbuf_).substr(inpos_), kMaxMessageBytes, frame, consumed, error);
-
-                if (status == ws::ParseStatus::ProtocolError)
+                if (cancelled_.load())
                 {
+                    error = kCancelled;
                     Release();
                     return WebSocketReceive::Error;
                 }
 
-                if (status == ws::ParseStatus::NeedMore)
+                char buffer[16384];
+                size_t received = 0;
+                const curl_ws_frame* meta = nullptr;
+                // Always try the read first: with TLS, bytes can sit decrypted inside libcurl while
+                // the socket itself is not readable, so waiting on the socket first could stall.
+                const CURLcode rc = curl_ws_recv(curl, buffer, sizeof(buffer), &received, &meta);
+                if (rc == CURLE_AGAIN)
                 {
                     if (RemainingMs(deadline) <= 0)
-                    {
-                        if (read_after_deadline)
-                            return WebSocketReceive::Timeout;
-                        read_after_deadline = true;
-                    }
-
-                    const Io io = ReadMore(deadline, error);
-                    if (io == Io::Ok)
-                        continue;
-                    if (io == Io::Timeout)
                         return WebSocketReceive::Timeout;
+
+                    const Wait waited = WaitForSocket(/*for_read=*/true, deadline);
+                    if (waited == Wait::Cancelled || waited == Wait::Failed)
+                    {
+                        error = waited == Wait::Cancelled ? kCancelled : "waiting on the connection failed";
+                        Release();
+                        return WebSocketReceive::Error;
+                    }
+                    continue; // read once more; a passed deadline is reported above after that read
+                }
+                if (rc == CURLE_GOT_NOTHING)
+                {
+                    Release(); // the peer closed the connection without a close frame
+                    return WebSocketReceive::Closed;
+                }
+                if (rc != CURLE_OK || meta == nullptr)
+                {
+                    // Includes every protocol violation libcurl detects in a frame.
+                    error = rc != CURLE_OK ? Describe(rc) : "libcurl returned no frame information";
                     Release();
-                    return io == Io::Closed ? WebSocketReceive::Closed : WebSocketReceive::Error;
+                    return WebSocketReceive::Error;
                 }
 
-                inpos_ += consumed;
-
-                switch (frame.opcode)
+                const unsigned int flags = static_cast<unsigned int>(meta->flags);
+                if ((flags & CURLWS_CLOSE) != 0)
                 {
-                case ws::kClose:
-                {
-                    // Complete the close handshake by echoing the status code, when there is one
-                    // (a close payload is either empty or starts with a two-byte code). Best effort
-                    // and bounded: the peer is leaving either way.
-                    std::string ignored;
-                    const std::string code = frame.payload.size() >= 2 ? frame.payload.substr(0, 2) : std::string{};
-                    (void)SendAll(MaskedFrame(ws::kClose, code), DeadlineIn(200), ignored);
+                    // Complete the close handshake with one non-blocking attempt, echoing the
+                    // peer's status code when it sent one.
+                    size_t sent = 0;
+                    (void)curl_ws_send(curl, buffer, received >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
                     Release();
                     return WebSocketReceive::Closed;
                 }
-                case ws::kPing:
-                    if (SendAll(MaskedFrame(ws::kPong, frame.payload), DeadlineIn(1000), error) != Io::Ok)
+                if ((flags & CURLWS_PING) != 0)
+                {
+                    // A control payload is at most 125 bytes, so it is whole in `buffer`. The pong
+                    // is a complete frame: it gets its own short bound rather than the caller's
+                    // deadline, which may already have passed.
+                    if (!SendFrame(buffer, received, CURLWS_PONG, DeadlineIn(1000), error))
                     {
                         Release();
                         return WebSocketReceive::Error;
                     }
                     continue;
-                case ws::kPong:
-                    continue;
-                case ws::kText:
-                    if (!assembling_)
-                        break;
-                    error = "a new message started inside a fragmented one";
-                    Release();
-                    return WebSocketReceive::Error;
-                case ws::kContinuation:
-                    if (assembling_)
-                        break;
-                    error = "a continuation frame without a message to continue";
-                    Release();
-                    return WebSocketReceive::Error;
-                case ws::kBinary:
-                    error = "binary messages are not supported";
-                    Release();
-                    return WebSocketReceive::Error;
-                default:
-                    error = "unknown opcode";
+                }
+                if ((flags & CURLWS_PONG) != 0)
+                    continue; // an unsolicited pong is a keep-alive from the peer, not a message
+                if ((flags & CURLWS_TEXT) == 0)
+                {
+                    error = (flags & CURLWS_BINARY) != 0 ? "binary messages are not supported" : "unexpected frame type";
                     Release();
                     return WebSocketReceive::Error;
                 }
 
-                if (message_.size() + frame.payload.size() > kMaxMessageBytes)
+                // bytesleft is the rest of this frame, known from its header: an oversized frame is
+                // refused on its first chunk, before the payload is read.
+                const uint64_t pending = meta->bytesleft > 0 ? static_cast<uint64_t>(meta->bytesleft) : 0;
+                if (static_cast<uint64_t>(message_.size()) + received + pending > kMaxMessageBytes)
                 {
                     error = "message exceeds the size limit";
                     Release();
                     return WebSocketReceive::Error;
                 }
 
-                if (frame.fin && !assembling_)
-                {
-                    text = std::move(frame.payload); // the common case: one frame, no extra copy
-                    return WebSocketReceive::Text;
-                }
-
-                message_ += frame.payload;
-                assembling_ = !frame.fin;
-                if (frame.fin)
+                message_.append(buffer, received);
+                // CURLWS_CONT: this frame is not the last fragment of its message.
+                if (pending == 0 && (flags & CURLWS_CONT) == 0)
                 {
                     text.swap(message_);
-                    message_.clear();
+                    std::string().swap(message_);
                     return WebSocketReceive::Text;
                 }
             }
@@ -748,17 +596,15 @@ namespace hsm::http
         {
             try
             {
-                // Status 1000 (normal closure).
-                std::string payload;
-                payload.push_back(static_cast<char>(0x03));
-                payload.push_back(static_cast<char>(0xE8));
-                const std::string frame = MaskedFrame(ws::kClose, payload);
+                CURL* curl = static_cast<CURL*>(curl_);
+                // Status 1000 (normal closure), network byte order.
+                const char normal_closure[2] = { static_cast<char>(0x03), static_cast<char>(0xE8) };
 
-                if (linger_ms <= 0)
+                if (linger_ms <= 0 || cancelled_.load())
                 {
                     // One non-blocking attempt: this path must never wait.
                     size_t sent = 0;
-                    (void)curl_easy_send(static_cast<CURL*>(curl_), frame.data(), frame.size(), &sent);
+                    (void)curl_ws_send(curl, normal_closure, sizeof(normal_closure), &sent, 0, CURLWS_CLOSE);
                 }
                 else
                 {
@@ -769,26 +615,17 @@ namespace hsm::http
                     // the stream) arrives, within the linger budget.
                     const Deadline deadline = DeadlineIn(std::min<int64_t>(linger_ms, kMaxLingerMs));
                     std::string ignored;
-                    bool done = SendAll(frame, deadline, ignored) != Io::Ok;
-                    while (!done)
+                    bool waiting = SendFrame(normal_closure, sizeof(normal_closure), CURLWS_CLOSE, deadline, ignored);
+                    while (waiting)
                     {
-                        ws::Frame incoming;
-                        size_t consumed = 0;
-                        const ws::ParseStatus status =
-                            ws::ParseServerFrame(std::string_view(inbuf_).substr(inpos_), kMaxMessageBytes, incoming, consumed, ignored);
-                        if (status == ws::ParseStatus::Complete)
-                        {
-                            inpos_ += consumed;
-                            done = incoming.opcode == ws::kClose;
-                        }
-                        else if (status == ws::ParseStatus::ProtocolError)
-                        {
-                            done = true;
-                        }
+                        char buffer[4096];
+                        size_t received = 0;
+                        const curl_ws_frame* meta = nullptr;
+                        const CURLcode rc = curl_ws_recv(curl, buffer, sizeof(buffer), &received, &meta);
+                        if (rc == CURLE_AGAIN)
+                            waiting = RemainingMs(deadline) > 0 && WaitForSocket(/*for_read=*/true, deadline) == Wait::Ready;
                         else
-                        {
-                            done = ReadMore(deadline, ignored) != Io::Ok;
-                        }
+                            waiting = rc == CURLE_OK && meta != nullptr && (static_cast<unsigned int>(meta->flags) & CURLWS_CLOSE) == 0;
                     }
                 }
             }
@@ -800,3 +637,70 @@ namespace hsm::http
         Release();
     }
 } // namespace hsm::http
+
+#else // libcurl headers older than 8.14.0
+
+namespace hsm::http
+{
+    namespace
+    {
+        constexpr const char* kTooOld = "built against a libcurl older than 8.14.0, the oldest whose WebSocket support is accepted";
+
+        void Assign(std::string& target, const char* text) noexcept
+        {
+            try
+            {
+                target.assign(text);
+            }
+            catch (...)
+            {
+            }
+        }
+    } // namespace
+
+    bool WebSocketConnection::Supported(std::string* reason) noexcept
+    {
+        if (reason != nullptr)
+            Assign(*reason, kTooOld);
+        return false;
+    }
+
+    WebSocketConnection::WebSocketConnection(bool verify_peer)
+        : verify_peer_(verify_peer)
+    {
+        (void)verify_peer_;
+    }
+
+    WebSocketConnection::~WebSocketConnection() = default;
+
+    void WebSocketConnection::Cancel()
+    {
+        cancelled_.store(true);
+    }
+
+    WebSocketOpenResult WebSocketConnection::Open(const std::string&, const std::vector<HttpHeader>&, const std::string&, int64_t)
+    {
+        WebSocketOpenResult result;
+        Assign(result.error, kTooOld);
+        return result;
+    }
+
+    bool WebSocketConnection::SendText(const std::string&, int64_t, std::string& error)
+    {
+        Assign(error, "not connected");
+        return false;
+    }
+
+    WebSocketReceive WebSocketConnection::Receive(std::string& text, int64_t, std::string& error)
+    {
+        text.clear();
+        Assign(error, "not connected");
+        return WebSocketReceive::Error;
+    }
+
+    void WebSocketConnection::Close(int64_t)
+    {
+    }
+} // namespace hsm::http
+
+#endif

@@ -16,12 +16,12 @@
   ],
   "features": {
     "http": {
-      "description": "libcurl HTTP transport (Schannel on Windows, OpenSSL elsewhere)",
+      "description": "libcurl HTTP transport and WebSocket connection (Schannel on Windows, OpenSSL elsewhere)",
       "dependencies": [
         {
           "name": "curl",
           "default-features": false,
-          "features": ["ssl"]
+          "features": ["ssl", "websockets"]
         }
       ]
     }

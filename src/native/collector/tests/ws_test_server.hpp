@@ -6,18 +6,18 @@
 // ping/pong and the close handshake. Plaintext only, like the HTTP capture servers next to it.
 // Serves one connection at a time on its own thread.
 //
-// The FRAMING here is written separately from the client's codec (the server parses masked frames
-// and writes unmasked ones, the client does the opposite), so each side checks the other. The
-// handshake DIGEST is the codec's own AcceptKey: a second copy of SHA-1 would prove nothing, and
-// the digest is pinned by published vectors in native_ws_codec_handshake_digest_matches_rfc.
+// This is the only RFC 6455 code the repository owns, and it never ships: the collector's client
+// side is libcurl's. Being a second, independent implementation is the point of it. Its handshake
+// digest is pinned by the RFC's own example in native_ws_fixture_accept_key_matches_rfc.
 
-#include "../src/hsm_ws_codec.hpp"
 #include "http_capture_server.hpp" // socket_t, platform socket headers
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -42,6 +42,117 @@ namespace hsm::test
             const size_t last = value.find_last_not_of(" \t");
             return first == std::string::npos ? std::string{} : value.substr(first, last - first + 1);
         }
+
+        inline uint32_t RotateLeft(uint32_t value, int bits)
+        {
+            return (value << bits) | (value >> (32 - bits));
+        }
+
+        // SHA-1 (FIPS 180-1), for the Sec-WebSocket-Accept value a server owes the client. The protocol
+        // fixes it to SHA-1; it protects nothing secret.
+        inline std::array<uint8_t, 20> Sha1(std::string_view input)
+        {
+            uint32_t h0 = 0x67452301u, h1 = 0xEFCDAB89u, h2 = 0x98BADCFEu, h3 = 0x10325476u, h4 = 0xC3D2E1F0u;
+
+            std::string message(input);
+            const uint64_t bit_length = static_cast<uint64_t>(input.size()) * 8u;
+            message.push_back(static_cast<char>(0x80));
+            while (message.size() % 64 != 56)
+                message.push_back('\0');
+            for (int shift = 56; shift >= 0; shift -= 8)
+                message.push_back(static_cast<char>((bit_length >> shift) & 0xFFu));
+
+            for (size_t chunk = 0; chunk < message.size(); chunk += 64)
+            {
+                uint32_t w[80];
+                for (size_t i = 0; i < 16; ++i)
+                {
+                    const size_t at = chunk + i * 4;
+                    w[i] = (static_cast<uint32_t>(static_cast<uint8_t>(message[at])) << 24) |
+                           (static_cast<uint32_t>(static_cast<uint8_t>(message[at + 1])) << 16) |
+                           (static_cast<uint32_t>(static_cast<uint8_t>(message[at + 2])) << 8) |
+                           static_cast<uint32_t>(static_cast<uint8_t>(message[at + 3]));
+                }
+                for (size_t i = 16; i < 80; ++i)
+                    w[i] = RotateLeft(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+
+                uint32_t a = h0, b = h1, c = h2, d = h3, e = h4;
+                for (size_t i = 0; i < 80; ++i)
+                {
+                    uint32_t f = 0, k = 0;
+                    if (i < 20)
+                    {
+                        f = (b & c) | (~b & d);
+                        k = 0x5A827999u;
+                    }
+                    else if (i < 40)
+                    {
+                        f = b ^ c ^ d;
+                        k = 0x6ED9EBA1u;
+                    }
+                    else if (i < 60)
+                    {
+                        f = (b & c) | (b & d) | (c & d);
+                        k = 0x8F1BBCDCu;
+                    }
+                    else
+                    {
+                        f = b ^ c ^ d;
+                        k = 0xCA62C1D6u;
+                    }
+                    const uint32_t temp = RotateLeft(a, 5) + f + e + k + w[i];
+                    e = d;
+                    d = c;
+                    c = RotateLeft(b, 30);
+                    b = a;
+                    a = temp;
+                }
+                h0 += a;
+                h1 += b;
+                h2 += c;
+                h3 += d;
+                h4 += e;
+            }
+
+            std::array<uint8_t, 20> digest{};
+            const uint32_t words[5] = { h0, h1, h2, h3, h4 };
+            for (size_t i = 0; i < 5; ++i)
+            {
+                digest[i * 4] = static_cast<uint8_t>((words[i] >> 24) & 0xFFu);
+                digest[i * 4 + 1] = static_cast<uint8_t>((words[i] >> 16) & 0xFFu);
+                digest[i * 4 + 2] = static_cast<uint8_t>((words[i] >> 8) & 0xFFu);
+                digest[i * 4 + 3] = static_cast<uint8_t>(words[i] & 0xFFu);
+            }
+            return digest;
+        }
+
+        inline std::string Base64(const uint8_t* data, size_t size)
+        {
+            static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            std::string out;
+            out.reserve((size + 2) / 3 * 4);
+            for (size_t i = 0; i < size; i += 3)
+            {
+                const uint32_t b0 = data[i];
+                const uint32_t b1 = i + 1 < size ? data[i + 1] : 0u;
+                const uint32_t b2 = i + 2 < size ? data[i + 2] : 0u;
+                const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
+                out.push_back(alphabet[(triple >> 18) & 0x3Fu]);
+                out.push_back(alphabet[(triple >> 12) & 0x3Fu]);
+                out.push_back(i + 1 < size ? alphabet[(triple >> 6) & 0x3Fu] : '=');
+                out.push_back(i + 2 < size ? alphabet[triple & 0x3Fu] : '=');
+            }
+            return out;
+        }
+
+        // The value a server must return in Sec-WebSocket-Accept for a given Sec-WebSocket-Key.
+        inline std::string AcceptKey(std::string_view client_key)
+        {
+            std::string material(client_key);
+            material += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+            const auto digest = Sha1(material);
+            return Base64(digest.data(), digest.size());
+        }
     } // namespace ws_detail
 
     class WebSocketTestServer
@@ -55,17 +166,15 @@ namespace hsm::test
             std::string subprotocol;
             // Answer every text message with "echo:" + the message.
             bool echo = true;
-            // Upgrade with a Sec-WebSocket-Accept that does not match the client's key.
-            bool wrong_accept = false;
             // Send this interim response (e.g. 103) before the final one; 0 = none.
             int interim_status = 0;
-            // Leave `Connection: Upgrade` out of the 101.
-            bool omit_connection_header = false;
         };
 
-        WebSocketTestServer() : WebSocketTestServer(Options{}) {}
+        WebSocketTestServer()
+            : WebSocketTestServer(Options{}) {}
 
-        explicit WebSocketTestServer(Options options) : options_(std::move(options))
+        explicit WebSocketTestServer(Options options)
+            : options_(std::move(options))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -157,6 +266,27 @@ namespace hsm::test
         bool SendContinuation(const std::string& text) { return SendFrame(0x0, /*fin=*/true, text); }
 
         bool SendPing() { return SendFrame(0x9, /*fin=*/true, "ping"); }
+
+        // A binary message as one frame.
+        bool SendBinary(const std::string& bytes) { return SendFrame(0x2, /*fin=*/true, bytes); }
+
+        // Only the START of a text frame: a header that declares `declared_bytes` of payload,
+        // followed by a handful of them. A client with a message limit must refuse it from the
+        // header, without waiting for (or buffering) the rest.
+        bool SendOversizedFrameStart(uint64_t declared_bytes)
+        {
+            std::string frame;
+            frame.push_back(static_cast<char>(0x81));
+            frame.push_back(static_cast<char>(127));
+            for (int shift = 56; shift >= 0; shift -= 8)
+                frame.push_back(static_cast<char>((declared_bytes >> shift) & 0xFF));
+            frame += "only-the-first-bytes";
+
+            std::lock_guard<std::mutex> guard(send_mutex_);
+            if (connection_ == INVALID_SOCKET)
+                return false;
+            return WriteAll(connection_, frame);
+        }
 
         // Starts the close handshake from the server side with the given status code.
         bool SendClose(uint16_t code)
@@ -333,9 +463,8 @@ namespace hsm::test
             std::string response;
             if (options_.interim_status != 0)
                 response += "HTTP/1.1 " + std::to_string(options_.interim_status) + " Interim\r\nLink: </style.css>; rel=preload\r\n\r\n";
-            response += std::string("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n") +
-                (options_.omit_connection_header ? "" : "Connection: Upgrade\r\n") + "Sec-WebSocket-Accept: " +
-                hsm::http::ws::AcceptKey(options_.wrong_accept ? key + "x" : key) + "\r\n";
+            response += "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " +
+                        ws_detail::AcceptKey(key) + "\r\n";
             if (!options_.subprotocol.empty())
                 response += "Sec-WebSocket-Protocol: " + options_.subprotocol + "\r\n";
             response += "\r\n";
@@ -399,8 +528,8 @@ namespace hsm::test
                     {
                         std::lock_guard<std::mutex> guard(mutex_);
                         close_codes_.push_back(payload.size() >= 2
-                                ? (static_cast<int>(static_cast<uint8_t>(payload[0])) << 8) | static_cast<uint8_t>(payload[1])
-                                : 0);
+                                                   ? (static_cast<int>(static_cast<uint8_t>(payload[0])) << 8) | static_cast<uint8_t>(payload[1])
+                                                   : 0);
                     }
                     SendFrame(0x8, /*fin=*/true, payload.substr(0, 2));
                     return;

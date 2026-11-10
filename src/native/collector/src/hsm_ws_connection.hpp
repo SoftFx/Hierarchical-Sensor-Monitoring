@@ -4,7 +4,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -14,11 +13,14 @@
 // ADR-0017). NOT part of the C ABI and not wired into the send path yet: this is the tested
 // building block the session transport is built on.
 //
-// libcurl provides the connection (TCP, TLS, proxy tunnelling, certificate checks) through a
-// CONNECT_ONLY handle; the WebSocket handshake and framing are done here with hsm_ws_codec.hpp.
-// It therefore works with any libcurl the collector supports, including distribution builds that
-// lack the curl_ws_* API (see hsm_ws_codec.hpp for the reasoning). libcurl stays confined to
-// hsm_ws_connection.cpp, like the HTTP transport.
+// The WebSocket protocol itself is libcurl's: the upgrade exchange, masking, frame encoding and
+// frame parsing all happen inside libcurl (CONNECT_ONLY=2 with curl_ws_send / curl_ws_recv). This
+// class adds no protocol code of its own. What it adds is policy around libcurl's API: timeouts,
+// cancellation, whole-message assembly with a size limit, text only, and the subprotocol check.
+// libcurl stays confined to hsm_ws_connection.cpp, like the HTTP transport.
+//
+// The price of not owning the protocol is that a session exists only where libcurl can carry one:
+// see Supported(). Elsewhere the collector keeps the HTTP transport.
 namespace hsm::http
 {
     struct WebSocketOpenResult
@@ -48,7 +50,7 @@ namespace hsm::http
     //
     // Every terminal outcome (a failed Open, a failed SendText, Receive returning Closed or Error)
     // releases the connection, so IsOpen() is the truth and nothing is written to a finished
-    // WebSocket afterwards. No member throws; Close and the destructor never block.
+    // WebSocket afterwards. No member throws; Close(0) and the destructor never block.
     //
     // Known limitation, for the session transport (step 4) to settle: waiting is a poll in
     // kWaitSliceMs slices, so an idle Receive wakes the thread ten times a second and a cancel is
@@ -57,20 +59,28 @@ namespace hsm::http
     class WebSocketConnection
     {
     public:
-        // Messages larger than this are refused by Receive (Error) instead of growing without bound.
+        // Messages larger than this are refused by Receive (Error) instead of growing without
+        // bound. The size comes from the frame header, so the refusal happens before the payload
+        // is read.
         static constexpr size_t kMaxMessageBytes = 8u * 1024u * 1024u;
-        // The upgrade response head is refused beyond this size.
-        static constexpr size_t kMaxHandshakeBytes = 16u * 1024u;
         // Longest timeout honoured; larger values are clamped (and cannot overflow the clock).
         static constexpr int64_t kMaxTimeoutMs = 24LL * 60 * 60 * 1000;
         static constexpr int64_t kWaitSliceMs = 100;
         // Longest Close() linger honoured.
         static constexpr int64_t kMaxLingerMs = 5000;
-        // Interim 1xx responses tolerated in front of the 101.
-        static constexpr int kMaxInterimResponses = 4;
-        // The receive buffer gives its memory back once it holds less than a quarter of this while
-        // its capacity exceeds it.
-        static constexpr size_t kShrinkAboveBytes = 256u * 1024u;
+        // Oldest libcurl accepted, as LIBCURL_VERSION_NUM: 8.14.0. Two things this class relies on
+        // are missing before it. Up to 8.12 the frames of a fragmented message are reported
+        // without saying which one is the last (the flags came from the opcode alone), so a
+        // message cannot be assembled reliably. And 8.14 is the first release that lets the caller
+        // answer pings (CURLWS_NOAUTOPONG): libcurl's automatic pong is not something to build on,
+        // as 8.21 keeps it queued until the next send or the next data frame.
+        static constexpr unsigned int kMinCurlVersion = 0x080e00;
+
+        // True when the libcurl loaded into this process can carry a WebSocket: it is at least
+        // kMinCurlVersion and was built with the ws/wss protocols (distribution builds older than
+        // 8.11 leave them out). When false, `reason` (if given) says why and Open fails with the
+        // same text; the caller stays on HTTP.
+        static bool Supported(std::string* reason = nullptr) noexcept;
 
         explicit WebSocketConnection(bool verify_peer);
         ~WebSocketConnection();
@@ -81,8 +91,8 @@ namespace hsm::http
         // `url` is ws:// or wss://. `headers` are added to the upgrade request (a name or value
         // containing CR or LF is refused). `subprotocol` (may be empty) is offered in
         // Sec-WebSocket-Protocol; the server must select exactly what was offered (nothing, when
-        // nothing was), otherwise the connection is closed and the result is a failure. `timeout_ms` bounds the whole open:
-        // connect, TLS and the upgrade exchange.
+        // nothing was), otherwise the connection is closed and the result is a failure.
+        // `timeout_ms` bounds the whole open: connect, TLS and the upgrade exchange.
         WebSocketOpenResult Open(
             const std::string& url,
             const std::vector<HttpHeader>& headers,
@@ -95,7 +105,7 @@ namespace hsm::http
 
         // Waits up to `timeout_ms` for one complete text message. Partial reads and fragmented
         // messages are assembled across calls, so a Timeout loses nothing. Pings are answered and
-        // pongs ignored without surfacing. A binary message is an Error: the session is text only.
+        // pongs dropped without surfacing. A binary message is an Error: the session is text only.
         // Answering a ping is a complete frame write, so it can extend the call by up to one
         // second beyond `timeout_ms` when the socket is not writable, and a pong that cannot be
         // written in that second ends the connection (a half-written frame would corrupt it).
@@ -117,14 +127,6 @@ namespace hsm::http
         bool IsOpen() const { return curl_ != nullptr; }
 
     private:
-        enum class Io
-        {
-            Ok,
-            Timeout,
-            Closed,
-            Error
-        };
-
         enum class Wait
         {
             Ready,
@@ -138,18 +140,15 @@ namespace hsm::http
         static Deadline DeadlineIn(int64_t timeout_ms);
 
         Wait WaitForSocket(bool for_read, Deadline deadline);
-        Io SendAll(const std::string& data, Deadline deadline, std::string& error);
-        Io ReadMore(Deadline deadline, std::string& error);
-        std::string MaskedFrame(uint8_t opcode, const std::string& payload);
+        bool SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error);
+        std::string Describe(int curl_code) const;
         void Release();
 
-        void* curl_ = nullptr; // CURL*, opaque so <curl/curl.h> stays in the .cpp
+        void* curl_ = nullptr;    // CURL*, opaque so <curl/curl.h> stays in the .cpp
+        void* headers_ = nullptr; // curl_slist* of the upgrade request, owned for the handle's life
         bool verify_peer_;
         std::atomic<bool> cancelled_{ false };
-        std::mt19937 random_;      // handshake key and frame masks; seeded once in the constructor
-        std::string inbuf_;        // bytes received from the connection
-        size_t inpos_ = 0;         // start of the unparsed part of inbuf_
-        std::string message_;      // fragments of the message being assembled
-        bool assembling_ = false;  // a non-final data frame has been received
+        std::string message_;      // payload received so far of the message being assembled
+        std::vector<char> detail_; // libcurl's error text for the handle (CURLOPT_ERRORBUFFER)
     };
 } // namespace hsm::http
