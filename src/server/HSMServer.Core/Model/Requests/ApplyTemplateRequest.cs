@@ -17,8 +17,10 @@ namespace HSMServer.Core.Model.Requests
     // The optional IsDisabledChangedAlertIds (#1077 review): the template
     // alert ids whose IsDisabled differs from the previously stored version
     // of the same template — computed once per save in AddAlertTemplateAsync
-    // (null on the restore and sensor-creation paths, where no previous
-    // version is diffed). Read by ApplyTemplateToSensor to decide whether a
+    // (null on the sensor-creation path, the only apply that runs without a
+    // save to diff; restore and change-set rollback also go through
+    // AddAlertTemplateAsync and DO get the diff). Read by
+    // ApplyTemplateToSensor to decide whether a
     // preserved operator toggle's divergence carries new information worth
     // reporting on THIS save.
     internal sealed record ApplyTemplateRequest(Guid SensorId, AlertTemplateModel Template,

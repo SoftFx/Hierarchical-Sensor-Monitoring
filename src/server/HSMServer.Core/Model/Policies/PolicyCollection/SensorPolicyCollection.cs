@@ -305,7 +305,7 @@ namespace HSMServer.Core.Model.Policies
                     var changeInfo = AlertChangeTable[update.Id.ToString()];
 
                     if (changeInfo.CanChange(initiator) || update.PreservesOperatorToggle ||
-                        (initiator.IsTemplateApply && changeInfo.Initiator.Type != InitiatorType.User))
+                        changeInfo.Initiator.Type != InitiatorType.User)
                     {
                         if (_storage.TryGetValue(update.Id, out var existingPolicy))
                         {

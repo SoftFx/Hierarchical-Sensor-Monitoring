@@ -2477,12 +2477,23 @@ namespace HSMServer.Core.Cache
         // The production save paths build a fresh AlertTemplateModel per
         // request, so the diff sees the previous state; entries matched only
         // by id, added ones are ignored (nothing applied can hold them).
-        private static HashSet<Guid> GetIsDisabledChangedAlertIds(AlertTemplateModel previous, AlertTemplateModel current)
+        private HashSet<Guid> GetIsDisabledChangedAlertIds(AlertTemplateModel previous, AlertTemplateModel current)
         {
             var changedIds = new HashSet<Guid>();
 
             if (previous is null)
                 return changedIds;
+
+            // A caller that mutates the STORED instance in place and saves it
+            // again passes the same reference as both versions: the diff
+            // below would compare the object with itself and silently report
+            // nothing (losing every flip-only divergence report). No
+            // production caller does this — say so instead of going quiet.
+            if (ReferenceEquals(previous, current))
+            {
+                _logger.Warn($"Alert template {current?.Id} re-saved as the same in-memory instance; the isDisabled diff is empty");
+                return changedIds;
+            }
 
             foreach (var oldPolicy in previous.Policies)
             {
