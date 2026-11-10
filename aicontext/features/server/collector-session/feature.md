@@ -17,12 +17,12 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 - **The ack status is the status of the HTTP route**, with one deliberate exception: a body the server cannot parse is `400 malformed body` on the session, where the HTTP route ends as a `500` (its model binder throws). A `500` tells a collector to retry a body that can never be accepted.
 - **A failure ack never echoes the request.** The HTTP `400` of `/list` does.
 - **Refusals before the upgrade are ordinary HTTP statuses**; nothing is upgraded just to be closed.
-- **Access is re-checked for every request frame and every ping**, as it is for every HTTP request: the key and its product are looked up again and the key must still be valid for `CanSendSensorData`. Losing it closes the session with `1008`, also for a session that only keeps itself alive. There is no `406` ack: a key that cannot send does not get a session in the first place.
+- **Access is re-checked for every request frame and every ping**, as it is for every HTTP request: the key and its product are looked up again and the key must still be valid for `CanSendSensorData`. Losing it closes the session with `1008`, also for a session that only keeps itself alive. A request frame counts as a use of the key (last-used time and address), a ping does not. There is no `406` ack: a key that cannot send does not get a session in the first place.
 - **A frame the server cannot acknowledge is refused, not dropped**: a request without an `id` closes the session with `1002`. Dropping it would be silent data loss.
 - **The cap holds under a race.** A slot is reserved before the upgrade is accepted and released when the session ends, whatever way it ends.
 - **A collector going away is not a server error.** A dropped connection, a close from the collector and a silent collector end the session at `Debug` level; protocol violations are logged at `Warn`; only a failure inside the server is an `Error`.
-- **Silence is the collector's, never the server's.** The three-heartbeat limit runs while the server waits for a frame or for the collector to take one, and starts again with every read from the socket, so a large frame on a slow link is not silence. It does not run while the server itself is storing a batch.
-- **Shutdown does not wait for collectors, and does not lose an ack.** On `ApplicationStopping` every session gets a close frame (`1001`); a peer that has not answered in 3 seconds is cut off. New upgrades are refused with `503` from that moment. A session that is storing a batch at that moment sends the ack first and the close after it, so a stored batch is not sent again. A frame that arrives after the close went out is neither stored nor answered.
+- **Silence is the collector's, never the server's.** The three-heartbeat limit runs while the server waits for a frame or for the collector to take one, and starts again with every read that brought bytes, so a large frame on a slow link is not silence. A frame still has to be complete within ten silence limits of its first byte (15 minutes by default): a frame that never ends would otherwise hold a slot and never reach the access check. The limit does not run while the server itself is storing a batch.
+- **Shutdown does not wait for collectors, and does not lose an ack.** On `ApplicationStopping` every session gets a close frame (`1001`); a peer that has not answered in 3 seconds is cut off. New upgrades are refused with `503` from that moment. A session that is storing a batch at that moment sends the ack first and the close after it, so a stored batch is not sent again, provided the store finishes within those 3 seconds; past them the session is cut off like any other and the batch may arrive twice (delivery is at-least-once). A frame that arrives after the close went out is neither stored nor answered.
 
 ## Primary Workflows
 
@@ -39,7 +39,7 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 
 | Contract | Location | Notes |
 |---|---|---|
-| `GET /api/sensors/session`, subprotocol `hsm.sensors.v1` | `Controllers/SensorsController.cs` (`Session`) | Not in the OpenAPI document: it is not an HTTP operation. The route has no method constraint, so a WebSocket over HTTP/2 (a `CONNECT`) reaches the handler too; that path is not tested. |
+| `GET /api/sensors/session`, subprotocol `hsm.sensors.v1` | `Controllers/SensorsController.cs` (`Session`) | Not in the OpenAPI document: it is not an HTTP operation. The route accepts `GET` (the upgrade over HTTP/1.1) and `CONNECT` (a WebSocket over HTTP/2); the second is not tested. |
 | Response header `X-Hsm-Session: hsm.sensors.v1` | `Middleware/Telemetry/TelemetryMiddleware.cs` | On every answer to a request that carries a `Key` header, refusals included, while sessions are on. |
 | Frames | `SensorApi/Sessions/SessionProtocol.cs` | The wire-contract doc is the contract. |
 | Settings section `CollectorSessions` | `ServerConfiguration/Sections/CollectorSessionsConfig.cs` | Read at startup. |
@@ -49,7 +49,8 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 | Condition | Status |
 |---|---|
 | Sessions are off (`MaxSessions = 0`) | 404 |
-| The request is not a WebSocket upgrade (any method) | 400 |
+| A `GET` that is not a WebSocket upgrade | 400 |
+| Any method but `GET` and `CONNECT` | 405 |
 | No `Key` header, unknown or malformed key, key blocked, expired or without `CanSendSensorData` | 406 (the Sensor API's access error) |
 | `Sec-WebSocket-Protocol` does not offer `hsm.sensors.v1` | 400 |
 | The session cap is reached, or the server is shutting down | 503 |
@@ -125,13 +126,13 @@ An idle session holds about **22 KiB of managed memory** on the server (measured
 
 ## Tests
 
-`src/tests/HSMServer.Core.Tests/SensorApi/CollectorSessionTests.cs`: a real `ClientWebSocket` and `HttpClient` against the real Sensor API (middleware, controller, ingestion service, session handler) on a real Kestrel listener over the real cache. Covered: the handshake access matrix, the required subprotocol, discovery header on and off, ack status and body equal to the HTTP route for the same body (`list` and `commands`, accepted and partly refused), failure acks without echo, unknown op and unknown envelope fields, ping, the five violations with their close codes, the session cap and slot release, the silence limit, lost access (on a data frame and on a ping), registry contents, shutdown (idle, and with a batch inside the store), a vanished collector, traffic counting, and the HTTP routes after the extraction of the ingestion service.
+`src/tests/HSMServer.Core.Tests/SensorApi/CollectorSessionTests.cs`: a real `ClientWebSocket` and `HttpClient` against the real Sensor API (middleware, controller, ingestion service, session handler) on a real Kestrel listener over the real cache. Covered: the handshake access matrix, the required subprotocol, discovery header on and off, ack status and body equal to the HTTP route for the same body (`list` and `commands`, accepted and partly refused), failure acks without echo, unknown op and unknown envelope fields, ping, the five violations with their close codes, the session cap and slot release, the silence limit (also with a frame arriving in pieces), lost access (on a data frame and on a ping), registry contents, shutdown (idle, and with a batch inside the store), a vanished collector, traffic counting, and the HTTP routes after the extraction of the ingestion service.
 
 The silence limit runs on a `TimeProvider`. The tests replace it with a manual clock, so none of them waits for real seconds: they assert that the watch is running, that a frame starts it again, and what happens when it fires.
 
 The test host runs only the part of the pipeline the Sensor API passes through. The full pipeline (HTTPS, the guards, cookie and token authentication in front of the endpoint) was checked by hand against a locally started server when the feature was written: upgrade, `hello`, a `list` and a `commands` frame with their acks, ping, the two refusals, and an empty error log.
 
-Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSocket over HTTP/2, a collector that stops reading (the send is bounded by the silence limit, untested), a large frame arriving slowly, and behaviour at thousands of sessions.
+Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSocket over HTTP/2, a collector that stops reading (the send is bounded by the silence limit, untested), the ten-limit budget of a frame that never ends, and behaviour at thousands of sessions.
 
 ## Known Issues / Limitations
 

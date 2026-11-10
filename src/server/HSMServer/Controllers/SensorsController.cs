@@ -76,11 +76,10 @@ namespace HSMServer.Controllers
         /// The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
         /// authenticated by the same Key header as every other route here. Not an HTTP
         /// operation, so it stays out of the OpenAPI document; the contract is
-        /// aicontext/features/api/wire-contract/feature.md. No method constraint: over
-        /// HTTP/1.1 the upgrade is a GET, over HTTP/2 it is a CONNECT, and anything that is
-        /// not an upgrade is refused by the handler.
+        /// aicontext/features/api/wire-contract/feature.md. Two methods: over HTTP/1.1 the
+        /// upgrade is a GET, over HTTP/2 it is a CONNECT.
         /// </summary>
-        [Route("session")]
+        [AcceptVerbs("GET", "CONNECT", Route = "session")]
         [ApiExplorerSettings(IgnoreApi = true)]
         public Task Session() => _sessions.HandleAsync(HttpContext);
 

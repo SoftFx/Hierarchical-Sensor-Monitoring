@@ -137,7 +137,7 @@ A second transport for the same bodies (#1664, epic #1660, ADR-0017). One WebSoc
 
 **Discovery.** A server that has sessions adds `X-Hsm-Session: hsm.sensors.v1` to every answer to a request that carries a `Key` header. A collector attempts a session only after it has seen that header, so it never probes a server that has none.
 
-**Handshake.** `Sec-WebSocket-Protocol: hsm.sensors.v1` is required and is echoed. Optional request headers state facts about the collector: `X-Collector-Kind` (`managed` / `native`), `X-Collector-Version`, `X-Agent-Version`. A refused upgrade is an HTTP status: `404` sessions are off, `400` not an upgrade or no known subprotocol, `406` no usable access key, `503` the session cap is reached or the server is shutting down.
+**Handshake.** `Sec-WebSocket-Protocol: hsm.sensors.v1` is required and is echoed. Optional request headers state facts about the collector: `X-Collector-Kind` (`managed` / `native`), `X-Collector-Version`, `X-Agent-Version`. A refused upgrade is an HTTP status: `404` sessions are off, `400` not an upgrade or no known subprotocol, `405` a method other than `GET` (or `CONNECT` over HTTP/2), `406` no usable access key, `503` the session cap is reached or the server is shutting down.
 
 **Frames.** Text frames, one JSON object each. The field names are lower-case and case-sensitive.
 
@@ -170,7 +170,7 @@ A second transport for the same bodies (#1664, epic #1660, ADR-0017). One WebSoc
 - **A success ack** carries the route's success body in `body`: the dictionary of per-path errors, empty when everything was accepted. Its keys are sensor paths exactly as sent.
 - **A failure ack** carries a short `error` text and no `body`. It never echoes the request, unlike the HTTP `400` of `list`. Texts in version 1: `empty batch`, `malformed body`, `unknown op`, `failed to store the batch`, `failed to apply the commands`. They are for logs; a collector decides by `status`.
 - **Heartbeat.** A collector that has sent nothing for `heartbeatSeconds` sends `{"op":"ping"}`; the server answers `{"op":"pong"}`. The server drops a session after three intervals without any inbound frame. WebSocket ping/pong frames are not the heartbeat. A ping is also where the server notices that the access key can no longer send (`1008`).
-- **Shutdown.** The server closes with `1001`. A request it was still handling is acknowledged before the close; a request that arrives after the close went out is not stored and gets no ack, so the collector sends it again over HTTP or the next session.
+- **Shutdown.** The server closes with `1001`. A request it was still handling is acknowledged before the close, if handling it takes no more than a few seconds; a request that arrives after the close went out is not stored and gets no ack, so the collector sends it again over HTTP or the next session.
 - **Growth without a new version.** Unknown envelope fields are ignored by both sides. An unknown request `op` is answered with a `400` ack (`"unknown op"`); an unknown push `op` is ignored by the collector.
 - **Close codes from the server**: `1001` shutdown, `1002` a request frame without an `id`, `1003` a binary frame, `1007` a frame that is not a JSON object, `1008` the access key can no longer send, `1009` a frame over `maxFrameBytes`.
 - **Delivery is at-least-once**, as over HTTP: a batch whose ack was lost may have been stored.

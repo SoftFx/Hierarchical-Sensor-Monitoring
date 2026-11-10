@@ -419,6 +419,37 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         [Fact]
+        public async Task FrameInPieces_KeepsTheSilenceLimitAway_AndIsHandledWhenWhole()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var watch = Assert.Single(host.Time.Timers);
+
+            await TestWait.UntilAsync(() => watch.IsArmed, "the watch to run while the server waits for a frame");
+            var armsBefore = watch.Arms;
+
+            // The first piece of a frame: bytes arrived, so the count starts again although
+            // no frame is complete.
+            await socket.SendAsync(Encoding.UTF8.GetBytes("{\"op\":"), WebSocketMessageType.Text, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => watch.Arms > armsBefore, "a piece of a frame to start the silence count again");
+
+            await socket.SendAsync(Encoding.UTF8.GetBytes("\"ping\"}"), WebSocketMessageType.Text, endOfMessage: true, Deadline());
+
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+        }
+
+        [Fact]
+        public async Task PlainRequest_WithAnotherMethod_IsNotRouted()
+        {
+            await using var host = await StartHost();
+
+            var post = await PostAsync(host, "session", "[]", _key);
+
+            Assert.Equal(HttpStatusCode.MethodNotAllowed, post.Status);
+        }
+
+        [Fact]
         public async Task KeyBlocked_EndsASessionThatOnlyPings()
         {
             await using var host = await StartHost();
@@ -510,10 +541,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
             var stop = Task.Run(host.StopAsync);
 
-            // Let the shutdown reach the session while its store is still held. The outcome
-            // asserted below does not depend on this pause: without it the ack is simply
-            // sent before the close was asked for.
-            await Task.Delay(300);
+            // The shutdown has reached the session and found it busy: its close now waits.
+            await TestWait.UntilAsync(() => host.Registry.AnyDeferredClose, "the shutdown to ask the busy session to close");
             gated.Release();
 
             // The batch was stored, so its ack must still arrive, and only then the close.

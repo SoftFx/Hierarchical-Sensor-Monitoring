@@ -43,6 +43,12 @@ namespace HSMServer.SensorApi.Sessions
         // off. The web server's own shutdown would otherwise wait for these connections.
         private static readonly TimeSpan ShutdownBudget = TimeSpan.FromSeconds(3);
 
+        // A frame that is still arriving keeps the silence limit away, but not for ever: this
+        // many silence limits after its first byte it has to be complete. Without the bound
+        // a collector could hold a session, and its slot, with a frame that never ends, and
+        // would never reach the access check that every completed frame gets.
+        private const int FrameBudgetInSilenceLimits = 10;
+
         // An ack buffer that grew past this (a batch with many per-path errors) is dropped
         // after the frame, so one large answer does not stay allocated for the session.
         private const int KeepOutputBytes = 64 * 1024;
@@ -133,6 +139,7 @@ namespace HSMServer.SensorApi.Sessions
                     _time.GetUtcNow().UtcDateTime);
 
                 _registry.Register(session);
+                SessionProtocol.MarkUpgraded(context);
 
                 _logger.Debug($"Collector session {session.Id} opened: {caller.TelemetryPath} from {caller.RemoteIP}");
 
@@ -182,6 +189,23 @@ namespace HSMServer.SensorApi.Sessions
             // over with every read, so a large frame on a slow link is not silence either.
             await using var silence = new SilenceWatch(_time, session, _config.SilenceLimit);
 
+            var frameBudget = _config.SilenceLimit * FrameBudgetInSilenceLimits;
+            long frameStarted = 0;
+
+            // Called after every read of the frame being received. Bytes that arrive start the
+            // silence limit again, within the frame's budget; an empty fragment is not progress.
+            Action<int> progressed = bytes =>
+            {
+                if (bytes == 0)
+                    return;
+
+                if (frameStarted == 0)
+                    frameStarted = _time.GetTimestamp();
+
+                if (_time.GetElapsedTime(frameStarted) < frameBudget)
+                    silence.Arm();
+            };
+
             SessionProtocol.WriteHello(output, _config.MaxFrameBytes, _config.HeartbeatSeconds);
             _telemetry.AddResponse(session.Caller.TelemetryPath, output.WrittenCount);
 
@@ -191,8 +215,9 @@ namespace HSMServer.SensorApi.Sessions
             while (true)
             {
                 silence.Arm();
+                frameStarted = 0;
 
-                using var frame = await session.ReceiveAsync(_config.MaxFrameBytes, silence.Arm, aborted);
+                using var frame = await session.ReceiveAsync(_config.MaxFrameBytes, progressed, aborted);
 
                 silence.Disarm();
 
@@ -286,8 +311,8 @@ namespace HSMServer.SensorApi.Sessions
 
                 // The key is looked up again for every request and every ping, as it is for
                 // every HTTP request: revoking or blocking it ends the session, also one that
-                // only keeps itself alive.
-                if (!TryRefreshCaller(session, out var caller, out var accessError))
+                // only keeps itself alive. A ping is not a use of the key, though.
+                if (!TryRefreshCaller(session, countsAsKeyUsage: !isPing, out var caller, out var accessError))
                 {
                     _logger.Debug($"Collector session {session.Id} lost its access: {accessError}");
                     await session.CloseAsync(SessionProtocol.ClosePolicyViolation, Truncate(accessError));
@@ -413,7 +438,7 @@ namespace HSMServer.SensorApi.Sessions
             return body is not null;
         }
 
-        private bool TryRefreshCaller(CollectorSession session, out PublicApiRequestInfo caller, out string error)
+        private bool TryRefreshCaller(CollectorSession session, bool countsAsKeyUsage, out PublicApiRequestInfo caller, out string error)
         {
             caller = session.Caller;
 
@@ -426,7 +451,8 @@ namespace HSMServer.SensorApi.Sessions
             if (!key.IsValid(KeyPermissions.CanSendSensorData, out error))
                 return false;
 
-            _cache.SetLastKeyUsage(key.Id, session.RemoteIP);
+            if (countsAsKeyUsage)
+                _cache.SetLastKeyUsage(key.Id, session.RemoteIP);
 
             // Rebuilt only when something it is made of changed.
             if (!session.IsCallerCurrent(key, product))

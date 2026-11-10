@@ -30,7 +30,7 @@ namespace HSMServer.Middleware.Telemetry
 
             // A request that was upgraded is a collector session: its traffic was counted
             // frame by frame, and its HTTP response has no body to count.
-            if (context.TryGetPublicApiInfo(out var requestInfo) && context.Response.StatusCode != StatusCodes.Status101SwitchingProtocols)
+            if (context.TryGetPublicApiInfo(out var requestInfo) && !SessionProtocol.WasUpgraded(context))
                 _statistics.AddResponse(requestInfo.TelemetryPath, context.Response.ContentLength);
         }
     }

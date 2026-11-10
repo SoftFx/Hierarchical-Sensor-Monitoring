@@ -25,6 +25,9 @@ namespace HSMServer.SensorApi.Sessions
 
         public IReadOnlyList<CollectorSessionInfo> GetSessions() => _sessions.Values.Select(session => session.ToInfo()).ToList();
 
+        // True while the close of some session waits for a frame that is being handled.
+        internal bool AnyDeferredClose => _sessions.Values.Any(session => session.HasDeferredClose);
+
 
         // Takes a slot before the upgrade is accepted, so a refusal is still an ordinary
         // HTTP status. Every successful call is paired with Release.

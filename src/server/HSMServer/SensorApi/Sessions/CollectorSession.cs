@@ -182,10 +182,20 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
+        // True while a close asked for from outside waits for the frame in progress.
+        internal bool HasDeferredClose
+        {
+            get
+            {
+                lock (_gate)
+                    return _closeRequest is not null;
+            }
+        }
+
         // Reads one whole message. Only the handler loop calls it. `progressed` is called
-        // after every read from the socket, so the caller can tell a frame that is still
-        // arriving from a collector that went silent.
-        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, Action progressed, CancellationToken token)
+        // after every read from the socket with the number of bytes it brought, so the
+        // caller can tell a frame that is still arriving from a collector that went silent.
+        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, Action<int> progressed, CancellationToken token)
         {
             var buffer = _receiveBuffer;
             byte[] rented = null;
@@ -197,7 +207,7 @@ namespace HSMServer.SensorApi.Sessions
                 {
                     var result = await _socket.ReceiveAsync(buffer.AsMemory(total), token);
 
-                    progressed?.Invoke();
+                    progressed?.Invoke(result.Count);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {

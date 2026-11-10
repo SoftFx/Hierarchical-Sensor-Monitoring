@@ -1,4 +1,5 @@
 using HSMSensorDataObjects;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -63,7 +64,16 @@ namespace HSMServer.SensorApi.Sessions
 
         private static readonly byte[] _pong = "{\"op\":\"pong\"}"u8.ToArray();
 
+        private static readonly object _upgradedKey = new();
+
         public static ReadOnlyMemory<byte> Pong => _pong;
+
+
+        // Set by the handler once a request became a session. The status code cannot tell:
+        // an upgrade answers 101 over HTTP/1.1 and 200 over HTTP/2.
+        public static void MarkUpgraded(HttpContext context) => context.Items[_upgradedKey] = true;
+
+        public static bool WasUpgraded(HttpContext context) => context.Items.ContainsKey(_upgradedKey);
 
 
         public static void WriteHello(IBufferWriter<byte> output, int maxFrameBytes, int heartbeatSeconds)
