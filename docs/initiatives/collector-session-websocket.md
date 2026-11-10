@@ -142,6 +142,8 @@ A server service holding the live sessions: product, access key, client name, co
 
 **Session cap.** One limit for the whole server (owner decision), a server setting. Its default is 1 000 sessions, proposed after step 2 measured the cost (#1664, PR #1665): an idle session holds about 22 KiB of managed memory on the server, so that cap costs about 22 MB when reached. The first draft said 10 000; the owner asked why so many. One session is one collector process, and no known installation has a thousand of them. A larger one raises the setting: collectors over the cap are refused every time they try and deliver nothing until a slot is free, and the server says so in its log.
 
+**Connection limit per address** (owner decision, 2026-11-10): one client address holds at most 20 sessions; the next upgrade from it is refused with 429. With no fallback, the server-wide cap alone let one host whose collector reconnects in a loop take every slot and stop everyone else. The limit is a server setting, an IPv6 client is counted by its /64, and behind a reverse proxy the address is the client's only when the server trusts the proxy (`Kestrel.TrustedProxies`): otherwise every collector shares the proxy's address and its 20 sessions.
+
 ### Disconnect alert
 
 Owner decision: a collector that disconnects must raise an **alert**.
@@ -238,6 +240,7 @@ Answered by the owner on 2026-11-10.
 | What does the product do when a collector disconnects? | **It raises an alert, and only after the collector has been off for more than 5 minutes.** Carried out by #1666; see there for sensors that are already registered. | § Disconnect alert, step 6, #1666 |
 | Does the managed collector expose directives publicly? | **No. They are handled inside the collector.** | § Push: directives, step 5 |
 | Is the session cap per server or per product? | **Per server.** | § Session registry, step 2 |
+| What stops one client from taking every slot? | **A connection limit of 20 sessions from one IP address.** | § Session registry, step 2 |
 | May the native collector carry its own WebSocket protocol code? | **No. No self-written protocol code; a session is still wanted.** The owner runs the software on hosts of their choosing with a current OS, so depending on a recent libcurl is acceptable. SharpRpc, gRPC and a Rust rewrite of the collector were raised in the same discussion and not taken (ADR-0017, Alternatives). | Step 1, § Compatibility, Risks |
 
 Proposed here and not confirmed by the owner: the default of 1 000 for the session cap. The owner's input was the question "why so many?" about the 10 000 of the first draft.
