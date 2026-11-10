@@ -56,7 +56,7 @@ namespace hsm::http
 
         if (kept.curl != nullptr)
         {
-            if (now - kept.created < kConnectionLifetime)
+            if (now - kept.created < connection_lifetime_)
                 return kept;
             // Past its lifetime: closing the handle closes its connection and drops its DNS cache,
             // so the request below resolves the server name again.
@@ -180,8 +180,8 @@ namespace hsm::http
         return response;
     }
 
-    HttpTransport::HttpTransport(int64_t timeout_ms, bool verify_peer)
-        : timeout_ms_(timeout_ms), verify_peer_(verify_peer)
+    HttpTransport::HttpTransport(int64_t timeout_ms, bool verify_peer, std::chrono::milliseconds connection_lifetime)
+        : timeout_ms_(timeout_ms), verify_peer_(verify_peer), connection_lifetime_(connection_lifetime)
     {
         EnsureCurlGlobal();
     }

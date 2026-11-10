@@ -278,6 +278,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_reuses_connection
         COMMAND hsm_collector_tests native_http_transport_reuses_connection
     )
+    add_test(NAME native_http_transport_retires_connection_after_its_lifetime
+        COMMAND hsm_collector_tests native_http_transport_retires_connection_after_its_lifetime
+    )
     add_test(NAME native_http_transport_concurrent_posts_then_reuse
         COMMAND hsm_collector_tests native_http_transport_concurrent_posts_then_reuse
     )
