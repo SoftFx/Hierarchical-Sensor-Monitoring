@@ -32,9 +32,11 @@ The owner asked for a persistent connection in a current, standard form (2026-11
 
 Protocol details, rollout and work breakdown: `docs/initiatives/collector-session-websocket.md`.
 
+This ADR quotes results of steps 1 and 2 (the libcurl version floor, the measured cost of a session). They come from PRs #1663 and #1665, which were still open when this was written; if either changes before it merges, the figures here change with it.
+
 ## Consequences
 
-- The server gains a push channel and real-time knowledge of connected collectors. A directive reaches a collector when it changes instead of on its next POST. Directives stay level-triggered (re-announced periodically), so a client-side retry that depends on repetition, such as the agent's update retry and its debounce, keeps working unchanged.
+- The server gains a push channel and real-time knowledge of connected collectors. A directive reaches a collector when it changes instead of on its next POST. Directives stay level-triggered (re-announced periodically), so a client-side retry that depends on repetition, such as the agent's update retry, keeps working. It gets slower on a session: about once a minute today, once per re-announcement (5 minutes) there.
 - Collectors carry two transports for the length of the transition, and one after it. The cost is contained by using one payload format and the HTTP status as the only result vocabulary for both, and by pinning session behavior with scenarios in the shared conformance corpus.
 - A collector on a session has no second path. When no session can be opened it delivers nothing, and what it loses is bounded by its queues, as with an unreachable server today. New causes of that state exist: a proxy that breaks upgrades, a server with sessions off, the session cap, a libcurl too old for the native client.
 - Retiring HTTP stops every collector that has not moved, older library versions in third-party applications above all. Existing deployments keep working unchanged only until then.
