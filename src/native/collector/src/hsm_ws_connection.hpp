@@ -88,8 +88,9 @@ namespace hsm::http
         WebSocketConnection(const WebSocketConnection&) = delete;
         WebSocketConnection& operator=(const WebSocketConnection&) = delete;
 
-        // `url` is ws:// or wss://. `headers` are added to the upgrade request (a name or value
-        // containing CR or LF is refused). `subprotocol` (may be empty) is offered in
+        // `url` is ws:// or wss://. `headers` are added to the upgrade request. A name that is not
+        // a plain header token, a value containing CR or LF, and a name that would replace one of
+        // the upgrade's own headers (Upgrade, Connection, Sec-WebSocket-*) are refused. `subprotocol` (may be empty) is offered in
         // Sec-WebSocket-Protocol; the server must select exactly what was offered (nothing, when
         // nothing was), otherwise the connection is closed and the result is a failure.
         // `timeout_ms` bounds the whole open: connect, TLS and the upgrade exchange.
@@ -104,7 +105,8 @@ namespace hsm::http
         bool SendText(const std::string& text, int64_t timeout_ms, std::string& error);
 
         // Waits up to `timeout_ms` for one complete text message. Partial reads and fragmented
-        // messages are assembled across calls, so a Timeout loses nothing. Pings are answered and
+        // messages are assembled across calls, so a Timeout loses nothing; and it is a Timeout
+        // whenever no message is complete by then, even if frames kept arriving. Pings are answered and
         // pongs dropped without surfacing. A binary message is an Error: the session is text only.
         // Answering a ping is a complete frame write, so it can extend the call by up to one
         // second beyond `timeout_ms` when the socket is not writable, and a pong that cannot be
@@ -142,6 +144,7 @@ namespace hsm::http
         Wait WaitForSocket(bool for_read, Deadline deadline);
         bool SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error);
         std::string Describe(int curl_code) const;
+        void ForgetDetail();
         void Release();
 
         void* curl_ = nullptr;    // CURL*, opaque so <curl/curl.h> stays in the .cpp
@@ -149,6 +152,7 @@ namespace hsm::http
         bool verify_peer_;
         std::atomic<bool> cancelled_{ false };
         std::string message_;      // payload received so far of the message being assembled
+        std::string control_;      // payload received so far of the ping or close frame in progress
         std::vector<char> detail_; // libcurl's error text for the handle (CURLOPT_ERRORBUFFER)
     };
 } // namespace hsm::http

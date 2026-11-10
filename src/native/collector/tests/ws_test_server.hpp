@@ -229,6 +229,13 @@ namespace hsm::test
         // Pong frames received from the client (answers to SendPing).
         int Pongs() const { return pongs_.load(std::memory_order_acquire); }
 
+        // Payload of the last pong received.
+        std::string LastPong() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return last_pong_;
+        }
+
         // True while an upgraded connection is being served.
         bool Connected() const { return connected_.load(std::memory_order_acquire); }
 
@@ -266,6 +273,27 @@ namespace hsm::test
         bool SendContinuation(const std::string& text) { return SendFrame(0x0, /*fin=*/true, text); }
 
         bool SendPing() { return SendFrame(0x9, /*fin=*/true, "ping"); }
+
+        // One ping whose bytes reach the client in two pieces, a pause apart: the frame header
+        // with the first half of the payload, then the rest. A client must answer it with ONE
+        // pong carrying the whole payload.
+        bool SendPingInTwoPieces(const std::string& payload)
+        {
+            if (payload.size() < 2 || payload.size() > 125)
+                return false;
+
+            std::string frame;
+            frame.push_back(static_cast<char>(0x89));
+            frame.push_back(static_cast<char>(payload.size()));
+            frame += payload;
+            const size_t cut = 2 + payload.size() / 2;
+
+            std::lock_guard<std::mutex> guard(send_mutex_);
+            if (connection_ == INVALID_SOCKET || !WriteAll(connection_, frame.substr(0, cut)))
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            return WriteAll(connection_, frame.substr(cut));
+        }
 
         // A binary message as one frame.
         bool SendBinary(const std::string& bytes) { return SendFrame(0x2, /*fin=*/true, bytes); }
@@ -541,6 +569,10 @@ namespace hsm::test
                 }
                 if (opcode == 0xA) // pong
                 {
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        last_pong_ = payload;
+                    }
                     pongs_.fetch_add(1, std::memory_order_release);
                     continue;
                 }
@@ -567,6 +599,7 @@ namespace hsm::test
         socket_t connection_ = INVALID_SOCKET; // guarded by send_mutex_
         mutable std::mutex mutex_;
         std::string handshake_head_;        // guarded by mutex_
+        std::string last_pong_;             // guarded by mutex_
         std::vector<std::string> received_; // guarded by mutex_
         std::vector<int> close_codes_;      // guarded by mutex_
     };

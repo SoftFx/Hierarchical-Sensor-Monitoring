@@ -27,6 +27,9 @@
 
 namespace hsm::http
 {
+    // The preprocessor cannot read the constant, so the two spellings of the minimum are tied here.
+    static_assert(WebSocketConnection::kMinCurlVersion == 0x080e00, "keep the #if above in step with kMinCurlVersion");
+
     namespace
     {
         constexpr const char* kCancelled = "cancelled";
@@ -77,10 +80,37 @@ namespace hsm::http
             return left.count() > 0 ? static_cast<int64_t>(left.count()) : 0;
         }
 
+        // A control frame carries at most 125 bytes of payload (RFC 6455 5.5).
+        constexpr size_t kMaxControlBytes = 125;
+
+        // RFC 9110 5.6.2 token: what a header name may consist of. Keeps out the separators that
+        // mean something in libcurl's header list syntax (':' and ';') along with everything else.
+        bool IsHeaderName(const std::string& name)
+        {
+            constexpr std::string_view kPunctuation = "!#$%&'*+-.^_`|~";
+            if (name.empty())
+                return false;
+            for (const char c : name)
+            {
+                if (std::isalnum(static_cast<unsigned char>(c)) == 0 && kPunctuation.find(c) == std::string_view::npos)
+                    return false;
+            }
+            return true;
+        }
+
+        // Headers libcurl writes for the upgrade. One of the same name in CURLOPT_HTTPHEADER would
+        // replace libcurl's, and the upgrade would no longer be the one libcurl validates.
+        bool IsUpgradeHeader(const std::string& name)
+        {
+            const auto is = [&name](std::string_view lower) { return name.size() == lower.size() && StartsWithNoCase(name, lower); };
+            return is("upgrade") || is("connection") || StartsWithNoCase(name, "sec-websocket-");
+        }
+
         // What the upgrade response said, collected by OnUpgradeHeader.
         struct UpgradeHead
         {
             std::string subprotocol;
+            int selections = 0; // Sec-WebSocket-Protocol lines in the final response head
         };
 
         // CURLOPT_HEADERFUNCTION: one call per header line of every response on the way to the
@@ -97,9 +127,16 @@ namespace hsm::http
                 constexpr std::string_view kName = "sec-websocket-protocol:";
 
                 if (StartsWithNoCase(line, "http/"))
-                    head->subprotocol.clear(); // a new response head: an interim 1xx can precede the 101
+                {
+                    // A new response head: an interim 1xx can precede the 101.
+                    head->subprotocol.clear();
+                    head->selections = 0;
+                }
                 else if (StartsWithNoCase(line, kName))
+                {
                     head->subprotocol = std::string(Trim(line.substr(kName.size())));
+                    ++head->selections;
+                }
                 return total;
             }
             catch (...)
@@ -187,6 +224,15 @@ namespace hsm::http
         detail_.clear(); // after the cleanup above: the handle pointed into it
         // swap, not clear: a large message must not pin its buffer for the life of the object.
         std::string().swap(message_);
+        control_.clear();
+    }
+
+    // libcurl clears its error buffer only when a transfer starts. Before each later call the old
+    // text is dropped, so a failure is never described with the words of an earlier one.
+    void WebSocketConnection::ForgetDetail()
+    {
+        if (!detail_.empty())
+            detail_[0] = '\0';
     }
 
     // libcurl's own description of the last failure on this handle when it gave one (it names the
@@ -267,6 +313,7 @@ namespace hsm::http
             }
 
             size_t sent = 0;
+            ForgetDetail();
             const CURLcode rc = curl_ws_send(curl, data + offset, size - offset, &sent, 0, flags);
             if (rc == CURLE_OK)
             {
@@ -337,10 +384,14 @@ namespace hsm::http
             }
             for (const auto& header : headers)
             {
-                if (header.name.empty() || HasLineBreak(header.name) || HasLineBreak(header.value) ||
-                    header.name.find(':') != std::string::npos)
+                if (!IsHeaderName(header.name) || HasLineBreak(header.value))
                 {
                     result.error = "a request header name or value is malformed";
+                    return result;
+                }
+                if (IsUpgradeHeader(header.name))
+                {
+                    result.error = "a request header would replace one of the upgrade's own";
                     return result;
                 }
             }
@@ -433,11 +484,16 @@ namespace hsm::http
                 return result;
             }
 
+            ForgetDetail(); // the open succeeded: whatever libcurl noted on the way is history
+
             result.subprotocol = head.subprotocol;
-            if (head.subprotocol != subprotocol)
+            if (head.selections > 1 || head.subprotocol != subprotocol)
             {
-                result.error = subprotocol.empty() ? "the server selected a subprotocol that was not offered"
-                                                   : "the server did not select the offered subprotocol";
+                if (head.selections > 1)
+                    result.error = "the server sent more than one subprotocol selection";
+                else
+                    result.error = subprotocol.empty() ? "the server selected a subprotocol that was not offered"
+                                                       : "the server did not select the offered subprotocol";
                 Close();
                 return result;
             }
@@ -489,7 +545,7 @@ namespace hsm::http
 
             CURL* curl = static_cast<CURL*>(curl_);
             const Deadline deadline = DeadlineIn(timeout_ms);
-            for (;;)
+            for (bool first = true;; first = false)
             {
                 if (cancelled_.load())
                 {
@@ -497,12 +553,17 @@ namespace hsm::http
                     Release();
                     return WebSocketReceive::Error;
                 }
+                // Frames that complete no message (pings, fragments) must not hold the caller past
+                // the deadline. What has arrived stays buffered for the next call.
+                if (!first && RemainingMs(deadline) <= 0)
+                    return WebSocketReceive::Timeout;
 
                 char buffer[16384];
                 size_t received = 0;
                 const curl_ws_frame* meta = nullptr;
                 // Always try the read first: with TLS, bytes can sit decrypted inside libcurl while
                 // the socket itself is not readable, so waiting on the socket first could stall.
+                ForgetDetail();
                 const CURLcode rc = curl_ws_recv(curl, buffer, sizeof(buffer), &received, &meta);
                 if (rc == CURLE_AGAIN)
                 {
@@ -516,7 +577,7 @@ namespace hsm::http
                         Release();
                         return WebSocketReceive::Error;
                     }
-                    continue; // read once more; a passed deadline is reported above after that read
+                    continue;
                 }
                 if (rc == CURLE_GOT_NOTHING)
                 {
@@ -532,29 +593,42 @@ namespace hsm::http
                 }
 
                 const unsigned int flags = static_cast<unsigned int>(meta->flags);
-                if ((flags & CURLWS_CLOSE) != 0)
+                if ((flags & CURLWS_PONG) != 0)
+                    continue; // an unsolicited pong is a keep-alive from the peer, not a message
+                if ((flags & (CURLWS_CLOSE | CURLWS_PING)) != 0)
                 {
-                    // Complete the close handshake with one non-blocking attempt, echoing the
-                    // peer's status code when it sent one.
-                    size_t sent = 0;
-                    (void)curl_ws_send(curl, buffer, received >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
-                    Release();
-                    return WebSocketReceive::Closed;
-                }
-                if ((flags & CURLWS_PING) != 0)
-                {
-                    // A control payload is at most 125 bytes, so it is whole in `buffer`. The pong
-                    // is a complete frame: it gets its own short bound rather than the caller's
-                    // deadline, which may already have passed.
-                    if (!SendFrame(buffer, received, CURLWS_PONG, DeadlineIn(1000), error))
+                    // libcurl hands a frame out as its bytes arrive, so even a control payload can
+                    // come in pieces. It is acted on once, when it is whole.
+                    if (control_.size() + received > kMaxControlBytes)
+                    {
+                        error = "control frame exceeds 125 bytes";
+                        Release();
+                        return WebSocketReceive::Error;
+                    }
+                    control_.append(buffer, received);
+                    if (meta->bytesleft > 0)
+                        continue;
+
+                    std::string payload;
+                    payload.swap(control_);
+                    if ((flags & CURLWS_CLOSE) != 0)
+                    {
+                        // Complete the close handshake with one non-blocking attempt, echoing the
+                        // peer's status code when it sent one.
+                        size_t sent = 0;
+                        (void)curl_ws_send(curl, payload.data(), payload.size() >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
+                        Release();
+                        return WebSocketReceive::Closed;
+                    }
+                    // The pong is a complete frame: it gets its own short bound rather than the
+                    // caller's deadline, which may already have passed.
+                    if (!SendFrame(payload.data(), payload.size(), CURLWS_PONG, DeadlineIn(1000), error))
                     {
                         Release();
                         return WebSocketReceive::Error;
                     }
                     continue;
                 }
-                if ((flags & CURLWS_PONG) != 0)
-                    continue; // an unsolicited pong is a keep-alive from the peer, not a message
                 if ((flags & CURLWS_TEXT) == 0)
                 {
                     error = (flags & CURLWS_BINARY) != 0 ? "binary messages are not supported" : "unexpected frame type";
@@ -616,14 +690,16 @@ namespace hsm::http
                     const Deadline deadline = DeadlineIn(std::min<int64_t>(linger_ms, kMaxLingerMs));
                     std::string ignored;
                     bool waiting = SendFrame(normal_closure, sizeof(normal_closure), CURLWS_CLOSE, deadline, ignored);
-                    while (waiting)
+                    // The budget and a cancel are checked on every pass: a peer that keeps talking
+                    // must not hold the stop past the linger.
+                    while (waiting && !cancelled_.load() && RemainingMs(deadline) > 0)
                     {
                         char buffer[4096];
                         size_t received = 0;
                         const curl_ws_frame* meta = nullptr;
                         const CURLcode rc = curl_ws_recv(curl, buffer, sizeof(buffer), &received, &meta);
                         if (rc == CURLE_AGAIN)
-                            waiting = RemainingMs(deadline) > 0 && WaitForSocket(/*for_read=*/true, deadline) == Wait::Ready;
+                            waiting = WaitForSocket(/*for_read=*/true, deadline) == Wait::Ready;
                         else
                             waiting = rc == CURLE_OK && meta != nullptr && (static_cast<unsigned int>(meta->flags) & CURLWS_CLOSE) == 0;
                     }

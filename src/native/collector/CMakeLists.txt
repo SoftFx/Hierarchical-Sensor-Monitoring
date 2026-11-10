@@ -290,8 +290,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_survives_server_dropping_kept_connection
         COMMAND hsm_collector_tests native_http_transport_survives_server_dropping_kept_connection
     )
-    # #1662: native WebSocket client over a plain libcurl connection (collector session step 1,
-    # ADR-0017). Needs no libcurl WebSocket feature, so these run against every lane's curl.
+    # #1662: native WebSocket client on libcurl's WebSocket API (collector session step 1,
+    # ADR-0017). The connection tests need a libcurl >= 8.14.0 built with ws/wss; on any other
+    # they skip and say so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
     add_test(NAME native_ws_reports_libcurl_support
         COMMAND hsm_collector_tests native_ws_reports_libcurl_support
     )

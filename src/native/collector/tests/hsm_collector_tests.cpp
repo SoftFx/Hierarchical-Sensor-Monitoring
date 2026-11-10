@@ -6353,22 +6353,17 @@ namespace
         return value;
     }
 
-    // The WebSocket is libcurl's, so the connection tests need a libcurl that has one. Where we
-    // choose the libcurl (Windows: vcpkg with the `websockets` feature) or where the caller says
-    // so (HSM_REQUIRE_WEBSOCKET=1, for a lane on a distribution known to ship it), a libcurl
-    // without it FAILS the test. Elsewhere the test is skipped and says so, because a distribution
-    // libcurl without WebSocket is a supported configuration: the collector stays on HTTP there.
+    // The WebSocket is libcurl's, so the connection tests need a libcurl that has one. A libcurl
+    // without it is a supported configuration (a distribution build, the Conan recipe's pin): the
+    // collector stays on HTTP there, and these tests skip and say so. A lane that knows its
+    // libcurl has WebSocket sets HSM_REQUIRE_WEBSOCKET=1, which turns the skip into a failure so
+    // the tests cannot pass by not running. The CI HTTP lane does, on both platforms.
     bool WsAvailable(const char* test)
     {
         std::string reason;
         if (hsm::http::WebSocketConnection::Supported(&reason))
             return true;
-#if defined(_WIN32)
-        const bool required = true;
-#else
-        const bool required = TestEnvironment("HSM_REQUIRE_WEBSOCKET") == "1";
-#endif
-        Require(!required, ("this build must link a libcurl with WebSocket support: " + reason).c_str());
+        Require(TestEnvironment("HSM_REQUIRE_WEBSOCKET") != "1", ("this lane requires a libcurl with WebSocket support: " + reason).c_str());
         std::cout << test << ": skipped (" << reason << ")" << std::endl;
         return false;
     }
@@ -6538,6 +6533,14 @@ namespace
         Require(connection.Receive(text, 300, error) == hsm::http::WebSocketReceive::Timeout, "a ping must not surface as a message");
         Require(WaitUntil([&] { return server.Pongs() == 1; }), "the ping must be answered with a pong");
 
+        // A ping whose bytes arrive in two pieces is still ONE ping: one pong, the whole payload.
+        const std::string split_payload = "a-ping-payload-that-arrives-in-two-pieces";
+        Require(server.SendPingInTwoPieces(split_payload), "the server must be able to send a ping in pieces");
+        Require(connection.Receive(text, 400, error) == hsm::http::WebSocketReceive::Timeout, "a ping in pieces must not surface as a message");
+        Require(WaitUntil([&] { return server.Pongs() == 2; }), "the ping in pieces must be answered");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(server.Pongs() == 2 && server.LastPong() == split_payload, "a ping in pieces gets exactly one pong with its whole payload");
+
         // A timeout far beyond what a clock can represent is clamped, not wrapped into the past:
         // the call waits and returns the message instead of reporting an instant timeout.
         Require(server.SendText("after-huge-timeout"), "the server must be able to push again");
@@ -6622,6 +6625,28 @@ namespace
             const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
             Require(!opened.ok, "an unsolicited subprotocol must fail the open");
             Contains(opened.error, "not offered");
+        }
+        {
+            // Two selections are not a selection, whichever of them matches.
+            hsm::test::WebSocketTestServer::Options options;
+            options.subprotocol = "other.v2\r\nSec-WebSocket-Protocol: hsm.sensors.v1";
+            hsm::test::WebSocketTestServer server(options);
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "hsm.sensors.v1", 5000);
+            Require(!opened.ok && !connection.IsOpen(), "two subprotocol selections must fail the open");
+            Contains(opened.error, "more than one");
+        }
+        {
+            // A caller header must not displace the ones libcurl writes for the upgrade, and a name
+            // must be a plain token.
+            hsm::test::WebSocketTestServer server;
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            for (const char* name : { "Upgrade", "connection", "Sec-WebSocket-Key", "X Bad", "X;" })
+            {
+                const auto opened = connection.Open(WsUrl(server), { hsm::http::HttpHeader{ name, "x" } }, "", 5000);
+                Require(!opened.ok, (std::string("the header name must be refused: ") + name).c_str());
+            }
+            Require(server.HandshakeHead().empty(), "a refused header must not reach the server");
         }
         {
             // A header value with a line break could smuggle extra header lines into the upgrade.
