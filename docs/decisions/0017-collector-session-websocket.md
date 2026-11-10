@@ -15,7 +15,7 @@ The owner asked for a persistent connection in a current, standard form (2026-11
 - **One port.** Everything is served on 443 behind the bundled Caddy (ADR-0014). A second port or a broker is not acceptable.
 - **Two collector implementations plus consumers.** The managed collector targets `net6.0` and `net472`; the native collector is C++17 over libcurl and is embedded in the Windows agent, the Linux probe (Rust over the C ABI) and HSMCppWrapper.
 - **The JSON wire is a frozen, byte-identical contract** pinned by the conformance corpus and by golden tests in both languages (`aicontext/features/api/wire-contract/feature.md`).
-- **The managed collector is a library used by third parties.** Existing deployments must keep working without any change, including against servers and proxies that know nothing about the new transport.
+- **The managed collector is a library used by third parties.** Existing deployments must keep working without any change for as long as the transition lasts, including against servers and proxies that know nothing about the new transport. Ending it is a breaking change and is made as one: a major version and a deprecation notice ahead of it (decision 4).
 
 ## Decision
 
