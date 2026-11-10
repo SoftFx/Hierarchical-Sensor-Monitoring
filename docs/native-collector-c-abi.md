@@ -160,9 +160,9 @@ Version history:
   client connection (`src/hsm_ws_connection.{hpp,cpp}`) for the collector session of ADR-0017. It
   is compiled into the HTTP build and **not used by the send path yet**. The WebSocket protocol is
   libcurl's own (`CONNECT_ONLY=2`, `curl_ws_send` / `curl_ws_recv`); the collector carries no
-  RFC 6455 code. It therefore needs a libcurl of at least 8.14.0 built with the `ws`/`wss`
-  protocols: the vcpkg dependency now asks for the `websockets` feature of `curl`, Debian 13 ships
-  such a libcurl, older distribution builds do not. Where libcurl cannot carry a WebSocket,
+  RFC 6455 code. It therefore needs a libcurl of at least 8.14.0 built with WebSocket support, at
+  build time and at run time: the vcpkg dependency now asks for the `websockets` feature of `curl`,
+  Debian 13 ships such a libcurl, older distribution builds do not. Where libcurl cannot carry a WebSocket,
   `WebSocketConnection::Supported()` is false and the collector stays on HTTP. Pinned by
   `native_ws_*` (in-process WebSocket server, HTTP lane).
 - **0.11.3** (#1653) — transport change, ABI unchanged. The HTTP transport keeps its connection
