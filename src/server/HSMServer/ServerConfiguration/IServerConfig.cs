@@ -16,6 +16,8 @@
 
         ApiTokensConfig ApiTokens { get; }
 
+        CollectorSessionsConfig CollectorSessions { get; }
+
 
         void ResaveSettings();
     }

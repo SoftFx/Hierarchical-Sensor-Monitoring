@@ -1,5 +1,4 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -9,14 +8,14 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Middleware.Telemetry
 {
-    public class TelemetryCollector(DataCollectorWrapper _collector, ITreeValuesCache _cache)
+    public class TelemetryCollector(ISensorApiTelemetry _telemetry, ITreeValuesCache _cache)
     {
         private const string ClientNameHeader = nameof(Header.ClientName);
         private const string AccessKeyHeader = nameof(Header.Key);
 
         private const string EmptyClient = "No name";
 
-        private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
+        private protected readonly ISensorApiTelemetry _statistics = _telemetry;
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -26,16 +25,17 @@ namespace HSMServer.Middleware.Telemetry
             {
                 if (IsPublicApiRequest(context))
                 {
-                    _statistics.Total.AddRequestData(context.Request);
-
                     if (TryBuildPublicApiInfo(context, out var info, out var error))
                     {
                         context.SetPublicApiInfo(info);
 
-                        _statistics[info.TelemetryPath].AddRequestData(context.Request);
+                        _statistics.AddRequest(info.TelemetryPath, context.Request.ContentLength);
                     }
                     else
                     {
+                        // Counted in the total only: there is no client to attribute it to.
+                        _statistics.AddRequest(null, context.Request.ContentLength);
+
                         await context.SetAccessError(error);
 
                         return false;
