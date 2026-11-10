@@ -156,9 +156,29 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.12.0** (#1668) — one additive entry point: the collector session as a transport.
+  `hsm_collector_use_session_transport(collector)` (C++ `Collector::UseSessionTransport()`), called
+  before Start like `hsm_collector_use_http_transport`, makes the collector keep one WebSocket to
+  `GET <server>/api/sensors/session` (subprotocol `hsm.sensors.v1`, ADR-0017) and send value batches
+  (`list` frames) and registrations (`commands` frames) on it, each acknowledged with the status
+  the same HTTP request would have got. Nothing goes over the HTTP routes, and there is no
+  fallback to them: while no session is up, values wait in the send queue and registrations are
+  retried, exactly as when the server is unreachable over HTTP. Start does not wait for the
+  session. The collector reconnects with a jittered backoff (1 s to 60 s), sends a heartbeat when
+  it has been quiet for the interval the server announced, and gives a session up after two and a
+  half intervals of server silence or when a request gets no ack within the request timeout. A
+  batch larger than the server's frame limit travels in several frames; if a later frame fails,
+  only the unacknowledged part goes back to the queue. File values are refused before the queue
+  (counted in `Queue overflow`): the session has no op for them yet. Needs a libcurl with WebSocket
+  (8.14.0 or newer); with an older one Start logs one error and nothing is delivered until the
+  setting or libcurl changes. The HTTP build gains a build dependency, the header-only
+  nlohmann/json (the frames that come off the network are parsed by a maintained library, not by
+  collector code), and on Windows the core now links `ws2_32`. `hsm_collector_use_http_transport`
+  and its behavior are unchanged, and it stays the default of the agent and the probe. Pinned by
+  `native_session_*` (HTTP lane, both platforms, `HSM_REQUIRE_WEBSOCKET=1`).
 - **0.11.4** (#1662) — internal building block, ABI unchanged, no behavior change. Adds a WebSocket
   client connection (`src/hsm_ws_connection.{hpp,cpp}`) for the collector session of ADR-0017. It
-  is compiled into the HTTP build and **not used by the send path yet**. The WebSocket protocol is
+  is compiled into the HTTP build and was not used by the send path until 0.12.0. The WebSocket protocol is
   libcurl's own (`CONNECT_ONLY=2`, `curl_ws_send` / `curl_ws_recv`); the collector carries no
   RFC 6455 code. It therefore needs a libcurl of at least 8.14.0 built with WebSocket support, at
   build time and at run time: the vcpkg dependency now asks for the `websockets` feature of `curl`,

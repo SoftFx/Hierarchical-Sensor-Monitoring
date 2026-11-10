@@ -20,7 +20,7 @@ use hsm_collector::{
     VersionSensor, LINUX_METRIC_SOURCES_AVAILABLE,
 };
 
-use crate::config::Config;
+use crate::config::{Config, Transport};
 use crate::logging::{self, Logger};
 use crate::probe_only::{self, HostEnvironment, StopSignal};
 use crate::secret::{self, Secret};
@@ -221,7 +221,10 @@ fn build_collector(
         log_sink.log(logging::collector_message_level(level, message), message);
     })?;
 
-    collector.use_http_transport()?;
+    match config.hsm.transport {
+        Transport::Http => collector.use_http_transport()?,
+        Transport::Session => collector.use_session_transport()?,
+    }
     Ok(collector)
 }
 

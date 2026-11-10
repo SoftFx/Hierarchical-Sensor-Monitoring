@@ -201,8 +201,12 @@ namespace hsm::agent
                 collector.SetLogger(log_);
 
             // Real server transport (#1165) + the Windows PDH/Win32 live readers (#1164). Both must be
-            // installed before Start.
-            collector.UseHttpTransport();
+            // installed before Start. `server.transport` picks requests or the collector session
+            // (#1668); there is no fallback from one to the other.
+            if (config_.UsesSession())
+                collector.UseSessionTransport();
+            else
+                collector.UseHttpTransport();
             collector.InstallWindowsMetricSources();
 
             // Standard host catalog, gated by the config groups. `computer` is the umbrella bundle

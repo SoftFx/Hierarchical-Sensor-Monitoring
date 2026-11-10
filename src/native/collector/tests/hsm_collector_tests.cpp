@@ -30,6 +30,7 @@
 
 #if defined(HSM_COLLECTOR_HTTP)
 #include "../src/hsm_http_transport.hpp"
+#include "../src/hsm_session_transport.hpp"
 #include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
@@ -6856,6 +6857,349 @@ namespace
         Contains(error, "cancelled");
     }
 
+    // ---- #1668: the collector session as the native collector's transport (ADR-0017, step 4) ----
+
+    // Bounded wait for a condition polled every 10 ms.
+    template <typename Condition>
+    bool WaitUntilFor(Condition condition, int milliseconds)
+    {
+        for (int waited = 0; waited < milliseconds && !condition(); waited += 10)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return condition();
+    }
+
+    // Frames the session server received that contain every one of `parts`.
+    size_t SessionFrames(const hsm::test::WebSocketTestServer& server, std::initializer_list<const char*> parts)
+    {
+        size_t count = 0;
+        for (const auto& frame : server.Received())
+        {
+            bool all = true;
+            for (const char* part : parts)
+                all = all && frame.find(part) != std::string::npos;
+            count += all ? 1 : 0;
+        }
+        return count;
+    }
+
+    hsm_collector_options_t SessionCollectorOptions(const hsm::test::WebSocketTestServer& server)
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "session-key";
+        // The same plaintext rule as the HTTP transport: an explicit http:// address plus
+        // AllowPlaintextTransport; the session then uses ws://.
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "session-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 1000;
+        options.package_collect_period_ms = 20;
+        options.request_timeout_ms = 5000;
+        return options;
+    }
+
+    hsm::test::WebSocketTestServer::Options SessionServerOptions()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.session = true;
+        return options;
+    }
+
+    // The whole path on a session: the upgrade says who the collector is, the registration of a
+    // sensor that existed before Start arrives as a `commands` frame once the session is up, a
+    // value arrives as a `list` frame in the wire format, and a graceful stop closes normally.
+    void NativeSessionDeliversRegistrationsAndValues()
+    {
+        if (!WsAvailable("native_session_delivers_registrations_and_values"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install on a stopped collector");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/int");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        // Start does not wait for the session: the registration is retried until it is up.
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "\"Path\":\"session/int\"" }) >= 1; }, 15000),
+                "the sensor registered before Start must arrive as a commands frame");
+
+        Require(hsm_sensor_add_int(sensor.value, 42, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":42", "\"Path\":\"session/int\"" }) >= 1; }, 10000),
+                "the value must arrive as a list frame");
+        // The wire format of the server, as over HTTP: ISO time, not the corpus format.
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"Time\":\"" }) >= 1, "a list frame must carry wire values");
+        Require(SessionFrames(server, { "UnixTimeMs" }) == 0, "no frame may carry the canonical corpus format");
+
+        const std::string head = server.HandshakeHead();
+        Contains(head, "GET /api/sensors/session HTTP/1.1");
+        Contains(head, "Key: session-key");
+        Contains(head, "ClientName: session-client");
+        Contains(head, "X-Collector-Kind: native");
+        Contains(head, std::string("X-Collector-Version: ") + HSM_COLLECTOR_VERSION_STRING);
+        Contains(head, "Sec-WebSocket-Protocol: hsm.sensors.v1");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+        Require(WaitUntilFor([&] { return server.CloseCodes().size() == 1; }, 5000), "a graceful stop must close the session");
+        Require(server.CloseCodes()[0] == 1000, "a graceful stop must be a normal closure");
+        Require(server.Upgrades() == 1, "one session must have carried everything");
+    }
+
+    // While the server refuses the upgrade nothing is delivered and nothing is lost: the values
+    // wait in the queue and arrive once a session opens.
+    void NativeSessionQueuesWhileRefusedAndDeliversAfterConnect()
+    {
+        if (!WsAvailable("native_session_queues_while_refused_and_delivers_after_connect"))
+            return;
+
+        auto server_options = SessionServerOptions();
+        server_options.refuse_with_status = 503;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "Start must not wait for a session, nor fail without one");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/queued");
+        for (int value = 7001; value <= 7005; ++value)
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        Require(server.Upgrades() == 0 && server.Received().empty(), "nothing may be delivered while the upgrade is refused");
+
+        server.RefuseUpgradesWith(0);
+
+        for (int value = 7001; value <= 7005; ++value)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(value);
+            Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", marker.c_str() }) >= 1; }, 20000),
+                    ("a value queued while there was no session must arrive after it opens: " + marker).c_str());
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A session that drops is reopened by the collector, and what is sent afterwards arrives.
+    void NativeSessionReconnectsAfterADrop()
+    {
+        if (!WsAvailable("native_session_reconnects_after_a_drop"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/reconnect");
+        Require(hsm_sensor_add_int(sensor.value, 8001, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":8001" }) >= 1; }, 15000),
+                "the first value must arrive on the first session");
+
+        server.Drop();
+        Require(WaitUntilFor([&] { return server.Upgrades() == 2; }, 15000), "the collector must open a new session after a drop");
+
+        Require(hsm_sensor_add_int(sensor.value, 8002, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":8002" }) >= 1; }, 15000),
+                "a value sent after the reconnect must arrive on the new session");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A request that gets no ack in time is a failed send, and it ends the session: a late ack must
+    // not be taken for another request. The batch goes back to the queue and arrives on the next
+    // session.
+    void NativeSessionAckTimeoutReopensAndResends()
+    {
+        if (!WsAvailable("native_session_ack_timeout_reopens_and_resends"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        auto options = SessionCollectorOptions(server);
+        options.request_timeout_ms = 400;
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/timeout");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "\"Path\":\"session/timeout\"" }) >= 1; }, 15000),
+                "the registration must arrive before the server goes silent");
+
+        server.StaySilent(true);
+        Require(hsm_sensor_add_int(sensor.value, 9001, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) >= 1; }, 10000),
+                "the value must have been sent to the silent server");
+        Require(WaitUntilFor([&] { return server.Upgrades() >= 2; }, 15000), "a request without an ack must end the session, and the collector must reconnect");
+
+        const size_t sent_while_silent = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" });
+        server.StaySilent(false);
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) > sent_while_silent; }, 15000),
+                "the unacknowledged batch must be sent again once the server answers");
+
+        // Acknowledged now: it is not sent a third time.
+        const size_t after_ack = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" });
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) == after_ack, "an acknowledged batch must not be sent again");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A batch larger than the frame the server allows is split, every frame fits the limit, and
+    // every value arrives.
+    void NativeSessionSplitsABatchToTheFrameLimit()
+    {
+        if (!WsAvailable("native_session_splits_a_batch_to_the_frame_limit"))
+            return;
+
+        constexpr int kFrameBytes = 4096;
+        constexpr int kValues = 200;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 300; // long enough for all the values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/split");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"" }) >= 1; }, 15000), "the session must be up before the batch is built");
+
+        for (int i = 0; i < kValues; ++i)
+            Require(hsm_sensor_add_int(sensor.value, 500000 + i, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":500199" }) >= 1; }, 20000), "the last value of the batch must arrive");
+
+        size_t list_frames = 0;
+        for (const auto& frame : server.Received())
+        {
+            Require(frame.size() <= static_cast<size_t>(kFrameBytes), "no frame may exceed the limit the server announced");
+            list_frames += frame.find("\"op\":\"list\"") != std::string::npos ? 1 : 0;
+        }
+        Require(list_frames >= 2, "a batch that does not fit one frame must travel in several");
+        for (int i = 0; i < kValues; ++i)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(500000 + i) + ",";
+            Require(SessionFrames(server, { "\"op\":\"list\"", marker.c_str() }) >= 1, ("every value of a split batch must arrive: " + marker).c_str());
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A batch that travels in several frames and fails part of the way: what the server already
+    // acknowledged is not sent again, and the rest still arrives.
+    void NativeSessionPartlyDeliveredBatchIsNotSentTwice()
+    {
+        if (!WsAvailable("native_session_partly_delivered_batch_is_not_sent_twice"))
+            return;
+
+        constexpr int kFrameBytes = 4096;
+        constexpr int kValues = 200;
+        constexpr int kFirst = 600000;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 300; // long enough for all the values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/partial");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"" }) >= 1; }, 15000), "the session must be up before the batch is built");
+
+        server.AcceptListFrames(1);
+        for (int i = 0; i < kValues; ++i)
+            Require(hsm_sensor_add_int(sensor.value, kFirst + i, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        // The first frame is acknowledged, the second refused.
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"" }) >= 2; }, 20000), "the batch must have been sent in more than one frame");
+        server.AcceptListFrames(-1);
+
+        const std::string last = "\"Value\":" + std::to_string(kFirst + kValues - 1) + ",";
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", last.c_str() }) >= 1; }, 20000), "the rest of the batch must arrive once the server accepts again");
+
+        std::string first_frame;
+        for (const auto& frame : server.Received())
+        {
+            if (frame.find("\"op\":\"list\"") != std::string::npos)
+            {
+                first_frame = frame;
+                break;
+            }
+        }
+
+        int in_first_frame = 0;
+        for (int i = 0; i < kValues; ++i)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(kFirst + i) + ",";
+            const size_t frames = SessionFrames(server, { "\"op\":\"list\"", marker.c_str() });
+            Require(frames >= 1, ("every value must arrive: " + marker).c_str());
+            if (first_frame.find(marker) != std::string::npos)
+            {
+                ++in_first_frame;
+                Require(frames == 1, ("a value the server acknowledged must not be sent again: " + marker).c_str());
+            }
+        }
+        Require(in_first_frame > 0 && in_first_frame < kValues, "the first frame must have carried a part of the batch");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // The transport on its own: no session means a request fails at once (the caller keeps its
+    // data), an ack carries the server's status, and a cancel ends a wait.
+    void NativeSessionTransportRequestContract()
+    {
+        if (!WsAvailable("native_session_transport_request_contract"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        hsm::http::SessionOptions options;
+        options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+        options.verify_peer = false;
+        hsm::http::SessionTransport transport(options);
+
+        const auto before = transport.Request("list", "[]", 5000);
+        Require(!before.acked && !before.IsSuccess(), "a request without a session must fail");
+        Contains(before.error, "no session");
+        Require(transport.MaxBodyBytes() == 0, "without a session there is no room for a body");
+
+        transport.Start();
+        Require(WaitUntilFor([&] { return transport.IsUp(); }, 10000), "the session must come up");
+        Require(transport.MaxBodyBytes() == static_cast<size_t>(4 * 1024 * 1024) - hsm::http::SessionTransport::kEnvelopeRoom,
+                "the room for a body is the frame limit of the hello less the envelope");
+
+        const auto accepted = transport.Request("list", "[1,2,3]", 5000);
+        Require(accepted.acked && accepted.status == 200 && accepted.IsSuccess(), "an ack with 200 is a delivered request");
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"body\":[1,2,3]}" }) == 1, "the body must be embedded in the frame as it is");
+
+        server.AckWith(400);
+        const auto refused = transport.Request("commands", "[]", 5000);
+        Require(refused.acked && refused.status == 400 && !refused.IsSuccess(), "an ack with 400 is an answered, refused request");
+        Contains(refused.error, "refused by the test");
+        Require(transport.IsUp(), "a refused request must not end the session");
+
+        transport.Cancel();
+        const auto cancelled = transport.Request("list", "[]", 5000);
+        Require(!cancelled.acked, "a request on a cancelled transport must fail");
+        Contains(cancelled.error, "cancelled");
+        transport.ResetCancel();
+
+        server.AckWith(200);
+        Require(transport.Request("list", "[]", 5000).IsSuccess(), "the transport must work again after the cancel is reset");
+
+        transport.Stop(1000);
+        Require(!transport.IsUp(), "a stopped transport has no session");
+        Require(WaitUntilFor([&] { return server.CloseCodes().size() == 1 && server.CloseCodes()[0] == 1000; }, 5000), "Stop with a linger must close normally");
+    }
+
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
     // with the libcurl transport installed, and assert the capture server saw the live POST. This
     // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
@@ -9000,6 +9344,13 @@ namespace
             { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
             { "native_ws_refuses_binary_and_oversized_messages", [](const std::string&) { NativeWsRefusesBinaryAndOversizedMessages(); } },
             { "native_ws_live_probe", [](const std::string&) { NativeWsLiveProbe(); } },
+            { "native_session_delivers_registrations_and_values", [](const std::string&) { NativeSessionDeliversRegistrationsAndValues(); } },
+            { "native_session_queues_while_refused_and_delivers_after_connect", [](const std::string&) { NativeSessionQueuesWhileRefusedAndDeliversAfterConnect(); } },
+            { "native_session_reconnects_after_a_drop", [](const std::string&) { NativeSessionReconnectsAfterADrop(); } },
+            { "native_session_ack_timeout_reopens_and_resends", [](const std::string&) { NativeSessionAckTimeoutReopensAndResends(); } },
+            { "native_session_splits_a_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsABatchToTheFrameLimit(); } },
+            { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },
+            { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },

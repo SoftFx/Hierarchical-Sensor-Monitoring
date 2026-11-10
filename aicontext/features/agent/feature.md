@@ -168,6 +168,7 @@ tested on every CI lane. Only `server.address` + `server.accessKey` are required
 defaults. Maps onto `CollectorOptions` + runtime group gates:
 
 - `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port).
+- `server.transport` (`"http"` default, or `"session"`; #1668, agent 0.5.50) → `UseHttpTransport()` or `UseSessionTransport()`. Any other value refuses to start: a typo must not select the other transport. On `session` the collector sends nothing over the HTTP routes and does not fall back to them; the agent's periodic update check is a request of its own and stays on HTTPS. Server directives (#1198) ride on the response headers of data POSTs, so an agent on the session receives none until the session pushes them (collector session step 5): remote sensor-group switches and the update-available nudge do not arrive, the periodic update check still does.
 - `identity.computerName` (`"auto"`/blank → `GetComputerNameExW` physical DNS host name) → `computer_name`;
   `identity.module` → `module`.
 - `sensors.{computer,system,disk,network,module,process}` — `computer` is the umbrella host bundle;
