@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.11.3 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.11.4 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -150,13 +150,14 @@ if(NOT MSVC)
 endif()
 
 # libcurl HTTP transport (#1096 §12). Opt-in so the serialization/behavior build and the existing
-# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides curl[ssl] —
-# Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the -Werror gate ignores
-# them; only hsm_http_transport.cpp includes <curl/curl.h>.
+# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides
+# curl[ssl,websockets] — Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the
+# -Werror gate ignores them; only hsm_http_transport.cpp and hsm_ws_connection.cpp include
+# <curl/curl.h>.
 option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
 if(HSM_COLLECTOR_HTTP)
     find_package(CURL REQUIRED)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp)
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${CURL_INCLUDE_DIRS})
@@ -291,6 +292,45 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_transport_survives_server_dropping_kept_connection
         COMMAND hsm_collector_tests native_http_transport_survives_server_dropping_kept_connection
+    )
+    # #1662: native WebSocket client on libcurl's WebSocket API (collector session step 1,
+    # ADR-0017). The connection tests need a libcurl >= 8.14.0 built with ws/wss; on any other
+    # they skip and say so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
+    add_test(NAME native_ws_reports_libcurl_support
+        COMMAND hsm_collector_tests native_ws_reports_libcurl_support
+    )
+    add_test(NAME native_ws_fixture_accept_key_matches_rfc
+        COMMAND hsm_collector_tests native_ws_fixture_accept_key_matches_rfc
+    )
+    add_test(NAME native_ws_opens_with_headers_and_subprotocol
+        COMMAND hsm_collector_tests native_ws_opens_with_headers_and_subprotocol
+    )
+    add_test(NAME native_ws_tolerates_interim_response_and_outlives_open_timeout
+        COMMAND hsm_collector_tests native_ws_tolerates_interim_response_and_outlives_open_timeout
+    )
+    add_test(NAME native_ws_lingering_close_reaches_server
+        COMMAND hsm_collector_tests native_ws_lingering_close_reaches_server
+    )
+    add_test(NAME native_ws_round_trips_text_messages
+        COMMAND hsm_collector_tests native_ws_round_trips_text_messages
+    )
+    add_test(NAME native_ws_receives_server_push_while_idle
+        COMMAND hsm_collector_tests native_ws_receives_server_push_while_idle
+    )
+    add_test(NAME native_ws_detects_server_close_and_drop
+        COMMAND hsm_collector_tests native_ws_detects_server_close_and_drop
+    )
+    add_test(NAME native_ws_refused_upgrade_reports_status
+        COMMAND hsm_collector_tests native_ws_refused_upgrade_reports_status
+    )
+    add_test(NAME native_ws_assembles_fragmented_messages
+        COMMAND hsm_collector_tests native_ws_assembles_fragmented_messages
+    )
+    add_test(NAME native_ws_cancel_unblocks_receive
+        COMMAND hsm_collector_tests native_ws_cancel_unblocks_receive
+    )
+    add_test(NAME native_ws_refuses_binary_and_oversized_messages
+        COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
