@@ -263,7 +263,10 @@ namespace HSMServer.Controllers
                     return Ok(response);
                 }
 
-                return BadRequest(values);
+                // The rejected-key reason is the 406 body the caller reads (#1649) —
+                // the old BadRequest landed on a response the registration had
+                // already started by hand and threw.
+                return StatusCode(406, infoRequest.Error);
             }
             catch (Exception ex)
             {
@@ -524,6 +527,9 @@ namespace HSMServer.Controllers
                     return result;
                 }
 
+                // The rejection reason (unknown/expired/blocked key) is the 406
+                // body the caller reads, not the generic invalid-request text (#1649).
+                return TaskResult.FromError(infoRequest.Error);
             }
             catch (Exception ex)
             {
@@ -545,7 +551,7 @@ namespace HSMServer.Controllers
                 return isValid ? TaskResult<HistoryRequestModel>.FromValue(coreRequest) : TaskResult<HistoryRequestModel>.FromError(error);
             }
 
-            return TaskResult<HistoryRequestModel>.FromError(InvalidRequest);
+            return TaskResult<HistoryRequestModel>.FromError(infoRequest.Error);
         }
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
@@ -567,25 +573,33 @@ namespace HSMServer.Controllers
                 return await _cache.AddOrUpdateSensorAsync(coreRequest);
             }
 
-            return _invalidRequestResult;
+            return TaskResult.FromError(infoRequest.Error);
         }
 
-        private async Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)
+        private Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)
         {
             var context = HttpContext;
 
             if (context.TryGetPublicApiInfo(out var info))
-                return TaskResult<PublicApiRequestInfo>.FromValue(info);
+                return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromValue(info));
 
             if (TelemetryCollector.TryAddKeyToHeader(context, request.Key))
             {
-                var result = await _telemetry.TryRegisterPublicApiRequest(HttpContext);
-
-                if (result && context.TryGetPublicApiInfo(out info))
-                    return TaskResult<PublicApiRequestInfo>.FromValue(info);
+                // The rejected-key reason rides the ACTION's result (the 406
+                // the caller sees) — writing the body by hand here started
+                // the response, and MVC's formatting of the action's own
+                // result then threw over it: three ERROR entries and a
+                // truncated body per rejected request (#1649).
+                if (_telemetry.TryRegisterPublicApiRequest(context, out var error))
+                {
+                    if (context.TryGetPublicApiInfo(out info))
+                        return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromValue(info));
+                }
+                else
+                    return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromError(error));
             }
 
-            return TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body");
+            return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body"));
         }
     }
 }

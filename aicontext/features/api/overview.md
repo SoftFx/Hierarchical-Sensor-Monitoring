@@ -18,6 +18,13 @@ HTTP headers on every request:
 - `ClientName` — human-readable client identifier
 - `Key` — product access key (API key)
 
+A rejected key answers `406 Not Acceptable` with its reason as the plain-text
+body: `Key is invalid.` (unknown key), `AccessKey expired.`, `AccessKey is
+blocked.`, or `AccessKey doesn't have {permission}.` — and the rejection logs
+one WARN entry (no stack trace), never an ERROR (#1649). The answer is the
+same whether the key rides the header (rejected by the telemetry middleware
+before MVC runs) or the body (rejected through the action's own result).
+
 ## Sensor Value Endpoints
 
 All accept POST with JSON body.
