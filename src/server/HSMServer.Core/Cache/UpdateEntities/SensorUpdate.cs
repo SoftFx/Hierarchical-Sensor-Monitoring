@@ -98,7 +98,31 @@ namespace HSMServer.Core.Cache.UpdateEntities
         // stamp, and the regular arm gates the CallJournal stamp in
         // SensorPolicyCollection.TryUpdate. The journal record itself is
         // never suppressed — only the ownership stamp.
-        internal bool PreserveChangeOwnership { get; init; }
+        //
+        // #1077: a toggle-preserving update (PreservesOperatorToggle)
+        // preserves ownership too — the getter includes that flag, so the
+        // two can never be set apart.
+        private readonly bool _preserveChangeOwnership;
+
+        internal bool PreserveChangeOwnership
+        {
+            get => _preserveChangeOwnership || PreservesOperatorToggle;
+            init => _preserveChangeOwnership = value;
+        }
+
+        // #1077: set by ApplyTemplateToSensor on an update whose target is a
+        // template-owned policy with a USER change-table owner — the
+        // operator's per-sensor disable toggle (only a User owner marks an
+        // operator's choice; a non-user higher-priority owner like the
+        // migration stamp is reclaimed by the apply through the gates'
+        // non-user clause instead, without this flag). The update carries
+        // the STORED IsDisabled (the operator's choice preserved), and the
+        // CanChange gates let it through instead of skipping the whole
+        // re-apply: the template owns the CONTENT, the operator owns the
+        // toggle. Implies PreserveChangeOwnership — re-stamping the owner
+        // would release the toggle marker, and the next apply would
+        // silently overwrite the operator's choice.
+        internal bool PreservesOperatorToggle { get; init; }
 
         public PolicyUpdate() { }
 

@@ -13,8 +13,18 @@ namespace HSMServer.Core.Model.Requests
     // fan-out policy record the apply writes links back to the template
     // write's rollback group. Null (the default) keeps the canonical
     // unstamped AlertTemplate initiator of the pre-journaled callers.
+    //
+    // The optional IsDisabledChangedAlertIds (#1077 review): the template
+    // alert ids whose IsDisabled differs from the previously stored version
+    // of the same template — computed once per save in AddAlertTemplateAsync
+    // (null on the sensor-creation path, the only apply that runs without a
+    // save to diff; restore and change-set rollback also go through
+    // AddAlertTemplateAsync and DO get the diff). Read by
+    // ApplyTemplateToSensor to decide whether a
+    // preserved operator toggle's divergence carries new information worth
+    // reporting on THIS save.
     internal sealed record ApplyTemplateRequest(Guid SensorId, AlertTemplateModel Template,
-        InitiatorInfo Initiator = null) : IUpdateRequest
+        InitiatorInfo Initiator = null, HashSet<Guid> IsDisabledChangedAlertIds = null) : IUpdateRequest
     {
         public AlertTemplateModel AlertTemplateModel { get; } = Template;
 

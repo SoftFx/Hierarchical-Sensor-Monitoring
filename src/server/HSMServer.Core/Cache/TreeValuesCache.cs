@@ -2139,6 +2139,16 @@ namespace HSMServer.Core.Cache
             var matchedSensorPolicyIds = new HashSet<Guid>();
             var matchedSensorTtlIds = new HashSet<Guid>();
 
+            // Buffered divergence reports of preserved operator toggles:
+            // collected while the update lists are built and emitted only
+            // after the apply PERSISTED (TryUpdateSensor == true) — a failed
+            // orphan persist or update must not leave a journal record
+            // describing a preservation that never landed. Each entry also
+            // carries the pre-apply rendered content, so the emission can
+            // skip saves that carry no new information (see
+            // ReportPreservedOperatorToggle).
+            var pendingToggleReports = new List<PreservedToggleReport>();
+
             // Handle regular policies
             foreach (var templatePolicy in template.Policies)
             {
@@ -2166,18 +2176,38 @@ namespace HSMServer.Core.Cache
                 {
                     // UPDATE in-place: keep the existing policy Id; the
                     // template's IsDisabled re-syncs the sensor policy
-                    // (#1606). A per-sensor toggle made by a user still
-                    // wins: the toggle stamps a User change-table owner and
-                    // the CanChange pre-check in TryUpdate skips the update.
-                    // The request's journaled initiator rides here as
-                    // everywhere in this apply (#1610) — AlertTemplate-typed,
-                    // carrying the write's undo group.
+                    // (#1606) — UNLESS a user made a per-sensor toggle: the
+                    // toggle stamps a User change-table owner, and the
+                    // operator's choice of IsDisabled wins over the template
+                    // while the template's CONTENT still re-applies (#1077).
+                    // The flags ride the update: PreservesOperatorToggle
+                    // opens the CanChange gates, PreserveChangeOwnership
+                    // keeps the User owner stamped as the toggle marker for
+                    // the next apply. The request's journaled initiator rides
+                    // here as everywhere in this apply (#1610) —
+                    // AlertTemplate-typed, carrying the write's undo group.
+                    // Only a USER owner marks an operator's toggle; another
+                    // higher-priority owner is machinery that the apply
+                    // reclaims the entry from (the template's IsDisabled
+                    // lands, ownership re-stamps, nothing is reported).
+                    var changeInfo = sensor.ChangeTable.Policies[existing.Id.ToString()];
+                    var preserveToggle = !changeInfo.CanChange(initiator) && changeInfo.Initiator.Type == InitiatorType.User;
+
                     policyUpdates.Add(new PolicyUpdate(templatePolicy, initiator)
                     {
                         Id = existing.Id,
                         TemplateId = template.Id,
                         TemplateAlertId = templatePolicy.Id,
+                        IsDisabled = preserveToggle ? existing.IsDisabled : templatePolicy.IsDisabled,
+                        PreserveChangeOwnership = preserveToggle,
+                        PreservesOperatorToggle = preserveToggle,
                     });
+
+                    if (preserveToggle)
+                        pendingToggleReports.Add(new PreservedToggleReport(existing, existing.ToString(),
+                            existing.IsDisabled, templatePolicy.IsDisabled,
+                            request.IsDisabledChangedAlertIds?.Contains(templatePolicy.Id) == true, IsTtl: false));
+
                     matchedSensorPolicyIds.Add(existing.Id);
                 }
                 else
@@ -2224,17 +2254,33 @@ namespace HSMServer.Core.Cache
                     {
                         // Same contract as the regular-policy arm above: the
                         // template's IsDisabled re-syncs the sensor TTL
-                        // policy (#1606); a user's per-sensor toggle keeps
-                        // its User change-table owner and the CanChange gate
-                        // in BaseNodeModel.Update blocks the re-sync. The
-                        // journaled initiator rides as everywhere (#1610).
+                        // policy (#1606) unless a user's per-sensor toggle
+                        // holds a User change-table owner — then the
+                        // operator's IsDisabled wins while the template's
+                        // content (interval included) still re-applies
+                        // (#1077), per-entry instead of an all-or-nothing
+                        // node freeze. The journaled initiator rides as
+                        // everywhere (#1610); the toggle marker is a USER
+                        // owner only, like the regular arm above.
+                        var changeInfo = sensor.ChangeTable.TtlPolicies[existing.Id.ToString()];
+                        var preserveToggle = !changeInfo.CanChange(initiator) && changeInfo.Initiator.Type == InitiatorType.User;
+
                         ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, initiator)
                         {
                             Id = existing.Id,
                             TemplateId = template.Id,
                             TemplateAlertId = ttlPolicy.Id,
                             TTL = ttlTicks,
+                            IsDisabled = preserveToggle ? existing.IsDisabled : ttlPolicy.IsDisabled,
+                            PreserveChangeOwnership = preserveToggle,
+                            PreservesOperatorToggle = preserveToggle,
                         });
+
+                        if (preserveToggle)
+                            pendingToggleReports.Add(new PreservedToggleReport(existing, existing.ToString(),
+                                existing.IsDisabled, ttlPolicy.IsDisabled,
+                                request.IsDisabledChangedAlertIds?.Contains(ttlPolicy.Id) == true, IsTtl: true));
+
                         matchedSensorTtlIds.Add(existing.Id);
                     }
                     else
@@ -2338,48 +2384,160 @@ namespace HSMServer.Core.Cache
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
                     _logger.Error(request.Error);
                 }
-                else if (!string.IsNullOrEmpty(error))
+                else
                 {
-                    // Two failure kinds ride the #1401 warnings channel to the
-                    // caller (rendered by every transport of
-                    // AddAlertTemplateAsync), each with its own journal record
-                    // naming the sensor and the reason — the same "Alert"
-                    // record shape the #1394 removal records use:
-                    // - REJECTED: the policy is never created — not on the
-                    //   sensor, not in the DB — while the save reports
-                    //   success. This is the real "partially applied" case:
-                    //   Error level (#1563 review reserved it for rejections;
-                    //   an error with no collected entry keeps the Error
-                    //   default too — not a shape the apply produces today).
-                    // - EVALUATION ERROR (#1563): the policy applied and
-                    //   persisted, but its post-update revalidation threw —
-                    //   nothing was skipped, so the journal must not claim
-                    //   "not applied" and the log is a warn, not an error.
-                    if (policyFailures.Count == 0 ||
-                        policyFailures.Any(f => f.Kind == PolicyUpdateFailureKind.Rejected))
-                        _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
-                    else
-                        _logger.Warn($"Template {template.Id} applied to sensor {sensor.Id} with policy evaluation errors: {error}");
-
-                    foreach (var failure in policyFailures)
+                    if (!string.IsNullOrEmpty(error))
                     {
-                        request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath, failure.Reason));
+                        // Two failure kinds ride the #1401 warnings channel to the
+                        // caller (rendered by every transport of
+                        // AddAlertTemplateAsync), each with its own journal record
+                        // naming the sensor and the reason — the same "Alert"
+                        // record shape the #1394 removal records use:
+                        // - REJECTED: the policy is never created — not on the
+                        //   sensor, not in the DB — while the save reports
+                        //   success. This is the real "partially applied" case:
+                        //   Error level (#1563 review reserved it for rejections;
+                        //   an error with no collected entry keeps the Error
+                        //   default too — not a shape the apply produces today).
+                        // - EVALUATION ERROR (#1563): the policy applied and
+                        //   persisted, but its post-update revalidation threw —
+                        //   nothing was skipped, so the journal must not claim
+                        //   "not applied" and the log is a warn, not an error.
+                        if (policyFailures.Count == 0 ||
+                            policyFailures.Any(f => f.Kind == PolicyUpdateFailureKind.Rejected))
+                            _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
+                        else
+                            _logger.Warn($"Template {template.Id} applied to sensor {sensor.Id} with policy evaluation errors: {error}");
 
-                        var verdict = failure.Kind == PolicyUpdateFailureKind.EvaluationError
-                            ? "evaluation failed"
-                            : "not applied";
-
-                        _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.AlertTemplate)
+                        foreach (var failure in policyFailures)
                         {
-                            Enviroment = "Alert collection",
-                            PropertyName = "Alert",
-                            OldValue = string.Empty,
-                            NewValue = $"{verdict}: {failure.Reason}",
-                            Path = sensor.FullPath,
-                        });
+                            request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath, failure.Reason));
+
+                            var verdict = failure.Kind == PolicyUpdateFailureKind.EvaluationError
+                                ? "evaluation failed"
+                                : "not applied";
+
+                            _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.AlertTemplate)
+                            {
+                                Enviroment = "Alert collection",
+                                PropertyName = "Alert",
+                                OldValue = string.Empty,
+                                NewValue = $"{verdict}: {failure.Reason}",
+                                Path = sensor.FullPath,
+                            });
+                        }
                     }
+
+                    // The buffered preserved-toggle reports are emitted only
+                    // here, after the apply PERSISTED — the same success arm
+                    // the #1401 rejection records write from. On the
+                    // hard-failure paths above nothing is journaled: a
+                    // "toggle preserved" record must describe state the apply
+                    // actually landed.
+                    foreach (var pending in pendingToggleReports)
+                        ReportPreservedOperatorToggle(request, sensor, pending, initiator);
                 }
             }
+        }
+
+        // One buffered divergence report of a preserved operator toggle —
+        // built while the update lists are assembled and emitted only after
+        // the apply PERSISTED. ContentBefore is the policy's rendered
+        // content (the same Policy.ToString() the change journal compares)
+        // captured BEFORE the update ran, so the emission can tell whether
+        // this apply actually changed the policy.
+        private readonly record struct PreservedToggleReport(
+            Policy ExistingPolicy,
+            string ContentBefore,
+            bool PreservedIsDisabled,
+            bool TemplateIsDisabled,
+            bool TemplateIsDisabledChanged,
+            bool IsTtl)
+        {
+            public Guid PolicyId => ExistingPolicy.Id;
+        }
+
+        // #1077: the apply re-applied a template policy whose change-table
+        // owner is a user's per-sensor disable toggle — the operator's
+        // IsDisabled was kept, the template's content landed. The
+        // disagreement is reported, never silently re-enabled — but only
+        // when THIS save carries new information: when the kept choice
+        // DIVERGES from the template's isDisabled AND either the apply
+        // changed the policy's rendered content or the template's
+        // isDisabled for the entry changed since the previously stored
+        // template (diffed in AddAlertTemplateAsync). An unchanged re-save
+        // (a rename, a description edit) reports nothing — it carries
+        // nothing new to report. The report runs only on the persisted
+        // arm — the caller buffers it and emits it after TryUpdateSensor
+        // succeeds. When the choices agree there is nothing to report —
+        // the toggle marker still rides the change table for the next
+        // apply.
+        private void ReportPreservedOperatorToggle(ApplyTemplateRequest request, BaseSensorModel sensor,
+            PreservedToggleReport report, InitiatorInfo initiator)
+        {
+            if (report.PreservedIsDisabled == report.TemplateIsDisabled)
+                return;
+
+            if (report.ExistingPolicy.ToString() == report.ContentBefore && !report.TemplateIsDisabledChanged)
+                return;
+
+            var kind = report.IsTtl ? "ttl policy" : "policy";
+
+            request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath,
+                $"{kind} {report.PolicyId}: operator's per-sensor enable/disable choice preserved; template isDisabled={report.TemplateIsDisabled} not applied"));
+
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, initiator)
+            {
+                Enviroment = "Alert collection",
+                PropertyName = "Alert",
+                OldValue = string.Empty,
+                NewValue = $"operator toggle preserved: {kind} {report.PolicyId} keeps isDisabled={report.PreservedIsDisabled}; template isDisabled={report.TemplateIsDisabled} not applied",
+                Path = sensor.FullPath,
+            });
+        }
+
+        // The template alert ids (regular policies and TTL entry policies
+        // alike — the id is the TemplateAlertId the apply matches sensor
+        // policies by) whose IsDisabled differs between the previously
+        // stored version of the template and the one being saved. The
+        // production save paths build a fresh AlertTemplateModel per
+        // request, so the diff sees the previous state; entries matched only
+        // by id, added ones are ignored (nothing applied can hold them).
+        private HashSet<Guid> GetIsDisabledChangedAlertIds(AlertTemplateModel previous, AlertTemplateModel current)
+        {
+            var changedIds = new HashSet<Guid>();
+
+            if (previous is null)
+                return changedIds;
+
+            // A caller that mutates the STORED instance in place and saves it
+            // again passes the same reference as both versions: the diff
+            // below would compare the object with itself and silently report
+            // nothing (losing every flip-only divergence report). No
+            // production caller does this — say so instead of going quiet.
+            if (ReferenceEquals(previous, current))
+            {
+                _logger.Warn($"Alert template {current?.Id} re-saved as the same in-memory instance; the isDisabled diff is empty");
+                return changedIds;
+            }
+
+            foreach (var oldPolicy in previous.Policies)
+            {
+                var newPolicy = current.Policies?.FirstOrDefault(p => p.Id == oldPolicy.Id);
+
+                if (newPolicy is not null && newPolicy.IsDisabled != oldPolicy.IsDisabled)
+                    changedIds.Add(oldPolicy.Id);
+            }
+
+            foreach (var oldEntry in previous.TtlEntries)
+            {
+                var newEntry = current.TtlEntries?.FirstOrDefault(e => e.Policy.Id == oldEntry.Policy.Id);
+
+                if (newEntry is not null && newEntry.Policy.IsDisabled != oldEntry.Policy.IsDisabled)
+                    changedIds.Add(oldEntry.Policy.Id);
+            }
+
+            return changedIds;
         }
 
         public async Task SaveLastStateToDbAsync(CancellationToken token = default)
@@ -2433,6 +2591,15 @@ namespace HSMServer.Core.Cache
             Guid? previousFolderId = null;
             if (_alertTemplates.TryGetValue(alertTemplateModel.Id, out var previousTemplate))
                 previousFolderId = previousTemplate.FolderId;
+
+            // The template alert ids whose IsDisabled changed in THIS save,
+            // diffed against the previously stored version of the template —
+            // the saves (besides a content change landing on a toggled
+            // policy) that re-report a preserved operator toggle; see
+            // ReportPreservedOperatorToggle. Empty for a first save, where
+            // nothing can diverge yet (no sensor policy carries this
+            // template's id).
+            var isDisabledChangedIds = GetIsDisabledChangedAlertIds(previousTemplate, alertTemplateModel);
 
             _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
@@ -2514,7 +2681,7 @@ namespace HSMServer.Core.Cache
                     CancellationToken = token
                 }, async (sensor, ct) =>
                 {
-                    var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel, initiator);
+                    var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel, initiator, isDisabledChangedIds);
                     var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
 
                     if (!result.IsOk || !string.IsNullOrEmpty(request.Error))

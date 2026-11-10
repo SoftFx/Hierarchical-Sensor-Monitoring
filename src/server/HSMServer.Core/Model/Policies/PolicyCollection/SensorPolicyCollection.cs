@@ -351,7 +351,18 @@ namespace HSMServer.Core.Model.Policies
             {
                 foreach (var update in updatesList)
                 {
-                    if (AlertChangeTable[update.Id.ToString()].CanChange(initiator))
+                    // #1077: PreservesOperatorToggle rides on updates the
+                    // apply built for a policy a user has toggled — the
+                    // template owns the content, the operator owns the
+                    // disable toggle, so the re-apply goes through instead of
+                    // freezing the policy at its pre-toggle content. Only a
+                    // USER owner marks an operator's toggle: a template
+                    // apply reclaims its own policy from any other
+                    // higher-priority owner instead of skipping it forever.
+                    var changeInfo = AlertChangeTable[update.Id.ToString()];
+
+                    if (changeInfo.CanChange(initiator) || update.PreservesOperatorToggle ||
+                        changeInfo.Initiator.Type != InitiatorType.User)
                     {
                         if (_storage.TryGetValue(update.Id, out var existingPolicy))
                         {
@@ -359,7 +370,8 @@ namespace HSMServer.Core.Model.Policies
                             var oldPolicy = existingPolicy.ToString();
                             if (existingPolicy.TryUpdate(update, out var err))
                             {
-                                CallDataJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator);
+                                CallDataJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator,
+                                    stampOwnership: !update.PreserveChangeOwnership);
                                 Uploaded?.Invoke(ActionType.Update, existingPolicy);
                             }
                             else
