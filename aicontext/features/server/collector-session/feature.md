@@ -11,7 +11,9 @@ A collector may hold one persistent WebSocket with the server at `GET /api/senso
 
 This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No collector uses it yet.** Directive push over the session is a later step.
 
-**The session is meant to replace the HTTP routes for collectors, not to sit beside them** (owner decision, 2026-11-10). The HTTP Sensor API is unchanged and keeps working through a transition period, for collectors that do not use a session yet. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. Two things the session cannot carry yet stand in the way of removing HTTP: file values and bodies larger than a frame.
+**The session is meant to replace the HTTP routes for collectors, not to sit beside them** (owner decision, 2026-11-10). The HTTP Sensor API is unchanged and keeps working through a transition period, for collectors that do not use a session yet. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. Three things stand in the way of removing HTTP: file values and elements larger than a frame, which the session cannot carry yet, and agent directives, which still reach a collector only as headers on HTTP answers until directive push is built.
+
+Which transport a collector uses is a setting of the collector (`http` or `session`), not something the server negotiates.
 
 ## Invariants
 
@@ -22,6 +24,7 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 - **Access is re-checked for every request frame and every ping**, as it is for every HTTP request: the key and its product are looked up again and the key must still be valid for `CanSendSensorData`. Losing it closes the session with `1008`, also for a session that only keeps itself alive. A request frame counts as a use of the key (last-used time and address), a ping does not. There is no `406` ack: a key that cannot send does not get a session in the first place.
 - **A frame the server cannot acknowledge is refused, not dropped**: a request without an `id` closes the session with `1002`. Dropping it would be silent data loss.
 - **The cap holds under a race.** A slot is reserved before the upgrade is accepted and released when the session ends, whatever way it ends.
+- **A refusal that stops delivery is visible.** Besides the cap below, an upgrade that arrives while sessions are switched off is logged as a `Warn`, at most once a minute: a collector set to use a session cannot send to such a server at all.
 - **Reaching the cap is visible.** A refused collector cannot send until a slot is free, so the server logs a `Warn` naming the limit, at most once a minute. The cap is a guard against a runaway fleet, not a number to run close to.
 - **A collector going away is not a server error.** A dropped connection, a close from the collector and a silent collector end the session at `Debug` level; protocol violations are logged at `Warn`; only a failure inside the server is an `Error`.
 - **Silence is the collector's, never the server's.** The three-heartbeat limit runs while the server waits for a frame or for the collector to take one, and starts again with every read that brought bytes, so a large frame on a slow link is not silence. A frame still has to be complete within ten silence limits of its first byte (15 minutes by default): a frame that never ends would otherwise hold a slot and never reach the access check. The limit does not run while the server itself is storing a batch.

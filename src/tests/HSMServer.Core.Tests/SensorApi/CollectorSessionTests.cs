@@ -591,6 +591,19 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(HttpStatusCode.NotAcceptable, refused.Status);
             Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "legacy/refused", out _));
 
+            // The HTTP routes say nothing about sessions: a collector on a session does not
+            // learn of it from HTTP, and one on HTTP is not nudged towards it.
+            using (var http = new HttpClient())
+            using (var request = new HttpRequestMessage(HttpMethod.Get, new Uri(host.HttpBase, "testConnection")))
+            {
+                request.Headers.Add("Key", _key);
+
+                using var response = await http.SendAsync(request, Deadline());
+
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.DoesNotContain(response.Headers, header => header.Key.Contains("Session", StringComparison.OrdinalIgnoreCase));
+            }
+
             // A registration through the single-command route.
             var registered = await PostAsync(host, "addOrUpdate", "{\"Type\":0,\"Path\":\"legacy/registered\",\"SensorType\":2}", _key);
 

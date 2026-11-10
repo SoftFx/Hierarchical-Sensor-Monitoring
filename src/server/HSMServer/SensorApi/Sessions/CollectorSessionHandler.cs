@@ -64,6 +64,7 @@ namespace HSMServer.SensorApi.Sessions
 
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
+        private long _offWarnedAtTicks;
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
@@ -86,6 +87,12 @@ namespace HSMServer.SensorApi.Sessions
         {
             if (!_config.Enabled)
             {
+                // A collector that is set to use a session has no other way to deliver, so
+                // an upgrade arriving here means values are piling up somewhere.
+                if (context.WebSockets.IsWebSocketRequest && IsTimeToWarn(ref _offWarnedAtTicks))
+                    _logger.Warn($"A collector asked for a session from {context.Connection.RemoteIpAddress}, but collector sessions are switched off on this server " +
+                                 "(CollectorSessions.MaxSessions = 0): it is refused with 404 and cannot send. Turn sessions on, or set that collector to HTTP.");
+
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
@@ -492,14 +499,20 @@ namespace HSMServer.SensorApi.Sessions
         // operator. At most one line a minute: a fleet over the cap retries.
         private void WarnCapReached(PublicApiRequestInfo caller)
         {
-            var now = _time.GetUtcNow().UtcTicks;
-            var last = Interlocked.Read(ref _capWarnedAtTicks);
-
-            if (now - last < TimeSpan.TicksPerMinute || Interlocked.CompareExchange(ref _capWarnedAtTicks, now, last) != last)
+            if (!IsTimeToWarn(ref _capWarnedAtTicks))
                 return;
 
             _logger.Warn($"The collector session limit is reached (CollectorSessions.MaxSessions = {_config.MaxSessions}): the upgrade of {caller.TelemetryPath} from {caller.RemoteIP} " +
                          "is refused with 503 and it cannot send until a session ends. Raise the limit: this server has more collectors than that.");
+        }
+
+        // True at most once a minute for each of the refusals that are worth a log line.
+        private bool IsTimeToWarn(ref long warnedAtTicks)
+        {
+            var now = _time.GetUtcNow().UtcTicks;
+            var last = Interlocked.Read(ref warnedAtTicks);
+
+            return now - last >= TimeSpan.TicksPerMinute && Interlocked.CompareExchange(ref warnedAtTicks, now, last) == last;
         }
 
         private void CloseAllForShutdown()
