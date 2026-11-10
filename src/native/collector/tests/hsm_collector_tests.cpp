@@ -6208,9 +6208,17 @@ namespace
         Require(server.Connections() == 1, "sequential requests must reuse one connection");
     }
 
-    // #1653: concurrent callers still get a handle each (no shared easy handle), and the pool never
-    // grows past the number of concurrent callers: two threads mean at most two connections.
-    void NativeHttpTransportConcurrentPostsReuseConnections()
+    // Bounded wait for the keep-alive server to have closed every connection it accepted.
+    bool WaitForNoOpenConnections(const hsm::test::HttpKeepAliveServer& server)
+    {
+        for (int i = 0; i < 400 && server.OpenConnections() != 0; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        return server.OpenConnections() == 0;
+    }
+
+    // #1653: concurrent callers each get a handle of their own (an easy handle is never shared),
+    // and once the burst is over the one kept handle carries sequential sends on its connection.
+    void NativeHttpTransportConcurrentPostsThenReuse()
     {
         hsm::test::HttpKeepAliveServer server;
         hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
@@ -6231,12 +6239,16 @@ namespace
 
         Require(failures.load() == 0, "every concurrent POST must succeed");
         Require(server.Requests().size() == 2 * kPostsPerThread, "the server must have seen every POST");
-        Require(server.Connections() >= 1 && server.Connections() <= 2, "two callers must use at most two connections");
+
+        const int after_burst = server.Connections();
+        for (int i = 0; i < 5; ++i)
+            Require(transport.Post(url, "[]", {}).IsSuccess(), "a POST after the burst must succeed");
+        Require(server.Connections() == after_burst, "sends after the burst must reuse the kept connection");
     }
 
-    // #1653: a handle whose transfer was cancelled is destroyed, not pooled, so the send after
-    // ResetCancel() starts on a fresh connection instead of whatever the aborted one left behind.
-    void NativeHttpTransportDropsHandleAfterCancel()
+    // #1432 + #1653: a send started while Cancel() is set never leaves the process, even though a
+    // kept connection is ready to carry it, and the kept connection is still usable afterwards.
+    void NativeHttpTransportCancelledSendNeverLeaves()
     {
         hsm::test::HttpKeepAliveServer server;
         hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
@@ -6244,7 +6256,6 @@ namespace
         const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
 
         Require(transport.Post(url, "[1]", {}).IsSuccess(), "the first POST must succeed");
-        Require(server.Connections() == 1, "the first POST opens the connection");
 
         transport.Cancel();
         Require(!transport.Post(url, "[2]", {}).transport_ok, "a POST started while cancelled must be aborted");
@@ -6252,7 +6263,32 @@ namespace
 
         const auto response = transport.Post(url, "[3]", {});
         Require(response.IsSuccess(), ("the POST after ResetCancel must succeed: " + response.error).c_str());
-        Require(server.Connections() == 2, "the POST after a cancel must not reuse the aborted handle's connection");
+
+        // Requests on one connection are recorded in order, so [3] being recorded means [2] would
+        // have been recorded before it had it been written.
+        const auto requests = server.Requests();
+        Require(requests.size() == 2, "the cancelled POST must not reach the server");
+        Require(requests[0].body == "[1]" && requests[1].body == "[3]", "only the two live POSTs must arrive");
+        Require(server.Connections() == 1, "the kept connection must survive a refused send");
+    }
+
+    // #1653: a send that fails mid-flight (here: the server hangs past the request timeout) must not
+    // poison the next one. The handle is dropped and the following send connects afresh.
+    void NativeHttpTransportRecoversAfterTimeout()
+    {
+        hsm::test::HttpKeepAliveServer server(/*drop_after_response=*/false, "/hang");
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string base = "http://127.0.0.1:" + std::to_string(server.Port());
+
+        Require(transport.Post(base + "/api/sensors/list", "[1]", {}).IsSuccess(), "the first POST must succeed");
+
+        const auto hung = transport.Post(base + "/hang", "[2]", {}, /*timeout_ms=*/300);
+        Require(!hung.transport_ok, "a POST to a hung server must time out");
+
+        const auto response = transport.Post(base + "/api/sensors/list", "[3]", {});
+        Require(response.IsSuccess(), ("the POST after a timeout must succeed: " + response.error).c_str());
+        Require(server.Connections() == 2, "the POST after a timeout must use a new connection");
     }
 
     // #1653: the price of keeping a connection is that the server may drop it while it is idle
@@ -6269,6 +6305,9 @@ namespace
         {
             const auto response = transport.Post(url, "[" + std::to_string(i) + "]", {});
             Require(response.IsSuccess(), ("a POST over a dropped kept connection must reconnect: " + response.error).c_str());
+            // The server has closed its side before the next send starts, so the test does not
+            // depend on which of "FIN" and "next request" wins.
+            Require(WaitForNoOpenConnections(server), "the server must have dropped the connection");
         }
 
         const auto requests = server.Requests();
@@ -8404,8 +8443,9 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
             { "native_http_transport_reuses_connection", [](const std::string&) { NativeHttpTransportReusesConnection(); } },
-            { "native_http_transport_concurrent_posts_reuse_connections", [](const std::string&) { NativeHttpTransportConcurrentPostsReuseConnections(); } },
-            { "native_http_transport_drops_handle_after_cancel", [](const std::string&) { NativeHttpTransportDropsHandleAfterCancel(); } },
+            { "native_http_transport_concurrent_posts_then_reuse", [](const std::string&) { NativeHttpTransportConcurrentPostsThenReuse(); } },
+            { "native_http_transport_cancelled_send_never_leaves", [](const std::string&) { NativeHttpTransportCancelledSendNeverLeaves(); } },
+            { "native_http_transport_recovers_after_timeout", [](const std::string&) { NativeHttpTransportRecoversAfterTimeout(); } },
             { "native_http_transport_survives_server_dropping_kept_connection", [](const std::string&) { NativeHttpTransportSurvivesServerDroppingKeptConnection(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },

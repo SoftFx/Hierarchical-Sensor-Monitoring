@@ -277,11 +277,14 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_reuses_connection
         COMMAND hsm_collector_tests native_http_transport_reuses_connection
     )
-    add_test(NAME native_http_transport_concurrent_posts_reuse_connections
-        COMMAND hsm_collector_tests native_http_transport_concurrent_posts_reuse_connections
+    add_test(NAME native_http_transport_concurrent_posts_then_reuse
+        COMMAND hsm_collector_tests native_http_transport_concurrent_posts_then_reuse
     )
-    add_test(NAME native_http_transport_drops_handle_after_cancel
-        COMMAND hsm_collector_tests native_http_transport_drops_handle_after_cancel
+    add_test(NAME native_http_transport_cancelled_send_never_leaves
+        COMMAND hsm_collector_tests native_http_transport_cancelled_send_never_leaves
+    )
+    add_test(NAME native_http_transport_recovers_after_timeout
+        COMMAND hsm_collector_tests native_http_transport_recovers_after_timeout
     )
     add_test(NAME native_http_transport_survives_server_dropping_kept_connection
         COMMAND hsm_collector_tests native_http_transport_survives_server_dropping_kept_connection

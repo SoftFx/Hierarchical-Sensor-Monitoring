@@ -64,34 +64,43 @@ namespace hsm::http
         }
     } // namespace
 
-    void* HttpTransport::AcquireHandle()
+    HttpTransport::Handle HttpTransport::AcquireHandle()
     {
+        const auto now = std::chrono::steady_clock::now();
+
+        Handle kept;
         {
             std::lock_guard<std::mutex> guard(idle_mutex_);
-            if (!idle_handles_.empty())
-            {
-                void* handle = idle_handles_.back();
-                idle_handles_.pop_back();
-                return handle;
-            }
+            kept = idle_;
+            idle_ = Handle{};
         }
-        return curl_easy_init();
+
+        if (kept.curl != nullptr)
+        {
+            if (now - kept.created < kConnectionLifetime)
+                return kept;
+            // Past its lifetime: closing the handle closes its connection and drops its DNS cache,
+            // so the request below resolves the server name again.
+            curl_easy_cleanup(static_cast<CURL*>(kept.curl));
+        }
+
+        return Handle{ curl_easy_init(), now };
     }
 
-    void HttpTransport::ReleaseHandle(void* handle, bool reusable)
+    void HttpTransport::ReleaseHandle(Handle handle, bool reusable)
     {
         if (reusable)
         {
             std::lock_guard<std::mutex> guard(idle_mutex_);
-            if (idle_handles_.size() < kMaxIdleHandles)
+            if (idle_.curl == nullptr)
             {
-                idle_handles_.push_back(handle);
+                idle_ = handle;
                 return;
             }
         }
-        // Not reusable (failed/cancelled transfer) or the pool is full: closing the handle closes
-        // its connection. Done outside the lock — it can block on a TLS shutdown.
-        curl_easy_cleanup(static_cast<CURL*>(handle));
+        // Not reusable (failed transfer), or a concurrent call already put its handle back: closing
+        // the handle closes its connection. Done outside the lock, it can block on a TLS shutdown.
+        curl_easy_cleanup(static_cast<CURL*>(handle.curl));
     }
 
     HttpResponse HttpTransport::Perform(
@@ -103,7 +112,17 @@ namespace hsm::http
     {
         HttpResponse response;
 
-        CURL* curl = static_cast<CURL*>(AcquireHandle());
+        // A send started while Cancel() is set must not leave the process (#1432). With a fresh
+        // connection libcurl aborted it during the connect phase; on a kept connection the request
+        // could be written before the first progress callback, so refuse it here instead.
+        if (cancelled_.load())
+        {
+            response.error = curl_easy_strerror(CURLE_ABORTED_BY_CALLBACK);
+            return response;
+        }
+
+        const Handle handle = AcquireHandle();
+        CURL* curl = static_cast<CURL*>(handle.curl);
         if (curl == nullptr)
         {
             response.error = "curl_easy_init failed";
@@ -124,7 +143,7 @@ namespace hsm::http
             if (appended == nullptr)
             {
                 curl_slist_free_all(header_list);
-                ReleaseHandle(curl, /*reusable=*/true); // nothing was sent; the handle is intact
+                ReleaseHandle(handle, /*reusable=*/true); // nothing was sent; the handle is intact
                 response.error = "curl_slist_append failed";
                 return response;
             }
@@ -143,13 +162,14 @@ namespace hsm::http
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
         curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, XferCallback);
         curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cancelled_);
-        // Kept-connection hygiene (#1653). TCP keep-alive probes let the stack notice a dead
-        // peer between sends; the lifetime bound retires a busy connection so a moved server
-        // (new DNS answer) is picked up, as the managed client does every 5 minutes.
+        // Kept-connection hygiene (#1653). A connection idle past kConnectionIdleSeconds is not
+        // reused (see the constant); TCP keep-alive probes, sent well inside that window, keep a
+        // NAT mapping alive and let the stack notice a dead peer between sends. The lifetime bound
+        // is enforced on the handle itself in AcquireHandle, independent of the libcurl version.
+        curl_easy_setopt(curl, CURLOPT_MAXAGE_CONN, kConnectionIdleSeconds);
         curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-#if LIBCURL_VERSION_NUM >= 0x075000 // CURLOPT_MAXLIFETIME_CONN: libcurl 7.80.0+
-        curl_easy_setopt(curl, CURLOPT_MAXLIFETIME_CONN, kConnectionLifetimeSeconds);
-#endif
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 15L);
 
         if (is_post)
         {
@@ -173,11 +193,11 @@ namespace hsm::http
 
         curl_slist_free_all(header_list);
         // The header list is freed above, so the handle must not be performed again without
-        // the reset at the top of this function. A transfer that failed at the transport level
-        // (connect error, timeout, cancel) may leave a half-dead connection in the handle's
-        // cache: destroy it rather than pool it. An HTTP error status is a completed exchange
-        // on a healthy connection and keeps the handle.
-        ReleaseHandle(curl, /*reusable=*/rc == CURLE_OK);
+        // the reset at the top of this function. After a transport-level failure (connect error,
+        // timeout, cancel) the handle is destroyed rather than kept: libcurl closes the failed
+        // connection itself, but the handle's DNS answer is suspect too. An HTTP error status is
+        // a completed exchange on a healthy connection and keeps the handle.
+        ReleaseHandle(handle, /*reusable=*/rc == CURLE_OK);
         return response;
     }
 
@@ -191,8 +211,9 @@ namespace hsm::http
     {
         // No request is in flight here: the collector joins its senders before dropping the
         // transport (the same contract cancelled_ already relied on).
-        for (void* handle : idle_handles_)
-            curl_easy_cleanup(static_cast<CURL*>(handle));
+        std::lock_guard<std::mutex> guard(idle_mutex_);
+        if (idle_.curl != nullptr)
+            curl_easy_cleanup(static_cast<CURL*>(idle_.curl));
     }
 
     void HttpTransport::Cancel()

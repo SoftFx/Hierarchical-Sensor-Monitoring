@@ -1,7 +1,7 @@
 #pragma once
 
 #include <atomic>
-#include <cstddef>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -32,13 +32,16 @@ namespace hsm::http
         bool IsSuccess() const { return transport_ok && status_code >= 200 && status_code < 300; }
     };
 
-    // One transport per collector. Each call checks a libcurl easy handle out of a small idle pool
-    // (creating one when the pool is empty) and checks it back in afterwards, so concurrent calls
-    // are safe AND sequential calls reuse the handle's kept connection instead of paying a TCP+TLS
-    // handshake per request (#1653) — the counterpart of the managed client's pooled keep-alive
-    // connection. A kept connection is retired after kConnectionLifetimeSeconds so DNS is resolved
-    // again (the managed PooledConnectionLifetime bound, #1102-E4). A handle whose transfer failed
-    // or was cancelled is destroyed, never pooled, so a broken connection is not reused.
+    // One transport per collector. Each call takes the kept libcurl easy handle (creating one when
+    // it is absent or checked out by a concurrent call) and puts it back afterwards, so concurrent
+    // calls are safe AND sequential calls reuse the handle's kept connection instead of paying a
+    // TCP+TLS handshake per request (#1653), like the managed client's pooled keep-alive
+    // connection. Only ONE idle handle is kept: a second one would strand an unused connection for
+    // the life of the process once a single concurrent burst had created it. A handle is retired
+    // kConnectionLifetime after its creation so DNS is resolved again (the managed
+    // PooledConnectionLifetime bound, #1102-E4), and a connection idle for longer than
+    // kConnectionIdleSeconds is not reused. A handle whose transfer failed is destroyed, never
+    // kept: its connection and DNS answer are suspect.
     // Cancel() aborts in-flight transfers (the CancelPendingRequests primitive) AND every
     // send started while it is set, so the caller must ResetCancel() once the threads it wanted to
     // interrupt have quiesced — otherwise later sends (the stop drain, a restart's registration)
@@ -65,14 +68,22 @@ namespace hsm::http
         void Cancel();
         void ResetCancel();
 
-        // Upper bound on the age of a reused connection — mirrors HsmHttpsClient.ConnectionLifetime.
-        static constexpr long kConnectionLifetimeSeconds = 300;
+        // Upper bound on the age of a kept handle (and so of its connection and DNS answer);
+        // mirrors HsmHttpsClient.ConnectionLifetime.
+        static constexpr std::chrono::seconds kConnectionLifetime{ 300 };
+        // A connection idle for longer than this is closed instead of reused: a NAT or firewall
+        // may have dropped it without a FIN, and a send into it would hang until the request
+        // timeout. Mirrors the managed handler's one-minute pooled-connection idle timeout.
+        static constexpr long kConnectionIdleSeconds = 60;
 
     private:
-        // Idle handles kept between requests. Two covers the steady state (the data worker plus an
-        // occasional registration flush or stop drain); a third concurrent caller still gets its
-        // own handle, it is just cleaned up on check-in instead of pooled.
-        static constexpr size_t kMaxIdleHandles = 2;
+        // A libcurl easy handle and when it was created. CURL* is kept opaque so <curl/curl.h>
+        // stays confined to the .cpp.
+        struct Handle
+        {
+            void* curl = nullptr;
+            std::chrono::steady_clock::time_point created{};
+        };
 
         HttpResponse Perform(
             const std::string& url,
@@ -81,14 +92,13 @@ namespace hsm::http
             bool is_post,
             const std::string& body);
 
-        // CURL* kept opaque so <curl/curl.h> stays confined to the .cpp.
-        void* AcquireHandle();
-        void ReleaseHandle(void* handle, bool reusable);
+        Handle AcquireHandle();
+        void ReleaseHandle(Handle handle, bool reusable);
 
         int64_t timeout_ms_;
         bool verify_peer_;
         std::atomic<bool> cancelled_{ false };
         std::mutex idle_mutex_;
-        std::vector<void*> idle_handles_; // guarded by idle_mutex_
+        Handle idle_; // guarded by idle_mutex_; curl == nullptr when no handle is kept
     };
 } // namespace hsm::http

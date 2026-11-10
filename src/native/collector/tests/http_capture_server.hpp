@@ -484,11 +484,13 @@ namespace hsm::test
     // concurrent clients are fine (unlike HttpRecordingServer).
     // `drop_after_response`: still answer without `Connection: close`, then close the socket. That
     // is a server or proxy dropping a kept connection without telling the client.
+    // `hang_path_prefix`: requests to it are recorded and never answered (a hung server); the
+    // connection stays open until the client gives up.
     class HttpKeepAliveServer
     {
     public:
-        explicit HttpKeepAliveServer(bool drop_after_response = false)
-            : drop_after_response_(drop_after_response)
+        explicit HttpKeepAliveServer(bool drop_after_response = false, std::string hang_path_prefix = {})
+            : drop_after_response_(drop_after_response), hang_path_prefix_(std::move(hang_path_prefix))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -543,6 +545,11 @@ namespace hsm::test
         // Connections accepted so far (not the number currently open).
         int Connections() const { return accepted_.load(std::memory_order_acquire); }
 
+        // Connections accepted and not yet closed by this server. Zero means every connection has
+        // been closed on the server side: whatever the client wrote on them is recorded, and a
+        // kept client connection has been sent its FIN.
+        int OpenConnections() const { return open_.load(std::memory_order_acquire); }
+
         std::vector<HttpRecordingServer::Recorded> Requests() const
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -591,6 +598,7 @@ namespace hsm::test
                 if (conn == INVALID_SOCKET)
                     continue;
 
+                open_.fetch_add(1, std::memory_order_release);
                 accepted_.fetch_add(1, std::memory_order_release);
                 connections_.emplace_back([this, conn] { ServeConnection(conn); });
             }
@@ -605,10 +613,13 @@ namespace hsm::test
                 if (!HttpRecordingServer::ReadRequest(conn, recorded))
                     break; // peer closed (recv 0) or sent something unparseable
 
+                const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
                     requests_.push_back(std::move(recorded));
                 }
+                if (hang)
+                    continue; // never answered; the loop ends when the client closes the connection
 
                 static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
                 send(conn, ok.c_str(), static_cast<int>(ok.size()), 0);
@@ -616,13 +627,16 @@ namespace hsm::test
                     break;
             }
             closesocket(conn);
+            open_.fetch_sub(1, std::memory_order_release);
         }
 
         bool drop_after_response_;
+        std::string hang_path_prefix_;
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };
         std::atomic<int> accepted_{ 0 };
+        std::atomic<int> open_{ 0 };
         std::thread worker_;
         std::vector<std::thread> connections_; // accept-thread only until the join in the destructor
         mutable std::mutex mutex_;
