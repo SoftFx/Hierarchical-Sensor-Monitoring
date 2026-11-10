@@ -611,6 +611,44 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task GetSensorHistory_BarPointsCarryStdDev_UnknownAndInvalidRenderNull()
+        {
+            // #1620: the Sensor API history, the CSV export, Grafana and the UI
+            // all serve the bar's σ (#1509) — the management projection used to
+            // drop it. The field is nullable on the wire: an absent σ (the
+            // managed collector, pre-#1509 rows) is null — unknown is never 0 —
+            // and a negative/non-finite stored value renders null through the
+            // same BarStdDev.Normalize the Sensor API converters apply. Int bars
+            // carry σ like double bars (their Mean is int, σ never is).
+            var sensor = AddSensor(_productA, "cpu", "bars", SensorType.DoubleBar);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+            var values = new List<BaseValue>
+            {
+                new DoubleBarValue { Min = 1, Max = 3, Mean = 2, StdDev = 0.5, Count = 4, Time = from },
+                // σ = 0 is a real measurement (all samples equal) and survives
+                // Normalize's `>= 0` boundary — 0 is distinct from unknown.
+                new DoubleBarValue { Min = 4, Max = 4, Mean = 4, StdDev = 0, Count = 2, Time = from.AddSeconds(30) },
+                // No StdDev — the managed collector's bars never carry one.
+                new DoubleBarValue { Min = 5, Max = 7, Mean = 6, Count = 2, Time = from.AddMinutes(1) },
+                // A negative stored σ must not reach an agent as a number.
+                new DoubleBarValue { Min = 0, Max = 0, Mean = 0, StdDev = -1.5, Count = 1, Time = from.AddMinutes(2) },
+                new IntegerBarValue { Min = 8, Max = 12, Mean = 10, StdDev = 2.75, Count = 3, Time = from.AddMinutes(3) },
+            };
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) =>
+                    PagesOf(Enumerable.Reverse(values).Take(count)));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 10)).Value as SensorHistoryDto;
+
+            var bars = history.Points.Select(p => Assert.IsType<BarValueDto>(p.Value)).ToList();
+            Assert.Equal([0.5, 0, null, null, 2.75], bars.Select(bar => bar.StdDev));
+        }
+
+
+        [Fact]
         public async Task GetSensorHistory_DenseWindow_ReturnsTheNewestEnd_NotTheOldest()
         {
             // The #1389 regression: a dense window used to answer with the OLDEST

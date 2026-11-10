@@ -132,11 +132,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 Label = sensor.EnumOptions.TryGetValue(enumValue.Value, out var option) ? option.Value : null,
             },
 
+            // σ rides through the same Normalize the Sensor API converters
+            // apply (#1509): a stored non-finite/negative value renders as
+            // unknown (null), never as a number an agent could chart.
             BarBaseValue<int> intBar => new BarValueDto
             {
                 Min = intBar.Min,
                 Max = intBar.Max,
                 Mean = intBar.Mean,
+                StdDev = BarStdDev.Normalize(intBar.StdDev),
                 Count = intBar.Count,
             },
 
@@ -145,6 +149,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 Min = doubleBar.Min,
                 Max = doubleBar.Max,
                 Mean = doubleBar.Mean,
+                StdDev = BarStdDev.Normalize(doubleBar.StdDev),
                 Count = doubleBar.Count,
             },
 

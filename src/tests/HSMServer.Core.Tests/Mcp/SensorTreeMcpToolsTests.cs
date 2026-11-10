@@ -345,6 +345,29 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async Task GetSensorHistory_BarPointsCarryStdDev()
+        {
+            // #1620: an agent analysing bars through MCP must see the same σ the
+            // Sensor API serves — the projection is shared with the REST twin
+            // (pinned there in depth); this pins the MCP surface itself.
+            var sensor = AddSensor(_productA, "cpu", "bars", SensorType.DoubleBar);
+            var from = new DateTime(2026, 9, 14, 0, 0, 0, DateTimeKind.Utc);
+            var to = from.AddHours(1);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, from, to, It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf(
+                [
+                    new DoubleBarValue { Min = 1, Max = 5, Mean = 3, StdDev = 1.25, Count = 4, Time = from },
+                ]));
+
+            var history = await CreateTools().GetSensorHistoryAsync(sensor.Id, from, to, maxPoints: 5);
+
+            var bar = Assert.IsType<BarValueDto>(Assert.Single(history.Points).Value);
+            Assert.Equal(1.25, bar.StdDev);
+        }
+
+
+        [Fact]
         public async Task GetSensorHistory_OmittedMaxPoints_DefaultsToTheMcpDefault()
         {
             // The tool result feeds the calling model's context window, so an
