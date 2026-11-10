@@ -8,7 +8,7 @@
 
 ## Context
 
-A collector delivers data with one HTTP request per batch. Keeping the underlying connection between requests (the managed collector does; the native one will with #1653) does not change the shape of the exchange. There is no session: the server cannot send anything to a collector except by piggybacking `X-Hsm-Directive` headers on a data response (#1198), and it learns that a collector is gone only when a sensor TTL expires.
+A collector delivers data with one HTTP request per batch. Keeping the underlying connection between requests (the managed collector does; the native one will with #1653) does not change the shape of the exchange. There is no session: the server cannot send anything to a collector except by piggybacking `X-Hsm-Directive` headers on a data response (#1198), and it has no notion of a connected collector: it cannot list or address one and infers absence from sensor TTLs.
 
 The owner asked for a persistent connection in a current, standard form (2026-11-10). The constraints that shape the choice:
 
@@ -40,7 +40,7 @@ Protocol details, rollout and work breakdown: `docs/initiatives/collector-sessio
 - The disconnect alert does not get faster because of the session. Using a session close to bring the `Service alive` timeout forward, or to tell a planned stop from a loss, is left as a separate decision.
 - A server restart or a proxy configuration reload drops every session; collectors continue over HTTP and reconnect with jitter.
 - Delivery remains at-least-once: a frame whose acknowledgement is lost is sent again, as a request whose response is lost is today.
-- The native collector frames RFC 6455 itself over a plain libcurl connection instead of using libcurl's WebSocket API, which distribution builds of libcurl on current LTS releases lack (#1662). No dependency manifest changes; the collector owns a small piece of protocol code.
+- **Amended 2026-11-10, before this ADR merged, with the result of step 1 (#1662).** The first text of this consequence said the native collector would use libcurl's WebSocket feature, with its own framing as the fallback. Step 1 found the fallback is the only option that works where the collector ships: distribution builds of libcurl on current LTS releases do not enable that feature, and the Linux probe links the distribution's libcurl. The native collector therefore does the RFC 6455 handshake and framing itself over a plain libcurl connection. No dependency manifest changes. The cost is that the collector owns security-relevant protocol code that parses server-controlled bytes (handshake verification, masking, bounded frame parsing). The server and the wire are unaffected by this choice.
 - No public signature changes in `HSMDataCollector`; the session is turned on by an additive option and is off by default.
 
 ## Alternatives Considered
