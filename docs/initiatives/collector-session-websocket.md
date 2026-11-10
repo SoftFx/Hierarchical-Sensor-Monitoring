@@ -27,7 +27,7 @@ A collector talks to the server with one HTTP request per batch. The managed col
 - File sensor values on the session in the first wave (see § Frames: files stay on HTTP).
 - A general remote-control channel. Push carries the directives that exist today; new directive kinds are separate decisions.
 - Exactly-once delivery. Delivery stays at-least-once, as it is over HTTP.
-- A new kind of alert or a presence UI. A lost collector raises an **ordinary sensor alert** through a server-written sensor (§ Disconnect alert); a page listing connected collectors is not part of this initiative.
+- A new kind of alert or a presence UI. A lost collector is alerted through the sensor-alert mechanism HSM already has (§ Disconnect alert); a page listing connected collectors is not part of this initiative.
 
 ## Current Behavior
 
@@ -68,7 +68,7 @@ Text frames, one JSON object each. One envelope shape per direction:
 | server to collector | `op`, `body` | a push; no `id`, no answer expected |
 | either | `op` = `ping` / `pong` | heartbeat (see lifecycle) |
 
-Request ops in v1: `identify`, `list`, `commands`.
+Request ops in v1: `list`, `commands`.
 
 The `body` of a `list` or `commands` request is **exactly the bytes the collector would have sent as the HTTP body of the matching route**.
 
@@ -83,15 +83,12 @@ The `body` of a `list` or `commands` request is **exactly the bytes the collecto
 {"ack":19,"status":400,"error":"empty batch"}
 
 {"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30}}
-{"id":1,"op":"identify","body":{"modulePath":"host-01/.module","instance":"2f1c0c4e-7a55-4a0e-9a53-0d1c2b9f6e11"}}
-{"ack":1,"status":200,"body":{}}
 {"op":"directive","body":"sensor-disable:network"}
 ```
 
 - **`status` is the HTTP status the same request would have got** (200, 400, 406, 5xx). Each collector feeds it into the decision it already makes for an HTTP status, so a session never needs a second rule set. The two collectors do not make the same decision on 4xx today (native treats a rejected registration as final, managed re-enqueues it; #1659 A2). The session inherits that as it stands; converging it is #1659's job and comes before the session scenarios pin 4xx behavior.
 - **A success ack carries the route's success body** (the path-to-error dictionary). **A failure ack carries a short `error` string and never echoes the request**, unlike the HTTP 400 of `/list`.
 - **`hello`** is the first frame the server sends. It states the limits the collector must respect.
-- **`identify`** is the first request the collector sends. `modulePath` is the node its own `.module` sensors live under, the same path prefix it uses when it posts `Service alive`; `instance` is a GUID generated when the collector object is created. The same GUID goes on every HTTP Sensor API request of that collector as `X-Collector-Instance`, which is how the server ties fallback traffic to a session identity. A session that never identifies works for data and directives but has no connection sensor.
 - **Frame limit.** `maxFrameBytes` (4 MiB in v1). The collector checks the size of a body **before** choosing the transport: a body over the limit goes over HTTP, where the request limit is far higher. A collector therefore never sends an oversized frame; a server that receives one closes the session with 1009.
 - **Data ops in v1**: `list` (values and bars, the polymorphic batch) and `commands` (registrations). The typed single-value routes are not mirrored: both collectors batch.
 - **Files stay on HTTP.** A file value is a numeric JSON array, about 40 MB of JSON for a 10 MiB file, far over the frame limit by design.
@@ -131,30 +128,30 @@ Directives are **state, not events**, and the push keeps the level-triggered beh
 - The staged agent version has no change event (it is a file). The session service samples it on the same 15 s cache the request path uses and pushes when the sampled value changes.
 - Directive strings are unchanged (`update-available:<version>`, `sensor-disable:<group>`, `sensor-enable:<group>`), so the agent's handling is unchanged.
 - **Managed collector** (owner decision): directives are handled **inside** the collector; there is no public event. The managed library acts on none of today's directives (they are agent matters), so in v1 it receives them, logs unknown ones at debug level once, and exposes nothing. A directive the library should act on later is added to its internal table, still without a public surface.
-- The header path stays for HTTP-only clients. A client with a session up gets no directive headers on its HTTP responses, so it never sees a directive twice.
+- The header path stays for HTTP-only clients, and the server keeps adding the headers to every HTTP response: it cannot tell which HTTP request belongs to which session. The rule is on the client: **while its session is up, a collector ignores directive headers on its own HTTP responses** (file sends, oversized bodies), so it never acts on a directive twice.
 
 What improves is latency and cost: a directive reaches the collector when it changes, not on the next POST, and an unchanged state costs one small frame per 5 minutes instead of six headers on every response.
 
 ### Session registry (presence)
 
-A server service holding the live sessions: product, access key, client name, collector kind and version, module path and instance, remote IP, connected-at, last-frame-at. It is the single place that answers "is this collector connected", and the single place push goes through. Consumers: a self-monitoring sensor with the session count, the directive push, and the disconnect alert.
+A server service holding the live sessions: product, access key, client name, collector kind and version, remote IP, connected-at, last-frame-at. It is the single place that answers "which sessions are open", and the single place push goes through. Consumers: a self-monitoring sensor with the session count, and the directive push.
 
 **Session cap.** One limit for the whole server (owner decision), a server setting with a default of 10 000 sessions. Step 2 measures the per-session cost and adjusts the default if the measurement says so.
 
 ### Disconnect alert
 
-Owner decision: a collector that disconnects raises an **alert**. Alerts in HSM belong to sensors (ADR-0001 removed node-level alerts), so presence is surfaced as a sensor and the alert is an ordinary sensor alert. Templates, schedules, destinations and muting apply to it like to any other; no new alert type exists.
+Owner decision: a collector that disconnects must raise an **alert**.
 
-- **The sensor.** `<modulePath>/Collector connection`, a Bool sensor **written by the server** into the collector's product, next to `Service alive`. It is created when a session first identifies with that module path. A collector that never opens a session has no such sensor and behaves exactly as today.
-- **Connected.** `true`, status Ok, when a session identifies.
-- **Lost.** `false`, status Error, comment `connection lost`, when the instance has had **neither a session nor an HTTP Sensor API request for the grace period** (server setting, default 90 s). Counting HTTP requests by `X-Collector-Instance` is what keeps a collector that fell back to HTTP behind a broken proxy from being reported as lost while its data still arrives.
-- **Stopped.** `false`, status Ok, comment `collector stopped`, when the collector closes the session as part of its own Stop or Dispose (a close reason both drivers send). A deliberate stop is not an incident; the existing `Service alive` TTL still covers a host that stays down.
-- **Replaced.** A new instance identifying with the same module path takes the sensor over at once (a restarted process); the old instance's grace timer is cancelled.
-- **The alert.** The sensor is registered with a default alert on the change to Error. The operator can edit, mute or delete it like any alert.
-- **Server restart.** Every session drops because of the server, not the collectors. Grace timers start only when the server is ready to accept sessions again, so a restart does not report every collector as lost.
-- **Relation to `Service alive`.** Complementary. `Service alive` with its TTL says "no data for a long time" and exists for every collector; `Collector connection` says "this collector went away 90 seconds ago" and exists only for collectors on a session.
+**HSM already raises it.** Both collectors post `.module/Service alive` every 15 s. The sensor is registered with a 1-minute TTL and a default inactivity alert that notifies and sets the sensor to Error (`ServiceAlivePrototype` in `Prototypes/Collections/ModuleInfoCollections.cs`; the native collector mirrors it). A collector that dies is therefore alerted about one minute after its last beat, with an ordinary sensor alert that templates, schedules, destinations and muting apply to. Alerts belong to sensors (ADR-0001), and this is the sensor.
 
-A server writing a sensor into a customer product is new. It goes through the same registration and value paths as collector data (with the server as initiator), so storage, history and permissions need no special case.
+**What a session can and cannot add.** A session tells the server at once when a process dies (the OS closes the socket). It does not beat the TTL for a host that loses power or network: there is no close, and silence is detected by the heartbeat, in roughly the same minute. A separate "connection" sensor driven by the session was designed and dropped during review: it would fire later than `Service alive` for hard failures, page a second time for the same incident, and need an identity that survives HTTP fallback and server restarts.
+
+**So the alert stays where it is, and the session adds no second one.** Two things follow for this initiative:
+
+- A collector with the session option on must also have `Service alive`, or it has no disconnect alert. Both collectors log a warning at Start when the session is enabled and `Service alive` is not.
+- The beat travels on the session like any other value, so nothing about the alert changes when a collector moves between the session and HTTP.
+
+**A possible follow-up, not in this initiative**: use an abnormal session close to bring the `Service alive` timeout forward (seconds instead of a minute for a crashed process), or use a deliberate-stop close to tell a planned stop from a loss. Both change when an existing alert fires and need their own decision. See Owner Decisions.
 
 ### Code shape
 
@@ -172,7 +169,7 @@ A server writing a sensor into a customer product is new. It goes through the sa
 | new | new | Session for `list` / `commands` / directives; HTTP for files, oversized bodies and as fallback. |
 
 - **Public API**: additive only. A new `CollectorOptions` member turns the session on; `IDataSender` is unchanged, so a custom `DataSender` keeps working and simply has no session.
-- **Off by default** (owner decision). The session is enabled by an explicit option in the managed collector, the native collector, the agent config and the probe config. A collector with the option off never sends the instance header, never opens a session and is byte-for-byte today's collector. Turning the default on is a separate, later decision; nothing in this initiative flips it.
+- **Off by default** (owner decision). The session is enabled by an explicit option in the managed collector, the native collector, the agent config and the probe config. A collector with the option off never opens a session and is byte-for-byte today's collector. Turning the default on is a separate, later decision; nothing in this initiative flips it.
 - **net472**: `ClientWebSocket` needs Windows 8 / Server 2012 or newer. On an older OS the collector logs once and stays on HTTP. `ClientWebSocketOptions` has no per-connection certificate callback on .NET Framework, so `AllowUntrustedServerCertificate` on net472 means HTTP only; the process-wide callback is not touched.
 - **Wire contract**: the frame envelope and the discovery header are new and become part of `wire-contract/feature.md`. The value and registration bytes inside a frame do not change.
 
@@ -184,18 +181,17 @@ One PR per step unless noted.
 |---|---|---|
 | 0 | This initiative, ADR-0017, glossary terms | Owner review gates everything below. |
 | 1 | Native WebSocket capability | Enable the `websockets` feature of the vcpkg `curl` dependency (manifest, port, Conan recipe), build it in the Windows and Linux lanes and in the static probe build, and prove `curl_ws_send`/`curl_ws_recv` against an in-process WebSocket test server. Today's build reports `supported_protocols="HTTP HTTPS"`. If libcurl's WebSocket API does not hold up, the fallback is RFC 6455 framing over a `CONNECT_ONLY` handle; the decision is recorded in the step's PR. |
-| 2 | Server: session endpoint | Extract ingestion from `SensorsController` into a service; discovery header; `GET /api/sensors/session`; `hello`, `identify`, frame dispatch, acks, heartbeat; server-wide session cap; registry; self-monitoring session count; per-session cost measured. Tests with a real WebSocket client against the test host. Wire-contract doc gets the envelope. |
+| 2 | Server: session endpoint | Extract ingestion from `SensorsController` into a service; discovery header; `GET /api/sensors/session`; `hello`, frame dispatch, acks, heartbeat; server-wide session cap; registry; self-monitoring session count; per-session cost measured. Tests with a real WebSocket client against the test host. Wire-contract doc gets the envelope. |
 | 3 | Session conformance harness + first collector | New DSL verbs for a scripted session server and the `.hsmtest` scenarios, with harness support in **both** drivers, plus the session sender of the first collector (managed: `SessionDataSender`, both TFMs). The other driver marks the session verbs `CONFORMANCE-UNSUPPORTED` against the step 4 issue, which is the sanctioned parity flow (rule #9, epic #1093). Depends on #1659 A2/A3 for a sane fallback path. |
 | 4 | Second collector | Native session transport behind the existing seams, C ABI option (MINOR bump), agent and probe bumps. Removes every `CONFORMANCE-UNSUPPORTED` marker step 3 added. |
 | 5 | Directive push | Server pushes on open, on change and on the 5-minute re-announcement; native routes pushed directives to the existing callback; managed receives them internally with no public surface (this settles #1659 B1). Scenarios and both drivers in the same PR. |
-| 6 | Disconnect alert | `X-Collector-Instance` on HTTP requests, the `Collector connection` sensor, grace timer, stopped/lost/replaced rules, default alert, restart behavior. Server tests for every state transition; collector scenarios for `identify`, the instance header and the stop close reason. |
+| 6 | Disconnect alert | No new mechanism: the existing `Service alive` inactivity alert is the disconnect alert. This step is the Start warning in both collectors when the session is on and `Service alive` is off (lands with steps 3 and 4), plus the docs that say so. A faster or smarter alert driven by the session is a follow-up that needs an owner decision. |
 | 7 | Rollout | Enable on the garage probe and soak for a week; wiki pages; release notes. The option stays off by default. |
 
 ## Risks
 
 - **Two transports to keep correct.** Mitigation: one payload format, the HTTP status as the only result vocabulary, and session scenarios in the shared conformance corpus so the two collectors cannot drift.
 - **Intermediaries.** Some corporate proxies break WebSocket upgrades or kill idle connections. Mitigation: automatic HTTP fallback, application heartbeat, and the option being off by default.
-- **False disconnect alerts.** A flapping link or a proxy that blocks upgrades must not page anyone. Mitigation: the grace period, HTTP traffic counting as liveness, and no grace timers until the server is ready after its own restart.
 - **Reconnect storms** after a server restart. Mitigation: jittered backoff, HTTP in the gap, and the server refusing upgrades until it is ready to ingest.
 - **Server resources.** Every collector holds a connection. Kestrel handles this at the scale HSM runs at, but large installs are memory-sensitive; step 2 measures per-session cost and the cap is configurable.
 - **Head-of-line blocking** by a large frame. Mitigation: the frame limit is enforced by the sender's choice of transport, files stay on HTTP, failure acks do not echo the request, one request in flight per queue.
@@ -210,8 +206,8 @@ One PR per step unless noted.
 - **Parity between collectors (rule #9)**: session behavior is portable, observable collector behavior, so it lives in the CI-gated corpus: `tests/conformance/collector/session_*.hsmtest`, driven by new verbs that script the server side of a session (advertise capability, accept or refuse the upgrade, ack with a status, stay silent, drop, push a directive) and assert the collector's frames and its choice of transport. Covered at least: no attempt without the capability header, fallback on refusal, oversized body goes to HTTP, ack timeout closes the session and re-sends, heartbeat silence reconnects, directive delivery. The checklist gate and the unsupported-marker triage apply to them like to any other scenario.
 - **Byte identity**: the `body` of a `list` / `commands` frame equals the HTTP body for the same input in each collector (golden tests reuse the existing wire goldens).
 - **End to end**: the Docker integration lane runs a real server behind Caddy with a managed and a native collector on sessions, asserts values arrive, then restarts the server and asserts HTTP fallback and reconnection with no gap in a bar series.
-- **Disconnect alert**: server tests drive each transition with a fake clock: connected, lost after grace, not lost while HTTP requests with the instance header keep arriving, stopped, replaced by a new instance, and no lost reports after a server restart.
-- **Soak**: the garage probe on a session for at least a week; the acceptance signals are the same as for the 0.10.0 soak (no restarts, complete bar series, `Queue overflow` silent), plus no false `connection lost`.
+- **Disconnect alert**: a scenario per collector asserts that `Service alive` beats arrive on the session and keep arriving over HTTP after the session drops, and that Start warns when the session is on without `Service alive`.
+- **Soak**: the garage probe on a session for at least a week; the acceptance signals are the same as for the 0.10.0 soak (no restarts, complete bar series, `Queue overflow` silent), plus no `Service alive` inactivity alert caused by the transport.
 - **Docs**: `wire-contract/feature.md`, `collector/http-client/feature.md` (becomes transport), `server/overview.md`, `architecture/docker.md` (proxy notes), agent feature doc, wiki.
 
 ## Owner Decisions
@@ -225,4 +221,6 @@ Answered by the owner on 2026-11-10.
 | Does the managed collector expose directives publicly? | **No. They are handled inside the collector.** | § Push: directives, step 5 |
 | Is the session cap per server or per product? | **Per server.** | § Session registry, step 2 |
 
-Proposed here and not yet confirmed by the owner, because they follow from the decisions rather than being stated in them: the `Collector connection` sensor as the carrier of the alert, the 90 s grace period, treating a deliberate stop as not an incident, and the 10 000 default for the cap.
+**One decision needs the owner again.** The alert the owner asked for exists today as the `Service alive` inactivity alert, about one minute after a collector's last beat. This document therefore adds no second alert. If the intent was something the existing alert does not give — firing within seconds when a process crashes, or not firing on a planned stop — that is the follow-up named in § Disconnect alert, and it is not designed here.
+
+Proposed here and not confirmed by the owner: the 10 000 default for the session cap.
