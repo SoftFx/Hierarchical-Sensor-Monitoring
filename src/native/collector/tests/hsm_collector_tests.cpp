@@ -6178,6 +6178,168 @@ namespace
         Require(request.body == body, "captured body must be the exact wire bytes sent");
     }
 
+    // #1653: the kept handle is retired once it is older than the connection lifetime, so the
+    // next request opens a new connection and resolves the server name again. A lifetime of two
+    // seconds stands in for the real five minutes: long next to two loopback requests even on a
+    // slow or instrumented lane, so the first half of the test cannot outlive it by accident.
+    void NativeHttpTransportRetiresConnectionAfterItsLifetime()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false, std::chrono::milliseconds(2000));
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+        const std::vector<hsm::http::HttpHeader> headers{ hsm::http::HttpHeader{ "Content-Type", "application/json" } };
+
+        Require(transport.Post(url, "[1]", headers).IsSuccess(), "the first POST must succeed");
+        Require(transport.Post(url, "[2]", headers).IsSuccess(), "the second POST must succeed");
+        Require(server.Connections() == 1, "within its lifetime the handle and its connection are reused");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(2500)); // past the lifetime
+
+        Require(transport.Post(url, "[3]", headers).IsSuccess(), "the POST after the lifetime must succeed");
+        Require(server.Connections() == 2, "a handle past its lifetime must be retired: the next request opens a new connection");
+        Require(server.Requests().size() == 3, "all three requests must have reached the server");
+    }
+
+    // #1653: sequential requests through one transport ride ONE kept connection. Before the fix
+    // every request used a fresh easy handle, i.e. a fresh TCP (and, in production, TLS) handshake
+    // per send. The trailing GET also proves the pooled handle is reset between requests: without
+    // the reset it would repeat the previous POST.
+    void NativeHttpTransportReusesConnection()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string base = "http://127.0.0.1:" + std::to_string(server.Port());
+        const std::vector<hsm::http::HttpHeader> headers{ hsm::http::HttpHeader{ "Content-Type", "application/json" } };
+
+        for (int i = 0; i < 5; ++i)
+        {
+            const auto response = transport.Post(base + "/api/sensors/list", "[" + std::to_string(i) + "]", headers);
+            Require(response.IsSuccess(), ("kept-connection POST must succeed: " + response.error).c_str());
+        }
+
+        const auto probe = transport.Get(base + "/api/sensors/testConnection", {});
+        Require(probe.IsSuccess(), ("GET on the reused handle must succeed: " + probe.error).c_str());
+
+        const auto requests = server.Requests();
+        Require(requests.size() == 6, "the server must have seen all six requests");
+        for (size_t i = 0; i < 5; ++i)
+            Require(requests[i].body == "[" + std::to_string(i) + "]", "each POST must carry its own body");
+        Require(requests[5].path == "/api/sensors/testConnection", "the last request must be the GET");
+        Require(requests[5].body.empty(), "the GET must not repeat the previous POST body");
+        Require(server.Connections() == 1, "sequential requests must reuse one connection");
+    }
+
+    // Bounded wait for the keep-alive server to have closed every connection it accepted.
+    bool WaitForNoOpenConnections(const hsm::test::HttpKeepAliveServer& server)
+    {
+        for (int i = 0; i < 400 && server.OpenConnections() != 0; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        return server.OpenConnections() == 0;
+    }
+
+    // #1653: concurrent callers each get a handle of their own (an easy handle is never shared),
+    // and once the burst is over the one kept handle carries sequential sends on its connection.
+    void NativeHttpTransportConcurrentPostsThenReuse()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+        constexpr int kPostsPerThread = 20;
+        std::atomic<int> failures{ 0 };
+
+        const auto run = [&] {
+            for (int i = 0; i < kPostsPerThread; ++i)
+                if (!transport.Post(url, "[]", {}).IsSuccess())
+                    failures.fetch_add(1);
+        };
+        std::thread first(run);
+        std::thread second(run);
+        first.join();
+        second.join();
+
+        Require(failures.load() == 0, "every concurrent POST must succeed");
+        Require(server.Requests().size() == 2 * kPostsPerThread, "the server must have seen every POST");
+
+        const int after_burst = server.Connections();
+        for (int i = 0; i < 5; ++i)
+            Require(transport.Post(url, "[]", {}).IsSuccess(), "a POST after the burst must succeed");
+        Require(server.Connections() == after_burst, "sends after the burst must reuse the kept connection");
+    }
+
+    // #1432 + #1653: a send started while Cancel() is set never leaves the process, even though a
+    // kept connection is ready to carry it, and the kept connection is still usable afterwards.
+    void NativeHttpTransportCancelledSendNeverLeaves()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+
+        Require(transport.Post(url, "[1]", {}).IsSuccess(), "the first POST must succeed");
+
+        transport.Cancel();
+        Require(!transport.Post(url, "[2]", {}).transport_ok, "a POST started while cancelled must be aborted");
+        transport.ResetCancel();
+
+        const auto response = transport.Post(url, "[3]", {});
+        Require(response.IsSuccess(), ("the POST after ResetCancel must succeed: " + response.error).c_str());
+
+        // Requests on one connection are recorded in order, so [3] being recorded means [2] would
+        // have been recorded before it had it been written.
+        const auto requests = server.Requests();
+        Require(requests.size() == 2, "the cancelled POST must not reach the server");
+        Require(requests[0].body == "[1]" && requests[1].body == "[3]", "only the two live POSTs must arrive");
+        Require(server.Connections() == 1, "the kept connection must survive a refused send");
+    }
+
+    // #1653: a send that fails mid-flight (here: the server hangs past the request timeout) must not
+    // poison the next one. The handle is dropped and the following send connects afresh.
+    void NativeHttpTransportRecoversAfterTimeout()
+    {
+        hsm::test::HttpKeepAliveServer server(/*drop_after_response=*/false, "/hang");
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string base = "http://127.0.0.1:" + std::to_string(server.Port());
+
+        Require(transport.Post(base + "/api/sensors/list", "[1]", {}).IsSuccess(), "the first POST must succeed");
+
+        const auto hung = transport.Post(base + "/hang", "[2]", {}, /*timeout_ms=*/300);
+        Require(!hung.transport_ok, "a POST to a hung server must time out");
+
+        const auto response = transport.Post(base + "/api/sensors/list", "[3]", {});
+        Require(response.IsSuccess(), ("the POST after a timeout must succeed: " + response.error).c_str());
+        Require(server.Connections() == 2, "the POST after a timeout must use a new connection");
+    }
+
+    // #1653: the price of keeping a connection is that the server may drop it while it is idle
+    // (proxy idle timeout, server restart). The send that finds it dead must still succeed (the
+    // transport reconnects) rather than surface a failure for every dropped connection.
+    void NativeHttpTransportSurvivesServerDroppingKeptConnection()
+    {
+        hsm::test::HttpKeepAliveServer server(/*drop_after_response=*/true);
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto response = transport.Post(url, "[" + std::to_string(i) + "]", {});
+            Require(response.IsSuccess(), ("a POST over a dropped kept connection must reconnect: " + response.error).c_str());
+            // The server has closed its side before the next send starts, so the test does not
+            // depend on which of "FIN" and "next request" wins.
+            Require(WaitForNoOpenConnections(server), "the server must have dropped the connection");
+        }
+
+        const auto requests = server.Requests();
+        Require(requests.size() == 3, "each POST must be delivered exactly once");
+        for (size_t i = 0; i < 3; ++i)
+            Require(requests[i].body == "[" + std::to_string(i) + "]", "POSTs must arrive in order, none duplicated");
+        Require(server.Connections() == 3, "each POST after a drop must open a new connection");
+    }
+
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
     // with the libcurl transport installed, and assert the capture server saw the live POST. This
     // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
@@ -8303,6 +8465,12 @@ namespace
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
+            { "native_http_transport_reuses_connection", [](const std::string&) { NativeHttpTransportReusesConnection(); } },
+            { "native_http_transport_retires_connection_after_its_lifetime", [](const std::string&) { NativeHttpTransportRetiresConnectionAfterItsLifetime(); } },
+            { "native_http_transport_concurrent_posts_then_reuse", [](const std::string&) { NativeHttpTransportConcurrentPostsThenReuse(); } },
+            { "native_http_transport_cancelled_send_never_leaves", [](const std::string&) { NativeHttpTransportCancelledSendNeverLeaves(); } },
+            { "native_http_transport_recovers_after_timeout", [](const std::string&) { NativeHttpTransportRecoversAfterTimeout(); } },
+            { "native_http_transport_survives_server_dropping_kept_connection", [](const std::string&) { NativeHttpTransportSurvivesServerDroppingKeptConnection(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
