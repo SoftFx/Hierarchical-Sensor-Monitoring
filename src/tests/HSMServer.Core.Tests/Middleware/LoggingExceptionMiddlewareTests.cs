@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -118,6 +119,54 @@ namespace HSMServer.Core.Tests.Middleware
             var middleware = Middleware(Throwing<InvalidOperationException>());
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(context));
+
+            Assert.Single(_memory.Logs, entry => entry.StartsWith("Error|"));
+        }
+
+        // #1648: the HTTP/2 arm of the same client disconnect — Kestrel aborts
+        // the request body pipe with IOException("The client reset the
+        // request stream.") (RST_STREAM) while the request token has not fired
+        // yet (the abort callback is queued). Same client going away, same
+        // WARN; the exact Kestrel wording is non-localized.
+        [Fact]
+        public async Task ClientResetIOException_WithLiveRequestToken_LogsWarnInsteadOfError()
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = "POST";
+            context.Request.Path = "/mcp";
+            var middleware = Middleware(_ => throw new IOException("The client reset the request stream."));
+
+            await Assert.ThrowsAsync<IOException>(() => middleware.InvokeAsync(context));
+
+            Assert.Single(_memory.Logs, entry => entry.StartsWith("Warn|"));
+            Assert.DoesNotContain(_memory.Logs, entry => entry.StartsWith("Error|"));
+        }
+
+        // An IOException racing an already-aborted request is the client going
+        // away too (the token fired first here).
+        [Fact]
+        public async Task IOException_OnAbortedRequest_LogsWarnInsteadOfError()
+        {
+            var context = AbortedContext(method: "POST", path: "/mcp");
+            var middleware = Middleware(Throwing<IOException>());
+
+            await Assert.ThrowsAsync<IOException>(() => middleware.InvokeAsync(context));
+
+            Assert.Single(_memory.Logs, entry => entry.StartsWith("Warn|"));
+            Assert.DoesNotContain(_memory.Logs, entry => entry.StartsWith("Error|"));
+        }
+
+        // Every other IOException (a failing disk, a broken pipe of ours) is an
+        // ordinary failure an operator must look at — it stays an Error.
+        [Fact]
+        public async Task OtherIOException_StaysError()
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = "POST";
+            context.Request.Path = "/mcp";
+            var middleware = Middleware(_ => throw new IOException("Disk full."));
+
+            await Assert.ThrowsAsync<IOException>(() => middleware.InvokeAsync(context));
 
             Assert.Single(_memory.Logs, entry => entry.StartsWith("Error|"));
         }

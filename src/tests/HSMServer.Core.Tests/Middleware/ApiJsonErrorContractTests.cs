@@ -356,6 +356,25 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
+        public static async Task ExceptionMiddleware_ClientResetIOException_RethrowsUntouched()
+        {
+            // #1648: the HTTP/2 body-read arm of the same client abort —
+            // Kestrel aborts the request pipe with IOException("The client
+            // reset the request stream.") (RST_STREAM) before the token
+            // fires. Not a 500: the same shared classifier decides, so the
+            // two middlewares cannot drift apart.
+            var context = BuildContext("/api/v1/alertTemplates");
+
+            static Task Reset(HttpContext _) => throw new IOException("The client reset the request stream.");
+
+            await Assert.ThrowsAsync<IOException>(() =>
+                new ApiExceptionJsonMiddleware(Reset).InvokeAsync(context));
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+            Assert.Equal(0, context.Response.Body.Length);
+        }
+
+        [Fact]
         public static async Task ExceptionMiddleware_ServerSideCancellation_IsUniformJson500()
         {
             // The other OperationCanceledException shape (#1371): a server-side
