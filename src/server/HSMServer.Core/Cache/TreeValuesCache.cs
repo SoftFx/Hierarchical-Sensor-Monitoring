@@ -902,11 +902,12 @@ namespace HSMServer.Core.Cache
         }
 
 
-        // rejectedPolicies (#1401): optional per-policy rejection collector of
-        // the template-apply path — one entry per update the sensor's policy
-        // collection refused while the update otherwise applied and persisted.
-        // Null for every other caller.
-        private bool TryUpdateSensor(SensorUpdate update, out string error, List<string> rejectedPolicies = null)
+        // policyFailures (#1401/#1563): optional per-policy failure collector
+        // of the template-apply path — one entry per update the sensor's
+        // policy collection refused (Rejected) or failed to re-evaluate
+        // after applying it (EvaluationError; the policy applied and
+        // persisted). Null for every other caller.
+        private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null)
         {
             try
             {
@@ -916,10 +917,20 @@ namespace HSMServer.Core.Cache
                     return false;
                 }
 
-                sensor.TryUpdate(update, out error, rejectedPolicies);
+                sensor.TryUpdate(update, out error, policyFailures);
                 _database.UpdateSensor(sensor.ToEntity());
 
                 SensorUpdateView(sensor);
+
+                // #1563: SOFT failure — applied AND persisted, but a policy was
+                // rejected or its post-update revalidation failed. The
+                // template-apply path (policyFailures != null) reports each
+                // failure through its per-policy warnings channel, evaluation
+                // errors included; every other caller — including the generic
+                // SensorUpdate queue case, which logs only the hard failure —
+                // used to drop the error silently.
+                if (!string.IsNullOrEmpty(error) && policyFailures is null)
+                    _logger.Warn($"Sensor {update.Id} updated with policy errors: {error}");
 
                 return true;
             }
@@ -2058,12 +2069,17 @@ namespace HSMServer.Core.Cache
             // the "AnyType Value condition re-asserted on a bar sensor" class
             // feature.md documents for the apply path. A deterministic noise
             // policy must not make the schedule permanently undeletable, so
-            // this arm is LOGGED (sensor + schedule context) and NOT returned:
-            // the deletion proceeds, and whatever reference that policy kept
-            // degrades to the documented backstop — fail-open lookup (#1405)
-            // plus the throttled missing-id report.
+            // this arm is NOT returned: the deletion proceeds, and whatever
+            // reference that policy kept degrades to the documented backstop
+            // — fail-open lookup (#1405) plus the throttled missing-id
+            // report. The soft error is WARNED once by TryUpdateSensor's
+            // #1563 line (this caller passes no failure collector); this
+            // detach-specific Debug line carries the scheduleId context that
+            // generic warn cannot — without it, the log cannot tell a detach
+            // entry apart from a TryAddOrUpdateSensor or chat-removal update
+            // over the same sensor (#1563 review).
             if (!string.IsNullOrEmpty(error))
-                _logger.Warn($"Detach of schedule {scheduleId} from sensor {sensorId} partially failed: {error}");
+                _logger.Debug($"Detach of schedule {scheduleId} from sensor {sensorId}: update applied with policy errors: {error}");
 
             return null;
         }
@@ -2311,39 +2327,54 @@ namespace HSMServer.Core.Cache
                 // Keyed to the RETURN VALUE, not the out string: false means
                 // the sensor was gone or the DB write threw — the "not
                 // persisted" case this channel exists for. A non-empty error
-                // with `true` is per-policy VALIDATION noise (the DB write
-                // succeeded); escalating it would turn, e.g., an AnyType
-                // template's Value condition on a bar sensor into a PERMANENT
-                // 409 on every save while everything persisted.
-                var rejectedPolicyReasons = new List<string>();
+                // with `true` is per-policy noise (the DB write succeeded);
+                // escalating it would turn, e.g., an AnyType template's Value
+                // condition on a bar sensor into a PERMANENT 409 on every
+                // save while everything persisted.
+                var policyFailures = new List<PolicyUpdateFailure>();
 
-                if (!TryUpdateSensor(update, out var error, rejectedPolicyReasons))
+                if (!TryUpdateSensor(update, out var error, policyFailures))
                 {
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
                     _logger.Error(request.Error);
                 }
                 else if (!string.IsNullOrEmpty(error))
                 {
-                    // Not purely cosmetic noise: a REJECTED policy is never
-                    // created — not on the sensor, not in the DB — while the
-                    // save reports success. Since #1401 each rejection rides
-                    // the warnings channel to the caller (rendered by every
-                    // transport of AddAlertTemplateAsync) and leaves a journal
-                    // record naming the sensor and the reason — the same
-                    // "Alert" record shape the #1394 removal records use —
-                    // without failing the save that persisted.
-                    _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
+                    // Two failure kinds ride the #1401 warnings channel to the
+                    // caller (rendered by every transport of
+                    // AddAlertTemplateAsync), each with its own journal record
+                    // naming the sensor and the reason — the same "Alert"
+                    // record shape the #1394 removal records use:
+                    // - REJECTED: the policy is never created — not on the
+                    //   sensor, not in the DB — while the save reports
+                    //   success. This is the real "partially applied" case:
+                    //   Error level (#1563 review reserved it for rejections;
+                    //   an error with no collected entry keeps the Error
+                    //   default too — not a shape the apply produces today).
+                    // - EVALUATION ERROR (#1563): the policy applied and
+                    //   persisted, but its post-update revalidation threw —
+                    //   nothing was skipped, so the journal must not claim
+                    //   "not applied" and the log is a warn, not an error.
+                    if (policyFailures.Count == 0 ||
+                        policyFailures.Any(f => f.Kind == PolicyUpdateFailureKind.Rejected))
+                        _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
+                    else
+                        _logger.Warn($"Template {template.Id} applied to sensor {sensor.Id} with policy evaluation errors: {error}");
 
-                    foreach (var reason in rejectedPolicyReasons)
+                    foreach (var failure in policyFailures)
                     {
-                        request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath, reason));
+                        request.Warnings.Add(new TemplateApplyWarning(sensor.FullPath, failure.Reason));
+
+                        var verdict = failure.Kind == PolicyUpdateFailureKind.EvaluationError
+                            ? "evaluation failed"
+                            : "not applied";
 
                         _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.AlertTemplate)
                         {
                             Enviroment = "Alert collection",
                             PropertyName = "Alert",
                             OldValue = string.Empty,
-                            NewValue = $"not applied: {reason}",
+                            NewValue = $"{verdict}: {failure.Reason}",
                             Path = sensor.FullPath,
                         });
                     }
