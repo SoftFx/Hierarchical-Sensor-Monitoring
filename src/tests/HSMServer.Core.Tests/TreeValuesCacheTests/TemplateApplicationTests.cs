@@ -1121,6 +1121,104 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(InitiatorType.User, afterB.ChangeTable.TtlPolicies[ttlAfterB.Id.ToString()].Initiator.Type);
         }
 
+        // A collector re-registration (AddOrUpdateSensor with TtlAlerts)
+        // sends its own TTL alerts as empty-id entries — entries it does
+        // not list (a template-owned TTL among them) survive verbatim in
+        // UpdateTTLs, and so must their change-table owner: the non-listed
+        // re-stamp in BaseNodeModel.Update respects change ownership, so
+        // the User toggle marker of a template-owned TTL survives a
+        // collector write, and the template's next save still preserves
+        // and REPORTS the operator's disable instead of silently
+        // re-enabling it.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_UserDisabledTtl_CollectorReregistration_DoesNotReleaseTheToggle()
+        {
+            // Arrange: template with one TTL entry (5 min), applied.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorTtlCollectorReassert",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError, _) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorTtlCollectorReassert";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, addResult.Error);
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensor));
+            var appliedTtl = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+
+            // The operator's per-sensor TTL disable toggle — the User owner
+            // is the toggle marker.
+            var user = InitiatorInfo.AsUser("operator");
+            var toggle = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                TTLPolicies = [new PolicyUpdate(appliedTtl, user) { TTL = appliedTtl.TTLTicks, IsDisabled = true }],
+            });
+            Assert.True(toggle.IsOk, toggle.Error);
+            Assert.True(appliedTtl.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[appliedTtl.Id.ToString()].Initiator.Type);
+
+            // Act 1: the collector re-registers its TTL alert — the
+            // AddOrUpdateSensor shape for TtlAlerts: a DataCollector
+            // initiator and an empty-id entry (its own alert), leaving the
+            // template TTL unlisted.
+            var collector = InitiatorInfo.AsCollector("collectorKey", isForce: false);
+            var reregistration = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = collector,
+                TTLPolicies =
+                [
+                    new PolicyUpdate
+                    {
+                        Id = Guid.Empty,
+                        TTL = TimeSpan.FromMinutes(30).Ticks,
+                        Destination = new PolicyDestinationUpdate(),
+                        Initiator = collector,
+                    },
+                ],
+            });
+            Assert.True(reregistration.IsOk, reregistration.Error);
+
+            // Assert 1: the template TTL keeps BOTH the operator's disable
+            // and the User toggle marker — the collector write did not
+            // touch it.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var afterCollector));
+            var ttlAfterCollector = Assert.Single(afterCollector.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.True(ttlAfterCollector.IsDisabled);
+            Assert.Equal(InitiatorType.User,
+                afterCollector.ChangeTable.TtlPolicies[ttlAfterCollector.Id.ToString()].Initiator.Type);
+
+            // Act 2: edit the template's TTL interval — new content landing
+            // under the operator's preserved, diverging disable.
+            template.TtlEntries[0] = new TtlEntry(
+                template.TtlEntries[0].Policy,
+                new TimeIntervalModel(TimeSpan.FromMinutes(15).Ticks));
+
+            var (editOk, editError, editWarnings) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+
+            // Assert 2: the interval landed, the disable survived, the owner
+            // stays User, and the divergence rides the warnings channel.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var appliedTtlAfter = Assert.Single(sensorAfter.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.Equal(TimeSpan.FromMinutes(15).Ticks, appliedTtlAfter.TTLTicks);
+            Assert.True(appliedTtlAfter.IsDisabled);
+            Assert.Equal(InitiatorType.User,
+                sensorAfter.ChangeTable.TtlPolicies[appliedTtlAfter.Id.ToString()].Initiator.Type);
+
+            var preserved = Assert.Single(editWarnings, w => w.Reason.Contains("preserved"));
+            Assert.Contains(sensorAfter.FullPath, preserved.SensorPath);
+        }
+
         // #1077 review: a higher-priority owner that is NOT a user — the
         // ServerMigration soft migrator stamping a template-owned TTL — is
         // machinery, not an operator toggle. The next apply of the template

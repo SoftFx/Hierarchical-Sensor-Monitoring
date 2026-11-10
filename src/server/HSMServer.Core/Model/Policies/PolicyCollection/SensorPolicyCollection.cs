@@ -355,11 +355,10 @@ namespace HSMServer.Core.Model.Policies
                     // apply built for a policy a user has toggled — the
                     // template owns the content, the operator owns the
                     // disable toggle, so the re-apply goes through instead of
-                    // freezing the policy at its pre-toggle content.
-                    // #1077 review: a higher-priority owner that is NOT a
-                    // user (the ServerMigration soft migrator) is machinery,
-                    // not an operator toggle — a template apply reclaims its
-                    // own policy instead of skipping it forever.
+                    // freezing the policy at its pre-toggle content. Only a
+                    // USER owner marks an operator's toggle: a template
+                    // apply reclaims its own policy from any other
+                    // higher-priority owner instead of skipping it forever.
                     var changeInfo = AlertChangeTable[update.Id.ToString()];
 
                     if (changeInfo.CanChange(initiator) || update.PreservesOperatorToggle ||

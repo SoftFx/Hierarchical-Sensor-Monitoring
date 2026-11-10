@@ -117,17 +117,12 @@ namespace HSMServer.Core.Model
                     var key = ttlUpdate.Id.ToString();
                     if (ttlUpdate.Id != Guid.Empty && !ChangeTable.TtlPolicies[key].CanChange(update.Initiator))
                     {
-                        // #1077: an entry the apply built for a user-toggled
-                        // TTL policy carries PreservesOperatorToggle — the
-                        // template owns the content, the operator owns the
-                        // disable toggle — and must not abort the whole list
-                        // update (one toggle used to freeze every TTL entry
-                        // of the node, all-or-nothing).
-                        // #1077 review: only a USER owner marks an operator's
-                        // toggle. Any other higher-priority owner (the
-                        // ServerMigration soft migrator) is machinery, not an
-                        // operator choice — a template apply reclaims its own
-                        // entry instead of freezing it as a preserved toggle.
+                        // A toggle-preserving entry carries the operator's
+                        // stored IsDisabled and must not abort the whole TTL
+                        // list update. Only a USER owner marks an operator's
+                        // toggle; any other higher-priority owner is
+                        // machinery that a template apply reclaims its entry
+                        // from instead of preserving it.
                         if (ttlUpdate.PreservesOperatorToggle ||
                             (update.Initiator.IsTemplateApply && ChangeTable.TtlPolicies[key].Initiator.Type != InitiatorType.User))
                             continue;
@@ -144,21 +139,25 @@ namespace HSMServer.Core.Model
                             .Where(u => u.Id != Guid.Empty)
                             .Select(u => u.Id.ToString()));
 
-                    // #1077 review: a template apply carries only ITS OWN TTL
-                    // entries (UpdateTTLs preserves every other TTL of the
-                    // node untouched), so it must not re-stamp the
-                    // change-table owner of entries it did not list: the
-                    // stamp downgraded every non-listed owner to
-                    // AlertTemplate, releasing the User toggle marker of
-                    // ANOTHER template's policy (or a hand-made TTL) — the
-                    // next apply of that template then silently re-enabled
-                    // the operator's disable. Non-template updates keep the
-                    // stamp: their full-list semantics rewrite the surviving
-                    // list, and the stamp records who wrote it.
+                    // A template apply carries only its own TTL entries
+                    // (UpdateTTLs preserves every other TTL of the node
+                    // untouched), so it must not re-stamp the change-table
+                    // owner of entries it did not list. Every other update
+                    // keeps the full-list stamp, which respects change
+                    // ownership: a non-force initiator never re-stamps a
+                    // non-listed entry whose current owner outranks it
+                    // (CanChange) — e.g. a collector re-registration must
+                    // not release a User toggle marker from a template-owned
+                    // TTL it preserves verbatim.
                     if (!update.Initiator.IsTemplateApply)
                         foreach (var existing in Policies.TTLPolicies)
-                            if (!updateIds.Contains(existing.Id.ToString()))
-                                ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
+                        {
+                            var existingKey = existing.Id.ToString();
+
+                            if (!updateIds.Contains(existingKey) &&
+                                ChangeTable.TtlPolicies[existingKey].CanChange(update.Initiator))
+                                ChangeTable.TtlPolicies[existingKey].SetUpdate(update.Initiator);
+                        }
 
                     UpdateTTLs(update.TTLPolicies, update.Initiator);
 
@@ -166,19 +165,17 @@ namespace HSMServer.Core.Model
                     {
                         // #1409/#1451: updates carrying
                         // PreserveChangeOwnership (the schedule detach, the
-                        // folder chat removal, and the #1077 toggle-preserving
+                        // folder chat removal, the #1077 toggle-preserving
                         // template re-apply) do not take ownership — a
                         // re-stamp here would downgrade a recorded User owner
                         // and release the change-table marker that keeps the
-                        // operator's disable toggle preserved.
-                        // Every OTHER update stamps its targeted policies
-                        // unconditionally (pre-#1409 behaviour), including
-                        // edits the change journal itself does not render
-                        // (e.g. a chat-only Destination edit on a
-                        // template-cleared alert). This loop stamps TTL
-                        // policies only; the regular-policy counterpart of
-                        // the opt-out is the stampOwnership gate on
-                        // CallJournal in SensorPolicyCollection.TryUpdate.
+                        // operator's disable toggle preserved. Every OTHER
+                        // update stamps its targeted policies unconditionally,
+                        // including edits the change journal does not render.
+                        // This loop stamps TTL policies only; the
+                        // regular-policy counterpart of the opt-out is the
+                        // stampOwnership gate on CallJournal in
+                        // SensorPolicyCollection.TryUpdate.
                         if (ttlUpdate.Id == Guid.Empty || ttlUpdate.PreserveChangeOwnership)
                             continue;
 

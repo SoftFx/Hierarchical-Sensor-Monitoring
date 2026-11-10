@@ -2139,10 +2139,10 @@ namespace HSMServer.Core.Cache
             var matchedSensorPolicyIds = new HashSet<Guid>();
             var matchedSensorTtlIds = new HashSet<Guid>();
 
-            // #1077 review: buffered divergence reports of preserved operator
-            // toggles, collected while the update lists are built and emitted
-            // only after the apply PERSISTED (TryUpdateSensor == true) — a
-            // failed orphan persist or update must not leave a journal record
+            // Buffered divergence reports of preserved operator toggles:
+            // collected while the update lists are built and emitted only
+            // after the apply PERSISTED (TryUpdateSensor == true) — a failed
+            // orphan persist or update must not leave a journal record
             // describing a preservation that never landed. Each entry also
             // carries the pre-apply rendered content, so the emission can
             // skip saves that carry no new information (see
@@ -2186,12 +2186,10 @@ namespace HSMServer.Core.Cache
                     // the next apply. The request's journaled initiator rides
                     // here as everywhere in this apply (#1610) —
                     // AlertTemplate-typed, carrying the write's undo group.
-                    // #1077 review: only a USER owner marks an operator's
-                    // toggle; another higher-priority owner (the
-                    // ServerMigration soft migrator) is machinery — the apply
-                    // reclaims the entry instead (the template's IsDisabled
-                    // lands, ownership re-stamps, nothing is reported), and
-                    // the CanChange gates let it through the same way.
+                    // Only a USER owner marks an operator's toggle; another
+                    // higher-priority owner is machinery that the apply
+                    // reclaims the entry from (the template's IsDisabled
+                    // lands, ownership re-stamps, nothing is reported).
                     var changeInfo = sensor.ChangeTable.Policies[existing.Id.ToString()];
                     var preserveToggle = !changeInfo.CanChange(initiator) && changeInfo.Initiator.Type == InitiatorType.User;
 
@@ -2260,11 +2258,10 @@ namespace HSMServer.Core.Cache
                         // holds a User change-table owner — then the
                         // operator's IsDisabled wins while the template's
                         // content (interval included) still re-applies
-                        // (#1077), per-entry instead of the old
-                        // all-or-nothing node freeze. The journaled
-                        // initiator rides as everywhere (#1610). The #1077
-                        // review scopes the toggle marker to USER owners,
-                        // like the regular arm above.
+                        // (#1077), per-entry instead of an all-or-nothing
+                        // node freeze. The journaled initiator rides as
+                        // everywhere (#1610); the toggle marker is a USER
+                        // owner only, like the regular arm above.
                         var changeInfo = sensor.ChangeTable.TtlPolicies[existing.Id.ToString()];
                         var preserveToggle = !changeInfo.CanChange(initiator) && changeInfo.Initiator.Type == InitiatorType.User;
 
@@ -2431,10 +2428,10 @@ namespace HSMServer.Core.Cache
                         }
                     }
 
-                    // #1077 review: the buffered preserved-toggle reports are
-                    // emitted only here, after the apply PERSISTED — the same
-                    // success arm the #1401 rejection records write from. On
-                    // the hard-failure paths above nothing is journaled: a
+                    // The buffered preserved-toggle reports are emitted only
+                    // here, after the apply PERSISTED — the same success arm
+                    // the #1401 rejection records write from. On the
+                    // hard-failure paths above nothing is journaled: a
                     // "toggle preserved" record must describe state the apply
                     // actually landed.
                     foreach (var pending in pendingToggleReports)
@@ -2443,13 +2440,12 @@ namespace HSMServer.Core.Cache
             }
         }
 
-
-        // #1077 review: one buffered divergence report of a preserved
-        // operator toggle — built while the update lists are assembled and
-        // emitted only after the apply PERSISTED. ContentBefore is the
-        // policy's rendered content (the same Policy.ToString() the change
-        // journal compares) captured BEFORE the update ran, so the emission
-        // can tell whether this apply actually changed the policy.
+        // One buffered divergence report of a preserved operator toggle —
+        // built while the update lists are assembled and emitted only after
+        // the apply PERSISTED. ContentBefore is the policy's rendered
+        // content (the same Policy.ToString() the change journal compares)
+        // captured BEFORE the update ran, so the emission can tell whether
+        // this apply actually changed the policy.
         private readonly record struct PreservedToggleReport(
             Policy ExistingPolicy,
             string ContentBefore,
@@ -2470,13 +2466,12 @@ namespace HSMServer.Core.Cache
         // changed the policy's rendered content or the template's
         // isDisabled for the entry changed since the previously stored
         // template (diffed in AddAlertTemplateAsync). An unchanged re-save
-        // (a rename, a description edit) reports nothing: before the #1077
-        // review every such save re-opened the cookie-UI warning modal and
-        // added one identical journal record per toggled policy per matched
-        // sensor. The report runs only on the persisted arm — the caller
-        // buffers it and emits it after TryUpdateSensor succeeds. When the
-        // choices agree there is nothing to report — the toggle marker
-        // still rides the change table for the next apply.
+        // (a rename, a description edit) reports nothing — it carries
+        // nothing new to report. The report runs only on the persisted
+        // arm — the caller buffers it and emits it after TryUpdateSensor
+        // succeeds. When the choices agree there is nothing to report —
+        // the toggle marker still rides the change table for the next
+        // apply.
         private void ReportPreservedOperatorToggle(ApplyTemplateRequest request, BaseSensorModel sensor,
             PreservedToggleReport report, InitiatorInfo initiator)
         {
@@ -2501,11 +2496,11 @@ namespace HSMServer.Core.Cache
             });
         }
 
-        // #1077 review: the template alert ids (regular policies and TTL
-        // entry policies alike — the id is the TemplateAlertId the apply
-        // matches sensor policies by) whose IsDisabled differs between the
-        // previously stored version of the template and the one being saved.
-        // The production save paths build a fresh AlertTemplateModel per
+        // The template alert ids (regular policies and TTL entry policies
+        // alike — the id is the TemplateAlertId the apply matches sensor
+        // policies by) whose IsDisabled differs between the previously
+        // stored version of the template and the one being saved. The
+        // production save paths build a fresh AlertTemplateModel per
         // request, so the diff sees the previous state; entries matched only
         // by id, added ones are ignored (nothing applied can hold them).
         private HashSet<Guid> GetIsDisabledChangedAlertIds(AlertTemplateModel previous, AlertTemplateModel current)
@@ -2597,12 +2592,12 @@ namespace HSMServer.Core.Cache
             if (_alertTemplates.TryGetValue(alertTemplateModel.Id, out var previousTemplate))
                 previousFolderId = previousTemplate.FolderId;
 
-            // #1077 review: the template alert ids whose IsDisabled changed
-            // in THIS save, diffed against the previously stored version of
-            // the template — the saves (besides a content change landing on
-            // a toggled policy) that re-report a preserved operator toggle;
-            // see ReportPreservedOperatorToggle. Empty for a first save,
-            // where nothing can diverge yet (no sensor policy carries this
+            // The template alert ids whose IsDisabled changed in THIS save,
+            // diffed against the previously stored version of the template —
+            // the saves (besides a content change landing on a toggled
+            // policy) that re-report a preserved operator toggle; see
+            // ReportPreservedOperatorToggle. Empty for a first save, where
+            // nothing can diverge yet (no sensor policy carries this
             // template's id).
             var isDisabledChangedIds = GetIsDisabledChangedAlertIds(previousTemplate, alertTemplateModel);
 
