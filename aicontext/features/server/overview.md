@@ -109,6 +109,7 @@ TypeScript 5.3 + Webpack 5:
 - `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
+- `collector-session/` - the WebSocket session a collector may hold with the server (#1664): `GET /api/sensors/session`, acks with the HTTP route's status, the server-wide session cap, the session registry and the `Open sessions` self-monitoring sensor. No collector uses it yet.
 - `database-backup-monitoring/` - self-monitoring of the server's own database backup (#1525): per-run `Backup result` (status + TTL so a missed run turns Timeout), backup file sizes, duration, and per-database sizes.
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.
 - `agent-download/` - admin-only per-product HSM Agent (Windows) bundle download and its `agent-release.txt` staging; also the admin **Downloads** page (#1550, Configuration menu) that offers both bundles for a chosen product.

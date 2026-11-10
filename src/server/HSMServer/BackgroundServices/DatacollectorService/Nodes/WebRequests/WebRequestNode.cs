@@ -2,7 +2,6 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorRequests;
-using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.BackgroundServices;
 
@@ -59,15 +58,18 @@ public record WebRequestNode
     private protected static string BuildSensorPath(string id, string sensorName) => $"{ClientNode}/{id}/{sensorName}";
 
 
-    public void AddRequestData(HttpRequest request)
+    // One request with its body size: an HTTP request (Content-Length) or one request
+    // frame of a collector session.
+    public void AddRequestData(long? bodyBytes)
     {
         _rps.AddValue(1);
-        _receiveBytes.AddValue((request.ContentLength ?? 0) / KbDivisor);
+        _receiveBytes.AddValue((bodyBytes ?? 0) / KbDivisor);
     }
 
-    public void AddResponseResult(HttpResponse response)
+    // The size of one answer: an HTTP response (Content-Length) or one session frame.
+    public void AddResponseResult(long? bodyBytes)
     {
-        _sentBytes.AddValue((response.ContentLength ?? 0) / KbDivisor);
+        _sentBytes.AddValue((bodyBytes ?? 0) / KbDivisor);
     }
 
     public void AddReceiveData(int count)

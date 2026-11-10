@@ -13,7 +13,6 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
-using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Requests;
 using HSMServer.ServerConfiguration;
@@ -21,6 +20,8 @@ using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.ModelBinders;
+using HSMServer.SensorApi;
+using HSMServer.SensorApi.Sessions;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -40,27 +41,27 @@ namespace HSMServer.Controllers
     [AllowAnonymous]
     public class SensorsController : ControllerBase
     {
-        private const string InvalidRequest = "Public API request info not found";
-
-        private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
+        private const string InvalidRequest = SensorIngestionService.InvalidRequest;
 
         private const string DirectiveHeader = "X-Hsm-Directive";
         private const string AgentVersionHeader = "X-Agent-Version";
         private static readonly string[] _knownSensorGroups = ["computer", "system", "disk", "network", "module", "process"];
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly DataCollectorWrapper _collector;
+        private readonly SensorIngestionService _ingestion;
+        private readonly CollectorSessionHandler _sessions;
         private readonly TelemetryCollector _telemetry;
         private readonly ITreeValuesCache _cache;
         private readonly IWebHostEnvironment _environment;
         private readonly IServerConfig _config;
 
 
-        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache,
+        public SensorsController(SensorIngestionService ingestion, CollectorSessionHandler sessions, ITreeValuesCache cache,
             TelemetryCollector telemetry, IWebHostEnvironment environment, IServerConfig config)
         {
             _telemetry = telemetry;
-            _collector = dataCollector;
+            _ingestion = ingestion;
+            _sessions = sessions;
             _cache = cache;
             _environment = environment;
             _config = config;
@@ -69,6 +70,17 @@ namespace HSMServer.Controllers
 
         [HttpGet("testConnection")]
         public ActionResult TestConnection() => Ok(); //add test
+
+
+        /// <summary>
+        /// The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
+        /// authenticated by the same Key header as every other route here. Not an HTTP
+        /// operation, so it stays out of the OpenAPI document; the contract is
+        /// aicontext/features/api/wire-contract/feature.md.
+        /// </summary>
+        [HttpGet("session")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public Task Session() => _sessions.HandleAsync(HttpContext);
 
 
         /// <summary>
@@ -248,12 +260,7 @@ namespace HSMServer.Controllers
 
                 if (infoRequest.IsOk)
                 {
-                    var info = infoRequest.Value;
-
-                    var response = await _cache.AddSensorValuesAsync(info.Key.Id, info.Product.Id, values);
-
-                    _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
-                    _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
+                    var response = await _ingestion.AddValuesAsync(infoRequest.Value, values);
 
                     // The agent sends data as batches to /list, so directives must ride this response
                     // too — not only the typed single-value endpoints. Without this the agent never
@@ -390,15 +397,13 @@ namespace HSMServer.Controllers
                 {
                     var path = sensorCommands[i].Path;
 
-                    if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
-                    {
-                        var result = await TryBuildAndApplySensorUpdateRequest(sensorUpdate);
+                    // Only a registration reads the caller; any other command is refused
+                    // without it, exactly as before the logic moved to the service.
+                    var info = sensorCommands[i] is AddOrUpdateSensorRequest ? (await IsValidPublicApiRequest(sensorCommands[i])).Value : null;
+                    var error = await _ingestion.ApplyCommandAsync(info, sensorCommands[i]);
 
-                        if (!result.IsOk)
-                            response[path] = result.Error;
-                    }
-                    else
-                        response[path] = $"This type of command is not supported";
+                    if (error is not null)
+                        response[path] = error;
                 }
 
                 return Ok(response);
@@ -509,28 +514,14 @@ namespace HSMServer.Controllers
             {
                 var infoRequest = await IsValidPublicApiRequest(value);
 
-                if (infoRequest.IsOk)
-                {
-                    var info = infoRequest.Value;
-
-                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.Id, value);
-
-                    if (result.IsOk)
-                    {
-                        _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
-                        _collector.WebRequestsSensors.Total.AddReceiveData(1);
-                    }
-
-                    return result;
-                }
-
+                return await _ingestion.AddValueAsync(infoRequest.Value, value);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
             }
 
-            return _invalidRequestResult;
+            return TaskResult.FromError(InvalidRequest);
         }
 
         private async Task<TaskResult<HistoryRequestModel>> TryCheckReadHistoryRequest(HistoryRequest apiRequest)
@@ -552,22 +543,7 @@ namespace HSMServer.Controllers
         {
             var infoRequest = await IsValidPublicApiRequest(apiRequest);
 
-            if (infoRequest.IsOk)
-            {
-                var relatedPath = apiRequest.Path;
-                var sensorType = apiRequest.SensorType;
-                var info = infoRequest.Value;
-
-                var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, relatedPath)
-                {
-                    Update = apiRequest.Convert(Guid.Empty, info.Key.DisplayName),
-                    Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
-                };
-
-                return await _cache.AddOrUpdateSensorAsync(coreRequest);
-            }
-
-            return _invalidRequestResult;
+            return await _ingestion.AddOrUpdateSensorAsync(infoRequest.Value, apiRequest);
         }
 
         private async Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)

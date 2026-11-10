@@ -20,6 +20,9 @@ using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Options;
 using HSMServer.Notifications;
+using HSMServer.SensorApi.Sessions;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorRequests;
 
 
@@ -28,6 +31,7 @@ namespace HSMServer.BackgroundServices
     public sealed class DataCollectorWrapper : IDataSender, IDisposable
     {
         private const string SelfCollectorName = "Self monitoring";
+        internal const string OpenSessionsSensorName = "Open sessions";
         public const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private readonly IDataCollector _collector;
@@ -44,6 +48,10 @@ namespace HSMServer.BackgroundServices
         private readonly ProductModel _productModel;
 
         private readonly NotificationsCenter _notificationsCenter;
+
+        // Collector sessions open right now (#1664). Sampled with the other statistics.
+        private readonly CollectorSessionRegistry _sessions;
+        private readonly IInstantValueSensor<int> _openSessions;
 
         private readonly Guid _key;
         private readonly Logger _logger;
@@ -73,7 +81,7 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users, CollectorSessionRegistry sessions)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
@@ -85,6 +93,7 @@ namespace HSMServer.BackgroundServices
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
 
             _notificationsCenter = notificationCenter;
+            _sessions = sessions;
 
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
 
@@ -107,6 +116,15 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
+            _openSessions = _collector.CreateIntSensor($"Clients/{ClientStatisticsSensors.TotalGroup}/{OpenSessionsSensorName}", new InstantSensorOptions
+            {
+                Alerts = [],
+                TTL = TimeSpan.MaxValue,
+                EnableForGrafana = true,
+                SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.Count,
+                Description = "Number of collector sessions (persistent WebSocket connections of collectors) open at the moment of the sample. " +
+                              $"The server accepts at most {config.CollectorSessions.MaxSessions} (CollectorSessions.MaxSessions; 0 turns sessions off).",
+            });
             ApiTokenUsageSensors = new ApiTokenUsageSensors(_collector);
             // The backup schedule is read once, like BackupDatabaseService's timer:
             // a period change takes effect for both on the next server start.
@@ -205,6 +223,8 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors.SendInfo();
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
+
+            _openSessions.AddValue(_sessions.Count);
 
             // Token-usage retention: rate sensors never idle on their own,
             // so a dead token's subtree is evicted here. The predicate is
