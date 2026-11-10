@@ -40,7 +40,7 @@ Protocol details, rollout and work breakdown: `docs/initiatives/collector-sessio
 - The disconnect alert does not get faster because of the session. Using a session close to bring the `Service alive` timeout forward, or to tell a planned stop from a loss, is left as a separate decision.
 - A server restart or a proxy configuration reload drops every session; collectors continue over HTTP and reconnect with jitter.
 - Delivery remains at-least-once: a frame whose acknowledgement is lost is sent again, as a request whose response is lost is today.
-- The native collector's libcurl dependency grows the `websockets` feature. If that API proves unsuitable, the native side frames RFC 6455 itself over a libcurl connection; the server and the wire do not change.
+- The native collector frames RFC 6455 itself over a plain libcurl connection instead of using libcurl's WebSocket API, which distribution builds of libcurl on current LTS releases lack (#1662). No dependency manifest changes; the collector owns a small piece of protocol code.
 - No public signature changes in `HSMDataCollector`; the session is turned on by an additive option and is off by default.
 
 ## Alternatives Considered

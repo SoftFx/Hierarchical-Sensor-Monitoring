@@ -8,7 +8,7 @@
 A collector talks to the server with one HTTP request per batch. The managed collector keeps its TCP+TLS connection between requests; the native collector opens a new one per request until #1653 (PR #1658, open at the time of writing) lands. Either way that is a transport detail: there is **no session** between a collector and the server. Three consequences:
 
 1. **The server cannot talk to a collector.** The only server-to-collector path is the `X-Hsm-Directive` response header piggybacked on data POSTs (#1198). A directive waits for the next POST and is repeated on every POST while its condition holds.
-2. **The server does not know which collectors are connected.** It learns that a collector went away only when a sensor's TTL expires, minutes later, and cannot tell "host down" from "sensor stopped posting".
+2. **The server does not know which collectors are connected.** It learns that a collector went away only when a sensor's TTL expires (about a minute for `Service alive`, longer for everything else), and it cannot list which collectors are connected right now.
 3. **Delivery is confirmed by an HTTP status per request.** Each batch costs a full request/response cycle with its headers, and the two directions of the conversation (data up, directives down) are tied to that cycle.
 
 ## Goals
@@ -157,7 +157,7 @@ Owner decision: a collector that disconnects must raise an **alert**.
 
 - **Server**: the ingestion logic now inside `SensorsController` actions (`/list`, `/commands`) moves into a service that both the controller and the session handler call. This is also what rule #4 asks for. The session handler is a thin loop: read frame, dispatch to the service, write ack. A client disconnect is a normal end of the loop, never an `Error` log (the #1632 class of noise).
 - **Managed**: a `SessionDataSender` that implements `IDataSender`, owns the WebSocket and delegates to the existing `HsmHttpsClient` whenever the session is down, the body is over the frame limit, or the op is `file`. No queue changes. `System.Net.WebSockets.ClientWebSocket` exists on both `net6.0` and `net472`.
-- **Native**: a session transport next to `HttpTransport`, behind the same `sender_` seam and the registration path, with one owned thread. Exposed through one additive C ABI option; the agent and the probe get it by enabling the option.
+- **Native**: a session transport next to `HttpTransport`, built on `WebSocketConnection` (step 1), behind the same `sender_` seam and the registration path, with one owned thread. Exposed through one additive C ABI option; the agent and the probe get it by enabling the option.
 
 ## Compatibility
 
@@ -180,7 +180,7 @@ One PR per step unless noted.
 | Step | Scope | Notes |
 |---|---|---|
 | 0 | This initiative, ADR-0017, glossary terms | Owner review gates everything below. |
-| 1 | Native WebSocket capability | Enable the `websockets` feature of the vcpkg `curl` dependency (manifest, port, Conan recipe), build it in the Windows and Linux lanes and in the static probe build, and prove `curl_ws_send`/`curl_ws_recv` against an in-process WebSocket test server. Today's build reports `supported_protocols="HTTP HTTPS"`. If libcurl's WebSocket API does not hold up, the fallback is RFC 6455 framing over a `CONNECT_ONLY` handle; the decision is recorded in the step's PR. |
+| 1 | Native WebSocket capability (#1662) | **Outcome: the native collector frames RFC 6455 itself over a plain libcurl connection** (`CONNECT_ONLY` + `curl_easy_send`/`curl_easy_recv`); libcurl's `curl_ws_*` API is not used. Reason found while doing the step: that API needs libcurl 8.11+ built with the feature, the Linux probe links the distribution's libcurl on purpose, and Debian 12 and Ubuntu 22.04/24.04 ship a libcurl without it, so sessions would not exist on most Linux hosts. The curl API was tried first and worked on Windows with the vcpkg `websockets` feature; libcurl 8.11 also cannot report whether a received fragment is the last one. Own framing needs no dependency change in any manifest and is covered by published SHA-1 / RFC 6455 vectors plus an independent in-process server. |
 | 2 | Server: session endpoint | Extract ingestion from `SensorsController` into a service; discovery header; `GET /api/sensors/session`; `hello`, frame dispatch, acks, heartbeat; server-wide session cap; registry; self-monitoring session count; per-session cost measured. Tests with a real WebSocket client against the test host. Wire-contract doc gets the envelope. |
 | 3 | Session conformance harness + first collector | New DSL verbs for a scripted session server and the `.hsmtest` scenarios, with harness support in **both** drivers, plus the session sender of the first collector (managed: `SessionDataSender`, both TFMs). The other driver marks the session verbs `CONFORMANCE-UNSUPPORTED` against the step 4 issue, which is the sanctioned parity flow (rule #9, epic #1093). Depends on #1659 A2/A3 for a sane fallback path. |
 | 4 | Second collector | Native session transport behind the existing seams, C ABI option (MINOR bump), agent and probe bumps. Removes every `CONFORMANCE-UNSUPPORTED` marker step 3 added. |
@@ -196,7 +196,7 @@ One PR per step unless noted.
 - **Server resources.** Every collector holds a connection. Kestrel handles this at the scale HSM runs at, but large installs are memory-sensitive; step 2 measures per-session cost and the cap is configurable.
 - **Head-of-line blocking** by a large frame. Mitigation: the frame limit is enforced by the sender's choice of transport, files stay on HTTP, failure acks do not echo the request, one request in flight per queue.
 - **Duplicates** when an ack is lost. Not new: a lost HTTP response has the same effect today.
-- **Native dependency risk** (libcurl WebSocket API maturity, static linking in the probe). Mitigation: step 1 is a gate, with a stated fallback.
+- **The native collector owns its WebSocket framing** (step 1 outcome). It is a small, security-relevant piece of protocol code: handshake check, masking, frame parsing with a size limit. Mitigation: it is pure and header-only, tested against published vectors and an independent server implementation, and it accepts only what the session needs (text, no extensions).
 - **Log noise from disconnects.** A dropped session must not become an `ERROR` line per drop (ADR-0016, #1632).
 - **The conformance DSL has no network today.** A scripted session server in both drivers is new harness surface. Mitigation: it lands once, in step 3, with the DSL spec (`tests/conformance/README.md`) versioned accordingly.
 
