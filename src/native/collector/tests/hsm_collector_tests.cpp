@@ -3,6 +3,7 @@
 #include "../src/cpu_top.hpp"
 #include "../src/disk_prediction.hpp"
 #include "../src/hsm_http_endpoints.hpp"
+#include "../src/hsm_ws_codec.hpp"
 #include "../src/hsm_http_retry.hpp"
 #include "../src/proc_metrics.hpp"
 #include "../src/tcp_connection_stats.hpp"
@@ -30,7 +31,9 @@
 
 #if defined(HSM_COLLECTOR_HTTP)
 #include "../src/hsm_http_transport.hpp"
+#include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
+#include "ws_test_server.hpp"
 #endif
 
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
@@ -6317,6 +6320,271 @@ namespace
         Require(server.Connections() == 3, "each POST after a drop must open a new connection");
     }
 
+    // ---- #1662: native WebSocket client (collector session step 1, ADR-0017) ----
+
+    std::string WsUrl(const hsm::test::WebSocketTestServer& server)
+    {
+        return "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+    }
+
+    // Bounded wait for a condition polled every 5 ms (up to 2 s).
+    template <typename Condition>
+    bool WaitUntil(Condition condition)
+    {
+        for (int i = 0; i < 400 && !condition(); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        return condition();
+    }
+
+    // The upgrade carries the same auth headers as the HTTP Sensor API plus the subprotocol, and
+    // the client learns which subprotocol the server selected.
+    void NativeWsOpensWithHeadersAndSubprotocol()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.subprotocol = "hsm.sensors.v1";
+        hsm::test::WebSocketTestServer server(options);
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        const auto opened = connection.Open(
+            WsUrl(server),
+            { hsm::http::HttpHeader{ "Key", "test-key" }, hsm::http::HttpHeader{ "ClientName", "test-client" } },
+            "hsm.sensors.v1",
+            5000);
+
+        Require(opened.ok, ("the upgrade must succeed: " + opened.error).c_str());
+        Require(opened.status_code == 101, "the upgrade response must be 101");
+        Require(opened.subprotocol == "hsm.sensors.v1", "the selected subprotocol must be reported");
+        Require(connection.IsOpen(), "the connection must be open after a successful upgrade");
+
+        const std::string head = server.HandshakeHead();
+        Contains(head, "GET /api/sensors/session HTTP/1.1");
+        Contains(head, "Key: test-key");
+        Contains(head, "ClientName: test-client");
+        Contains(head, "Sec-WebSocket-Protocol: hsm.sensors.v1");
+    }
+
+    // Text messages go both ways, small and large. 300 KB uses the 64-bit length form on the way
+    // out and arrives back in many partial reads, which Receive must assemble into one message.
+    void NativeWsRoundTripsTextMessages()
+    {
+        hsm::test::WebSocketTestServer server;
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+
+        std::string error;
+        std::string text;
+
+        Require(connection.SendText("{\"id\":1,\"op\":\"list\",\"body\":[]}", 5000, error), ("send must succeed: " + error).c_str());
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("a reply must arrive: " + error).c_str());
+        Require(text == "echo:{\"id\":1,\"op\":\"list\",\"body\":[]}", "the reply must be the echoed message");
+
+        std::string large(300 * 1024, 'x');
+        for (size_t i = 0; i < large.size(); i += 997)
+            large[i] = static_cast<char>('a' + (i / 997) % 26);
+        Require(connection.SendText(large, 10000, error), ("a large send must succeed: " + error).c_str());
+        Require(connection.Receive(text, 10000, error) == hsm::http::WebSocketReceive::Text, ("the large reply must arrive: " + error).c_str());
+        Require(text == "echo:" + large, "the large reply must match byte for byte");
+
+        const auto received = server.Received();
+        Require(received.size() == 2 && received[1] == large, "the server must have received the large message intact");
+    }
+
+    // The point of a session: the server speaks first. An idle Receive times out without harming
+    // the connection, and a pushed message is delivered by the next Receive.
+    void NativeWsReceivesServerPushWhileIdle()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the connection");
+
+        std::string error;
+        std::string text;
+        Require(connection.Receive(text, 100, error) == hsm::http::WebSocketReceive::Timeout, "an idle receive must time out");
+
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"sensor-disable:network\"}"), "the server must be able to push");
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("the push must arrive: " + error).c_str());
+        Require(text == "{\"op\":\"directive\",\"body\":\"sensor-disable:network\"}", "the push must arrive intact");
+
+        // A ping is answered by libcurl without surfacing to the caller.
+        Require(server.SendPing(), "the server must be able to ping");
+        Require(connection.Receive(text, 300, error) == hsm::http::WebSocketReceive::Timeout, "a ping must not surface as a message");
+        Require(WaitUntil([&] { return server.Pongs() == 1; }), "the ping must be answered with a pong");
+
+        Require(connection.SendText("still-alive", 5000, error), "the connection must stay usable after a timeout and a ping");
+        Require(WaitUntil([&] { return server.Received().size() == 1; }), "the server must receive the message sent after the push");
+    }
+
+    // Both ways a session ends from the far side: an orderly close frame, and a dropped connection.
+    void NativeWsDetectsServerCloseAndDrop()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+
+        std::string error;
+        std::string text;
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the first upgrade must succeed");
+            Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the first connection");
+
+            Require(server.SendClose(1001), "the server must be able to start a close");
+            Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a close frame must be reported as Closed");
+        }
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the second connection");
+
+        server.Drop();
+        const auto result = connection.Receive(text, 5000, error);
+        Require(
+            result == hsm::http::WebSocketReceive::Closed || result == hsm::http::WebSocketReceive::Error,
+            "a dropped connection must end the receive, not time out");
+        Require(server.Upgrades() == 2, "both connections must have been upgraded");
+    }
+
+    // A refused upgrade is a failed Open that reports the server's HTTP status, and a server that
+    // does not select the offered subprotocol is not a session either.
+    void NativeWsRefusedUpgradeReportsStatus()
+    {
+        {
+            hsm::test::WebSocketTestServer::Options options;
+            options.refuse_with_status = 404;
+            hsm::test::WebSocketTestServer server(options);
+
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "hsm.sensors.v1", 5000);
+            Require(!opened.ok, "a refused upgrade must fail");
+            Require(opened.status_code == 404, "the refusal status must be reported");
+            Require(!connection.IsOpen(), "a refused upgrade must leave no open connection");
+        }
+        {
+            hsm::test::WebSocketTestServer server; // upgrades, but selects no subprotocol
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "hsm.sensors.v1", 5000);
+            Require(!opened.ok, "an upgrade without the offered subprotocol must fail");
+            Require(!connection.IsOpen(), "a subprotocol mismatch must leave no open connection");
+        }
+        {
+            // A 101 whose Sec-WebSocket-Accept does not answer OUR key is not a handshake with us.
+            hsm::test::WebSocketTestServer::Options options;
+            options.wrong_accept = true;
+            hsm::test::WebSocketTestServer server(options);
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
+            Require(!opened.ok, "an upgrade with a wrong accept digest must fail");
+            Contains(opened.error, "Sec-WebSocket-Accept");
+        }
+        {
+            // A header value with a line break could smuggle extra header lines into the upgrade.
+            hsm::test::WebSocketTestServer server;
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), { hsm::http::HttpHeader{ "ClientName", "a\r\nX-Injected: 1" } }, "", 5000);
+            Require(!opened.ok, "a header with a line break must be refused");
+            Require(server.HandshakeHead().empty(), "a refused header must not reach the server");
+        }
+        {
+            // Nothing listens on the port the first server just released: a transport failure, no status.
+            int port = 0;
+            {
+                hsm::test::WebSocketTestServer server;
+                port = server.Port();
+            }
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open("ws://127.0.0.1:" + std::to_string(port) + "/", {}, "", 2000);
+            Require(!opened.ok, "connecting to a closed port must fail");
+            Require(!opened.error.empty(), "a transport failure must carry an error");
+        }
+    }
+
+    // A message split into fragments by the server is delivered as one message, and a continuation
+    // with nothing to continue is a protocol error.
+    void NativeWsAssemblesFragmentedMessages()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the connection");
+
+        Require(server.SendFragmented("first-", "second"), "the server must be able to send fragments");
+
+        std::string error;
+        std::string text;
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("the fragmented message must arrive: " + error).c_str());
+        Require(text == "first-second", "the fragments must be assembled in order");
+
+        Require(server.SendContinuation("orphan"), "the server must be able to send a stray continuation");
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "a stray continuation must be a protocol error");
+        Contains(error, "continuation");
+    }
+
+    // Manual probe, not registered in CTest: point HSM_WS_LIVE_URL at a real wss:// endpoint to
+    // exercise the TLS path (certificate verification on) that the plaintext fixture cannot. Prints
+    // what the upgrade returned; any HTTP status proves connect + TLS + request + response parsing.
+    void NativeWsLiveProbe()
+    {
+        std::string url;
+#if defined(_MSC_VER)
+        char* env = nullptr;
+        size_t env_len = 0;
+        if (_dupenv_s(&env, &env_len, "HSM_WS_LIVE_URL") == 0 && env != nullptr)
+        {
+            url = env;
+            std::free(env);
+        }
+#else
+        if (const char* env = std::getenv("HSM_WS_LIVE_URL"))
+            url = env;
+#endif
+        if (url.empty())
+        {
+            std::cout << "native_ws_live_probe: skipped (HSM_WS_LIVE_URL is not set)" << std::endl;
+            return;
+        }
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/true);
+        const auto opened = connection.Open(url, {}, "hsm.sensors.v1", 15000);
+        std::cout << "native_ws_live_probe: ok=" << opened.ok << " status=" << opened.status_code << " subprotocol='"
+                  << opened.subprotocol << "' error='" << opened.error << "'" << std::endl;
+        Require(opened.status_code != 0, ("the endpoint must answer the upgrade with an HTTP status: " + opened.error).c_str());
+    }
+
+    // Cancel() from another thread unblocks a Receive that is waiting: the session's stop path.
+    void NativeWsCancelUnblocksReceive()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+
+        std::atomic<bool> returned{ false };
+        hsm::http::WebSocketReceive result = hsm::http::WebSocketReceive::Text;
+        std::string error;
+        std::thread receiver([&] {
+            std::string text;
+            result = connection.Receive(text, 30000, error);
+            returned.store(true);
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(!returned.load(), "the receive must still be waiting before the cancel");
+        connection.Cancel();
+        const bool unblocked = WaitUntil([&] { return returned.load(); });
+        receiver.join();
+
+        Require(unblocked, "the cancel must unblock the receive well within its 30 s timeout");
+        Require(result == hsm::http::WebSocketReceive::Error, "a cancelled receive must report an error");
+        Contains(error, "cancelled");
+    }
+
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
     // with the libcurl transport installed, and assert the capture server saw the live POST. This
     // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
@@ -7479,6 +7747,93 @@ namespace
         Require(ep.TestConnection() == ep.connection_address + "/testConnection", "testConnection route");
     }
 
+    std::string HexOf(const std::string& bytes)
+    {
+        static const char digits[] = "0123456789abcdef";
+        std::string out;
+        for (const char c : bytes)
+        {
+            out.push_back(digits[(static_cast<unsigned char>(c) >> 4) & 0xF]);
+            out.push_back(digits[static_cast<unsigned char>(c) & 0xF]);
+        }
+        return out;
+    }
+
+    // #1662: the handshake digest against published vectors. The test WebSocket server carries its
+    // own SHA-1/Base64, so a mistake shared by client and fixture cannot hide; these vectors are
+    // the outside reference for both.
+    void NativeWsCodecHandshakeDigestMatchesRfc()
+    {
+        namespace ws = hsm::http::ws;
+
+        const auto abc = ws::Sha1("abc"); // FIPS 180-1 appendix A
+        Require(HexOf(std::string(abc.begin(), abc.end())) == "a9993e364706816aba3e25717850c26c9cd0d89d", "SHA-1(\"abc\")");
+        const auto empty = ws::Sha1("");
+        Require(HexOf(std::string(empty.begin(), empty.end())) == "da39a3ee5e6b4b0d3255bfef95601890afd80709", "SHA-1(\"\")");
+        // 56 bytes: the padding spills into a second block.
+        const auto two_blocks = ws::Sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+        Require(HexOf(std::string(two_blocks.begin(), two_blocks.end())) == "84983e441c3bd26ebaae4aa1f95129e5e54670f1", "SHA-1 two-block vector");
+
+        const auto b64 = [](const std::string& s) { return ws::Base64(reinterpret_cast<const uint8_t*>(s.data()), s.size()); };
+        Require(b64("") == "" && b64("f") == "Zg==" && b64("fo") == "Zm8=" && b64("foo") == "Zm9v" && b64("foobar") == "Zm9vYmFy", "Base64 RFC 4648 vectors");
+
+        // RFC 6455 section 1.3.
+        Require(ws::AcceptKey("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=", "Sec-WebSocket-Accept RFC 6455 vector");
+    }
+
+    // #1662: frame encoding and parsing against the RFC 6455 section 5.7 examples and the rules a
+    // client must enforce on what a server sends.
+    void NativeWsCodecFramesMatchRfc()
+    {
+        namespace ws = hsm::http::ws;
+
+        // A single-frame masked text message "Hello".
+        const std::array<uint8_t, 4> mask{ 0x37, 0xfa, 0x21, 0x3d };
+        Require(HexOf(ws::EncodeClientFrame(ws::kText, "Hello", mask)) == "818537fa213d7f9f4d5158", "masked Hello frame");
+
+        // Length forms: 7-bit, 16-bit, 64-bit.
+        Require(HexOf(ws::EncodeClientFrame(ws::kText, std::string(125, 'a'), mask)).compare(0, 4, "81fd") == 0, "125 bytes use the 7-bit length");
+        Require(HexOf(ws::EncodeClientFrame(ws::kText, std::string(126, 'a'), mask)).compare(0, 8, "81fe007e") == 0, "126 bytes use the 16-bit length");
+        Require(HexOf(ws::EncodeClientFrame(ws::kText, std::string(65536, 'a'), mask)).compare(0, 20, "81ff0000000000010000") == 0, "65536 bytes use the 64-bit length");
+
+        ws::Frame frame;
+        size_t consumed = 0;
+        std::string error;
+
+        // A single-frame unmasked text message "Hello", followed by the start of another frame.
+        const std::string hello("\x81\x05Hello\x81", 8);
+        Require(ws::ParseServerFrame(hello, 1024, frame, consumed, error) == ws::ParseStatus::Complete, "unmasked Hello parses");
+        Require(frame.opcode == ws::kText && frame.fin && frame.payload == "Hello" && consumed == 7, "Hello frame fields and consumed length");
+
+        // Every strict prefix of a frame is "need more", never an error and never a frame.
+        for (size_t size = 0; size < 7; ++size)
+            Require(ws::ParseServerFrame(std::string_view(hello).substr(0, size), 1024, frame, consumed, error) == ws::ParseStatus::NeedMore,
+                "a truncated frame needs more bytes");
+
+        // Fragmented "Hel" + "lo": first frame not final, then a final continuation.
+        Require(ws::ParseServerFrame(std::string("\x01\x03Hel", 5), 1024, frame, consumed, error) == ws::ParseStatus::Complete && !frame.fin && frame.opcode == ws::kText,
+            "first fragment is a non-final text frame");
+        Require(ws::ParseServerFrame(std::string("\x80\x02lo", 4), 1024, frame, consumed, error) == ws::ParseStatus::Complete && frame.fin && frame.opcode == ws::kContinuation,
+            "last fragment is a final continuation frame");
+
+        // 16-bit and 64-bit lengths.
+        std::string medium("\x81\x7e\x01\x00", 4);
+        medium += std::string(256, 'm');
+        Require(ws::ParseServerFrame(medium, 1024, frame, consumed, error) == ws::ParseStatus::Complete && frame.payload.size() == 256 && consumed == 260, "16-bit length parses");
+        std::string large("\x81\x7f\x00\x00\x00\x00\x00\x01\x00\x00", 10);
+        large += std::string(65536, 'l');
+        Require(ws::ParseServerFrame(large, 1u << 20, frame, consumed, error) == ws::ParseStatus::Complete && frame.payload.size() == 65536 && consumed == 65546, "64-bit length parses");
+
+        // What a client must refuse.
+        Require(ws::ParseServerFrame(large.substr(0, 10), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError, "a length over the limit is refused from the header alone");
+        Require(ws::ParseServerFrame(std::string("\x81\x85\x37\xfa\x21\x3d\x7f\x9f\x4d\x51\x58", 11), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError,
+            "a masked server frame is refused");
+        Require(ws::ParseServerFrame(std::string("\xc1\x00", 2), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError, "reserved bits are refused");
+        Require(ws::ParseServerFrame(std::string("\x83\x00", 2), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError, "an unknown opcode is refused");
+        Require(ws::ParseServerFrame(std::string("\x09\x00", 2), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError, "a non-final control frame is refused");
+        Require(ws::ParseServerFrame(std::string("\x89\x7e\x00\x7e", 4), 1024, frame, consumed, error) == ws::ParseStatus::ProtocolError, "an oversized control frame is refused");
+    }
+
     void NativeHttpRetryPolicyMatchesNet()
     {
         const auto data = hsm::http::RetryPolicy::Data();         // bounded, exponential, 10 retries
@@ -8447,6 +8802,14 @@ namespace
             { "native_http_transport_cancelled_send_never_leaves", [](const std::string&) { NativeHttpTransportCancelledSendNeverLeaves(); } },
             { "native_http_transport_recovers_after_timeout", [](const std::string&) { NativeHttpTransportRecoversAfterTimeout(); } },
             { "native_http_transport_survives_server_dropping_kept_connection", [](const std::string&) { NativeHttpTransportSurvivesServerDroppingKeptConnection(); } },
+            { "native_ws_opens_with_headers_and_subprotocol", [](const std::string&) { NativeWsOpensWithHeadersAndSubprotocol(); } },
+            { "native_ws_round_trips_text_messages", [](const std::string&) { NativeWsRoundTripsTextMessages(); } },
+            { "native_ws_receives_server_push_while_idle", [](const std::string&) { NativeWsReceivesServerPushWhileIdle(); } },
+            { "native_ws_detects_server_close_and_drop", [](const std::string&) { NativeWsDetectsServerCloseAndDrop(); } },
+            { "native_ws_refused_upgrade_reports_status", [](const std::string&) { NativeWsRefusedUpgradeReportsStatus(); } },
+            { "native_ws_assembles_fragmented_messages", [](const std::string&) { NativeWsAssemblesFragmentedMessages(); } },
+            { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
+            { "native_ws_live_probe", [](const std::string&) { NativeWsLiveProbe(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
@@ -8463,6 +8826,8 @@ namespace
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
+            { "native_ws_codec_handshake_digest_matches_rfc", [](const std::string&) { NativeWsCodecHandshakeDigestMatchesRfc(); } },
+            { "native_ws_codec_frames_match_rfc", [](const std::string&) { NativeWsCodecFramesMatchRfc(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },

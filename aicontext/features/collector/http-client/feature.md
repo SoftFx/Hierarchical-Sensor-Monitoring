@@ -41,6 +41,8 @@
 | `../../src/native/collector/src/hsm_http_transport.{hpp,cpp}` | Native (C++) libcurl transport — Post/Get, timeout, cert-bypass, xfer-abort cancel |
 | `../../src/native/collector/src/hsm_http_endpoints.hpp` | Native route table + scheme defaulting (mirror of `Endpoints.cs` + `*Handlers.GetUri`) |
 | `../../src/native/collector/src/hsm_http_retry.hpp` | Native retry policy (mirror of the Polly pipelines + `ShouldRetry`) |
+| `../../src/native/collector/src/hsm_ws_codec.hpp` | Native RFC 6455 pieces: handshake digest, client frame encoding, server frame parsing (pure, no libcurl) |
+| `../../src/native/collector/src/hsm_ws_connection.{hpp,cpp}` | Native WebSocket client connection over a libcurl `CONNECT_ONLY` handle (#1662); not wired into the send path yet |
 
 ---
 
@@ -77,6 +79,16 @@ Routing + retry are pure headers compiled into the always-on core, so they are u
 Send semantics: **one POST attempt per batch**. A non-2xx or transport failure returns `false`, so the dispatcher re-enqueues the batch at the tail — the same durable-retry contract the C# queue uses (re-enqueue on `PackageSendingInfo.Error != null`, including 5xx and 4xx). The Polly-equivalent in-send exponential/linear backoff (`hsm_http_retry.hpp`, unit-tested separately) is a non-blocking refinement layered on later; doing it inline would block the single worker thread for up to the policy max-delay per batch. The end-to-end live path is pinned by `native_http_live_send_posts_to_capture_server` (drives a real int value through the collector and asserts the captured POST route/headers/body).
 
 **Public live transport (#1165):** `hsm_collector_use_http_transport` (C ABI) / `Collector::UseHttpTransport()` (C++) makes the libcurl transport reachable from application code. Installed before Start, it (a) POSTs the wire `AddOrUpdate` registration batch to `/commands` at Start (the `Type:0` Command discriminator), and (b) switches values/bars to the **server wire format** (`Time` ISO-8601, bar `OpenTime`/`CloseTime`) via `OutgoingValueJson`/`OutgoingBarJson` — the conformance corpus keeps the canonical/in-memory recorder (`send_wire_` is false there). Pinned by `native_http_registers_sensors_on_start` + the wire assertions in `native_http_live_send_posts_to_capture_server`, and proven end-to-end against a Dockerized HSM server by `examples/server-monitor` (registration + live int/double values readable via `/api/sensors/history`). Before #1165 the transport was test-only and posted canonical JSON, so nothing reached a real server. Still open: per-command error-dictionary parse, in-send Polly backoff, and registering sensors created *while running* (today only the Start-batch registers over HTTP).
+
+### WebSocket client connection (#1662, collector session step 1)
+
+A building block for the collector session (ADR-0017, `docs/initiatives/collector-session-websocket.md`), **not used by the send path yet**.
+
+- `WebSocketConnection` (`hsm_ws_connection.{hpp,cpp}`): `Open(url, headers, subprotocol, timeout)`, `SendText`, `Receive`, `Close`, `Cancel`. One owner thread; `Cancel()` is the only cross-thread member and unblocks a waiting `Open`/`SendText`/`Receive`.
+- **libcurl connects, the collector frames.** A `CONNECT_ONLY` easy handle gives TCP, TLS (same `verify_peer` rule as the HTTP transport) and proxy tunnelling; the upgrade request, the `Sec-WebSocket-Accept` check, masking and frame parsing are done with `hsm_ws_codec.hpp` over `curl_easy_send` / `curl_easy_recv`. libcurl's own `curl_ws_*` API is deliberately not used: it needs libcurl 8.11+ built with the feature, which Debian 12 and Ubuntu 22.04/24.04 do not ship, and the Linux probe links the distribution's libcurl.
+- `Open` reports the HTTP status of a refused upgrade (404, 503, ...) and the subprotocol the server selected; an offered subprotocol the server did not select fails the open. Request headers with a line break are refused (header injection).
+- `Receive` returns `Text`, `Timeout` (connection still usable, nothing lost), `Closed` (close frame or TCP close) or `Error`. It assembles fragmented messages and partial reads, answers pings, ignores pongs, refuses binary messages, masked server frames, reserved bits and anything over 8 MiB.
+- Tests: `native_ws_codec_handshake_digest_matches_rfc` and `native_ws_codec_frames_match_rfc` (default lane, published vectors); `native_ws_*` in the HTTP lane against `tests/ws_test_server.hpp`, an independent RFC 6455 server implementation. The fixture is plaintext; `native_ws_live_probe` is a manual, env-gated check of the TLS path against a real endpoint.
 
 ## Known Issues / Limitations
 

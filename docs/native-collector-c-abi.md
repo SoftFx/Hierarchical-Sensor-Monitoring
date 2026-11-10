@@ -156,6 +156,15 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.4** (#1662) — internal building block, ABI unchanged, no behavior change. Adds a WebSocket
+  client connection (`src/hsm_ws_connection.{hpp,cpp}`, `src/hsm_ws_codec.hpp`) for the collector
+  session of ADR-0017. It is compiled into the HTTP build and **not used by the send path yet**.
+  libcurl provides the connection (TCP, TLS, proxy tunnel) through a `CONNECT_ONLY` handle; the
+  RFC 6455 handshake and framing are the collector's own, so it works with every libcurl the
+  collector supports and needs no libcurl WebSocket feature (distribution builds on Debian 12 and
+  Ubuntu 22.04/24.04 lack it, and the Linux probe links the distribution's libcurl). Pinned by
+  `native_ws_codec_*` (published SHA-1 / Base64 / RFC 6455 vectors, default lane) and `native_ws_*`
+  (in-process WebSocket server, HTTP lane).
 - **0.11.3** (#1653) — transport change, ABI unchanged. The HTTP transport keeps its connection
   between requests instead of opening a new TCP+TLS connection for every send: `HttpTransport` keeps
   one libcurl easy handle and resets it between requests, so sequential sends ride one connection,
