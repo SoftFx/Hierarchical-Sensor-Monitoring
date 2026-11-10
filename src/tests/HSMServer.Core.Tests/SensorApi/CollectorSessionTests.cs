@@ -365,29 +365,31 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         [Fact]
-        public async Task Silence_EndsTheSessionAfterThreeHeartbeats_AndPingsKeepItOpen()
+        public async Task Silence_EndsTheSessionAfterThreeHeartbeats_AndEveryFrameStartsTheCountAgain()
         {
-            await using var host = await StartHost(config => config.HeartbeatSeconds = 1);
+            await using var host = await StartHost(config => config.HeartbeatSeconds = 30);
             using var socket = await OpenAsync(host);
 
-            // Four seconds of nothing but pings: longer than the three-heartbeat limit.
-            for (var i = 0; i < 4; i++)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1));
-                await SendAsync(socket, "{\"op\":\"ping\"}");
+            // The session's silence watch runs on the host's manual clock.
+            var watch = Assert.Single(host.Time.Timers);
 
-                Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
-            }
+            await TestWait.UntilAsync(() => watch.IsArmed, "the watch to run while the server waits for a frame");
+            Assert.Equal(TimeSpan.FromSeconds(90), watch.DueTime);
 
+            // A ping is a frame: the count starts again.
+            var armsBefore = watch.Arms;
+
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+
+            await TestWait.UntilAsync(() => watch.Arms > armsBefore && watch.IsArmed, "the watch to start again after a frame");
             Assert.Equal(1, host.Registry.Count);
 
-            // Then real silence. The server does not wait for a close handshake with a
-            // collector it considers gone, so the connection simply ends.
-            var silentSince = Stopwatch.StartNew();
+            // Three heartbeats pass with nothing from the collector. The server does not wait
+            // for a close handshake with a collector it considers gone: the connection ends.
+            watch.Fire();
 
             await TestWait.UntilAsync(() => host.Registry.Count == 0, "the silent session to be dropped");
-
-            Assert.InRange(silentSince.Elapsed, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8));
             Assert.True(await EndsAsync(socket), "the collector's end of a dropped session must see it end");
         }
 
@@ -414,6 +416,27 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.Equal(WebSocketCloseStatus.PolicyViolation, await ExpectCloseAsync(socket));
             Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "revoked/after", out _));
+        }
+
+        [Fact]
+        public async Task KeyBlocked_EndsASessionThatOnlyPings()
+        {
+            await using var host = await StartHost();
+
+            var key = AddKey();
+
+            using var socket = await OpenAsync(host, key.ToString());
+
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+
+            Block(key);
+
+            // No data frame is needed to notice: the next heartbeat ends it.
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+
+            Assert.Equal(WebSocketCloseStatus.PolicyViolation, await ExpectCloseAsync(socket));
+            await TestWait.UntilAsync(() => host.Registry.Count == 0, "the closed session to leave the registry");
         }
 
         [Fact]
@@ -470,6 +493,39 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.True(stopping.Elapsed < TimeSpan.FromSeconds(8), $"shutdown took {stopping.Elapsed} with one open session");
             Assert.Equal(0, host.Registry.Count);
+        }
+
+        [Fact]
+        public async Task ShutdownDuringAStore_AcknowledgesTheBatchBeforeClosing()
+        {
+            var gated = GatedCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(gated.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            // A batch is inside the store when the server starts shutting down.
+            gated.HoldTheNextStore();
+            await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{IntValue("shutdown/stored", 1)}]}}");
+            await gated.Entered.Task.WaitAsync(Patience);
+
+            var stop = Task.Run(host.StopAsync);
+
+            // Let the shutdown reach the session while its store is still held. The outcome
+            // asserted below does not depend on this pause: without it the ack is simply
+            // sent before the close was asked for.
+            await Task.Delay(300);
+            gated.Release();
+
+            // The batch was stored, so its ack must still arrive, and only then the close.
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(1, (long)ack["ack"]);
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, await ExpectCloseAsync(socket));
+
+            await stop.WaitAsync(Patience);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "shutdown/stored", out _));
         }
 
         [Fact]

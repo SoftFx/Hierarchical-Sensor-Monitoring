@@ -74,6 +74,13 @@ namespace HSMServer.SensorApi.Sessions
         private long _lastFrameTicks;
         private volatile string _endReason;
 
+        // Guards the three fields below: which of the two, the handler loop or a close
+        // asked for from outside, gets to the socket first.
+        private readonly object _gate = new();
+        private bool _handling;
+        private bool _closing;
+        private (WebSocketCloseStatus Status, string Reason)? _closeRequest;
+
 
         public Guid Id { get; } = Guid.NewGuid();
 
@@ -145,8 +152,40 @@ namespace HSMServer.SensorApi.Sessions
         }
 
 
-        // Reads one whole message. Only the handler loop calls it.
-        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, CancellationToken token)
+        // The handler loop is about to act on a frame. False when a close asked for from
+        // outside is already on its way: the frame must then be left alone, neither stored
+        // nor answered, so the collector sends it again elsewhere and nothing is doubled.
+        public bool TryBeginFrame()
+        {
+            lock (_gate)
+            {
+                if (_closing)
+                    return false;
+
+                _handling = true;
+                return true;
+            }
+        }
+
+        // The frame is done and its answer is out. Returns the close that was asked for
+        // meanwhile, for the loop to carry out now.
+        public (WebSocketCloseStatus Status, string Reason)? EndFrame()
+        {
+            lock (_gate)
+            {
+                _handling = false;
+
+                var request = _closeRequest;
+                _closeRequest = null;
+
+                return request;
+            }
+        }
+
+        // Reads one whole message. Only the handler loop calls it. `progressed` is called
+        // after every read from the socket, so the caller can tell a frame that is still
+        // arriving from a collector that went silent.
+        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, Action progressed, CancellationToken token)
         {
             var buffer = _receiveBuffer;
             byte[] rented = null;
@@ -157,6 +196,8 @@ namespace HSMServer.SensorApi.Sessions
                 while (true)
                 {
                     var result = await _socket.ReceiveAsync(buffer.AsMemory(total), token);
+
+                    progressed?.Invoke();
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -242,10 +283,23 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
-        // Only our half of the close, from another thread while the loop waits in a
-        // receive: the loop then reads the peer's close and ends by itself.
+        // A close asked for from outside the handler loop (shutdown). While the loop waits
+        // in a receive, our half of the close goes out at once and the loop ends when it
+        // reads the peer's. While the loop is busy with a frame, the close waits for it: the
+        // frame's answer goes out first, so a batch that was stored is also acknowledged.
         public async Task SignalCloseAsync(WebSocketCloseStatus status, string reason, CancellationToken token)
         {
+            lock (_gate)
+            {
+                if (_handling)
+                {
+                    _closeRequest = (status, reason);
+                    return;
+                }
+
+                _closing = true;
+            }
+
             try
             {
                 await _sendLock.WaitAsync(token);

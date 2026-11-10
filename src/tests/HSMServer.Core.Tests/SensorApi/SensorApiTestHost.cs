@@ -14,10 +14,12 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Tests.SensorApi
@@ -44,6 +46,116 @@ namespace HSMServer.Core.Tests.SensorApi
     }
 
 
+    // A clock whose timers fire only when a test says so. The session's silence limit runs
+    // on it, so no test waits for real seconds and none can be cut off by a slow machine.
+    internal sealed class ManualTimeProvider : TimeProvider
+    {
+        public ConcurrentQueue<ManualTimer> Timers { get; } = new();
+
+
+        public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state, dueTime);
+
+            Timers.Enqueue(timer);
+
+            return timer;
+        }
+    }
+
+
+    internal sealed class ManualTimer(TimerCallback callback, object state, TimeSpan dueTime) : ITimer
+    {
+        private long _dueTicks = dueTime.Ticks;
+        private int _arms;
+
+
+        // What the timer was last set to; Timeout.InfiniteTimeSpan when it is not running.
+        public TimeSpan DueTime => TimeSpan.FromTicks(Volatile.Read(ref _dueTicks));
+
+        public bool IsArmed => DueTime != Timeout.InfiniteTimeSpan;
+
+        // How many times it was started or restarted.
+        public int Arms => Volatile.Read(ref _arms);
+
+
+        public bool Change(TimeSpan dueTime, TimeSpan period)
+        {
+            Volatile.Write(ref _dueTicks, dueTime.Ticks);
+
+            if (dueTime != Timeout.InfiniteTimeSpan)
+                Interlocked.Increment(ref _arms);
+
+            return true;
+        }
+
+        // The due time has passed.
+        public void Fire() => callback(state);
+
+        public void Dispose() { }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+
+    // The real cache, except that a test can hold one batch inside the store: everything is
+    // forwarded, and AddSensorValuesAsync waits at the gate when one is set.
+    public class GatedCache : DispatchProxy
+    {
+        private ITreeValuesCache _inner;
+        private volatile TaskCompletionSource _gate;
+        private volatile bool _hold;
+
+
+        public ITreeValuesCache Cache { get; private set; }
+
+        // Completes when a batch has reached the store and is waiting at the gate.
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+
+        public static GatedCache Wrap(ITreeValuesCache inner)
+        {
+            var cache = Create<ITreeValuesCache, GatedCache>();
+            var proxy = (GatedCache)(object)cache;
+
+            proxy._inner = inner;
+            proxy.Cache = cache;
+
+            return proxy;
+        }
+
+        public void HoldTheNextStore()
+        {
+            _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _hold = true;
+        }
+
+        public void Release() => _gate?.TrySetResult();
+
+
+        protected override object Invoke(MethodInfo targetMethod, object[] args)
+        {
+            if (_hold && targetMethod.Name == nameof(ITreeValuesCache.AddSensorValuesAsync))
+            {
+                _hold = false;
+
+                return StoreAfter(_gate, targetMethod, args);
+            }
+
+            return targetMethod.Invoke(_inner, args);
+        }
+
+        private async Task<Dictionary<string, string>> StoreAfter(TaskCompletionSource gate, MethodInfo store, object[] args)
+        {
+            Entered.TrySetResult();
+
+            await gate.Task;
+
+            return await (Task<Dictionary<string, string>>)store.Invoke(_inner, args);
+        }
+    }
+
+
     // The real Sensor API on a real Kestrel listener (loopback, ephemeral port): the real
     // TelemetryMiddleware, SensorsController, ingestion service and session handler over
     // the cache the test hands in. Only the server's self-monitoring collector and its
@@ -55,6 +167,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
 
         public RecordingTelemetry Telemetry { get; }
+
+        public ManualTimeProvider Time => (ManualTimeProvider)_app.Services.GetRequiredService<TimeProvider>();
 
         public CollectorSessionRegistry Registry => _app.Services.GetRequiredService<CollectorSessionRegistry>();
 
@@ -95,6 +209,7 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<SensorIngestionService>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
+            builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());
 
             builder.Services.AddControllers()
                 .ConfigureApplicationPartManager(manager =>

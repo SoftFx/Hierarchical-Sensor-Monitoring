@@ -54,18 +54,20 @@ namespace HSMServer.SensorApi.Sessions
         private readonly SensorIngestionService _ingestion;
         private readonly ISensorApiTelemetry _telemetry;
         private readonly ITreeValuesCache _cache;
+        private readonly TimeProvider _time;
 
         private volatile bool _stopping;
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
-            ISensorApiTelemetry telemetry, ITreeValuesCache cache, IHostApplicationLifetime lifetime)
+            ISensorApiTelemetry telemetry, ITreeValuesCache cache, IHostApplicationLifetime lifetime, TimeProvider time)
         {
             _config = config.CollectorSessions ?? new CollectorSessionsConfig();
             _registry = registry;
             _ingestion = ingestion;
             _telemetry = telemetry;
             _cache = cache;
+            _time = time;
 
             // ApplicationStopping fires before the web server starts waiting for its
             // connections, which is the moment to let the collectors go.
@@ -112,10 +114,11 @@ namespace HSMServer.SensorApi.Sessions
             }
 
             CollectorSession session = null;
+            WebSocket socket = null;
 
             try
             {
-                var socket = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext
+                socket = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext
                 {
                     SubProtocol = SessionProtocol.Subprotocol,
                     // Protocol-level keep-alive, for NAT and proxy idle timers. Liveness is
@@ -127,7 +130,7 @@ namespace HSMServer.SensorApi.Sessions
                     ReadFact(context, SessionProtocol.CollectorKindHeader),
                     ReadFact(context, SessionProtocol.CollectorVersionHeader),
                     ReadFact(context, SessionProtocol.AgentVersionHeader),
-                    DateTime.UtcNow);
+                    _time.GetUtcNow().UtcDateTime);
 
                 _registry.Register(session);
 
@@ -157,6 +160,12 @@ namespace HSMServer.SensorApi.Sessions
                     _logger.Debug($"Collector session {session.Id} closed{(session.EndReason is null ? string.Empty : $": {session.EndReason}")}");
                     session.Dispose();
                 }
+                else if (socket is not null)
+                {
+                    // Accepted, but no session came to own it.
+                    socket.Abort();
+                    socket.Dispose();
+                }
             }
         }
 
@@ -169,8 +178,9 @@ namespace HSMServer.SensorApi.Sessions
             // without a close: a dead host, a cut network. The same limit bounds a send to a
             // collector that stopped reading. The watch ends the session, which fails
             // whatever the loop is waiting in. It does not run while the server itself is
-            // busy with a frame: a slow store is not the collector's silence.
-            await using var silence = new SilenceWatch(session, _config.SilenceLimit);
+            // busy with a frame: a slow store is not the collector's silence. And it starts
+            // over with every read, so a large frame on a slow link is not silence either.
+            await using var silence = new SilenceWatch(_time, session, _config.SilenceLimit);
 
             SessionProtocol.WriteHello(output, _config.MaxFrameBytes, _config.HeartbeatSeconds);
             _telemetry.AddResponse(session.Caller.TelemetryPath, output.WrittenCount);
@@ -182,7 +192,7 @@ namespace HSMServer.SensorApi.Sessions
             {
                 silence.Arm();
 
-                using var frame = await session.ReceiveAsync(_config.MaxFrameBytes, aborted);
+                using var frame = await session.ReceiveAsync(_config.MaxFrameBytes, silence.Arm, aborted);
 
                 silence.Disarm();
 
@@ -202,10 +212,35 @@ namespace HSMServer.SensorApi.Sessions
                         return;
                 }
 
-                session.Touch(DateTime.UtcNow);
+                // The server is closing this session (shutdown): what arrives now is left
+                // unstored and unanswered, and the loop only waits for the collector's close.
+                if (!session.TryBeginFrame())
+                    continue;
 
-                if (!await HandleFrameAsync(session, frame, output, silence, aborted))
+                bool open;
+                (WebSocketCloseStatus Status, string Reason)? askedToClose;
+
+                try
+                {
+                    session.Touch(_time.GetUtcNow().UtcDateTime);
+
+                    open = await HandleFrameAsync(session, frame, output, silence, aborted);
+                }
+                finally
+                {
+                    askedToClose = session.EndFrame();
+                }
+
+                if (!open)
                     return;
+
+                // Asked for while the frame was being handled, and held back until its
+                // answer was out.
+                if (askedToClose is { } close)
+                {
+                    await session.CloseAsync(close.Status, close.Reason);
+                    return;
+                }
 
                 if (output.Capacity > KeepOutputBytes)
                     output = new ArrayBufferWriter<byte>(256);
@@ -235,15 +270,10 @@ namespace HSMServer.SensorApi.Sessions
                     return false;
                 }
 
-                if (request.Id is null)
-                {
-                    if (request.Op == SessionProtocol.OpPing)
-                    {
-                        silence.Arm();
-                        await session.SendAsync(SessionProtocol.Pong, aborted);
-                        return true;
-                    }
+                var isPing = request.Id is null && request.Op == SessionProtocol.OpPing;
 
+                if (request.Id is null && !isPing)
+                {
                     if (request.Op == SessionProtocol.OpPong)
                         return true;
 
@@ -254,13 +284,21 @@ namespace HSMServer.SensorApi.Sessions
                     return false;
                 }
 
-                // The key is looked up again for every request, as it is for every HTTP
-                // request: revoking or blocking it ends the session.
+                // The key is looked up again for every request and every ping, as it is for
+                // every HTTP request: revoking or blocking it ends the session, also one that
+                // only keeps itself alive.
                 if (!TryRefreshCaller(session, out var caller, out var accessError))
                 {
                     _logger.Debug($"Collector session {session.Id} lost its access: {accessError}");
                     await session.CloseAsync(SessionProtocol.ClosePolicyViolation, Truncate(accessError));
                     return false;
+                }
+
+                if (isPing)
+                {
+                    silence.Arm();
+                    await session.SendAsync(SessionProtocol.Pong, aborted);
+                    return true;
                 }
 
                 var id = request.Id.Value;
@@ -451,9 +489,9 @@ namespace HSMServer.SensorApi.Sessions
 
         // Ends a session that makes no progress for `limit` while the loop waits for the
         // collector: for its next frame, or for it to take what the server sends.
-        private sealed class SilenceWatch(CollectorSession session, TimeSpan limit) : IAsyncDisposable
+        private sealed class SilenceWatch(TimeProvider time, CollectorSession session, TimeSpan limit) : IAsyncDisposable
         {
-            private readonly Timer _timer = new(_ => session.Abort(SilenceReason), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            private readonly ITimer _timer = time.CreateTimer(_ => session.Abort(SilenceReason), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
 
             public void Arm() => _timer.Change(limit, Timeout.InfiniteTimeSpan);

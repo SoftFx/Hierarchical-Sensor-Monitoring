@@ -123,7 +123,7 @@ namespace HSMServer.BackgroundServices
                 EnableForGrafana = true,
                 SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.Count,
                 Description = "Number of collector sessions (persistent WebSocket connections of collectors) open at the moment of the sample. " +
-                              $"The server accepts at most {config.CollectorSessions.MaxSessions} (CollectorSessions.MaxSessions; 0 turns sessions off).",
+                              $"The server accepts at most {config.CollectorSessions?.MaxSessions ?? CollectorSessionsConfig.DefaultMaxSessions} (CollectorSessions.MaxSessions; 0 turns sessions off).",
             });
             ApiTokenUsageSensors = new ApiTokenUsageSensors(_collector);
             // The backup schedule is read once, like BackupDatabaseService's timer:

@@ -11,7 +11,9 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
 
 
-        public WebRequestNode this[string id] => id is null ? null : _selfSensors.GetOrAdd(id, new WebRequestNode(_collector, id));
+        // The factory overload: the node (four sensors) is built only when the client is new,
+        // not on every request and every session frame that looks it up.
+        public WebRequestNode this[string id] => id is null ? null : _selfSensors.GetOrAdd(id, key => new WebRequestNode(_collector, key));
 
         public TotalWebRequestNode Total { get; }
 

@@ -190,6 +190,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<SensorIngestionService>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()
+                    // The clock of the session's silence limit, replaceable in tests.
+                    .AddSingleton(TimeProvider.System)
                     .AddSingleton<BackupDatabaseService>()
                     .AddSingleton<NotificationsCenter>()
                     .AddSingleton<ChatSensorUsageCalculator>();
