@@ -269,6 +269,26 @@ namespace hsm::test
             return SendFrame(0x1, /*fin=*/false, first) && SendFrame(0x0, /*fin=*/true, second);
         }
 
+        // Only the first fragment of a text message: the message stays open until a final
+        // continuation follows (SendContinuation).
+        bool SendFragmentStart(const std::string& text) { return SendFrame(0x1, /*fin=*/false, text); }
+
+        // Only the START of a final continuation frame that declares `declared_bytes` of payload.
+        bool SendOversizedContinuationStart(uint64_t declared_bytes)
+        {
+            std::string frame;
+            frame.push_back(static_cast<char>(0x80));
+            frame.push_back(static_cast<char>(127));
+            for (int shift = 56; shift >= 0; shift -= 8)
+                frame.push_back(static_cast<char>((declared_bytes >> shift) & 0xFF));
+            frame += "only-the-first-bytes";
+
+            std::lock_guard<std::mutex> guard(send_mutex_);
+            if (connection_ == INVALID_SOCKET)
+                return false;
+            return WriteAll(connection_, frame);
+        }
+
         // A final continuation frame with no message in progress (a protocol violation).
         bool SendContinuation(const std::string& text) { return SendFrame(0x0, /*fin=*/true, text); }
 

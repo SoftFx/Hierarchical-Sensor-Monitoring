@@ -6717,10 +6717,33 @@ namespace
         Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("the fragmented message must arrive: " + error).c_str());
         Require(text == "first-second", "the fragments must be assembled in order");
 
+        // A message that arrives over several calls: the first fragment alone is not a message,
+        // a ping in the middle is answered without disturbing it, and the continuation completes
+        // it with nothing lost.
+        Require(server.SendFragmentStart("kept-"), "the server must be able to start a fragmented message");
+        Require(connection.Receive(text, 300, error) == hsm::http::WebSocketReceive::Timeout, "an unfinished message must not surface");
+        Require(server.SendPing(), "the server must be able to ping between fragments");
+        Require(server.SendContinuation("across-calls"), "the server must be able to finish the message");
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("the message must complete on a later call: " + error).c_str());
+        Require(text == "kept-across-calls", "nothing of a message assembled across calls may be lost");
+        Require(WaitUntil([&] { return server.Pongs() == 1; }), "a ping between fragments must be answered");
+
         Require(server.SendContinuation("orphan"), "the server must be able to send a stray continuation");
         // The violation is detected by libcurl; its wording is not ours to pin.
         Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "a stray continuation must be a protocol error");
         Require(!error.empty() && !connection.IsOpen(), "a protocol error must carry a description and release the connection");
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
+
+        // The size limit is for the whole message: fragments that are each small, but whose sum
+        // is over the limit, are refused from the header of the fragment that crosses it.
+        hsm::http::WebSocketConnection summed(/*verify_peer=*/false);
+        Require(summed.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the second connection");
+
+        Require(server.SendFragmentStart("x"), "the server must be able to start a fragmented message");
+        Require(server.SendOversizedContinuationStart(hsm::http::WebSocketConnection::kMaxMessageBytes), "the server must be able to start an oversized continuation");
+        Require(summed.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "fragments that sum over the limit must be refused");
+        Contains(error, "size limit");
     }
 
     // The two rules this client adds on top of libcurl's framing: the session is text only, and a
