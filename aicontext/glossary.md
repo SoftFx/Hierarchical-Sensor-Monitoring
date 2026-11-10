@@ -1,6 +1,6 @@
 # HSM Glossary
 
-> Owner: shared | Last reviewed: 2026-10-01 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
 
 Canonical terms for Hierarchical-Sensor-Monitoring. Prefer these names in code,
 docs, PR descriptions, review comments, and user-facing documentation.
@@ -92,6 +92,10 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Sensor-tree folder (wire) | In the management-API sensor-tree surface (#1386), `"type": "folder"` on a node — a NESTED `ProductModel` under a root product; `"type": "product"` is a root. | Distinct from the access-grouping Folder entity (`FolderModel`, `IsFolderAvailable`): those are NOT addressable through the sensor-tree surface. The wire pair mirrors the web UI's product/folder vocabulary. |
 | MCP surface (`/mcp`) | The Model Context Protocol endpoint hosted by HSMServer (#1391, phase-2 writes): Streamable HTTP, snake_case tools rendering the management-API surface (reads of the sensor tree, templates/schedules, chats, folders; writes of sensor policies, templates, schedules) through the SAME HsmApiToken credential and owner sight — read-write tokens only (every MCP message is a POST). | Outside the `/api/v1` area guard (JSON-RPC errors, SDK-owned handler) but inside the bearer credential family; SitePort-only. See `aicontext/features/server/mcp/`. |
 | Token usage sensors | The per-token view of management-API usage inside self-monitoring: how often the token authenticates `/api/v1`/`/mcp` requests and how long they run. Keyed by owner login + token EntityId — never the name (collides, moves) or the TokenId (never disclosed). | The Profile token card displays the EntityId as the join key. See `aicontext/features/server/token-usage-monitoring/`; rationale in ADR-0006 (`docs/decisions/`). |
+| Collector session | The long-lived WebSocket connection a collector holds to `GET /api/sensors/session` (ADR-0017): data frames up, acknowledgements and directives down. | Designed, not shipped: `docs/initiatives/collector-session-websocket.md`. Distinct from the kept HTTP connection (#1653), which is transport reuse without a session. |
+| Session frame | One JSON message on a collector session: a small envelope (`id`/`op`/`body` up, `ack`/`status`/`body` or `op` down) around a body that is byte for byte the HTTP body of the matching Sensor API route. | The envelope is new wire; the body is the existing wire contract. |
+| Session fallback | A collector sending over the HTTP Sensor API because no session is up (old server, refused or dropped upgrade) or because the payload is a file value. | Automatic and per send; nothing waits for a session. |
+| Session registry | The server-side record of live collector sessions (product, access key, client name, collector kind/version, address, connected-at, last-frame-at). | Source of truth for "is this collector connected"; push goes through it. |
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 
