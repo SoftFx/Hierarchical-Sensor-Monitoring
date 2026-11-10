@@ -8,6 +8,15 @@ using System.Threading.Tasks;
 
 namespace HSMServer.SensorApi.Sessions
 {
+    // Why an upgrade did not get a slot.
+    internal enum SlotRefusal
+    {
+        None,
+        ServerFull,
+        AddressFull,
+    }
+
+
     // The live collector sessions of this server (#1664): the one place that answers
     // "which collectors are connected", enforces the server-wide cap, and reaches every
     // session at once (the close at shutdown now, pushes later).
@@ -15,8 +24,11 @@ namespace HSMServer.SensorApi.Sessions
     {
         private readonly ConcurrentDictionary<Guid, CollectorSession> _sessions = new();
 
-        // Slots taken, including upgrades that are still in progress. Counted apart from
-        // the dictionary so the cap holds while many upgrades race.
+        // Slots taken, in total and per client address, including upgrades that are still in
+        // progress. Counted apart from the dictionary and under one lock, so both limits
+        // hold while many upgrades race.
+        private readonly object _slotsLock = new();
+        private readonly Dictionary<string, int> _slotsByAddress = new();
         private int _slots;
 
 
@@ -30,26 +42,47 @@ namespace HSMServer.SensorApi.Sessions
 
 
         // Takes a slot before the upgrade is accepted, so a refusal is still an ordinary
-        // HTTP status. Every successful call is paired with Release.
-        internal bool TryReserve(int maxSessions)
+        // HTTP status. Every reservation that succeeded is paired with Release.
+        // `maxPerAddress` of zero means no limit per address.
+        internal SlotRefusal TryReserve(string address, int maxSessions, int maxPerAddress)
         {
-            if (Interlocked.Increment(ref _slots) <= maxSessions)
-                return true;
+            lock (_slotsLock)
+            {
+                if (_slots >= maxSessions)
+                    return SlotRefusal.ServerFull;
 
-            Interlocked.Decrement(ref _slots);
+                _slotsByAddress.TryGetValue(address, out var held);
 
-            return false;
+                if (maxPerAddress > 0 && held >= maxPerAddress)
+                    return SlotRefusal.AddressFull;
+
+                _slots++;
+                _slotsByAddress[address] = held + 1;
+
+                return SlotRefusal.None;
+            }
         }
 
         internal void Register(CollectorSession session) => _sessions[session.Id] = session;
 
         // `session` is null when the upgrade failed after the slot was taken.
-        internal void Release(CollectorSession session)
+        internal void Release(CollectorSession session, string address)
         {
             if (session is not null)
                 _sessions.TryRemove(session.Id, out _);
 
-            Interlocked.Decrement(ref _slots);
+            lock (_slotsLock)
+            {
+                _slots--;
+
+                if (_slotsByAddress.TryGetValue(address, out var held))
+                {
+                    if (held > 1)
+                        _slotsByAddress[address] = held - 1;
+                    else
+                        _slotsByAddress.Remove(address);
+                }
+            }
         }
 
         // Starts the close handshake on every session and gives the peers `budget` to

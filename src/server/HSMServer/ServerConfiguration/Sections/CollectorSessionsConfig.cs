@@ -12,6 +12,7 @@ namespace HSMServer.ServerConfiguration
         // server, so the default cap costs about 22 MB when it is reached; an installation
         // with more collectors than this raises it.
         public const int DefaultMaxSessions = 1_000;
+        public const int DefaultMaxSessionsPerAddress = 20;
         public const int DefaultHeartbeatSeconds = 30;
         public const int DefaultMaxFrameBytes = 4 * 1024 * 1024;
 
@@ -25,6 +26,15 @@ namespace HSMServer.ServerConfiguration
         // guard against a runaway fleet, not something to run close to. Zero turns sessions
         // off: the endpoint answers 404.
         public int MaxSessions { get; set; } = DefaultMaxSessions;
+
+        // The connection limit per client address (owner decision, 2026-11-10): one address
+        // holds at most this many sessions, so one host with a collector that reconnects in
+        // a loop cannot take every slot of the server. An upgrade over it is refused with
+        // 429. Zero means no limit per address. The address is the one the server records
+        // for the request: behind a reverse proxy it is the client's only when
+        // Kestrel.TrustedProxies names the proxy; otherwise every collector appears to come
+        // from the proxy and they all share this limit.
+        public int MaxSessionsPerAddress { get; set; } = DefaultMaxSessionsPerAddress;
 
         // Announced to the collector in the hello frame: it sends an application ping after
         // this long without sending anything. The server drops a session after three of
@@ -52,6 +62,9 @@ namespace HSMServer.ServerConfiguration
 
             if (MaxSessions < 0)
                 throw new InvalidOperationException($"{section}.{nameof(MaxSessions)} = {MaxSessions} is invalid: use 0 to turn collector sessions off, or a positive limit.");
+
+            if (MaxSessionsPerAddress < 0)
+                throw new InvalidOperationException($"{section}.{nameof(MaxSessionsPerAddress)} = {MaxSessionsPerAddress} is invalid: use 0 for no limit per address, or a positive limit.");
 
             if (HeartbeatSeconds is < MinHeartbeatSeconds or > MaxHeartbeatSeconds)
                 throw new InvalidOperationException($"{section}.{nameof(HeartbeatSeconds)} = {HeartbeatSeconds} is invalid: expected {MinHeartbeatSeconds}..{MaxHeartbeatSeconds}.");

@@ -65,6 +65,7 @@ namespace HSMServer.SensorApi.Sessions
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
+        private long _addressWarnedAtTicks;
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
@@ -127,12 +128,19 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            if (!_registry.TryReserve(_config.MaxSessions))
+            switch (_registry.TryReserve(caller.RemoteIP, _config.MaxSessions, _config.MaxSessionsPerAddress))
             {
-                WarnCapReached(caller);
+                case SlotRefusal.ServerFull:
+                    WarnCapReached(caller);
 
-                await Refuse(context, StatusCodes.Status503ServiceUnavailable, "The session limit of this server is reached");
-                return;
+                    await Refuse(context, StatusCodes.Status503ServiceUnavailable, "The session limit of this server is reached");
+                    return;
+
+                case SlotRefusal.AddressFull:
+                    WarnAddressLimitReached(caller);
+
+                    await Refuse(context, StatusCodes.Status429TooManyRequests, "The session limit for this address is reached");
+                    return;
             }
 
             CollectorSession session = null;
@@ -176,7 +184,7 @@ namespace HSMServer.SensorApi.Sessions
             }
             finally
             {
-                _registry.Release(session);
+                _registry.Release(session, caller.RemoteIP);
 
                 if (session is not null)
                 {
@@ -507,6 +515,19 @@ namespace HSMServer.SensorApi.Sessions
 
             _logger.Warn($"The collector session limit is reached (CollectorSessions.MaxSessions = {_config.MaxSessions}): the upgrade of {caller.TelemetryPath} from {caller.RemoteIP} " +
                          "is refused with 503 and it cannot send until a session ends. Raise the limit: this server has more collectors than that.");
+        }
+
+        // The usual cause is one host whose collector opens sessions without closing them.
+        // The other is a reverse proxy the server does not trust: then every collector
+        // comes from the proxy's address and they share one limit.
+        private void WarnAddressLimitReached(PublicApiRequestInfo caller)
+        {
+            if (!IsTimeToWarn(ref _addressWarnedAtTicks))
+                return;
+
+            _logger.Warn($"The collector session limit per address is reached (CollectorSessions.MaxSessionsPerAddress = {_config.MaxSessionsPerAddress}): the upgrade of {caller.TelemetryPath} " +
+                         $"from {caller.RemoteIP} is refused with 429. Either that host opens sessions without closing them, or {caller.RemoteIP} is a reverse proxy " +
+                         "that is not listed in Kestrel.TrustedProxies, so all collectors share its address.");
         }
 
         // True at most once a minute for each of the refusals that are worth a log line.

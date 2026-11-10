@@ -345,6 +345,42 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         [Fact]
+        public async Task AddressLimit_RefusesTheNextUpgradeWith429_AndFreesTheSlotOnClose()
+        {
+            // Far below the server-wide cap: the limit that applies is the one per address.
+            await using var host = await StartHost(config => config.MaxSessionsPerAddress = 2);
+
+            using var first = await OpenAsync(host);
+            using var second = await OpenAsync(host);
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, await RefusedUpgradeStatus(host, _key, Subprotocol));
+            Assert.Equal(2, host.Registry.Count);
+
+            await first.CloseAsync(WebSocketCloseStatus.NormalClosure, null, Deadline());
+            await TestWait.UntilAsync(() => host.Registry.Count == 1, "the closed session to leave the registry");
+
+            using var third = await OpenAsync(host);
+
+            Assert.Equal(2, host.Registry.Count);
+        }
+
+        [Fact]
+        public async Task AddressLimit_OfZero_IsNoLimit()
+        {
+            await using var host = await StartHost(config => config.MaxSessionsPerAddress = 0);
+
+            var sockets = new ClientWebSocket[CollectorSessionsConfig.DefaultMaxSessionsPerAddress + 2];
+
+            for (var i = 0; i < sockets.Length; i++)
+                sockets[i] = await OpenAsync(host);
+
+            Assert.Equal(sockets.Length, host.Registry.Count);
+
+            foreach (var socket in sockets)
+                socket.Dispose();
+        }
+
+        [Fact]
         public async Task Silence_EndsTheSessionAfterThreeHeartbeats_AndEveryFrameStartsTheCountAgain()
         {
             await using var host = await StartHost(config => config.HeartbeatSeconds = 30);
@@ -625,7 +661,11 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             const int sessions = 400;
 
-            await using var host = await StartHost(config => config.MaxSessions = sessions + 50);
+            await using var host = await StartHost(config =>
+            {
+                config.MaxSessions = sessions + 50;
+                config.MaxSessionsPerAddress = 0; // every session of this test comes from one address
+            });
 
             // Warm up everything that is allocated once.
             foreach (var warm in await OpenRawSessionsAsync(host, 20))
