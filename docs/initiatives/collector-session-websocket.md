@@ -136,7 +136,7 @@ What improves is latency and cost: a directive reaches the collector when it cha
 
 A server service holding the live sessions: product, access key, client name, collector kind and version, remote IP, connected-at, last-frame-at. It is the single place that answers "which sessions are open", and the single place push goes through. Consumers: a self-monitoring sensor with the session count, and the directive push.
 
-**Session cap.** One limit for the whole server (owner decision), a server setting with a default of 10 000 sessions. Step 2 measures the per-session cost and adjusts the default if the measurement says so.
+**Session cap.** One limit for the whole server (owner decision), a server setting with a default of 1 000 sessions. Step 2 measured the cost: an idle session holds about 22 KiB of managed memory on the server, so the default cap costs about 22 MB when reached. The first draft said 10 000; the owner asked why so many, and nothing needs that many: one session is one collector process.
 
 ### Disconnect alert
 
@@ -146,12 +146,14 @@ Owner decision: a collector that disconnects must raise an **alert**.
 
 **What a session can and cannot add.** A session tells the server at once when a process dies (the OS closes the socket). It does not beat the TTL for a host that loses power or network: there is no close, and silence is detected by the heartbeat, in roughly the same minute. A separate "connection" sensor driven by the session was designed and dropped during review: it would fire later than `Service alive` for hard failures, page a second time for the same incident, and need an identity that survives HTTP fallback and server restarts.
 
-**So the alert stays where it is, and the session adds no second one.** Two things follow for this initiative:
+**So the alert stays where it is, and the session adds no second one.** What changes is its timing (owner decision, 2026-11-10): **the alert must fire only when a collector has been off for more than 5 minutes.** A restart, an update or a short network loss must not page anyone. Today the inactivity period of `Service alive` is 1 minute. It becomes 5 minutes in both collectors (#1666); the beat period stays 15 seconds.
+
+Two more things follow for this initiative:
 
 - A collector with the session option on must also have `Service alive`, or it has no disconnect alert. Both collectors log a warning at Start when the session is enabled and `Service alive` is not.
 - The beat travels on the session like any other value, so nothing about the alert changes when a collector moves between the session and HTTP.
 
-**A possible follow-up, not in this initiative**: use an abnormal session close to bring the `Service alive` timeout forward (seconds instead of a minute for a crashed process), or use a deliberate-stop close to tell a planned stop from a loss. Both change when an existing alert fires and need their own decision. See Owner Decisions.
+**Not taken**: using an abnormal session close to bring the alert forward. The owner wants a later alert, not an earlier one.
 
 ### Code shape
 
@@ -186,7 +188,7 @@ One PR per step unless noted.
 | 3 | Session conformance harness + first collector | New DSL verbs for a scripted session server and the `.hsmtest` scenarios, with harness support in **both** drivers, plus the session sender of the first collector (managed: `SessionDataSender`, both TFMs). The other driver marks the session verbs `CONFORMANCE-UNSUPPORTED` against the step 4 issue, which is the sanctioned parity flow (rule #9, epic #1093). Depends on #1659 A2/A3 for a sane fallback path. |
 | 4 | Second collector | Native session transport: the session thread with its wake-up mechanism, request/ack correlation interleaved with pushes and heartbeat, behind the existing seams; C ABI option (MINOR bump), agent and probe bumps. Falls back to HTTP for good where `WebSocketConnection::Supported()` is false, and says so once in the log. The registry port asks for `curl` with the `websockets` feature and a `version>=` of 8.14.0 (a feature alone does not fix the version a consumer's baseline resolves), and the Conan recipe moves to a libcurl that has WebSocket, or the PR states that Conan builds have no session. The native session scenarios run in the CI HTTP lane, whose vcpkg libcurl has WebSocket on both platforms and which sets `HSM_REQUIRE_WEBSOCKET=1`, so they cannot pass by skipping; lanes built without the HTTP transport have no transport to run them on. Removes every `CONFORMANCE-UNSUPPORTED` marker step 3 added. An integration test over real TLS belongs here. |
 | 5 | Directive push | Server pushes on open, on change and on the 5-minute re-announcement; native routes pushed directives to the existing callback; managed receives them internally with no public surface (this settles #1659 B1). Scenarios and both drivers in the same PR. |
-| 6 | Disconnect alert | No new mechanism: the existing `Service alive` inactivity alert is the disconnect alert. This step is the Start warning in both collectors when the session is on and `Service alive` is off (lands with steps 3 and 4), plus the docs that say so. A faster or smarter alert driven by the session is a follow-up that needs an owner decision. |
+| 6 | Disconnect alert | No new mechanism: the existing `Service alive` inactivity alert is the disconnect alert. Its inactivity period moves from 1 to 5 minutes in both collectors (#1666, owner decision: alert only after more than 5 minutes off), with the conformance scenario and both drivers in the same PR. Plus the Start warning in both collectors when the session is on and `Service alive` is off (lands with steps 3 and 4). |
 | 7 | Rollout | Enable on the garage probe and soak for a week; wiki pages; release notes. The option stays off by default. |
 
 ## Risks
@@ -218,11 +220,8 @@ Answered by the owner on 2026-11-10.
 | Question | Decision | Where it lands |
 |---|---|---|
 | Is the session on by default in the first releases? | **No. It is an explicit option.** | § Compatibility, steps 3, 4 and 7 |
-| What does the product do when a collector disconnects? | **It raises an alert.** | § Disconnect alert, step 6 |
+| What does the product do when a collector disconnects? | **It raises an alert, and only after the collector has been off for more than 5 minutes.** | § Disconnect alert, step 6, #1666 |
 | Does the managed collector expose directives publicly? | **No. They are handled inside the collector.** | § Push: directives, step 5 |
-| Is the session cap per server or per product? | **Per server.** | § Session registry, step 2 |
+| Is the session cap per server or per product? | **Per server**, default 1 000 ("why so many?" to the 10 000 of the first draft). | § Session registry, step 2 |
 | May the native collector carry its own WebSocket protocol code? | **No. No self-written protocol code; a session is still wanted.** The owner runs the software on hosts of their choosing with a current OS, so depending on a recent libcurl is acceptable. SharpRpc, gRPC and a Rust rewrite of the collector were raised in the same discussion and not taken (ADR-0017, Alternatives). | Step 1, § Compatibility, Risks |
 
-**One decision needs the owner again.** The alert the owner asked for exists today as the `Service alive` inactivity alert, about one minute after a collector's last beat. This document therefore adds no second alert. If the intent was something the existing alert does not give — firing within seconds when a process crashes, or not firing on a planned stop — that is the follow-up named in § Disconnect alert, and it is not designed here.
-
-Proposed here and not confirmed by the owner: the 10 000 default for the session cap.
