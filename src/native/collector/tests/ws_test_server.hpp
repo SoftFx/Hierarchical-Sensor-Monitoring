@@ -295,6 +295,9 @@ namespace hsm::test
             return WriteAll(connection_, frame.substr(cut));
         }
 
+        // A ping whose payload is one byte over what a control frame may carry (RFC 6455 5.5).
+        bool SendOversizedPing() { return SendFrame(0x9, /*fin=*/true, std::string(126, 'p')); }
+
         // A binary message as one frame.
         bool SendBinary(const std::string& bytes) { return SendFrame(0x2, /*fin=*/true, bytes); }
 

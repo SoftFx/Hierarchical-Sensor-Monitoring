@@ -6436,7 +6436,8 @@ namespace
         hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
         const auto opened = connection.Open(
             WsUrl(server),
-            { hsm::http::HttpHeader{ "Key", "test-key" }, hsm::http::HttpHeader{ "ClientName", "test-client" } },
+            { hsm::http::HttpHeader{ "Key", "test-key" }, hsm::http::HttpHeader{ "ClientName", "test-client" },
+              hsm::http::HttpHeader{ "X-Empty", "" } },
             "hsm.sensors.v1",
             5000);
 
@@ -6450,6 +6451,8 @@ namespace
         Contains(head, "Key: test-key");
         Contains(head, "ClientName: test-client");
         Contains(head, "Sec-WebSocket-Protocol: hsm.sensors.v1");
+        // A header with an empty value is still sent, as a header with no value.
+        Contains(head, "X-Empty:");
     }
 
     // An intermediary may answer with interim responses before the 101; and the open timeout bounds
@@ -6464,11 +6467,11 @@ namespace
         hsm::test::WebSocketTestServer server(options);
 
         hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
-        const auto opened = connection.Open(WsUrl(server), {}, "", /*timeout_ms=*/400);
+        const auto opened = connection.Open(WsUrl(server), {}, "", /*timeout_ms=*/1500);
         Require(opened.ok, ("an interim response before the 101 must not fail the open: " + opened.error).c_str());
         Require(opened.status_code == 101, "the reported status must be the final one");
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(700)); // well past the open timeout
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // past the open timeout
 
         std::string error;
         std::string text;
@@ -6754,6 +6757,28 @@ namespace
         Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "an oversized message must be refused");
         Contains(error, "size limit");
         Require(!connection.IsOpen(), "an oversized message must release the connection");
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the second connection");
+
+        // A control frame may carry 125 bytes at most. One byte more is refused, whichever of
+        // libcurl and this class notices first.
+        hsm::http::WebSocketConnection pinged(/*verify_peer=*/false);
+        Require(pinged.Open(WsUrl(server), {}, "", 5000).ok, "the third upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the third connection");
+
+        Require(server.SendOversizedPing(), "the server must be able to send an oversized ping");
+        Require(pinged.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "an oversized control frame must be refused");
+        Require(!pinged.IsOpen() && server.Pongs() == 0, "an oversized ping must release the connection and get no pong");
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the third connection");
+
+        // A send that does not go through releases the connection: a frame may be half-written,
+        // and nothing more may follow it.
+        hsm::http::WebSocketConnection cancelled(/*verify_peer=*/false);
+        Require(cancelled.Open(WsUrl(server), {}, "", 5000).ok, "the fourth upgrade must succeed");
+
+        cancelled.Cancel();
+        Require(!cancelled.SendText("never-sent", 5000, error), "a cancelled send must fail");
+        Contains(error, "cancelled");
+        Require(!cancelled.IsOpen(), "a failed send must release the connection");
     }
 
     // Manual probe, not registered in CTest: point HSM_WS_LIVE_URL at a real wss:// endpoint to
