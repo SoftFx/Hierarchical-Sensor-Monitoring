@@ -400,10 +400,14 @@ namespace hsm::http
             // 1 = connect (TCP, TLS, proxy tunnel) and stop: no HTTP request is sent by libcurl.
             // The upgrade request and everything after it go through curl_easy_send / _recv.
             curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
-            // The upgrade below is written by hand as HTTP/1.1. Without this pin a libcurl built
-            // with HTTP/2 offers `h2` in the TLS ALPN, the server selects it, and the hand-written
-            // request lands on a connection the server reads as HTTP/2. Pinning 1.1 makes libcurl
-            // offer only `http/1.1`.
+            // MANDATORY, do not remove. The upgrade below is written by hand as HTTP/1.1. Without
+            // this pin a libcurl built with HTTP/2 (every distribution build) offers `h2` in the
+            // TLS ALPN and the server selects it. The request then lands on a connection the
+            // server reads as HTTP/2, and worse: libcurl 8.14.1 installs its HTTP/2 filter on the
+            // CONNECT_ONLY connection and curl_easy_recv crashes inside it (SIGSEGV under
+            // nghttp2_session_mem_recv2; reproduced on Debian 13 against an HTTP/2 server by
+            // deleting this line). Pinning 1.1 makes libcurl offer only `http/1.1`, and a server
+            // cannot select a protocol the client did not offer.
             curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, static_cast<long>(CURL_HTTP_VERSION_1_1));
             // Through an HTTP proxy the connection must be a CONNECT tunnel, or the frames would be
             // interpreted by the proxy.
