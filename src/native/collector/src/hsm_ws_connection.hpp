@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -34,15 +35,25 @@ namespace hsm::http
     enum class WebSocketReceive
     {
         Text,    // a complete message is in `text`
-        Timeout, // nothing complete arrived in time; the connection is still usable
-        Closed,  // the peer closed the WebSocket or the connection; the connection is finished
-        Error    // transport failure, protocol violation, cancellation or an oversized message
+        Timeout, // nothing complete arrived in time; the connection is still open and usable
+        Closed,  // the peer closed the WebSocket or the connection; the connection is released
+        Error    // transport failure, protocol violation, cancellation or an oversized message;
+                 // the connection is released
     };
 
     // One connection, one owner thread. Open/SendText/Receive/Close must be called from the same
     // thread; Cancel() is the only member that may be called from another one. It makes a blocked
-    // Open, SendText or Receive return promptly (the session's stop path) and stays in force for
+    // Open, SendText or Receive return within one wait slice (kWaitSliceMs) and stays in force for
     // the life of the object: a cancelled connection is not reopened.
+    //
+    // Every terminal outcome (a failed Open, a failed SendText, Receive returning Closed or Error)
+    // releases the connection, so IsOpen() is the truth and nothing is written to a finished
+    // WebSocket afterwards. No member throws; Close and the destructor never block.
+    //
+    // Known limitation, for the session transport (step 4) to settle: waiting is a poll in
+    // kWaitSliceMs slices, so an idle Receive wakes the thread ten times a second and a cancel is
+    // seen within one slice. The session thread has to wake for outgoing data as well, so it needs
+    // a wake-up primitive of its own; that design belongs there, not in this building block.
     class WebSocketConnection
     {
     public:
@@ -50,6 +61,9 @@ namespace hsm::http
         static constexpr size_t kMaxMessageBytes = 8u * 1024u * 1024u;
         // The upgrade response head is refused beyond this size.
         static constexpr size_t kMaxHandshakeBytes = 16u * 1024u;
+        // Longest timeout honoured; larger values are clamped (and cannot overflow the clock).
+        static constexpr int64_t kMaxTimeoutMs = 24LL * 60 * 60 * 1000;
+        static constexpr int64_t kWaitSliceMs = 100;
 
         explicit WebSocketConnection(bool verify_peer);
         ~WebSocketConnection();
@@ -69,7 +83,7 @@ namespace hsm::http
             int64_t timeout_ms);
 
         // Sends one text message as one frame. False on failure, timeout or cancellation; the
-        // connection is finished then (a frame may be half-written) and must be closed.
+        // connection is released then (a frame may be half-written).
         bool SendText(const std::string& text, int64_t timeout_ms, std::string& error);
 
         // Waits up to `timeout_ms` for one complete text message. Partial reads and fragmented
@@ -77,7 +91,9 @@ namespace hsm::http
         // pongs ignored without surfacing. A binary message is an Error: the session is text only.
         WebSocketReceive Receive(std::string& text, int64_t timeout_ms, std::string& error);
 
-        // Sends a close frame (best effort, never blocks) and releases the connection. Idempotent.
+        // Sends a close frame (best effort, one non-blocking write) and releases the connection.
+        // Idempotent; after Receive returned Closed or Error there is nothing left to close, so
+        // no second close frame is ever written.
         void Close();
 
         void Cancel();
@@ -93,19 +109,31 @@ namespace hsm::http
             Error
         };
 
+        enum class Wait
+        {
+            Ready,
+            Timeout,
+            Cancelled,
+            Failed
+        };
+
         using Deadline = std::chrono::steady_clock::time_point;
 
-        bool WaitForSocket(bool for_read, Deadline deadline);
+        static Deadline DeadlineIn(int64_t timeout_ms);
+
+        Wait WaitForSocket(bool for_read, Deadline deadline);
         Io SendAll(const std::string& data, Deadline deadline, std::string& error);
         Io ReadMore(Deadline deadline, std::string& error);
-        std::string MaskedFrame(uint8_t opcode, const std::string& payload) const;
+        std::string MaskedFrame(uint8_t opcode, const std::string& payload);
         void Release();
 
         void* curl_ = nullptr; // CURL*, opaque so <curl/curl.h> stays in the .cpp
         bool verify_peer_;
         std::atomic<bool> cancelled_{ false };
-        std::string inbuf_;       // bytes received and not yet parsed into frames
-        std::string message_;     // fragments of the message being assembled
-        bool assembling_ = false; // a non-final data frame has been received
+        std::mt19937 random_;      // handshake key and frame masks; seeded once in the constructor
+        std::string inbuf_;        // bytes received from the connection
+        size_t inpos_ = 0;         // start of the unparsed part of inbuf_
+        std::string message_;      // fragments of the message being assembled
+        bool assembling_ = false;  // a non-final data frame has been received
     };
 } // namespace hsm::http

@@ -1,6 +1,6 @@
 #include "hsm_http_transport.hpp"
 
-#include <curl/curl.h>
+#include "hsm_curl_support.hpp"
 
 #include <cctype>      // std::tolower in the header-name comparison
 #include <string_view> // std::string_view used when splitting response headers
@@ -9,22 +9,6 @@ namespace hsm::http
 {
     namespace
     {
-        // libcurl needs one process-wide init before any easy handle is used. A function-local
-        // static gives thread-safe once-only init. We deliberately DO NOT call
-        // curl_global_cleanup(): it is not thread-safe and, run from a static destructor at
-        // process exit, would race any still-live easy handles / worker threads (and TSan would
-        // flag it). Leaking the one-time global allocation is the documented, safe choice for a
-        // library that cannot prove all curl users have quiesced.
-        void EnsureCurlGlobal()
-        {
-            struct CurlGlobal
-            {
-                CurlGlobal() { curl_global_init(CURL_GLOBAL_DEFAULT); }
-            };
-            static CurlGlobal global;
-            (void)global;
-        }
-
         size_t WriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
         {
             const size_t total = size * nmemb;
@@ -57,11 +41,6 @@ namespace hsm::http
             return total;
         }
 
-        // Returning non-zero aborts the transfer — the CancelPendingRequests primitive.
-        int XferCallback(void* clientp, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
-        {
-            return static_cast<std::atomic<bool>*>(clientp)->load() ? 1 : 0;
-        }
     } // namespace
 
     HttpTransport::Handle HttpTransport::AcquireHandle()
@@ -160,7 +139,7 @@ namespace hsm::http
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer_ ? 1L : 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_peer_ ? 2L : 0L);
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, XferCallback);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CancelXferCallback);
         curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cancelled_);
         // Kept-connection hygiene (#1653). A connection idle past kConnectionIdleSeconds is not
         // reused (see the constant); TCP keep-alive probes, sent well inside that window, keep a

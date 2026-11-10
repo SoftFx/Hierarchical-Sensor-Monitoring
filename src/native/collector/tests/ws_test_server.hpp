@@ -2,13 +2,18 @@
 
 // Minimal in-process WebSocket server for the native WebSocket tests (#1662). Test-only; compiled
 // only in the HSM_COLLECTOR_HTTP build. Implements just enough of RFC 6455 to exercise a client:
-// the upgrade handshake (with the Sec-WebSocket-Accept digest), masked client frames, unmasked
-// server frames with 7/16/64-bit lengths, ping/pong and the close handshake. Plaintext only, like
-// the HTTP capture servers next to it. Serves one connection at a time on its own thread.
+// the upgrade handshake, masked client frames, unmasked server frames with 7/16/64-bit lengths,
+// ping/pong and the close handshake. Plaintext only, like the HTTP capture servers next to it.
+// Serves one connection at a time on its own thread.
+//
+// The FRAMING here is written separately from the client's codec (the server parses masked frames
+// and writes unmasked ones, the client does the opposite), so each side checks the other. The
+// handshake DIGEST is the codec's own AcceptKey: a second copy of SHA-1 would prove nothing, and
+// the digest is pinned by published vectors in native_ws_codec_handshake_digest_matches_rfc.
 
+#include "../src/hsm_ws_codec.hpp"
 #include "http_capture_server.hpp" // socket_t, platform socket headers
 
-#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -21,112 +26,6 @@ namespace hsm::test
 {
     namespace ws_detail
     {
-        inline uint32_t RotateLeft(uint32_t value, int bits)
-        {
-            return (value << bits) | (value >> (32 - bits));
-        }
-
-        // SHA-1 (FIPS 180-1), needed only for the Sec-WebSocket-Accept digest of the handshake.
-        inline std::array<uint8_t, 20> Sha1(const std::string& input)
-        {
-            uint32_t h0 = 0x67452301u, h1 = 0xEFCDAB89u, h2 = 0x98BADCFEu, h3 = 0x10325476u, h4 = 0xC3D2E1F0u;
-
-            std::string message = input;
-            const uint64_t bit_length = static_cast<uint64_t>(input.size()) * 8u;
-            message.push_back(static_cast<char>(0x80));
-            while (message.size() % 64 != 56)
-                message.push_back('\0');
-            for (int shift = 56; shift >= 0; shift -= 8)
-                message.push_back(static_cast<char>((bit_length >> shift) & 0xFFu));
-
-            for (size_t chunk = 0; chunk < message.size(); chunk += 64)
-            {
-                uint32_t w[80];
-                for (size_t i = 0; i < 16; ++i)
-                {
-                    const size_t at = chunk + i * 4;
-                    w[i] = (static_cast<uint32_t>(static_cast<uint8_t>(message[at])) << 24) |
-                           (static_cast<uint32_t>(static_cast<uint8_t>(message[at + 1])) << 16) |
-                           (static_cast<uint32_t>(static_cast<uint8_t>(message[at + 2])) << 8) |
-                           static_cast<uint32_t>(static_cast<uint8_t>(message[at + 3]));
-                }
-                for (size_t i = 16; i < 80; ++i)
-                    w[i] = RotateLeft(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
-
-                uint32_t a = h0, b = h1, c = h2, d = h3, e = h4;
-                for (size_t i = 0; i < 80; ++i)
-                {
-                    uint32_t f = 0, k = 0;
-                    if (i < 20)
-                    {
-                        f = (b & c) | (~b & d);
-                        k = 0x5A827999u;
-                    }
-                    else if (i < 40)
-                    {
-                        f = b ^ c ^ d;
-                        k = 0x6ED9EBA1u;
-                    }
-                    else if (i < 60)
-                    {
-                        f = (b & c) | (b & d) | (c & d);
-                        k = 0x8F1BBCDCu;
-                    }
-                    else
-                    {
-                        f = b ^ c ^ d;
-                        k = 0xCA62C1D6u;
-                    }
-                    const uint32_t temp = RotateLeft(a, 5) + f + e + k + w[i];
-                    e = d;
-                    d = c;
-                    c = RotateLeft(b, 30);
-                    b = a;
-                    a = temp;
-                }
-                h0 += a;
-                h1 += b;
-                h2 += c;
-                h3 += d;
-                h4 += e;
-            }
-
-            std::array<uint8_t, 20> digest{};
-            const uint32_t words[5] = { h0, h1, h2, h3, h4 };
-            for (size_t i = 0; i < 5; ++i)
-            {
-                digest[i * 4] = static_cast<uint8_t>((words[i] >> 24) & 0xFFu);
-                digest[i * 4 + 1] = static_cast<uint8_t>((words[i] >> 16) & 0xFFu);
-                digest[i * 4 + 2] = static_cast<uint8_t>((words[i] >> 8) & 0xFFu);
-                digest[i * 4 + 3] = static_cast<uint8_t>(words[i] & 0xFFu);
-            }
-            return digest;
-        }
-
-        inline std::string Base64(const uint8_t* data, size_t size)
-        {
-            static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-            std::string out;
-            for (size_t i = 0; i < size; i += 3)
-            {
-                const uint32_t b0 = data[i];
-                const uint32_t b1 = i + 1 < size ? data[i + 1] : 0u;
-                const uint32_t b2 = i + 2 < size ? data[i + 2] : 0u;
-                const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
-                out.push_back(alphabet[(triple >> 18) & 0x3Fu]);
-                out.push_back(alphabet[(triple >> 12) & 0x3Fu]);
-                out.push_back(i + 1 < size ? alphabet[(triple >> 6) & 0x3Fu] : '=');
-                out.push_back(i + 2 < size ? alphabet[triple & 0x3Fu] : '=');
-            }
-            return out;
-        }
-
-        inline std::string AcceptKey(const std::string& client_key)
-        {
-            const auto digest = Sha1(client_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-            return Base64(digest.data(), digest.size());
-        }
-
         inline std::string HeaderValue(const std::string& head, const std::string& name_lower)
         {
             std::string lower = head;
@@ -422,7 +321,7 @@ namespace hsm::test
 
             std::string response =
                 "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " +
-                ws_detail::AcceptKey(options_.wrong_accept ? key + "x" : key) + "\r\n";
+                hsm::http::ws::AcceptKey(options_.wrong_accept ? key + "x" : key) + "\r\n";
             if (!options_.subprotocol.empty())
                 response += "Sec-WebSocket-Protocol: " + options_.subprotocol + "\r\n";
             response += "\r\n";

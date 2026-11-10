@@ -6413,6 +6413,12 @@ namespace
         Require(connection.Receive(text, 300, error) == hsm::http::WebSocketReceive::Timeout, "a ping must not surface as a message");
         Require(WaitUntil([&] { return server.Pongs() == 1; }), "the ping must be answered with a pong");
 
+        // A timeout far beyond what a clock can represent is clamped, not wrapped into the past:
+        // the call waits and returns the message instead of reporting an instant timeout.
+        Require(server.SendText("after-huge-timeout"), "the server must be able to push again");
+        Require(connection.Receive(text, (std::numeric_limits<int64_t>::max)(), error) == hsm::http::WebSocketReceive::Text && text == "after-huge-timeout",
+            "a huge timeout must be clamped, not overflow");
+
         Require(connection.SendText("still-alive", 5000, error), "the connection must stay usable after a timeout and a ping");
         Require(WaitUntil([&] { return server.Received().size() == 1; }), "the server must receive the message sent after the push");
     }
@@ -6433,6 +6439,11 @@ namespace
 
             Require(server.SendClose(1001), "the server must be able to start a close");
             Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a close frame must be reported as Closed");
+            // A finished connection is released: nothing more is written to it (no second close
+            // frame from Close or the destructor) and further use fails cleanly.
+            Require(!connection.IsOpen(), "a closed connection must not report itself open");
+            Require(!connection.SendText("late", 1000, error), "sending on a closed connection must fail");
+            Require(connection.Receive(text, 100, error) == hsm::http::WebSocketReceive::Error, "receiving on a closed connection must fail");
         }
         Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
 
@@ -6445,6 +6456,7 @@ namespace
         Require(
             result == hsm::http::WebSocketReceive::Closed || result == hsm::http::WebSocketReceive::Error,
             "a dropped connection must end the receive, not time out");
+        Require(!connection.IsOpen(), "a dropped connection must be released");
         Require(server.Upgrades() == 2, "both connections must have been upgraded");
     }
 

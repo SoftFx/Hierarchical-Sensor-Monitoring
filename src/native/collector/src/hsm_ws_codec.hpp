@@ -166,8 +166,11 @@ namespace hsm::http::ws
 
         for (const uint8_t byte : mask)
             frame.push_back(static_cast<char>(byte));
+
+        const size_t header_size = frame.size();
+        frame.resize(header_size + payload.size());
         for (size_t i = 0; i < payload.size(); ++i)
-            frame.push_back(static_cast<char>(static_cast<uint8_t>(payload[i]) ^ mask[i % 4]));
+            frame[header_size + i] = static_cast<char>(static_cast<uint8_t>(payload[i]) ^ mask[i % 4]);
         return frame;
     }
 
