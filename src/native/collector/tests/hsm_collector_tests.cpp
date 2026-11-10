@@ -6178,6 +6178,28 @@ namespace
         Require(request.body == body, "captured body must be the exact wire bytes sent");
     }
 
+    // #1653: the kept handle is retired once it is older than the connection lifetime, so the
+    // next request opens a new connection and resolves the server name again. A lifetime of
+    // 150 ms stands in for the real five minutes.
+    void NativeHttpTransportRetiresConnectionAfterItsLifetime()
+    {
+        hsm::test::HttpKeepAliveServer server;
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false, std::chrono::milliseconds(150));
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+        const std::vector<hsm::http::HttpHeader> headers{ hsm::http::HttpHeader{ "Content-Type", "application/json" } };
+
+        Require(transport.Post(url, "[1]", headers).IsSuccess(), "the first POST must succeed");
+        Require(transport.Post(url, "[2]", headers).IsSuccess(), "the second POST must succeed");
+        Require(server.Connections() == 1, "within its lifetime the handle and its connection are reused");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(400)); // well past the lifetime
+
+        Require(transport.Post(url, "[3]", headers).IsSuccess(), "the POST after the lifetime must succeed");
+        Require(server.Connections() == 2, "a handle past its lifetime must be retired: the next request opens a new connection");
+        Require(server.Requests().size() == 3, "all three requests must have reached the server");
+    }
+
     // #1653: sequential requests through one transport ride ONE kept connection. Before the fix
     // every request used a fresh easy handle, i.e. a fresh TCP (and, in production, TLS) handshake
     // per send. The trailing GET also proves the pooled handle is reset between requests: without
@@ -8443,6 +8465,7 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
             { "native_http_transport_reuses_connection", [](const std::string&) { NativeHttpTransportReusesConnection(); } },
+            { "native_http_transport_retires_connection_after_its_lifetime", [](const std::string&) { NativeHttpTransportRetiresConnectionAfterItsLifetime(); } },
             { "native_http_transport_concurrent_posts_then_reuse", [](const std::string&) { NativeHttpTransportConcurrentPostsThenReuse(); } },
             { "native_http_transport_cancelled_send_never_leaves", [](const std::string&) { NativeHttpTransportCancelledSendNeverLeaves(); } },
             { "native_http_transport_recovers_after_timeout", [](const std::string&) { NativeHttpTransportRecoversAfterTimeout(); } },

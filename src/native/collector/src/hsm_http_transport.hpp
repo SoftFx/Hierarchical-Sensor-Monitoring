@@ -49,7 +49,9 @@ namespace hsm::http
     class HttpTransport
     {
     public:
-        HttpTransport(int64_t timeout_ms, bool verify_peer);
+        // `connection_lifetime` is the age at which the kept handle is retired; a parameter so a
+        // test can make it short enough to see the retirement happen.
+        HttpTransport(int64_t timeout_ms, bool verify_peer, std::chrono::milliseconds connection_lifetime = kConnectionLifetime);
         ~HttpTransport();
 
         HttpTransport(const HttpTransport&) = delete;
@@ -97,6 +99,7 @@ namespace hsm::http
 
         int64_t timeout_ms_;
         bool verify_peer_;
+        std::chrono::milliseconds connection_lifetime_;
         std::atomic<bool> cancelled_{ false };
         std::mutex idle_mutex_;
         Handle idle_; // guarded by idle_mutex_; curl == nullptr when no handle is kept
