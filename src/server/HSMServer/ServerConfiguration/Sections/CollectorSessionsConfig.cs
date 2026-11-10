@@ -21,9 +21,9 @@ namespace HSMServer.ServerConfiguration
         private const int MaxFrameBytesCeiling = 64 * 1024 * 1024;
 
         // The server-wide cap on concurrently open sessions. An upgrade over the cap is
-        // refused with 503 and the collector stays on HTTP. Zero turns sessions off: the
-        // endpoint answers 404 and HTTP responses stop advertising the capability, so no
-        // collector ever tries.
+        // refused with 503: that collector cannot send until a slot is free, so the limit is a
+        // guard against a runaway fleet, not something to run close to. Zero turns sessions
+        // off: the endpoint answers 404.
         public int MaxSessions { get; set; } = DefaultMaxSessions;
 
         // Announced to the collector in the hello frame: it sends an application ping after

@@ -31,7 +31,6 @@ namespace HSMServer.Core.Tests.SensorApi
     public class CollectorSessionTests : MonitoringCoreTestsBase<CollectorSessionFixture>
     {
         private const string Subprotocol = "hsm.sensors.v1";
-        private const string DiscoveryHeader = "X-Hsm-Session";
         private const string ClientName = "session-tests";
 
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -118,36 +117,12 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         [Fact]
-        public async Task SessionsOn_EverySensorApiResponseAdvertisesThem()
-        {
-            await using var host = await StartHost();
-
-            var stored = await PostAsync(host, "list", $"[{IntValue("discovery/int", 1)}]", _key);
-            var refused = await PostAsync(host, "list", $"[{IntValue("discovery/int", 1)}]", Guid.NewGuid().ToString());
-            var anonymous = await PostAsync(host, "list", "[]", key: null);
-
-            Assert.Equal(HttpStatusCode.OK, stored.Status);
-            Assert.Equal(Subprotocol, stored.SessionHeader);
-
-            // A refusal is an answer of this server too: the capability does not depend on the key.
-            Assert.Equal(HttpStatusCode.NotAcceptable, refused.Status);
-            Assert.Equal(Subprotocol, refused.SessionHeader);
-
-            // No key header, no Sensor API client to tell.
-            Assert.Null(anonymous.SessionHeader);
-        }
-
-        [Fact]
-        public async Task SessionsOff_NoAdvertisingAndNoEndpoint()
+        public async Task SessionsOff_NoEndpoint_AndTheHttpRoutesStillWork()
         {
             await using var host = await StartHost(config => config.MaxSessions = 0);
 
-            var stored = await PostAsync(host, "list", $"[{IntValue("off/int", 1)}]", _key);
-
-            Assert.Equal(HttpStatusCode.OK, stored.Status);
-            Assert.Null(stored.SessionHeader);
-
             Assert.Equal(HttpStatusCode.NotFound, await RefusedUpgradeStatus(host, _key, Subprotocol));
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "list", $"[{IntValue("off/int", 1)}]", _key)).Status);
         }
 
         [Fact]
@@ -802,7 +777,7 @@ namespace HSMServer.Core.Tests.SensorApi
             }
         }
 
-        private static async Task<(HttpStatusCode Status, string Body, string SessionHeader)> PostAsync(SensorApiTestHost host, string route, string body, string key)
+        private static async Task<(HttpStatusCode Status, string Body)> PostAsync(SensorApiTestHost host, string route, string body, string key)
         {
             using var http = new HttpClient();
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, route))
@@ -817,9 +792,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             using var response = await http.SendAsync(request, Deadline());
 
-            var header = response.Headers.TryGetValues(DiscoveryHeader, out var values) ? values.Single() : null;
-
-            return (response.StatusCode, await response.Content.ReadAsStringAsync(), header);
+            return (response.StatusCode, await response.Content.ReadAsStringAsync());
         }
 
         // Sessions opened by hand over plain sockets: the upgrade request, then the bytes up

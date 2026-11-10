@@ -487,9 +487,9 @@ namespace HSMServer.SensorApi.Sessions
             await session.CloseAsync(status, reason);
         }
 
-        // The refused collector keeps working over HTTP, so nothing else would tell the
-        // operator that the cap is too low. At most one line a minute: a fleet over the cap
-        // retries.
+        // A refused collector cannot deliver until a slot is free: the session is its
+        // transport, and nothing falls back to the HTTP routes. So this must reach the
+        // operator. At most one line a minute: a fleet over the cap retries.
         private void WarnCapReached(PublicApiRequestInfo caller)
         {
             var now = _time.GetUtcNow().UtcTicks;
@@ -499,7 +499,7 @@ namespace HSMServer.SensorApi.Sessions
                 return;
 
             _logger.Warn($"The collector session limit is reached (CollectorSessions.MaxSessions = {_config.MaxSessions}): the upgrade of {caller.TelemetryPath} from {caller.RemoteIP} " +
-                         "is refused with 503 and it stays on HTTP. Raise the limit if this server has more collectors than that.");
+                         "is refused with 503 and it cannot send until a session ends. Raise the limit: this server has more collectors than that.");
         }
 
         private void CloseAllForShutdown()

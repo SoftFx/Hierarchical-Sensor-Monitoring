@@ -1,4 +1,3 @@
-using HSMSensorDataObjects;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Buffers;
@@ -21,12 +20,6 @@ namespace HSMServer.SensorApi.Sessions
     internal static class SessionProtocol
     {
         public const string Subprotocol = "hsm.sensors.v1";
-
-        // On every HTTP Sensor API response while sessions are on; its value is the
-        // subprotocol a collector may ask for.
-        public const string DiscoveryHeader = "X-Hsm-Session";
-
-        public const string KeyHeader = nameof(Header.Key);
 
         // Facts a collector states about itself on the upgrade request, for the registry.
         public const string AgentVersionHeader = "X-Agent-Version";
