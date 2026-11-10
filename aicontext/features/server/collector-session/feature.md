@@ -20,6 +20,7 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 - **Access is re-checked for every request frame and every ping**, as it is for every HTTP request: the key and its product are looked up again and the key must still be valid for `CanSendSensorData`. Losing it closes the session with `1008`, also for a session that only keeps itself alive. A request frame counts as a use of the key (last-used time and address), a ping does not. There is no `406` ack: a key that cannot send does not get a session in the first place.
 - **A frame the server cannot acknowledge is refused, not dropped**: a request without an `id` closes the session with `1002`. Dropping it would be silent data loss.
 - **The cap holds under a race.** A slot is reserved before the upgrade is accepted and released when the session ends, whatever way it ends.
+- **Reaching the cap is visible.** The refused collector stays on HTTP and works, so the server logs a `Warn` naming the limit, at most once a minute.
 - **A collector going away is not a server error.** A dropped connection, a close from the collector and a silent collector end the session at `Debug` level; protocol violations are logged at `Warn`; only a failure inside the server is an `Error`.
 - **Silence is the collector's, never the server's.** The three-heartbeat limit runs while the server waits for a frame or for the collector to take one, and starts again with every read that brought bytes, so a large frame on a slow link is not silence. A frame still has to be complete within ten silence limits of its first byte (15 minutes by default): a frame that never ends would otherwise hold a slot and never reach the access check. The limit does not run while the server itself is storing a batch.
 - **Shutdown does not wait for collectors, and does not lose an ack.** On `ApplicationStopping` every session gets a close frame (`1001`); a peer that has not answered in 3 seconds is cut off. New upgrades are refused with `503` from that moment. A session that is storing a batch at that moment sends the ack first and the close after it, so a stored batch is not sent again, provided the store finishes within those 3 seconds; past them the session is cut off like any other and the batch may arrive twice (delivery is at-least-once). A frame that arrives after the close went out is neither stored nor answered.
@@ -137,5 +138,7 @@ Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSoc
 ## Known Issues / Limitations
 
 - The registry is not shown anywhere in the UI.
+- `Open sessions` has no default alert for approaching the cap; the `Warn` above and the sensor's value are the signals.
+- A connection that dies without a close keeps its slot until the silence limit (90 seconds by default). After a network event that drops many connections at once, collectors that reconnect within that time can be refused while the cap is not really reached; they continue over HTTP and try again later.
 - `Open sessions` is a 5-minute sample, not a live gauge.
 - `HeartbeatSeconds`, `MaxFrameBytes` and `MaxSessions` are read at startup; a change needs a restart.

@@ -63,6 +63,7 @@ namespace HSMServer.SensorApi.Sessions
         private readonly TimeProvider _time;
 
         private volatile bool _stopping;
+        private long _capWarnedAtTicks;
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
@@ -113,9 +114,17 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            if (_stopping || !_registry.TryReserve(_config.MaxSessions))
+            if (_stopping)
             {
-                await Refuse(context, StatusCodes.Status503ServiceUnavailable, _stopping ? ShutdownReason : "The session limit of this server is reached");
+                await Refuse(context, StatusCodes.Status503ServiceUnavailable, ShutdownReason);
+                return;
+            }
+
+            if (!_registry.TryReserve(_config.MaxSessions))
+            {
+                WarnCapReached(caller);
+
+                await Refuse(context, StatusCodes.Status503ServiceUnavailable, "The session limit of this server is reached");
                 return;
             }
 
@@ -476,6 +485,21 @@ namespace HSMServer.SensorApi.Sessions
             _logger.Warn($"Collector session {session.Id} ({session.Caller.TelemetryPath}) is closed with {(int)status}: {reason}");
 
             await session.CloseAsync(status, reason);
+        }
+
+        // The refused collector keeps working over HTTP, so nothing else would tell the
+        // operator that the cap is too low. At most one line a minute: a fleet over the cap
+        // retries.
+        private void WarnCapReached(PublicApiRequestInfo caller)
+        {
+            var now = _time.GetUtcNow().UtcTicks;
+            var last = Interlocked.Read(ref _capWarnedAtTicks);
+
+            if (now - last < TimeSpan.TicksPerMinute || Interlocked.CompareExchange(ref _capWarnedAtTicks, now, last) != last)
+                return;
+
+            _logger.Warn($"The collector session limit is reached (CollectorSessions.MaxSessions = {_config.MaxSessions}): the upgrade of {caller.TelemetryPath} from {caller.RemoteIP} " +
+                         "is refused with 503 and it stays on HTTP. Raise the limit if this server has more collectors than that.");
         }
 
         private void CloseAllForShutdown()
