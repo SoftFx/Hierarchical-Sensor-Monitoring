@@ -2072,9 +2072,15 @@ namespace HSMServer.Core.Cache
             // this arm is NOT returned: the deletion proceeds, and whatever
             // reference that policy kept degrades to the documented backstop
             // — fail-open lookup (#1405) plus the throttled missing-id
-            // report. The soft error is logged ONCE, by TryUpdateSensor's
-            // #1563 warn (this caller passes no failure collector), so it is
-            // not logged a second time here (#1563 review).
+            // report. The soft error is WARNED once by TryUpdateSensor's
+            // #1563 line (this caller passes no failure collector); this
+            // detach-specific Debug line carries the scheduleId context that
+            // generic warn cannot — without it, the log cannot tell a detach
+            // entry apart from a TryAddOrUpdateSensor or chat-removal update
+            // over the same sensor (#1563 review).
+            if (!string.IsNullOrEmpty(error))
+                _logger.Debug($"Detach of schedule {scheduleId} from sensor {sensorId}: update applied with policy errors: {error}");
+
             return null;
         }
 

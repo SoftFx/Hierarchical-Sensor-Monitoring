@@ -75,12 +75,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var value = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue { Path = path, Time = DateTime.UtcNow };
             await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, value);
-            await Task.Delay(300);
 
-            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out BaseSensorModel sensor));
-            Assert.Null(((StringValue)sensor.LastValue).Value);
+            // The value lands through the product update queue; a fixed
+            // sleep races that on a loaded CI agent (all three tests would
+            // fail HERE, in setup, not on the behavior they pin). Poll for
+            // the sensor and its last value until TestWait's deadline.
+            await TestWait.UntilAsync(
+                () => _valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out BaseSensorModel sensor) &&
+                     sensor.LastValue is not null,
+                $"sensor '{path}' did not process the null string value");
 
-            return sensor;
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out BaseSensorModel created));
+            Assert.Null(((StringValue)created.LastValue).Value);
+
+            return created;
         }
 
         // The issue's own alert shape: Length > 3 on a string sensor.
@@ -128,10 +136,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(result.IsOk, result.Error);
 
             // The policy lives in memory, marked failed through the sensor's
-            // error status naming it.
+            // error status naming it by its RULE — the user-facing text, not
+            // the raw exception message (#1563 review).
             Assert.Single(sensor.Policies, p => p.Id == policyId);
             Assert.True(sensor.Policies.SensorResult.HasError);
-            Assert.Contains(policyId.ToString(), sensor.Policies.SensorResult.Message);
+            Assert.Contains("could not be evaluated", sensor.Policies.SensorResult.Message);
 
             // The DB row was written AFTER the apply: the persisted entity
             // carries the policy id (the sensor-creation write could not).
@@ -161,12 +170,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(success, error);
 
             // The evaluation failure reaches the CALLER as a warning naming
-            // the policy — the review's P2: before the fix the template path
-            // logged "partially applied" at Error (wrong — every policy was
-            // applied) and the caller heard nothing.
+            // the policy by its RULE — the review's P2: before the fix the
+            // template path logged "partially applied" at Error (wrong —
+            // every policy was applied) and the caller heard nothing. The
+            // reason is the user-facing text, never the raw exception
+            // message (#1563 review).
             var warning = Assert.Single(warnings);
             Assert.Contains(path, warning.SensorPath);
-            Assert.Contains("Failed to evaluate alert", warning.Reason);
+            Assert.Contains("could not be evaluated", warning.Reason);
 
             // The journal record describes the ACTUAL outcome — the evaluator
             // threw; the policy was applied, not skipped. (The apply's own

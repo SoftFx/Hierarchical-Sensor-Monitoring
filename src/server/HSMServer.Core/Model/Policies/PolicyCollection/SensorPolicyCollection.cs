@@ -289,13 +289,24 @@ namespace HSMServer.Core.Model.Policies
                     }
                     catch (Exception ex)
                     {
-                        var message = $"Failed to evaluate alert {policy.Id} on sensor {_sensor?.Id}: {ex.Message}";
+                        // #1563 review: the message split. The raw ex.Message
+                        // ("Object reference not set to an instance of an
+                        // object.") is operator context — it stays in the log
+                        // warn below, with the exception attached. Every
+                        // user-facing consumer of this failure (the sensor's
+                        // Error status via SetEvaluationError, the aggregate
+                        // update error, the template warning, the journal
+                        // record) gets a text a user can act on instead: the
+                        // alert named by its RULE (Condition + actions, the
+                        // same rendering the journal uses for policy edits),
+                        // not by a GUID plus a runtime detail.
+                        var message = $"Alert '{policy}' could not be evaluated for the current value";
 
                         // Warn on the TRANSITION into the failure only
                         // (HasEvaluationError): the marking below repeats on
                         // every pass, and a hot sensor would flood the log.
                         if (!policy.HasEvaluationError)
-                            _logger.Warn(ex, message);
+                            _logger.Warn(ex, $"Failed to evaluate alert {policy.Id} on sensor {_sensor?.Id}: {ex.Message}");
 
                         policy.SetEvaluationError(message);
                         _evaluationErrors.Add(message);

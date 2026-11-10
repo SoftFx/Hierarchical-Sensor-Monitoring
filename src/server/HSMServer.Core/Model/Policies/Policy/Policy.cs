@@ -332,6 +332,9 @@ namespace HSMServer.Core.Model.Policies
         // through the sensor's error status (no alert/notification entry is
         // fabricated — the broken policy adds nothing to PolicyResult), and
         // the same message names it in the collection's aggregate error.
+        // The message is the USER-FACING line — the alert named by its rule,
+        // never the raw exception text, which stays in the collection's
+        // transition warn (#1563 review).
         // HasEvaluationError gates the collection's WARN to the transition
         // into the failure (RebuildState/ResetState clear it on every
         // successful evaluation or re-save), so a hot sensor with a broken

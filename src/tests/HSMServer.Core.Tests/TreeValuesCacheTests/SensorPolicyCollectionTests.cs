@@ -468,10 +468,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // The failure is reported like a rejected update: named in the
             // aggregate error, and surfaced through the sensor error status.
+            // #1563 review: both are USER-FACING texts — the alert named by
+            // its rule ("If Length > 3 …"), never the raw exception message
+            // (which stays in the collection's warn).
             Assert.False(result);
-            Assert.Contains(throwingId.ToString(), updateError);
+            Assert.Contains("could not be evaluated", updateError);
+            Assert.Contains("Length > 3", updateError);
             Assert.True(sensor.Policies.SensorResult.HasError);
-            Assert.Contains(throwingId.ToString(), sensor.Policies.SensorResult.Message);
+            Assert.Contains("could not be evaluated", sensor.Policies.SensorResult.Message);
         }
 
         [Fact]
@@ -544,13 +548,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // A soft failure still reports through the aggregate error...
             Assert.False(result);
-            Assert.Contains(throwingId.ToString(), error);
+            Assert.Contains("could not be evaluated", error);
 
             // ...and through the collector, with the kind that says
             // "applied but not evaluable", never "not applied".
             var failure = Assert.Single(failures);
             Assert.Equal(PolicyUpdateFailureKind.EvaluationError, failure.Kind);
-            Assert.Contains(throwingId.ToString(), failure.Reason);
+            Assert.Contains("could not be evaluated", failure.Reason);
         }
 
         [Fact]
