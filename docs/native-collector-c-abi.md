@@ -165,6 +165,7 @@ Version history:
   60 s is not reused, TCP keep-alive is on, and a handle whose transfer failed is destroyed rather
   than kept. A send started while the transport is cancelled is refused before it touches the
   connection. Pinned by `native_http_transport_reuses_connection`,
+  `native_http_transport_retires_connection_after_its_lifetime`,
   `native_http_transport_concurrent_posts_then_reuse`,
   `native_http_transport_cancelled_send_never_leaves`,
   `native_http_transport_recovers_after_timeout` and

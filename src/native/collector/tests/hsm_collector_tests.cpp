@@ -6179,12 +6179,13 @@ namespace
     }
 
     // #1653: the kept handle is retired once it is older than the connection lifetime, so the
-    // next request opens a new connection and resolves the server name again. A lifetime of
-    // 150 ms stands in for the real five minutes.
+    // next request opens a new connection and resolves the server name again. A lifetime of two
+    // seconds stands in for the real five minutes: long next to two loopback requests even on a
+    // slow or instrumented lane, so the first half of the test cannot outlive it by accident.
     void NativeHttpTransportRetiresConnectionAfterItsLifetime()
     {
         hsm::test::HttpKeepAliveServer server;
-        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false, std::chrono::milliseconds(150));
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false, std::chrono::milliseconds(2000));
 
         const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
         const std::vector<hsm::http::HttpHeader> headers{ hsm::http::HttpHeader{ "Content-Type", "application/json" } };
@@ -6193,7 +6194,7 @@ namespace
         Require(transport.Post(url, "[2]", headers).IsSuccess(), "the second POST must succeed");
         Require(server.Connections() == 1, "within its lifetime the handle and its connection are reused");
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(400)); // well past the lifetime
+        std::this_thread::sleep_for(std::chrono::milliseconds(2500)); // past the lifetime
 
         Require(transport.Post(url, "[3]", headers).IsSuccess(), "the POST after the lifetime must succeed");
         Require(server.Connections() == 2, "a handle past its lifetime must be retired: the next request opens a new connection");
