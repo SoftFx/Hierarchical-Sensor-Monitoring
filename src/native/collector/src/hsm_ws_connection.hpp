@@ -64,6 +64,13 @@ namespace hsm::http
         // Longest timeout honoured; larger values are clamped (and cannot overflow the clock).
         static constexpr int64_t kMaxTimeoutMs = 24LL * 60 * 60 * 1000;
         static constexpr int64_t kWaitSliceMs = 100;
+        // Longest Close() linger honoured.
+        static constexpr int64_t kMaxLingerMs = 5000;
+        // Interim 1xx responses tolerated in front of the 101.
+        static constexpr int kMaxInterimResponses = 4;
+        // The receive buffer gives its memory back once it holds less than a quarter of this while
+        // its capacity exceeds it.
+        static constexpr size_t kShrinkAboveBytes = 256u * 1024u;
 
         explicit WebSocketConnection(bool verify_peer);
         ~WebSocketConnection();
@@ -73,8 +80,8 @@ namespace hsm::http
 
         // `url` is ws:// or wss://. `headers` are added to the upgrade request (a name or value
         // containing CR or LF is refused). `subprotocol` (may be empty) is offered in
-        // Sec-WebSocket-Protocol; when it is non-empty the server must select exactly it, otherwise
-        // the connection is closed and the result is a failure. `timeout_ms` bounds the whole open:
+        // Sec-WebSocket-Protocol; the server must select exactly what was offered (nothing, when
+        // nothing was), otherwise the connection is closed and the result is a failure. `timeout_ms` bounds the whole open:
         // connect, TLS and the upgrade exchange.
         WebSocketOpenResult Open(
             const std::string& url,
@@ -89,12 +96,21 @@ namespace hsm::http
         // Waits up to `timeout_ms` for one complete text message. Partial reads and fragmented
         // messages are assembled across calls, so a Timeout loses nothing. Pings are answered and
         // pongs ignored without surfacing. A binary message is an Error: the session is text only.
+        // Answering a ping is a complete frame write, so it can extend the call by up to one
+        // second beyond `timeout_ms` when the socket is not writable, and a pong that cannot be
+        // written in that second ends the connection (a half-written frame would corrupt it).
         WebSocketReceive Receive(std::string& text, int64_t timeout_ms, std::string& error);
 
-        // Sends a close frame (best effort, one non-blocking write) and releases the connection.
-        // Idempotent; after Receive returned Closed or Error there is nothing left to close, so
-        // no second close frame is ever written.
-        void Close();
+        // Sends a close frame and releases the connection. Idempotent; after Receive returned
+        // Closed or Error there is nothing left to close, so no second close frame is written.
+        //
+        // linger_ms == 0 (the default, and what the destructor does): one non-blocking write, then
+        // release. Never waits, but if inbound data is still unread the OS may reset the
+        // connection and the server sees an abort instead of a normal closure.
+        // linger_ms > 0: the orderly close for a planned stop. Waits up to that long (capped at
+        // kMaxLingerMs) for the close frame to go out and for the peer's own close to come back,
+        // dropping anything else that arrives.
+        void Close(int64_t linger_ms = 0);
 
         void Cancel();
 

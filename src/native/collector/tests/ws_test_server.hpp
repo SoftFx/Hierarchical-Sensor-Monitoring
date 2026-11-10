@@ -57,6 +57,10 @@ namespace hsm::test
             bool echo = true;
             // Upgrade with a Sec-WebSocket-Accept that does not match the client's key.
             bool wrong_accept = false;
+            // Send this interim response (e.g. 103) before the final one; 0 = none.
+            int interim_status = 0;
+            // Leave `Connection: Upgrade` out of the 101.
+            bool omit_connection_header = false;
         };
 
         WebSocketTestServer() : WebSocketTestServer(Options{}) {}
@@ -124,6 +128,13 @@ namespace hsm::test
         {
             std::lock_guard<std::mutex> guard(mutex_);
             return handshake_head_;
+        }
+
+        // Status codes of the close frames received from clients, in order (0 = no code).
+        std::vector<int> CloseCodes() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return close_codes_;
         }
 
         // Text messages received so far, in order.
@@ -319,8 +330,11 @@ namespace hsm::test
                 return false;
             }
 
-            std::string response =
-                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " +
+            std::string response;
+            if (options_.interim_status != 0)
+                response += "HTTP/1.1 " + std::to_string(options_.interim_status) + " Interim\r\nLink: </style.css>; rel=preload\r\n\r\n";
+            response += std::string("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n") +
+                (options_.omit_connection_header ? "" : "Connection: Upgrade\r\n") + "Sec-WebSocket-Accept: " +
                 hsm::http::ws::AcceptKey(options_.wrong_accept ? key + "x" : key) + "\r\n";
             if (!options_.subprotocol.empty())
                 response += "Sec-WebSocket-Protocol: " + options_.subprotocol + "\r\n";
@@ -380,8 +394,14 @@ namespace hsm::test
                 for (size_t i = 0; i < payload.size(); ++i)
                     payload[i] = static_cast<char>(payload[i] ^ mask[i % 4]);
 
-                if (opcode == 0x8) // close: complete the handshake and end
+                if (opcode == 0x8) // close: record the code, complete the handshake and end
                 {
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        close_codes_.push_back(payload.size() >= 2
+                                ? (static_cast<int>(static_cast<uint8_t>(payload[0])) << 8) | static_cast<uint8_t>(payload[1])
+                                : 0);
+                    }
                     SendFrame(0x8, /*fin=*/true, payload.substr(0, 2));
                     return;
                 }
@@ -419,5 +439,6 @@ namespace hsm::test
         mutable std::mutex mutex_;
         std::string handshake_head_;        // guarded by mutex_
         std::vector<std::string> received_; // guarded by mutex_
+        std::vector<int> close_codes_;      // guarded by mutex_
     };
 } // namespace hsm::test

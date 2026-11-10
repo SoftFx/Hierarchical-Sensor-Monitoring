@@ -6363,6 +6363,47 @@ namespace
         Contains(head, "Sec-WebSocket-Protocol: hsm.sensors.v1");
     }
 
+    // An intermediary may answer with interim responses before the 101; and the open timeout bounds
+    // the open only: a connection that has been idle for longer than it took to open still works.
+    void NativeWsToleratesInterimResponseAndOutlivesOpenTimeout()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.interim_status = 103;
+        hsm::test::WebSocketTestServer server(options);
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        const auto opened = connection.Open(WsUrl(server), {}, "", /*timeout_ms=*/400);
+        Require(opened.ok, ("an interim response before the 101 must not fail the open: " + opened.error).c_str());
+        Require(opened.status_code == 101, "the reported status must be the final one");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(700)); // well past the open timeout
+
+        std::string error;
+        std::string text;
+        Require(connection.SendText("after-idle", 5000, error), ("a send after the open timeout elapsed must succeed: " + error).c_str());
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == "echo:after-idle",
+            ("a receive after the open timeout elapsed must succeed: " + error).c_str());
+    }
+
+    // The orderly close for a planned stop: with a linger the close frame reaches the server as a
+    // normal closure (1000) even though a pushed message was still unread on the client.
+    void NativeWsLingeringCloseReachesServer()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the connection");
+
+        Require(server.SendText("never-read-by-the-client"), "the server must be able to push");
+        connection.Close(/*linger_ms=*/2000);
+
+        Require(!connection.IsOpen(), "Close must release the connection");
+        Require(WaitUntil([&] { return server.CloseCodes().size() == 1; }), "the server must receive the close frame");
+        Require(server.CloseCodes()[0] == 1000, "the close must be a normal closure");
+    }
+
     // Text messages go both ways, small and large. 300 KB uses the 64-bit length form on the way
     // out and arrives back in many partial reads, which Receive must assemble into one message.
     void NativeWsRoundTripsTextMessages()
@@ -6491,6 +6532,24 @@ namespace
             const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
             Require(!opened.ok, "an upgrade with a wrong accept digest must fail");
             Contains(opened.error, "Sec-WebSocket-Accept");
+        }
+        {
+            // A subprotocol nobody offered means the two sides disagree on what the frames mean.
+            hsm::test::WebSocketTestServer::Options options;
+            options.subprotocol = "other.v2";
+            hsm::test::WebSocketTestServer server(options);
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
+            Require(!opened.ok, "an unsolicited subprotocol must fail the open");
+            Contains(opened.error, "not offered");
+        }
+        {
+            // A 101 without Connection: Upgrade is not a completed upgrade (RFC 6455 4.1).
+            hsm::test::WebSocketTestServer::Options options;
+            options.omit_connection_header = true;
+            hsm::test::WebSocketTestServer server(options);
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            Require(!connection.Open(WsUrl(server), {}, "", 5000).ok, "a 101 without Connection: Upgrade must fail the open");
         }
         {
             // A header value with a line break could smuggle extra header lines into the upgrade.
@@ -8815,6 +8874,8 @@ namespace
             { "native_http_transport_recovers_after_timeout", [](const std::string&) { NativeHttpTransportRecoversAfterTimeout(); } },
             { "native_http_transport_survives_server_dropping_kept_connection", [](const std::string&) { NativeHttpTransportSurvivesServerDroppingKeptConnection(); } },
             { "native_ws_opens_with_headers_and_subprotocol", [](const std::string&) { NativeWsOpensWithHeadersAndSubprotocol(); } },
+            { "native_ws_tolerates_interim_response_and_outlives_open_timeout", [](const std::string&) { NativeWsToleratesInterimResponseAndOutlivesOpenTimeout(); } },
+            { "native_ws_lingering_close_reaches_server", [](const std::string&) { NativeWsLingeringCloseReachesServer(); } },
             { "native_ws_round_trips_text_messages", [](const std::string&) { NativeWsRoundTripsTextMessages(); } },
             { "native_ws_receives_server_push_while_idle", [](const std::string&) { NativeWsReceivesServerPushWhileIdle(); } },
             { "native_ws_detects_server_close_and_drop", [](const std::string&) { NativeWsDetectsServerCloseAndDrop(); } },

@@ -294,6 +294,12 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_opens_with_headers_and_subprotocol
         COMMAND hsm_collector_tests native_ws_opens_with_headers_and_subprotocol
     )
+    add_test(NAME native_ws_tolerates_interim_response_and_outlives_open_timeout
+        COMMAND hsm_collector_tests native_ws_tolerates_interim_response_and_outlives_open_timeout
+    )
+    add_test(NAME native_ws_lingering_close_reaches_server
+        COMMAND hsm_collector_tests native_ws_lingering_close_reaches_server
+    )
     add_test(NAME native_ws_round_trips_text_messages
         COMMAND hsm_collector_tests native_ws_round_trips_text_messages
     )

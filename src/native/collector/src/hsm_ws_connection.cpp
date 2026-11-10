@@ -26,7 +26,36 @@ namespace hsm::http
     namespace
     {
         constexpr const char* kCancelled = "cancelled";
-        constexpr const char* kInternalError = "internal error (out of memory?)";
+        // 14 characters: fits every standard library's small-string buffer, so assigning it in a
+        // catch handler cannot allocate and throw again.
+        constexpr const char* kInternalError = "internal error";
+
+        void SetInternalError(std::string& error) noexcept
+        {
+            try
+            {
+                error.assign(kInternalError);
+            }
+            catch (...)
+            {
+            }
+        }
+
+        // Status code of a response head ("HTTP/1.1 101 Switching Protocols\r\n...").
+        bool ParseStatusLine(const std::string& head, long& status)
+        {
+            const size_t space = head.find(' ');
+            if (head.compare(0, 5, "HTTP/") != 0 || space == std::string::npos || head.size() < space + 4)
+                return false;
+            status = 0;
+            for (size_t i = space + 1; i < space + 4; ++i)
+            {
+                if (head[i] < '0' || head[i] > '9')
+                    return false;
+                status = status * 10 + (head[i] - '0');
+            }
+            return true;
+        }
 
         std::string ToLower(std::string value)
         {
@@ -160,7 +189,7 @@ namespace hsm::http
 
     WebSocketConnection::~WebSocketConnection()
     {
-        Close();
+        Close(0);
     }
 
     void WebSocketConnection::Cancel()
@@ -262,12 +291,14 @@ namespace hsm::http
 
             size_t sent = 0;
             const CURLcode rc = curl_easy_send(curl, data.data() + offset, data.size() - offset, &sent);
-            if (rc == CURLE_OK)
+            if (rc == CURLE_OK && sent > 0)
             {
                 offset += sent;
                 continue;
             }
-            if (rc != CURLE_AGAIN)
+            // CURLE_OK with nothing written is treated like CURLE_AGAIN: wait for the socket under
+            // the deadline instead of looping without one.
+            if (rc != CURLE_AGAIN && rc != CURLE_OK)
             {
                 error = curl_easy_strerror(rc);
                 return Io::Error;
@@ -302,6 +333,10 @@ namespace hsm::http
             inbuf_.erase(0, inpos_);
             inpos_ = 0;
         }
+        // erase keeps the capacity: without this one large message would pin megabytes for the
+        // life of a connection that otherwise carries small frames.
+        if (inbuf_.capacity() > kShrinkAboveBytes && inbuf_.size() < kShrinkAboveBytes / 4)
+            inbuf_.shrink_to_fit();
 
         CURL* curl = static_cast<CURL*>(curl_);
         for (;;)
@@ -385,6 +420,7 @@ namespace hsm::http
                 }
             }
 
+            // At least 1 ms: libcurl reads 0 as "no timeout".
             const int64_t open_timeout_ms = std::min<int64_t>(std::max<int64_t>(timeout_ms, 1), kMaxTimeoutMs);
             const Deadline deadline = DeadlineIn(open_timeout_ms);
 
@@ -412,6 +448,7 @@ namespace hsm::http
             // Through an HTTP proxy the connection must be a CONNECT tunnel, or the frames would be
             // interpreted by the proxy.
             curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1L);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(open_timeout_ms));
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(open_timeout_ms));
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer_ ? 1L : 0L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_peer_ ? 2L : 0L);
@@ -429,6 +466,10 @@ namespace hsm::http
                 Release();
                 return result;
             }
+            // The transfer timeout bounded the connect above. It must not stay armed on a handle
+            // that lives for hours: a filter that consulted it in curl_easy_send / curl_easy_recv
+            // would fail a healthy idle connection once the open timeout had elapsed.
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 0L);
 
             std::array<uint8_t, 16> key_bytes{};
             for (size_t i = 0; i < key_bytes.size(); i += 4)
@@ -457,48 +498,58 @@ namespace hsm::http
                 return result;
             }
 
-            size_t head_end = std::string::npos;
-            while ((head_end = inbuf_.find("\r\n\r\n")) == std::string::npos)
+            // Read response heads until a final one. An intermediary may put interim responses
+            // (100 Continue, 103 Early Hints) in front of the 101.
+            std::string head;
+            long status = 0;
+            for (int interim = 0;; ++interim)
             {
-                if (inbuf_.size() > kMaxHandshakeBytes)
+                size_t head_end = std::string::npos;
+                while ((head_end = inbuf_.find("\r\n\r\n", inpos_)) == std::string::npos)
+                {
+                    if (inbuf_.size() - inpos_ > kMaxHandshakeBytes)
+                    {
+                        result.error = "the upgrade response is too large";
+                        Release();
+                        return result;
+                    }
+                    const Io io = ReadMore(deadline, result.error);
+                    if (io != Io::Ok)
+                    {
+                        if (io == Io::Timeout)
+                            result.error = "the upgrade timed out";
+                        else if (io == Io::Closed)
+                            result.error = "the server closed the connection during the upgrade";
+                        Release();
+                        return result;
+                    }
+                }
+                // The loop above stops as soon as the terminator is in the buffer, which can be up
+                // to one read past the limit: bound the head itself.
+                if (head_end + 4 - inpos_ > kMaxHandshakeBytes)
                 {
                     result.error = "the upgrade response is too large";
                     Release();
                     return result;
                 }
-                const Io io = ReadMore(deadline, result.error);
-                if (io != Io::Ok)
+
+                head = inbuf_.substr(inpos_, head_end + 4 - inpos_);
+                inpos_ = head_end + 4; // what follows is the next head or already frame data
+
+                if (!ParseStatusLine(head, status))
                 {
-                    if (io == Io::Timeout)
-                        result.error = "the upgrade timed out";
-                    else if (io == Io::Closed)
-                        result.error = "the server closed the connection during the upgrade";
+                    result.error = "the upgrade response is not HTTP";
                     Release();
                     return result;
                 }
-            }
-
-            const std::string head = inbuf_.substr(0, head_end + 4);
-            inpos_ = head_end + 4; // anything after the head is already frame data
-
-            // Status line: "HTTP/1.1 101 Switching Protocols".
-            const size_t space = head.find(' ');
-            if (head.compare(0, 5, "HTTP/") != 0 || space == std::string::npos || head.size() < space + 4)
-            {
-                result.error = "the upgrade response is not HTTP";
-                Release();
-                return result;
-            }
-            long status = 0;
-            for (size_t i = space + 1; i < space + 4; ++i)
-            {
-                if (head[i] < '0' || head[i] > '9')
+                if (status == 101 || status < 100 || status >= 200)
+                    break;
+                if (interim >= kMaxInterimResponses)
                 {
-                    result.error = "the upgrade response has no status code";
+                    result.error = "too many interim responses before the upgrade";
                     Release();
                     return result;
                 }
-                status = status * 10 + (head[i] - '0');
             }
             result.status_code = status;
             result.subprotocol = HeaderValue(head, "sec-websocket-protocol");
@@ -509,7 +560,9 @@ namespace hsm::http
                 Release();
                 return result;
             }
-            if (ToLower(HeaderValue(head, "upgrade")) != "websocket")
+            // RFC 6455 4.1: the response must carry Upgrade: websocket and Connection: Upgrade.
+            if (ToLower(HeaderValue(head, "upgrade")) != "websocket" ||
+                ToLower(HeaderValue(head, "connection")).find("upgrade") == std::string::npos)
             {
                 result.error = "the upgrade response does not switch to websocket";
                 Release();
@@ -522,9 +575,12 @@ namespace hsm::http
                 Release();
                 return result;
             }
-            if (!subprotocol.empty() && result.subprotocol != subprotocol)
+            // The selected subprotocol must be the offered one, and none may be selected when none
+            // was offered (RFC 6455 4.1): otherwise the two sides disagree on what the frames mean.
+            if (result.subprotocol != subprotocol)
             {
-                result.error = "the server did not select subprotocol '" + subprotocol + "'";
+                result.error = subprotocol.empty() ? "the server selected a subprotocol that was not offered"
+                                                   : "the server did not select subprotocol '" + subprotocol + "'";
                 Close();
                 return result;
             }
@@ -536,7 +592,7 @@ namespace hsm::http
         {
             Release();
             result.ok = false;
-            result.error = kInternalError;
+            SetInternalError(result.error);
             return result;
         }
     }
@@ -555,7 +611,7 @@ namespace hsm::http
         }
         catch (...)
         {
-            error = kInternalError;
+            SetInternalError(error);
         }
         Release(); // a frame may be half-written: the stream is no longer in a known state
         return false;
@@ -680,26 +736,61 @@ namespace hsm::http
         }
         catch (...)
         {
-            error = kInternalError;
+            SetInternalError(error);
             Release();
             return WebSocketReceive::Error;
         }
     }
 
-    void WebSocketConnection::Close()
+    void WebSocketConnection::Close(int64_t linger_ms)
     {
         if (curl_ != nullptr)
         {
             try
             {
-                // Status 1000 (normal closure). One non-blocking attempt: Close must never wait,
-                // and a peer that cannot take a few bytes right now is not owed a goodbye.
+                // Status 1000 (normal closure).
                 std::string payload;
                 payload.push_back(static_cast<char>(0x03));
                 payload.push_back(static_cast<char>(0xE8));
                 const std::string frame = MaskedFrame(ws::kClose, payload);
-                size_t sent = 0;
-                (void)curl_easy_send(static_cast<CURL*>(curl_), frame.data(), frame.size(), &sent);
+
+                if (linger_ms <= 0)
+                {
+                    // One non-blocking attempt: this path must never wait.
+                    size_t sent = 0;
+                    (void)curl_easy_send(static_cast<CURL*>(curl_), frame.data(), frame.size(), &sent);
+                }
+                else
+                {
+                    // Closing a socket that still has unread inbound bytes makes the OS send a
+                    // reset, which can discard the close frame just queued; the server then sees an
+                    // aborted connection instead of a normal closure. So send the close frame, then
+                    // read and drop what the peer sends until its own close frame (or the end of
+                    // the stream) arrives, within the linger budget.
+                    const Deadline deadline = DeadlineIn(std::min<int64_t>(linger_ms, kMaxLingerMs));
+                    std::string ignored;
+                    bool done = SendAll(frame, deadline, ignored) != Io::Ok;
+                    while (!done)
+                    {
+                        ws::Frame incoming;
+                        size_t consumed = 0;
+                        const ws::ParseStatus status =
+                            ws::ParseServerFrame(std::string_view(inbuf_).substr(inpos_), kMaxMessageBytes, incoming, consumed, ignored);
+                        if (status == ws::ParseStatus::Complete)
+                        {
+                            inpos_ += consumed;
+                            done = incoming.opcode == ws::kClose;
+                        }
+                        else if (status == ws::ParseStatus::ProtocolError)
+                        {
+                            done = true;
+                        }
+                        else
+                        {
+                            done = ReadMore(deadline, ignored) != Io::Ok;
+                        }
+                    }
+                }
             }
             catch (...)
             {
