@@ -8,7 +8,10 @@ namespace HSMServer.ServerConfiguration
     // takes effect on the next server start.
     public sealed class CollectorSessionsConfig
     {
-        public const int DefaultMaxSessions = 10_000;
+        // One session is one collector process. An idle session holds about 22 KiB on the
+        // server, so the default cap costs about 22 MB when it is reached; an installation
+        // with more collectors than this raises it.
+        public const int DefaultMaxSessions = 1_000;
         public const int DefaultHeartbeatSeconds = 30;
         public const int DefaultMaxFrameBytes = 4 * 1024 * 1024;
 

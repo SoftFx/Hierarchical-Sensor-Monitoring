@@ -73,7 +73,7 @@ This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No coll
 
 | Key | Default | Meaning |
 |---|---|---|
-| `MaxSessions` | 10000 | Server-wide cap on open sessions. `0` turns sessions off: no endpoint, no discovery header. |
+| `MaxSessions` | 1000 | Server-wide cap on open sessions. One session is one collector process. `0` turns sessions off: no endpoint, no discovery header. |
 | `HeartbeatSeconds` | 30 | Announced in `hello`. The server drops a session after 3 × this without any inbound frame. Also the WebSocket keep-alive interval. 5..3600. |
 | `MaxFrameBytes` | 4194304 | Announced in `hello`. A larger frame closes the session with `1009`. 65536..67108864. |
 
@@ -117,7 +117,7 @@ None. The registry lives in memory and is empty after a restart; collectors reco
 
 ## Cost
 
-An idle session holds about **22 KiB of managed memory** on the server (measured with 400 sessions opened over raw sockets, `IdleSession_CostsTensOfKilobytes`; stable to 0.1 KiB across runs). At the default cap of 10 000 sessions that is about 220 MB. Kernel socket buffers come on top and are not measured.
+An idle session holds about **22 KiB of managed memory** on the server (measured with 400 sessions opened over raw sockets, `IdleSession_CostsTensOfKilobytes`; stable to 0.1 KiB across runs). At the default cap of 1 000 sessions that is about 22 MB; every further 1 000 costs about as much. Kernel socket buffers come on top and are not measured.
 
 ## Dependencies
 
