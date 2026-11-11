@@ -540,6 +540,24 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
+        [Fact]
+        public async Task Create_HugeConfirmationPeriodTicks_Is400()
+        {
+            // #1673: the raw-ticks confirmation period rides the same shifted-time
+            // arithmetic as the TTL intervals, so it carries the same bound — a value
+            // near TimeSpan.MaxValue would leave the DateTime range.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with { ConfirmationPeriod = long.MaxValue };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].confirmationPeriod", details.Keys);
+            Assert.Empty(_store);
+        }
+
         [Theory]
         [InlineData("policies")]
         [InlineData("ttlPolicies")]
