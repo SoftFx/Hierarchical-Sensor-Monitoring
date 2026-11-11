@@ -113,6 +113,21 @@ namespace hsm::http
                    status == 426;
         }
 
+        // What makes two open failures "the same" for the once-per-reason rule: the HTTP status
+        // and the text without its digits. libcurl words a timeout with a number that changes
+        // from one attempt to the next ("after 15001 ms"), and a server that stays away must not
+        // get a line per attempt for it.
+        std::string FailureKey(long status, const std::string& why)
+        {
+            std::string key = std::to_string(status) + ':';
+            for (const char c : why)
+            {
+                if (c < '0' || c > '9')
+                    key.push_back(c);
+            }
+            return key;
+        }
+
         // How the far side ended a session whose Receive returned Closed. The close frame, when
         // there was one, may come from an intermediary (a proxy or a CDN) that speaks for the server.
         std::string DescribeClosure(const WebSocketClosure& closure)
@@ -685,13 +700,14 @@ namespace hsm::http
                 // next, and the same failure must still be logged once.
                 const std::string context = "attempt " + std::to_string(failed) + ", " + FormatDuration(down_ms) + " without a session" +
                                             (opened.peer.empty() ? std::string{} : ", peer " + opened.peer);
-                if (why != reported)
+                const std::string failure = FailureKey(opened.status_code, why);
+                if (failure != reported)
                 {
                     Log(permanent ? SessionLogLevel::Error : SessionLogLevel::Info,
                         "Cannot open a collector session (" + context + "): " + why +
                             (permanent ? ". The server refuses it for a reason a retry will not change; values stay queued, retrying."
                                        : ". Values stay queued; retrying."));
-                    reported = why;
+                    reported = failure;
                 }
                 if (!outage_reported && !permanent && down_ms >= kOutageErrorMs)
                 {
