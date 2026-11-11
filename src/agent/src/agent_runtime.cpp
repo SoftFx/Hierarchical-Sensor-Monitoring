@@ -99,13 +99,18 @@ namespace hsm::agent
         // more than a few times an hour.
         constexpr auto kFirstCheckDelay = std::chrono::seconds(30);
         constexpr auto kCheckPeriod = std::chrono::minutes(5);
+        // "The retired port is dead and 443 answers" has to hold on two checks in a row before the
+        // config is rewritten: a server pinned to the old port that is merely restarting must not
+        // lose its agents to whatever else answers on 443 of that host. The move is one-way (443 is
+        // not a retired port, so nothing watches it afterwards).
+        constexpr auto kConfirmDelay = std::chrono::minutes(1);
         // A state the agent cannot fix by itself is reported hourly, not on every check: the
         // collector already logs every failed send.
         constexpr int kNoticeEveryChecks = 12;
 
         auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(kFirstCheckDelay);
-        int unreachable_checks = 0;
-        int manual_move_checks = 0;
+        RetiredPortVerdict last_verdict = RetiredPortVerdict::NotRetired;
+        int repeats = 0; // how many checks in a row have returned last_verdict, minus one
 
         for (;;)
         {
@@ -123,21 +128,33 @@ namespace hsm::agent
             if (StopRequested())
                 return;
 
+            repeats = (verdict == last_verdict) ? repeats + 1 : 0;
+            last_verdict = verdict;
+
             if (verdict == RetiredPortVerdict::ServerUnreachable)
             {
-                if (unreachable_checks++ % kNoticeEveryChecks == 0)
+                if (repeats % kNoticeEveryChecks == 0)
                     Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port));
                 continue;
             }
-            unreachable_checks = 0;
 
             if (verdict != RetiredPortVerdict::SwitchToStandard)
                 continue;
 
+            if (repeats == 0)
+            {
+                delay = std::chrono::duration_cast<std::chrono::milliseconds>(kConfirmDelay);
+                continue;
+            }
+
+            // From here on the agent either moves or says what to do by hand; the latter is
+            // throttled like every other state it cannot fix (first at the confirming check).
+            const bool notice_due = (repeats - 1) % kNoticeEveryChecks == 0;
+
             if (service_config_path_.empty())
             {
                 // A foreground run: report, do not touch the file or the service.
-                if (manual_move_checks++ % kNoticeEveryChecks == 0)
+                if (notice_due)
                     Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
                 continue;
             }
@@ -149,21 +166,32 @@ namespace hsm::agent
             updated.port = kStandardServerPort;
 
             std::string cfg_err;
-            const std::string cfg_path = std::filesystem::path(service_config_path_).string();
-            if (!WriteAgentConfig(cfg_path, updated, cfg_err))
+            bool saved = false;
+            try
             {
-                Log(hc::LogLevel::Error,
-                    RetiredPortManualMoveNotice(config_.port) + " (The agent could not rewrite config.json itself: " +
-                        cfg_err + ")");
+                // The narrow conversion throws for a path the active code page cannot represent.
+                saved = WriteAgentConfig(std::filesystem::path(service_config_path_).string(), updated, cfg_err);
+            }
+            catch (const std::exception& ex)
+            {
+                cfg_err = ex.what();
+            }
+            if (!saved)
+            {
+                if (notice_due)
+                    Log(hc::LogLevel::Error,
+                        RetiredPortManualMoveNotice(config_.port) +
+                            " (The agent could not rewrite config.json itself: " + cfg_err + ")");
                 continue;
             }
 
             if (!SpawnRestartService())
             {
-                Log(hc::LogLevel::Error,
-                    "config: server.port " + std::to_string(config_.port) +
-                        " no longer answers; config.json now says \"port\": 443, but the restart helper could not be"
-                        " started. Restart the HSMAgent service to apply.");
+                if (notice_due)
+                    Log(hc::LogLevel::Error,
+                        "config: server.port " + std::to_string(config_.port) +
+                            " no longer answers; config.json now says \"port\": 443, but the restart helper could"
+                            " not be started. Restart the HSMAgent service to apply.");
                 continue;
             }
 

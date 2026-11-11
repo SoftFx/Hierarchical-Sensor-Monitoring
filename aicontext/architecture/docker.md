@@ -119,7 +119,7 @@ The searchable log-store pipeline that used to sit next to these files (store + 
 
 This is an intentional breaking change for clients still configured with an old port: they get a refused connection, which the server cannot see or log. What keeps that from being silent:
 
-- HSM Agent 0.5.50 and later notices by itself (`aicontext/features/agent/feature.md`, "Retired server port"): when its configured 44330/44333 stops answering and the server answers on 443, the service rewrites its `config.json` to port 443 and restarts.
+- HSM Agent 0.5.50 and later notices by itself (`aicontext/features/agent/feature.md`, "Retired server port"): when its configured 44330/44333 stops answering and the server answers on 443, the service rewrites its `config.json` to port 443 and restarts. Agents get that code through self-update, which serves the release pinned in `src/server/HSMServer/agent-release.txt`: a server release that drops the ports must already pin such an agent, or older agents can neither connect nor update.
 - Older agents, Linux probes and embedded collectors are repointed by hand: `"port": 443` in the agent/probe config, `Port = 443` (or the port-less `https://host`) in collector options.
 - An operator who cannot repoint everything at once can keep an old port open with a mapping of their own in `docker-compose.override.yml` — `'44330:443'` on the `caddy` service: the connection lands on Caddy's 443 listener, where the catch-all site serves any Host. That is the operator's temporary measure, not a product address: nothing in the repo publishes it or tests it.
 

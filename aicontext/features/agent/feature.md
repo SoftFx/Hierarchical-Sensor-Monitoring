@@ -266,23 +266,32 @@ there: the agent is the only place that can say what is wrong, and it must not f
   timeouts), asked lazily and in a fixed order:
   1. the retired port answers → keep it. This covers a proxy-less server pinned to the old port
      (`Kestrel.Port`) and an operator's own port mapping; 443 is not even asked.
-  2. the retired port is dead and 443 answers → **move**: rewrite `config.json` with `port: 443`
-     (`WriteAgentConfig`, the directive rewrite), spawn the `--restart-service` helper, stop. The
-     collector's endpoint is built once at `Start`, so the new port needs a fresh process — the same
-     persist-then-restart sequence as a sensor-group directive. If the rewrite or the helper fails, the
-     agent stays up, logs an Error naming the manual fix, and retries at the next check.
+  2. the retired port is dead and 443 answers, **on two checks in a row** (the confirming one a
+     minute after the first) → **move**: rewrite `config.json` with `port: 443` (`WriteAgentConfig`,
+     the directive rewrite), spawn the `--restart-service` helper, stop. The collector's endpoint is
+     built once at `Start`, so the new port needs a fresh process — the same persist-then-restart
+     sequence as a sensor-group directive. The confirmation exists because the move is one-way (443
+     is not a retired port, so nothing watches it afterwards): a server pinned to the old port that is
+     merely restarting must not lose its agents to something else answering on 443 of that host. If
+     the rewrite or the helper fails, the agent stays up, logs an Error naming the manual fix (hourly),
+     and retries at every check.
   3. neither answers → nothing changes; an Error is logged hourly (the collector already logs every
      failed send).
 - **Service only.** The move needs the config path the run was loaded from (`SetServiceConfigPath`,
   set by the service host). A `--console` run has none and only reports (an hourly Error with the value
   to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not.
+- **Stopping.** The probes run on the runtime's thread between two waits for the stop signal. A stop
+  that arrives during a probe waits for that probe only (2 s per WinHTTP phase; a refused connection
+  measured ~4 s on a dual-stack `localhost`), and the second probe is skipped.
 - **Log levels.** The agent log has no warning level. The start notice and the move are Info (a
   working or self-healed state); "nothing is being delivered" is Error, which also reaches the Windows
   Event Log.
 - **Limits.** The probe proves that *an* HSM Sensor API answers on 443 of the same host, not that it
   knows this agent's access key. Only an agent that already runs this code can move: an older agent has
   to receive it through self-update while its old port still answers, or be repointed by hand
-  (`docs/hsm-agent.md`, "Retired ports 44330 / 44333").
+  (`docs/hsm-agent.md`, "Retired ports 44330 / 44333"). Self-update delivers what
+  `src/server/HSMServer/agent-release.txt` pins, so a server release that drops the old ports is only
+  safe for old agents once that pin names an agent release carrying this code.
 
 ## Top processes by CPU (issue #1175)
 

@@ -358,8 +358,11 @@ namespace hsm::agent
     // ---- Retired-port reachability probe (#1655) -------------------------------------------------
 
     // Short timeouts: the probe runs on the runtime's main thread between two waits for the stop
-    // signal, so a black-holed port must not hold a service stop for long.
-    static constexpr int kProbeTimeoutMs = 3000;
+    // signal, so a black-holed port must not hold a service stop for long. They apply per phase
+    // (resolve, connect, send, receive) and the connect one per resolved address, so one probe of a
+    // black-holed dual-stack host can still take about twice this; a stop that arrives meanwhile
+    // waits for that one probe only (the runtime skips the second).
+    static constexpr int kProbeTimeoutMs = 2000;
 
     bool HsmServerAnswersOnPort(const AgentConfig& config, int port)
     {
