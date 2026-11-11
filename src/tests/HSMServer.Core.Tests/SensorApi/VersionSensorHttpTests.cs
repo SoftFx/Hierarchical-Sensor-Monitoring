@@ -32,20 +32,23 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        [Fact]
-        public async Task VersionRoute_AcceptsAVersionStringAndEchoesItAsAnObject()
+        [Theory]
+        [InlineData("1.2.3.4")]
+        [InlineData("1.2.3")]
+        [InlineData("1.2")]
+        public async Task VersionRoute_AcceptsAVersionStringAndEchoesItAsAnObject(string version)
         {
             await using var host = await StartHost();
 
-            var (status, body) = await PostAsync(host, "version",
-                "{\"Path\":\"version/string\",\"Value\":\"1.2.3.4\",\"Time\":\"2026-11-11T10:00:00Z\",\"Status\":1}");
+            var (status, body) = await host.PostAsync("version",
+                $"{{\"Path\":\"version/string\",\"Value\":\"{version}\",\"Time\":\"2026-11-11T10:00:00Z\",\"Status\":1}}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
 
             // The echo is a JSON object with the version as a string, not the whole
             // object folded into a JSON string.
             var echoed = JsonNode.Parse(body);
-            Assert.Equal("1.2.3.4", (string)echoed["Value"]);
+            Assert.Equal(version, (string)echoed["Value"]);
             Assert.Equal("version/string", (string)echoed["Path"]);
 
             await SensorStored("version/string");
@@ -56,8 +59,8 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             await using var host = await StartHost();
 
-            var (status, body) = await PostAsync(host, "version",
-                "{\"Path\":\"version/no-status\",\"Value\":\"1.2.3\"}");
+            var (status, body) = await host.PostAsync("version",
+                "{\"Path\":\"version/no-status\",\"Value\":\"1.2.3\"}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal(1, (int)JsonNode.Parse(body)["Status"]);
@@ -70,8 +73,8 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             await using var host = await StartHost();
 
-            var (status, body) = await PostAsync(host, "version",
-                "{\"Path\":\"version/object\",\"Value\":{\"Major\":1,\"Minor\":2,\"Build\":3,\"Revision\":4},\"Status\":1}");
+            var (status, body) = await host.PostAsync("version",
+                "{\"Path\":\"version/object\",\"Value\":{\"Major\":1,\"Minor\":2,\"Build\":3,\"Revision\":4},\"Status\":1}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal("1.2.3.4", (string)JsonNode.Parse(body)["Value"]);
@@ -87,8 +90,8 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             await using var host = await StartHost();
 
-            var (status, body) = await PostAsync(host, "version",
-                $"{{\"Path\":\"version/bad\",\"Value\":{rawValue},\"Status\":1}}");
+            var (status, body) = await host.PostAsync("version",
+                $"{{\"Path\":\"version/bad\",\"Value\":{rawValue},\"Status\":1}}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Contains(expectedError, body);
@@ -99,8 +102,8 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             await using var host = await StartHost();
 
-            var (status, body) = await PostAsync(host, "version",
-                "{\"Path\":\"version/bad-time\",\"Value\":\"1.2.3\",\"Time\":\"not-a-time\",\"Status\":1}");
+            var (status, body) = await host.PostAsync("version",
+                "{\"Path\":\"version/bad-time\",\"Value\":\"1.2.3\",\"Time\":\"not-a-time\",\"Status\":1}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Contains("is not a valid Time", body);
@@ -111,8 +114,8 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             await using var host = await StartHost();
 
-            var (status, _) = await PostAsync(host, "list",
-                "[{\"Type\":8,\"Path\":\"version/in-list\",\"Value\":\"1.0.0\"}]");
+            var (status, _) = await host.PostAsync("list",
+                "[{\"Type\":8,\"Path\":\"version/in-list\",\"Value\":\"1.0.0\"}]", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
 
@@ -125,20 +128,5 @@ namespace HSMServer.Core.Tests.SensorApi
 
         private Task<SensorApiTestHost> StartHost() => SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
 
-        private async Task<(HttpStatusCode Status, string Body)> PostAsync(SensorApiTestHost host, string route, string body)
-        {
-            using var http = new HttpClient();
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, route))
-            {
-                Content = new StringContent(body, Encoding.UTF8, "application/json"),
-            };
-
-            request.Headers.Add("ClientName", ClientName);
-            request.Headers.Add("Key", _key);
-
-            using var response = await http.SendAsync(request, new CancellationTokenSource(Patience).Token);
-
-            return (response.StatusCode, await response.Content.ReadAsStringAsync());
-        }
     }
 }

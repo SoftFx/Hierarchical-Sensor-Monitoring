@@ -17,7 +17,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -240,6 +242,26 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         public Task StopAsync() => _app.StopAsync();
+
+        // POST a JSON body to one of the host's routes with collector auth headers, the
+        // way every HTTP test of the Sensor API talks to it.
+        public async Task<(HttpStatusCode Status, string Body)> PostAsync(string route, string body, string key, string clientName)
+        {
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(HttpBase, route))
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.Add("ClientName", clientName);
+
+            if (key is not null)
+                request.Headers.Add("Key", key);
+
+            using var response = await http.SendAsync(request, new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token);
+
+            return (response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
 
         public ValueTask DisposeAsync() => _app.DisposeAsync();
 
