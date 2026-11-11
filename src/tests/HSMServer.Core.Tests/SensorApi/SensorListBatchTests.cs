@@ -33,6 +33,8 @@ namespace HSMServer.Core.Tests.SensorApi
         [Theory]
         [InlineData("[{\"Type\":99,\"Path\":\"list/bad\",\"Value\":1}]", "Unexpected sensor type")]
         [InlineData("[{\"Type\":2147483647,\"Path\":\"list/bad\",\"Value\":1}]", "Unexpected sensor type")]
+        [InlineData("[{\"Type\":1.5,\"Path\":\"list/bad\",\"Value\":1}]", "Malformed sensor values")]
+        [InlineData("[{\"Type\":2147483648,\"Path\":\"list/bad\",\"Value\":1}]", "Malformed sensor values")]
         [InlineData("[{\"Path\":\"list/no-type\",\"Value\":1}]", "Unexpected string for sensor values deserialization")]
         [InlineData("[{\"Type\":\"1\",\"Path\":\"list/string-type\",\"Value\":7}]", "Type discriminator must be a number")]
         [InlineData("{}", "Malformed sensor values")]
