@@ -1115,12 +1115,11 @@
             <summary>
             The fallback port baked into a bundle when no external URL carries an explicit one:
             the port the requesting admin actually used, so a non-standard deployment keeps
-            working — except the deprecated 44330/44333 aliases, which must not be baked into
-            NEW bundles (they stop answering when the deprecation window closes), and a missing
-            port (the standard https://host), which both mean the default 443. A legacy port
+            working — except the retired 44330/44333 ports of the old two-port scheme, which
+            the product no longer publishes and which must not be baked into a bundle, and a
+            missing port (the standard https://host): both mean the default 443. A retired port
             that IS the server's own listener (a proxy-less deployment pinned to the old
-            address) is kept: it is the address that answers there, not an alias that will
-            disappear with the window.
+            address) is kept: it is the address that answers there.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentBundleOptions">
