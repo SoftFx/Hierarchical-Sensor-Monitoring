@@ -39,10 +39,29 @@ public sealed class JournalRecordViewModel
 
     public bool Rollbackable { get; set; }
 
+    /// <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
+    public string Operation { get; set; }
+
 
     public JournalRecordViewModel(JournalRecordModel model)
     {
         (Value, SearchValue) = BuildSearchAndViewValue(model);
+
+        // The operation badge of the per-node tab (#1638): the same label
+        // set the global Journal table shows. Derived from the record's own
+        // data only — the tab streams records without undo-group access, so
+        // policy rows (whose operation lives on the group entry) render no
+        // badge here.
+        Operation = Core.Journal.JournalOperations.Of(model);
+
+        var badge = ManagementApi.Journal.JournalOperationLabels.Badge(Operation);
+
+        if (badge.Length > 0)
+        {
+            Value = $"{badge} {Value}";
+            SearchValue = $"{SearchValue} {ManagementApi.Journal.JournalOperationLabels.Label(Operation)}";
+        }
+
         Type = model.Key.Type;
         Time = new DateTime(model.Key.Time);
         TimeAsString = Time.ToDefaultFormat();
