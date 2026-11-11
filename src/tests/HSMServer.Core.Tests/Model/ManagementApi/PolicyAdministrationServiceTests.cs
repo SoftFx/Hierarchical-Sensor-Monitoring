@@ -581,6 +581,52 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensor.Policies.TTLPolicies);
         }
 
+        // #1673: an interval near TimeSpan.MaxValue parses fine but now + ticks
+        // leaves the DateTime range, where AddTicks throws in the retention
+        // scan. The template write already rejects such ticks; the TimeSpan
+        // surfaces must too, on every create and update path.
+        [Theory]
+        [InlineData("10675199.02:48:05")]
+        [InlineData("10675199.02:48:05.4775807")]
+        public async Task TtlPolicies_RejectAnIntervalThatOverflowsDateTime(string interval)
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTtlRange");
+
+            var created = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy(interval), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", created.Failure.Errors["interval"].Single());
+            Assert.Empty(sensor.Policies.TTLPolicies);
+
+            var seeded = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00"), User);
+            Assert.True(seeded.Success, seeded.Failure?.Message);
+
+            var updated = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, seeded.Value.Id, TtlPolicy(interval), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, updated.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", updated.Failure.Errors["interval"].Single());
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks,
+                sensor.Policies.TTLPolicies.Single(p => p.Id == seeded.Value.Id).TTLInterval.Ticks);
+
+            var productCreated = await _service.CreateProductTtlPolicyAsync(_fixture.ProductAId, TtlPolicy(interval), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, productCreated.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", productCreated.Failure.Errors["interval"].Single());
+        }
+
+        // #1673, the confirmation-period twin of the interval bound; the negative
+        // case says "must be positive" in the TTL surface's wording (#1677).
+        [Fact]
+        public async Task CreateSensorPolicy_RejectsAnOutOfRangeConfirmationPeriod()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcConfirmationRange");
+
+            var huge = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with { ConfirmationPeriod = "10675199.02:48:05" }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, huge.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", huge.Failure.Errors["confirmationPeriod"].Single());
+
+            var negative = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with { ConfirmationPeriod = "-00:05:00" }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, negative.Failure.Outcome);
+            Assert.Equal("The confirmation period must be positive.", negative.Failure.Errors["confirmationPeriod"].Single());
+        }
+
         // #1501 round-2 (F2): a full-list TTL write must not RE-STAMP the
         // change-table ownership of the siblings it merely re-asserts — the
         // TTL stamp loop in BaseNodeModel.Update stamps unconditionally per

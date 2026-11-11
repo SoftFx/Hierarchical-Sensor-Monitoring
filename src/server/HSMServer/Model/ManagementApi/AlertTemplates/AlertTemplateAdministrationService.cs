@@ -801,6 +801,13 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, $"{prefix}.template",
                     "The message template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
 
+            // #1673: the raw-ticks confirmation period rides the same shifted-time
+            // arithmetic as the TTL intervals, so it carries the same bound.
+            if (policy.ConfirmationPeriod is { } confirmation &&
+                (confirmation < 0L || confirmation > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
+                Add(errors, $"{prefix}.confirmationPeriod",
+                    "The confirmation period must be positive and keep the shifted time inside the DateTime range.");
+
             foreach (var (condition, conditionIndex) in (policy.Conditions ?? []).Select((c, i) => (c, i)))
             {
                 var conditionPrefix = $"{prefix}.conditions[{conditionIndex}]";
