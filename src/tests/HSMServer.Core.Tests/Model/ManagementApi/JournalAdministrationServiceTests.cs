@@ -445,6 +445,33 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.False(record.RolledBack);
         }
 
+        [Fact]
+        public async Task ListRecords_LegacySensorRow_RendersOtherKindAndTheResolvedProduct()
+        {
+            // #1679: legacy rows are stored with kind=null and productId=null
+            // while the FILTERS match them (kind=other, the resolved root
+            // product), so a client grouping or checking the payload by those
+            // fields loses every legacy row. The payload must carry the
+            // filter's own answers.
+            var sensor = await CreateSensorAsync("jrnLegacySensor");
+
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.AsUser("legacy-sensor-writer"))
+            {
+                Enviroment = "Sensors",
+                PropertyName = "Singleton",
+                Path = sensor.FullPath,
+                OldValue = "False",
+                NewValue = "True",
+            });
+
+            var byOtherKind = _journal.ListRecords(TokenUser,
+                new JournalFilter { Kind = "other", FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            var record = byOtherKind.Single(r => r.Author.Contains("legacy-sensor-writer", StringComparison.Ordinal));
+
+            Assert.Equal("other", record.Kind);
+            Assert.Equal(sensor.Root.Id.ToString(), record.ProductId);
+        }
 
         [Fact]
         public async Task Rollback_ByRecord_NonAdminTokenOwner_IsForbidden()
