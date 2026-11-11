@@ -215,6 +215,7 @@ namespace HSMServer.ServiceExtensions
                 o.UseInlineDefinitionsForEnums();
                 o.OperationFilter<DataRequestHeaderSwaggerFilter>();
                 o.OperationFilter<ManagementApiSecuritySwaggerFilter>();
+                o.OperationFilter<DryRunHeaderSwaggerFilter>();
                 o.SchemaFilter<SensorValueUnionSchemaFilter>();
                 o.SchemaFilter<ManagementApiErrorDetailsSchemaFilter>();
                 o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo

@@ -85,7 +85,7 @@ builder.Services.AddHsts(options =>
     options.IncludeSubDomains = true;
 });
 
-builder.Services.AddMvc()
+builder.Services.AddMvc(options => options.Filters.Add<HSMServer.Filters.DryRunHeaderFilter>())
                 .AddJsonOptions(options =>
                 {
                     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;

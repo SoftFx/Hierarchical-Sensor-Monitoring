@@ -138,8 +138,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// <summary>
         /// Parse the write options of a management-API request: the dry-run
         /// header plus the request's implicit undo-group id. The dry-run
-        /// header is a strict boolean: only "true" (any casing) previews, so
-        /// a "0" or "no" never silently suppresses the write.
+        /// header is a strict boolean: "true" (any casing) previews, and a
+        /// value that parses as neither true nor false never reaches this
+        /// parse — <c>DryRunHeaderFilter</c> fails the request closed with a
+        /// 400 before the write runs (#1675), so a typo cannot turn a
+        /// preview into the real, irreversible write.
         /// </summary>
         public static ChangeSetWriteOptions WriteOptions(this HttpRequest request)
         {
