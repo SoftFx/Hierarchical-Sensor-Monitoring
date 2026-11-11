@@ -48,6 +48,39 @@ test('Missing-name error is visible, data survives, save succeeds after entering
   await expect(page.getByRole('row', { name })).toBeVisible({ timeout: 10000 });
 });
 
+// #1650 regression: a blocked Save must not silently empty the "affected sensors" preview. The
+// re-rendered form partial renders it empty, and only an explicit refill (updateForm after the
+// replaceWith) restores the sensors of the unchanged paths — without it the preview reads as
+// "no sensors match", inviting the author to "fix" a correct path.
+test('Blocked save keeps the affected-sensors preview of the unchanged path', async ({ page }) => {
+  fx = await buildMixedTypeAlertTemplateFixture(page);
+  const name = uniqueName('Tpl');
+  templates.push(name);
+
+  await page.goto('/AlertTemplates');
+  await page.getByRole('link', { name: 'Add Template' }).click();
+
+  await page.getByLabel('Folder').selectOption({ label: fx.folderName });
+  await page.locator('#Type').selectOption({ label: 'Integer' });
+  await page.locator('input[name="PathTemplates[0]"]').fill(fx.intPath);
+
+  // The preview fills from the debounced path input.
+  await expect(page.locator('#affected_sensors')).toBeVisible();
+  await expect(page.locator('#affected_sensors_cardbody')).toContainText('Int sensor');
+
+  // Blocked Save (empty name): the error is visible AND the preview still names the same
+  // sensors for the unchanged path.
+  await page.locator('#submit_form').click();
+  await expect(page.locator('span[data-valmsg-for="Name"]')).toHaveText(/required/i);
+  await expect(page.locator('#affected_sensors')).toBeVisible();
+  await expect(page.locator('#affected_sensors_cardbody')).toContainText('Int sensor');
+
+  // The #1247 recovery still holds: entering the name saves.
+  await page.locator('#Name').fill(name);
+  await page.locator('#submit_form').click();
+  await expect(page.getByRole('row', { name })).toBeVisible({ timeout: 10000 });
+});
+
 test('Mixed-type error is visible, data survives repeated saves, corrected form saves', async ({ page }) => {
   fx = await buildMixedTypeAlertTemplateFixture(page);
   const name = uniqueName('Tpl');

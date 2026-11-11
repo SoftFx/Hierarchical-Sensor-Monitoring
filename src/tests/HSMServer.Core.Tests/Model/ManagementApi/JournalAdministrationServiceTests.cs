@@ -355,6 +355,98 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task ListRecords_OperationTagNamesCreateUpdateDeleteAndRollback()
+        {
+            // The QA scenario of #1638: create, edit, rollback, rollback of
+            // the rollback (redo), delete — every row must name its
+            // operation at a glance, and the rolled-back edit must be
+            // visibly marked instead of only losing its Rollback button.
+            var createGroup = Guid.NewGuid();
+            var updateGroup = Guid.NewGuid();
+            var deleteGroup = Guid.NewGuid();
+
+            var created = await _templates.CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnOps"]),
+                new ChangeSetWriteOptions { ChangeSetId = createGroup });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var updated = await _templates.UpdateTemplateAsync(created.Value.Id, TokenUser,
+                TemplateDto(["*/jrnOps"]),
+                new ChangeSetWriteOptions { ChangeSetId = updateGroup });
+            Assert.True(updated.Success, updated.Failure?.Message);
+
+            var rolledBack = await _journal.RollbackAsync(RecordOf(updateGroup).Id, TokenUser);
+            Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
+
+            var redoGroup = Guid.Parse(rolledBack.Value.RollbackChangeSetId);
+
+            var deleted = await _templates.DeleteTemplateAsync(created.Value.Id, TokenUser,
+                new ChangeSetWriteOptions { ChangeSetId = deleteGroup });
+            Assert.True(deleted.Success, deleted.Failure?.Message);
+
+            var listed = _journal.ListRecords(TokenUser,
+                new JournalFilter { Kind = JournalKinds.AlertTemplate, FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            Assert.Equal("create", listed.Single(r => r.ChangeSetId == createGroup.ToString()).Operation);
+            Assert.Equal("delete", listed.Single(r => r.ChangeSetId == deleteGroup.ToString()).Operation);
+            Assert.Equal("rollback", listed.Single(r => r.ChangeSetId == redoGroup.ToString()).Operation);
+
+            var edit = listed.Single(r => r.ChangeSetId == updateGroup.ToString());
+
+            Assert.Equal("update", edit.Operation);
+            Assert.True(edit.RolledBack);
+            Assert.False(edit.Rollbackable);
+
+            // The details view agrees with the table row (#1638).
+            var details = _journal.GetRecord(edit.Id, TokenUser);
+
+            Assert.True(details.Success, details.Failure?.Message);
+            Assert.True(details.Value.Record.RolledBack);
+            Assert.Equal("update", details.Value.Record.Operation);
+        }
+
+        [Fact]
+        public async Task ListRecords_PolicyRow_NamesTheOperationFromItsGroupEntry()
+        {
+            // Policy rows carry no "{Kind}:{Operation}" property — the
+            // operation comes from their undo-group entry.
+            var sensor = await CreateSensorAsync("jrnPolicyOp");
+            var changeSetId = Guid.NewGuid();
+
+            var created = await _policies.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), TokenUser,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var record = RecordOf(changeSetId);
+
+            Assert.Equal("create", record.Operation);
+            Assert.False(record.RolledBack);
+        }
+
+        [Fact]
+        public void ListRecords_LegacyRowWithoutOperation_RendersNullOperation()
+        {
+            // Rows with no derivable operation (legacy policy items, rows
+            // written before the tags) must keep rendering — no badge, no
+            // exception.
+            _journalService.AddRecord(new JournalRecordModel(Guid.NewGuid(), InitiatorInfo.AsUser("legacy-op-writer"))
+            {
+                Enviroment = "Alert collection",
+                PropertyName = "Alert",
+                OldValue = "off",
+                NewValue = "on",
+            });
+
+            var listed = _journal.ListRecords(TokenUser,
+                new JournalFilter { FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            var record = listed.Single(r => r.Author.Contains("legacy-op-writer", StringComparison.Ordinal));
+
+            Assert.Null(record.Operation);
+            Assert.False(record.RolledBack);
+        }
+
+
+        [Fact]
         public async Task Rollback_ByRecord_NonAdminTokenOwner_IsForbidden()
         {
             // #1588 breaking change: Manager tokens can no longer roll back —

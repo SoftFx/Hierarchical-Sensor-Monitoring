@@ -603,6 +603,15 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Session">
+            <summary>
+            The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
+            authenticated by the same Key header as every other route here. Not an HTTP
+            operation, so it stays out of the OpenAPI document; the contract is
+            aicontext/features/api/wire-contract/feature.md. Two methods: over HTTP/1.1 the
+            upgrade is a GET, over HTTP/2 it is a CONNECT.
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.BoolSensorValue)">
             <summary>
             Receives value of bool sensor
@@ -1540,6 +1549,9 @@
         <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Id">
             <summary>The wire id of the record (rollback-by-record addressing, #1588).</summary>
         </member>
+        <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Operation">
+            <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>
             The write engine of the schedule CRUD — the schedules' twin of
@@ -2423,6 +2435,9 @@
             journal (it is the redo handle: rolling back the rollback re-applies
             the original writes). Policy restores also leave their per-node
             ChangesHandler records; this record is the group's primary trace.
+            The record carries the rollback marker in its enviroment (#1638):
+            its property names the COMPENSATING write (the inverse
+            operation), which alone would read like an ordinary edit.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions">
@@ -2718,6 +2733,16 @@
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Rollbackable">
             <summary>True when the record's write is undoable (admin-only rollback).</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Operation">
+            <summary>
+            create | update | delete | rollback — what kind of write the
+            record is (#1638); null when nothing says (legacy rows). The
+            property format is untouched; this tag is derived and additive.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.RolledBack">
+            <summary>True when the record's undo group was rolled back — the write was undone by a later rollback.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDetailsDto.ChangeSet">
             <summary>The undo group's entries (before/after images) when the record is rollbackable, null otherwise.</summary>
         </member>
@@ -2749,6 +2774,29 @@
             through the internal rollback engine (the #1570 mechanics, now an
             implementation detail of the Journal).
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Journal.JournalOperationLabels">
+            <summary>
+            The table-facing rendering of a journal record's operation (#1638): the
+            badge text and Bootstrap color of each operation tag, shared by the
+            global Journal table (_JournalTable) and the per-node tab's Record cell
+            (JournalRecordViewModel), so the two surfaces never drift apart.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Journal.JournalOperationLabels.Label(System.String)">
+            <summary>The badge text of the operation; null renders no badge.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Journal.JournalOperationLabels.CssClass(System.String)">
+            <summary>The Bootstrap badge class of the operation.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Journal.JournalOperationLabels.Badge(System.String)">
+            <summary>
+            The ready badge markup of the operation (the per-node tab renders
+            its cells as strings, not Razor); empty when the tag is unknown.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Journal.JournalOperationLabels.RolledBackBadge">
+            <summary>The rolled-back marker of a record whose undo group went terminal.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
             <summary>

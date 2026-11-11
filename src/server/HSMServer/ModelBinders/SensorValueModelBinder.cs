@@ -1,8 +1,7 @@
-﻿using HSMServer.ApiObjectsConverters;
+﻿using HSMServer.SensorApi;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace HSMServer.ModelBinders
@@ -14,15 +13,8 @@ namespace HSMServer.ModelBinders
             if (bindingContext == null)
                 throw new ArgumentNullException(nameof(bindingContext));
 
-            var serializeOptions = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
-            };
-
-            serializeOptions.Converters.Add(new SensorValueBaseDeserializationConverter());
-
-            var value = await JsonSerializer.DeserializeAsync(bindingContext.HttpContext.Request.Body, bindingContext.ModelType, serializeOptions);
+            // The same options the collector session reads a `list` body with.
+            var value = await JsonSerializer.DeserializeAsync(bindingContext.HttpContext.Request.Body, bindingContext.ModelType, SensorApiJson.Values);
 
             bindingContext.Result = ModelBindingResult.Success(value);
         }

@@ -85,6 +85,8 @@ namespace HSMServer.ServerConfiguration
 
         public ApiTokensConfig ApiTokens { get; }
 
+        public CollectorSessionsConfig CollectorSessions { get; }
+
 
         static ServerConfig()
         {
@@ -119,6 +121,7 @@ namespace HSMServer.ServerConfiguration
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
+            CollectorSessions = Register<CollectorSessionsConfig>(nameof(CollectorSessions));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
@@ -134,6 +137,7 @@ namespace HSMServer.ServerConfiguration
             // "Configuration"). Throws before the server starts serving.
             ApiTokens.Validate();
             Kestrel.Validate();
+            CollectorSessions.Validate();
 
             ResaveSettings();
 

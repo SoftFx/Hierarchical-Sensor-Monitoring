@@ -1,6 +1,6 @@
-using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
+using HSMServer.SensorApi.Sessions;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
@@ -8,7 +8,8 @@ namespace HSMServer.Middleware.Telemetry
 {
     // Not sealed: the middleware tests stub the registration decision
     // (#1649) — the real collector needs the self-monitoring collector stack.
-    public class TelemetryMiddleware(RequestDelegate _next, DataCollectorWrapper _collector, ITreeValuesCache _cache) : TelemetryCollector(_collector, _cache)
+    public class TelemetryMiddleware(RequestDelegate _next, ISensorApiTelemetry _telemetry, ITreeValuesCache _cache)
+        : TelemetryCollector(_telemetry, _cache)
     {
         public async Task InvokeAsync(HttpContext context)
         {
@@ -22,11 +23,10 @@ namespace HSMServer.Middleware.Telemetry
             else
                 await context.SetAccessError(error);
 
-            if (context.TryGetPublicApiInfo(out var requestInfo))
-            {
-                _statistics.Total.AddResponseResult(context.Response);
-                _statistics[requestInfo.TelemetryPath].AddResponseResult(context.Response);
-            }
+            // A request that was upgraded is a collector session: its traffic was counted
+            // frame by frame, and its HTTP response has no body to count.
+            if (context.TryGetPublicApiInfo(out var requestInfo) && !SessionProtocol.WasUpgraded(context))
+                _statistics.AddResponse(requestInfo.TelemetryPath, context.Response.ContentLength);
         }
     }
 }

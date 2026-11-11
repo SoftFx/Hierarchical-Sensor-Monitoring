@@ -150,12 +150,14 @@
             $('#interval_inputs').hide();
         }
         else {
-            let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
+            // The server prints ToDefaultFormat() as invariant MM/dd/yyyy; parsing it
+            // day-first silently shifted the note's start by a month whenever day <= 12 (#1647).
+            let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "MM/DD/YYYY HH:mm:ss");
             let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
                                                .add($('#ignoreNotifications_hours').val(), 'h')
                                                .add($('#ignoreNotifications_days').val(), 'd');
 
-            until = ` until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            until = ` until ${endOfIgnorePeriod.format('MM/DD/YYYY HH:mm')}`;
             $('#interval_inputs').show();
         }
         

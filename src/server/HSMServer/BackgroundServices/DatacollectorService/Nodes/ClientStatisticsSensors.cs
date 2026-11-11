@@ -11,7 +11,10 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
 
 
-        public WebRequestNode this[string id] => id is null ? null : _selfSensors.GetOrAdd(id, new WebRequestNode(_collector, id));
+        // Looked up on every request and every session frame. A known client is a plain read;
+        // the node (four sensors) is built only when the client is new.
+        public WebRequestNode this[string id] =>
+            id is null ? null : _selfSensors.TryGetValue(id, out var node) ? node : _selfSensors.GetOrAdd(id, key => new WebRequestNode(_collector, key));
 
         public TotalWebRequestNode Total { get; }
 

@@ -27,6 +27,8 @@ using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
+using HSMServer.SensorApi;
+using HSMServer.SensorApi.Sessions;
 using HSMServer.Migrations;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertSchedules;
@@ -183,7 +185,13 @@ namespace HSMServer.ServiceExtensions
                         sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
                     .AddSingleton<IApiTokenUsageGate>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<TreeViewModel>()
+                    .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
+                    .AddSingleton<SensorIngestionService>()
+                    .AddSingleton<CollectorSessionRegistry>()
+                    .AddSingleton<CollectorSessionHandler>()
+                    // The clock of the session's silence limit, replaceable in tests.
+                    .AddSingleton(TimeProvider.System)
                     .AddSingleton<BackupDatabaseService>()
                     .AddSingleton<NotificationsCenter>()
                     .AddSingleton<ChatSensorUsageCalculator>();
@@ -352,6 +360,11 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<ApiTokenUsageMiddleware>();
 
             applicationBuilder.UseAuthorization();
+
+            // Collector sessions (#1664): GET /api/sensors/session upgrades to a WebSocket.
+            // Before TelemetryMiddleware, which has to tell an upgrade from an HTTP request.
+            // Keep-alive and the subprotocol are set per session when the upgrade is accepted.
+            applicationBuilder.UseWebSockets();
 
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();

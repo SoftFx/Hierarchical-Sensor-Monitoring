@@ -156,6 +156,29 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.11.4** (#1662) — internal building block, ABI unchanged, no behavior change. Adds a WebSocket
+  client connection (`src/hsm_ws_connection.{hpp,cpp}`) for the collector session of ADR-0017. It
+  is compiled into the HTTP build and **not used by the send path yet**. The WebSocket protocol is
+  libcurl's own (`CONNECT_ONLY=2`, `curl_ws_send` / `curl_ws_recv`); the collector carries no
+  RFC 6455 code. It therefore needs a libcurl of at least 8.14.0 built with WebSocket support, at
+  build time and at run time: the vcpkg dependency now asks for the `websockets` feature of `curl`,
+  Debian 13 ships such a libcurl, older distribution builds do not. Where libcurl cannot carry a WebSocket,
+  `WebSocketConnection::Supported()` is false and the collector stays on HTTP. Pinned by
+  `native_ws_*` (in-process WebSocket server, HTTP lane).
+- **0.11.3** (#1653) — transport change, ABI unchanged. The HTTP transport keeps its connection
+  between requests instead of opening a new TCP+TLS connection for every send: `HttpTransport` keeps
+  one libcurl easy handle and resets it between requests, so sequential sends ride one connection,
+  as the managed client's pooled keep-alive connection does (a concurrent caller gets a handle of
+  its own, closed afterwards). The kept handle is retired 5 minutes after its creation so DNS is
+  resolved again (the managed `PooledConnectionLifetime` bound), a connection idle for more than
+  60 s is not reused, TCP keep-alive is on, and a handle whose transfer failed is destroyed rather
+  than kept. A send started while the transport is cancelled is refused before it touches the
+  connection. Pinned by `native_http_transport_reuses_connection`,
+  `native_http_transport_retires_connection_after_its_lifetime`,
+  `native_http_transport_concurrent_posts_then_reuse`,
+  `native_http_transport_cancelled_send_never_leaves`,
+  `native_http_transport_recovers_after_timeout` and
+  `native_http_transport_survives_server_dropping_kept_connection`.
 - **0.11.2** (#1593) — endpoint rendering parity with the managed collector, ABI unchanged. `MakeEndpoints`
   omits a port equal to the effective scheme's default (https 443, http 80) from the connection address,
   exactly as the managed `Uri` renders it, so the default endpoint since #1590 (port 443) is

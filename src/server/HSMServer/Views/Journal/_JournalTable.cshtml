@@ -13,6 +13,7 @@
             <th scope="col">Time (UTC)</th>
             <th scope="col">Author</th>
             <th scope="col">Kind</th>
+            <th scope="col">Operation</th>
             <th scope="col">Entity</th>
             <th scope="col">Change</th>
             <th scope="col">Actions</th>
@@ -21,7 +22,7 @@
     <tbody>
         @if (Model.Count == 0)
         {
-            <tr><td colspan="6" class="text-muted">No journal records for the selected filters.</td></tr>
+            <tr><td colspan="7" class="text-muted">No journal records for the selected filters.</td></tr>
         }
         @foreach (var item in Model)
         {
@@ -40,6 +41,22 @@
                     else
                     {
                         <span class="badge bg-secondary">@item.Kind</span>
+                    }
+                </td>
+                <td>
+                    @* The write's operation at a glance (#1638): Create /
+                       Update / Delete / Rollback, no hover or Details needed.
+                       Records with no derivable operation (legacy rows)
+                       render an empty cell. *@
+                    @if (item.Operation is not null)
+                    {
+                        <span class="badge @JournalOperationLabels.CssClass(item.Operation)">
+                            @JournalOperationLabels.Label(item.Operation)
+                        </span>
+                    }
+                    @if (item.RolledBack)
+                    {
+                        @Html.Raw(JournalOperationLabels.RolledBackBadge())
                     }
                 </td>
                 <td>

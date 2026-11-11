@@ -133,13 +133,16 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         /// journal (it is the redo handle: rolling back the rollback re-applies
         /// the original writes). Policy restores also leave their per-node
         /// ChangesHandler records; this record is the group's primary trace.
+        /// The record carries the rollback marker in its enviroment (#1638):
+        /// its property names the COMPENSATING write (the inverse
+        /// operation), which alone would read like an ordinary edit.
         /// </summary>
         public bool RecordRollback(Guid rollbackChangeSetId, InitiatorInfo author, ChangeSetEntry entry)
         {
             try
             {
                 _journal.Append(rollbackChangeSetId, author, entry);
-                WriteJournalRecord(rollbackChangeSetId, author, entry);
+                WriteJournalRecord(rollbackChangeSetId, author, entry, isRollback: true);
 
                 return true;
             }
@@ -153,15 +156,24 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             }
         }
 
-        private void WriteJournalRecord(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry) =>
+        private void WriteJournalRecord(Guid changeSetId, InitiatorInfo author, ChangeSetEntry entry,
+            bool isRollback = false) =>
             _journalService.AddRecord(new JournalRecordModel(entry.EntityId, author ?? InitiatorInfo.System)
             {
-                Enviroment = entry.Kind switch
-                {
-                    ChangeSetEntryKind.AlertTemplate => "Alert template",
-                    ChangeSetEntryKind.AlertSchedule => "Alert schedule",
-                    _ => "Rollback",
-                },
+                Enviroment = isRollback
+                    // The marker JournalOperations derives the "rollback"
+                    // operation tag from (#1638).
+                    ? JournalOperations.RollbackEnviroment
+                    : entry.Kind switch
+                    {
+                        ChangeSetEntryKind.AlertTemplate => "Alert template",
+                        ChangeSetEntryKind.AlertSchedule => "Alert schedule",
+                        // The fork arm covers POLICY kinds only (templates
+                        // and schedules return above): a mid-request write
+                        // whose group went terminal, forked into a fresh
+                        // group — an ordinary write, not a rollback.
+                        _ => "Undo group fork",
+                    },
                 PropertyName = $"{entry.Kind}:{entry.Operation}",
                 OldValue = entry.Operation == ChangeSetOperation.Delete ? entry.Path : null,
                 NewValue = entry.Operation != ChangeSetOperation.Delete ? entry.Path : null,
