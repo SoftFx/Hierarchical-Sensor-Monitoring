@@ -30,10 +30,12 @@ logs.
   `HttpContext.RequestAborted` is cancelled, a
   `ConnectionAbortedException` (the transport reporting the dead connection
   before the token fires), or an `IOException` of the request-body read
-  (Kestrel's HTTP/2 stream reset, `The client reset the request stream.`, or
-  one caught while the token is cancelled; see `ClientAbortDetection`) — at
-  WARN; an internal cancellation (token intact) and every other exception
-  type — including every other `IOException`, e.g. a failing disk — stay at
+  (the transport's own `ConnectionResetException`, rethrown top-level or
+  wrapped; Kestrel's HTTP/2 stream reset, `The client reset the request
+  stream.`; or one caught while the token is cancelled; see
+  `ClientAbortDetection`) — at WARN; an internal cancellation (token
+  intact) and every other exception type — including every other
+  `IOException` with the request token intact, e.g. a failing disk — stay at
   ERROR (#1632, #1648, ADR-0016).
 
 ## Required Context

@@ -375,6 +375,26 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
+        public static async Task ExceptionMiddleware_ConnectionResetIOException_RethrowsUntouched()
+        {
+            // #1648 review: the HTTP/1.1 body-read arm of the same client
+            // abort — the socket transport completes the input pipe with
+            // ConnectionResetException ("Connection reset by peer") and the
+            // body read rethrows it TOP-LEVEL (it is itself an IOException)
+            // before the token fires. Same shared classifier, same rethrow:
+            // not a 500.
+            var context = BuildContext("/api/v1/alertTemplates");
+
+            static Task Reset(HttpContext _) => throw new ConnectionResetException("Connection reset by peer");
+
+            await Assert.ThrowsAsync<ConnectionResetException>(() =>
+                new ApiExceptionJsonMiddleware(Reset).InvokeAsync(context));
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+            Assert.Equal(0, context.Response.Body.Length);
+        }
+
+        [Fact]
         public static async Task ExceptionMiddleware_ServerSideCancellation_IsUniformJson500()
         {
             // The other OperationCanceledException shape (#1371): a server-side

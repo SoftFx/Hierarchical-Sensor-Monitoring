@@ -19,12 +19,18 @@ namespace HSMServer.Middleware
     // e.g. an HttpClient timeout inside a handler is an ordinary failure of a
     // live request.
     //
-    // The same race exists on the HTTP/2 body read (#1648): Kestrel aborts the
-    // request pipe with IOException("The client reset the request stream.")
-    // (RST_STREAM) before the token fires, so that IOException — thrown out of
-    // the body read, matching Kestrel's constant wording — and an IOException
-    // caught while the token is cancelled are client aborts too. Every other
-    // IOException (e.g. a failing disk) is an ordinary failure.
+    // The same race exists on the body read (#1648): before the token fires,
+    // the transport can kill the request pipe — on HTTP/2 Kestrel aborts it
+    // with IOException("The client reset the request stream.") (RST_STREAM);
+    // on any HTTP version the socket transport completes the input pipe with
+    // ConnectionResetException ("Connection reset by peer"), which the body
+    // read rethrows TOP-LEVEL (it is itself an IOException). So that
+    // Kestrel-worded IOException, a top-level or inner
+    // ConnectionResetException, an inner ConnectionAbortedException, and an
+    // IOException caught while the token is cancelled are client aborts too.
+    // Every other IOException with the token intact (e.g. a failing disk) is
+    // an ordinary failure; one caught after the token fired counts as an
+    // abort (the disconnect is the likely cause — ADR-0016).
     internal static class ClientAbortDetection
     {
         // Kestrel's constant, non-localized wording of the HTTP/2 stream reset
@@ -43,6 +49,7 @@ namespace HSMServer.Middleware
         private static bool IsBodyResetAbort(Exception exception, HttpContext context) =>
             exception is IOException &&
             (context.RequestAborted.IsCancellationRequested ||
+             exception is ConnectionResetException ||
              exception.InnerException is ConnectionResetException or ConnectionAbortedException ||
              string.Equals(exception.Message, ClientResetRequestStream, StringComparison.Ordinal));
     }
