@@ -245,8 +245,16 @@
                         // ids/inputs that the next Save reads from the wrong element, so the second
                         // Save after a validation error silently fails or sends stale data (#1247).
                         // replaceWith swaps the outer form for the freshly rendered one.
+                        // #1650: the fresh partial renders the affected-sensors preview EMPTY (only
+                        // updateForm fills it) — remember the visible page and refill the preview for
+                        // the unchanged paths, or the list silently reads as "no sensors match" until
+                        // the user edits a path.
+                        var page = parseInt($('#sensors_pagination ul li.active .page-link').text()) || 1;
+
                         $("#addAlertTemplate_form").replaceWith(viewData);
                         initForm();
+                        if(getPaths().some(p => p !== ''))
+                            updateForm(false, page);
                     }
                 }
             });
