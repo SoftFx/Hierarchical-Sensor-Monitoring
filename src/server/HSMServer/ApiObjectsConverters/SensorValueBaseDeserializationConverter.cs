@@ -42,6 +42,13 @@ namespace HSMServer.ApiObjectsConverters
                     continue;
 
                 readerClone.Read();
+
+                // GetInt32 throws an InvalidOperationException on a non-number, which
+                // no caller turns into a client error; keep the discriminator failures
+                // JsonExceptions so the batch is refused with 400, not 500 (#1672).
+                if (readerClone.TokenType != JsonTokenType.Number)
+                    throw new JsonException("The sensor Type discriminator must be a number");
+
                 var sensorType = readerClone.GetInt32();
 
                 return (SensorType)sensorType switch

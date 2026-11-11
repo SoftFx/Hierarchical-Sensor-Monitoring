@@ -188,12 +188,11 @@ namespace HSMServer.Core.Tests.SensorApi
 
             const string malformedBody = "[{\"Type\":1,\"Value\":\"MARKER-not-a-number\",\"Path\":\"failure/int\"}]";
 
-            // The one place where the ack deliberately differs from the HTTP route. There the
-            // model binder throws and the request ends as a 500, which tells a collector to
-            // retry a body that can never be accepted. The session answers 400. If this
-            // assertion fails because the route learned to answer 400, the difference is
-            // gone: update the wire-contract doc.
-            Assert.Equal(HttpStatusCode.InternalServerError, (await PostAsync(host, "list", malformedBody, _key)).Status);
+            // Both transports refuse a body the server cannot parse with 400 (#1672):
+            // the route through the model binder's model-state error, the session with
+            // its "malformed body" error text. A collector does not retry a body that
+            // can never be accepted.
+            Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync(host, "list", malformedBody, _key)).Status);
 
             await SendAsync(socket, $"{{\"id\":4,\"op\":\"list\",\"body\":{malformedBody}}}");
             var malformed = await ReceiveTextAsync(socket);
