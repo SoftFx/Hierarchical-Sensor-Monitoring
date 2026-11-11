@@ -348,12 +348,13 @@ namespace hsm::test
             return WriteAll(connection_, frame);
         }
 
-        // Starts the close handshake from the server side with the given status code.
-        bool SendClose(uint16_t code)
+        // Starts the close handshake from the server side with the given status code and reason.
+        bool SendClose(uint16_t code, const std::string& reason = {})
         {
             std::string payload;
             payload.push_back(static_cast<char>((code >> 8) & 0xFF));
             payload.push_back(static_cast<char>(code & 0xFF));
+            payload += reason;
             return SendFrame(0x8, /*fin=*/true, payload);
         }
 

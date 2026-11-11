@@ -335,6 +335,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refused_upgrade_reports_status
         COMMAND hsm_collector_tests native_ws_refused_upgrade_reports_status
     )
+    add_test(NAME native_ws_tells_a_close_frame_from_a_tcp_close
+        COMMAND hsm_collector_tests native_ws_tells_a_close_frame_from_a_tcp_close
+    )
     add_test(NAME native_ws_assembles_fragmented_messages
         COMMAND hsm_collector_tests native_ws_assembles_fragmented_messages
     )
@@ -354,6 +357,12 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_session_reconnects_after_a_drop
         COMMAND hsm_collector_tests native_session_reconnects_after_a_drop
+    )
+    add_test(NAME native_session_logs_how_a_session_ended
+        COMMAND hsm_collector_tests native_session_logs_how_a_session_ended
+    )
+    add_test(NAME native_session_logs_open_failures_by_kind
+        COMMAND hsm_collector_tests native_session_logs_open_failures_by_kind
     )
     add_test(NAME native_session_ack_timeout_reopens_and_resends
         COMMAND hsm_collector_tests native_session_ack_timeout_reopens_and_resends

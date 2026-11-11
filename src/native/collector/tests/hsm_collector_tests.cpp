@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -6618,6 +6619,49 @@ namespace
         Require(server.Upgrades() == 2, "both connections must have been upgraded");
     }
 
+    // Both ends of a session report as Closed, but the connection says which one it was: a close
+    // frame carries its code and reason, a TCP close carries neither. And an Open says where it
+    // connected to.
+    void NativeWsTellsACloseFrameFromATcpClose()
+    {
+        if (!WsAvailable("native_ws_tells_a_close_frame_from_a_tcp_close"))
+            return;
+
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+
+        std::string error;
+        std::string text;
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
+            Require(opened.ok, "the first upgrade must succeed");
+            Require(opened.peer == "127.0.0.1:" + std::to_string(server.Port()), ("the open must name the peer, got '" + opened.peer + "'").c_str());
+            Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the first connection");
+
+            Require(server.SendClose(4001, "going away for a test"), "the server must be able to start a close");
+            Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a close frame must be reported as Closed");
+            const auto& closure = connection.LastClosure();
+            Require(closure.close_frame, "a close frame must be reported as one");
+            Require(closure.code == 4001, ("the close frame's code must be kept, got " + std::to_string(closure.code)).c_str());
+            Require(closure.reason == "going away for a test", ("the close frame's reason must be kept, got '" + closure.reason + "'").c_str());
+        }
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+        Require(!connection.LastClosure().close_frame, "an Open must forget how the previous connection ended");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the second connection");
+
+        // The fixture has read everything the client sent, so its close is an orderly FIN that
+        // libcurl reads as the end of the stream (CURLE_GOT_NOTHING), not a reset.
+        server.Drop();
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a TCP close must be reported as Closed");
+        Require(!connection.LastClosure().close_frame, "a TCP close must not be reported as a close frame");
+        Require(connection.LastClosure().code == 0 && connection.LastClosure().reason.empty(), "a TCP close carries no code and no reason");
+    }
+
     // A refused upgrade is a failed Open that reports the server's HTTP status, and a server that
     // does not select the offered subprotocol is not a session either.
     void NativeWsRefusedUpgradeReportsStatus()
@@ -7005,6 +7049,161 @@ namespace
                 "a value sent after the reconnect must arrive on the new session");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // What a SessionTransport logs, for the tests that pin it.
+    struct SessionLogRecorder
+    {
+        struct Line
+        {
+            hsm::http::SessionLogLevel level = hsm::http::SessionLogLevel::Debug;
+            std::string text;
+        };
+
+        mutable std::mutex mutex;
+        std::vector<Line> lines;
+
+        std::function<void(hsm::http::SessionLogLevel, const std::string&)> Callback()
+        {
+            return [this](hsm::http::SessionLogLevel level, const std::string& text) {
+                std::lock_guard<std::mutex> guard(mutex);
+                lines.push_back({ level, text });
+            };
+        }
+
+        // Lines that contain every one of `parts`; the first of them goes to `found`.
+        size_t Count(std::initializer_list<const char*> parts, Line* found = nullptr) const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            size_t count = 0;
+            for (const auto& line : lines)
+            {
+                bool all = true;
+                for (const char* part : parts)
+                    all = all && line.text.find(part) != std::string::npos;
+                if (all && found != nullptr && count == 0)
+                    *found = line;
+                count += all ? 1 : 0;
+            }
+            return count;
+        }
+
+        size_t Errors() const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            return static_cast<size_t>(
+                std::count_if(lines.begin(), lines.end(), [](const Line& line) { return line.level == hsm::http::SessionLogLevel::Error; }));
+        }
+
+        std::string Dump() const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            std::string all;
+            for (const auto& line : lines)
+                all += "\n  " + line.text;
+            return all;
+        }
+    };
+
+    hsm::http::SessionOptions SessionTransportOptions(const hsm::test::WebSocketTestServer& server, SessionLogRecorder& log)
+    {
+        hsm::http::SessionOptions options;
+        options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+        options.verify_peer = false;
+        options.headers = { { "Key", "secret-session-key" } };
+        options.log = log.Callback();
+        return options;
+    }
+
+    // What the transport logs about a session's life: where it connected and how long the open
+    // took, and when it ends, how (a close frame with its code and reason, or a TCP close), after
+    // how long, with what in flight. Sessions that keep ending early do not fill the log: a repeat
+    // of the same end is suppressed, and the next line that is logged says how many were.
+    void NativeSessionLogsHowASessionEnded()
+    {
+        if (!WsAvailable("native_session_logs_how_a_session_ended"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+        SessionLogRecorder log;
+        hsm::http::SessionTransport transport(SessionTransportOptions(server, log));
+        transport.Start();
+
+        const std::string peer = "connected to 127.0.0.1:" + std::to_string(server.Port());
+        SessionLogRecorder::Line up{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session is up: ", peer.c_str(), " in " }, &up) == 1; }, 10000),
+                ("the up line must name the peer and the open time:" + log.Dump()).c_str());
+        Require(up.level == hsm::http::SessionLogLevel::Info, "a session coming up is INFO");
+        Require(transport.Request("list", "[]", 5000).IsSuccess(), "a request must be acknowledged");
+
+        // A close frame from the server, with its code and a reason that tries to forge a line.
+        Require(server.SendClose(4002, "closed by\nthe test"), "the server must be able to start a close");
+        SessionLogRecorder::Line ended{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session ended after ", "close frame (code 4002, reason \"closed by?the test\")" }, &ended) == 1; },
+                             10000),
+                ("the end line must carry the close frame's code and its reason, made printable:" + log.Dump()).c_str());
+        Contains(ended.text, "Peer 127.0.0.1:" + std::to_string(server.Port()));
+        Contains(ended.text, "requests sent 1, acks received 1, still waiting for an ack 0; pings sent 0, pongs received 0");
+        Contains(ended.text, "last frame from the server ");
+        Contains(ended.text, "Reconnecting with backoff: it lasted less than 1m 00s");
+        Require(ended.level == hsm::http::SessionLogLevel::Info, "a session that ended and is reopened is not an ERROR");
+
+        // The reconnect after a session that ended early is not logged: the next line says so.
+        Require(WaitUntilFor([&] { return server.Upgrades() == 2 && transport.IsUp(); }, 15000), "the collector must reopen the session");
+        server.Drop();
+        SessionLogRecorder::Line dropped{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session ended after ", "the connection ended without a close frame" }, &dropped) == 1; },
+                             10000),
+                ("a TCP close must be logged as one:" + log.Dump()).c_str());
+        Contains(dropped.text, "(1 line(s) about earlier short-lived sessions suppressed)");
+
+        // The same end again: nothing new is logged.
+        Require(WaitUntilFor([&] { return server.Upgrades() == 3 && transport.IsUp(); }, 15000), "the collector must reopen the session again");
+        server.Drop();
+        Require(WaitUntilFor([&] { return server.Upgrades() == 4; }, 20000), "the collector must reopen the session after the second drop");
+
+        transport.Stop(1000);
+        std::cout << "native_session_logs_how_a_session_ended: the lines logged:" << log.Dump() << std::endl;
+        Require(log.Count({ "the connection ended without a close frame" }) == 1, "a repeated early end must be suppressed");
+        Require(log.Count({ "The collector session is up" }) == 1, "the up lines of a flapping session must be suppressed");
+        Require(log.Count({ "close frame (code 4002" }) == 1, "a TCP close must not be taken for a close frame");
+        Require(log.Errors() == 0, ("nothing here is an ERROR:" + log.Dump()).c_str());
+        Require(log.Count({ "secret-session-key" }) == 0, "no line may carry the access key");
+        Require(log.lines.size() == 3, ("a stop logs nothing, and nothing else was logged:" + log.Dump()).c_str());
+    }
+
+    // An upgrade refused for a reason that may pass (503) is INFO; one that a retry will not
+    // change (401) is an ERROR; and the session that finally opens says how long it took.
+    void NativeSessionLogsOpenFailuresByKind()
+    {
+        if (!WsAvailable("native_session_logs_open_failures_by_kind"))
+            return;
+
+        auto server_options = SessionServerOptions();
+        server_options.refuse_with_status = 503;
+        hsm::test::WebSocketTestServer server(server_options);
+        SessionLogRecorder log;
+        hsm::http::SessionTransport transport(SessionTransportOptions(server, log));
+        transport.Start();
+
+        SessionLogRecorder::Line busy{};
+        Require(WaitUntilFor([&] { return log.Count({ "Cannot open a collector session (attempt 1, ", "with HTTP 503" }, &busy) == 1; }, 10000),
+                ("a refused upgrade must be logged with its status:" + log.Dump()).c_str());
+        Require(busy.level == hsm::http::SessionLogLevel::Info, "a 503 may pass by itself: INFO");
+
+        server.RefuseUpgradesWith(401);
+        SessionLogRecorder::Line unauthorized{};
+        Require(WaitUntilFor([&] { return log.Count({ "Cannot open a collector session (attempt ", "with HTTP 401" }, &unauthorized) == 1; }, 15000),
+                ("a new reason must be logged:" + log.Dump()).c_str());
+        Require(unauthorized.level == hsm::http::SessionLogLevel::Error, "a 401 will not pass by itself: ERROR");
+
+        server.RefuseUpgradesWith(0);
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session is up after ", "failed attempt(s) and ", "without a session" }) == 1; }, 20000),
+                ("the up line must say how long the outage lasted:" + log.Dump()).c_str());
+
+        transport.Stop(1000);
+        Require(log.Count({ "with HTTP 503" }) == 1 && log.Count({ "with HTTP 401" }) == 1, "each reason must be logged once");
+        Require(log.Count({ "secret-session-key" }) == 0, "no line may carry the access key");
     }
 
     // A request that gets no ack in time is a failed send, and it ends the session: a late ack must
@@ -9444,6 +9643,7 @@ namespace
             { "native_ws_receives_server_push_while_idle", [](const std::string&) { NativeWsReceivesServerPushWhileIdle(); } },
             { "native_ws_detects_server_close_and_drop", [](const std::string&) { NativeWsDetectsServerCloseAndDrop(); } },
             { "native_ws_refused_upgrade_reports_status", [](const std::string&) { NativeWsRefusedUpgradeReportsStatus(); } },
+            { "native_ws_tells_a_close_frame_from_a_tcp_close", [](const std::string&) { NativeWsTellsACloseFrameFromATcpClose(); } },
             { "native_ws_assembles_fragmented_messages", [](const std::string&) { NativeWsAssemblesFragmentedMessages(); } },
             { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
             { "native_ws_refuses_binary_and_oversized_messages", [](const std::string&) { NativeWsRefusesBinaryAndOversizedMessages(); } },
@@ -9451,6 +9651,8 @@ namespace
             { "native_session_delivers_registrations_and_values", [](const std::string&) { NativeSessionDeliversRegistrationsAndValues(); } },
             { "native_session_queues_while_refused_and_delivers_after_connect", [](const std::string&) { NativeSessionQueuesWhileRefusedAndDeliversAfterConnect(); } },
             { "native_session_reconnects_after_a_drop", [](const std::string&) { NativeSessionReconnectsAfterADrop(); } },
+            { "native_session_logs_how_a_session_ended", [](const std::string&) { NativeSessionLogsHowASessionEnded(); } },
+            { "native_session_logs_open_failures_by_kind", [](const std::string&) { NativeSessionLogsOpenFailuresByKind(); } },
             { "native_session_ack_timeout_reopens_and_resends", [](const std::string&) { NativeSessionAckTimeoutReopensAndResends(); } },
             { "native_session_splits_a_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsABatchToTheFrameLimit(); } },
             { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },

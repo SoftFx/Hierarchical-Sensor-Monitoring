@@ -112,12 +112,30 @@ namespace hsm::http
             SessionResult result;
         };
 
+        // What one session did, for the line that reports its end. Touched by the session thread
+        // only.
+        struct Counters
+        {
+            uint64_t requests_sent = 0;
+            uint64_t acks = 0; // every ack received, including late ones nobody waited for any more
+            uint64_t pings_sent = 0;
+            uint64_t pongs = 0;
+            std::chrono::steady_clock::time_point last_in; // the last frame from the server
+            std::chrono::steady_clock::time_point served_since;
+            // The session was opened while sessions kept ending early, and its up line was
+            // suppressed: say once that it holds when it has lasted kStableSessionMs.
+            bool announce_when_stable = false;
+            uint64_t short_sessions = 0;   // for that line: short-lived sessions before this one
+            uint64_t suppressed_lines = 0; // for that line: lines left out about them
+        };
+
         void Run();
         void RunLoop();
         // Serves one open session until it ends. Returns why it ended, empty when stopping.
-        std::string Serve(WebSocketConnection& connection);
-        bool ReadHello(WebSocketConnection& connection, int64_t timeout_ms, std::string& why);
-        void HandleFrame(const std::string& text);
+        std::string Serve(WebSocketConnection& connection, Counters& counters);
+        // `permanent`: the server answered with something that a retry will not change.
+        bool ReadHello(WebSocketConnection& connection, int64_t timeout_ms, std::string& why, bool& permanent);
+        void HandleFrame(const std::string& text, Counters& counters);
         void FailAll(const std::string& why);
         // Waits before the next attempt; false when stopping.
         bool WaitBeforeRetry(int attempt);
