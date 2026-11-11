@@ -65,6 +65,16 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // the map already and the write fails on them.
         public static void AddConditionErrors(AlertTemplateDto dto, Dictionary<string, List<string>> errors)
         {
+            // #1677: an unknown sensor type (e.g. 999) byte-truncates in the
+            // rule lookup below ((SensorType)999 = 231), so the per-condition
+            // messages would judge the conditions against — and name — a type
+            // the caller never sent. The structural pass has already rejected
+            // the type under its own key; skip the condition pass entirely
+            // and let that one error speak.
+            if (dto.SensorType != AlertTemplateModel.AnyType &&
+                !(dto.SensorType is >= 0 and <= byte.MaxValue && Enum.IsDefined((SensorType)dto.SensorType)))
+                return;
+
             foreach (var (policy, index) in (dto.Policies ?? []).Select((p, i) => (p, i)))
                 AddConditionErrors(dto.SensorType, isTtlPolicy: false, policy, $"policies[{index}]", errors);
 

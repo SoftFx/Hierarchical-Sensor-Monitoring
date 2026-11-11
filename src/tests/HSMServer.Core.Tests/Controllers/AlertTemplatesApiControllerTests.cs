@@ -760,6 +760,11 @@ namespace HSMServer.Core.Tests.Controllers
             // #1607: the enum-coded fields bind as int, so out-of-range values
             // REACH the validator instead of failing JSON binding first — the
             // error names the field and the value like the in-range unknowns.
+            // #1677: the sensorType error must also be the ONLY one — the
+            // per-condition pass used to judge the conditions against the
+            // byte-truncated cast ((SensorType)999 = 231) and add a
+            // "Property 'Value' is not supported by 231 templates." error
+            // naming a type the caller never sent.
             var dto = BuildDto(sensorType: sensorType);
 
             var result = await CreateController().CreateTemplate(dto);
@@ -769,6 +774,7 @@ namespace HSMServer.Core.Tests.Controllers
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
             Assert.Equal($"Unknown sensor type {sensorType}.",
                 Assert.IsType<string[]>(details["sensorType"]).Single());
+            Assert.DoesNotContain(details.Keys, key => key.StartsWith("policies["));
             Assert.Empty(_store);
         }
 
