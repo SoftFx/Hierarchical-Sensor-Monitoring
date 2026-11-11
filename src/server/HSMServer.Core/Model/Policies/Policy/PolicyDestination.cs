@@ -86,6 +86,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal void Update(PolicyDestinationUpdate update)
         {
+            // Null means "nothing to change" — the twin of PolicySchedule's
+            // null guard. Without it a null update threw, and Policy.TryUpdate
+            // caught the throw and silently rejected the WHOLE update (#1645).
+            if (update is null)
+                return;
+
             Mode = update.Mode ?? Mode;
 
             Chats.Clear();

@@ -1676,6 +1676,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var update = new PolicyUpdate
             {
                 ConfirmationPeriod = 0,
+                // Destination/Schedule arms ride as empty updates — a null
+                // arm used to throw inside PolicyDestination.Update, and
+                // Policy.UpdatePolicy swallows TryUpdate's error, minting a
+                // CONTENT-EMPTY policy without a whisper (#1645).
+                Destination = new PolicyDestinationUpdate(),
+                Schedule = new PolicyScheduleUpdate(),
                 Conditions =
                 [
                     new PolicyConditionUpdate(
@@ -1685,6 +1691,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ],
             };
             policy.UpdatePolicy(update);
+
+            // UpdatePolicy discards TryUpdate's error by contract — assert
+            // the content landed so the helper can never regress silently
+            // (#1645): a dozen template-application tests build on it.
+            Assert.Single(policy.Conditions);
+            Assert.Equal(PolicyProperty.Value, policy.Conditions[0].Property);
 
             var template = new AlertTemplateModel
             {
