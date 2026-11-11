@@ -675,6 +675,41 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "legacy/registered", out _));
         }
 
+        // #1678: testConnection is the collector's CONNECTIVITY AND AUTH check —
+        // an anonymous call must not answer 200 like a successful authenticated
+        // check. A keyed request with an unusable key was already answered 406
+        // by the telemetry middleware; the keyless call answers the area's own
+        // 406 now.
+        [Fact]
+        public async Task TestConnection_WithoutCredentials_Answers406NotASilent200()
+        {
+            await using var host = await StartHost();
+
+            using var http = new HttpClient();
+            using var response = await http.GetAsync(new Uri(host.HttpBase, "testConnection"), Deadline());
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+            Assert.Equal("Public API request info not found", await response.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task TestConnection_WithAKeyThatCannotSend_Answers406()
+        {
+            await using var host = await StartHost();
+
+            var readOnly = AddKey(KeyPermissions.CanReadSensorData).ToString();
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, (await PostAsync(host, "list", $"[{IntValue("tc/refused", 5)}]", readOnly)).Status);
+
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(host.HttpBase, "testConnection"));
+            request.Headers.Add("Key", readOnly);
+
+            using var response = await http.SendAsync(request, Deadline());
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+        }
+
         // The number behind the default session cap: what one idle session holds on the
         // server. The clients are raw sockets that only do the upgrade, so nearly all of the
         // measured growth is the server's. Printed for the record; the assertion is only a

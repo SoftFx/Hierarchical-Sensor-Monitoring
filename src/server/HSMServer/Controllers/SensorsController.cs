@@ -68,8 +68,20 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// The collector's pre-flight check: connectivity AND auth. A request
+        /// with a Key header is already answered 406 by the telemetry
+        /// middleware when the key is unusable (expired, blocked, #1649);
+        /// what stayed wrong was the keyless call, which answered an empty
+        /// 200 — indistinguishable from a successful authenticated check
+        /// (#1678). The send-permission filter mirrors the data endpoints:
+        /// this proves the collector can WORK with the server, not merely
+        /// reach it.
+        /// </summary>
         [HttpGet("testConnection")]
-        public ActionResult TestConnection() => Ok(); //add test
+        [SendDataKeyPermissionFilter]
+        public ActionResult TestConnection() =>
+            HttpContext.TryGetPublicApiInfo(out _) ? Ok() : StatusCode(406, InvalidRequest);
 
 
         /// <summary>
