@@ -128,7 +128,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `file` | `FileSensorValue` |
 | `commands` | command batch (response: error dictionary keyed by sensor path) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` |
-| `testConnection` | — |
+| `testConnection` | — ; the collector's connectivity AND auth pre-flight: a keyless call answers **406** `Public API request info not found` (#1678 — an anonymous ping must not look like a successful authenticated check), a keyed call with an unusable key (expired/blocked, or without send permission) answers the key's own 406 reason, and only a usable send key answers 200 |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
 
 ## Collector session (WebSocket)
