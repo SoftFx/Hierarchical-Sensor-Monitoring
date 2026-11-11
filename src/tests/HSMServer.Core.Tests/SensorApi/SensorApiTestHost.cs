@@ -12,6 +12,9 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -43,6 +46,34 @@ namespace HSMServer.Core.Tests.SensorApi
         public void AddReceivedValues(string telemetryPath, int count) => Records.Enqueue(("values", telemetryPath, count));
 
         public long Sum(string kind, string path) => Records.Where(record => record.Kind == kind && record.Path == path).Sum(record => record.Amount);
+    }
+
+
+    // What the session handler logged, in order. Its own LogFactory, so the process-wide NLog
+    // configuration is neither read nor changed and the tests can run in parallel.
+    internal sealed class RecordingLog : Target
+    {
+        public ConcurrentQueue<(NLog.LogLevel Level, string Message)> Lines { get; } = new();
+
+
+        public static Logger CreateLogger(RecordingLog target)
+        {
+            var factory = new LogFactory();
+            var config = new LoggingConfiguration(factory);
+
+            config.AddRuleForAllLevels(target);
+            factory.Configuration = config;
+
+            return factory.GetLogger(nameof(CollectorSessionHandler));
+        }
+
+        public (NLog.LogLevel Level, string Message)[] Matching(params string[] parts) =>
+            Lines.Where(line => parts.All(part => line.Message.Contains(part, StringComparison.Ordinal))).ToArray();
+
+        public string Dump() => string.Join(Environment.NewLine, Lines.Select(line => $"{line.Level}|{line.Message}"));
+
+
+        protected override void Write(LogEventInfo logEvent) => Lines.Enqueue((logEvent.Level, logEvent.FormattedMessage));
     }
 
 
@@ -168,6 +199,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public RecordingTelemetry Telemetry { get; }
 
+        public RecordingLog Log { get; }
+
         public ManualTimeProvider Time => (ManualTimeProvider)_app.Services.GetRequiredService<TimeProvider>();
 
         public CollectorSessionRegistry Registry => _app.Services.GetRequiredService<CollectorSessionRegistry>();
@@ -177,10 +210,11 @@ namespace HSMServer.Core.Tests.SensorApi
         public Uri SessionUri { get; }
 
 
-        private SensorApiTestHost(WebApplication app, RecordingTelemetry telemetry)
+        private SensorApiTestHost(WebApplication app, RecordingTelemetry telemetry, RecordingLog log)
         {
             _app = app;
             Telemetry = telemetry;
+            Log = log;
 
             var address = new Uri(app.Urls.First());
 
@@ -227,6 +261,9 @@ namespace HSMServer.Core.Tests.SensorApi
                     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals);
 
             var app = builder.Build();
+            var log = new RecordingLog();
+
+            app.Services.GetRequiredService<CollectorSessionHandler>().UseLogger(RecordingLog.CreateLogger(log));
 
             // The part of the server pipeline the Sensor API runs through, in its order.
             app.UseRouting();
@@ -236,7 +273,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             await app.StartAsync();
 
-            return new SensorApiTestHost(app, telemetry);
+            return new SensorApiTestHost(app, telemetry, log);
         }
 
         public Task StopAsync() => _app.StopAsync();
