@@ -21,9 +21,10 @@ hosts it. The single signed `hsm-agent.exe` is identical across every download �
 > there is no .NET runtime requirement and no MSI/C# installer on the client.
 
 For the download button to bake in the right URL, set the **Agent connection URL** under
-*Configuration → Agent* (the externally-reachable Sensor-API base, e.g. `https://hsm.company.com:44330`).
-Behind Docker/NAT the server cannot infer this. When blank, it falls back to the request host + the
-configured Sensors API port. Use a scheme + host (+ optional port) only — a **path prefix is not
+*Configuration → Agent* (the externally-reachable Sensor-API base, e.g. `https://hsm.company.com`).
+Behind Docker/NAT the server cannot infer this. When blank, it falls back to the request host and its
+port — 443 when the host carries none; the retired 44330/44333 ports are never written into a bundle.
+Use a scheme + host (+ optional port) only — a **path prefix is not
 supported** (a reverse proxy must expose the Sensor API at the host root, not under a sub-path), and the
 prefix is dropped rather than baked into a config that would not connect.
 
@@ -65,7 +66,7 @@ are required; everything else has a default.
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `server.address` | — (required) | HSM Sensor API base URL, e.g. `https://hsm.company.com` |
-| `server.port` | `44330` | HSM Sensor API port |
+| `server.port` | `443` | HSM server port (one port for everything since #1590; see "Retired ports" below for 44330/44333) |
 | `server.accessKey` | — (required) | per-product access key (GUID) |
 | `server.allowUntrustedCertificate` | `false` | accept a self-signed server certificate |
 | `identity.computerName` | `"auto"` | `"auto"`/blank → the machine host name |
@@ -93,11 +94,31 @@ A name that isn't in the top list that tick gets no value — leaving a natural 
 Blank/missing `address` or `accessKey`, or an out-of-range `port`, make the agent refuse to start (the
 reason is logged to the Event Log and the file log).
 
+## Retired ports 44330 / 44333
+
+HSM servers used to answer on two ports: 44330 (Sensor API) and 44333 (Web UI). Since #1590 everything is
+on **443**, and the server stack no longer publishes the old ports at all (**breaking change**, #1696).
+An agent whose `config.json` still says `"port": 44330` cannot connect once the server's compose files
+are upgraded, and the server cannot see a connection that never arrives.
+
+- **Agent 0.5.50 and later** handles it. At every start it logs that `server.port` is a retired port.
+  When that port stops answering and the server answers on 443, the service rewrites `config.json` to
+  `"port": 443`, logs the move and restarts itself — no operator action. If neither port answers it
+  logs an error every hour and changes nothing. A `--console` run only reports what to change.
+- **Older agents** only log `Could not connect to server`. Set `"port": 443` under `"server"` in
+  `%ProgramData%\HSM Agent\config.json` and restart the service (`sc stop HSMAgent`, then
+  `sc start HSMAgent`), or reinstall from a freshly downloaded bundle.
+- **To let older agents update themselves first:** upgrade the server image to one that ships agent
+  0.5.50 or later while the old ports still answer, wait until the agents report the new version
+  (`.module/Version`), and only then replace the server's compose files.
+- A server that itself listens on 44330 (no proxy, `Kestrel.Port` set to it) keeps working: the agent
+  leaves a retired port alone for as long as it answers.
+
 ## Where the data lands
 
 Computer sensors appear in the server tree under `<computer>/.computer/...` for the product the access
 key belongs to (note the literal `.computer` segment). Verify via the server UI or the history API
-(`POST :44330/api/sensors/history`).
+(`POST /api/sensors/history`).
 
 ## Troubleshooting
 
@@ -106,7 +127,7 @@ key belongs to (note the literal `.computer` segment). Verify via the server UI 
 - **Service state.** `sc query HSMAgent` should show `RUNNING` with `START_TYPE` Auto. On a crash the
   service auto-restarts (failure-actions) after a minute.
 - **"Cannot connect to server".** Check `server.address`/`port` reachability from the machine, and the
-  access key. For a self-signed server certificate set `server.allowUntrustedCertificate: true`.
+  access key. If `port` is 44330 or 44333, see "Retired ports 44330 / 44333" above: the fix is `"port": 443`. For a self-signed server certificate set `server.allowUntrustedCertificate: true`.
 - **Foreground debugging.** Run `hsm-agent --console` to see live log output on stderr.
 - **Not started by the SCM.** Running `hsm-agent.exe` with no arguments from a console prints guidance —
   that mode is for the service manager; use `--console` for a foreground run.

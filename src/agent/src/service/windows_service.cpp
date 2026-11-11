@@ -119,6 +119,7 @@ namespace hsm::agent
 
             auto logger = MakeAgentLogger(&file, &event_log, false);
             AgentRuntime runtime(std::move(config), std::move(logger));
+            runtime.SetServiceConfigPath(g_config_path);
             g_runtime.store(&runtime);
             event_log.ReportInformation("HSM Agent service starting.");
 

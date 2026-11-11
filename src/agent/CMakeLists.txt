@@ -21,7 +21,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.5.49 LANGUAGES CXX)
+project(HsmAgent VERSION 0.5.50 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
@@ -49,7 +49,7 @@ endfunction()
 # --- Portable config layer + tests (every platform) ----------------------------------------------
 # cpu_top.cpp moved to the native collector (#1179): SelectTopN + WindowsCpuSampler now live in
 # src/native/collector/src/cpu_top.cpp and are exposed via hsm_collector_enable_top_cpu_sensors.
-add_library(hsm_agent_config STATIC src/config.cpp src/launch_hint.cpp)
+add_library(hsm_agent_config STATIC src/config.cpp src/launch_hint.cpp src/retired_port.cpp)
 target_include_directories(hsm_agent_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(hsm_agent_config PUBLIC cxx_std_17)
 hsm_agent_set_warnings(hsm_agent_config)
@@ -86,7 +86,10 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_update_config_parses_and_defaults
             agent_update_config_rejects_bad_period
             agent_sensor_group_flag_maps_names
-            agent_launch_hint_message_guides_the_operator)
+            agent_launch_hint_message_guides_the_operator
+            agent_retired_port_names_only_the_old_two
+            agent_retired_port_verdict_follows_the_probes
+            agent_retired_port_notices_name_the_fix)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 

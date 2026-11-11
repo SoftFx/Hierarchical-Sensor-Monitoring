@@ -1,6 +1,6 @@
 # Feature: HSM Agent (Windows service)
 
-> Owner: agent | Last reviewed: 2026-10-14 | Canonical: yes
+> Owner: agent | Last reviewed: 2026-11-11 | Canonical: yes
 > Scope: The standalone **HSM Agent** product (`src/agent/`) — an always-on Windows service that hosts the native collector and streams this computer's metrics to an HSM server with zero client-side configuration. This feature owns the service host, config, and logging; it owns NO wire behavior (that all lives in `collector/` + `integrations/native-collector`).
 
 ---
@@ -167,7 +167,7 @@ exposes no general parser and the epic mandates minimal deps. Platform-agnostic 
 tested on every CI lane. Only `server.address` + `server.accessKey` are required; everything else
 defaults. Maps onto `CollectorOptions` + runtime group gates:
 
-- `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port).
+- `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port). A `port` of 44330/44333 is accepted but watched — see "Retired server port".
 - `identity.computerName` (`"auto"`/blank → `GetComputerNameExW` physical DNS host name) → `computer_name`;
   `identity.module` → `module`.
 - `sensors.{computer,system,disk,network,module,process}` — `computer` is the umbrella host bundle;
@@ -248,6 +248,42 @@ agent's real data path, so emitting only on the typed endpoints means it never s
 - Toggling a product's sensor groups (server `ProductController.UpdateSensorGroups`) is gated by the
   **ProductManager** role on that product, like every other product mutation.
 
+## Retired server port (issues #1655, #1696)
+
+Before #1590 the server answered on 44330 (Sensor API) and 44333 (Web UI); #1696 removed the last
+aliases of them, so only 443 answers. An agent installed against the old scheme keeps
+`server.port: 44330` in `config.json`, and a connection that never reaches the server leaves no trace
+there: the agent is the only place that can say what is wrong, and it must not fail silently.
+
+- **Which ports.** Exactly 44330 and 44333 (`IsRetiredServerPort`, `include/agent/retired_port.hpp`).
+  Any other port — 443, a custom one — is never probed or changed: such a config behaves as before.
+- **At every start** with a retired port the agent logs a notice naming the port, 443, the file to
+  edit and the service to restart.
+- **While running** it checks 30 s after start and then every 5 min
+  (`AgentRuntime::WaitForStopWatchingRetiredPort`, on the runtime's own thread in place of the plain
+  stop wait). The decision is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
+  `GET /api/sensors/testConnection` returns 200 under the config's scheme and certificate policy, 3 s
+  timeouts), asked lazily and in a fixed order:
+  1. the retired port answers → keep it. This covers a proxy-less server pinned to the old port
+     (`Kestrel.Port`) and an operator's own port mapping; 443 is not even asked.
+  2. the retired port is dead and 443 answers → **move**: rewrite `config.json` with `port: 443`
+     (`WriteAgentConfig`, the directive rewrite), spawn the `--restart-service` helper, stop. The
+     collector's endpoint is built once at `Start`, so the new port needs a fresh process — the same
+     persist-then-restart sequence as a sensor-group directive. If the rewrite or the helper fails, the
+     agent stays up, logs an Error naming the manual fix, and retries at the next check.
+  3. neither answers → nothing changes; an Error is logged hourly (the collector already logs every
+     failed send).
+- **Service only.** The move needs the config path the run was loaded from (`SetServiceConfigPath`,
+  set by the service host). A `--console` run has none and only reports (an hourly Error with the value
+  to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not.
+- **Log levels.** The agent log has no warning level. The start notice and the move are Info (a
+  working or self-healed state); "nothing is being delivered" is Error, which also reaches the Windows
+  Event Log.
+- **Limits.** The probe proves that *an* HSM Sensor API answers on 443 of the same host, not that it
+  knows this agent's access key. Only an agent that already runs this code can move: an older agent has
+  to receive it through self-update while its old port still answers, or be repointed by hand
+  (`docs/hsm-agent.md`, "Retired ports 44330 / 44333").
+
 ## Top processes by CPU (issue #1175)
 
 Opt-in (`topCpu.enabled`). A dedicated thread in `AgentRuntime` (started after `Start()`, joined
@@ -284,9 +320,11 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 16 cases — config parser + topCpu/update
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 19 cases — config parser + topCpu/update
   config + the sensor-group directive name↔field map + the interactive-launch message text,
-  `agent_launch_hint_message_guides_the_operator`) — run on every platform, registered in `ctest`.
+  `agent_launch_hint_message_guides_the_operator` + the retired-port rules, `agent_retired_port_*`:
+  which ports are retired, the verdict for every probe outcome including "no probe for a port that is
+  not retired", and that every notice names the fix) — run on every platform, registered in `ctest`.
 - Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
     a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to

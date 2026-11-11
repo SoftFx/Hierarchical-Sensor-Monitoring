@@ -355,6 +355,29 @@ namespace hsm::agent
         return u;
     }
 
+    // ---- Retired-port reachability probe (#1655) -------------------------------------------------
+
+    // Short timeouts: the probe runs on the runtime's main thread between two waits for the stop
+    // signal, so a black-holed port must not hold a service stop for long.
+    static constexpr int kProbeTimeoutMs = 3000;
+
+    bool HsmServerAnswersOnPort(const AgentConfig& config, int port)
+    {
+        const ServerUrl url = ParseServerUrl(config.server_address, port);
+        if (!url.ok)
+            return false;
+
+        // `port`, not url.port: a port written into server.address does not reach the collector's
+        // endpoint either, and the question here is about the port the collector is using.
+        WinHttpSession sess(url.host, port, url.https, config.allow_untrusted_certificate);
+        if (!sess.Valid())
+            return false;
+        WinHttpSetTimeouts(sess.session, kProbeTimeoutMs, kProbeTimeoutMs, kProbeTimeoutMs, kProbeTimeoutMs);
+
+        std::vector<char> body;
+        return HttpGet(sess, L"/api/sensors/testConnection", url.https, L"", body) == 200;
+    }
+
     // ---- Spawn --apply-update detached process ---------------------------------------------------
 
     static bool SpawnApplyUpdate(const UpdateChecker::LogFn& log)

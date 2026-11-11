@@ -1,5 +1,7 @@
 #include "agent/agent_runtime.hpp"
 
+#include "agent/retired_port.hpp"
+
 #ifdef _WIN32
 #include "agent/apply_update.hpp"
 #include "agent/config.hpp"
@@ -76,6 +78,102 @@ namespace hsm::agent
     {
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait(lock, [this] { return stop_requested_; });
+    }
+
+    void AgentRuntime::SetServiceConfigPath(std::wstring path)
+    {
+        service_config_path_ = std::move(path);
+    }
+
+    bool AgentRuntime::StopRequested()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return stop_requested_;
+    }
+
+    void AgentRuntime::WaitForStopWatchingRetiredPort()
+    {
+#ifdef _WIN32
+        // The first check waits for the collector's own first sends; later ones are spaced so that an
+        // agent stranded by a server upgrade is back within minutes, without probing a healthy server
+        // more than a few times an hour.
+        constexpr auto kFirstCheckDelay = std::chrono::seconds(30);
+        constexpr auto kCheckPeriod = std::chrono::minutes(5);
+        // A state the agent cannot fix by itself is reported hourly, not on every check: the
+        // collector already logs every failed send.
+        constexpr int kNoticeEveryChecks = 12;
+
+        auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(kFirstCheckDelay);
+        int unreachable_checks = 0;
+        int manual_move_checks = 0;
+
+        for (;;)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                if (cv_.wait_for(lock, delay, [this] { return stop_requested_; }))
+                    return;
+            }
+            delay = std::chrono::duration_cast<std::chrono::milliseconds>(kCheckPeriod);
+
+            const RetiredPortVerdict verdict = JudgeRetiredPort(config_.port, [this](int port) {
+                // A stop that arrived during the previous probe ends the check without another one.
+                return !StopRequested() && HsmServerAnswersOnPort(config_, port);
+            });
+            if (StopRequested())
+                return;
+
+            if (verdict == RetiredPortVerdict::ServerUnreachable)
+            {
+                if (unreachable_checks++ % kNoticeEveryChecks == 0)
+                    Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port));
+                continue;
+            }
+            unreachable_checks = 0;
+
+            if (verdict != RetiredPortVerdict::SwitchToStandard)
+                continue;
+
+            if (service_config_path_.empty())
+            {
+                // A foreground run: report, do not touch the file or the service.
+                if (manual_move_checks++ % kNoticeEveryChecks == 0)
+                    Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
+                continue;
+            }
+
+            // Same persist-then-restart sequence as a sensor-group directive: the collector's endpoint
+            // is built once at Start, so the new port needs a fresh process, and config_ itself is
+            // left alone (UpdateChecker reads it on its own thread).
+            AgentConfig updated = config_;
+            updated.port = kStandardServerPort;
+
+            std::string cfg_err;
+            const std::string cfg_path = std::filesystem::path(service_config_path_).string();
+            if (!WriteAgentConfig(cfg_path, updated, cfg_err))
+            {
+                Log(hc::LogLevel::Error,
+                    RetiredPortManualMoveNotice(config_.port) + " (The agent could not rewrite config.json itself: " +
+                        cfg_err + ")");
+                continue;
+            }
+
+            if (!SpawnRestartService())
+            {
+                Log(hc::LogLevel::Error,
+                    "config: server.port " + std::to_string(config_.port) +
+                        " no longer answers; config.json now says \"port\": 443, but the restart helper could not be"
+                        " started. Restart the HSMAgent service to apply.");
+                continue;
+            }
+
+            Log(hc::LogLevel::Info, RetiredPortSwitchNotice(config_.port));
+            RequestStop();
+            return;
+        }
+#else
+        WaitForStop();
+#endif
     }
 
     void AgentRuntime::RequestStop()
@@ -297,6 +395,14 @@ namespace hsm::agent
             Log(hc::LogLevel::Info,
                 "HSM Agent starting: streaming to " + config_.server_address + ":" + std::to_string(config_.port));
 
+            // A config that still names 44330/44333 (#1655): say so at every start, then watch the
+            // port below. The server cannot report a connection that never reaches it. The log has
+            // no warning level: the notices that describe a working or self-healed state are Info,
+            // "nothing answers" is Error (it reaches the Windows Event Log).
+            const bool retired_port = IsRetiredServerPort(config_.port);
+            if (retired_port)
+                Log(hc::LogLevel::Info, RetiredPortStartupNotice(config_.port));
+
             collector.Start();
 
             if (on_started)
@@ -306,7 +412,10 @@ namespace hsm::agent
             updater.Start();
 #endif
 
-            WaitForStop();
+            if (retired_port)
+                WaitForStopWatchingRetiredPort();
+            else
+                WaitForStop();
 
 #ifdef _WIN32
             updater.Stop();

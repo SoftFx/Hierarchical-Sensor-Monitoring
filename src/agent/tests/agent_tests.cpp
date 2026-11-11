@@ -4,6 +4,7 @@
 
 #include "agent/config.hpp"
 #include "agent/launch_hint.hpp"
+#include "agent/retired_port.hpp"
 
 #ifdef _WIN32
 #include "agent/dir_acl.hpp"
@@ -313,6 +314,83 @@ namespace
         Check(contains(L"Logs: %ProgramData%\\HSM Agent\\logs"), "log location");
         Check(contains(L"README.txt"), "points at the bundle README");
         Check(std::wstring(hsm::agent::kLaunchHintTitle) == L"HSM Agent", "message box title");
+    }
+
+    // --- Retired server ports (#1655) ---------------------------------------------------------------
+    //
+    // The server stack no longer publishes 44330/44333, and a connection that never arrives leaves
+    // no trace on the server: the agent has to notice by itself that its config names a dead port.
+
+    void RetiredPortNamesOnlyTheOldTwo()
+    {
+        using hsm::agent::IsRetiredServerPort;
+        Check(IsRetiredServerPort(44330), "44330 (old Sensor API port) is retired");
+        Check(IsRetiredServerPort(44333), "44333 (old Web UI port) is retired");
+        Check(!IsRetiredServerPort(443), "443 is the standard port");
+        Check(!IsRetiredServerPort(8443), "a custom port is not retired");
+        Check(!IsRetiredServerPort(44331), "a neighbour of the old ports is not retired");
+        CheckEq(hsm::agent::kStandardServerPort, 443, "the standard port is 443");
+    }
+
+    void RetiredPortVerdictFollowsTheProbes()
+    {
+        using hsm::agent::JudgeRetiredPort;
+        using hsm::agent::RetiredPortVerdict;
+
+        std::vector<int> probed;
+        const auto probe = [&probed](bool retired_answers, bool standard_answers) {
+            probed.clear();
+            return [&probed, retired_answers, standard_answers](int port) {
+                probed.push_back(port);
+                return port == 443 ? standard_answers : retired_answers;
+            };
+        };
+
+        // A config on 443 (or on any custom port) with an unreachable server behaves as before:
+        // nothing is probed, so nothing can switch it.
+        Check(JudgeRetiredPort(443, probe(false, false)) == RetiredPortVerdict::NotRetired, "443 is not judged");
+        Check(probed.empty(), "443: no probe is made");
+        Check(JudgeRetiredPort(8443, probe(false, true)) == RetiredPortVerdict::NotRetired, "a custom port is not judged");
+        Check(probed.empty(), "custom port: no probe is made");
+
+        // The retired port still answers (a server pinned to it, or an operator's own mapping):
+        // keep it, and do not even ask 443.
+        Check(JudgeRetiredPort(44330, probe(true, true)) == RetiredPortVerdict::StillAnswers, "answering retired port is kept");
+        Check(probed == std::vector<int>{ 44330 }, "443 is not probed while the retired port answers");
+
+        // The stack dropped the old ports: the retired one is dead, 443 answers.
+        Check(JudgeRetiredPort(44330, probe(false, true)) == RetiredPortVerdict::SwitchToStandard, "dead 44330 + live 443 -> switch");
+        Check(probed == std::vector<int>({ 44330, 443 }), "the retired port is probed first, then 443");
+        Check(JudgeRetiredPort(44333, probe(false, true)) == RetiredPortVerdict::SwitchToStandard, "dead 44333 + live 443 -> switch");
+
+        // The server is down altogether: no switch to a port that does not answer either.
+        Check(JudgeRetiredPort(44330, probe(false, false)) == RetiredPortVerdict::ServerUnreachable, "nothing answers -> no switch");
+    }
+
+    void RetiredPortNoticesNameTheFix()
+    {
+        const auto contains = [](const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; };
+
+        const std::string startup = hsm::agent::RetiredPortStartupNotice(44330);
+        Check(contains(startup, "server.port 44330"), "startup notice names the configured port");
+        Check(contains(startup, "443"), "startup notice names the port to use");
+        Check(contains(startup, "config.json"), "startup notice names the file to edit");
+        Check(contains(startup, "HSMAgent"), "startup notice names the service to restart");
+
+        const std::string moved = hsm::agent::RetiredPortSwitchNotice(44333);
+        Check(contains(moved, "server.port 44333"), "switch notice names the old port");
+        Check(contains(moved, "\"port\": 443"), "switch notice says what config.json holds now");
+
+        const std::string manual = hsm::agent::RetiredPortManualMoveNotice(44330);
+        Check(contains(manual, "server.port 44330"), "manual-move notice names the configured port");
+        Check(contains(manual, "nothing is being delivered"), "manual-move notice says what is broken");
+        Check(contains(manual, "\"port\": 443"), "manual-move notice names the value to set");
+        Check(contains(manual, "config.json"), "manual-move notice names the file to edit");
+
+        const std::string unreachable = hsm::agent::RetiredPortUnreachableNotice(44330);
+        Check(contains(unreachable, "server.port 44330"), "unreachable notice names the configured port");
+        Check(contains(unreachable, "443"), "unreachable notice names the port that was also tried");
+        Check(contains(unreachable, "server.address"), "unreachable notice says what to check");
     }
 
 #ifdef _WIN32
@@ -857,6 +935,9 @@ namespace
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
             { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
             { "agent_launch_hint_message_guides_the_operator", LaunchHintMessageGuidesTheOperator },
+            { "agent_retired_port_names_only_the_old_two", RetiredPortNamesOnlyTheOldTwo },
+            { "agent_retired_port_verdict_follows_the_probes", RetiredPortVerdictFollowsTheProbes },
+            { "agent_retired_port_notices_name_the_fix", RetiredPortNoticesNameTheFix },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
