@@ -197,7 +197,24 @@ namespace HSMServer.SensorApi.Sessions
 
         public void CountRequestRefused() => Interlocked.Increment(ref _requestsRefused);
 
-        public void NoteEnd(string text, bool abnormal) => Interlocked.CompareExchange(ref _end, new SessionEnd(text, abnormal), null);
+        public void NoteEnd(string text, bool abnormal)
+        {
+            while (true)
+            {
+                var noted = Volatile.Read(ref _end);
+
+                // The first cause stands. The one exception: a close that was announced as
+                // orderly and then did not complete (the handshake failed or timed out and the
+                // connection was cut) is not an orderly close, and the line must say so.
+                if (noted is not null && (noted.Abnormal || !abnormal))
+                    return;
+
+                var end = noted is null ? new SessionEnd(text, abnormal) : new SessionEnd($"{noted.Text}, and then {text}", Abnormal: true);
+
+                if (Interlocked.CompareExchange(ref _end, end, noted) == noted)
+                    return;
+            }
+        }
 
         // The collector's close frame arrived: its code and reason are on the socket now.
         public void NoteCollectorClose()
@@ -227,7 +244,22 @@ namespace HSMServer.SensorApi.Sessions
                 return null;
 
             var cut = text.Length > limit;
-            var printable = new string(text.Take(limit).Select(c => char.IsControl(c) ? '?' : c).ToArray());
+            var length = cut ? limit : text.Length;
+
+            // Not half of a surrogate pair at the cut.
+            if (cut && length > 0 && char.IsHighSurrogate(text[length - 1]))
+                length--;
+
+            var printable = string.Create(length, text, static (span, source) =>
+            {
+                for (var i = 0; i < span.Length; i++)
+                {
+                    var c = source[i];
+
+                    // U+2028 / U+2029 are not control characters, but they break a line.
+                    span[i] = char.IsControl(c) || c == '\u2028' || c == '\u2029' ? '?' : c;
+                }
+            });
 
             return cut ? printable + "..." : printable;
         }

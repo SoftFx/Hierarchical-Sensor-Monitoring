@@ -128,6 +128,13 @@ namespace hsm::http
             return key;
         }
 
+        // The same for the end of a short-lived session. A close frame keeps its digits: they are
+        // its status code, and another code is another reason.
+        std::string EndKey(const std::string& why)
+        {
+            return why.compare(0, 29, "the server sent a close frame") == 0 ? why : FailureKey(0, why);
+        }
+
         // How the far side ended a session whose Receive returned Closed. The close frame, when
         // there was one, may come from an intermediary (a proxy or a CDN) that speaks for the server.
         std::string DescribeClosure(const WebSocketClosure& closure)
@@ -589,9 +596,10 @@ namespace hsm::http
                 }
 
                 Counters counters;
-                // While sessions keep ending early the up lines are left out; not after an outage
-                // that was reported as an error, whose end must be seen.
-                if (flapping && !outage_reported)
+                // While sessions keep ending early the up lines are left out. Not after failed
+                // attempts: then a "Cannot open" line may be the log's last word, and the up line
+                // is what says the outage is over and how long it was.
+                if (flapping && failed == 0)
                 {
                     ++suppressed_lines;
                     counters.announce_when_stable = true;
@@ -612,6 +620,9 @@ namespace hsm::http
                 }
                 failed = 0;
                 outage_reported = false;
+                // A failure that comes back after this session is news again, however short the
+                // session turns out to be.
+                reported.clear();
 
                 counters.last_in = Clock::now(); // the hello
                 counters.served_since = Clock::now();
@@ -655,12 +666,17 @@ namespace hsm::http
                     short_sessions = 0;
                     suppressed_lines = 0;
                     flap_reason.clear();
-                    reported.clear();
+                    // 7: a session whose up line was suppressed and that ended before Serve said
+                    // "has held": its end line is the place for what was left out.
+                    if (counters.announce_when_stable)
+                        suppressed_note = " (its up line and " + std::to_string(counters.suppressed_lines) +
+                                          " line(s) about earlier short-lived sessions were suppressed)";
                 }
                 else
                 {
                     ++short_sessions;
-                    if (flapping && why == flap_reason)
+                    const std::string end_key = EndKey(why);
+                    if (flapping && end_key == flap_reason)
                     {
                         log_end = false;
                         ++suppressed_lines;
@@ -669,7 +685,7 @@ namespace hsm::http
                     {
                         if (suppressed_lines > 0)
                             suppressed_note = " (" + std::to_string(suppressed_lines) + " line(s) about earlier short-lived sessions suppressed)";
-                        flap_reason = why;
+                        flap_reason = end_key;
                         suppressed_lines = 0;
                     }
                     flapping = true;

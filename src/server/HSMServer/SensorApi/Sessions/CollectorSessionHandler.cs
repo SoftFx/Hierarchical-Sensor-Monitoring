@@ -211,7 +211,15 @@ namespace HSMServer.SensorApi.Sessions
 
                 if (session is not null)
                 {
-                    LogClosed(session);
+                    try
+                    {
+                        LogClosed(session);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to log the end of collector session {session.ShortId}: {ex}");
+                    }
+
                     session.Dispose();
                 }
                 else if (socket is not null)
@@ -434,8 +442,8 @@ namespace HSMServer.SensorApi.Sessions
             {
                 var errors = await _ingestion.AddValuesAsync(caller, values);
 
-                // The errors are per path; a value whose path is refused is not accepted.
-                session.CountValuesAccepted(values.Count - (errors?.Count ?? 0));
+                // The errors are keyed by path: every value of a refused path is not accepted.
+                session.CountValuesAccepted(errors is null || errors.Count == 0 ? values.Count : values.Count(value => !errors.ContainsKey(value.Path)));
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
             }
             catch (Exception ex)
