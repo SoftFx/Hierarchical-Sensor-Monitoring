@@ -581,6 +581,62 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensor.Policies.TTLPolicies);
         }
 
+        // A notification without a template stays the "required" 422, never an
+        // NRE 500 — the brace check runs after the required check without an
+        // early return.
+        [Fact]
+        public async Task CreateSensorPolicy_NullNotificationTemplate_AnswersRequiredNot500()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcNullTemplate");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = null },
+            }, User);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("required", created.Failure.Errors["notification.template"].Single());
+        }
+
+        // #1674: the message renders with string.Format over the substituted
+        // $variables, so braces in the user text either throw at evaluation time
+        // or silently substitute another variable's value. The template write
+        // already rejects them (#1608); both sensor-policy kinds must too, on
+        // create and update.
+        [Theory]
+        [InlineData("bad {0} brace")]
+        [InlineData("closing } alone")]
+        public async Task SensorPolicies_RejectCurlyBracesInTheNotificationTemplate(string template)
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTemplateBraces");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", created.Failure.Errors["notification.template"].Single());
+            Assert.Empty(sensor.Policies);
+
+            var ttlCreated = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, ttlCreated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", ttlCreated.Failure.Errors["notification.template"].Single());
+            Assert.Empty(sensor.Policies.TTLPolicies);
+
+            var seeded = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            Assert.True(seeded.Success, seeded.Failure?.Message);
+
+            var updated = await _service.UpdateSensorPolicyAsync(sensor.Id, seeded.Value.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, updated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", updated.Failure.Errors["notification.template"].Single());
+        }
+
         // #1501 round-2 (F2): a full-list TTL write must not RE-STAMP the
         // change-table ownership of the siblings it merely re-asserts — the
         // TTL stamp loop in BaseNodeModel.Update stamps unconditionally per
