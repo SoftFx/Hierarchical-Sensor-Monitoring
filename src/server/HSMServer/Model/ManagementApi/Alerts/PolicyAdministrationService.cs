@@ -997,8 +997,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 // (#1608) — the message renders with string.Format over the
                 // substituted $variables, so braces in the user text either throw
                 // at evaluation time or silently substitute another variable's
-                // value. Reject them at write time on both policy kinds.
-                if (notification.Template.Contains('{') || notification.Template.Contains('}'))
+                // value. Reject them at write time on both policy kinds. The
+                // template may still be null here — the required check above only
+                // records its error.
+                if (notification.Template is { } message && (message.Contains('{') || message.Contains('}')))
                     AlertPolicyConditionValidator.Add(errors, "notification.template",
                         "The notification template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
 

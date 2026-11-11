@@ -581,6 +581,23 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensor.Policies.TTLPolicies);
         }
 
+        // A notification without a template stays the "required" 422, never an
+        // NRE 500 — the brace check runs after the required check without an
+        // early return.
+        [Fact]
+        public async Task CreateSensorPolicy_NullNotificationTemplate_AnswersRequiredNot500()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcNullTemplate");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = null },
+            }, User);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("required", created.Failure.Errors["notification.template"].Single());
+        }
+
         // #1674: the message renders with string.Format over the substituted
         // $variables, so braces in the user text either throw at evaluation time
         // or silently substitute another variable's value. The template write
