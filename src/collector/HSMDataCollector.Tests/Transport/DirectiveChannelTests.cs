@@ -4,8 +4,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
@@ -31,12 +34,14 @@ namespace HSMDataCollector.Tests.Transport
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
-        private static CollectorOptions OptionsFor(FakeHsmServer server)
+        private static CollectorOptions OptionsFor(FakeHsmServer server) => OptionsFor(server.ServerAddress, server.Port);
+
+        private static CollectorOptions OptionsFor(string address, int port)
         {
             return new CollectorOptions
             {
-                ServerAddress = server.ServerAddress,
-                Port = server.Port,
+                ServerAddress = address,
+                Port = port,
                 AccessKey = "directive-key",
                 ClientName = "directive-client",
                 AllowPlaintextTransport = true,
@@ -81,6 +86,10 @@ namespace HSMDataCollector.Tests.Transport
         [Theory]
         [InlineData("Authorization", "Bearer abc")]
         [InlineData("User-Agent", "probe/1.0")]
+        // Headers the .NET Framework handler has typed properties for, with values that do not
+        // parse as their type: they are still sent as they were set.
+        [InlineData("Date", "today")]
+        [InlineData("Referer", "not a uri")]
         public async Task Extra_request_header_reaches_the_server_as_it_was_set(string name, string value)
         {
             using (var server = new FakeHsmServer())
@@ -114,11 +123,13 @@ namespace HSMDataCollector.Tests.Transport
             var log = new LoggerManager();
             log.AddLogger(logger);
 
-            using (var server = new FakeHsmServer())
-            using (var client = new HsmHttpsClient(OptionsFor(server), log))
+            // The answer is written by hand, one header line per directive, as the real server
+            // writes them. A line is one directive, and HttpListener is free to send two headers
+            // of one name as one comma-joined line (it does outside Windows), which would make
+            // this test count lines of the listener instead of directives of the server.
+            using (var server = new DirectiveLinesServer("sensor-disable:network", "update-available:9.9.9"))
+            using (var client = new HsmHttpsClient(OptionsFor("http://127.0.0.1", server.Port), log))
             {
-                server.SendDirectivesOnDataResponses("sensor-disable:network", "update-available:9.9.9");
-
                 for (var i = 0; i < 3; i++)
                 {
                     var info = await client.SendDataAsync(new[] { new IntSensorValue { Path = "directive/int", Value = i } }, CancellationToken.None);
@@ -194,6 +205,108 @@ namespace HSMDataCollector.Tests.Transport
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Answers every request with 200 and one <c>X-Hsm-Directive</c> header line per
+        /// directive, written to the socket as it is.
+        /// </summary>
+        private sealed class DirectiveLinesServer : IDisposable
+        {
+            private readonly TcpListener _listener = new TcpListener(IPAddress.Loopback, 0);
+            private readonly byte[] _answer;
+            private readonly Task _loop;
+
+            internal DirectiveLinesServer(params string[] directives)
+            {
+                var answer = new StringBuilder("HTTP/1.1 200 OK\r\n");
+
+                foreach (var directive in directives)
+                    answer.Append("X-Hsm-Directive: ").Append(directive).Append("\r\n");
+
+                answer.Append("Content-Length: 0\r\nConnection: close\r\n\r\n");
+                _answer = Encoding.ASCII.GetBytes(answer.ToString());
+
+                _listener.Start();
+                Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+                _loop = Task.Run(AcceptLoopAsync);
+            }
+
+            internal int Port { get; }
+
+            public void Dispose()
+            {
+                _listener.Stop();
+                _loop.Wait(TimeSpan.FromSeconds(5));
+            }
+
+            private async Task AcceptLoopAsync()
+            {
+                while (true)
+                {
+                    TcpClient connection;
+
+                    try
+                    {
+                        connection = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        return; // the listener was stopped
+                    }
+
+                    using (connection)
+                    {
+                        try
+                        {
+                            await AnswerAsync(connection.GetStream()).ConfigureAwait(false);
+                        }
+                        catch (Exception)
+                        {
+                            // A client that went away; the test sees it as a failed send.
+                        }
+                    }
+                }
+            }
+
+            // Reads one request to its end (the head, then as many body bytes as it announces)
+            // and writes the answer.
+            private async Task AnswerAsync(NetworkStream stream)
+            {
+                var request = new MemoryStream();
+                var buffer = new byte[4096];
+                var headEnd = -1;
+
+                while (headEnd < 0)
+                {
+                    var read = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    if (read == 0)
+                        return;
+
+                    request.Write(buffer, 0, read);
+                    headEnd = Encoding.ASCII.GetString(request.GetBuffer(), 0, (int)request.Length).IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                }
+
+                var head = Encoding.ASCII.GetString(request.GetBuffer(), 0, headEnd);
+                var bodyLength = 0;
+
+                foreach (var line in head.Split(new[] { "\r\n" }, StringSplitOptions.None))
+                    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                        bodyLength = int.Parse(line.Substring("Content-Length:".Length).Trim());
+
+                var missing = headEnd + 4 + bodyLength - request.Length;
+
+                while (missing > 0)
+                {
+                    var read = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    if (read == 0)
+                        return;
+
+                    missing -= read;
+                }
+
+                await stream.WriteAsync(_answer, 0, _answer.Length).ConfigureAwait(false);
+            }
         }
 
         private sealed class RecordingLogger : ICollectorLogger
