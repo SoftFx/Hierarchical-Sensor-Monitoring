@@ -234,12 +234,15 @@ impl<'c> InterfaceHealth<'c> {
             current.insert(name.clone(), HealthCounters::from_dev(dev, carrier_changes));
         }
         // An interface with a `Link up` sensor that left /proc/net/dev (a USB adapter unplugged, a
-        // driver reset that removed the netdev) has no link.
+        // driver reset that removed the netdev) has no link: posted once, not reposted, so a
+        // deleted bridge or VPN device goes to Timeout instead of a permanent "down".
         let gone: Vec<String> = self
             .links
-            .keys()
-            .filter(|name| !current.contains_key(*name))
-            .cloned()
+            .iter()
+            .filter(|(name, link)| {
+                !current.contains_key(*name) && link.last.map(|(up, _)| up) != Some(false)
+            })
+            .map(|(name, _)| name.clone())
             .collect();
         for name in gone {
             self.post_link(&name, false, now, logger, &mut registrations, &mut posts);
@@ -563,13 +566,14 @@ mod tests {
 
         // The Wi-Fi adapter is unplugged: its row leaves /proc/net/dev, and its link is down.
         let rows = [("lo", 0, 0, 0, 0), ("enp2s0", 0, 0, 0, 0)];
-        source.sample_at(
-            Ok(dev(&rows)),
-            t0 + COUNTER_PERIOD + Duration::from_secs(10),
-            &logger,
-        );
+        let unplugged = t0 + COUNTER_PERIOD + Duration::from_secs(10);
+        source.sample_at(Ok(dev(&rows)), unplugged, &logger);
+        assert_eq!(source.links["wlp3s0"].last, Some((false, unplugged)));
+        // Still gone past the repost period: not posted again, so the sensor times out instead of
+        // reading "down" forever (a deleted bridge or VPN device would otherwise stay red).
+        source.sample_at(Ok(dev(&rows)), unplugged + LINK_REPOST, &logger);
         collector.stop().expect("stop");
-        assert_eq!(source.links["wlp3s0"].last.map(|(up, _)| up), Some(false));
+        assert_eq!(source.links["wlp3s0"].last, Some((false, unplugged)));
         assert!(lines.lock().unwrap().iter().all(|l| !l.contains("ERROR")));
     }
 

@@ -164,14 +164,24 @@ struct TargetSensors<'c> {
     target: Target,
     time: DoubleBarSensor<'c>,
     failures: IntSensor<'c>,
-    /// Failed attempts in the current window.
+    /// Attempts and failed attempts in the current window.
+    attempts: u32,
     failed: i32,
     /// The reason of the current failure episode, logged once.
     failing: Option<String>,
 }
 
 impl TargetSensors<'_> {
+    /// The window's failure count to post, or `None` when the target was not tried at all in it
+    /// (the gateway behind a point-to-point route or an unreadable route file): then nothing is
+    /// posted and `Connect failures` goes to Timeout instead of reading a healthy 0.
+    fn take_window(&mut self) -> Option<i32> {
+        let failed = std::mem::take(&mut self.failed);
+        (std::mem::take(&mut self.attempts) > 0).then_some(failed)
+    }
+
     fn record(&mut self, attempt: Attempt, logger: &Logger, posts: &mut Result<(), String>) {
+        self.attempts = self.attempts.saturating_add(1);
         match attempt {
             Ok(round_trip) => {
                 if self.failing.take().is_some() {
@@ -241,7 +251,7 @@ impl<'c> Reachability<'c> {
 
     /// Close the failure window if `now` ends it: the counts to post. Windows follow each other
     /// on the minute grid of the first sample; after a gap longer than a window, the grid restarts.
-    fn close_window(&mut self, now: Instant) -> Option<(i32, i32)> {
+    fn close_window(&mut self, now: Instant) -> Option<(Option<i32>, Option<i32>)> {
         let start = *self.window_start.get_or_insert(now);
         let end = start + FAILURE_WINDOW;
         if now < end {
@@ -253,8 +263,8 @@ impl<'c> Reachability<'c> {
             end
         });
         Some((
-            std::mem::take(&mut self.gateway.failed),
-            std::mem::take(&mut self.internet_sensors.failed),
+            self.gateway.take_window(),
+            self.internet_sensors.take_window(),
         ))
     }
 
@@ -299,6 +309,9 @@ impl<'c> Reachability<'c> {
         if let Some((gateway, internet)) = self.close_window(now) {
             for (sensors, failed) in [(&self.gateway, gateway), (&self.internet_sensors, internet)]
             {
+                let Some(failed) = failed else {
+                    continue;
+                };
                 if let Err(error) = sensors.failures.add(failed) {
                     posts = Err(error.to_string());
                 }
@@ -394,6 +407,7 @@ fn register_target<'c>(
         target,
         time,
         failures,
+        attempts: 0,
         failed: 0,
         failing: None,
     })
@@ -596,18 +610,30 @@ pub(crate) mod tests {
         );
         // The next window ends on the grid (120 s), not 60 s after a late sample.
         assert_eq!(source.close_window(at(119)), None);
-        assert_eq!(source.close_window(at(121)), Some((0, 1)));
+        assert_eq!(source.close_window(at(121)), Some((Some(0), Some(1))));
         assert_eq!(source.close_window(at(179)), None);
-        assert_eq!(source.close_window(at(180)), Some((0, 0)));
+        // A window with no attempt at all posts nothing (a healthy 0 would hide the gap).
+        assert_eq!(source.close_window(at(180)), Some((None, None)));
         // After a long gap the grid restarts.
-        assert_eq!(source.close_window(at(400)), Some((0, 0)));
+        assert_eq!(source.close_window(at(400)), Some((None, None)));
         assert_eq!(source.close_window(at(459)), None);
+
+        // A whole window behind a VPN tunnel: the gateway is never tried, so its count is not
+        // posted, while the internet's is.
+        let tunnel = format!(
+            "{}\nwg0\t00000000\t00000000\t0001\t0\t0\t0\t00000000\t0\t0\t0\n",
+            header()
+        );
+        for seconds in (460..520).step_by(5) {
+            source.sample_at(Ok(tunnel.clone()), at(seconds), &logger);
+        }
+        assert_eq!(source.close_window(at(520)), Some((None, Some(12))));
         collector.stop().expect("stop");
 
         let lines = lines.lock().unwrap();
         let count = |text: &str| lines.iter().filter(|l| l.contains(text)).count();
         assert_eq!(count("EIO"), 1, "{lines:#?}");
-        assert_eq!(count("point-to-point"), 1, "{lines:#?}");
+        assert_eq!(count("point-to-point"), 2, "once per episode: {lines:#?}");
         assert_eq!(count("Internet: connection timed out"), 1, "{lines:#?}");
         assert_eq!(count("Gateway: no default route"), 1, "{lines:#?}");
         assert_eq!(count("Gateway: answering again"), 1, "{lines:#?}");

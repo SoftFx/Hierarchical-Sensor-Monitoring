@@ -647,7 +647,8 @@ All have KeepHistory 90 days and Grafana on, and none has an alert.
 
 - `Link up` is created the first time the interface is seen up, so an Ethernet port that never
   had a cable gets no sensor that is false forever. For Wi-Fi, `dormant` (not associated) is down.
-  An interface that leaves `/proc/net/dev` (a USB adapter unplugged) is posted as down.
+  An interface that leaves `/proc/net/dev` (a USB adapter unplugged) is posted as down once and
+  then left to its TTL, so a deleted bridge or VPN device times out instead of staying "down".
   A drop shorter than 10 s is missed by `Link up` but counted by `Carrier changes` (a drop counts 2).
 - The three counters follow the TCP delta rule above, with a 1-minute window: the window's whole
   movement is posted once, at its end. Their sensors are created on the first non-zero minute and
@@ -682,7 +683,9 @@ not have.
   unreadable route file skip the gateway attempt (logged once, not counted). IPv6-only hosts are
   not supported.
 - The time bars have no TTL: while every attempt fails they get no value, and `Connect failures`
-  shows it. Registered before Start, so the set is pinned (`REACHABILITY_SET`).
+  shows it. A minute in which a target was not tried at all (the gateway behind a point-to-point
+  route or an unreadable route file) posts no `Connect failures`, so its TTL shows the gap
+  instead of a healthy 0. Registered before Start, so the set is pinned (`REACHABILITY_SET`).
 - `internet` must be a remote `ip:port` (IPv6 as `[addr]:port`; not port 0, loopback or
   unspecified): a host name would time the resolver too. Checked only when reachability is on.
 

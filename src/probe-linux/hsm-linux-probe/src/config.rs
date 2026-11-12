@@ -264,8 +264,9 @@ pub struct ProbeConfig {
 pub struct NetworkConfig {
     #[serde(default = "enabled_by_default")]
     pub enabled: bool,
-    /// Interface-name patterns (`*` = any run of characters) whose speed is reported, e.g.
-    /// `["wlp*", "br0"]`. Empty = every physical interface (one with `/sys/class/net/<if>/device`).
+    /// Interface-name patterns (`*` = any run of characters) of the interfaces every per-interface
+    /// source reports (speed, link health, Wi-Fi), e.g. `["wlp*", "br0"]`. Empty = every physical
+    /// interface (one with `/sys/class/net/<if>/device`).
     #[serde(default)]
     pub interfaces: Vec<String>,
     #[serde(default)]

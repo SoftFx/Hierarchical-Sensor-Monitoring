@@ -221,7 +221,7 @@ The probe registers **two separately pinned sets**:
    - **Link health** (Linux only, `network/health.rs`), per reported interface: `Link up` (Bool,
      AggregateData, from `operstate`, `unknown` → `carrier`; checked every 10 s, posted on change
      and every 5 min, TTL 15 min; created the first time the interface is seen up; an interface that
-     leaves `/proc/net/dev` is posted down), and
+     leaves `/proc/net/dev` is posted down once, then left to the TTL), and
      `Carrier changes` / `Errors` / `Drops` (Int, Count: per-minute deltas of `carrier_changes`
      and the `/proc/net/dev` rx + tx `errs` / `drop` columns, posted only when non-zero, no TTL,
      created on the first non-zero minute).
@@ -236,7 +236,8 @@ The probe registers **two separately pinned sets**:
      `internet` (`1.1.1.1:443`). `Reachability/<Gateway|Internet>/Connect time ms` (DoubleBar,
      ms, no TTL) and `Connect failures` (Int, per minute, 0 included, TTL 5 min). A refused
      connect is an answer from the gateway only; no default route is a gateway failure; a
-     point-to-point default route or an unreadable route file skips the gateway attempt. Registered before Start (`REACHABILITY_SET`).
+     point-to-point default route or an unreadable route file skips the gateway attempt, and a
+     minute with no attempt posts no `Connect failures`. Registered before Start (`REACHABILITY_SET`).
    - **Not built:** `Connection failures rate` (needs a Rate type in the Rust wrapper).
    - Pinned by `NETWORK_SET` and `network::tests::the_tcp_sensors_are_the_windows_catalog_rows`.
 
