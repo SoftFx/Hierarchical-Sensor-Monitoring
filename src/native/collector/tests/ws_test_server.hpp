@@ -255,6 +255,14 @@ namespace hsm::test
             return handshake_head_;
         }
 
+        // Raw request head of the last upgrade that was accepted. Unlike HandshakeHead it is not
+        // replaced by a refused upgrade or by a request that was no upgrade at all.
+        std::string AcceptedHandshakeHead() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return accepted_head_;
+        }
+
         // Status codes of the close frames received from clients, in order (0 = no code).
         std::vector<int> CloseCodes() const
         {
@@ -591,7 +599,12 @@ namespace hsm::test
             if (!options_.subprotocol.empty())
                 response += "Sec-WebSocket-Protocol: " + options_.subprotocol + "\r\n";
             response += "\r\n";
-            return WriteAll(conn, response);
+            if (!WriteAll(conn, response))
+                return false;
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            accepted_head_ = head;
+            return true;
         }
 
         void Serve(socket_t conn)
@@ -744,13 +757,14 @@ namespace hsm::test
                 else if (budget > 0)
                     list_budget_.store(budget - 1, std::memory_order_release);
             }
-            {
-                std::lock_guard<std::mutex> guard(mutex_);
-                session_requests_.push_back({ payload, status });
-            }
-            SendFrame(0x1, /*fin=*/true,
-                      status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
-                                                    : "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"error\":\"refused by the test\"}");
+            // Recorded with its status only once the ack is written: a test that sees a request as
+            // accepted and then cuts the session must not race the ack it is counting on.
+            const bool acked = SendFrame(0x1, /*fin=*/true,
+                                         status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
+                                                                       : "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"error\":\"refused by the test\"}");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            session_requests_.push_back({ payload, acked ? status : 0 });
         }
 
         Options options_;
@@ -778,6 +792,7 @@ namespace hsm::test
         std::mutex send_mutex_;
         socket_t connection_ = INVALID_SOCKET; // guarded by send_mutex_
         mutable std::mutex mutex_;
+        std::string accepted_head_;                    // guarded by mutex_
         std::string handshake_head_;                   // guarded by mutex_
         std::string last_pong_;                        // guarded by mutex_
         std::vector<std::string> received_;            // guarded by mutex_

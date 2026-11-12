@@ -226,7 +226,7 @@ polls until the expectation holds; `0` checks once.
 | `expect_session_requests_containing\|op\|substring\|count\|timeout_s`, `expect_session_requests_containing_at_least\|…` | how many requests of `op`, acknowledged or not, contain the text; with it a case counts sends ("sent once", "sent again") |
 | `expect_session_no_request_contains\|substring` | no request frame of any op contains the text |
 | `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
-| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request |
+| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request. Place it after `stop` or while no session is open: the native scripted server serves one connection at a time and reads a request made during a session only when that session has ended |
 | `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
 | `expect_session_closed_normally` | the collector ended its last session with close code 1000 |
 

@@ -3170,6 +3170,7 @@ namespace
             if (action == "session_server_ack")
             {
                 Require(step.size() >= 3, "session_server_ack requires an op and a status");
+                Require(step[1] == "list" || step[1] == "commands", ("session_server_ack: unknown op '" + step[1] + "'").c_str());
                 server.AckOpWith(step[1], ToInt(step[2]));
                 return;
             }
@@ -3198,8 +3199,9 @@ namespace
                 Require(step.size() >= 3, "expect_session_count requires a count and a timeout");
                 const int expected = ToInt(step[1]);
                 const bool exact = action == "expect_session_count";
-                PollSession([&] { return exact ? server.Upgrades() == expected : server.Upgrades() >= expected; }, step[2]);
-                Require(exact ? server.Upgrades() == expected : server.Upgrades() >= expected,
+                const auto holds = [&] { return exact ? server.Upgrades() == expected : server.Upgrades() >= expected; };
+                PollSession(holds, step[2]);
+                Require(holds(),
                         ("expected " + std::string(exact ? "" : "at least ") + step[1] + " session(s), got " + std::to_string(server.Upgrades())).c_str());
                 return;
             }
@@ -3285,6 +3287,11 @@ namespace
 
             if (action == "expect_no_http_requests")
             {
+                // The fixture serves one connection at a time: a request made while a session is
+                // open waits in the listen backlog and is read when the session has ended. When
+                // none is open, give the accept loop a moment to read what may be waiting.
+                if (!server.Connected())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300));
                 Require(server.PlainHttpRequests() == 0,
                         ("the collector made " + std::to_string(server.PlainHttpRequests()) + " HTTP request(s) beside its upgrades").c_str());
                 return;
@@ -3296,15 +3303,23 @@ namespace
                 std::string name = step[1];
                 for (auto& c : name)
                     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                const auto actual = hsm::test::ws_detail::HeaderValue(server.HandshakeHead(), name);
+                Require(server.Upgrades() > 0, "expect_session_upgrade_header: no upgrade has been accepted yet");
+                const auto actual = hsm::test::ws_detail::HeaderValue(server.AcceptedHandshakeHead(), name);
                 Require(actual == step[2], ("the upgrade header " + step[1] + " is '" + actual + "', expected '" + step[2] + "'").c_str());
                 return;
             }
 
             if (action == "expect_session_closed_normally")
             {
-                Require(PollSession([&] { return !server.CloseCodes().empty(); }, "5"), "the collector sent no close frame");
-                Require(server.CloseCodes().back() == 1000, "the collector did not close its last session with 1000");
+                // The last close, not any close: an earlier session of the case may have been ended
+                // by the collector for a reason of its own.
+                Require(PollSession(
+                            [&] {
+                                const auto codes = server.CloseCodes();
+                                return !codes.empty() && codes.back() == 1000;
+                            },
+                            "5"),
+                        "the collector did not close its last session with 1000");
                 return;
             }
 #else
