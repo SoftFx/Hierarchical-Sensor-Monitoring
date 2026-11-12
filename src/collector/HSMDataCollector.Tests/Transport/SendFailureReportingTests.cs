@@ -7,9 +7,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
+using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.IntegrationTests.Helpers;
 using HSMDataCollector.Logging;
@@ -98,6 +100,22 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Contains("406", info.Error);
                 Assert.True(info.Error.Length < 600, $"The failure text is {info.Error.Length} characters long.");
             }
+        }
+
+        [Fact]
+        public async Task Failure_text_of_a_server_error_is_the_same_whatever_its_body_says()
+        {
+            // The text is the key a failing package is deduplicated by. A proxy that answers a
+            // 5xx with a page that names the request would make every cycle a new report.
+            var texts = new List<string>();
+
+            foreach (var body in new[] { "upstream failed, request id 1001", "upstream failed, request id 1002" })
+                using (var response = new HttpResponseMessage(HttpStatusCode.BadGateway) { Content = new StringContent(body, Encoding.UTF8, "text/plain") })
+                    texts.Add((await BaseHandlers<SensorValueBase>.BuildSendingInfoAsync(10, response)).Error);
+
+            Assert.Equal(texts[0], texts[1]);
+            Assert.Contains("502", texts[0]);
+            Assert.DoesNotContain("request id", texts[0]);
         }
 
         [Fact]
@@ -314,7 +332,8 @@ namespace HSMDataCollector.Tests.Transport
 
             Assert.True(reports.Count == 1,
                         $"Expected one report for the two failed attempts, got {reports.Count}: " + string.Join(" | ", reports));
-            Assert.Contains("503", reports[0]);
+            // The cause is spelled as in the queue's report of a send that failed for good.
+            Assert.Contains("Code: 503 (Service Unavailable).", reports[0]);
         }
 
         private static async Task<bool> WaitForAsync(Func<bool> done)
