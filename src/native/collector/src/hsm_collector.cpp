@@ -2804,9 +2804,8 @@ namespace
         // only adds in-send retries for exceptions (BaseHandlers.ShouldRetry, #1096). Native retries
         // on the worker's cycle, which is that same period: a transport failure (no HTTP response)
         // and a 5xx (a server restarting behind its proxy answers 502/503) are retried. A 4xx is
-        // final here — managed would re-send it every period until the queue evicts it, but a
-        // rejected payload or key never succeeds on repeat, and the values carrying the same key
-        // already report it.
+        // final, in managed too since 3.6.2 (#1659 A2): a rejected payload or key never succeeds
+        // on repeat, and the values carrying the same key already report it.
         // Split: a batch that went out in several session frames and whose parts ended
         // differently. Each part is already settled (the parts to retry are queued), so the caller
         // has nothing to do; it is not Accepted, so no "registered" line is credited to it.

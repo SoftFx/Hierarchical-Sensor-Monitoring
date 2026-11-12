@@ -31,6 +31,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         // Command POSTs (/commands, /addOrUpdate) to fail with 503 before the first success.
         private int _failCommandRequests;
 
+        // Statuses scripted for the next command POSTs, one per request, in order.
+        private readonly ConcurrentQueue<HttpStatusCode> _scriptedCommandStatuses = new ConcurrentQueue<HttpStatusCode>();
+
         public FakeHsmServer()
         {
             Port = GetFreeTcpPort();
@@ -54,6 +57,10 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         /// <summary>The next <paramref name="count"/> command POSTs (/commands or /addOrUpdate)
         /// answer 503.</summary>
         public void FailNextCommandRequests(int count) => Interlocked.Exchange(ref _failCommandRequests, count);
+
+        /// <summary>The next command POST (/commands or /addOrUpdate) answers
+        /// <paramref name="status"/>; it takes precedence over <see cref="FailNextCommandRequests"/>.</summary>
+        public void AnswerNextCommandRequest(HttpStatusCode status) => _scriptedCommandStatuses.Enqueue(status);
 
         public IEnumerable<CapturedRequest> CommandRequests =>
             Requests.Where(r => r.Method == "POST"
@@ -103,15 +110,10 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                          && !isCommand
                          && !path.EndsWith("/testConnection", StringComparison.Ordinal);
 
-            _requests.Enqueue(new CapturedRequest(
-                request.HttpMethod,
-                path,
-                request.Headers["Key"],
-                request.Headers["ClientName"],
-                body));
-
             var statusCode = HttpStatusCode.OK;
-            if (isData && Interlocked.Decrement(ref _failDataRequests) >= 0)
+            if (isCommand && _scriptedCommandStatuses.TryDequeue(out var scripted))
+                statusCode = scripted;
+            else if (isData && Interlocked.Decrement(ref _failDataRequests) >= 0)
                 statusCode = HttpStatusCode.ServiceUnavailable;
             else if (isData)
                 Interlocked.Increment(ref _failDataRequests); // floor the counter at 0
@@ -119,6 +121,14 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                 statusCode = HttpStatusCode.ServiceUnavailable;
             else if (isCommand)
                 Interlocked.Increment(ref _failCommandRequests); // floor the counter at 0
+
+            _requests.Enqueue(new CapturedRequest(
+                request.HttpMethod,
+                path,
+                request.Headers["Key"],
+                request.Headers["ClientName"],
+                body,
+                statusCode));
 
             try
             {
@@ -151,8 +161,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
         public sealed class CapturedRequest
         {
-            public CapturedRequest(string method, string path, string key, string clientName, string body)
+            public CapturedRequest(string method, string path, string key, string clientName, string body, HttpStatusCode answer)
             {
+                Answer = answer;
                 Method = method;
                 Path = path;
                 Key = key;
@@ -165,6 +176,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             public string Key { get; }
             public string ClientName { get; }
             public string Body { get; }
+
+            /// <summary>The status this request was answered with.</summary>
+            public HttpStatusCode Answer { get; }
         }
     }
 }

@@ -318,9 +318,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    // Dedup the log because DispatchPackageAsync re-enqueues on a non-retryable
-                    // server error and rethrows here on every cycle — a poison package would
-                    // otherwise produce one error log per PackageCollectPeriod indefinitely.
+                    // Dedup the log because DispatchPackageAsync re-enqueues a failed package and
+                    // rethrows here on every cycle — a package that keeps failing would otherwise
+                    // produce one error log per PackageCollectPeriod indefinitely. (A registration
+                    // the server refused with a 4xx does not come back: RejectionIsFinal.)
                     // RETRY POLICY: re-enqueue + rethrow is intentional. The graceful-stop story
                     // depends on preserving accepted work even under transient transport failure;
                     // a per-package retry cap would re-introduce the old "data dropped on first
@@ -457,6 +458,15 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (sendingInfo.Error != null)
             {
+                // A refusal (4xx) on a queue whose items never succeed on repeat is final: the
+                // package is reported once and leaves the queue (#1659 A2). Everything else,
+                // a missing answer and a 5xx included, goes back for the next cycle.
+                if (RejectionIsFinal && sendingInfo.IsRejected)
+                {
+                    ReportRejectedPackage(DescribeItems(package), sendingInfo);
+                    return;
+                }
+
                 var dropped = ReEnqueueItems(package.Items);
                 var preserved = package.Count - dropped;
                 // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
@@ -470,6 +480,27 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+        }
+
+        /// <summary>
+        /// True when a package the server refused with a 4xx must not be sent again. Off by
+        /// default: a value batch keeps the at-least-once rule and returns to the queue on any
+        /// failed send, as it does in the native collector. The command queue turns it on.
+        /// </summary>
+        protected virtual bool RejectionIsFinal => false;
+
+        /// <summary>
+        /// What a rejected package held, for its report: the count by default; a queue whose
+        /// items carry an identity names a lone item.
+        /// </summary>
+        protected virtual string DescribeItems(DataPackage<T> package) => $"{package.Count} item(s)";
+
+        private void ReportRejectedPackage(string items, PackageSendingInfo sendingInfo)
+        {
+            if (_queueManager != null)
+                _queueManager.ReportRejectedPackage(QueueName, items, sendingInfo);
+            else
+                _logger.Error(DataProcessor.BuildRejectionMessage(QueueName, items, sendingInfo));
         }
 
         // Self-reports retry-path evictions to the queue manager so every caller — including
