@@ -45,7 +45,7 @@
 //! # Linux-only additions (no Windows counterpart)
 //!
 //! - [`health`]: per interface, `Link up`, `Carrier changes`, `Errors`, `Drops`.
-//! - [`wifi`]: per Wi-Fi interface, `Signal dBm` and `Link quality` bars.
+//! - [`wifi`]: per Wi-Fi interface, a `Signal dBm` bar.
 //! - [`reachability`] (opt-in): TCP connect time and failures to the gateway and one internet
 //!   address.
 

@@ -207,9 +207,8 @@ pub fn wireless_interfaces(sys_root: &Path) -> Vec<String> {
 /// One associated Wi-Fi interface's row of `/proc/net/wireless`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WirelessReading {
-    /// `link`: 0–70 on cfg80211 drivers (the signal clamped to −110…−40 dBm, plus 110).
-    pub quality: Option<f64>,
-    /// `level` in dBm.
+    /// `level` in dBm. (`link`, the quality, is not read: on cfg80211 drivers it is this signal
+    /// plus 110, clamped to 0–70; #1731.)
     pub signal_dbm: Option<f64>,
 }
 
@@ -250,12 +249,11 @@ pub fn parse_wireless(text: &str) -> Result<BTreeMap<String, WirelessReading>, S
             })?;
             Ok(updated.then_some(number))
         };
-        let quality = value(1)?;
+        // Field 1, the quality, is not read at all: an odd value there must not cost the signal.
         let level = value(2)?;
         interfaces.insert(
             name.to_string(),
             WirelessReading {
-                quality: quality.map(f64::from),
                 signal_dbm: level.filter(|dbm| *dbm < 0).map(f64::from),
             },
         );
@@ -323,7 +321,8 @@ pub(crate) mod tests {
     pub const WIFI_DOCKER_DEV: &str = include_str!("fixtures/wifi-docker-dev.txt");
 
     /// `/proc/net/wireless` of the same host, in the kernel's exact format: `wlp3s0` associated at
-    /// −74 dBm, a USB dongle whose driver reports a non-dBm level, and a row with nothing updated.
+    /// −74 dBm, a USB dongle whose driver reports a non-dBm level, a row with nothing updated, and
+    /// a row whose dBm level the driver did not mark updated (no `.`).
     pub const WIFI_WIRELESS: &str = include_str!("fixtures/wifi-wireless.txt");
 
     /// `/sys/class/net` of [`WIFI_DOCKER_DEV`]: only the two NICs have a `device` link and only
@@ -536,18 +535,14 @@ pub(crate) mod tests {
                 (
                     "wlp3s0".to_string(),
                     WirelessReading {
-                        quality: Some(36.0),
                         signal_dbm: Some(-74.0)
                     }
                 ),
-                (
-                    "wlx00c0ca".to_string(),
-                    WirelessReading {
-                        quality: Some(60.0),
-                        signal_dbm: None
-                    }
-                ),
+                // Its level is not in dBm.
+                ("wlx00c0ca".to_string(), WirelessReading::default()),
                 ("wlan9".to_string(), WirelessReading::default()),
+                // −70 dBm, but not marked updated: stale, not a sample.
+                ("wlan8".to_string(), WirelessReading::default()),
             ])
         );
         // A host with no associated Wi-Fi: the two header lines only.
@@ -557,11 +552,21 @@ pub(crate) mod tests {
             .map(|l| format!("{l}\n"))
             .collect();
         assert_eq!(parse_wireless(&headers), Ok(BTreeMap::new()));
+        // Junk in the quality column, which is not read, does not cost the signal (#1731).
+        assert_eq!(
+            parse_wireless(&format!("{headers}wlp3s0: 0000 x. -74.\n")),
+            Ok(BTreeMap::from([(
+                "wlp3s0".to_string(),
+                WirelessReading {
+                    signal_dbm: Some(-74.0)
+                }
+            )]))
+        );
         for broken in [
             String::new(),
             format!("{headers}wlp3s0 0000 36. -74.\n"),
             format!("{headers}wlp3s0: 0000 36.\n"),
-            format!("{headers}wlp3s0: 0000 x. -74.\n"),
+            format!("{headers}wlp3s0: 0000 36. x.\n"),
         ] {
             assert!(parse_wireless(&broken).is_err(), "{broken:?}");
         }

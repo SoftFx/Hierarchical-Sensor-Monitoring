@@ -641,7 +641,6 @@ stalled and whether the radio was the cause:
 | `Errors` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `errs`, delta |
 | `Drops` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `drop`, delta |
 | `Signal dBm` | DoubleBar | a sample every 10 s into a 1-min bar | none | `/proc/net/wireless` `level` (dBm only) |
-| `Link quality` | DoubleBar | a sample every 10 s into a 1-min bar | none | `/proc/net/wireless` `link` (0–70 on cfg80211) |
 
 All have KeepHistory 90 days and Grafana on, and none has an alert.
 
@@ -653,9 +652,14 @@ All have KeepHistory 90 days and Grafana on, and none has an alert.
 - The three counters follow the TCP delta rule above, with a 1-minute window: the window's whole
   movement is posted once, at its end. Their sensors are created on the first non-zero minute and
   have no TTL of their own, like the Docker `Restart count`.
-- The Wi-Fi bars exist only for interfaces in `/proc/net/wireless`, which lists one only while it
-  is associated: a disconnected minute has no value, and `Link up` says why (so they have no TTL). A value the driver did
-  not mark updated (no `.` after it) is skipped, and so is a level that is not in dBm.
+- The Wi-Fi bar exists only for interfaces in `/proc/net/wireless`, which lists one only while it
+  is associated: a disconnected minute has no value, and `Link up` says why (so it has no TTL). A
+  value the driver did not mark updated (no `.` after it) is skipped, and so is a level that is
+  not in dBm.
+- **Not reported:** the `link` quality column (owner's decision, #1731). On cfg80211 drivers it is
+  the signal plus 110, clamped to 0–70, so it would repeat `Signal dBm`. A `Link quality` sensor
+  that an earlier 0.11.0 test build registered stays on the server with its last value; the probe
+  cannot delete sensors, so delete it by hand.
 - **Not reported:** the access point (BSSID), channel and channel width. Only nl80211 (generic
   netlink) has them, and by the owner's decision in #1711 the probe adds no netlink dependency.
   A kernel without `/proc/net/wireless` (cloud kernels) is fine on a host without Wi-Fi; with a

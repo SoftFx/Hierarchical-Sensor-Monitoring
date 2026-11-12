@@ -1,18 +1,17 @@
 //! Wi-Fi signal (#1711 group 3), per reported Wi-Fi interface, from `/proc/net/wireless`:
+//! `.computer/Network/<iface>/Signal dBm`, the access point's signal at the card (the `level`
+//! column, dBm only).
 //!
-//! | leaf (`.computer/Network/<iface>/…`) | `/proc/net/wireless` | meaning |
-//! |---|---|---|
-//! | `Signal dBm` | `level` | the access point's signal at the card, dBm |
-//! | `Link quality` | `link` | 0–70 on cfg80211 drivers: the signal clamped to −110…−40 dBm, plus 110 |
-//!
-//! Both are 1-minute DoubleBars of samples taken every [`SAMPLE_PERIOD`], so a dip shows in the
-//! bar's Min. A sensor is created with its first value. The kernel prints a row only while the
+//! A 1-minute DoubleBar of samples taken every [`SAMPLE_PERIOD`], so a dip shows in the bar's
+//! Min. The sensor is created with its first value. The kernel prints a row only while the
 //! interface is associated, so a disconnected minute has no value (`Link up` tells why); that is
-//! also why they have no TTL: a long disconnect would otherwise put them in Timeout.
+//! also why it has no TTL: a long disconnect would otherwise put it in Timeout.
 //!
-//! Only these two. The access point (BSSID), channel and channel width are reported only by
-//! nl80211 (generic netlink); by the owner's decision in #1711 the probe does not add a netlink
-//! dependency for them, and protocol code is never hand-written here.
+//! Only the signal. The `link` quality column is left out by the owner's decision (#1731): on
+//! cfg80211 drivers it is the signal plus 110, clamped to 0–70, so it repeats `Signal dBm`. The
+//! access point (BSSID), channel and channel width are reported only by nl80211 (generic
+//! netlink); by the owner's decision in #1711 the probe does not add a netlink dependency for
+//! them, and protocol code is never hand-written here.
 
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
@@ -29,60 +28,29 @@ use crate::logging::Logger;
 use crate::probe_only::{FailureLog, Source};
 
 pub const SIGNAL_LEAF: &str = "Signal dBm";
-pub const QUALITY_LEAF: &str = "Link quality";
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Reading {
-    Signal,
-    Quality,
-}
-
-impl Reading {
-    pub fn leaf(self) -> &'static str {
-        match self {
-            Reading::Signal => SIGNAL_LEAF,
-            Reading::Quality => QUALITY_LEAF,
-        }
-    }
-
-    pub fn description(self, interface: &str) -> String {
-        match self {
-            Reading::Signal => format!(
-                "Signal of the access point on Wi-Fi interface **{interface}**, dBm \
-                 (`/proc/net/wireless` level): how strongly the router's radio reaches this \
-                 card. Always negative; **the closer to 0, the better**. Every 10 dB is ten \
-                 times less power, so −70 is ten times weaker than −60.\n\n\
-                 - −30 … −50: excellent\n\
-                 - −50 … −60: good\n\
-                 - −60 … −67: fine, enough for calls and video\n\
-                 - −67 … −75: weak: works, but retries and short stalls begin\n\
-                 - below −75: unreliable: stalls and disconnects are likely\n\n\
-                 Sampled every 10 s into 1-minute bars: **Min** is the weakest of the minute's \
-                 samples, so a dip shows there even when Mean looks fine (a dip shorter than \
-                 10 s can fall between samples)."
-            ),
-            Reading::Quality => format!(
-                "Link quality of Wi-Fi interface **{interface}** (`/proc/net/wireless` link), \
-                 **higher is better**. It is not measured separately: cfg80211 drivers that \
-                 report the signal in dBm (almost all current ones) compute it from the signal \
-                 (quality = signal + 110 dBm, kept within 0…70), so it says the same as \
-                 `Signal dBm` on another scale. A driver of another kind uses its own scale, and \
-                 the list below does not apply to it.\n\n\
-                 - 70: −40 dBm or stronger, the maximum\n\
-                 - 50: −60 dBm, good\n\
-                 - 43: −67 dBm, still fine\n\
-                 - 35: −75 dBm, unreliable below this\n\n\
-                 As a percentage: quality / 70. Sampled every 10 s into 1-minute bars."
-            ),
-        }
-    }
+pub fn signal_description(interface: &str) -> String {
+    format!(
+        "Signal of the access point on Wi-Fi interface **{interface}**, dBm \
+         (`/proc/net/wireless` level): how strongly the router's radio reaches this card. Always \
+         negative; **the closer to 0, the better**. Every 10 dB is ten times less power, so −70 \
+         is ten times weaker than −60.\n\n\
+         - −30 … −50: excellent\n\
+         - −50 … −60: good\n\
+         - −60 … −67: fine, enough for calls and video\n\
+         - −67 … −75: weak: works, but retries and short stalls begin\n\
+         - below −75: unreliable: stalls and disconnects are likely\n\n\
+         Sampled every 10 s into 1-minute bars: **Min** is the weakest of the minute's samples, \
+         so a dip shows there even when Mean looks fine (a dip shorter than 10 s can fall \
+         between samples)."
+    )
 }
 
 pub struct WifiSignal<'c> {
     collector: &'c Collector,
     wireless: PathBuf,
     filter: InterfaceFilter,
-    sensors: BTreeMap<(String, Reading), DoubleBarSensor<'c>>,
+    sensors: BTreeMap<String, DoubleBarSensor<'c>>,
     cap: InterfaceCap,
     read_failures: FailureLog,
     registration_failures: FailureLog,
@@ -142,13 +110,8 @@ impl<'c> WifiSignal<'c> {
             .filter(|(name, _)| self.filter.reported(name))
             .collect();
         for (name, row) in &reported {
-            for (reading, value) in [
-                (Reading::Signal, row.signal_dbm),
-                (Reading::Quality, row.quality),
-            ] {
-                if let Some(value) = value {
-                    self.post(name, reading, value, logger, &mut registrations, &mut posts);
-                }
+            if let Some(dbm) = row.signal_dbm {
+                self.post(name, dbm, logger, &mut registrations, &mut posts);
             }
         }
         report(
@@ -168,15 +131,13 @@ impl<'c> WifiSignal<'c> {
     fn post(
         &mut self,
         interface: &str,
-        reading: Reading,
-        value: f64,
+        dbm: f64,
         logger: &Logger,
         registrations: &mut Result<(), String>,
         posts: &mut Result<(), String>,
     ) {
-        let key = (interface.to_string(), reading);
-        let path = interface_path(interface, reading.leaf());
-        if !self.sensors.contains_key(&key) {
+        let path = interface_path(interface, SIGNAL_LEAF);
+        if !self.sensors.contains_key(interface) {
             if !self.cap.admit(interface, logger) {
                 return;
             }
@@ -184,7 +145,7 @@ impl<'c> WifiSignal<'c> {
                 .with_is_computer_sensor(true)
                 .with_keep_history(KEEP_HISTORY)
                 .with_enable_grafana(true)
-                .with_description(reading.description(interface));
+                .with_description(signal_description(interface));
             match self.collector.double_bar_sensor(
                 &path,
                 BAR_PERIOD,
@@ -193,7 +154,7 @@ impl<'c> WifiSignal<'c> {
                 &options,
             ) {
                 Ok(sensor) => {
-                    self.sensors.insert(key.clone(), sensor);
+                    self.sensors.insert(interface.to_string(), sensor);
                 }
                 Err(error) => {
                     *registrations = Err(format!("{path}: {error}"));
@@ -201,8 +162,8 @@ impl<'c> WifiSignal<'c> {
                 }
             }
         }
-        if let Some(sensor) = self.sensors.get(&key) {
-            if let Err(error) = sensor.add(value) {
+        if let Some(sensor) = self.sensors.get(interface) {
+            if let Err(error) = sensor.add(dbm) {
                 *posts = Err(format!("{path}: {error}"));
             }
         }
@@ -251,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn an_associated_interface_gets_signal_and_quality_bars() {
+    fn an_associated_interface_gets_one_signal_bar() {
         let collector = test_collector();
         let tree = FakeTree::new("net-wifi");
         wifi_docker_sysfs(&tree);
@@ -263,54 +224,42 @@ mod tests {
         let registrations = network_registrations(&collector);
         collector.stop().expect("stop");
 
-        // Only wlp3s0 is a physical interface of this host; the other rows are not reported.
-        assert_eq!(registrations.len(), 2, "{registrations:#?}");
-        let find = |leaf: &str| {
-            registrations
-                .iter()
-                .find(|json| {
-                    json.contains(&format!("\"Path\":\".computer/Network/wlp3s0/{leaf}\""))
-                })
-                .unwrap_or_else(|| panic!("no {leaf} in {registrations:#?}"))
-        };
-        for (leaf, description) in [
-            (
-                SIGNAL_LEAF,
-                "Signal of the access point on Wi-Fi interface **wlp3s0**, dBm",
-            ),
+        // Only wlp3s0 is a physical interface of this host; the other rows are not reported. No
+        // `Link quality` (#1731): it repeats the signal.
+        assert_eq!(registrations.len(), 1, "{registrations:#?}");
+        let json = &registrations[0];
+        for part in [
+            "\"Path\":\".computer/Network/wlp3s0/Signal dBm\"",
+            "\"SensorType\":5,",
+            "\"TTLTicks\":null",
+            "\"KeepHistory\":77760000000000",
+            "\"EnableGrafana\":true",
+            "\"IsSingletonSensor\":true",
+            "Signal of the access point on Wi-Fi interface **wlp3s0**, dBm",
             // The scale is a markdown list: the newlines travel JSON-escaped.
-            (SIGNAL_LEAF, "\\n- −30 … −50: excellent\\n"),
-            (QUALITY_LEAF, "Link quality of Wi-Fi interface **wlp3s0**"),
-            (QUALITY_LEAF, "\\n- 50: −60 dBm, good\\n"),
+            "\\n- −30 … −50: excellent\\n",
         ] {
-            let json = find(leaf);
-            for part in [
-                "\"SensorType\":5,",
-                "\"TTLTicks\":null",
-                "\"KeepHistory\":77760000000000",
-                "\"EnableGrafana\":true",
-                "\"IsSingletonSensor\":true",
-                description,
-            ] {
-                assert!(json.contains(part), "missing {part} in {json}");
-            }
+            assert!(json.contains(part), "missing {part} in {json}");
         }
         assert!(lines.lock().unwrap().is_empty(), "{lines:#?}");
     }
 
     #[test]
-    fn a_pattern_reports_a_dongle_without_a_dbm_level_as_quality_only() {
+    fn patterns_admit_every_row_but_only_a_fresh_dbm_level_gets_a_sensor() {
         let collector = test_collector();
         let tree = FakeTree::new("net-wifi-dongle");
         tree.file("proc-net/wireless", WIFI_WIRELESS);
-        let mut source = wifi_source(&collector, &tree, &["wlx*", "wlan*"]);
+        // No sysfs: the patterns alone decide, and they admit all four rows.
+        let mut source = wifi_source(&collector, &tree, &["wl*"]);
         let (logger, _) = capture();
         collector.start().expect("start");
         source.sample(&logger);
         let registrations = network_registrations(&collector);
         collector.stop().expect("stop");
+        // wlx00c0ca (non-dBm level), wlan9 (nothing updated) and wlan8 (dBm level not marked
+        // updated) get none.
         assert_eq!(registrations.len(), 1, "{registrations:#?}");
-        assert!(registrations[0].contains("\"Path\":\".computer/Network/wlx00c0ca/Link quality\""));
+        assert!(registrations[0].contains("\"Path\":\".computer/Network/wlp3s0/Signal dBm\""));
     }
 
     #[test]
