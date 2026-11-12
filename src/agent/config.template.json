@@ -6,7 +6,8 @@
     "address": "https://your-hsm-server",
     "port": 443,
     "accessKey": "<paste-the-product-access-key>",
-    "allowUntrustedCertificate": false
+    "allowUntrustedCertificate": false,
+    "transport": "http"
   },
 
   "identity": {

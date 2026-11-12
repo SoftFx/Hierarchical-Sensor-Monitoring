@@ -41,6 +41,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         internal const string SensorName = "Connection failures rate";
 
+        // One sample at a time. A monitor added while the collector is starting is initialized
+        // twice (by its registration and by the Start under way), and the loop of the first
+        // start may still be sampling: the accumulator is no thread-safe type, and a baseline
+        // read by two samples at once would lose or repeat the increase of a period.
+        private readonly object _sampleLock = new object();
+
         private TcpFailureRateAccumulator _accumulator = new TcpFailureRateAccumulator();
         private double _pushedTotal;
         private readonly Func<FamilyReading> _readV4;
@@ -53,6 +59,9 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private Task _loopTask;
 
         public string SensorPath { get; } = MonitorPath;
+
+        /// <summary>The sampling period this monitor was built with.</summary>
+        internal TimeSpan Period => _period;
 
 
         /// <param name="readV4">The cumulative counter of IPv4; a seam for tests, the OS by default.</param>
@@ -127,8 +136,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             // sampler on each Start: with the baselines of the previous run, everything that
             // failed while the collector was stopped would come out as one spike. The first
             // reading only seeds them and posts nothing.
-            _accumulator = new TcpFailureRateAccumulator();
-            Sample();
+            lock (_sampleLock)
+            {
+                _accumulator = new TcpFailureRateAccumulator();
+                Sample();
+            }
 
             return new ValueTask<bool>(true);
         }
@@ -202,6 +214,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         private void Sample()
         {
+            lock (_sampleLock)
+                SampleLocked();
+        }
+
+        private void SampleLocked()
+        {
             try
             {
                 var v4 = _readV4();
@@ -220,7 +238,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                 if (delta.HasValue)
                 {
                     _sensor.AddValue(delta.Value);
-                    Interlocked.Exchange(ref _pushedTotal, _pushedTotal + delta.Value);
+                    Volatile.Write(ref _pushedTotal, _pushedTotal + delta.Value);
                 }
             }
             catch (Exception ex)
