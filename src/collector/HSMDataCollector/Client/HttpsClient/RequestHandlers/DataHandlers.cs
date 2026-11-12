@@ -13,6 +13,9 @@ namespace HSMDataCollector.Client.HttpsClient
 
         protected override int MaxRetryAttempts => 10;
 
+        // Values, priority values and file values: the requests the server answers with directives.
+        protected override bool CarriesValues => true;
+
 
         public DataHandlers(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger) { }
 

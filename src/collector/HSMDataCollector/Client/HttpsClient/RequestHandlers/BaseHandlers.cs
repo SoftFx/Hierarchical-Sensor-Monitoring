@@ -24,6 +24,13 @@ namespace HSMDataCollector.Client.HttpsClient
         /// </summary>
         protected abstract int MaxRetryAttempts { get; }
 
+        /// <summary>
+        /// True for a handler whose requests carry sensor values: those take the host's extra
+        /// request headers and their answers can carry server directives (#1659 B1). Off unless a
+        /// handler says so, so a new route does not send the host's headers by default.
+        /// </summary>
+        protected virtual bool CarriesValues => false;
+
         /// <summary>The pause between the retries of one send; read only when there are any.</summary>
         protected virtual DelayBackoffType DelayStrategy => DelayBackoffType.Exponential;
 
@@ -226,7 +233,7 @@ namespace HSMDataCollector.Client.HttpsClient
         {
             using (var content = request.GetContent())
             {
-                return await _client.SendRequestAsync(request.Uri, content, token).ConfigureAwait(false);
+                return await _client.SendRequestAsync(request.Uri, content, token, CarriesValues).ConfigureAwait(false);
             }
         }
 
