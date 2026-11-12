@@ -49,6 +49,7 @@ import './js/metaInfo.js';
 import './js/products.js';
 import './js/nodeData.js';
 import './js/tree.js';
+import './js/sensorMove.js';
 import './js/site.js';
 import './js/treeCollapse';
 import './js/dashboard.js'

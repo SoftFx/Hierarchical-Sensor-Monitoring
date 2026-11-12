@@ -13,6 +13,7 @@
 
 <div>
     @await Html.PartialAsync("_MetaInfo", new SensorInfoViewModel(Model))
+    @await Html.PartialAsync("Sensor/_SensorAliases", Model)
 
     @if (Model.Type == SensorType.File)
     {

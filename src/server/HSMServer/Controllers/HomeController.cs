@@ -59,13 +59,16 @@ namespace HSMServer.Controllers
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
         private readonly PolicyAdministrationService _policies;
+        private readonly HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService _mover;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
                               IDatabaseCore database, IAlertScheduleProvider provider,
-                              PolicyAdministrationService policies) : base(userManager)
+                              PolicyAdministrationService policies,
+                              HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService mover) : base(userManager)
         {
+            _mover = mover;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -265,6 +268,83 @@ namespace HSMServer.Controllers
 
             return Json(model.BuildResponse("Removed"));
         }
+
+        // Sensor move (#1722): the modal, the move itself and alias removal.
+        // The decisions live in SensorMoveAdministrationService (the engine of
+        // the REST and MCP surfaces); this controller only maps the web user
+        // onto it through CookieSensorMoveAccess — Manager of the sensor's and
+        // of the destination's root product, or admin (the RemoveNode rule, #1512).
+        [HttpGet]
+        public IActionResult GetMoveSensorsModal([FromQuery] string[] ids)
+        {
+            var sensors = (ids ?? [])
+                .Select(id => _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(id)))
+                .Where(s => s is not null && CurrentUser.IsManager(s.Root.Id))
+                .ToList();
+
+            if (sensors.Count == 0)
+                return BadRequest("Select sensors of a product you manage.");
+
+            var first = sensors[0];
+
+            return PartialView("~/Views/Tree/_MoveSensorsModal.cshtml", new MoveSensorsViewModel
+            {
+                SensorIds = sensors.Select(s => SensorPathHelper.EncodeGuid(s.Id)).ToList(),
+                SensorNames = sensors.Select(s => s.DisplayName).ToList(),
+                Products = _treeValuesCache.GetProducts()
+                    .Where(p => CurrentUser.IsManager(p.Id))
+                    .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .Select(p => (p.Id, p.DisplayName))
+                    .ToList(),
+                ProductId = first.Root.Id,
+                Destination = sensors.Count == 1 ? first.Path : first.Parent?.Path ?? string.Empty,
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MoveSensors([FromBody] MoveSensorsRequestViewModel model)
+        {
+            if (model is null)
+                return BadRequest(new { error = "A move request is required." });
+
+            var request = new HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto
+            {
+                Sensors = model.SensorIds.Select(SensorPathHelper.DecodeGuid).ToList(),
+                Product = model.ProductId,
+                Path = model.SensorIds.Count == 1 ? model.Destination ?? string.Empty : null,
+                Node = model.SensorIds.Count == 1 ? null : model.Destination ?? string.Empty,
+                OnConflict = model.Merge ? "merge" : "fail",
+            };
+
+            var result = await _mover.MoveSensorsAsync(request,
+                new HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess(CurrentUser, _treeValuesCache),
+                new ChangeSetWriteOptions { DryRun = model.DryRun }, HttpContext.RequestAborted);
+
+            if (!result.Success)
+                return BadRequest(new { error = MoveFailureText(result.Failure) });
+
+            return result.IsDryRun ? Json(result.Preview) : Json(result.Value);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveSensorAlias(Guid sensorId, Guid productId, string path)
+        {
+            var result = await _mover.RemoveAliasAsync(sensorId, productId, path,
+                new HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess(CurrentUser, _treeValuesCache), HttpContext.RequestAborted);
+
+            return result.Success ? Ok() : BadRequest(new { error = MoveFailureText(result.Failure) });
+        }
+
+        private static string MoveFailureText(PolicyWriteFailure failure) => failure.Outcome switch
+        {
+            PolicyWriteOutcome.Invalid or PolicyWriteOutcome.Validation when failure.Errors is { Count: > 0 } =>
+                string.Join(" ", failure.Errors.SelectMany(e => e.Value)),
+            PolicyWriteOutcome.Forbidden => "You need the Manager role on both the sensors' and the destination's product.",
+            PolicyWriteOutcome.NotFound => failure.Message ?? "Not found.",
+            _ => failure.Message ?? "The move could not be applied.",
+        };
 
         [HttpGet]
         public IActionResult GetEditAlertsPartialView() => PartialView("~/Views/Tree/_MultiEditModal.cshtml", new EditAlertsViewModel());

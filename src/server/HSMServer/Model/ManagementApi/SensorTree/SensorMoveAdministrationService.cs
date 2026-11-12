@@ -49,15 +49,20 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         }
 
 
+        public Task<PolicyWriteResult<SensorMoveResponseDto>> MoveSensorsAsync(SensorMoveRequestDto request,
+            ClaimsPrincipal user, ChangeSetWriteOptions write = null, CancellationToken token = default) =>
+            MoveSensorsAsync(request, new TokenSensorMoveAccess(_authorization, user, _users), write, token);
+
+        /// <summary>The same move for any caller — the web UI passes a <see cref="CookieSensorMoveAccess"/> (#1722).</summary>
         public async Task<PolicyWriteResult<SensorMoveResponseDto>> MoveSensorsAsync(SensorMoveRequestDto request,
-            ClaimsPrincipal user, ChangeSetWriteOptions write = null, CancellationToken token = default)
+            ISensorMoveAccess access, ChangeSetWriteOptions write = null, CancellationToken token = default)
         {
             var errors = Validate(request, out var onConflict);
 
             if (errors.Count > 0)
                 return PolicyWriteResult<SensorMoveResponseDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            var destination = _authorization.AuthorizeWrite(user, new ApiTokenResource(ApiTokenResourceKind.Product, request.Product));
+            var destination = access.AuthorizeWrite(new ApiTokenResource(ApiTokenResourceKind.Product, request.Product));
 
             if (destination != ApiTokenAuthorization.Allowed)
                 return destination == ApiTokenAuthorization.Forbidden
@@ -79,7 +84,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             // the caller may move, or it would name hidden sensors and let one
             // of them fail the whole batch (#1721 review).
             var admitted = request.Sensors
-                .Select(id => (Id: id, Admission: Admit(id, user, out var sensor), Sensor: sensor))
+                .Select(id => (Id: id, Admission: Admit(id, access, out var sensor), Sensor: sensor))
                 .ToList();
 
             // Two sensors bound for one path: the second would conflict — or,
@@ -99,7 +104,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             }
 
             var dryRun = write is { DryRun: true };
-            var initiator = dryRun ? null : ChangeSetRecorder.InitiatorOf(user, _users);
+            var initiator = dryRun ? null : access.Initiator;
 
             var results = new List<SensorMoveItemDto>(request.Sensors.Count);
             var previews = new List<SensorMovePreviewItemDto>(request.Sensors.Count);
@@ -153,8 +158,12 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// Remove one alias of a moved sensor: values sent to that old path stop
         /// landing in the sensor (the next one creates a new sensor there).
         /// </summary>
+        public Task<PolicyWriteResult> RemoveAliasAsync(Guid sensorId, Guid productId, string path,
+            ClaimsPrincipal user, CancellationToken token = default) =>
+            RemoveAliasAsync(sensorId, productId, path, new TokenSensorMoveAccess(_authorization, user, _users), token);
+
         public async Task<PolicyWriteResult> RemoveAliasAsync(Guid sensorId, Guid productId, string path,
-            ClaimsPrincipal user, CancellationToken token = default)
+            ISensorMoveAccess access, CancellationToken token = default)
         {
             if (productId == Guid.Empty || string.IsNullOrWhiteSpace(path))
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid, new Dictionary<string, string[]>
@@ -162,7 +171,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     [productId == Guid.Empty ? "product" : "path"] = ["The alias's product id and path (as listed in the sensor's `aliases`) are required."],
                 });
 
-            var admission = Admit(sensorId, user, out _);
+            var admission = Admit(sensorId, access, out _);
 
             if (admission is not null)
                 return admission == Forbidden
@@ -171,14 +180,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             // Removing the alias changes routing in ITS product (the next value
             // there creates a new sensor), which may not be the sensor's.
-            var aliasProduct = _authorization.AuthorizeWrite(user, new ApiTokenResource(ApiTokenResourceKind.Product, productId));
+            var aliasProduct = access.AuthorizeWrite(new ApiTokenResource(ApiTokenResourceKind.Product, productId));
 
             if (aliasProduct != ApiTokenAuthorization.Allowed)
                 return aliasProduct == ApiTokenAuthorization.Forbidden
                     ? PolicyWriteResult.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage)
                     : PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
-            return await _cache.RemoveSensorAliasAsync(sensorId, productId, path, ChangeSetRecorder.InitiatorOf(user, _users), token)
+            return await _cache.RemoveSensorAliasAsync(sensorId, productId, path, access.Initiator, token)
                 ? PolicyWriteResult.Ok()
                 : PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound, message: NoSuchAlias);
         }
@@ -189,11 +198,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         // The per-sensor admission: the evaluator's 404/403 split, then the live
         // lookup. Null = the sensor may be moved.
-        private string Admit(Guid sensorId, ClaimsPrincipal user, out Core.Model.BaseSensorModel sensor)
+        private string Admit(Guid sensorId, ISensorMoveAccess access, out Core.Model.BaseSensorModel sensor)
         {
             sensor = null;
 
-            var decision = _authorization.AuthorizeWrite(user, new ApiTokenResource(ApiTokenResourceKind.Sensor, sensorId));
+            var decision = access.AuthorizeWrite(new ApiTokenResource(ApiTokenResourceKind.Sensor, sensorId));
 
             if (decision == ApiTokenAuthorization.Forbidden)
                 return Forbidden;

@@ -1,0 +1,53 @@
+@using HSMServer.Core.Cache
+@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.TreeViewModel
+
+@model SensorNodeViewModel
+
+@inject ITreeValuesCache Cache
+
+@* Sensor move (#1722): the old paths that still route values to this sensor. *@
+@{
+    var sensor = Cache.GetSensor(Model.Id);
+    var aliases = sensor?.Aliases ?? [];
+    var user = User as User;
+}
+
+@if (aliases.Count > 0)
+{
+    <div class="mt-2 mb-2" id="sensorAliases_@Model.EncodedId">
+        <div class="fw-semibold small">Old paths (aliases)</div>
+        <div class="small text-muted">
+            Values and registrations sent to these paths still land in this sensor. An alias expires after the sensor's
+            SelfDestroy interval without arrivals.
+        </div>
+        <table class="table table-sm small mb-0 w-auto">
+            <tbody>
+                @for (var i = 0; i < aliases.Count; i++)
+                {
+                    var alias = aliases[i];
+                    var rowId = $"sensorAlias_{Model.EncodedId}_{i}";
+                    var product = Cache.GetProduct(alias.ProductId)?.DisplayName ?? alias.ProductId.ToString();
+                    var lastHit = alias.LastHit.Ticks > 0 ? alias.LastHit.ToLocalTime().ToString("g") : "never";
+
+                    <tr id="@rowId">
+                        <td class="text-break">@product/@alias.Path</td>
+                        <td class="text-muted text-nowrap">last value: @lastHit</td>
+                        <td>
+                            @if (user is not null && user.IsManager(alias.ProductId) && user.IsManager(sensor.Root.Id))
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0"
+                                        title="Stop routing this path to the sensor"
+                                        data-sensor="@Model.Id" data-product="@alias.ProductId" data-path="@alias.Path" data-row="@rowId"
+                                        onclick="removeSensorAlias(this)">
+                                    Remove
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
