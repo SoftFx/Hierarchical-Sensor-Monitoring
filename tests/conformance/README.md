@@ -231,7 +231,8 @@ polls until the expectation holds; `0` checks once.
 | `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
 | `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request |
 | `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
-| `expect_session_closed_normally` | the last close frame the collector sent carries code 1000: its close at stop, or its answer to the server's close. Polled for 5 s. A session that was cut sends none, so pair it with `expect_session_count` where the number of sessions matters |
+| `expect_session_close_code\|code\|timeout_s` | the last close frame the collector sent carries this code. A collector answers a server's close with the code it received. A session that was cut sends no close frame, so pair it with `expect_session_count` where the number of sessions matters |
+| `expect_session_closed_normally` | `expect_session_close_code\|1000\|5`: how a collector ends a session at stop |
 
 Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
 (the WebSocket itself is `HttpListener`'s). **The native driver does not implement these verbs yet**

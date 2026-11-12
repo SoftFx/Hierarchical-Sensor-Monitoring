@@ -1226,6 +1226,16 @@ namespace HSMDataCollector.Tests
                     break;
                 }
 
+                case "expect_session_close_code":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Closes.Count > 0 && server.Closes.Last() == expected, step.Arg(1)).ConfigureAwait(false),
+                                $"The last close frame of the collector does not carry {expected}. Close codes: " + string.Join(",", server.Closes));
+                    break;
+                }
+
                 case "expect_session_closed_normally":
                 {
                     var server = SessionServer(state);

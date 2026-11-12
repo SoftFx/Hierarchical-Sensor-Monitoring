@@ -680,8 +680,9 @@ namespace HSMDataCollector.Tests.Transport
                     // A server that shuts down: "going away", and it waits for the answer.
                     server.CloseSessions(1001);
 
+                    // Answered with the code it was closed with, as the native collector does.
                     Assert.True(await WaitForAsync(() => server.Closes.Count >= 1), "The collector dropped the session instead of answering the close.");
-                    Assert.Equal(1000, server.Closes[0]);
+                    Assert.Equal(1001, server.Closes[0]);
 
                     sensor.AddValue(3);
 

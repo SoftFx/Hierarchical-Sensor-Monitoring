@@ -3047,6 +3047,7 @@ namespace
             "session_server_close_sessions",
             "session_http_request",
             "expect_session_pings_at_least",
+            "expect_session_close_code",
             "expect_session_count",
             "expect_session_count_at_least",
             "expect_refused_upgrades_at_least",
