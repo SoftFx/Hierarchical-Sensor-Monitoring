@@ -657,7 +657,9 @@ All have KeepHistory 90 days and Grafana on, and none has an alert.
   value the driver did not mark updated (no `.` after it) is skipped, and so is a level that is
   not in dBm.
 - **Not reported:** the `link` quality column (owner's decision, #1731). On cfg80211 drivers it is
-  the signal plus 110, clamped to 0–70, so it would repeat `Signal dBm`.
+  the signal plus 110, clamped to 0–70, so it would repeat `Signal dBm`. A `Link quality` sensor
+  that an earlier 0.11.0 test build registered stays on the server with its last value; the probe
+  cannot delete sensors, so delete it by hand.
 - **Not reported:** the access point (BSSID), channel and channel width. Only nl80211 (generic
   netlink) has them, and by the owner's decision in #1711 the probe adds no netlink dependency.
   A kernel without `/proc/net/wireless` (cloud kernels) is fine on a host without Wi-Fi; with a
