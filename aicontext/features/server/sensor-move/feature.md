@@ -11,7 +11,7 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721). The `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). Rollback (#1723) and collector `PreviousPaths` (#1724) follow.
 
 ## Invariants
 
@@ -29,7 +29,7 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 
 | # | Workflow | Initiator |
 |---|---|---|
-| 1 | Move a sensor (`ITreeValuesCache.MoveSensorAsync`) — `POST /api/v1/sensors/move`, MCP `move_sensors` (#1721); the Web UI is #1722 | operator / AI agent |
+| 1 | Move a sensor (`ITreeValuesCache.MoveSensorAsync`) — `POST /api/v1/sensors/move`, MCP `move_sensors` (#1721), the tree's "Move sensor(s)..." (#1722) | operator / AI agent |
 | 1a | Predict a move (`ITreeValuesCache.PreviewMove`): outcome, nodes to create, alert templates detached/applied, inherited settings that change — the dry run of both surfaces | operator / AI agent |
 | 2 | Value or registration arrives at an old path → lands in the moved sensor | collector |
 | 3 | Value of another type, or a registration with an explicit other type, arrives at an old path → displaces the alias and creates a new sensor there | collector |
@@ -99,7 +99,9 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 
 - Journal: a `treeCrud` record "Move sensor" on the sensor (`OldValue` → `NewValue` full paths, initiator); "Remove sensor alias" when an alias is removed by hand or displaced.
 - Log: `Sensor moved: ...` (Info); alias expiry / startup drop (Info / Warn); dropped aliased values (rate-limited Warn).
-- The tree view moves the same sensor node under its new parent. The UI action and the alias list on the sensor page are #1722.
+- The tree view moves the same sensor node under its new parent.
+- **Web UI (#1722).** The sensor tree's context menu offers "Move sensor..." on one sensor and "Move sensors..." when every selected item is a sensor (nodes are never offered). The modal (`Views/Tree/_MoveSensorsModal.cshtml`, `wwwroot/src/js/sensorMove.js`) takes the destination root product (those the user manages), the new path of one sensor (prefilled with its current path, the last segment renames it) or the destination node of several (prefilled with the first sensor's parent; empty = directly under the product), and a "merge into an existing sensor" checkbox marked irreversible (a confirm dialog guards it again). **Preview** runs the dry run and lists per sensor the outcome, the nodes it creates, alert templates removed/added, inherited settings that change, a sensor it would absorb or whose alias it takes over; **Move** applies it and toasts the per-sensor failures. Server-side, `HomeController.MoveSensors` / `RemoveSensorAlias` (POST, antiforgery-validated) call the same `SensorMoveAdministrationService` as REST/MCP through `CookieSensorMoveAccess`: Manager of the sensor's root product and of the destination's, or admin — the `RemoveNode` rule (#1512) on both ends; out of sight answers not-found, in sight without the role forbidden.
+- **The sensor page** lists the sensor's aliases ("Old paths", `Views/Home/Sensor/_SensorAliases.cshtml`): product/path and the last value that arrived through each, with a **Remove** button for a user who manages both the alias's product and the sensor's.
 
 ## Known limits
 

@@ -3201,6 +3201,16 @@
             no values.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess">
+            <summary>
+            Who is moving sensors (#1722): the write decision per resource and the
+            journal initiator. One move engine, two callers — an API token (REST,
+            MCP) and a signed-in web user.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess.AuthorizeWrite(HSMServer.Authentication.ApiTokenResource)">
+            <summary>Allowed, Forbidden (in sight, not writable) or NotFound (unknown or out of sight).</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService">
             <summary>
             The sensor-move write engine (#1721): move sensors to another path, and
@@ -3208,6 +3218,9 @@
             and the MCP tools render its results through the same envelopes every
             other administration service uses.
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService.MoveSensorsAsync(HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto,HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,System.Threading.CancellationToken)">
+            <summary>The same move for any caller — the web UI passes a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess"/> (#1722).</summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService.RemoveAliasAsync(System.Guid,System.Guid,System.String,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
             <summary>
@@ -3413,6 +3426,36 @@
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
+        </member>
+        <member name="T:HSMServer.Model.ViewModel.MoveSensorsViewModel">
+            <summary>
+            The tree's "Move" modal (#1722): the selected sensors, the root products
+            the user may move them into, and the prefilled destination.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.SensorIds">
+            <summary>The selected sensors' encoded ids, as the tree knows them.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.SensorNames">
+            <summary>Display names of the selected sensors (for the header).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Products">
+            <summary>Root products the user manages: (id, name), name-ordered.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.ProductId">
+            <summary>The first sensor's root product: the preselected destination.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Single">
+            <summary>One sensor: the destination is a full path (rename allowed); several: a node.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Destination">
+            <summary>Prefill: the sensor's own path (one sensor) or its parent node's path (several).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ViewModel.MoveSensorsRequestViewModel">
+            <summary>The modal's POST body (JSON).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsRequestViewModel.Destination">
+            <summary>Full new path of one sensor, or the destination node of several.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.SensorGroupsRequest.DisabledGroups">
             Sensor group names that should be disabled. All others are considered enabled.
