@@ -3019,6 +3019,20 @@ namespace
             return;
         }
 
+        if (action == "enable_tcp_connection_failure_rate_sensor")
+        {
+            // (#1659 B2) period_ms. Used only by collector/windows/, which runs on Windows.
+            Require(step.size() >= 2, "enable_tcp_connection_failure_rate_sensor requires period_ms");
+#ifdef _WIN32
+            Require(
+                hsm_collector_enable_tcp_connection_failure_rate_sensor(
+                    state.collector.value,
+                    ToInt(step[1])) == HSM_RESULT_OK,
+                "enable_tcp_connection_failure_rate_sensor failed");
+#endif
+            return;
+        }
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 
@@ -10084,6 +10098,7 @@ namespace
             { "conformance_module_markers_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_tcp_failure_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

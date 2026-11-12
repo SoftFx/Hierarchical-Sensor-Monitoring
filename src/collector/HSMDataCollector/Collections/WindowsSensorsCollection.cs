@@ -272,6 +272,38 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddNetworkInterfacesSpeed() => ToWindows(new WindowsNetworkInterfaceSpeedMonitor(_storage));
 
+        private readonly object _tcpFailureRateGate = new object();
+
+        public IWindowsCollection AddNetworkConnectionFailuresRate(TimeSpan? period = null)
+        {
+            // Before the monitor is built: building it puts the rate sensor into the storage, and
+            // a Windows-only sensor must not be left there by a call that then throws.
+            EnsureCorrectOs();
+
+            lock (_tcpFailureRateGate)
+            {
+                // Asked for once per collector: a second request is not a second monitor. The
+                // storage is the record of what was taken: a monitor it refused (the collector
+                // was stopping) is not there, so the next call tries again.
+                //
+                // The period of the first request stays: the rate sensor was created with it.
+                // The native enable call differs here (the last period given before Start is
+                // the one used), so a second request with another period is reported, not
+                // swallowed: the host gets a rate it did not ask for last.
+                var asked = period ?? TimeSpan.FromMinutes(1);
+
+                if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var existing))
+                {
+                    if (existing is WindowsTcpFailureRateMonitor monitor && monitor.Period != asked)
+                        _storage.ReportError($"The TCP connection failure rate sensor was already added with a period of {monitor.Period}; the period {asked} of the second request is not applied.");
+
+                    return this;
+                }
+
+                return ToWindows(new WindowsTcpFailureRateMonitor(_storage, asked));
+            }
+        }
+
         public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();
 
         #endregion

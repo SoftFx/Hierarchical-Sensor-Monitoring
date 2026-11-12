@@ -11,7 +11,7 @@ Current drivers:
 
 | Driver | Runner | Fixture discovery |
 |---|---|---|
-| .NET (canonical) | `src/collector/HSMDataCollector.Tests/CollectorConformanceTests.cs` | auto: globs `collector/*.hsmtest` (non-recursive) |
+| .NET (canonical) | `src/collector/HSMDataCollector.Tests/CollectorConformanceTests.cs` | auto: globs `collector/*.hsmtest` (non-recursive), plus `collector/windows/*.hsmtest` on Windows |
 | native C++ | `src/native/collector/tests/hsm_collector_tests.cpp` | explicit: `add_conformance_test` in the native `CMakeLists.txt` |
 
 CI: `collector-unit-tests` runs the corpus through the .NET driver;
@@ -93,6 +93,13 @@ satisfies by an owner decision — today `bar_stddev_contract.hsmtest` (#1529). 
 discovery is non-recursive, so it never reads them; the native driver registers them in CMake like any
 fixture. A case moves back into the shared fixtures when the managed collector gains the behavior.
 
+**Windows-only fixtures.** `collector/windows/*.hsmtest` holds scenarios for sensors that exist only
+on Windows and whose registration can therefore be asserted only there (today
+`tcp_failure_rate_contract.hsmtest`, #1659 B2). Both drivers run the folder on Windows and nowhere
+else: the managed driver adds it to its discovery when the host is Windows, the native driver
+registers its fixtures in CMake under `if(WIN32)`. A scenario that can be written so that it passes
+on every platform belongs in the shared folder, not here.
+
 ## Verb catalog
 
 Status args accept `Ok|Warning|Error`; `sensor_index`/`bar_index`/`idx` index
@@ -134,6 +141,7 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_int_sensor_full_options\|path\|ttl_ms\|unit\|keep_history_ms\|self_destroy_ms\|statistics\|is_singleton\|aggregate\|grafana\|is_computer\|sensor_location\|description` | full SensorOptions surface + path model; tri-state (is_singleton/aggregate/grafana) -1=null/0/1; statistics -1=null else flags (EMA=1); is_computer anchors at the computer node + forces singleton; sensor_location 0=Module/1=Product |
 | `create_enum_sensor_full_options\|path\|ttl_ms\|keep_history_ms\|aggregate\|grafana\|is_computer\|description\|key:value:color:desc[;...]` | enum sensor carrying its `EnumOptions` AND the SensorOptions surface (the `ServiceStatusPrototype` shape); tri-states -1=null/0/1; consumes the staged alert builders. C#: `CreateEnumSensor(path, new EnumSensorOptions { … })`; native: `hsm_collector_create_enum_sensor_with_sensor_options` (0.9.0) + `hsm_sensor_attach_alert` |
 | `create_service_commands_sensor` | service-commands sensor (string, fixed `.module/Service commands`, implicit received-new-value alert) |
+| `enable_tcp_connection_failure_rate_sensor\|period_ms` | (#1659 B2) opt in to the TCP connection failure rate sensor (Windows only; see **Windows-only fixtures** above): a Rate sensor at `.computer/Network/Connection failures rate`, registered by Start. Native `hsm_collector_enable_tcp_connection_failure_rate_sensor`; C# `IWindowsCollection.AddNetworkConnectionFailuresRate`. Values are the host's own failed connection attempts, so a fixture pins the registration only |
 | `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET), except for the four `.module/Collector queue stats` rows (#1480), whose text is composed only from the collector options and is pinned byte-exact (both harnesses create the collector with the same options); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
 | `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start (the one exception, `module_markers_contract:service_alive_keeps_beating_with_a_long_collect_period`, waits a beat period out on purpose to pin the cadence, #1443) |
 | `add_queue_diagnostic_sensors` | (#1480) register the `.module/Collector queue stats` group — Queue overflow, Items count in package, Package process time, Package content size (priority sensors). C# calls `AddAllQueueDiagnosticSensors` on the host's collection; native calls `hsm_collector_add_all_queue_diagnostic_sensors`. Their bars post a partial every 15 s, so keep a case well inside that or assert after `stop` (which flushes them) |
