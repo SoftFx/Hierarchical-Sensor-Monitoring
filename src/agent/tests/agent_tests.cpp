@@ -105,12 +105,14 @@ namespace
         Check(!config.sensors_process, "process sensors default off");
         CheckEq(config.collect_period_ms, 0, "default collect period (collector default)");
         Check(!config.allow_untrusted_certificate, "untrusted cert defaults off");
+        CheckEq(config.transport, std::string{ "http" }, "transport defaults to http");
+        Check(!config.UsesSession(), "the session is opt-in");
     }
 
     void FullConfigMapsEveryField()
     {
         const auto config = ParseOk(R"({
-            "server": { "address": "https://h:1", "port": 9999, "accessKey": "k", "allowUntrustedCertificate": true },
+            "server": { "address": "https://h:1", "port": 9999, "accessKey": "k", "allowUntrustedCertificate": true, "transport": "session" },
             "identity": { "computerName": "BUILD01", "module": "Custom Module" },
             "sensors": { "computer": false, "system": true, "disk": false, "network": true, "module": false, "process": true },
             "periods": { "collectMs": 5000 },
@@ -120,6 +122,7 @@ namespace
         CheckEq(config.server_address, std::string{ "https://h:1" }, "address");
         CheckEq(config.port, 9999, "port");
         Check(config.allow_untrusted_certificate, "untrusted cert on");
+        Check(config.UsesSession(), "session transport");
         CheckEq(config.computer_name, std::string{ "BUILD01" }, "computer name");
         Check(!config.ComputerNameIsAuto(), "explicit computer name is not auto");
         CheckEq(config.module, std::string{ "Custom Module" }, "module");
@@ -141,7 +144,7 @@ namespace
     void WriteReadRoundTrip()
     {
         const AgentConfig original = ParseOk(R"({
-            "server": { "address": "https://h:1", "port": 9999, "accessKey": "k\"\\with\ttabs", "allowUntrustedCertificate": true },
+            "server": { "address": "https://h:1", "port": 9999, "accessKey": "k\"\\with\ttabs", "allowUntrustedCertificate": true, "transport": "session" },
             "identity": { "computerName": "BUILD01", "module": "Custom\\Module" },
             "sensors": { "computer": false, "system": true, "disk": false, "network": true, "module": false, "process": true },
             "periods": { "collectMs": 5000 },
@@ -165,6 +168,7 @@ namespace
         CheckEq(reparsed.server_address, original.server_address, "address round-trips");
         CheckEq(reparsed.computer_name, original.computer_name, "computerName round-trips");
         CheckEq(reparsed.port, original.port, "port round-trips");
+        CheckEq(reparsed.transport, original.transport, "transport round-trips");
         Check(reparsed.sensors_system && reparsed.sensors_network && reparsed.sensors_process, "enabled groups round-trip");
         Check(!reparsed.sensors_computer && !reparsed.sensors_disk && !reparsed.sensors_module, "disabled groups round-trip");
         CheckEq(reparsed.collect_period_ms, original.collect_period_ms, "collect period round-trips");
@@ -195,6 +199,15 @@ namespace
         ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "port": 1e10 } })", "port overflow");
         // Fractional value must be rejected, not silently truncated to 1.
         ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "port": 1.5 } })", "fractional port");
+    }
+
+    // A typo in the transport must refuse to start, not select the other one silently.
+    void UnknownTransportIsRejected()
+    {
+        ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "transport": "websocket" } })", "unknown transport");
+        ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "transport": "" } })", "blank transport");
+        ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "transport": "Session" } })", "transport is case-sensitive");
+        ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "transport": 1 } })", "transport must be a string");
     }
 
     void MalformedJsonIsRejected()
@@ -1166,6 +1179,7 @@ namespace
             { "agent_config_rejects_blank_access_key", BlankAccessKeyIsRejected },
             { "agent_config_rejects_missing_address", MissingAddressIsRejected },
             { "agent_config_rejects_bad_port", BadPortIsRejected },
+            { "agent_config_rejects_unknown_transport", UnknownTransportIsRejected },
             { "agent_config_rejects_malformed_json", MalformedJsonIsRejected },
             { "agent_config_rejects_wrong_typed_field", WrongTypedFieldIsRejected },
             { "agent_config_ignores_unknown_fields", UnknownFieldsAreIgnored },

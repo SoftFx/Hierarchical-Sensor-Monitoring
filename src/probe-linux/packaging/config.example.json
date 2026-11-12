@@ -4,7 +4,8 @@
     "port": 443,
     "accessKeyFile": "access-key",
     "packageCollectPeriodSec": 15,
-    "requestTimeoutSec": 30
+    "requestTimeoutSec": 30,
+    "transport": "http"
   },
   "logging": {
     "directory": "/var/log/hsm-linux-probe",

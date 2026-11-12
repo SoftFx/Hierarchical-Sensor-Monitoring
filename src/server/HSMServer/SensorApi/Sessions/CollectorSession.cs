@@ -2,6 +2,8 @@ using HSMServer.Core.Model;
 using HSMServer.Middleware;
 using System;
 using System.Buffers;
+using System.Diagnostics;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +25,11 @@ namespace HSMServer.SensorApi.Sessions
         string RemoteIP,
         DateTime ConnectedAtUtc,
         DateTime LastFrameAtUtc);
+
+
+    // How a session ended, for the line that reports it. `Abnormal` sessions are logged as a
+    // warning: anything but an orderly close by either side or a close for shutdown.
+    internal sealed record SessionEnd(string Text, bool Abnormal);
 
 
     internal enum SessionFrameKind
@@ -74,6 +81,18 @@ namespace HSMServer.SensorApi.Sessions
         private long _lastFrameTicks;
         private volatile string _endReason;
 
+        // For the close line. The first cause noted wins: what follows it (the handshake it
+        // starts, the exception the loop then sees) is its consequence, not another cause.
+        private SessionEnd _end;
+        private readonly long _openedTimestamp = Stopwatch.GetTimestamp();
+        private long _lastReceivedTimestamp;
+        private long _framesIn;
+        private long _bytesIn;
+        private long _framesOut;
+        private long _bytesOut;
+        private long _valuesAccepted;
+        private long _requestsRefused;
+
         // Guards the three fields below: which of the two, the handler loop or a close
         // asked for from outside, gets to the socket first.
         private readonly object _gate = new();
@@ -83,6 +102,9 @@ namespace HSMServer.SensorApi.Sessions
 
 
         public Guid Id { get; } = Guid.NewGuid();
+
+        // The first eight hex digits of the id: what the log lines of one session share.
+        public string ShortId => Id.ToString("N")[..8];
 
         public Guid KeyId { get; }
 
@@ -104,6 +126,34 @@ namespace HSMServer.SensorApi.Sessions
 
         // Why the session ended, when the server ended it without a close handshake.
         public string EndReason => _endReason;
+
+        // Who ended the session and how; null while nothing was noted.
+        public SessionEnd End => Volatile.Read(ref _end);
+
+        public TimeSpan Lifetime => Stopwatch.GetElapsedTime(_openedTimestamp);
+
+        // Since the last complete frame from the collector (or since the upgrade, before one).
+        public TimeSpan SinceLastFrame
+        {
+            get
+            {
+                var last = Interlocked.Read(ref _lastReceivedTimestamp);
+
+                return Stopwatch.GetElapsedTime(last == 0 ? _openedTimestamp : last);
+            }
+        }
+
+        public long FramesIn => Interlocked.Read(ref _framesIn);
+
+        public long BytesIn => Interlocked.Read(ref _bytesIn);
+
+        public long FramesOut => Interlocked.Read(ref _framesOut);
+
+        public long BytesOut => Interlocked.Read(ref _bytesOut);
+
+        public long ValuesAccepted => Interlocked.Read(ref _valuesAccepted);
+
+        public long RequestsRefused => Interlocked.Read(ref _requestsRefused);
 
 
         public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow)
@@ -142,6 +192,77 @@ namespace HSMServer.SensorApi.Sessions
         }
 
         public void Touch(DateTime utcNow) => Volatile.Write(ref _lastFrameTicks, utcNow.Ticks);
+
+        public void CountValuesAccepted(int count) => Interlocked.Add(ref _valuesAccepted, Math.Max(count, 0));
+
+        public void CountRequestRefused() => Interlocked.Increment(ref _requestsRefused);
+
+        public void NoteEnd(string text, bool abnormal)
+        {
+            while (true)
+            {
+                var noted = Volatile.Read(ref _end);
+
+                // The first cause stands. The one exception: a close that was announced as
+                // orderly and then did not complete (the handshake failed or timed out and the
+                // connection was cut) is not an orderly close, and the line must say so.
+                if (noted is not null && (noted.Abnormal || !abnormal))
+                    return;
+
+                var end = noted is null ? new SessionEnd(text, abnormal) : new SessionEnd($"{noted.Text}, and then {text}", Abnormal: true);
+
+                if (Interlocked.CompareExchange(ref _end, end, noted) == noted)
+                    return;
+            }
+        }
+
+        // The collector's close frame arrived: its code and reason are on the socket now.
+        public void NoteCollectorClose()
+        {
+            var status = _socket.CloseStatus;
+            var code = status is null ? "no status code" : ((int)status.Value).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            NoteEnd($"the collector closed it with {code}{DescribeReason(_socket.CloseStatusDescription)}", abnormal: !IsOrderly(status));
+        }
+
+        // A close of either side with these codes is a planned one: a stop, a restart.
+        // 1005 is what a close frame without a status code reads as.
+        public static bool IsOrderly(WebSocketCloseStatus? status) =>
+            status is WebSocketCloseStatus.NormalClosure or WebSocketCloseStatus.EndpointUnavailable or WebSocketCloseStatus.Empty;
+
+        // ", reason "..."" or ", no reason", for a close reason that came from either side.
+        // RFC 6455 allows 123 bytes of reason; it is bounded here all the same.
+        public static string DescribeReason(string reason) =>
+            string.IsNullOrEmpty(reason) ? ", no reason" : $", reason \"{Printable(reason, 123)}\"";
+
+        // Text a client supplied (a header, a close reason), made safe for one log line:
+        // control characters and line breaks become '?', and it is cut to `limit` characters,
+        // so a client can neither forge log lines nor flood one.
+        public static string Printable(string text, int limit = 100)
+        {
+            if (text is null)
+                return null;
+
+            var cut = text.Length > limit;
+            var length = cut ? limit : text.Length;
+
+            // Not half of a surrogate pair at the cut.
+            if (cut && length > 0 && char.IsHighSurrogate(text[length - 1]))
+                length--;
+
+            var printable = string.Create(length, text, static (span, source) =>
+            {
+                for (var i = 0; i < span.Length; i++)
+                {
+                    var c = source[i];
+
+                    // U+2028 / U+2029 are not control characters, but they break a line.
+                    span[i] = char.IsControl(c) || c == '\u2028' || c == '\u2029' ? '?' : c;
+                }
+            });
+
+            return cut ? printable + "..." : printable;
+        }
 
         public CollectorSessionInfo ToInfo()
         {
@@ -211,6 +332,7 @@ namespace HSMServer.SensorApi.Sessions
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
+                        Received(0);
                         Return(ref rented);
                         return new SessionFrame(SessionFrameKind.Close, buffer, 0, null);
                     }
@@ -221,12 +343,15 @@ namespace HSMServer.SensorApi.Sessions
                     // beyond one byte past it.
                     if (total > maxFrameBytes)
                     {
+                        Received(total);
                         Return(ref rented);
                         return new SessionFrame(SessionFrameKind.TooBig, buffer, 0, null);
                     }
 
                     if (result.EndOfMessage)
                     {
+                        Received(total);
+
                         var kind = result.MessageType == WebSocketMessageType.Text ? SessionFrameKind.Text : SessionFrameKind.Binary;
                         return new SessionFrame(kind, buffer, total, rented);
                     }
@@ -258,6 +383,9 @@ namespace HSMServer.SensorApi.Sessions
             try
             {
                 await _socket.SendAsync(frame, WebSocketMessageType.Text, endOfMessage: true, token);
+
+                Interlocked.Increment(ref _framesOut);
+                Interlocked.Add(ref _bytesOut, frame.Length);
             }
             finally
             {
@@ -269,6 +397,8 @@ namespace HSMServer.SensorApi.Sessions
         // our close frame, then the peer's. Bounded; a peer that does not answer is cut off.
         public async Task CloseAsync(WebSocketCloseStatus status, string reason)
         {
+            NoteServerClose(status, reason);
+
             using var timeout = new CancellationTokenSource(CloseTimeout);
 
             try
@@ -310,6 +440,8 @@ namespace HSMServer.SensorApi.Sessions
                 _closing = true;
             }
 
+            NoteServerClose(status, reason);
+
             try
             {
                 await _sendLock.WaitAsync(token);
@@ -333,6 +465,8 @@ namespace HSMServer.SensorApi.Sessions
         // Ends the session without a handshake; the loop's pending receive fails.
         public void Abort(string reason)
         {
+            NoteEnd($"the server cut the connection without a close handshake: {reason}", abnormal: true);
+
             _endReason ??= reason;
             _socket.Abort();
         }
@@ -345,6 +479,17 @@ namespace HSMServer.SensorApi.Sessions
             _sendLock.Dispose();
         }
 
+
+        private void NoteServerClose(WebSocketCloseStatus status, string reason) =>
+            NoteEnd($"the server closed it with {(int)status}{DescribeReason(reason)}", abnormal: !IsOrderly(status));
+
+        // One complete frame (or a close, or a frame refused as too big) arrived.
+        private void Received(int bytes)
+        {
+            Interlocked.Increment(ref _framesIn);
+            Interlocked.Add(ref _bytesIn, bytes);
+            Interlocked.Exchange(ref _lastReceivedTimestamp, Stopwatch.GetTimestamp());
+        }
 
         private static void Return(ref byte[] rented)
         {

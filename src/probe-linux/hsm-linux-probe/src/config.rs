@@ -425,6 +425,21 @@ pub struct HsmConfig {
     pub package_collect_period_sec: u64,
     #[serde(default = "default_request_timeout_sec")]
     pub request_timeout_sec: u64,
+    /// How the probe talks to the server. `http` (the default) sends a request per batch;
+    /// `session` keeps one WebSocket to the collector session endpoint and sends nothing over the
+    /// HTTP routes. There is no fallback from one to the other, and any other value is a config
+    /// error rather than a silent default.
+    #[serde(default)]
+    pub transport: Transport,
+}
+
+/// The transport named by `hsm.transport`.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Transport {
+    #[default]
+    Http,
+    Session,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -983,6 +998,38 @@ mod tests {
         let text =
             r#"{ "hsm": { "address": "HTTPS://garage.lan", "port": 1, "accessKeyFile": "/k" } }"#;
         assert!(Config::parse(text).is_ok());
+    }
+
+    #[test]
+    fn transport_defaults_to_http_and_session_is_opt_in() {
+        let default = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" } }"#;
+        assert_eq!(
+            Config::parse(default).expect("parse").hsm.transport,
+            Transport::Http
+        );
+
+        for (value, expected) in [("http", Transport::Http), ("session", Transport::Session)] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k",
+                     "transport": "{value}" }} }}"#
+            );
+            assert_eq!(Config::parse(&text).expect("parse").hsm.transport, expected);
+        }
+    }
+
+    // A typo must refuse to start rather than select the other transport silently.
+    #[test]
+    fn unknown_transport_is_rejected() {
+        for value in [r#""websocket""#, r#""Session""#, r#""""#, "1", "null"] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k",
+                     "transport": {value} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Parse(_))),
+                "expected a parse error for transport {value}"
+            );
+        }
     }
 
     #[test]
