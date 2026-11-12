@@ -1,6 +1,6 @@
 # Feature: Journal (unified configuration journal with rollback)
 
-> Owner: server | Last reviewed: 2026-11-10 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-12 | Canonical: yes
 > Scope: the single journal of every monitoring-tree configuration change (#1588) — the global Journal page, the per-node Journal tabs, the `/api/v1/journal` surface, the `list/get/rollback_journal_record` MCP tools, the entity-kind/product/undo-group tags on journal records, and the admin-only rollback by record. The undo mechanics of #1570 (before/after images, compensating writes, conflict detection) live on as internal machinery of this feature, addressed through journal records. Decision record: ADR-0013 (supersedes the surface decisions of ADR-0010).
 
 ---
@@ -21,6 +21,7 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 - **Rollback restores configuration only** — notifications already sent, alerts already fired and sensor history are untouched.
 - **Durability trade-off (ADR-0010)** — journal appends run AFTER the primary write succeeds; storage failures are logged loudly and never fail an applied write.
 - **No backfill** — records written before #1588 deserialize with null tags and show as "other"; pre-unification change sets are unreachable inert history in the internal store.
+- **Count-limited reads pick by time across shards and record types** — the journal is stored in weekly shards, and inside a shard each record type (Actions, Changes) is its own key range. `GetJournalValuesPage` walks the shards newest week first for a negative count (oldest first for a positive one) and merges the record types of a shard by time, so a page of N holds the N records nearest its starting edge in time order (newest first for a negative count) whatever their week or type. The per-node Journal tab relies on this: it asks for the newest 100 records of each node over the last year (`Count = -100`). Before the fix a negative count read the OLDEST week first and all Actions before any Changes, so a node with more records than the limit showed old ones instead of the latest. Pinned by `JournalPageOrderTests`.
 - **Operation tag (#1638)** — every row names what kind of write it is — `create` / `update` / `delete` / `rollback` — in the table's Operation column and on the wire (`operation` field of the record DTO, additive; `property` keeps its format). A rollback row (the redo handle) is tagged `rollback`, never the compensating operation its property carries. A record whose undo group went terminal additionally renders `rolledBack: true` (and keeps its non-rollbackable list rendering). The tag is DERIVED at read time (`JournalOperations`), never stored: the rollback rows by their enviroment marker, template/schedule rows by the operation part of their property, policy rows by their undo-group entry, tree-CRUD and node-settings rows by the legacy enviroment wording; rows where nothing says render without a badge and with `operation: null`.
 
 ## Surfaces

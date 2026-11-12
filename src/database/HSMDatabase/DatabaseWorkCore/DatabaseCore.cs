@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -736,29 +737,99 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
+            var newestFirst = count < 0;
+
+            // Inside a shard every record type is its own key range
+            // (sensorId|type|ticks), so the per-type streams are merged by time:
+            // a count-limited page must keep the records nearest its starting
+            // edge whatever their type.
             IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
             {
+                var streams = new List<IEnumerable<(byte[], byte[])>>(2);
+
                 foreach (var recordType in Enum.GetValues<RecordType>())
                     if (types.HasFlag(recordType))
                     {
                         var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
                         var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
 
-                        foreach (var t in requestDb(fromBytes, toBytes))
-                            yield return t;
+                        streams.Add(requestDb(fromBytes, toBytes));
                     }
+
+                return MergeJournalStreamsByTime(streams, newestFirst);
             }
 
-            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).Reverse();
-            GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
+            // The shard dictionary enumerates newest week first.
+            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
+            GetJournalValuesFunc getValues;
 
-            if (count < 0)
-            {
-                databases.Reverse();
+            if (newestFirst)
                 getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
+            else
+            {
+                databases = databases.Reverse();
+                getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
             }
 
             return GetJournalValuesPage(databases, count, getValues);
+        }
+
+        private static IEnumerable<(byte[], byte[])> MergeJournalStreamsByTime(List<IEnumerable<(byte[], byte[])>> streams, bool newestFirst)
+        {
+            if (streams.Count == 1)
+            {
+                foreach (var pair in streams[0])
+                    yield return pair;
+
+                yield break;
+            }
+
+            // Ticks are the big-endian tail of the key, the same bytes for every record type.
+            static long GetTicks(byte[] key) => BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(key.Length - sizeof(long)));
+
+            var enumerators = new List<IEnumerator<(byte[], byte[])>>(streams.Count);
+
+            try
+            {
+                foreach (var stream in streams)
+                {
+                    var enumerator = stream.GetEnumerator();
+                    enumerators.Add(enumerator);
+
+                    if (!enumerator.MoveNext())
+                    {
+                        enumerator.Dispose();
+                        enumerators.RemoveAt(enumerators.Count - 1);
+                    }
+                }
+
+                while (enumerators.Count > 0)
+                {
+                    var next = 0;
+
+                    for (var i = 1; i < enumerators.Count; i++)
+                    {
+                        var ticks = GetTicks(enumerators[i].Current.Item1);
+                        var best = GetTicks(enumerators[next].Current.Item1);
+
+                        if (newestFirst ? ticks > best : ticks < best)
+                            next = i;
+                    }
+
+                    yield return enumerators[next].Current;
+
+                    if (!enumerators[next].MoveNext())
+                    {
+                        enumerators[next].Dispose();
+                        enumerators.RemoveAt(next);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var enumerator in enumerators)
+                    enumerator.Dispose();
+            }
         }
 
 
