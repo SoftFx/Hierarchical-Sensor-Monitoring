@@ -798,29 +798,95 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
+            var newestFirst = count < 0;
+
+            // Inside a shard every record type is its own key range
+            // (sensorId|type|ticks), so the per-type streams are merged by time:
+            // a count-limited page must keep the records nearest its starting
+            // edge whatever their type.
+            IEnumerable<(byte[], byte[])> GetValuesEnumerator(Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
             {
+                var streams = new List<IEnumerable<(byte[], byte[])>>(2);
+
+                // Actions is 0, so HasFlag(Actions) is always true: every read
+                // includes Actions records (pinned by JournalBorderTests).
                 foreach (var recordType in Enum.GetValues<RecordType>())
                     if (types.HasFlag(recordType))
                     {
                         var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
                         var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
 
-                        foreach (var t in requestDb(fromBytes, toBytes))
-                            yield return t;
+                        streams.Add(requestDb(fromBytes, toBytes));
                     }
+
+                return MergeJournalStreamsByTime(streams, newestFirst);
             }
 
-            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).Reverse();
-            GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
+            // The shard dictionary enumerates newest week first.
+            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
+            GetJournalValuesFunc getValues;
 
-            if (count < 0)
+            if (newestFirst)
+                getValues = (db) => GetValuesEnumerator(db.GetValuesTo);
+            else
             {
-                databases.Reverse();
-                getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
+                databases = databases.Reverse();
+                getValues = (db) => GetValuesEnumerator(db.GetValuesFrom);
             }
 
             return GetJournalValuesPage(databases, count, getValues);
+        }
+
+        private static IEnumerable<(byte[], byte[])> MergeJournalStreamsByTime(List<IEnumerable<(byte[], byte[])>> streams, bool newestFirst)
+        {
+            var enumerators = new List<IEnumerator<(byte[], byte[])>>(streams.Count);
+            var heads = new List<long>(streams.Count); // ticks of each enumerator's Current
+
+            try
+            {
+                foreach (var stream in streams)
+                {
+                    // Listed before MoveNext so the finally disposes it if MoveNext throws.
+                    var enumerator = stream.GetEnumerator();
+                    enumerators.Add(enumerator);
+
+                    if (enumerator.MoveNext())
+                        heads.Add(JournalKey.GetTime(enumerator.Current.Item1));
+                    else
+                    {
+                        enumerator.Dispose();
+                        enumerators.RemoveAt(enumerators.Count - 1);
+                    }
+                }
+
+                while (enumerators.Count > 0)
+                {
+                    var next = 0;
+
+                    // Equal ticks: the earlier stream wins oldest first and
+                    // the later one newest first, so the two directions
+                    // are exact mirrors of each other.
+                    for (var i = 1; i < enumerators.Count; i++)
+                        if (newestFirst ? heads[i] >= heads[next] : heads[i] < heads[next])
+                            next = i;
+
+                    yield return enumerators[next].Current;
+
+                    if (enumerators[next].MoveNext())
+                        heads[next] = JournalKey.GetTime(enumerators[next].Current.Item1);
+                    else
+                    {
+                        enumerators[next].Dispose();
+                        enumerators.RemoveAt(next);
+                        heads.RemoveAt(next);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var enumerator in enumerators)
+                    enumerator.Dispose();
+            }
         }
 
 

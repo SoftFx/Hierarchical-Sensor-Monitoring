@@ -193,6 +193,15 @@ namespace hsm::collector
             Check(hsm_collector_use_http_transport(handle_), "HTTP transport is not available (build with HSM_COLLECTOR_HTTP).");
         }
 
+        /// Make the collector session the transport: one persistent WebSocket to the server instead
+        /// of the HTTP routes. Call INSTEAD of UseHttpTransport, before Start. There is no fallback
+        /// to HTTP: while no session is up, values wait in the queue. File values are refused on a
+        /// session (the add call fails with HSM_RESULT_INVALID_STATE). Throws hsm::collector::Error if the library was built without the HTTP transport.
+        void UseSessionTransport()
+        {
+            Check(hsm_collector_use_session_transport(handle_), "The session transport is not available (build with HSM_COLLECTOR_HTTP).");
+        }
+
         /// Install the ready-made Windows PDH/Win32 metric-source factory so the value-typed default
         /// sensors report live values. Call BEFORE Start. Throws hsm::collector::Error off Windows.
         void InstallWindowsMetricSources()

@@ -1,6 +1,6 @@
 # ADR-0014: One port — 443 serves everything; the sensor/site port split is retired
 
-**Status:** Accepted
+**Status:** Accepted; clause 3 (the deprecation window) closed by the 2026-11-11 amendment below
 **Date:** 2026-10-29
 **Supersedes:** the SitePort-listener clause (3) of ADR-0003
 
@@ -30,6 +30,14 @@ The cost is paid everywhere: firewall exceptions for non-standard ports on every
 - Agents and collectors pinned to `:44330` keep working through the window; they are repointed by reinstalling a server-generated bundle (which now carries 443) or editing config. The deprecation warning tells operators when the stragglers are gone — that is the signal to ship the alias removal.
 - Unprivileged local dev cannot bind 443 on Linux/macOS: the per-developer untracked `appsettings.Development.json` (the Debug config name) can pin `Kestrel.Port` to a high port for `dotnet run` — no pin ships in the repo, so a fresh clone binds the default 443, which needs no privileges on Windows. Containers run as root and use the default.
 
+## Amendment (2026-11-11, #1696): the deprecation window is closed
+
+The owner decided that one port is enough and that the old two-port scheme goes now, without waiting for the straggler signal clause 3 described. Clause 3 is therefore history:
+
+- The Caddy alias sites for 44330/44333, their compose port mappings (Caddy stack, direct stack, `docker_scripts/HSMserver` launchers) and the request-time deprecation warning (`LegacyPortDeprecationMiddleware`) are removed. Shipped as `hsm-caddy:2.11.4-8`.
+- Clauses 1, 2, 4, 5 and 6 stand. In clause 6 read "retired port" for "deprecated alias": bundles still never carry 44330/44333 unless it is the server's own `Kestrel.Port`. The startup warning about ignored `SensorPort`/`SitePort` keys stays.
+- Consequence accepted with the decision: a client still configured with an old port is cut off at the moment the operator upgrades the edge files, and the server cannot see it. Mitigations are on the client and in the docs — the HSM Agent detects a retired port and moves itself to 443 (#1655), release notes and the installation guide name the operator steps, and an operator may keep a port mapping of their own for as long as they need. The product does not provide or test such a mapping.
+
 ## Alternatives Considered
 
 - **Keep both ports forever**: rejected — every client and firewall carries the cost forever, and the isolation the split provided was already gone behind Caddy.
@@ -39,6 +47,7 @@ The cost is paid everywhere: firewall exceptions for non-standard ports on every
 ## References
 
 - #1590 (task: serve everything on port 443, deprecation window)
+- #1696 (removal of the 44330/44333 aliases), #1655 (agents whose config still names them)
 - ADR-0003 (auth isolation this decision partially supersedes)
 - ADR-0007 (bundled Caddy image)
 - `aicontext/architecture/docker.md` (canonical deployment topology)

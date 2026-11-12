@@ -9,12 +9,10 @@
 #   HSM_DOMAIN       the address clients use: a bare DNS name or IP address
 #                    (no https://, no port). Examples: hsm.example.com, 10.0.0.5
 #
-#   PORTS            80/443 are the stack's client-facing ports. 443 serves EVERYTHING
-#                    (Web UI + Sensor API) through the app's single listener (#1590);
-#                    44330/44333 are deprecated aliases kept through the deprecation
-#                    window for clients still pointed at the old two-port scheme — the
-#                    app logs a rate-limited warning for requests that arrive by them.
-#                    The follow-up release removes both the aliases and these mappings.
+#   PORTS            80/443 are the stack's only client-facing ports. 443 serves EVERYTHING
+#                    (Web UI + Sensor API) through the app's single listener (#1590).
+#                    The 44330/44333 ports of the old two-port scheme are no longer
+#                    published: point every client still using them at 443.
 #
 #   HSM_CERTIFICATE  which certificate clients get:
 #     letsencrypt    backward-compatible alias for letsencrypt-http
@@ -32,8 +30,7 @@
 #
 # SWITCHING: edit .env and run `docker compose up -d` (Caddy is recreated; HSM data is untouched).
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
-# Collectors and agents connect to https://<HSM_DOMAIN> (port 443; the deprecated
-# https://<HSM_DOMAIN>:44330 alias keeps answering through the deprecation window).
+# Collectors and agents connect to https://<HSM_DOMAIN> (port 443, the only one).
 #
 # The app listens on Kestrel.Port (default 443, Config/appsettings.json) INSIDE the
 # compose network; pre-#1590 SensorPort/SitePort keys there are ignored with a startup
@@ -94,7 +91,7 @@ services:
       - ./DatabasesBackups:/app/DatabasesBackups
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-7'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-8'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -114,9 +111,6 @@ services:
     ports:
       - '80:80'
       - '443:443'
-      # Deprecated aliases (#1590), removed with the follow-up release.
-      - '44330:44330'
-      - '44333:44333'
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro

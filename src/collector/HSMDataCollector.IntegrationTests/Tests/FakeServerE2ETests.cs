@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.IntegrationTests.Helpers;
@@ -131,6 +132,45 @@ namespace HSMDataCollector.IntegrationTests.Tests
             await collector.Stop();
 
             Assert.True(posts >= 3, $"Expected the registration to be re-sent past 2 injected 5xx, saw {posts} posts.");
+        }
+
+        [Theory]
+        [InlineData(HttpStatusCode.BadRequest)]
+        [InlineData(HttpStatusCode.NotAcceptable)]
+        public async Task StartRegistration_RejectedWith4xx_IsPostedOnce(HttpStatusCode status)
+        {
+            using var server = new FakeHsmServer();
+            // A 4xx is the server refusing this payload or this key; the same request is refused
+            // again, so the collector reports it and does not repeat it (#1659 A2). The native
+            // collector has had this rule since 0.10.3 (#1515).
+            server.AnswerNextCommandRequest(status);
+
+            using var collector = new DataCollector(OptionsFor(server));
+            collector.CreateIntSensor("e2e/registration/rejected");
+            await collector.Start();
+
+            await WaitForAsync(
+                () => server.CommandRequests.Count(r => r.Body.Contains("e2e/registration/rejected")),
+                count => count >= 1);
+
+            // A later registration can only leave in a package built after the rejected one came
+            // back; a re-enqueued registration would ride with it.
+            collector.CreateIntSensor("e2e/registration/later");
+
+            var later = await WaitForAsync(
+                () => server.CommandRequests.Count(r => r.Body.Contains("e2e/registration/later")),
+                count => count >= 1);
+
+            await collector.Stop();
+
+            Assert.True(later >= 1, "The later registration never reached the server.");
+
+            var posts = server.CommandRequests.Where(r => r.Body.Contains("e2e/registration/rejected")).ToList();
+
+            Assert.Single(posts);
+            // The one post is the one the server refused, so the count above is about the rule
+            // and not about a package the script never touched.
+            Assert.Equal(status, posts[0].Answer);
         }
 
         [Fact]

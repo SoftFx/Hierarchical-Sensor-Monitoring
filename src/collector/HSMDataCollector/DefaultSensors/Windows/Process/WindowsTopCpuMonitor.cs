@@ -89,8 +89,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
 
         public string SensorPath { get; } = MonitorPath;
 
-        internal WindowsTopCpuMonitor(SensorsStorage storage, int count, double minPercent, TimeSpan period)
+        // The process list of one sample. A seam for tests: the OS call cannot be made to fail.
+        private readonly Func<SysProcess[]> _listProcesses;
+
+        internal WindowsTopCpuMonitor(SensorsStorage storage, int count, double minPercent, TimeSpan period, Func<SysProcess[]> listProcesses = null)
         {
+            _listProcesses = listProcesses ?? SysProcess.GetProcesses;
             _storage = storage;
             _count = count;
             _minPercent = minPercent;
@@ -134,7 +138,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         {
             try
             {
-                foreach (var p in SysProcess.GetProcesses())
+                foreach (var p in _listProcesses())
                 {
                     try
                     {
@@ -145,6 +149,19 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     finally { p.Dispose(); }
                 }
             }
+            catch (Exception ex)
+            {
+                ReportSamplingError(ex);
+            }
+        }
+
+        // A sample that failed as a whole (the process list could not be read, a sensor could not
+        // be created). Reported, deduplicated, as the native collector reports it (#1659 A8). The
+        // per-process catches inside a sample stay silent on purpose: a protected or exiting
+        // process refusing its start time or CPU time is the normal case, every tick.
+        private void ReportSamplingError(Exception ex)
+        {
+            try { _storage.ReportError($"top-CPU sampling error: {ex.Message}"); }
             catch { }
         }
 
@@ -156,7 +173,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 catch (OperationCanceledException) { return; }
 
                 try { Sample(); }
-                catch { }
+                catch (Exception ex) { ReportSamplingError(ex); }
             }
         }
 
@@ -170,7 +187,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             var byName = new Dictionary<string, double>(StringComparer.Ordinal);
             var curCpu = new Dictionary<ProcessKey, double>();
 
-            foreach (var p in SysProcess.GetProcesses())
+            foreach (var p in _listProcesses())
             {
                 try
                 {
