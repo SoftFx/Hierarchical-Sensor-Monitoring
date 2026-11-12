@@ -376,9 +376,20 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_session_splits_a_registration_batch_to_the_frame_limit
         COMMAND hsm_collector_tests native_session_splits_a_registration_batch_to_the_frame_limit
     )
+    add_test(NAME native_session_split_registration_retries_only_the_failed_part
+        COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
+    )
+    add_test(NAME native_session_refuses_file_values
+        COMMAND hsm_collector_tests native_session_refuses_file_values
+    )
     add_test(NAME native_session_oversized_value_is_dropped_once
         COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
     )
+    add_test(NAME native_session_value_at_the_frame_limit_does_not_stall_the_sender
+        COMMAND hsm_collector_tests native_session_value_at_the_frame_limit_does_not_stall_the_sender
+    )
+    # A regression here is a sender that spins forever: fail in a minute, not at ctest's default.
+    set_tests_properties(native_session_value_at_the_frame_limit_does_not_stall_the_sender PROPERTIES TIMEOUT 90)
     add_test(NAME native_session_transport_request_contract
         COMMAND hsm_collector_tests native_session_transport_request_contract
     )

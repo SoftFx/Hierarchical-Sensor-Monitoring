@@ -168,8 +168,9 @@ Version history:
   it has been quiet for the interval the server announced, and gives a session up after two and a
   half intervals of server silence or when a request gets no ack within the request timeout. A
   batch larger than the server's frame limit travels in several frames (values and registrations
-  alike); if a later frame fails, only the unacknowledged part goes back to the queue. File values are refused before the queue
-  (counted in `Queue overflow`): the session has no op for them yet. Needs a libcurl with WebSocket
+  alike); if a later frame fails, only the unacknowledged part goes back to the queue. File values are refused before the queue:
+  `hsm_sensor_add_file` / `hsm_sensor_add_file_from_path` return `HSM_RESULT_INVALID_STATE` and one error is logged; the
+  session has no op for them yet. Needs a libcurl with WebSocket
   (8.14.0 or newer); with an older one Start logs one error and nothing is delivered until the
   setting or libcurl changes. The HTTP build gains a build dependency, the header-only
   nlohmann/json (the frames that come off the network are parsed by a maintained library, not by

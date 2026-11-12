@@ -96,6 +96,20 @@ public readonly struct JournalKey
     }
 
 
+    /// <summary>The time of a key produced by <see cref="GetBytes"/>, read without allocating.</summary>
+    public static long GetTime(ReadOnlySpan<byte> key)
+    {
+        if (key.Length != StructSize)
+            return default;
+
+        Span<byte> time = stackalloc byte[sizeof(long)];
+        key[GuidAndTypeSize..].CopyTo(time);
+        time.Reverse();
+
+        return BitConverter.ToInt64(time);
+    }
+
+
     public override bool Equals([NotNullWhen(true)] object obj)
     {
         return obj is JournalKey key && Key == key.Key;

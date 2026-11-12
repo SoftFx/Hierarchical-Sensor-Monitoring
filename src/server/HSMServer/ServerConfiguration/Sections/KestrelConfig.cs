@@ -13,8 +13,9 @@ public class KestrelConfig
     // root there); pick another value only for unprivileged local runs.
     public const int DefaultPort = 443;
 
-    // Pre-#1590 ports, published by Caddy as deprecated aliases through the deprecation
-    // window and recognized by the legacy-key warning and the request deprecation log.
+    // The ports of the pre-#1590 two-port scheme. Nothing in the product listens on or
+    // publishes them any more; they are named here only so that generated agent/probe
+    // configs never carry one (AgentConnectionResolver).
     public const int LegacySensorPort = 44330;
     public const int LegacySitePort = 44333;
 

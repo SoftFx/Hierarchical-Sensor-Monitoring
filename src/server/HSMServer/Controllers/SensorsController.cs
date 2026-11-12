@@ -68,8 +68,22 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Response header that marks a <c>testConnection</c> answer as coming from an HSM server.
+        /// The HSM Agent's retired-port check (#1655) moves an agent off 44330/44333 only when 443
+        /// answers with it, so that a foreign service answering 200 on 443 of a host whose HSM is
+        /// pinned to an old port (and merely down) cannot take its agents. A "not a stranger" check,
+        /// not authentication: the agent accepts exactly the value "1" (kServerMarkerValue in
+        /// src/agent/include/agent/retired_port.hpp).
+        /// </summary>
+        public const string ServerMarkerHeader = "X-Hsm-Server";
+
         [HttpGet("testConnection")]
-        public ActionResult TestConnection() => Ok(); //add test
+        public ActionResult TestConnection()
+        {
+            Response.Headers[ServerMarkerHeader] = "1";
+            return Ok();
+        }
 
 
         /// <summary>

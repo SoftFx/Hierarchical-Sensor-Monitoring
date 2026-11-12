@@ -11,7 +11,7 @@ A collector may hold one persistent WebSocket with the server at `GET /api/senso
 
 This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No collector uses it yet.** Directive push over the session is a later step.
 
-**The session is meant to replace the HTTP routes for collectors, not to sit beside them** (owner decision, 2026-11-10). The HTTP Sensor API is unchanged and keeps working through a transition period, for collectors that do not use a session yet. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. Three things stand in the way of removing HTTP: file values and elements larger than a frame, which the session cannot carry yet, and agent directives, which still reach a collector only as headers on HTTP answers until directive push is built.
+**The session is a transport a collector can be set to; the HTTP Sensor API stays beside it** (owner decisions: 2026-11-10, no fallback between the two; 2026-11-11, the HTTP routes are not retired, because script clients such as PowerShell use them and a WebSocket is inconvenient there). The HTTP Sensor API is unchanged. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. Three things a collector on a session cannot do yet: send file values, send an element larger than a frame, and receive agent directives, which still reach a collector only as headers on HTTP answers until directive push is built.
 
 Which transport a collector uses is a setting of the collector (`http` or `session`), not something the server negotiates.
 

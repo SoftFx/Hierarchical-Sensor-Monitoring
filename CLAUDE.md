@@ -56,7 +56,8 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 
 ```
 :443   -> HSMServer, single port: Web UI + Sensor API (via Caddy; direct mode maps it straight)
-:44330/:44333 -> deprecated aliases through the deprecation window (#1590), removed in a follow-up release
+:80    -> ACME HTTP-01 challenge + redirect to 443 (Caddy only)
+(44330/44333, the ports of the pre-#1590 two-port scheme, are retired: nothing listens on or publishes them, #1696)
 ```
 
 ## Architecture Rules — ALWAYS follow these

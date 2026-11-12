@@ -128,7 +128,12 @@ namespace HSMDataCollector.PublicInterface
         /// second, shown per minute, with an alert when it stays above 1 per second for 5 minutes.
         /// Opt-in: it is not part of <see cref="AddAllNetworkSensors"/>. The native collector has the
         /// same sensor (<c>hsm_collector_enable_tcp_connection_failure_rate_sensor</c>).
+        /// A second call does not add a second sensor; the period of the first call stays.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="period"/> is shorter than a millisecond or longer than
+        /// <see cref="int.MaxValue"/> milliseconds. Pass <c>null</c> for the default.
+        /// </exception>
         IWindowsCollection AddNetworkConnectionFailuresRate(TimeSpan? period = null);
 
         IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null);
