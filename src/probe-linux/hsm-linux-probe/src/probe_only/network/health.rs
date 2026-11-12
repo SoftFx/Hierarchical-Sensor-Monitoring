@@ -66,15 +66,24 @@ impl Counter {
         match self {
             Counter::CarrierChanges => format!(
                 "Times the link of interface **{interface}** went up or down in the minute \
-                 (`carrier_changes`; a short drop counts 2). Posted only when non-zero."
+                 (`carrier_changes`). **Normally there is no value at all**: it is posted only \
+                 when non-zero. One drop counts 2 (down, then up), so a 2 is one short loss of \
+                 the cable or the Wi-Fi association, even one too short for `Link up` to see."
             ),
             Counter::Errors => format!(
                 "Receive + transmit errors on interface **{interface}** in the minute \
-                 (`/proc/net/dev` errs). Posted only when non-zero."
+                 (`/proc/net/dev` errs): frames that arrived damaged or could not be sent. \
+                 **Normally there is no value at all**: it is posted only when non-zero. A few \
+                 a day are noise; errors every minute point to a bad cable or port, or radio \
+                 interference on Wi-Fi."
             ),
             Counter::Drops => format!(
                 "Received + transmitted packets dropped on interface **{interface}** in the \
-                 minute (`/proc/net/dev` drop). Posted only when non-zero."
+                 minute (`/proc/net/dev` drop): packets the driver or kernel discarded, for \
+                 example a full receive queue or traffic nobody here listens for. Posted only \
+                 when non-zero. A small steady count is common and harmless on many hosts \
+                 (Wi-Fi drivers count broadcast noise here); what matters is a jump above the \
+                 usual level, especially together with `Errors` or `Carrier changes`."
             ),
         }
     }
@@ -82,8 +91,10 @@ impl Counter {
 
 pub fn link_description(interface: &str) -> String {
     format!(
-        "Whether interface **{interface}** has a link (`operstate` is `up`; for Wi-Fi: associated \
-         with an access point). Checked every 10 s; posted on change and every 5 minutes."
+        "Whether interface **{interface}** has a link (`operstate` is `up`). **True is normal.** \
+         False means no link: the cable is unplugged, or Wi-Fi is not associated with the access \
+         point. Checked every 10 s; posted on change and every 5 minutes. A drop shorter than \
+         10 s can be missed here; `Carrier changes` counts it."
     )
 }
 

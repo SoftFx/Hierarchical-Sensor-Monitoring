@@ -362,12 +362,17 @@ fn register_target<'c>(
     what: &str,
 ) -> Result<TargetSensors<'c>, String> {
     let attempts = FAILURE_WINDOW.as_secs() / PROBE_PERIOD.as_secs();
-    let (answer, failure_causes) = match target {
+    let (answer, failure_causes, normal) = match target {
         Target::Gateway => (
             " (a refused connection is an answer)",
             "no answer in 1.5 s, network unreachable, no default route",
+            "On a wired LAN a few ms is normal, over Wi-Fi 2–20 ms",
         ),
-        Target::Internet => ("", "no answer in 1.5 s, refused, network unreachable"),
+        Target::Internet => (
+            "",
+            "no answer in 1.5 s, refused, network unreachable",
+            "10–60 ms is normal for a home connection",
+        ),
     };
     let time_path = target_path(target, CONNECT_TIME_LEAF);
     let time = collector
@@ -382,8 +387,10 @@ fn register_target<'c>(
                 .with_keep_history(KEEP_HISTORY)
                 .with_enable_grafana(true)
                 .with_description(format!(
-                    "Time to open a TCP connection to {what}, ms, tried every 5 s{answer}. \
-                     Failed attempts are not in the bar: see `Connect failures`."
+                    "Time to open a TCP connection to {what}, ms, tried every 5 s{answer}: \
+                     about one network round trip. **Lower is better.** {normal}; a Max of \
+                     hundreds of ms is a stall of the network in that minute. Failed attempts \
+                     are not in the bar: see `Connect failures`."
                 )),
         )
         .map_err(|error| format!("{time_path}: {error}"))?;
@@ -399,7 +406,9 @@ fn register_target<'c>(
                 .with_enable_grafana(true)
                 .with_description(format!(
                     "TCP connections to {what} that failed in the minute, of about {attempts} \
-                     attempts ({failure_causes}). The probe log has the reason."
+                     attempts ({failure_causes}). **Normally 0.** One failure is a stall of at \
+                     least 1.5 s; {attempts} of {attempts} means the target was unreachable for \
+                     the whole minute. The probe log has the reason."
                 )),
         )
         .map_err(|error| format!("{failures_path}: {error}"))?;
@@ -538,7 +547,8 @@ pub(crate) mod tests {
             "\"TTLTicks\":null",
             "\"KeepHistory\":77760000000000",
             "\"EnableGrafana\":true",
-            "Time to open a TCP connection to 1.1.1.1:443, ms, tried every 5 s. Failed",
+            "Time to open a TCP connection to 1.1.1.1:443, ms, tried every 5 s: about",
+            "10–60 ms is normal",
         ] {
             assert!(time.contains(part), "missing {part} in {time}");
         }
