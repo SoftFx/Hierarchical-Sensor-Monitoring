@@ -89,6 +89,12 @@ namespace HSMDataCollector.Tests.Transport
                     // alone and leaves this one waiting behind it.
                     collector.CreateIntSensor("attempt/second");
 
+                    // Only once a failed attempt has carried the second registration are both in
+                    // the queue for certain; bringing the server back earlier could let the first
+                    // one be accepted alone.
+                    Assert.True(await WaitForAsync(() => server.CommandRequests.Any(r => r.Answer == 0 && r.Body.Contains("attempt/second"))),
+                                "The second registration never joined a failed attempt.");
+
                     server.AbortNextCommandRequests(0);
 
                     Assert.True(await WaitForAsync(() => server.CommandRequests.Any(r => r.Answer != 0 && r.Body.Contains("attempt/second"))),

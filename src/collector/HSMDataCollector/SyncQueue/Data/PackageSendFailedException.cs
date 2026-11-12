@@ -9,6 +9,22 @@ namespace HSMDataCollector.SyncQueue.Data
     /// </summary>
     internal sealed class PackageSendFailedException : InvalidOperationException
     {
-        internal PackageSendFailedException(string message) : base(message) { }
+        /// <summary>
+        /// The report of the failure without the item counts: what happened to the queue and
+        /// why. The counts differ from cycle to cycle while a failure lasts (the package grows
+        /// with what queued up meanwhile), so a report keyed with them was a new report on
+        /// every cycle (#1659 A4).
+        /// </summary>
+        internal string Report { get; }
+
+        internal PackageSendFailedException(string queueName, int preserved, int dropped, bool flushing, string error)
+            : base($"Failed to send package for {queueName} ({preserved} {Fate(flushing)}{(dropped > 0 ? $", {dropped} dropped" : string.Empty)}). {error}")
+        {
+            Report = $"Failed to send package for {queueName} (items {Fate(flushing)}{(dropped > 0 ? ", some dropped at capacity" : string.Empty)}). {error}";
+        }
+
+        // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
+        // "discarded"; calling them "preserved" contradicts the very next log line.
+        private static string Fate(bool flushing) => flushing ? "queued for clear" : "preserved";
     }
 }
