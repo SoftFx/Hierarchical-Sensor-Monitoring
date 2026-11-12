@@ -742,7 +742,7 @@ namespace HSMDatabase.DatabaseWorkCore
             // (sensorId|type|ticks), so the per-type streams are merged by time:
             // a count-limited page must keep the records nearest its starting
             // edge whatever their type.
-            IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
+            IEnumerable<(byte[], byte[])> GetValuesEnumerator(Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
             {
                 var streams = new List<IEnumerable<(byte[], byte[])>>(2);
 
@@ -765,11 +765,11 @@ namespace HSMDatabase.DatabaseWorkCore
             GetJournalValuesFunc getValues;
 
             if (newestFirst)
-                getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
+                getValues = (db) => GetValuesEnumerator(db.GetValuesTo);
             else
             {
                 databases = databases.Reverse();
-                getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
+                getValues = (db) => GetValuesEnumerator(db.GetValuesFrom);
             }
 
             return GetJournalValuesPage(databases, count, getValues);
@@ -778,15 +778,19 @@ namespace HSMDatabase.DatabaseWorkCore
         private static IEnumerable<(byte[], byte[])> MergeJournalStreamsByTime(List<IEnumerable<(byte[], byte[])>> streams, bool newestFirst)
         {
             var enumerators = new List<IEnumerator<(byte[], byte[])>>(streams.Count);
+            var heads = new List<long>(streams.Count); // ticks of each enumerator's Current
 
             try
             {
                 foreach (var stream in streams)
                 {
+                    // Listed before MoveNext so the finally disposes it if MoveNext throws.
                     var enumerator = stream.GetEnumerator();
                     enumerators.Add(enumerator);
 
-                    if (!enumerator.MoveNext())
+                    if (enumerator.MoveNext())
+                        heads.Add(JournalKey.GetTime(enumerator.Current.Item1));
+                    else
                     {
                         enumerator.Dispose();
                         enumerators.RemoveAt(enumerators.Count - 1);
@@ -797,24 +801,22 @@ namespace HSMDatabase.DatabaseWorkCore
                 {
                     var next = 0;
 
+                    // Equal ticks: the earlier stream wins oldest first and
+                    // the later one newest first, so the two directions
+                    // are exact mirrors of each other.
                     for (var i = 1; i < enumerators.Count; i++)
-                    {
-                        var ticks = JournalKey.GetTime(enumerators[i].Current.Item1);
-                        var best = JournalKey.GetTime(enumerators[next].Current.Item1);
-
-                        // Equal ticks: the earlier stream wins oldest first and
-                        // the later one newest first, so the two directions
-                        // are exact mirrors of each other.
-                        if (newestFirst ? ticks >= best : ticks < best)
+                        if (newestFirst ? heads[i] >= heads[next] : heads[i] < heads[next])
                             next = i;
-                    }
 
                     yield return enumerators[next].Current;
 
-                    if (!enumerators[next].MoveNext())
+                    if (enumerators[next].MoveNext())
+                        heads[next] = JournalKey.GetTime(enumerators[next].Current.Item1);
+                    else
                     {
                         enumerators[next].Dispose();
                         enumerators.RemoveAt(next);
+                        heads.RemoveAt(next);
                     }
                 }
             }
