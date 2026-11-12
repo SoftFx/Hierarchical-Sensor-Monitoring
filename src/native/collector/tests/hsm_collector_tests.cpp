@@ -3123,7 +3123,7 @@ namespace
         // mode of tests/ws_test_server.hpp; these verbs exist in the HTTP build only, which is
         // the build that has a session transport.
         if (action.rfind("session_server_", 0) == 0 || action.rfind("expect_session_", 0) == 0 || action == "create_collector_on_session" ||
-            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests")
+            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests" || action == "session_http_request")
         {
 #if defined(HSM_COLLECTOR_HTTP)
             auto& server = SessionServer(state);

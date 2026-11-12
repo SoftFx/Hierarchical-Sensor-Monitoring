@@ -1,0 +1,8 @@
+# MUST-FAIL: the value 1 is delivered on the session, then no request is allowed to contain it.
+# Proves expect_session_no_request_contains reads the frames the scripted session server recorded.
+meta_session_no_request_contains_present|create_collector_on_session|50|20|5000
+meta_session_no_request_contains_present|create_int_sensor|meta/session/present
+meta_session_no_request_contains_present|start
+meta_session_no_request_contains_present|add_int|0|1|Ok|sent
+meta_session_no_request_contains_present|expect_session_ints_once|1|1|15
+meta_session_no_request_contains_present|expect_session_no_request_contains|"Value":1

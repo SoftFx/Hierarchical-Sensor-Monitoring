@@ -370,9 +370,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             // A floor, so that a connection that comes and goes cannot make this loop spin.
             await Task.Delay(TransportRetryFloor, token).ConfigureAwait(false);
 
-            var connected = transport.WaitForConnectionAsync(token);
+            // The wait for a connection ends with this pause, whichever of the two is first:
+            // left pending, one more waiter would stay behind every cycle of an outage.
+            using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                var connected = transport.WaitForConnectionAsync(wait.Token);
+                var woken = await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
 
-            return await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
+                wait.Cancel();
+                _ = connected.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+                return woken;
+            }
         }
 
         private static readonly TimeSpan TransportRetryFloor = TimeSpan.FromMilliseconds(100);
@@ -517,14 +526,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // the others go back, or what was delivered would arrive twice.
                 var unsettled = Unsettled(package, sendingInfo.Settled);
                 var dropped = ReEnqueueItems(unsettled);
-                var preserved = unsettled.Count - dropped;
-                // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
-                // "discarded"; calling them "preserved" contradicts the very next log line.
-                var fate = IsFlushing ? "queued for clear" : "preserved";
-                // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
-                // current head) reasons — wording stays generic so it's accurate for either.
-                var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
-                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}", sendingInfo.IsTransportDown);
+                // The drop count is the #1088 backstop (a retry refused by a queue at capacity).
+                throw new PackageSendFailedException(QueueName, unsettled.Count - dropped, dropped, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);

@@ -63,7 +63,7 @@ namespace HSMDataCollector.Client.Session
 
             headers.AddRange(options.ExtraRequestHeaders);
 
-            _unavailable = FindWhySessionCannotExist(options);
+            _unavailable = FindWhySessionCannotExist(options, Url);
             _connection = new SessionConnection(Url, headers, options.AllowUntrustedServerCertificate, logger, ReportError, Directives, options.SessionTimings);
         }
 
@@ -92,12 +92,13 @@ namespace HSMDataCollector.Client.Session
         }
 
         // A setting the session cannot honour, or a host it cannot exist on. Null when it can.
-        private static string FindWhySessionCannotExist(CollectorOptions options)
+        private static string FindWhySessionCannotExist(CollectorOptions options, Uri url)
         {
 #if !NET6_0_OR_GREATER
             // ClientWebSocket has no per-connection certificate callback on .NET Framework, and
-            // the process-wide one is not the collector's to change.
-            if (options.AllowUntrustedServerCertificate)
+            // the process-wide one is not the collector's to change. A plaintext session has no
+            // certificate to check, so the setting does not stand in its way.
+            if (options.AllowUntrustedServerCertificate && string.Equals(url.Scheme, "wss", StringComparison.OrdinalIgnoreCase))
                 return "AllowUntrustedServerCertificate cannot be honoured for a collector session on .NET Framework";
 #endif
             try
@@ -121,7 +122,12 @@ namespace HSMDataCollector.Client.Session
         public void Start()
         {
             if (Volatile.Read(ref _disposed) == 1)
+            {
+                // A collector built from options whose sender another collector has disposed.
+                // Said out loud: a disposed HTTP client fails every send, this would send nothing.
+                _logger?.Error("The collector session transport was disposed and cannot be started again: nothing is delivered. Create the collector from new CollectorOptions.");
                 return;
+            }
 
             if (_unavailable != null)
             {

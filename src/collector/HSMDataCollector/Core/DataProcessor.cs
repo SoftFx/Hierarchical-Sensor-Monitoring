@@ -292,14 +292,22 @@ namespace HSMDataCollector.Core
             // The collector session has no op for a file value yet, and there is no HTTP to send
             // it over instead. Refused here, before the queue: queued, it would be sent, refused
             // and re-queued for ever. Reported and counted like any other lost value.
-            if (_transport != null && !_transport.CanCarryFiles && _lifecycle.CanAcceptData)
+            if (RefusesFiles && _lifecycle.CanAcceptData)
             {
-                AddError($"A file value of {file?.Path} was not sent: the collector session transport cannot carry file values yet.");
-                EmitOverflowDrops(_fileQueue.QueueName, 1);
+                ReportRefusedFile(file?.Path);
                 return;
             }
 
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
+        }
+
+        /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
+        internal bool RefusesFiles => _transport != null && !_transport.CanCarryFiles;
+
+        internal void ReportRefusedFile(string path)
+        {
+            AddError($"A file value of {path} was not sent: the collector session transport cannot carry file values yet.");
+            EmitOverflowDrops(_fileQueue.QueueName, 1);
         }
 
         // Wraps each queue's typed Enqueue with the collector-wide lifecycle gate. When the
@@ -339,12 +347,19 @@ namespace HSMDataCollector.Core
         /// </summary>
         public void AddQueueLoopError(string queueName, Exception ex)
         {
-            // A package the sender failed is described by its message alone. Its stack trace
+            // A package the sender failed is described by its report alone. Its stack trace
             // says nothing about the cause and differs between the first pass of the loop and
-            // the later ones, which made two entries of one failure (#1659 A4).
-            var msg = ex is PackageSendFailedException
-                ? $"Queue: {queueName}, {ex.Message}"
-                : $"Queue: {queueName}, {ex}";
+            // the later ones, and its item counts change from cycle to cycle; either in the key
+            // made several entries of one failure (#1659 A4). The counts stay at Debug.
+            string msg;
+
+            if (ex is PackageSendFailedException failed)
+            {
+                msg = $"Queue: {queueName}, {failed.Report}";
+                _logger.Debug($"Queue: {queueName}, {failed.Message}");
+            }
+            else
+                msg = $"Queue: {queueName}, {ex}";
 
             _messageDeduplicator.AddMessage(msg);
         }

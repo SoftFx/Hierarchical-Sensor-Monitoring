@@ -37,6 +37,11 @@ namespace HSMDataCollector.Core
 
         // Transport = Session was set next to a custom DataSender; said once per Start.
         private readonly bool _transportSettingIgnored;
+
+        // The transport this collector created, and so the one it starts and stops. A session
+        // sender that came with the options belongs to the collector that created it: stopping
+        // it here would end the session under that collector.
+        private readonly ICollectorTransport _ownTransport;
         private readonly DataProcessor _dataProcessor;
         private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
         private readonly ICollectorScheduler _scheduler;
@@ -117,6 +122,7 @@ namespace HSMDataCollector.Core
             }
 
             _dataSender = options.DataSender;
+            _ownTransport = ownSender as ICollectorTransport;
 
             _scheduler = new CollectorScheduler();
 
@@ -316,15 +322,20 @@ namespace HSMDataCollector.Core
                 if (_transportSettingIgnored)
                     _logger.Info("CollectorOptions.Transport = Session has no effect: the collector uses the custom DataSender it was given.");
 
-                if (!(_dataSender is ICollectorTransport transport))
+                if (_ownTransport == null)
+                {
+                    if (_dataSender is ICollectorTransport)
+                        _logger.Info("This collector uses the collector session of the collector that was created first from the same options: that one opens and closes it.");
+
                     return;
+                }
 
                 // The disconnect alert of a collector is the inactivity alert of its Service alive
                 // sensor. Without that sensor nobody is told when the session, the only path, is gone.
                 if (!_sensorsStorage.Values.Any(sensor => sensor is DefaultSensors.Other.CollectorAlive))
                     _logger.Info("The collector session is enabled and the Service alive sensor (AddCollectorAlive) is not registered at Start: without it the server has no disconnect alert for this collector.");
 
-                transport.Start();
+                _ownTransport.Start();
             }
             catch (Exception ex)
             {
@@ -334,12 +345,12 @@ namespace HSMDataCollector.Core
 
         private async Task StopTransportAsync(bool terminal)
         {
-            if (!(_dataSender is ICollectorTransport transport))
+            if (_ownTransport == null)
                 return;
 
             try
             {
-                await transport.StopAsync(terminal).ConfigureAwait(false);
+                await _ownTransport.StopAsync(terminal).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -481,6 +492,10 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+
+                // As in Start: this obsolete entry point runs a collector too, and one on a
+                // session delivers nothing until its transport is started.
+                StartTransport();
             }
 
             try
