@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 
 
@@ -12,6 +13,21 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         public override string QueueName => "Command";
 
         public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
+
+        // A registration the server refused (bad payload, bad or blocked key) is refused again on
+        // every repeat, so it is not re-enqueued. The native collector has the same rule (#1515).
+        protected override bool RejectionIsFinal => true;
+
+        // A lone registration is named by its path, a batch by its size, as the native collector
+        // names a failed registration post.
+        protected override string DescribeItems(DataPackage<CommandRequestBase> package)
+        {
+            if (package.Count == 1)
+                foreach (var command in package)
+                    return $"the command for {command.Path}";
+
+            return $"{package.Count} command(s)";
+        }
 
         protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
