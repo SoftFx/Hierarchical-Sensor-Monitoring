@@ -58,6 +58,8 @@ Drain in `DataProcessor.StopWithFlushAsync` (#1659 A7, 3.6.5):
 
 Worst case for a stop is therefore the stop wait plus the drain budget: 10 s graceful, 2 s terminal. What the single budget costs: registrations that are slow to land (many packages, a slow `/commands`) can use it up, and the values behind them are then discarded where they used to have a budget of their own. That is the bounded-stop contract (a stop must not hold up a host restart; loss at stop is accepted) and the native order.
 
+No conformance scenario pins the drain order, the single budget or the re-send of the in-flight package: the DSL has no verb that makes them observable without a wall-clock margin (#1751). They are pinned per language: managed `StopDrainTests`, the native tests of the stop drain (`native_http_stop_drain_*`). Known gaps of the managed drain: a value send still runs its in-send retries, so a server that is down costs the whole budget (#1747), and a package cancelled when the budget fires can be re-enqueued after the clear (#1748).
+
 Diagnostics suppression: `AddPackageInfo`/`AddPackageSendingInfo` are no-ops during the command flush and from the data-drain boundary on, so the command and file flushes cannot enqueue stale self-diagnostics into stopped data queues (would survive restart as stale telemetry). **Overflow reporting is exempt** — data loss must stay visible even during shutdown. Flag resets on every Start.
 
 Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "N preserved" in the run loop but "N queued for clear" when running inside `FlushAsync` (`IsFlushing`), because ClearQueue discards those items moments later; "+M dropped" counts retry-filter drops.
