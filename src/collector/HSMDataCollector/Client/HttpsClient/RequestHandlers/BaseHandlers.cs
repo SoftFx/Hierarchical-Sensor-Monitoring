@@ -18,13 +18,14 @@ namespace HSMDataCollector.Client.HttpsClient
         protected readonly ICollectorLogger _logger;
         protected readonly Endpoints _endpoints;
 
-        protected abstract DelayBackoffType DelayStrategy { get; }
-
         /// <summary>
         /// How many times one send repeats a failed request before it returns. Zero means a
         /// send is a single attempt and the queue alone decides when to try again.
         /// </summary>
-        protected abstract int MaxRequestAttempts { get; }
+        protected abstract int MaxRetryAttempts { get; }
+
+        /// <summary>The pause between the retries of one send; read only when there are any.</summary>
+        protected virtual DelayBackoffType DelayStrategy => DelayBackoffType.Exponential;
 
         protected int _timeout = 1000;
 
@@ -36,7 +37,7 @@ namespace HSMDataCollector.Client.HttpsClient
             _logger = logger;
             _client = client;
 
-            if (MaxRequestAttempts <= 0)
+            if (MaxRetryAttempts <= 0)
             {
                 _pipeline = ResiliencePipeline<HttpResponseMessage>.Empty;
                 return;
@@ -44,7 +45,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
-                MaxRetryAttempts = MaxRequestAttempts,
+                MaxRetryAttempts = MaxRetryAttempts,
                 BackoffType      = DelayStrategy,
 
                 MaxDelay = TimeSpan.FromMinutes(2),
@@ -151,7 +152,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
         private void LogSendFailure(Exception ex, HttpRequest<T> request)
         {
-            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts + 1}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+            _logger.Error($"Failed to send data. Attempt number = {MaxRetryAttempts + 1}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
         }
 
 

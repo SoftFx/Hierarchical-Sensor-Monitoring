@@ -71,7 +71,9 @@ namespace HSMDataCollector.Tests.Transport
         {
             using (var server = new FakeHsmServer())
             {
-                server.AbortNextCommandRequests(2);
+                // The server is "down" until the test brings it back: however many attempts fit
+                // in between, none is answered, so nothing here depends on how fast they come.
+                server.AbortNextCommandRequests(int.MaxValue);
 
                 using (var collector = new DataCollector(OptionsFor(server)))
                 {
@@ -86,6 +88,8 @@ namespace HSMDataCollector.Tests.Transport
                     // together. A send that keeps retrying by itself delivers the first registration
                     // alone and leaves this one waiting behind it.
                     collector.CreateIntSensor("attempt/second");
+
+                    server.AbortNextCommandRequests(0);
 
                     Assert.True(await WaitForAsync(() => server.CommandRequests.Any(r => r.Answer != 0 && r.Body.Contains("attempt/second"))),
                                 "The second registration was never accepted.");

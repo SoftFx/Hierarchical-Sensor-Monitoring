@@ -106,7 +106,7 @@ When adding new functionality:
 - `Dispose()` must work from any state and must not throw
 - `CollectorScheduler` is a per-collector instance (owned and disposed by its `DataCollector`); there is no process-global scheduler
 - Sensor values are queued in `Channel<QueueItem<T>>` and sent in batches by `QueueProcessorBase`; overflow/retry policy per `aicontext/features/collector/data-pipeline/feature.md`
-- HTTP retries use Polly with exponential backoff; `BaseHandlers.ShouldRetry` retries 5xx on bounded data/priority/file requests only — commands retry on exceptions, 4xx never (#1096)
+- HTTP retries use Polly with exponential backoff on data/priority/file requests only: `BaseHandlers.ShouldRetry` retries exceptions and 5xx, 4xx never (#1096). A command send is a single attempt; the command queue re-sends a failed package on its next cycle and drops one the server rejected with a 4xx (#1659 A2, A3)
 - `MessageDeduplicator` bounds cache size to prevent memory leaks from diverse exception messages
 
 ## Versioning
