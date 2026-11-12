@@ -776,6 +776,13 @@ mod tests {
         expected.extend_from_slice(NETWORK_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
+
+        // Reachability is opt-in; enabled, its four sensors register before Start too.
+        config.network.reachability.enabled = true;
+        expected
+            .extend_from_slice(crate::probe_only::network::reachability::tests::REACHABILITY_SET);
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
     }
 
     #[test]

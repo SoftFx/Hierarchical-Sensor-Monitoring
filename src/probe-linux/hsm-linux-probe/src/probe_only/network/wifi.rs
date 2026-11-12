@@ -224,6 +224,7 @@ mod tests {
         let config = NetworkConfig {
             enabled: true,
             interfaces: patterns.iter().map(|p| p.to_string()).collect(),
+            ..NetworkConfig::default()
         };
         WifiSignal::new(
             collector,

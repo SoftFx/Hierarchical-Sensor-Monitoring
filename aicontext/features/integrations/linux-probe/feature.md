@@ -230,7 +230,14 @@ The probe registers **two separately pinned sets**:
      value without the kernel's "updated" `.` and a non-dBm level are skipped). BSSID, channel and
      channel width need nl80211 and are not reported (owner's decision in #1711: no netlink
      dependency). A missing `/proc/net/wireless` is silent on a host without Wi-Fi.
-   - **Not built:** reachability (group 4 of #1711) and `Connection failures rate`.
+   - **Reachability** (opt-in, `probe.network.reachability`, off by default; `network/
+     reachability.rs`): every 5 s a TCP connect (`std` `connect_timeout`, 2 s; no ICMP) to the
+     lowest-metric IPv4 default gateway of `/proc/net/route` on `gatewayPort` (53) and to
+     `internet` (`1.1.1.1:443`). `Reachability/<Gateway|Internet>/Connect time ms` (DoubleBar,
+     ms, no TTL) and `Connect failures` (Int, per minute, 0 included, TTL 5 min). A refused
+     connect is an answer; no default route is a gateway failure; an unreadable route file is
+     logged, not counted. Registered before Start (`REACHABILITY_SET`).
+   - **Not built:** `Connection failures rate` (needs a Rate type in the Rust wrapper).
    - Pinned by `NETWORK_SET` and `network::tests::the_tcp_sensors_are_the_windows_catalog_rows`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,

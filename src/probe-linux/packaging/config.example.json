@@ -30,7 +30,12 @@
     },
     "network": {
       "enabled": true,
-      "interfaces": []
+      "interfaces": [],
+      "reachability": {
+        "enabled": false,
+        "internet": "1.1.1.1:443",
+        "gatewayPort": 53
+      }
     }
   },
   "topCpu": {

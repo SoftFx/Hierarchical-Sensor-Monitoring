@@ -658,11 +658,33 @@ All have KeepHistory 90 days and Grafana on, and none has an alert.
 - **Not reported:** the access point (BSSID), channel and channel width. Only nl80211 (generic
   netlink) has them, and by the owner's decision in #1711 the probe adds no netlink dependency.
   A kernel without `/proc/net/wireless` (cloud kernels) is fine on a host without Wi-Fi; with a
-  Wi-Fi interface it is logged once.
+  reported Wi-Fi interface it is logged once.
+
+**Reachability (opt-in: `probe.network.reachability.enabled`, off by default).** Every 5 s the
+probe times a TCP connect (the standard library's `connect_timeout`, 2 s) to the default gateway
+on `gatewayPort` (`53`) and to `internet` (`1.1.1.1:443`). No ICMP: a ping socket needs a
+capability the unit does not have.
+
+| Path (`.computer/Network/Reachability/<Gateway\|Internet>/…`) | Type · unit | Posted | TTL |
+|---|---|---|---|
+| `Connect time ms` | DoubleBar · `Milliseconds` | the successful connects, 1-min bar | none |
+| `Connect failures` | Int · Count | every minute, 0 included (of 12 attempts) | 5 min |
+
+- A **refused** connect is an answer (the host sent a reset), so the gateway does not need to
+  listen on the port; its round trip is in the bar.
+- A **failure** is a timeout or any other error (network unreachable), and for the gateway also
+  "no default route".
+- The gateway is the lowest-metric IPv4 default route in `/proc/net/route`, read on every attempt,
+  so a changed network is followed. An unreadable route file is logged once and skips the gateway
+  attempt; it is not counted as a failure.
+- The time bars have no TTL: while every attempt fails they get no value, and `Connect failures`
+  says why. Registered before Start, so the set is pinned (`REACHABILITY_SET`).
+- `internet` must be an `ip:port` (IPv6 as `[addr]:port`): a host name would time the resolver too.
 
 **Cost:** one read of `/proc/net/snmp` a minute; `/proc/net/dev` twice and `/proc/net/wireless`
-once every 10 s, plus two small sysfs files per reported interface. All from the probe's own
-network namespace (the unit has no `PrivateNetwork`, so it is the host's).
+once every 10 s, plus two small sysfs files per reported interface; with reachability on, two
+TCP connects and one read of `/proc/net/route` every 5 s. All from the probe's own network
+namespace (the unit has no `PrivateNetwork`, so it is the host's).
 
 ### Advanced, opt-in (not advertised)
 
@@ -1140,7 +1162,9 @@ Placeholders only — **no secrets**:
   Docker `CPU`, `Memory used %` and `Disk written per hour` descriptions state the period the
   probe actually samples at.
 * `probe.network` (optional): `enabled` (`true`) and `interfaces` (`[]`: interface-name patterns
-  with `*`, e.g. `"wlp*"`; empty = the physical interfaces). See [Network](#network-1711).
+  with `*`, e.g. `"wlp*"`; empty = the physical interfaces), and `reachability`: `enabled`
+  (`false`), `internet` (`"1.1.1.1:443"`, an `ip:port`), `gatewayPort` (`53`). See
+  [Network](#network-1711).
 * `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See

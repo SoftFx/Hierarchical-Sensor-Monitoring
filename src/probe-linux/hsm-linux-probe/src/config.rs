@@ -268,6 +268,8 @@ pub struct NetworkConfig {
     /// `["wlp*", "br0"]`. Empty = every physical interface (one with `/sys/class/net/<if>/device`).
     #[serde(default)]
     pub interfaces: Vec<String>,
+    #[serde(default)]
+    pub reachability: ReachabilityConfig,
 }
 
 impl Default for NetworkConfig {
@@ -275,7 +277,49 @@ impl Default for NetworkConfig {
         Self {
             enabled: true,
             interfaces: Vec::new(),
+            reachability: ReachabilityConfig::default(),
         }
+    }
+}
+
+/// `probe.network.reachability { enabled, internet, gatewayPort }` (#1711): time a TCP connect to
+/// the default gateway and to one internet address. Absent = off.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReachabilityConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// The internet target, an `ip:port` (no host name: a DNS lookup would time the resolver too,
+    /// and fail with it).
+    #[serde(default = "default_internet_target")]
+    pub internet: String,
+    /// The TCP port the gateway is probed on; a refused connect counts as an answer.
+    #[serde(default = "default_gateway_port")]
+    pub gateway_port: u16,
+}
+
+fn default_internet_target() -> String {
+    "1.1.1.1:443".to_string()
+}
+
+fn default_gateway_port() -> u16 {
+    53
+}
+
+impl Default for ReachabilityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            internet: default_internet_target(),
+            gateway_port: default_gateway_port(),
+        }
+    }
+}
+
+impl ReachabilityConfig {
+    /// The internet target as a socket address; validated by [`Config::validate`].
+    pub fn internet_address(&self) -> Option<std::net::SocketAddr> {
+        self.internet.trim().parse().ok()
     }
 }
 
@@ -524,6 +568,18 @@ impl NetworkConfig {
                  wildcards (got '{bad}')"
             )));
         }
+        if self.reachability.internet_address().is_none() {
+            return Err(ConfigError::invalid(format!(
+                "probe.network.reachability.internet must be an ip:port such as 1.1.1.1:443 \
+                 (got '{}')",
+                self.reachability.internet
+            )));
+        }
+        if self.reachability.gateway_port == 0 {
+            return Err(ConfigError::invalid(
+                "probe.network.reachability.gatewayPort must be 1-65535",
+            ));
+        }
         Ok(())
     }
 }
@@ -684,6 +740,14 @@ mod tests {
         assert!(config.probe.disks_enabled());
         assert!(example.contains("\"network\""));
         assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
+        // Reachability (#1711) is spelled out, off, with the defaults the owner chose.
+        let reachability = &config.probe.network.reachability;
+        assert!(example.contains("\"reachability\""));
+        assert!(!reachability.enabled);
+        assert_eq!(
+            (reachability.internet.as_str(), reachability.gateway_port),
+            ("1.1.1.1:443", 53)
+        );
         // The topCpu block is spelled out with the agent's defaults, and off.
         assert!(example.contains("\"topCpu\""));
         let top = &config.top_cpu;
@@ -723,6 +787,45 @@ mod tests {
         assert!(disks.enabled.is_none() && disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
         assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
+        let reachability = &config.probe.network.reachability;
+        assert!(!reachability.enabled, "reachability is opt-in");
+        assert_eq!(
+            (reachability.internet.as_str(), reachability.gateway_port),
+            ("1.1.1.1:443", 53)
+        );
+    }
+
+    #[test]
+    fn the_reachability_section_maps_and_rejects_bad_targets() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "reachability": {
+                 "enabled": true, "internet": "[2606:4700:4700::1111]:443", "gatewayPort": 80 } } } }"#;
+        let reachability = Config::parse(text)
+            .expect("parse")
+            .probe
+            .network
+            .reachability;
+        assert!(reachability.enabled);
+        assert_eq!(reachability.gateway_port, 80);
+        assert_eq!(
+            reachability.internet_address(),
+            Some("[2606:4700:4700::1111]:443".parse().unwrap())
+        );
+
+        for bad in [
+            r#""internet": "one.one.one.one:443""#,
+            r#""internet": "1.1.1.1""#,
+            r#""gatewayPort": 0"#,
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "network": {{ "reachability": {{ {bad} }} }} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

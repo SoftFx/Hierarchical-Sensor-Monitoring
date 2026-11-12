@@ -46,9 +46,12 @@
 //!
 //! - [`health`]: per interface, `Link up`, `Carrier changes`, `Errors`, `Drops`.
 //! - [`wifi`]: per Wi-Fi interface, `Signal dBm` and `Link quality` bars.
+//! - [`reachability`] (opt-in): TCP connect time and failures to the gateway and one internet
+//!   address.
 
 pub mod health;
 pub mod procfs;
+pub mod reachability;
 pub mod wifi;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -142,6 +145,18 @@ pub fn register<'c>(
         filter,
         environment.proc_net.join("wireless"),
     )));
+    if config.reachability.enabled {
+        match reachability::Reachability::register(
+            collector,
+            &config.reachability,
+            environment.proc_net.join("route"),
+        ) {
+            Ok(source) => sources.push(Box::new(source)),
+            Err(error) => logger.error(format!(
+                "network: cannot register the reachability sensors: {error}"
+            )),
+        }
+    }
     sources
 }
 
@@ -528,6 +543,7 @@ pub(crate) mod tests {
         let config = NetworkConfig {
             enabled: true,
             interfaces: patterns.iter().map(|p| p.to_string()).collect(),
+            ..NetworkConfig::default()
         };
         InterfaceSpeed::new(
             collector,
@@ -851,6 +867,7 @@ pub(crate) mod tests {
         let config = NetworkConfig {
             enabled: false,
             interfaces: Vec::new(),
+            ..NetworkConfig::default()
         };
         assert!(register(&collector, &config, &HostEnvironment::system(), &logger).is_empty());
         assert!(lines.lock().unwrap().iter().any(|l| l.contains("disabled")));
