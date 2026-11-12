@@ -37,6 +37,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         // Statuses scripted for the next command POSTs, one per request, in order.
         private readonly ConcurrentQueue<HttpStatusCode> _scriptedCommandStatuses = new ConcurrentQueue<HttpStatusCode>();
 
+        // Answers scripted for the next data POSTs, one per request, in order.
+        private readonly ConcurrentQueue<ScriptedAnswer> _scriptedDataAnswers = new ConcurrentQueue<ScriptedAnswer>();
+
         public FakeHsmServer()
         {
             Port = GetFreeTcpPort();
@@ -69,6 +72,12 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         /// connection is dropped, which the collector sees as a failed transport, not a status.
         /// Such a request is captured with <see cref="CapturedRequest.Answer"/> 0.</summary>
         public void AbortNextCommandRequests(int count) => Interlocked.Exchange(ref _abortCommandRequests, count);
+
+        /// <summary>The next data POST answers <paramref name="status"/> with
+        /// <paramref name="body"/> as its content; it takes precedence over
+        /// <see cref="FailNextDataRequests"/>.</summary>
+        public void AnswerNextDataRequest(HttpStatusCode status, string body = null, string contentType = "text/plain") =>
+            _scriptedDataAnswers.Enqueue(new ScriptedAnswer(status, body, contentType));
 
         public IEnumerable<CapturedRequest> CommandRequests =>
             Requests.Where(r => r.Method == "POST"
@@ -145,8 +154,11 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             }
 
             var statusCode = HttpStatusCode.OK;
+            ScriptedAnswer scriptedData = null;
             if (isCommand && _scriptedCommandStatuses.TryDequeue(out var scripted))
                 statusCode = scripted;
+            else if (isData && _scriptedDataAnswers.TryDequeue(out scriptedData))
+                statusCode = scriptedData.Status;
             else if (isData && TryTakeOne(ref _failDataRequests))
                 statusCode = HttpStatusCode.ServiceUnavailable;
             else if (isCommand && TryTakeOne(ref _failCommandRequests))
@@ -173,6 +185,11 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                     context.Response.ContentType = "application/json";
                     context.Response.Close(accepted, willBlock: true);
                 }
+                else if (scriptedData?.Body != null)
+                {
+                    context.Response.ContentType = scriptedData.ContentType;
+                    context.Response.Close(System.Text.Encoding.UTF8.GetBytes(scriptedData.Body), willBlock: true);
+                }
                 else
                     context.Response.Close();
             }
@@ -198,6 +215,20 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             try { _loop.Wait(TimeSpan.FromSeconds(2)); } catch { /* loop already unwound */ }
             _listener.Close();
             _cts.Dispose();
+        }
+
+        private sealed class ScriptedAnswer
+        {
+            public ScriptedAnswer(HttpStatusCode status, string body, string contentType)
+            {
+                Status = status;
+                Body = body;
+                ContentType = contentType;
+            }
+
+            public HttpStatusCode Status { get; }
+            public string Body { get; }
+            public string ContentType { get; }
         }
 
         public sealed class CapturedRequest

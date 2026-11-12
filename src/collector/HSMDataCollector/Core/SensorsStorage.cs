@@ -56,6 +56,12 @@ namespace HSMDataCollector.Core
         public int Count => Volatile.Read(ref _sensorCount);
 
 
+        /// <summary>
+        /// For a built-in source that owns sensors here but is not one itself (the top-CPU
+        /// monitor): reports its fault through the collector's deduplicated error channel.
+        /// </summary>
+        internal void ReportError(string message) => _dataProcessor.AddError(message);
+
         internal SensorsStorage(CollectorOptions options, DataProcessor dataProcessor, ICollectorLogger logger)
         {
             _options      = options;
