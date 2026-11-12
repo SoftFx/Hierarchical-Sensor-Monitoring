@@ -111,7 +111,7 @@ namespace HSMServer.Core.Model
             LastIP = lastIP ?? LastIP;
         }
 
-        public bool IsValidState(out string message) => !CheckBlocked(out message) && !CheckExpired(out message);
+        public virtual bool IsValidState(out string message) => !CheckBlocked(out message) && !CheckExpired(out message);
 
         public virtual bool IsValid(KeyPermissions permissions, out string message) =>
              IsValidState(out message) && IsHasPermissions(permissions, out message);
@@ -170,10 +170,18 @@ namespace HSMServer.Core.Model
 
     public class InvalidAccessKey : AccessKeyModel
     {
-        public override bool IsValid(KeyPermissions permissions, out string message)
+        // The stand-in for an UNKNOWN key carries default expiration
+        // (DateTime.MinValue), so the inherited state check mislabeled it as
+        // expired ("AccessKey expired.") — the real reason is that the key
+        // does not exist (#1649).
+        public override bool IsValidState(out string message)
         {
             message = "Key is invalid.";
+
             return false;
         }
+
+        // IsValid inherits: the invalid state short-circuits the permission
+        // arm and answers the same message.
     }
 }

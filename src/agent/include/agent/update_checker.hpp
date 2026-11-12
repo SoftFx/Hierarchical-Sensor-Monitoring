@@ -9,6 +9,7 @@
 /// --apply-update, then requests a graceful stop of the current service run.
 
 #include "agent/config.hpp"
+#include "agent/retired_port.hpp"
 
 #include <functional>
 #include <string>
@@ -58,4 +59,13 @@ namespace hsm::agent
         void* stop_event_ = nullptr;    // HANDLE — signals thread exit
         void* check_event_ = nullptr;   // HANDLE — wakes the thread for an immediate check
     };
+
+    /// True when an HSM Sensor API answers on `port` of the configured server host: a
+    /// `GET /api/sensors/testConnection` there returns 200 within a few seconds, over https (as the
+    /// agent's collector sends, even for an `http://` address) and under the config's certificate
+    /// policy, without a proxy (the collector's transport does not use the WinHTTP one), and
+    /// whether that answer carries the `X-Hsm-Server` marker that only an HSM server's
+    /// testConnection sets. Used by the retired-port check (#1655). `port` always wins over a port
+    /// written into `server.address`, the way the collector's endpoint builder treats it.
+    PortAnswer ProbeServerPort(const AgentConfig& config, int port);
 } // namespace hsm::agent

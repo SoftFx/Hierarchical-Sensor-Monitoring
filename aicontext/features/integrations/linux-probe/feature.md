@@ -1,6 +1,6 @@
 # Feature: Linux Probe (`hsm-linux-probe`)
 
-> Owner: integrations | Last reviewed: 2026-09-30 | Canonical: yes
+> Owner: integrations | Last reviewed: 2026-11-12 | Canonical: yes
 > Scope: The systemd-hosted Linux host probe in `src/probe-linux/` — a Rust process that hosts the native collector through its stable C ABI. Owns the host wiring (config, secrets, logging, lifecycle, packaging), the sensor set it registers, and the acquisition of its probe-only sensors; owns no wire semantics.
 
 ---
@@ -186,6 +186,61 @@ The probe registers **two separately pinned sets**:
    (`uninstall.sh` and `prerm` disable it). Every sensor registers at runtime. Not in the
    shared catalog, so no Windows counterpart and no conformance scenario. Details: README "Top disk
    I/O processes".
+6. **Network** (#1711, probe 0.11.0; `probe_only/network/`) — the Windows hosts'
+   `.computer/Network/…` sensors on the same paths, **on unless `probe.network.enabled` is
+   `false`**:
+   - **TCP counters.** `Connections Established Count`, `Connection Failures Count` and
+     `Connections Reset Count` are the collector's own catalog rows. The probe registers them
+     through `hsm_collector_add_default_sensor` (`Collector::network_counter_sensor`), so the
+     registration is the Windows one byte for byte. It feeds them once a minute from
+     `/proc/net/snmp` `Tcp:` `CurrEstab` / `AttemptFails` / `EstabResets`, which are the RFC 1213
+     counters PDH reads on Windows. Linux keeps one TCP MIB for IPv4 and IPv6, so these are
+     already the sum.
+   - **Deltas** (`AttemptFails`, `EstabResets`) follow the managed `ConnectionsDifferenceSensor`:
+     the first read is the baseline, nothing is posted for a minute in which the counter did not
+     move (hence TTL never), a counter that went down becomes the new baseline, and a failed read
+     keeps the baseline. `Connections Established Count` has TTL 5 min and shows when the source
+     stops.
+   - **Speed bars.** `<iface>/Received MB,sec` and `<iface>/Sent MB,sec` copy
+     `RunNetworkSpeedLoop`'s registration: DoubleBar, `MBytes_sec`, EMA, KeepHistory 90 days,
+     TTL 5 min, Grafana on, the same description. They are 1-minute bars of samples taken every
+     10 s from `/proc/net/dev` octets. A direction gets a sensor when it first moves at least
+     0.005 MB/s. An interface seen for the first time, or one whose counter went down, gives no
+     value for that interval, and a failed read drops the baseline. They register at runtime, so
+     they are not in a pinned set.
+   - **Two wire differences** from Windows, both because a custom bar created through the C ABI
+     cannot express them: the bar is posted when it closes (Windows also posts the open bar every
+     15 s), and it registers `Alerts: null` instead of `[]`.
+   - **Interfaces.** By default only physical ones (`/sys/class/net/<if>/device`), because
+     Docker's `veth` names change with every container recreate. `probe.network.interfaces`
+     patterns replace that rule. Loopback is never reported, and at most 32 interfaces get
+     sensors.
+   - **Rule #10.** It binds one path to one mechanism per OS. Across OSes the meaning carries
+     over (the same MIB counters). A managed Unix implementation, if ever written, must read the
+     same files.
+   - **Link health** (Linux only, `network/health.rs`), per reported interface: `Link up` (Bool,
+     AggregateData, from `operstate`, `unknown` → `carrier`; checked every 10 s, posted on change
+     and every 5 min, TTL 15 min; created the first time the interface is seen up; an interface that
+     leaves `/proc/net/dev` is posted down once, then left to the TTL), and
+     `Carrier changes` / `Errors` / `Drops` (Int, Count: per-minute deltas of `carrier_changes`
+     and the `/proc/net/dev` rx + tx `errs` / `drop` columns, posted only when non-zero, no TTL,
+     created on the first non-zero minute).
+   - **Wi-Fi signal** (Linux only, `network/wifi.rs`): `Signal dBm`, a 1-minute DoubleBar of 10 s
+     samples from `/proc/net/wireless` (a row exists only while associated, so no TTL; a value
+     without the kernel's "updated" `.` and a non-dBm level are skipped). The `link` quality column
+     is not reported (#1731): on cfg80211 it is the signal plus 110, clamped to 0–70. BSSID, channel and
+     channel width need nl80211 and are not reported (owner's decision in #1711: no netlink
+     dependency). A missing `/proc/net/wireless` is silent on a host without Wi-Fi.
+   - **Reachability** (opt-in, `probe.network.reachability`, off by default; `network/
+     reachability.rs`): every 5 s a TCP connect (`std` `connect_timeout`, 1.5 s, both targets in parallel; no ICMP) to the
+     lowest-metric IPv4 default gateway of `/proc/net/route` on `gatewayPort` (53) and to
+     `internet` (`1.1.1.1:443`). `Reachability/<Gateway|Internet>/Connect time ms` (DoubleBar,
+     ms, no TTL) and `Connect failures` (Int, per minute, 0 included, TTL 5 min). A refused
+     connect is an answer from the gateway only; no default route is a gateway failure; a
+     point-to-point default route or an unreadable route file skips the gateway attempt, and a
+     minute with no attempt posts no `Connect failures`. Registered before Start (`REACHABILITY_SET`).
+   - **Not built:** `Connection failures rate` (needs a Rate type in the Rust wrapper).
+   - Pinned by `NETWORK_SET` and `network::tests::the_tcp_sensors_are_the_windows_catalog_rows`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
@@ -206,7 +261,9 @@ change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 **Configuration.** `probe.hostSensors.{enabled, cpuTemperature}`,
 `probe.disks.{enabled, exclude, writeSpeed}` (`exclude`: mount-point patterns with `*`) and
 `probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours, exclude}` (`exclude`:
-`project/service` patterns with `*` wildcards, not monitored and dropped from the state), switches all
+`project/service` patterns with `*` wildcards, not monitored and dropped from the state),
+`probe.network.{enabled, interfaces}` (`interfaces`: interface-name patterns with `*`; empty = the
+physical interfaces), switches all
 default `true` (and the `exclude` lists empty), so a config without those sections turns everything
 on. The host switches covered the disk sensor before 0.4.0, so while `probe.disks.enabled` is unset a
 `hostSensors.enabled: false` or the deprecated `hostSensors.disk: false` still disables the disks
@@ -263,7 +320,9 @@ Linux is the only supported target. The initiative is
   shadow a parity path (the pinned test checks it) and exists only by explicit owner agreement.
   Top CPU processes (#1479) is not such a reimplementation: the collector's top-CPU source is
   Windows-only (its enable call refuses Linux), so the probe adds the Linux acquisition and matches
-  the Windows wire shape.
+  the Windows wire shape. Nor is Network (#1711): the collector has the TCP and interface-speed
+  sensors but reads them only on Windows; the probe registers the TCP catalog rows itself and feeds
+  them, and matches the speed bars' wire shape.
 - **Probe-only sources are isolated.** Each registers its sensors (with their alerts) before Start
   and then samples on a thread of its own, so a read blocked on a hung filesystem cannot stall
   another source; every sample runs under `catch_unwind`; a failed read is skipped and logged
@@ -316,7 +375,7 @@ Linux is the only supported target. The initiative is
   against `$CREDENTIALS_DIRECTORY`), and every in-process copy is wiped after the collector takes it.
 - **Transport is HTTPS-only.** Config validation accepts `https://<host>` or a bare host; the wrapper
   deliberately does not expose the ABI's `allow_untrusted_server_certificate`.
-- **`hsm.transport` picks requests or the collector session (#1668, probe 0.11.0).** `http` (default)
+- **`hsm.transport` picks requests or the collector session (#1668, probe 0.12.0).** `http` (default)
   or `session`; anything else is a config error, never a silent default. On `session` the collector
   keeps one `wss://` WebSocket to the session endpoint, sends nothing over the HTTP routes and does
   not fall back to them. Collector side: `aicontext/features/collector/http-client/feature.md`.

@@ -19,34 +19,59 @@ namespace HSMServer.Middleware.Telemetry
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public async Task<bool> TryRegisterPublicApiRequest(HttpContext context)
+        /// <summary>
+        /// Resolve and register the request's public-API info (key, product,
+        /// telemetry counters). Answers TRUE both for a registered request
+        /// and for a request that is not public-API at all (no Key header —
+        /// nothing to register, the pipeline continues untouched); a
+        /// rejected key answers FALSE with its reason and writes NOTHING to
+        /// the response — the two callers answer differently: the middleware
+        /// writes the 406 body directly (before MVC runs, safe), an action
+        /// returns the error as its OWN result so MVC formats it once. A
+        /// hand-written body from inside an action started the response and
+        /// MVC's result formatting then threw over it — three ERROR entries
+        /// and a truncated body per rejected request (#1649). Virtual for
+        /// the middleware tests (#1649 review: the not-a-key-request arm
+        /// answering false would cut the whole web UI off).
+        /// </summary>
+        public virtual bool TryRegisterPublicApiRequest(HttpContext context, out string error)
         {
-            try
+            if (!IsPublicApiRequest(context))
             {
-                if (IsPublicApiRequest(context))
-                {
-                    if (TryBuildPublicApiInfo(context, out var info, out var error))
-                    {
-                        context.SetPublicApiInfo(info);
-
-                        _statistics.AddRequest(info.TelemetryPath, context.Request.ContentLength);
-                    }
-                    else
-                    {
-                        // Counted in the total only: there is no client to attribute it to.
-                        _statistics.AddRequest(null, context.Request.ContentLength);
-
-                        await context.SetAccessError(error);
-
-                        return false;
-                    }
-                }
+                error = string.Empty;
 
                 return true;
             }
-            catch (Exception ex) 
+
+            error = string.Empty;
+
+            try
+            {
+                if (TryBuildPublicApiInfo(context, out var info, out var rejectReason))
+                {
+                    context.SetPublicApiInfo(info);
+
+                    _statistics.AddRequest(info.TelemetryPath, context.Request.ContentLength);
+
+                    return true;
+                }
+
+                // Counted in the total only: there is no client to attribute it to.
+                _statistics.AddRequest(null, context.Request.ContentLength);
+
+                // A rejected key is a client mistake, not a server fault:
+                // WARN without a stack trace (the ADR-0016 operator-surface
+                // contract) — the reason reaches the caller, not the log.
+                error = rejectReason;
+                _logger.Warn($"Rejected {context.Request.Method} {context.Request.Path} request: {error}");
+
+                return false;
+            }
+            catch (Exception ex)
             {
                 _logger.Error(ex);
+                error = "Cannot register the request";
+
                 return false;
             }
         }

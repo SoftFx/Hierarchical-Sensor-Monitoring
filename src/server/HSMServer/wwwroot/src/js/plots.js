@@ -447,8 +447,10 @@ export class BarPLot extends Plot {
                 '<br>max: ' + i.max +
                 (stdDev === null ? '' : '<br>σ: ' + stdDev) +
                 '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : '') +
-                '<br>open time: ' + moment.utc(i.openTime).format('DD/MM/yyyy HH:mm:ss') +
-                '<br>close time: ' + moment.utc(i.closeTime).format('DD/MM/yyyy HH:mm:ss'));
+                // Unambiguous date + explicit UTC: the From/To fields print MM/dd/yyyy, and a
+                // day-first DD/MM hover of the same day read as a different date (#1647).
+                '<br>open time: ' + moment.utc(i.openTime).format('YYYY-MM-DD HH:mm:ss [UTC]') +
+                '<br>close time: ' + moment.utc(i.closeTime).format('YYYY-MM-DD HH:mm:ss [UTC]'));
             this.close.push(i.lastValue);
 
             this.barMeans.push(i.mean);

@@ -68,8 +68,22 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Response header that marks a <c>testConnection</c> answer as coming from an HSM server.
+        /// The HSM Agent's retired-port check (#1655) moves an agent off 44330/44333 only when 443
+        /// answers with it, so that a foreign service answering 200 on 443 of a host whose HSM is
+        /// pinned to an old port (and merely down) cannot take its agents. A "not a stranger" check,
+        /// not authentication: the agent accepts exactly the value "1" (kServerMarkerValue in
+        /// src/agent/include/agent/retired_port.hpp).
+        /// </summary>
+        public const string ServerMarkerHeader = "X-Hsm-Server";
+
         [HttpGet("testConnection")]
-        public ActionResult TestConnection() => Ok(); //add test
+        public ActionResult TestConnection()
+        {
+            Response.Headers[ServerMarkerHeader] = "1";
+            return Ok();
+        }
 
 
         /// <summary>
@@ -271,7 +285,10 @@ namespace HSMServer.Controllers
                     return Ok(response);
                 }
 
-                return BadRequest(values);
+                // The rejected-key reason is the 406 body the caller reads (#1649) —
+                // the old BadRequest landed on a response the registration had
+                // already started by hand and threw.
+                return StatusCode(406, infoRequest.Error);
             }
             catch (Exception ex)
             {
@@ -400,7 +417,24 @@ namespace HSMServer.Controllers
 
                     // Only a registration reads the caller; any other command is refused
                     // without it, exactly as before the logic moved to the service.
-                    var info = sensorCommands[i] is AddOrUpdateSensorRequest ? (await IsValidPublicApiRequest(sensorCommands[i])).Value : null;
+                    PublicApiRequestInfo info = null;
+                    if (sensorCommands[i] is AddOrUpdateSensorRequest)
+                    {
+                        var infoRequest = await IsValidPublicApiRequest(sensorCommands[i]);
+
+                        if (!infoRequest.IsOk)
+                        {
+                            // The rejection reason (unknown/expired/blocked key) is the
+                            // per-path error the caller reads, not the generic
+                            // invalid-request text (#1649).
+                            response[path] = infoRequest.Error;
+
+                            continue;
+                        }
+
+                        info = infoRequest.Value;
+                    }
+
                     var error = await _ingestion.ApplyCommandAsync(info, sensorCommands[i]);
 
                     if (error is not null)
@@ -515,6 +549,13 @@ namespace HSMServer.Controllers
             {
                 var infoRequest = await IsValidPublicApiRequest(value);
 
+                if (!infoRequest.IsOk)
+                {
+                    // The rejection reason (unknown/expired/blocked key) is the 406
+                    // body the caller reads, not the generic invalid-request text (#1649).
+                    return TaskResult.FromError(infoRequest.Error);
+                }
+
                 return await _ingestion.AddValueAsync(infoRequest.Value, value);
             }
             catch (Exception ex)
@@ -537,32 +578,43 @@ namespace HSMServer.Controllers
                 return isValid ? TaskResult<HistoryRequestModel>.FromValue(coreRequest) : TaskResult<HistoryRequestModel>.FromError(error);
             }
 
-            return TaskResult<HistoryRequestModel>.FromError(InvalidRequest);
+            return TaskResult<HistoryRequestModel>.FromError(infoRequest.Error);
         }
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
         {
             var infoRequest = await IsValidPublicApiRequest(apiRequest);
 
+            if (!infoRequest.IsOk)
+                return TaskResult.FromError(infoRequest.Error);
+
             return await _ingestion.AddOrUpdateSensorAsync(infoRequest.Value, apiRequest);
         }
 
-        private async Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)
+        private Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)
         {
             var context = HttpContext;
 
             if (context.TryGetPublicApiInfo(out var info))
-                return TaskResult<PublicApiRequestInfo>.FromValue(info);
+                return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromValue(info));
 
             if (TelemetryCollector.TryAddKeyToHeader(context, request.Key))
             {
-                var result = await _telemetry.TryRegisterPublicApiRequest(HttpContext);
-
-                if (result && context.TryGetPublicApiInfo(out info))
-                    return TaskResult<PublicApiRequestInfo>.FromValue(info);
+                // The rejected-key reason rides the ACTION's result (the 406
+                // the caller sees) — writing the body by hand here started
+                // the response, and MVC's formatting of the action's own
+                // result then threw over it: three ERROR entries and a
+                // truncated body per rejected request (#1649).
+                if (_telemetry.TryRegisterPublicApiRequest(context, out var error))
+                {
+                    if (context.TryGetPublicApiInfo(out info))
+                        return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromValue(info));
+                }
+                else
+                    return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromError(error));
             }
 
-            return TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body");
+            return Task.FromResult(TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body"));
         }
     }
 }

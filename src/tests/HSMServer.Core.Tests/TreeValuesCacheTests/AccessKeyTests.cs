@@ -144,6 +144,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // #1649: the unknown-key stand-in used to fall through the inherited
+        // state check and answer "AccessKey expired." (its default expiration
+        // is DateTime.MinValue) — the key does not exist, and its own message
+        // is "Key is invalid.". The 406 body the client reads comes from this
+        // message.
+        [Fact]
+        [Trait("Category", "Get access key")]
+        public void TryGetKeyTest_UnknownKeyAnswersKeyIsInvalid()
+        {
+            var resolved = _valuesCache.TryGetKey(Guid.NewGuid(), out var key, out var message);
+
+            Assert.False(resolved);
+            Assert.Same(AccessKeyModel.InvalidKey, key);
+            Assert.Equal("Key is invalid.", message);
+        }
+
+
         public void Dispose()
         {
             _valuesCache.ChangeAccessKeyEvent -= EventHandler;

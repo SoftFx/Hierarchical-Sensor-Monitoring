@@ -1,6 +1,6 @@
 # Logging And Diagnostics
 
-> Owner: shared | Last reviewed: 2026-11-04 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
 
 ## Goals
 
@@ -27,11 +27,16 @@ logs.
   `TaskCanceledException` from the transport):
   `src/server/HSMServer/Middleware/LoggingExceptionMiddleware.cs` logs a
   client abort — an `OperationCanceledException` caught while
-  `HttpContext.RequestAborted` is cancelled, or a
+  `HttpContext.RequestAborted` is cancelled, a
   `ConnectionAbortedException` (the transport reporting the dead connection
-  before the token fires; see `ClientAbortDetection`) — at WARN; an internal
-  cancellation (token intact) and every other exception type stay at ERROR
-  (#1632, ADR-0016).
+  before the token fires), or an `IOException` of the request-body read
+  (the transport's own `ConnectionResetException`, rethrown top-level or
+  wrapped; Kestrel's HTTP/2 stream reset, `The client reset the request
+  stream.`; or one caught while the token is cancelled; see
+  `ClientAbortDetection`) — at WARN; an internal cancellation (token
+  intact) and every other exception type — including every other
+  `IOException` with the request token intact, e.g. a failing disk — stay at
+  ERROR (#1632, #1648, ADR-0016).
 
 ## Required Context
 

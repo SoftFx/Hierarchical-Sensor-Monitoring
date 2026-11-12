@@ -1,5 +1,6 @@
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.ChangeSets;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -95,6 +96,16 @@ namespace HSMServer.Model.ManagementApi.Journal
 
         /// <summary>True when the record's write is undoable (admin-only rollback).</summary>
         public bool Rollbackable { get; init; }
+
+        /// <summary>
+        /// create | update | delete | rollback — what kind of write the
+        /// record is (#1638); null when nothing says (legacy rows). The
+        /// property format is untouched; this tag is derived and additive.
+        /// </summary>
+        public string Operation { get; init; }
+
+        /// <summary>True when the record's undo group was rolled back — the write was undone by a later rollback.</summary>
+        public bool RolledBack { get; init; }
     }
 
 
@@ -194,11 +205,13 @@ namespace HSMServer.Model.ManagementApi.Journal
             // The cheap field filter runs before the per-record resource
             // resolution (several cache lookups each) — only survivors pay
             // for the sight check.
-            // Group status for the rendered page (#1588 review round 4):
-            // a terminal (rolled-back) group's records keep their kind and
-            // link, but the Rollback action must not come back on refresh —
-            // one cheap journal read per DISTINCT group of the page.
-            var terminalGroups = new HashSet<string>(StringComparer.Ordinal);
+            // Group cache for the rendered page (#1588 review round 4,
+            // #1638): a terminal (rolled-back) group's records keep their
+            // kind and link but the Rollback action must not come back on
+            // refresh, and the page now also derives each record's
+            // operation from its group — one journal read per DISTINCT
+            // group of the page serves both.
+            var groupCache = new Dictionary<string, ChangeSetModel>(StringComparer.Ordinal);
 
             var page = _journal.GetRecords(from, to)
                 .Where(r => Matches(r, filter))
@@ -207,34 +220,45 @@ namespace HSMServer.Model.ManagementApi.Journal
                 .ThenBy(r => r.Key.Id)
                 .Skip(offset)
                 .Take(limit)
-                .Select(r =>
-                {
-                    var dto = Render(r);
-
-                    if (dto.Rollbackable && IsTerminal(dto.ChangeSetId, terminalGroups))
-                        dto = dto with { Rollbackable = false };
-
-                    return dto;
-                })
+                .Select(r => Enrich(Render(r), r, groupCache))
                 .ToList();
 
             return PolicyWriteResult<List<JournalRecordDto>>.Ok(page);
         }
 
-        private bool IsTerminal(string changeSetId, HashSet<string> terminalGroups)
+        // The rendered record with its operation tag and rollback state
+        // (#1638): the operation comes from the record's own data first,
+        // then from its undo-group entry. stripRollbackable: the LIST strips
+        // the Rollback action and marks the write rolled back when the group
+        // went terminal; the details response keeps the stored flag.
+        private JournalRecordDto Enrich(JournalRecordDto dto, JournalRecordModel record,
+            Dictionary<string, ChangeSetModel> groupCache, bool stripRollbackable = true)
         {
-            if (terminalGroups.Contains(changeSetId))
-                return true;
-
-            if (Guid.TryParse(changeSetId, out var id) &&
-                _changeSetJournal.Get(id) is { Status: HSMServer.Core.ChangeSets.ChangeSetStatus.RolledBack })
+            ChangeSetModel GroupOf(string changeSetId)
             {
-                terminalGroups.Add(changeSetId);
+                if (groupCache.TryGetValue(changeSetId, out var cached))
+                    return cached;
 
-                return true;
+                var group = Guid.TryParse(changeSetId, out var id) ? _changeSetJournal.Get(id) : null;
+
+                groupCache.Add(changeSetId, group);
+
+                return group;
             }
 
-            return false;
+            var operation = JournalOperations.Of(record, GroupOf);
+
+            if (dto.Rollbackable && GroupOf(dto.ChangeSetId) is { Status: ChangeSetStatus.RolledBack })
+            {
+                // The list also strips the Rollback action (the terminal
+                // strip, #1588 review round 4); the details response keeps
+                // the stored flag.
+                dto = stripRollbackable
+                    ? dto with { Rollbackable = false, RolledBack = true }
+                    : dto with { RolledBack = true };
+            }
+
+            return operation is null ? dto : dto with { Operation = operation };
         }
 
         public PolicyWriteResult<JournalRecordDetailsDto> GetRecord(string recordId, ClaimsPrincipal user,
@@ -247,7 +271,13 @@ namespace HSMServer.Model.ManagementApi.Journal
 
             return PolicyWriteResult<JournalRecordDetailsDto>.Ok(new JournalRecordDetailsDto
             {
-                Record = Render(record),
+                // Enriched like the list rows on the ADDITIVE fields only
+                // (#1638): the details response keeps the stored
+                // rollbackable flag — rewriting it here would not be an
+                // additive change (the list's terminal strip stays where it
+                // already was, #1588 review round 4).
+                Record = Enrich(Render(record), record,
+                    new Dictionary<string, ChangeSetModel>(StringComparer.Ordinal), stripRollbackable: false),
                 ChangeSet = UndoGroupDetails(record, user, access),
             });
         }
