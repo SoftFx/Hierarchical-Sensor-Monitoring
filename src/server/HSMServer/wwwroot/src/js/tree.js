@@ -570,7 +570,9 @@ function buildContextMenu(node) {
             };
         }
 
-        if (curType === NodeType.Sensor) {
+        // With several items selected only "Move sensors..." is offered:
+        // this entry would move just the right-clicked one.
+        if (curType === NodeType.Sensor && selectedNodesCount <= 1) {
             contextMenu["Move"] = {
                 "label": `Move sensor...`,
                 "action": _ => openMoveSensorsModal([node.id])

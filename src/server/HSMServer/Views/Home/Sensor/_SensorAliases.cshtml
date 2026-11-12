@@ -35,7 +35,7 @@
                         <td class="text-break">@product/@alias.Path</td>
                         <td class="text-muted text-nowrap">last value: @lastHit</td>
                         <td>
-                            @if (user is not null && user.IsManager(alias.ProductId) && user.IsManager(sensor.Root.Id))
+                            @if (user is not null && user.IsManager(alias.ProductId) && sensor.Root?.Id is { } rootId && user.IsManager(rootId))
                             {
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0"
                                         title="Stop routing this path to the sensor"

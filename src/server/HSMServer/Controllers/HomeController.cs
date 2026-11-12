@@ -278,12 +278,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetMoveSensorsModal([FromQuery] string[] ids)
         {
-            // Every selected sensor goes to the server, managed or not: the
-            // move answers "no rights" for the ones the user may not move
-            // instead of the modal silently dropping them.
+            // Every selected sensor the user can see goes to the server, managed
+            // or not: the move answers "no rights" for the ones the user may not
+            // move instead of the modal silently dropping them. A sensor out of
+            // the user's sight is not shown at all (#1722 review).
             var sensors = (ids ?? [])
                 .Select(id => _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(id)))
-                .Where(s => s?.Root is not null)
+                .Where(s => s?.Root is not null && CurrentUser.IsProductAvailable(s.Root.Id))
                 .ToList();
 
             if (sensors.Count == 0)
