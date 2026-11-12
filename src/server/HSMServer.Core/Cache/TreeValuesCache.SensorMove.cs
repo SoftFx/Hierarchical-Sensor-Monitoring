@@ -230,37 +230,65 @@ namespace HSMServer.Core.Cache
         // CanAddSensors) are asked only when there is something to move, and a key that may not
         // add sensors keeps re-registering its existing ones. Nothing here fails the registration:
         // every refusal is logged and the result is Ok — a stale or invalid old path must not
-        // stop the collector from registering its new one.
+        // stop the collector from registering its new one. A blocked sensor at an old path never
+        // moves: it would win the merge and block the live sensor (#1724 review).
         public async Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path,
             IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token = default)
+        {
+            try
+            {
+                await ApplyPreviousPathsCoreAsync(key, productId, path, previousPaths, type, initiator, token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Previous paths of {path} not applied");
+            }
+
+            return TaskResult.Ok;
+        }
+
+        // At most this many entries of one registration are looked at: each costs a path check
+        // and a lookup before any permission check runs.
+        internal const int MaxPreviousPaths = 32;
+
+        private async Task ApplyPreviousPathsCoreAsync(Guid key, Guid productId, string path,
+            IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token)
         {
             var target = new SensorPathCheck(productId, path ?? string.Empty);
 
             if (!target.TryCheckRequest(out var error))
-                return TaskResult.Ok; // the registration itself reports the invalid path
+                return; // the registration itself reports the invalid path
 
             var found = new List<(string Path, BaseSensorModel Sensor)>();
+            var seen = new HashSet<Guid>();
+            var listed = 0;
 
             foreach (var raw in previousPaths ?? [])
             {
                 if (string.IsNullOrWhiteSpace(raw))
                     continue;
 
+                if (++listed > MaxPreviousPaths)
+                {
+                    _logger.Warn($"Previous paths of {target.Path}: only the first {MaxPreviousPaths} of {previousPaths.Count} are applied");
+                    break;
+                }
+
                 var previous = new SensorPathCheck(productId, raw);
 
                 if (previous.TryCheckRequest(out _) && !string.Equals(previous.Path, target.Path, StringComparison.Ordinal) &&
-                    TryGetSensorFromCache(productId, previous.Path, out var old) && found.TrueForAll(f => f.Sensor.Id != old.Id))
+                    TryGetSensorFromCache(productId, previous.Path, out var old) && seen.Add(old.Id))
                     found.Add((previous.Path, old));
             }
 
             if (found.Count == 0)
-                return TaskResult.Ok;
+                return;
 
             if (!TryCheckKeyWritePermissions(key, target.PathParts, out error) ||
                 !GetAccessKeyModel(key).IsValid(KeyPermissions.CanAddSensors, out error))
             {
                 _logger.Warn($"Previous paths of {target.Path} not applied: {error}");
-                return TaskResult.Ok;
+                return;
             }
 
             // The reference type: the registration's own, else the sensor already at the target,
@@ -279,13 +307,17 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
+                if (old.State is SensorState.Blocked)
+                {
+                    _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: the sensor there is blocked");
+                    continue;
+                }
+
                 var result = await MoveSensorAsync(old.Id, productId, target.Path, SensorMoveConflict.Merge, initiator, token);
 
                 if (!result.IsOk)
                     _logger.Warn($"Previous path {previousPath} of {target.Path} not applied: {result.Outcome} {result.Error}");
             }
-
-            return TaskResult.Ok;
         }
 
         private bool TryGetOccupant(Guid sensorId, Guid productId, string destinationPath, out BaseSensorModel occupant, out string path)

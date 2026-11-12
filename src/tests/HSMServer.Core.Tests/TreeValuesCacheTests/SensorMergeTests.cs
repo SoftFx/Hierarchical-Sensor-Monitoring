@@ -405,6 +405,50 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_OfABlockedSensor_IsSkipped_AndTheLiveSensorStays()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var retired = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/cpu", start);
+            var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new/cpu", start.AddHours(1));
+
+            var blocked = await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+            {
+                Id = retired.Id,
+                State = SensorState.Blocked,
+            });
+            Assert.True(blocked.IsOk, blocked.Error);
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/old/cpu", retired.Path);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new/cpu", out var owner));
+            Assert.Same(live, owner);
+            Assert.NotEqual(SensorState.Blocked, live.State);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_BeyondTheLimit_AreNotLookedAt()
+        {
+            var root = Unique();
+            var late = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/late", DateTime.UtcNow.AddMinutes(-1));
+
+            var list = Enumerable.Range(0, HSMServer.Core.Cache.TreeValuesCache.MaxPreviousPaths).Select(i => $"{root}/missing{i}").ToList();
+            list.Add($"{root}/late");
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                list, SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/late", late.Path);
+        }
+
+
         private static string Unique() => $"m{Guid.NewGuid():N}"[..12];
 
         private Task<BaseSensorModel> CreateAsync(Guid productId, Guid key, string path, params DateTime[] times) =>
