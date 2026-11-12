@@ -277,6 +277,10 @@ extern "C" {
     /// Switch from the in-memory recording sender to the real libcurl transport. Call before Start.
     pub fn hsm_collector_use_http_transport(collector: *mut hsm_collector_t) -> hsm_result_t;
 
+    /// Switch to the collector session: one WebSocket instead of a request per batch, and nothing
+    /// over the HTTP routes. Call before Start. Since the native collector 0.12.0.
+    pub fn hsm_collector_use_session_transport(collector: *mut hsm_collector_t) -> hsm_result_t;
+
     pub fn hsm_collector_set_logger(
         collector: *mut hsm_collector_t,
         callback: hsm_log_callback_t,

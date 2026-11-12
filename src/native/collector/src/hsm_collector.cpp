@@ -39,6 +39,7 @@
 #if defined(HSM_COLLECTOR_HTTP)
 #include "hsm_http_endpoints.hpp"
 #include "hsm_http_transport.hpp"
+#include "hsm_session_transport.hpp"
 #endif
 
 namespace
@@ -2702,6 +2703,86 @@ namespace
             endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
             sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
             send_wire_ = true;
+            use_session_ = false;
+        }
+
+        // The collector session as the transport (#1668): value batches and registrations travel as
+        // frames on one WebSocket and nothing goes over the HTTP routes. Same install contract as
+        // UseHttpTransport (before Start, one transport per collector). The session itself is
+        // opened by Start and closed by Stop; here only the choice is recorded, because the
+        // upgrade's headers include what the host may still set (extra request headers).
+        void UseSessionTransport()
+        {
+            http_transport_.reset();
+            endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
+            sender_ = [this](std::vector<std::string>& batch) { return SessionSendBatch(batch); };
+            send_wire_ = true;
+            use_session_ = true;
+        }
+
+        // Called by Start, before anything is sent. A new transport object for every run: the
+        // previous one, if any, was stopped by the Stop that preceded this Start.
+        void StartSessionTransport()
+        {
+            if (!use_session_)
+                return;
+
+            hsm::http::SessionOptions options;
+            // "<scheme>://host[:port]/api/sensors" -> "ws[s]://host[:port]/api/sensors/session".
+            options.url = endpoints_.connection_address + "/session";
+            if (options.url.compare(0, 4, "http") == 0)
+                options.url.replace(0, 4, "ws");
+            options.verify_peer = !allow_untrusted_certificate_;
+            options.headers = {
+                { "Key", access_key_ },
+                { "ClientName", client_name_ },
+                { "X-Collector-Kind", "native" },
+                { "X-Collector-Version", HSM_COLLECTOR_VERSION_STRING },
+            };
+            for (const auto& [hdr_name, hdr_value] : extra_request_headers_)
+                options.headers.push_back({ hdr_name, hdr_value });
+            options.log = [this](hsm::http::SessionLogLevel level, const std::string& message) {
+                if (level == hsm::http::SessionLogLevel::Error)
+                    LogError(message);
+                else
+                    LogMessage(level == hsm::http::SessionLogLevel::Info ? HSM_LOG_LEVEL_INFO : HSM_LOG_LEVEL_DEBUG, message);
+            };
+
+            session_transport_ = std::make_unique<hsm::http::SessionTransport>(std::move(options));
+            session_transport_->Start();
+        }
+
+        // One request of the registration path, over whichever transport is installed, in the
+        // shape the HTTP transport answers with. On a session the status is the ack's.
+        hsm::http::HttpResponse PostCommands(const std::string& body, const std::vector<hsm::http::HttpHeader>& headers, int64_t timeout_ms)
+        {
+            if (!use_session_)
+                return http_transport_->Post(endpoints_.CommandsList(), body, headers, timeout_ms);
+
+            hsm::http::HttpResponse response;
+            if (!session_transport_)
+            {
+                response.error = "no session";
+                return response;
+            }
+            // The caller has already split a batch down to what fits. What is left too large is
+            // one registration that cannot fit a frame on its own: it has no way to the server and
+            // trying again does not change that, so it is answered here as the 413 an HTTP server
+            // would give, which the caller treats as final. Zero room means no session, which is
+            // the transport's to say.
+            const size_t room = session_transport_->MaxBodyBytes();
+            if (room != 0 && body.size() > room)
+            {
+                response.transport_ok = true;
+                response.status_code = 413;
+                response.error = "the registration is larger than a collector session frame";
+                return response;
+            }
+            const auto result = session_transport_->Request("commands", body, timeout_ms);
+            response.transport_ok = result.acked;
+            response.status_code = result.status;
+            response.error = result.error;
+            return response;
         }
 
         // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
@@ -2737,6 +2818,15 @@ namespace
             if (sensors.empty())
                 return RegistrationPost::Accepted;
 
+            // No session: nothing can be sent, so nothing is serialized. The session reports its
+            // own state; this is the retry the caller already does for an unreachable server.
+            if (use_session_ && (!session_transport_ || !session_transport_->IsUp()))
+            {
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Not registered " + std::to_string(sensors.size()) +
+                                                    " sensor(s): no collector session; retrying on the next send cycle.");
+                return RegistrationPost::Retry;
+            }
+
             std::vector<uint64_t> versions;
             versions.reserve(sensors.size());
             std::string body = "[";
@@ -2749,6 +2839,24 @@ namespace
                 versions.push_back(snapshot.second);
             }
             body += "]";
+
+            // A batch that does not fit one session frame is posted in halves, each acknowledged
+            // and recorded on its own. One registration that does not fit on its own goes on and
+            // is answered 413 by PostCommands.
+            if (use_session_ && sensors.size() > 1)
+            {
+                const size_t room = session_transport_->MaxBodyBytes();
+                if (room != 0 && body.size() > room)
+                {
+                    const auto middle = sensors.begin() + static_cast<std::ptrdiff_t>(sensors.size() / 2);
+                    const RegistrationPost first = PostRegistrationsWire({ sensors.begin(), middle }, runtime);
+                    const RegistrationPost second = PostRegistrationsWire({ middle, sensors.end() }, runtime);
+                    if (first == RegistrationPost::Retry || second == RegistrationPost::Retry)
+                        return RegistrationPost::Retry;
+                    return first == RegistrationPost::Rejected || second == RegistrationPost::Rejected ? RegistrationPost::Rejected
+                                                                                                       : RegistrationPost::Accepted;
+                }
+            }
 
             const std::vector<hsm::http::HttpHeader> headers = {
                 { "Key", access_key_ },
@@ -2769,7 +2877,7 @@ namespace
                 timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
             }
 
-            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers, timeout_ms);
+            const auto response = PostCommands(body, headers, timeout_ms);
             // Name a single sensor by path; the connect batch by count.
             const std::string what = sensors.size() == 1 ? "sensor " + sensors.front()->Path()
                                                          : std::to_string(sensors.size()) + " sensor(s)";
@@ -2781,8 +2889,14 @@ namespace
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
                 const bool retry = response.status_code <= 0 || response.status_code >= 500;
-                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
-                         (retry ? "; retrying on the next send cycle." : "."));
+                const std::string message = "Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
+                                            (retry ? "; retrying on the next send cycle." : ".");
+                // On a session "no ack" is the state of the session, which the session reports
+                // itself when it changes; repeating it for every registration attempt is noise.
+                if (use_session_ && !response.transport_ok)
+                    LogMessage(HSM_LOG_LEVEL_DEBUG, message);
+                else
+                    LogError(message);
                 return retry ? RegistrationPost::Retry : RegistrationPost::Rejected;
             }
 
@@ -2980,6 +3094,10 @@ namespace
             StopServiceStatusSampler();
             StopSelfMonitor();
             StopWorker();
+#if defined(HSM_COLLECTOR_HTTP)
+            if (session_transport_)
+                session_transport_->Stop(0);
+#endif
         }
 
         // Start: Stopped -> Starting -> Running. Idempotent (Running/Starting -> no-op),
@@ -3061,6 +3179,11 @@ namespace
             // builds (conformance) never set send_wire_, so this is a no-op there. A server that is
             // down or restarting (a 5xx from its proxy) gets the batch again on every worker cycle
             // until it accepts it (#1515), like the managed command queue's re-enqueue.
+            // On a session nothing can be sent before it is up, and Start does not wait for it:
+            // the registration batch below then fails at once and is retried by the worker on
+            // every cycle until the session accepts it, like a server that is down over HTTP.
+            StartSessionTransport();
+
             if (send_wire_)
                 PostRegistrationsOrRetry(sensors_snapshot, /*runtime=*/false);
 #endif
@@ -3194,6 +3317,13 @@ namespace
             // the C# stop flush.
             StopWorker();
             DrainQueueOnStop(terminal);
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // After the drain, which used the session if it was up. A graceful stop gives the
+            // close handshake a moment, so the server sees a normal closure.
+            if (session_transport_)
+                session_transport_->Stop(terminal ? 0 : kSessionCloseLingerMs);
+#endif
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -4018,6 +4148,18 @@ namespace
                 if (!CanAcceptDataLocked())
                     return;
             }
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // The session cannot carry a file value yet (it needs an op of its own), and there is
+            // no HTTP to send it over instead. Refused here, before the queue: queued, it would be
+            // sent, refused and re-queued for ever.
+            if (use_session_)
+            {
+                LogError("A file value was not sent: the collector session transport cannot carry file values yet.");
+                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
+#endif
 
             Enqueue(std::move(json), /*is_file=*/true);
 
@@ -5546,6 +5688,8 @@ namespace
             // xfer-abort reads a lock-free atomic, so this is safe without the hang/queue locks.
             if (http_transport_)
                 http_transport_->Cancel();
+            if (session_transport_)
+                session_transport_->Cancel();
 #endif
 
             {
@@ -5568,6 +5712,8 @@ namespace
             // transport user left is the stop drain on this thread.
             if (http_transport_)
                 http_transport_->ResetCancel();
+            if (session_transport_)
+                session_transport_->ResetCancel();
 #endif
         }
 
@@ -5720,6 +5866,7 @@ namespace
                     batch_bytes += batch.size() + 1;
                 }
 
+                batch_handled_ = 0;
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
@@ -5730,15 +5877,25 @@ namespace
 
                 if (!sent)
                 {
+                    // A sender that delivers a batch in parts (the session, when the batch does
+                    // not fit one frame) says how many leading values are settled; only the rest
+                    // goes back, or the delivered part would arrive twice.
+                    // A value the sender emptied is settled too (dropped and counted by it).
+                    const size_t handled = (std::min)(batch_handled_, batch.size());
                     if (clear_remainder_on_failure)
                     {
-                        const size_t dropped = batch.size() + queue_.size();
+                        size_t dropped = queue_.size();
+                        for (size_t index = handled; index < batch.size(); ++index)
+                            dropped += batch[index].empty() ? 0 : 1;
                         queue_.clear();
                         return dropped;
                     }
 
-                    for (size_t index = 0; index < batch.size(); ++index)
-                        ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    for (size_t index = handled; index < batch.size(); ++index)
+                    {
+                        if (!batch[index].empty())
+                            ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    }
 
                     return 0;
                 }
@@ -5881,6 +6038,87 @@ namespace
         }
 #endif
 
+#if defined(HSM_COLLECTOR_HTTP)
+        // The data queue's batch as `list` frames on the session. A batch that does not fit one
+        // frame is split; every frame is acknowledged on its own. The result is the HTTP rule:
+        // 2xx is delivered, anything else (or no ack) sends the batch back to the queue.
+        bool SessionSendBatch(std::vector<std::string>& batch)
+        {
+            int64_t timeout_ms = request_timeout_ms_;
+            if (stop_drain_active_)
+            {
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           stop_drain_deadline_ - std::chrono::steady_clock::now())
+                                           .count();
+                if (remaining <= 0)
+                    return false;
+
+                timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
+            }
+
+            const size_t room = session_transport_ ? session_transport_->MaxBodyBytes() : 0;
+            if (room == 0)
+            {
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Not sent " + std::to_string(batch.size()) + " value(s): no collector session.");
+                return false;
+            }
+
+            size_t index = 0;
+            while (index < batch.size())
+            {
+                // Everything before this frame was acknowledged, or dropped and counted.
+                batch_handled_ = index;
+                std::string body = "[";
+                size_t count = 0;
+                while (index < batch.size())
+                {
+                    const std::string& element = batch[index];
+                    // "[" + element + "]" must fit. A value that cannot fit a frame on its own
+                    // has no way to the server: dropped and counted, or it would come back with
+                    // every retry and block everything behind it.
+                    if (element.size() + 2 > room)
+                    {
+                        LogError("Dropped a value of " + std::to_string(element.size()) +
+                                 " bytes: it is larger than a collector session frame (" + std::to_string(room) + " bytes).");
+                        queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                        // Emptied: settled, whatever happens to the frame around it (the
+                        // dispatcher neither re-enqueues nor counts an emptied value).
+                        batch[index].clear();
+                        ++index;
+                        continue;
+                    }
+                    if (body.size() + element.size() + 2 > room)
+                        break;
+                    if (count != 0)
+                        body += ',';
+                    body += element;
+                    ++count;
+                    ++index;
+                }
+                if (count == 0)
+                    continue;
+                body += ']';
+
+                const auto result = session_transport_->Request("list", body, timeout_ms);
+                if (!result.IsSuccess())
+                {
+                    const std::string msg = "Failed to send " + std::to_string(count) + " value(s) on the collector session: " +
+                                            (result.acked ? "status " + std::to_string(result.status) : std::string("no ack")) +
+                                            (result.error.empty() ? "" : " (" + result.error + ")");
+                    // A refusal by the server is an error worth a line. "No ack" is the state of
+                    // the session, which the session reports itself, and a send cancelled by the
+                    // stop is expected.
+                    if (result.acked)
+                        LogError(msg);
+                    else
+                        LogMessage(HSM_LOG_LEVEL_DEBUG, msg);
+                    return false;
+                }
+            }
+            return true;
+        }
+#endif
+
         bool TryConsumeFailToken()
         {
             auto current = fail_next_.load();
@@ -5940,6 +6178,10 @@ namespace
         // send path during it; the worker is joined by then and only starts again after these are
         // cleared (thread creation/join carry the happens-before), so no lock is needed.
         bool stop_drain_active_ = false;
+        // Set by a sender that delivers a batch in parts: how many leading values of the batch in
+        // flight are settled (delivered, or dropped and counted). Read by the dispatcher after a
+        // failed send; only the sending thread touches it.
+        size_t batch_handled_ = 0;
         std::chrono::steady_clock::time_point stop_drain_deadline_{};
 
         // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
@@ -6005,6 +6247,11 @@ namespace
         bool send_wire_ = false;
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
+        // The collector session, when it is the transport (UseSessionTransport). Created by Start
+        // and stopped by Stop; the pointer itself changes only while no sending thread runs.
+        std::unique_ptr<hsm::http::SessionTransport> session_transport_;
+        bool use_session_ = false;
+        static constexpr int64_t kSessionCloseLingerMs = 1000;
         hsm::http::Endpoints endpoints_;
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
         std::mutex pending_registrations_mutex_;
@@ -7101,6 +7348,25 @@ extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collec
     if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
         return HSM_RESULT_INVALID_STATE;
     collector->impl->UseHttpTransport();
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+// Make the collector session the transport (#1668): one WebSocket to the server instead of the
+// HTTP routes. Same contract as hsm_collector_use_http_transport: before Start, and
+// HSM_RESULT_INVALID_STATE when the library was built without HSM_COLLECTOR_HTTP. Whether a
+// session can actually be opened (the server has sessions, this libcurl has WebSocket) is found
+// out at Start and reported through the log; the collector never switches to HTTP by itself.
+extern "C" hsm_result_t hsm_collector_use_session_transport(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(HSM_COLLECTOR_HTTP)
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
+    collector->impl->UseSessionTransport();
     return HSM_RESULT_OK;
 #else
     return HSM_RESULT_INVALID_STATE;

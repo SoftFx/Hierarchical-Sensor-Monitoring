@@ -198,6 +198,18 @@ impl Collector {
         })
     }
 
+    /// Switch to the collector session: one WebSocket to the server's session endpoint carries
+    /// values and registrations, and nothing is sent over the HTTP routes. There is no fallback to
+    /// them: while no session is up the values wait in the queue. Must be called before
+    /// [`Collector::start`].
+    pub fn use_session_transport(&self) -> Result<()> {
+        let _guard = self.lock();
+        // SAFETY: valid handle; the ABI validates the lifecycle state itself.
+        self.check("use session transport", unsafe {
+            sys::hsm_collector_use_session_transport(self.handle)
+        })
+    }
+
     /// Install the Linux `/proc` metric-source factory so the default host sensors report live
     /// values. Must be called before [`Collector::start`].
     ///

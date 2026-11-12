@@ -316,6 +316,10 @@ Linux is the only supported target. The initiative is
   against `$CREDENTIALS_DIRECTORY`), and every in-process copy is wiped after the collector takes it.
 - **Transport is HTTPS-only.** Config validation accepts `https://<host>` or a bare host; the wrapper
   deliberately does not expose the ABI's `allow_untrusted_server_certificate`.
+- **`hsm.transport` picks requests or the collector session (#1668, probe 0.11.0).** `http` (default)
+  or `session`; anything else is a config error, never a silent default. On `session` the collector
+  keeps one `wss://` WebSocket to the session endpoint, sends nothing over the HTTP routes and does
+  not fall back to them. Collector side: `aicontext/features/collector/http-client/feature.md`.
 - **Values dropped by the collector's bounded stop drain are logged at WARN** (the collector reports
   them at debug), per rule #8.
 - **A release is exactly the source it names.** The `probe-v*` tag, the workspace version, the

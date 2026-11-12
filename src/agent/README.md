@@ -71,6 +71,7 @@ Default location: `%ProgramData%\HSM Agent\config.json` (see
 | `server.port` | `443` | HSM server port |
 | `server.accessKey` | — (required) | per-product access key |
 | `server.allowUntrustedCertificate` | `false` | accept a self-signed server cert |
+| `server.transport` | `"http"` | `"http"`: a request per batch. `"session"`: one WebSocket to the collector session endpoint, nothing over the HTTP routes and no fallback to them. Any other value refuses to start. On `session` server directives do not arrive yet (they ride on HTTP responses); the periodic update check still runs |
 | `identity.computerName` | `"auto"` | `"auto"`/blank → the machine host name |
 | `identity.module` | `"HSM Agent"` | module segment for module sensors |
 | `sensors.computer` | `true` | umbrella host bundle (CPU/RAM/disks/network/OS) |
