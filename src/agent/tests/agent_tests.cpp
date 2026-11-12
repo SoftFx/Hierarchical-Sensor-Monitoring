@@ -467,6 +467,25 @@ namespace
         Check(!moved.sensors_network, "a sensor flag changed since start is kept");
         CheckEq(moved.computer_name, std::string("BUILD01"), "the identity is kept");
 
+        // The next check after a restart helper that failed to start: the file already says 443 for
+        // the probed host. That is still a move (the restart is retried), not "changed since start",
+        // and the file is not rewritten.
+        std::string already_moved;
+        {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            already_moved = ss.str();
+        }
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) == MoveOutcome::Moved,
+              "a file already moved to 443 is still a move, so the restart is retried");
+        {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            CheckEq(ss.str(), already_moved, "a file already on 443 is not rewritten");
+        }
+
         // The file now names another port or another host than the probes ran against: the
         // operator's choice stands, the file is not touched.
         const std::string repointed_port = R"({ "server": { "address": "https://hsm.example", "port": 8443, "accessKey": "k" } })";

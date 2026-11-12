@@ -104,7 +104,7 @@ namespace hsm::agent
 
     enum class MoveOutcome
     {
-        Moved,             ///< the file now says port 443
+        Moved,             ///< the file now says port 443 (also when it already did: the restart is still due)
         ChangedSinceStart, ///< the file no longer names the probed address and port: left as it is
         Failed,            ///< the file could not be read, parsed or written: `error` says why
     };

@@ -293,7 +293,9 @@ there: the agent is the only place that can say what is wrong, and it must not f
   start and "nothing answers" notices say so instead of promising a self-move.
 - **What the move writes.** `MoveConfigToStandardPort` reads `config.json` back and changes only the
   port, and only while the file still names the address and port the probes ran against; an operator
-  who has since pointed it elsewhere is left alone (hourly Error: restart to apply). Every setting the
+  who has since pointed it elsewhere is left alone (hourly Error: restart to apply). A file that already
+  says 443 for the probed host counts as moved without a rewrite, so a restart helper that failed to
+  start is retried at the next check. Every setting the
   config models keeps the value the file has now (a new key, a directive's flag whose restart failed);
   the file is regenerated from the parsed config, like the directive rewrite, so keys the parser does
   not know and the layout are not kept. A file that does not load is left untouched and the manual fix

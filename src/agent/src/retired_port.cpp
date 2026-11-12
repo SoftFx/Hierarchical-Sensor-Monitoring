@@ -102,7 +102,14 @@ namespace hsm::agent
         // The probes ran against the values the agent started with. An operator who has since
         // pointed the file elsewhere (another port, another host) decides; the agent does not
         // overwrite a choice it never probed.
-        if (current.port != probed_port || current.server_address != probed_address)
+        if (current.server_address != probed_address)
+            return MoveOutcome::ChangedSinceStart;
+        // Already on 443 for the probed host: an earlier check wrote it and the restart helper
+        // failed to start (or an operator made the same move). Nothing to write; the caller still
+        // has to restart, so this counts as moved and the restart is retried.
+        if (current.port == kStandardServerPort)
+            return MoveOutcome::Moved;
+        if (current.port != probed_port)
             return MoveOutcome::ChangedSinceStart;
 
         current.port = kStandardServerPort;
