@@ -473,6 +473,7 @@ mod tests {
                 crate::probe_only::disks::diskstats::tests::GARAGE_DISKSTATS,
             );
             crate::probe_only::disks::diskstats::tests::garage_sysfs(&tree);
+            crate::probe_only::network::tests::fake_host(&tree);
             Self { tree }
         }
 
@@ -499,6 +500,7 @@ mod tests {
                 disk_names: None,
                 disk_written: None,
                 boot_id: std::path::PathBuf::from("/nonexistent/boot_id"),
+                proc_net: self.tree.0.join("proc-net"),
             }
         }
     }
@@ -507,6 +509,10 @@ mod tests {
     /// 2026-09-24): computer-level, so they sit under `.computer/` at the product root (or under
     /// `computerName` when it is set), not the module.
     const PROBE_ONLY_SET: &[&str] = &[".computer/CPU temperature", ".computer/Logical cores"];
+
+    /// The network sensors registered before Start (#1711): the Windows catalog's three TCP rows.
+    /// The per-interface speed bars register at runtime, so they are not in any pinned set.
+    const NETWORK_SET: &[&str] = crate::probe_only::network::tests::TCP_SET;
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
@@ -680,6 +686,7 @@ mod tests {
         expected.extend_from_slice(PROBE_ONLY_SET);
         expected.extend_from_slice(DISKS_GARAGE_SET);
         expected.extend_from_slice(DOCKER_GARAGE_SET);
+        expected.extend_from_slice(NETWORK_SET);
         expected.sort_unstable();
         let registered = registered_paths_with(&ProbeConfig::default(), true);
         assert_eq!(registered, expected);
@@ -690,6 +697,7 @@ mod tests {
                 .iter()
                 .chain(DISKS_GARAGE_SET)
                 .chain(DOCKER_GARAGE_SET)
+                .chain(NETWORK_SET)
                 .all(|path| !parity.contains(path)),
             "a probe-only sensor must never shadow a parity sensor"
         );
@@ -705,6 +713,7 @@ mod tests {
         config.host_sensors.enabled = false;
         config.disks.enabled = Some(false);
         config.docker.enabled = false;
+        config.network.enabled = false;
         let mut parity = parity_set();
         parity.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), parity);
@@ -713,6 +722,7 @@ mod tests {
         config.host_sensors.cpu_temperature = false;
         config.disks.enabled = Some(false);
         config.docker.enabled = false;
+        config.network.enabled = false;
         let mut expected = parity_set();
         expected.push(".computer/Logical cores");
         expected.sort_unstable();
@@ -722,6 +732,7 @@ mod tests {
         let mut config = ProbeConfig::default();
         config.host_sensors.disk = Some(false);
         config.docker.enabled = false;
+        config.network.enabled = false;
         let mut expected = parity_set();
         expected.extend_from_slice(PROBE_ONLY_SET);
         expected.sort_unstable();
@@ -733,6 +744,7 @@ mod tests {
         config.host_sensors.enabled = false;
         config.disks.enabled = Some(true);
         config.docker.enabled = false;
+        config.network.enabled = false;
         config.disks.exclude = vec!["/mnt/*".into()];
         config.disks.write_speed = false;
         let mut expected = parity_set();
@@ -749,8 +761,19 @@ mod tests {
         // 0.4.0), so an upgraded config does not switch them back on.
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
+        config.network.enabled = false;
         let mut expected = parity_set();
         expected.extend_from_slice(DOCKER_GARAGE_SET);
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
+
+        // The network sensors have their own switch (#1711); only the TCP sensors register before
+        // Start, the per-interface speed ones at runtime.
+        let mut config = ProbeConfig::default();
+        config.host_sensors.enabled = false;
+        config.docker.enabled = false;
+        let mut expected = parity_set();
+        expected.extend_from_slice(NETWORK_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
     }

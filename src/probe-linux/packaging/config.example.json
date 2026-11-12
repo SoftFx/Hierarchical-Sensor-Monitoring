@@ -27,6 +27,10 @@
       "samplePeriodSec": 60,
       "oomLatchHours": 24,
       "exclude": []
+    },
+    "network": {
+      "enabled": true,
+      "interfaces": []
     }
   },
   "topCpu": {

@@ -1766,6 +1766,7 @@ pub mod tests {
             disk_names: None,
             disk_written: None,
             boot_id: PathBuf::from("/nonexistent/boot_id"),
+            proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
@@ -1836,6 +1837,7 @@ pub mod tests {
             disk_names: None,
             disk_written: None,
             boot_id: PathBuf::from("/nonexistent/boot_id"),
+            proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
@@ -1948,6 +1950,7 @@ pub mod tests {
             disk_names: None,
             disk_written: Some(tree.0.join(written::FILE_NAME)),
             boot_id: tree.0.join("boot_id"),
+            proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         // sdc wrote 2 000 000 sectors (1.024 GB) since the first read; the HDDs nothing.
         let later = diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 685671624 ");
@@ -2131,6 +2134,7 @@ pub mod tests {
             disk_names: None,
             disk_written: Some(tree.0.join(written::FILE_NAME)),
             boot_id: tree.0.join("boot_id"),
+            proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         (tree, environment)
     }
@@ -2622,6 +2626,7 @@ pub mod tests {
             disk_names: None,
             disk_written: None,
             boot_id: PathBuf::from("/nonexistent/boot_id"),
+            proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         let collector = test_collector();
         let logger = Logger::new(Level::Error, None);

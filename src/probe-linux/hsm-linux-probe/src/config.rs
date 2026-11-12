@@ -253,6 +253,30 @@ pub struct ProbeConfig {
     pub disks: DisksConfig,
     #[serde(default)]
     pub docker: DockerConfig,
+    #[serde(default)]
+    pub network: NetworkConfig,
+}
+
+/// `probe.network { enabled, interfaces }`: the network sensors (#1711). Absent = on, physical
+/// interfaces only.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfig {
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+    /// Interface-name patterns (`*` = any run of characters) whose speed is reported, e.g.
+    /// `["wlp*", "br0"]`. Empty = every physical interface (one with `/sys/class/net/<if>/device`).
+    #[serde(default)]
+    pub interfaces: Vec<String>,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interfaces: Vec::new(),
+        }
+    }
 }
 
 /// `probe.disks { enabled, exclude, writeSpeed }`: the per-filesystem disk sensors (#1481).
@@ -462,6 +486,7 @@ impl Config {
         }
         self.probe.docker.validate()?;
         self.probe.disks.validate()?;
+        self.probe.network.validate()?;
         self.top_cpu.validate()?;
         self.top_disk_io.validate()?;
         Ok(())
@@ -481,6 +506,22 @@ impl DisksConfig {
         {
             return Err(ConfigError::invalid(format!(
                 "probe.disks.exclude must not contain an empty pattern (got '{bad}')"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl NetworkConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(bad) = self
+            .interfaces
+            .iter()
+            .find(|pattern| pattern.trim().is_empty() || pattern.contains('/'))
+        {
+            return Err(ConfigError::invalid(format!(
+                "probe.network.interfaces entries are interface-name patterns with '*' \
+                 wildcards (got '{bad}')"
             )));
         }
         Ok(())
@@ -641,6 +682,8 @@ mod tests {
         assert_eq!(disks.enabled, Some(true));
         assert!(disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
+        assert!(example.contains("\"network\""));
+        assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
         // The topCpu block is spelled out with the agent's defaults, and off.
         assert!(example.contains("\"topCpu\""));
         let top = &config.top_cpu;
@@ -679,6 +722,31 @@ mod tests {
         let disks = &config.probe.disks;
         assert!(disks.enabled.is_none() && disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
+        assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
+    }
+
+    #[test]
+    fn the_network_section_maps_and_rejects_bad_patterns() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "interfaces": ["wlp*", "br0"] } } }"#;
+        let network = Config::parse(text).expect("parse").probe.network;
+        assert!(network.enabled);
+        assert_eq!(network.interfaces, vec!["wlp*", "br0"]);
+
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "enabled": false } } }"#;
+        assert!(!Config::parse(text).expect("parse").probe.network.enabled);
+
+        for bad in [r#"[" "]"#, r#"["eth0/1"]"#] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "network": {{ "interfaces": {bad} }} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

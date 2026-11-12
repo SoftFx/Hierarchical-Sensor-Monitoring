@@ -120,7 +120,7 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 Sensors that exist **only in this probe** (owner decisions of 2026-09-24/29, #1476, #1481, #1416).
 They are pinned separately from the parity set by
 `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` (`PROBE_ONLY_SET` +
-`DISKS_GARAGE_SET` + `DOCKER_GARAGE_SET`, nothing more, nothing less, the disks and Docker sets
+`DISKS_GARAGE_SET` + `DOCKER_GARAGE_SET` + `NETWORK_SET`, nothing more, nothing less, the disks and Docker sets
 built from garage-server captures), and their registration shape and alerts by
 `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts` and
 `docker::tests::prime_registers_the_whole_tree_before_start_with_alerts`.
@@ -574,6 +574,63 @@ the baseline saw.
 **Cost:** one record per minute per posted name — ≈ 1 440 records/day for each process that stays
 at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
 is one read of `/proc/stat` plus one small read per process per minute.
+
+### Network (#1711)
+
+The Windows hosts' `.computer/Network/…` sensors on the same paths: the three TCP counters and the
+per-interface speed bars (`probe_only/network/`). **On unless `probe.network.enabled` is `false`.**
+
+**Placement.** Probe-only acquisition, by the owner's rule for this epic (as for top CPU): the
+collector reads these counters only on Windows (PDH, `GetIfTable2`) and the managed collector has
+none on Unix. Root rule #10 binds one sensor path to one acquisition mechanism *per OS* (the two
+collectors on the same OS); across OSes the meaning carries over: both sides read the RFC 1213
+counters. Linux keeps one TCP MIB for IPv4 and IPv6 (`/proc/net/snmp6` has no TCP row), so
+`/proc/net/snmp` already holds the sum Windows adds up from `\TCPv4` and `\TCPv6`. A managed Unix
+implementation, if ever written, must read the same files.
+
+**The TCP sensors are the collector's catalog rows**, the one exception to "never in the shared
+catalog". The probe registers them through `hsm_collector_add_default_sensor`
+(`Collector::network_counter_sensor`), so their registration is the Windows one byte for byte,
+and it only posts the values. On Linux no metric source binds these rows, so nothing else feeds
+them. That keeps [the one rule](#the-one-rule-that-shapes-everything-here): the collector has the
+sensor but no Linux acquisition for it.
+
+| Path (`.computer/Network/…`) | Type · unit | Period | TTL | Windows source | Linux source | Records/day |
+|---|---|---|---|---|---|---|
+| `Connections Established Count` | Int | every 60 s | 5 min | PDH `Connections Established` | `/proc/net/snmp` `Tcp: CurrEstab` | 1 440 |
+| `Connection Failures Count` | Int | every 60 s, **only when non-zero** | never | PDH `Connection Failures`, delta | `Tcp: AttemptFails`, delta | ≤ 1 440 |
+| `Connections Reset Count` | Int | every 60 s, **only when non-zero** | never | PDH `Connections Reset`, delta | `Tcp: EstabResets`, delta | ≤ 1 440 |
+| `<iface>/Received MB,sec`, `<iface>/Sent MB,sec` | DoubleBar · `MBytes_sec` (1 MB = 1024² B), EMA | a sample every 10 s into a 1-min bar | 5 min | `GetIfTable2` octets | `/proc/net/dev` octets | 1 440 per busy direction |
+
+All of them have KeepHistory 90 days and Grafana on, and none has an alert.
+
+**Deltas** follow the managed `ConnectionsDifferenceSensor`:
+- The first read is the baseline, and nothing is posted for a minute in which the counter did not move. That is why these two have TTL "never". `Connections Established Count` comes from the same file every minute, so it goes to Timeout when the source stops.
+- A counter that went down becomes the new baseline.
+- A failed read keeps the baseline, so the next good read posts what accumulated.
+
+**Speed** follows `RunNetworkSpeedLoop`:
+- A direction gets a sensor the first time it moves at least 0.005 MB/s (the smallest value that does not show as 0.00), and slower trickle is not posted.
+- An interface seen for the first time, or one whose counter went down, gives no value for that interval.
+- A failed read drops the baseline, so no spike is computed over the gap.
+- Each sensor's description names its interface.
+
+Two differences from Windows, both because a custom bar created through the C ABI cannot express them:
+- The probe posts a bar when it closes; Windows also posts the open bar every 15 s. The stored minute is the same.
+- The probe registers `Alerts: null`; Windows sends `[]`. Both mean no alert.
+
+**Interfaces.** Windows reports every Up, non-loopback interface except NDIS filter modules. Here,
+by default, only **physical** ones (those with `/sys/class/net/<if>/device`): `wlp3s0`, `enp2s0`, a
+USB adapter. That leaves out loopback, `docker0`, `br-…`, `veth…`, tunnels and bonds. A Docker
+host's `veth` pairs get a new name every time a container is recreated, and each name would leave a
+sensor behind to time out. `probe.network.interfaces` (name patterns, `*` = any run of
+characters) replaces that rule, for example `["wlp*", "br0"]`. Loopback is never reported. At most
+32 interfaces get sensors; the next ones are logged once at WARN. Names are the kernel's
+(`wlp3s0`), not the Windows aliases (`Wi-Fi`), so a template written for one interface name
+matches with `*`.
+
+**Cost:** one read of `/proc/net/snmp` a minute and one of `/proc/net/dev` every 10 s, both from
+the probe's own network namespace (the unit has no `PrivateNetwork`, so it is the host's).
 
 ### Advanced, opt-in (not advertised)
 
@@ -1050,6 +1107,8 @@ Placeholders only — **no secrets**:
   (`probe.docker.samplePeriodSec is 5 s in the config, below the 60 s default …`), and the
   Docker `CPU`, `Memory used %` and `Disk written per hour` descriptions state the period the
   probe actually samples at.
+* `probe.network` (optional): `enabled` (`true`) and `interfaces` (`[]`: interface-name patterns
+  with `*`, e.g. `"wlp*"`; empty = the physical interfaces). See [Network](#network-1711).
 * `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),
   `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
   checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See

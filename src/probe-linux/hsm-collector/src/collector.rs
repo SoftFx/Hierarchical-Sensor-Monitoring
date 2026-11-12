@@ -39,6 +39,30 @@ impl DefaultSensor {
     }
 }
 
+/// The catalog's TCP counter sensors (see [`Collector::network_counter_sensor`]). All three are
+/// Int sensors under `.computer/Network/`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NetworkCounter {
+    /// `Connections Established Count`: the current number of established TCP connections.
+    ConnectionsEstablished,
+    /// `Connection Failures Count`: failed connection attempts since the previous post.
+    ConnectionFailures,
+    /// `Connections Reset Count`: established connections reset since the previous post.
+    ConnectionsReset,
+}
+
+impl NetworkCounter {
+    fn as_raw(self) -> sys::hsm_default_sensor_t {
+        match self {
+            NetworkCounter::ConnectionsEstablished => {
+                sys::HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED
+            }
+            NetworkCounter::ConnectionFailures => sys::HSM_DEFAULT_NETWORK_CONNECTION_FAILURES,
+            NetworkCounter::ConnectionsReset => sys::HSM_DEFAULT_NETWORK_CONNECTIONS_RESET,
+        }
+    }
+}
+
 /// Whether this build bound the Linux metric-source factory (#1414). See
 /// [`Collector::install_linux_metric_sources`].
 pub const LINUX_METRIC_SOURCES_AVAILABLE: bool = sys::HAS_LINUX_METRIC_SOURCES;
@@ -285,6 +309,54 @@ impl Collector {
         self.check("add product version sensor", code)?;
         // SAFETY: the ABI returned OK, so the handle is live.
         Ok(VersionSensor(unsafe { RawSensor::from_raw(self, handle) }))
+    }
+
+    /// Register one of the catalog's TCP counter sensors under `.computer/Network/` and return its
+    /// handle, so a host with its own source can feed it.
+    ///
+    /// The registration is the catalog row, so it is the one Windows hosts send byte for byte
+    /// (Int, KeepHistory 90 days, the catalog TTL and description). The collector reads these
+    /// counters itself only on Windows; on Linux no metric source binds them, and they post only
+    /// what the host adds.
+    pub fn network_counter_sensor(&self, counter: NetworkCounter) -> Result<IntSensor<'_>> {
+        let mut handle = ptr::null_mut();
+        let _guard = self.lock();
+        // SAFETY: valid handle; NULL params take the defaults (the network rows read none).
+        let code = unsafe {
+            sys::hsm_collector_add_default_sensor(
+                self.handle,
+                counter.as_raw(),
+                ptr::null(),
+                &mut handle,
+            )
+        };
+        self.check("add network counter sensor", code)?;
+        // SAFETY: the ABI returned OK, so the handle is a live Int sensor of this collector.
+        Ok(IntSensor(unsafe { RawSensor::from_raw(self, handle) }))
+    }
+
+    /// The value payloads the in-memory sender recorded (tests only: with no transport installed
+    /// nothing leaves the process, and the collector keeps what it would have sent).
+    #[cfg(test)]
+    pub(crate) fn sent_payloads(&self) -> Vec<String> {
+        let _guard = self.lock();
+        // SAFETY: valid handle; every returned pointer is collector-owned text copied out under
+        // the lock.
+        unsafe {
+            let count = sys::hsm_collector_sent_count(self.handle);
+            (0..count)
+                .filter_map(|index| {
+                    let mut json = ptr::null();
+                    if sys::hsm_collector_get_sent_json(self.handle, index, &mut json)
+                        != sys::HSM_RESULT_OK
+                        || json.is_null()
+                    {
+                        return None;
+                    }
+                    Some(CStr::from_ptr(json).to_string_lossy().into_owned())
+                })
+                .collect()
+        }
     }
 
     /// The canonical registration JSON of every sensor registered so far, in registration order.

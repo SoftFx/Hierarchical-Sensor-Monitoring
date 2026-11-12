@@ -26,7 +26,7 @@ pub use alert::{
     instant_hourly_schedule_anchor, Alert, AlertBuilder, AlertCombination, AlertDestination,
     AlertIcon, AlertKind, AlertOperation, AlertProperty, AlertRepeat, AlertTarget,
 };
-pub use collector::{Collector, DefaultSensor, LINUX_METRIC_SOURCES_AVAILABLE};
+pub use collector::{Collector, DefaultSensor, NetworkCounter, LINUX_METRIC_SOURCES_AVAILABLE};
 pub use error::{Error, Result};
 pub use options::{
     CollectorOptions, CollectorStatus, EnumOption, LogLevel, SensorOptions, SensorStatus,
@@ -65,6 +65,34 @@ mod tests {
         options.allow_plaintext_transport = true;
         options.module = Some("UnitTest".into());
         options
+    }
+
+    /// The catalog's network rows are metric candidates; with no metric source bound (always on
+    /// Linux) the values the host adds must still be sent (#1711).
+    #[test]
+    fn a_network_counter_sensor_sends_what_the_host_adds() {
+        let collector = Collector::new(&test_options()).expect("create");
+        let failures = collector
+            .network_counter_sensor(NetworkCounter::ConnectionFailures)
+            .expect("register");
+        let established = collector
+            .network_counter_sensor(NetworkCounter::ConnectionsEstablished)
+            .expect("register");
+        collector.start().expect("start");
+        failures.add(4).expect("add");
+        established.add(17).expect("add");
+        collector.stop().expect("stop");
+        let sent = collector.sent_payloads();
+        for (leaf, value) in [
+            ("Connection Failures Count", "\"Value\":4"),
+            ("Connections Established Count", "\"Value\":17"),
+        ] {
+            assert!(
+                sent.iter()
+                    .any(|json| json.contains(&format!("/{leaf}\"")) && json.contains(value)),
+                "no {leaf} = {value} in {sent:#?}"
+            );
+        }
     }
 
     #[test]
