@@ -3898,11 +3898,12 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
-        // Sensor creation and sensor move are the two writers of the tree's
-        // structure across product queues: both take _treeStructureLock, and
-        // creation re-checks the index under it so a cross-product move that
-        // just published a sensor at this path is reused, not duplicated
-        // (ADR-0018).
+        // Sensor creation, sensor move and node/product removal are the
+        // writers of the tree's structure across product queues: all take
+        // _treeStructureLock (removal nests _productsByNameLock and the journal
+        // purge inside it — never take the tree lock under those). Creation
+        // re-checks the index under it so a cross-product move that just
+        // published a sensor at this path is reused, not duplicated (ADR-0018).
         private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
         {
             lock (_treeStructureLock)

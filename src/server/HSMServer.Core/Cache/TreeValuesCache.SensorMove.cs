@@ -87,6 +87,7 @@ namespace HSMServer.Core.Cache
                     return request.Removed;
             }
 
+            _logger.Warn($"Alias removal gave up: sensor {sensorId} kept moving between products ({productId}/{removePath})");
             return false;
         }
 
@@ -119,7 +120,7 @@ namespace HSMServer.Core.Cache
 
         // What a published move hands to its post-publish side effects.
         private sealed record PublishedMove(BaseSensorModel Sensor, ProductModel OldParent, ProductModel DestinationRoot,
-            string OldFullPath, string NewFullPath, HashSet<Guid> MatchedBefore);
+            string OldFullPath, string NewFullPath);
 
 
         private void MoveSensor(SensorMoveRequest request)
@@ -152,10 +153,17 @@ namespace HSMServer.Core.Cache
             // Templates mutate the sensor's policies, so they run on the queue
             // that owns the sensor now: inline for a move inside the product,
             // on the destination's queue for a move across products.
-            if (move.OldParent.Root.Id == move.DestinationRoot.Id)
-                ReevaluateTemplates(sensor, move.MatchedBefore);
-            else
-                Dispatch(move.DestinationRoot, new SensorTemplateReevaluationRequest(sensor.Id, move.MatchedBefore, move.DestinationRoot.Id, Hops: 0));
+            try
+            {
+                if (move.OldParent.Root.Id == move.DestinationRoot.Id)
+                    ReevaluateTemplates(sensor);
+                else
+                    Dispatch(move.DestinationRoot, new SensorTemplateReevaluationRequest(sensor.Id, move.DestinationRoot.Id, Hops: 0));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Template re-evaluation of moved sensor {sensor.Id} failed");
+            }
 
             try
             {
@@ -225,8 +233,6 @@ namespace HSMServer.Core.Cache
                     return (new SensorMoveResult(SensorMoveOutcome.Conflict,
                         $"Sensor '{newFullPath}' already exists (id {occupant.Id}).") { OldPath = oldFullPath, NewPath = newFullPath }, null);
 
-                var matchedBefore = _alertTemplates.Values.Where(t => t.IsMatch(sensor)).Select(t => t.Id).ToHashSet();
-
                 // Missing nodes are created exactly as ingestion creates them;
                 // an empty one left behind by a failed move is swept like any
                 // other empty node.
@@ -273,25 +279,34 @@ namespace HSMServer.Core.Cache
                 destinationCache.Sensors[newPath] = sensor;
 
                 return (new SensorMoveResult(SensorMoveOutcome.Moved) { OldPath = oldFullPath, NewPath = newFullPath },
-                    new PublishedMove(sensor, oldParent, destinationRoot, oldFullPath, newFullPath, matchedBefore));
+                    new PublishedMove(sensor, oldParent, destinationRoot, oldFullPath, newFullPath));
             }
         }
 
-        // "As if the sensor had always been there" (#1718 decision 5): templates
-        // that stopped matching are detached, newly matching ones applied.
-        // Templates matching both before and after are left alone — re-applying
-        // them would only churn the journal.
-        private void ReevaluateTemplates(BaseSensorModel sensor, HashSet<Guid> matchedBefore)
+        // "As if the sensor had always been there" (#1718 decision 5): attached
+        // templates that no longer match are detached, matching ones not yet
+        // attached are applied, attached and matching ones are left alone —
+        // re-applying them would only churn the journal. Judged by what is
+        // ATTACHED, not by what matched at the old path, so a re-evaluation
+        // that was lost (a sensor moved faster than its follow-ups) is
+        // repaired by the next one.
+        private void ReevaluateTemplates(BaseSensorModel sensor)
         {
+            var attached = sensor.Policies.Select(p => p.TemplateId)
+                .Concat(sensor.Policies.TTLPolicies.Select(t => t.TemplateId))
+                .OfType<Guid>()
+                .ToHashSet();
+
             foreach (var template in _alertTemplates.Values.OrderBy(t => t.Id))
             {
                 try
                 {
                     var matchesNow = template.IsMatch(sensor);
+                    var isAttached = attached.Contains(template.Id);
 
-                    if (matchesNow && !matchedBefore.Contains(template.Id))
+                    if (matchesNow && !isAttached)
                         ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
-                    else if (!matchesNow && matchedBefore.Contains(template.Id))
+                    else if (!matchesNow && isAttached)
                         RemoveTemplateFromSensor(new RemoveTemplateFromSensorRequest(sensor.Id, template.Id));
                 }
                 catch (Exception ex)
@@ -370,7 +385,7 @@ namespace HSMServer.Core.Cache
             if (TryGetSensorById(request.SensorId, out var sensor) &&
                 OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
                     (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "template re-evaluation"))
-                ReevaluateTemplates(sensor, request.MatchedBefore);
+                ReevaluateTemplates(sensor);
         }
 
         private void UpdateThroughAlias(AliasRegistrationRequest request)
@@ -555,8 +570,17 @@ namespace HSMServer.Core.Cache
 
         // Fire-and-forget onto another product's queue: a queue handler must
         // never wait on another queue (aicontext/features/server/overview.md).
-        private void Dispatch(ProductModel root, IUpdateRequest request) =>
+        private void Dispatch(ProductModel root, IUpdateRequest request)
+        {
+            // A product removed meanwhile must not get its queue back.
+            if (!TryGetProduct(root.Id, out _))
+            {
+                _logger.Warn($"Dropped {request.GetType().Name} for removed product {root.Id}");
+                return;
+            }
+
             _ = GetOrAddCachedValue(root).Queue.AddItemAsync(request);
+        }
 
         private CachedValue GetOrAddCachedValue(ProductModel root) =>
             _cache.GetOrAdd(root.Id, _ => new CachedValue(root, this));

@@ -82,8 +82,7 @@ namespace HSMServer.Core.Model.Requests
     /// Template re-evaluation of a sensor that moved into another root product:
     /// runs on the destination's queue, which owns the sensor from now on.
     /// </summary>
-    internal sealed record SensorTemplateReevaluationRequest(Guid SensorId, System.Collections.Generic.HashSet<Guid> MatchedBefore,
-        Guid ExpectedRootId, int Hops) : IUpdateRequest;
+    internal sealed record SensorTemplateReevaluationRequest(Guid SensorId, Guid ExpectedRootId, int Hops) : IUpdateRequest;
 
 
     // Path validation and normalization shared with ingestion (BaseUpdateRequest).
