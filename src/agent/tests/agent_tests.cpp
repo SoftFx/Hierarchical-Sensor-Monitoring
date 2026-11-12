@@ -4,6 +4,7 @@
 
 #include "agent/config.hpp"
 #include "agent/launch_hint.hpp"
+#include "agent/retired_port.hpp"
 
 #ifdef _WIN32
 #include "agent/dir_acl.hpp"
@@ -22,6 +23,7 @@
 #include <vector>
 #endif
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -313,6 +315,324 @@ namespace
         Check(contains(L"Logs: %ProgramData%\\HSM Agent\\logs"), "log location");
         Check(contains(L"README.txt"), "points at the bundle README");
         Check(std::wstring(hsm::agent::kLaunchHintTitle) == L"HSM Agent", "message box title");
+    }
+
+    // --- Retired server ports (#1655) ---------------------------------------------------------------
+    //
+    // The server stack no longer publishes 44330/44333, and a connection that never arrives leaves
+    // no trace on the server: the agent has to notice by itself that its config names a dead port.
+
+    void RetiredPortNamesOnlyTheOldTwo()
+    {
+        using hsm::agent::IsRetiredServerPort;
+        Check(IsRetiredServerPort(44330), "44330 (old Sensor API port) is retired");
+        Check(IsRetiredServerPort(44333), "44333 (old Web UI port) is retired");
+        Check(!IsRetiredServerPort(443), "443 is the standard port");
+        Check(!IsRetiredServerPort(8443), "a custom port is not retired");
+        Check(!IsRetiredServerPort(44331), "a neighbour of the old ports is not retired");
+        CheckEq(hsm::agent::kStandardServerPort, 443, "the standard port is 443");
+        // The server sets this header on testConnection (SensorsController.ServerMarkerHeader,
+        // pinned to the same literal by SensorsTestConnectionTests): renaming one side alone would
+        // stop every agent from recognising its server on 443.
+        CheckEq(std::string(hsm::agent::kServerMarkerHeader), std::string("X-Hsm-Server"), "the server marker header name");
+        CheckEq(std::string(hsm::agent::kServerMarkerValue), std::string("1"), "the server marker value");
+    }
+
+    void RetiredPortVerdictFollowsTheProbes()
+    {
+        using hsm::agent::JudgeRetiredPort;
+        using hsm::agent::PortAnswer;
+        using hsm::agent::RetiredPortVerdict;
+
+        std::vector<int> probed;
+        const auto probe_answers = [&probed](PortAnswer retired, PortAnswer standard) {
+            probed.clear();
+            return [&probed, retired, standard](int port) {
+                probed.push_back(port);
+                return port == 443 ? standard : retired;
+            };
+        };
+        // An answer from an HSM server, or none.
+        const auto probe = [&probe_answers](bool retired_answers, bool standard_answers) {
+            return probe_answers(retired_answers ? PortAnswer::HsmServer : PortAnswer::Nothing,
+                                 standard_answers ? PortAnswer::HsmServer : PortAnswer::Nothing);
+        };
+
+        // A config on 443 (or on any custom port) with an unreachable server behaves as before:
+        // nothing is probed, so nothing can switch it.
+        Check(JudgeRetiredPort(443, probe(false, false)) == RetiredPortVerdict::NotRetired, "443 is not judged");
+        Check(probed.empty(), "443: no probe is made");
+        Check(JudgeRetiredPort(8443, probe(false, true)) == RetiredPortVerdict::NotRetired, "a custom port is not judged");
+        Check(probed.empty(), "custom port: no probe is made");
+
+        // The retired port still answers (a server pinned to it, or an operator's own mapping):
+        // keep it, and do not even ask 443.
+        Check(JudgeRetiredPort(44330, probe(true, true)) == RetiredPortVerdict::StillAnswers, "answering retired port is kept");
+        Check(probed == std::vector<int>{ 44330 }, "443 is not probed while the retired port answers");
+
+        // The stack dropped the old ports: the retired one is dead, 443 answers.
+        Check(JudgeRetiredPort(44330, probe(false, true)) == RetiredPortVerdict::SwitchToStandard, "dead 44330 + live 443 -> switch");
+        Check(probed == std::vector<int>({ 44330, 443 }), "the retired port is probed first, then 443");
+        Check(JudgeRetiredPort(44333, probe(false, true)) == RetiredPortVerdict::SwitchToStandard, "dead 44333 + live 443 -> switch");
+
+        // The server is down altogether: no switch to a port that does not answer either.
+        Check(JudgeRetiredPort(44330, probe(false, false)) == RetiredPortVerdict::ServerUnreachable, "nothing answers -> no switch");
+
+        // 443 answers without the HSM marker (another service, or an HSM server older than the
+        // marker): never a move target, and reported as such rather than as "nothing answers".
+        Check(JudgeRetiredPort(44330, probe_answers(PortAnswer::Nothing, PortAnswer::Unidentified)) ==
+                  RetiredPortVerdict::UnrecognisedOnStandard,
+              "dead 44330 + unmarked 443 -> no switch, unrecognised");
+        // Any answer keeps the retired port: an HSM server pinned there may predate the marker.
+        Check(JudgeRetiredPort(44330, probe_answers(PortAnswer::Unidentified, PortAnswer::HsmServer)) ==
+                  RetiredPortVerdict::StillAnswers,
+              "an unmarked answer on the retired port keeps it");
+        Check(probed == std::vector<int>{ 44330 }, "443 is not probed while the retired port answers unmarked");
+    }
+
+    void RetiredPortNoticesNameTheFix()
+    {
+        const auto contains = [](const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; };
+
+        const std::string startup = hsm::agent::RetiredPortStartupNotice(44330, true);
+        Check(contains(startup, "server.port 44330"), "startup notice names the configured port");
+        Check(contains(startup, "443"), "startup notice names the port to use");
+        Check(contains(startup, "config.json"), "startup notice names the file to edit");
+        Check(contains(startup, "HSMAgent"), "startup notice names the service to restart");
+        Check(contains(startup, "by itself"), "service startup notice promises the self-move");
+
+        // A --console run never moves itself, so its notices must not promise that it will.
+        const std::string console_startup = hsm::agent::RetiredPortStartupNotice(44330, false);
+        Check(contains(console_startup, "\"port\": 443"), "console startup notice names the value to set");
+        Check(!contains(console_startup, "by itself"), "console startup notice promises no self-move");
+
+        const std::string moved = hsm::agent::RetiredPortSwitchNotice(44333);
+        Check(contains(moved, "server.port 44333"), "switch notice names the old port");
+        Check(contains(moved, "\"port\": 443"), "switch notice says what config.json holds now");
+
+        const std::string manual = hsm::agent::RetiredPortManualMoveNotice(44330);
+        Check(contains(manual, "server.port 44330"), "manual-move notice names the configured port");
+        Check(contains(manual, "nothing is being delivered"), "manual-move notice says what is broken");
+        Check(contains(manual, "\"port\": 443"), "manual-move notice names the value to set");
+        Check(contains(manual, "config.json"), "manual-move notice names the file to edit");
+
+        const std::string unreachable = hsm::agent::RetiredPortUnreachableNotice(44330, true);
+        Check(contains(unreachable, "server.port 44330"), "unreachable notice names the configured port");
+        Check(contains(unreachable, "443"), "unreachable notice names the port that was also tried");
+        Check(contains(unreachable, "server.address"), "unreachable notice says what to check");
+        Check(contains(unreachable, "by itself"), "service unreachable notice promises the self-move");
+
+        const std::string unrecognised = hsm::agent::RetiredPortUnrecognisedNotice(44330);
+        Check(contains(unrecognised, "server.port 44330"), "unrecognised notice names the configured port");
+        Check(contains(unrecognised, "not as an HSM server"), "unrecognised notice says what 443 is not");
+        Check(contains(unrecognised, "\"port\": 443"), "unrecognised notice names the manual fix");
+
+        const std::string changed = hsm::agent::RetiredPortChangedSinceStartNotice(44330);
+        Check(contains(changed, "changed"), "changed-since-start notice says the file changed");
+        Check(contains(changed, "Restart the HSMAgent service"), "changed-since-start notice says how to apply it");
+
+        const std::string console_unreachable = hsm::agent::RetiredPortUnreachableNotice(44330, false);
+        Check(contains(console_unreachable, "server.address"), "console unreachable notice says what to check");
+        Check(contains(console_unreachable, "\"port\": 443"), "console unreachable notice names the value to set");
+        Check(!contains(console_unreachable, "by itself"), "console unreachable notice promises no self-move");
+    }
+
+    // The move rewrites the file as it is on disk, not the snapshot the agent started with: an edit
+    // made since start (a new key, a sensor flag from a directive whose restart failed) survives.
+    void RetiredPortMoveKeepsTheFileAsItIsNow()
+    {
+        const std::filesystem::path path = std::filesystem::temp_directory_path() / "hsm_agent_retired_move.json";
+        const auto write_text = [&path](const std::string& text) {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            out << text;
+        };
+
+        // What the file says now (the agent may have started with another key and network on).
+        write_text(R"({
+            "server": { "address": "https://hsm.example", "port": 44330, "accessKey": "edited-after-start", "allowUntrustedCertificate": true },
+            "identity": { "computerName": "BUILD01", "module": "Custom" },
+            "sensors": { "computer": true, "system": true, "disk": true, "network": false, "module": true, "process": true }
+        })");
+
+        using hsm::agent::MoveOutcome;
+        std::string error;
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) == MoveOutcome::Moved,
+              "the move succeeds: " + error);
+
+        AgentConfig moved;
+        Check(hsm::agent::LoadAgentConfig(path.string(), moved, error), "the moved file loads: " + error);
+        CheckEq(moved.port, 443, "the port is 443");
+        CheckEq(moved.access_key, std::string("edited-after-start"), "a key edited since start is kept");
+        CheckEq(moved.server_address, std::string("https://hsm.example"), "the address is kept");
+        Check(moved.allow_untrusted_certificate, "the certificate policy is kept");
+        Check(!moved.sensors_network, "a sensor flag changed since start is kept");
+        CheckEq(moved.computer_name, std::string("BUILD01"), "the identity is kept");
+
+        // The next check after a restart helper that failed to start: the file already says 443 for
+        // the probed host. That is still a move (the restart is retried), not "changed since start",
+        // and the file is not rewritten.
+        std::string already_moved;
+        {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            already_moved = ss.str();
+        }
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) == MoveOutcome::Moved,
+              "a file already moved to 443 is still a move, so the restart is retried");
+        {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            CheckEq(ss.str(), already_moved, "a file already on 443 is not rewritten");
+        }
+
+        // The file now names another port or another host than the probes ran against: the
+        // operator's choice stands, the file is not touched.
+        const std::string repointed_port = R"({ "server": { "address": "https://hsm.example", "port": 8443, "accessKey": "k" } })";
+        write_text(repointed_port);
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) ==
+                  MoveOutcome::ChangedSinceStart,
+              "a file repointed to another port is not moved");
+        {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            CheckEq(ss.str(), repointed_port, "a file repointed to another port is left as it was");
+        }
+        write_text(R"({ "server": { "address": "https://new-host.example", "port": 44330, "accessKey": "k" } })");
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) ==
+                  MoveOutcome::ChangedSinceStart,
+              "a file repointed to another host is not moved (that host was never probed)");
+
+        // A file that does not parse is not replaced (the agent reports the manual fix instead).
+        const std::string broken = "{ \"server\": { \"port\": 44330, ";
+        write_text(broken);
+        error.clear();
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) == MoveOutcome::Failed,
+              "an unreadable file is not moved");
+        Check(!error.empty(), "the failure says why");
+        std::ifstream in(path, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        in.close();
+        CheckEq(ss.str(), broken, "an unreadable file is left as it was");
+
+        std::filesystem::remove(path);
+        error.clear();
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), "https://hsm.example", 44330, error) == MoveOutcome::Failed,
+              "a missing file is not created");
+        Check(!std::filesystem::exists(path), "no file appears where there was none");
+    }
+
+    // The watcher's step function decides when config.json gets rewritten; an off-by-one here would
+    // move an agent after a single transient failure, or flood the log.
+    void RetiredPortWatcherConfirmsAndThrottles()
+    {
+        using hsm::agent::NextRetiredPortStep;
+        using hsm::agent::RetiredPortAction;
+        using hsm::agent::RetiredPortStep;
+        using hsm::agent::RetiredPortVerdict;
+        using hsm::agent::RetiredPortWatchState;
+        using hsm::agent::kRetiredPortCheckPeriod;
+        using hsm::agent::kRetiredPortConfirmDelay;
+        using hsm::agent::kRetiredPortNoticeEveryChecks;
+
+        CheckEq(kRetiredPortNoticeEveryChecks, 12, "failures are reported once per 12 checks");
+        Check(kRetiredPortCheckPeriod * kRetiredPortNoticeEveryChecks == std::chrono::hours(1), "12 checks = one hour");
+        Check(kRetiredPortConfirmDelay < kRetiredPortCheckPeriod, "the confirming check comes sooner than the next regular one");
+
+        // A service run: the first SwitchToStandard only schedules a confirming check, the second moves.
+        {
+            RetiredPortWatchState state;
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "first sighting does not move");
+            Check(step.next_delay == kRetiredPortConfirmDelay, "first sighting is confirmed a minute later");
+
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Move, "confirmed sighting moves");
+            Check(step.failure_notice_due, "a failed move is reported at the confirming check");
+            Check(step.next_delay == kRetiredPortCheckPeriod, "after the confirming check the regular period applies");
+
+            // The move failed (config not written / helper not started): retried at every check,
+            // reported once an hour.
+            int notices = 0;
+            for (int i = 0; i < kRetiredPortNoticeEveryChecks; ++i)
+            {
+                step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+                Check(step.action == RetiredPortAction::Move, "a failed move is retried at every check");
+                notices += step.failure_notice_due ? 1 : 0;
+            }
+            CheckEq(notices, 1, "a failed move is reported once in the next 12 checks");
+            Check(step.failure_notice_due, "the hourly report falls on the 12th retry");
+        }
+
+        // A check in between that sees the retired port answer again resets the confirmation.
+        {
+            RetiredPortWatchState state;
+            NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::StillAnswers, true);
+            Check(step.action == RetiredPortAction::Wait, "a retired port that answers is left alone");
+            Check(step.next_delay == kRetiredPortCheckPeriod, "a port that answers is checked at the regular period");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "a sighting after an interruption needs a new confirmation");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::ServerUnreachable, true);
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "an unreachable check in between also resets it");
+        }
+
+        // A console run never moves: it reports at the confirming check, then once an hour.
+        {
+            RetiredPortWatchState state;
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+            Check(step.action == RetiredPortAction::Wait, "console: first sighting says nothing yet");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+            Check(step.action == RetiredPortAction::ReportManualMove, "console: the confirming check reports");
+            int reports = 0;
+            for (int i = 0; i < kRetiredPortNoticeEveryChecks; ++i)
+            {
+                step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+                Check(step.action != RetiredPortAction::Move, "console never moves");
+                reports += step.action == RetiredPortAction::ReportManualMove ? 1 : 0;
+            }
+            CheckEq(reports, 1, "console reports once in the next 12 checks");
+        }
+
+        // 443 answers unmarked: reported like "nothing answers" (at once, then hourly), never a move.
+        {
+            RetiredPortWatchState state;
+            int reports = 0;
+            for (int i = 0; i < 2 * kRetiredPortNoticeEveryChecks; ++i)
+            {
+                const RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::UnrecognisedOnStandard, true);
+                Check(step.action != RetiredPortAction::Move, "an unrecognised 443 never causes a move");
+                reports += step.action == RetiredPortAction::ReportUnrecognised ? 1 : 0;
+            }
+            CheckEq(reports, 2, "an unrecognised 443 is reported twice in 24 checks");
+        }
+
+        // Nothing answers: reported at once, then once an hour; never a move.
+        {
+            RetiredPortWatchState state;
+            int reports = 0;
+            for (int i = 0; i < 2 * kRetiredPortNoticeEveryChecks; ++i)
+            {
+                const RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::ServerUnreachable, true);
+                Check(step.action != RetiredPortAction::Move, "an unreachable server never causes a move");
+                if (i == 0)
+                    Check(step.action == RetiredPortAction::ReportUnreachable, "unreachable is reported at the first check");
+                reports += step.action == RetiredPortAction::ReportUnreachable ? 1 : 0;
+            }
+            CheckEq(reports, 2, "unreachable is reported twice in 24 checks");
+        }
+
+        // A port that keeps answering is never acted on.
+        {
+            RetiredPortWatchState state;
+            for (int i = 0; i < 2 * kRetiredPortNoticeEveryChecks; ++i)
+                Check(NextRetiredPortStep(state, RetiredPortVerdict::StillAnswers, true).action == RetiredPortAction::Wait,
+                      "an answering retired port is never acted on");
+        }
     }
 
 #ifdef _WIN32
@@ -857,6 +1177,11 @@ namespace
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
             { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
             { "agent_launch_hint_message_guides_the_operator", LaunchHintMessageGuidesTheOperator },
+            { "agent_retired_port_names_only_the_old_two", RetiredPortNamesOnlyTheOldTwo },
+            { "agent_retired_port_verdict_follows_the_probes", RetiredPortVerdictFollowsTheProbes },
+            { "agent_retired_port_notices_name_the_fix", RetiredPortNoticesNameTheFix },
+            { "agent_retired_port_watcher_confirms_and_throttles", RetiredPortWatcherConfirmsAndThrottles },
+            { "agent_retired_port_move_keeps_the_file_as_it_is_now", RetiredPortMoveKeepsTheFileAsItIsNow },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },

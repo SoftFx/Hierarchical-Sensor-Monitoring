@@ -128,7 +128,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `file` | `FileSensorValue` |
 | `commands` | command batch (response: error dictionary keyed by sensor path) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` |
-| `testConnection` | — |
+| `testConnection` | — (response: 200 with header `X-Hsm-Server: 1`, which identifies an HSM server; the HSM Agent's retired-port check relies on it, #1655) |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
 
 ## Collector session (WebSocket)
