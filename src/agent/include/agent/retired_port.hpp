@@ -26,7 +26,14 @@ namespace hsm::agent
     /// Response header an HSM server's `testConnection` answer carries. The server side is
     /// `SensorsController.ServerMarkerHeader`; both sides pin the literal in a test
     /// (`agent_retired_port_names_only_the_old_two`, `SensorsTestConnectionTests`).
+    ///
+    /// It tells an HSM server apart from an unrelated service that happens to answer 200 on 443; it
+    /// is not authentication. Anything that controls 443 of the configured host can send it, and
+    /// after a move every data POST carries the access key there, as it would for any port the
+    /// operator configures.
     inline constexpr const char* kServerMarkerHeader = "X-Hsm-Server";
+    /// The only value of kServerMarkerHeader the agent accepts.
+    inline constexpr const char* kServerMarkerValue = "1";
 
     enum class RetiredPortVerdict
     {

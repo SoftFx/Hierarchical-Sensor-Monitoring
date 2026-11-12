@@ -386,9 +386,12 @@ namespace hsm::agent
         // sends an "http://" address over https as well. A plain-HTTP probe would get a 400 from
         // the server's TLS listener and call a working server unreachable.
         constexpr bool kHttps = true;
-        // No proxy: the collector's libcurl transport ignores the machine-wide WinHTTP proxy
+        // No WinHTTP proxy: the collector's libcurl transport ignores the machine-wide WinHTTP proxy
         // (netsh winhttp), so a probe through it could see a different network than the data does
         // (a proxy that only lets CONNECT through to 443 would make a working 44330 look dead).
+        // Not matched: libcurl does follow HTTPS_PROXY / ALL_PROXY from the service's environment,
+        // and this probe does not. On such a host the probe goes direct while the data goes through
+        // that proxy; the two-checks-in-a-row rule and the hourly notices are what is left.
         WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate, WINHTTP_ACCESS_TYPE_NO_PROXY);
         if (!sess.Valid())
             return PortAnswer::Nothing;
@@ -399,7 +402,9 @@ namespace hsm::agent
         const int status = HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, &marker_name, &marker, kProbeTimeoutMs);
         if (status != 200)
             return PortAnswer::Nothing;
-        return marker.empty() ? PortAnswer::Unidentified : PortAnswer::HsmServer;
+        // Exactly the value the server sends. A "not a stranger" check, not authentication: any
+        // service on 443 of that host can send it (see kServerMarkerHeader).
+        return marker == kServerMarkerValue ? PortAnswer::HsmServer : PortAnswer::Unidentified;
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------

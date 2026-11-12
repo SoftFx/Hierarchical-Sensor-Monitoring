@@ -264,8 +264,10 @@ there: the agent is the only place that can say what is wrong, and it must not f
   stop wait). The verdict is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
   `GET /api/sensors/testConnection` returns 200 over https under the config's certificate policy, 2 s
   timeouts set on the request handle; https even for an `http://` address, because the agent's
-  collector never enables plaintext and sends such an address over https too; no proxy, because the
-  collector's libcurl transport ignores the machine-wide WinHTTP proxy; and for 443, the move target,
+  collector never enables plaintext and sends such an address over https too; no WinHTTP proxy, because
+  the collector's libcurl transport ignores the machine-wide WinHTTP proxy — but libcurl does follow
+  `HTTPS_PROXY`/`ALL_PROXY` from the service environment and the probe does not, so on such a host the
+  probe goes direct while the data goes through that proxy; and for 443, the move target,
   the answer must carry the `X-Hsm-Server` header that only an HSM server's testConnection sets — a
   bare 200 from another service on 443 of a host whose HSM is pinned to an old port and merely down
   must not take its agents), asked lazily and in a fixed order. What to do with the verdict —
@@ -314,7 +316,9 @@ there: the agent is the only place that can say what is wrong, and it must not f
   working or self-healed state); "nothing is being delivered" is Error, which also reaches the Windows
   Event Log.
 - **Limits.** The probe proves that *an* HSM server answers on 443 of the same host, not that it
-  knows this agent's access key. An HSM server older than the marker (before #1696) on 443 is not
+  knows this agent's access key. The marker (`X-Hsm-Server: 1`, exactly that value) is a "not a
+  stranger" check, not authentication: anything that controls 443 of the configured host can send it,
+  and after the move every data POST carries the access key there. An HSM server older than the marker (before #1696) on 443 is not
   recognised, so its agents are not moved and get the hourly "answers on 443, but not as an HSM
   server" Error instead (case 3). The header name lives on both sides (`SensorsController.ServerMarkerHeader`,
   `kServerMarkerHeader` in `retired_port.hpp`), each pinned to the literal by a test. Only an agent that already runs this code can move: an older agent has

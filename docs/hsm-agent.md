@@ -104,7 +104,8 @@ are upgraded, and the server cannot see a connection that never arrives.
 - **Agent 0.5.50 and later** handles it. At every start it logs that `server.port` is a retired port.
   When that port stops answering and an HSM server answers on 443 (confirmed by a second check a
   minute later; a server from this release on, which marks its `testConnection` answer, so that some
-  other service on 443 cannot take the agent), the service rewrites `config.json` to `"port": 443`,
+  other service on 443 cannot take the agent by accident; the marker is not authentication), the
+  service rewrites `config.json` to `"port": 443`,
   logs the move and restarts itself — no operator action. If neither port answers, or 443 answers but
   not as an HSM server of this release or later, it logs an error every hour and changes nothing. If
   `config.json` was edited after the agent started, the agent leaves the file alone and asks for a

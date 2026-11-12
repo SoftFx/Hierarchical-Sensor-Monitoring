@@ -335,6 +335,7 @@ namespace
         // pinned to the same literal by SensorsTestConnectionTests): renaming one side alone would
         // stop every agent from recognising its server on 443.
         CheckEq(std::string(hsm::agent::kServerMarkerHeader), std::string("X-Hsm-Server"), "the server marker header name");
+        CheckEq(std::string(hsm::agent::kServerMarkerValue), std::string("1"), "the server marker value");
     }
 
     void RetiredPortVerdictFollowsTheProbes()
