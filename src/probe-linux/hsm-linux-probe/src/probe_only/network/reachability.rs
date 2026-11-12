@@ -371,7 +371,8 @@ fn register_target<'c>(
         Target::Internet => (
             "",
             "no answer in 1.5 s, refused, network unreachable",
-            "10–60 ms is normal for a home connection",
+            "It depends on the target and the connection: 10–60 ms is typical for a nearby \
+             target such as 1.1.1.1 from a home connection",
         ),
     };
     let time_path = target_path(target, CONNECT_TIME_LEAF);
@@ -406,9 +407,10 @@ fn register_target<'c>(
                 .with_enable_grafana(true)
                 .with_description(format!(
                     "TCP connections to {what} that failed in the minute, of about {attempts} \
-                     attempts ({failure_causes}). **Normally 0.** One failure is a stall of at \
-                     least 1.5 s; {attempts} of {attempts} means the target was unreachable for \
-                     the whole minute. The probe log has the reason."
+                     attempts ({failure_causes}). **Normally 0.** A failure is either no answer \
+                     within 1.5 s (a stall) or an immediate error (no route, a reject); the probe \
+                     log has which. A count near the number of attempts means the target was \
+                     unreachable for most of the minute."
                 )),
         )
         .map_err(|error| format!("{failures_path}: {error}"))?;
@@ -548,7 +550,7 @@ pub(crate) mod tests {
             "\"KeepHistory\":77760000000000",
             "\"EnableGrafana\":true",
             "Time to open a TCP connection to 1.1.1.1:443, ms, tried every 5 s: about",
-            "10–60 ms is normal",
+            "10–60 ms is typical",
         ] {
             assert!(time.contains(part), "missing {part} in {time}");
         }

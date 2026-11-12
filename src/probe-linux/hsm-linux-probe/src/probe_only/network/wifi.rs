@@ -57,14 +57,17 @@ impl Reading {
                  - −60 … −67: fine, enough for calls and video\n\
                  - −67 … −75: weak: works, but retries and short stalls begin\n\
                  - below −75: unreliable: stalls and disconnects are likely\n\n\
-                 Sampled every 10 s into 1-minute bars: **Min** is the worst moment of the \
-                 minute, so a dip shows there even when Mean looks fine."
+                 Sampled every 10 s into 1-minute bars: **Min** is the weakest of the minute's \
+                 samples, so a dip shows there even when Mean looks fine (a dip shorter than \
+                 10 s can fall between samples)."
             ),
             Reading::Quality => format!(
                 "Link quality of Wi-Fi interface **{interface}** (`/proc/net/wireless` link), \
-                 0–70, **higher is better**. It is not measured separately: cfg80211 drivers \
-                 compute it from the signal (quality = signal + 110 dBm, kept within 0…70), \
-                 so it says the same as `Signal dBm` on another scale.\n\n\
+                 **higher is better**. It is not measured separately: cfg80211 drivers that \
+                 report the signal in dBm (almost all current ones) compute it from the signal \
+                 (quality = signal + 110 dBm, kept within 0…70), so it says the same as \
+                 `Signal dBm` on another scale. A driver of another kind uses its own scale, and \
+                 the list below does not apply to it.\n\n\
                  - 70: −40 dBm or stronger, the maximum\n\
                  - 50: −60 dBm, good\n\
                  - 43: −67 dBm, still fine\n\
