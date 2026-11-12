@@ -205,6 +205,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductB, $"{root}/dst/s")).IsOk);
 
+                // Across products the templates are re-evaluated on the destination's queue.
+                await TestWait.UntilAsync(() => sensor.Policies.TTLPolicies.Any(t => t.TemplateId == destinationTemplate.Id),
+                    "the destination template was applied");
+
                 Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId == sourceTemplate.Id);
                 Assert.Contains(sensor.Policies.TTLPolicies, t => t.TemplateId == destinationTemplate.Id);
                 Assert.All(ownTtl, id => Assert.Contains(sensor.Policies.TTLPolicies, t => t.Id == id));
@@ -286,6 +290,28 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True((await _valuesCache.AddOrUpdateSensorAsync(registration)).IsOk);
 
             Assert.Equal("registered through the alias", sensor.Description);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out _), "the old path was recreated");
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor alias")]
+        public async Task Alias_RegistrationAcrossProducts_UpdatesTheMovedSensorOnItsOwnQueue()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductB, $"{root}/new")).IsOk);
+
+            var registration = new SensorAddOrUpdateRequest(_fixture.ProductA, $"{root}/old")
+            {
+                Update = new SensorUpdate { Id = Guid.Empty, Description = "registered across products" },
+                Type = SensorType.Integer,
+                TypeIsExplicit = true,
+            };
+
+            Assert.True((await _valuesCache.AddOrUpdateSensorAsync(registration)).IsOk);
+
+            await TestWait.UntilAsync(() => sensor.Description == "registered across products",
+                "the registration reached the moved sensor through product B's queue");
             Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out _), "the old path was recreated");
         }
 

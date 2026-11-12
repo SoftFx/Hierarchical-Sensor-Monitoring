@@ -310,15 +310,15 @@ namespace HSMServer.Model.TreeViewModel
         // references) is relocated under the new parent node.
         private void SensorMovedHandler(BaseSensorModel model, Guid oldParentId)
         {
-            if (!Sensors.TryGetValue(model.Id, out var sensor))
+            // The new parent is looked up first: without it the node would be
+            // detached from the visible tree and never re-added.
+            if (!Sensors.TryGetValue(model.Id, out var sensor) || !Nodes.TryGetValue(model.Parent.Id, out var newParent))
                 return;
 
             if (Nodes.TryGetValue(oldParentId, out var oldParent))
                 oldParent.Sensors.TryRemove(model.Id, out _);
 
-            if (Nodes.TryGetValue(model.Parent.Id, out var newParent))
-                newParent.AddSensor(sensor);
-
+            newParent.AddSensor(sensor);
             sensor.Update(model);
         }
 

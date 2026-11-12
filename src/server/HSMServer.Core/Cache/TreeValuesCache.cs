@@ -908,7 +908,7 @@ namespace HSMServer.Core.Cache
                 switch (ResolveAlias(request.ProductId, request.Path, request.TypeIsExplicit ? request.Type : null, out sensor))
                 {
                     case AliasResolution.Forwarded:
-                        Dispatch(sensor.Root, update with { Id = sensor.Id });
+                        Dispatch(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0));
                         error = null;
                         return true;
 
@@ -3134,7 +3134,10 @@ namespace HSMServer.Core.Cache
                     UpdateProduct(request);
                     break;
                 case RemoveProductRequest request:
-                    RemoveProduct(request);
+                    // A structural change like sensor creation and move: a move
+                    // must not attach a sensor to a node being removed (ADR-0018).
+                    lock (_treeStructureLock)
+                        RemoveProduct(request);
                     break;
                 case SaveLastStateRequest request:
                     SaveLastStateToDb(request);
@@ -3150,6 +3153,12 @@ namespace HSMServer.Core.Cache
                     break;
                 case SensorAliasMaintenanceRequest request:
                     MaintainAliases(request);
+                    break;
+                case AliasRegistrationRequest request:
+                    UpdateThroughAlias(request);
+                    break;
+                case SensorTemplateReevaluationRequest request:
+                    ReevaluateMovedSensorTemplates(request);
                     break;
             }
 
@@ -3366,7 +3375,6 @@ namespace HSMServer.Core.Cache
                         return true;
 
                     case AliasResolution.None:
-                        _logger.Info($"Creating new sensor: ProductId = {request.ProductId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
                         if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
                             return false;
                         break;
@@ -3904,6 +3912,8 @@ namespace HSMServer.Core.Cache
                     error = string.Empty;
                     return true;
                 }
+
+                _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
 
                 return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error);
             }

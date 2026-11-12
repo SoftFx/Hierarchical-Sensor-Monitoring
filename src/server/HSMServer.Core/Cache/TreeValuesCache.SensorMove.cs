@@ -65,19 +65,29 @@ namespace HSMServer.Core.Cache
         public async Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default)
         {
-            if (!TryGetSensorById(sensorId, out var sensor))
-                return false;
+            var removePath = new SensorPathCheck(productId, path ?? string.Empty).Path;
 
-            var request = new SensorAliasMaintenanceRequest(sensorId, DateTime.UtcNow)
+            // A sensor that moves between the lookup and the handler is chased
+            // to its new queue a bounded number of times.
+            for (var attempt = 0; attempt <= MaxAliasHops; attempt++)
             {
-                RemoveProductId = productId,
-                RemovePath = new SensorPathCheck(productId, path ?? string.Empty).Path,
-                Initiator = initiator ?? InitiatorInfo.System,
-            };
+                if (!TryGetSensorById(sensorId, out var sensor))
+                    return false;
 
-            await ProcessRequestAsync(sensor.Root.Id, request, token);
+                var request = new SensorAliasMaintenanceRequest(sensorId, sensor.Root.Id, DateTime.UtcNow)
+                {
+                    RemoveProductId = productId,
+                    RemovePath = removePath,
+                    Initiator = initiator ?? InitiatorInfo.System,
+                };
 
-            return request.Removed;
+                await ProcessRequestAsync(sensor.Root.Id, request, token);
+
+                if (!request.Misrouted)
+                    return request.Removed;
+            }
+
+            return false;
         }
 
         // The hourly sweep's alias pass: expiry and hit persistence run on each
@@ -94,7 +104,9 @@ namespace HSMServer.Core.Cache
                 if (sensor.Aliases.Count == 0)
                     continue;
 
-                await ProcessRequestAsync(sensor.Root.Id, new SensorAliasMaintenanceRequest(sensor.Id, DateTime.UtcNow), token);
+                // A sensor that moved meanwhile is simply picked up next hour.
+                var root = sensor.Root.Id;
+                await ProcessRequestAsync(root, new SensorAliasMaintenanceRequest(sensor.Id, root, DateTime.UtcNow), token);
             }
 
             var expired = _aliasesExpired - expiredBefore;
@@ -105,38 +117,96 @@ namespace HSMServer.Core.Cache
         private long _aliasesExpired;
 
 
+        // What a published move hands to its post-publish side effects.
+        private sealed record PublishedMove(BaseSensorModel Sensor, ProductModel OldParent, ProductModel DestinationRoot,
+            string OldFullPath, string NewFullPath, HashSet<Guid> MatchedBefore);
+
+
         private void MoveSensor(SensorMoveRequest request)
         {
+            PublishedMove published;
+
             try
             {
-                request.Result = MoveSensorUnderLock(request);
+                (request.Result, published) = MoveSensorUnderLock(request);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, $"Sensor move failed: {request.SensorId} -> {request.DestinationProductId}/{request.DestinationPath}");
                 request.Result = new SensorMoveResult(SensorMoveOutcome.Failed, ex.Message);
+                return;
+            }
+
+            if (published is not null)
+                CompleteMove(published, request.Initiator);
+        }
+
+        // Outside the tree-structure lock: nothing here changes the tree's
+        // structure, and holding the lock across template applies, the journal
+        // and UI subscribers would stall sensor creation on every product.
+        // The move is already persisted and published, so every step is isolated.
+        private void CompleteMove(PublishedMove move, InitiatorInfo initiator)
+        {
+            var sensor = move.Sensor;
+
+            // Templates mutate the sensor's policies, so they run on the queue
+            // that owns the sensor now: inline for a move inside the product,
+            // on the destination's queue for a move across products.
+            if (move.OldParent.Root.Id == move.DestinationRoot.Id)
+                ReevaluateTemplates(sensor, move.MatchedBefore);
+            else
+                Dispatch(move.DestinationRoot, new SensorTemplateReevaluationRequest(sensor.Id, move.MatchedBefore, move.DestinationRoot.Id, Hops: 0));
+
+            try
+            {
+                _journalService.AddRecord(new JournalRecordModel(sensor.Id, initiator)
+                {
+                    Enviroment = "Move sensor",
+                    PropertyName = "Path",
+                    OldValue = move.OldFullPath,
+                    NewValue = move.NewFullPath,
+                    Path = move.NewFullPath,
+                    Kind = JournalKinds.TreeCrud,
+                    ProductId = move.DestinationRoot.Id.ToString(),
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Journaling the move of sensor {sensor.Id} failed");
+            }
+
+            _logger.Info($"Sensor moved: Id = {sensor.Id}, {move.OldFullPath} -> {move.NewFullPath}, Initiator = {initiator}");
+
+            try
+            {
+                SensorMovedEvent?.Invoke(sensor, move.OldParent.Id);
+                SensorUpdateView(sensor);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"A subscriber failed on the move of sensor {sensor.Id}");
             }
         }
 
-        private SensorMoveResult MoveSensorUnderLock(SensorMoveRequest request)
+        private (SensorMoveResult, PublishedMove) MoveSensorUnderLock(SensorMoveRequest request)
         {
             lock (_treeStructureLock)
             {
                 // The request was enqueued on the sensor's root at that time; a
                 // sensor moved away since then belongs to another queue now.
                 if (!TryGetSensorById(request.SensorId, out var sensor) || sensor.Parent is null)
-                    return new SensorMoveResult(SensorMoveOutcome.SensorNotFound, $"Sensor {request.SensorId} was not found.");
+                    return (new SensorMoveResult(SensorMoveOutcome.SensorNotFound, $"Sensor {request.SensorId} was not found."), null);
 
                 if (sensor.Root.Id != request.SourceRootId)
-                    return new SensorMoveResult(SensorMoveOutcome.Failed, MovedConcurrentlyError);
+                    return (new SensorMoveResult(SensorMoveOutcome.Failed, MovedConcurrentlyError), null);
 
                 var pathCheck = new SensorPathCheck(request.DestinationProductId, request.DestinationPath ?? string.Empty);
 
                 if (!pathCheck.TryCheckRequest(out var pathError))
-                    return new SensorMoveResult(SensorMoveOutcome.InvalidPath, pathError);
+                    return (new SensorMoveResult(SensorMoveOutcome.InvalidPath, pathError), null);
 
                 if (!TryGetProduct(request.DestinationProductId, out var destinationRoot) || !destinationRoot.IsRoot)
-                    return new SensorMoveResult(SensorMoveOutcome.DestinationNotFound, $"Product {request.DestinationProductId} was not found.");
+                    return (new SensorMoveResult(SensorMoveOutcome.DestinationNotFound, $"Product {request.DestinationProductId} was not found."), null);
 
                 var oldParent = sensor.Parent;
                 var oldRoot = sensor.Root;
@@ -147,13 +217,13 @@ namespace HSMServer.Core.Cache
                 var newFullPath = $"{destinationRoot.DisplayName}/{newPath}";
 
                 if (oldRoot.Id == destinationRoot.Id && string.Equals(oldPath, newPath, StringComparison.Ordinal))
-                    return new SensorMoveResult(SensorMoveOutcome.Unchanged) { OldPath = oldFullPath, NewPath = newFullPath };
+                    return (new SensorMoveResult(SensorMoveOutcome.Unchanged) { OldPath = oldFullPath, NewPath = newFullPath }, null);
 
                 var destinationCache = GetOrAddCachedValue(destinationRoot);
 
                 if (destinationCache.Sensors.TryGetValue(newPath, out var occupant))
-                    return new SensorMoveResult(SensorMoveOutcome.Conflict,
-                        $"Sensor '{newFullPath}' already exists (id {occupant.Id}).") { OldPath = oldFullPath, NewPath = newFullPath };
+                    return (new SensorMoveResult(SensorMoveOutcome.Conflict,
+                        $"Sensor '{newFullPath}' already exists (id {occupant.Id}).") { OldPath = oldFullPath, NewPath = newFullPath }, null);
 
                 var matchedBefore = _alertTemplates.Values.Where(t => t.IsMatch(sensor)).Select(t => t.Id).ToHashSet();
 
@@ -198,45 +268,12 @@ namespace HSMServer.Core.Cache
                 if (destinationCache.Aliases.TryRemove(newPath, out var displaced) && displaced.Id != sensor.Id)
                     DispatchAliasRemoval(displaced, destinationRoot.Id, newPath, "Displaced by a moved sensor");
 
-                ReevaluateTemplates(sensor, matchedBefore);
-
-                // From here on the move is persisted: nothing below may keep the
-                // sensor out of the index, so every side effect is isolated.
-                try
-                {
-                    _journalService.AddRecord(new JournalRecordModel(sensor.Id, request.Initiator)
-                    {
-                        Enviroment = "Move sensor",
-                        PropertyName = "Path",
-                        OldValue = oldFullPath,
-                        NewValue = newFullPath,
-                        Path = newFullPath,
-                        Kind = JournalKinds.TreeCrud,
-                        ProductId = destinationRoot.Id.ToString(),
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"Journaling the move of sensor {sensor.Id} failed");
-                }
-
-                _logger.Info($"Sensor moved: Id = {sensor.Id}, {oldFullPath} -> {newFullPath}, Initiator = {request.Initiator}");
-
                 // Publish last (see the class comment).
                 oldCache.Aliases[oldPath] = sensor;
                 destinationCache.Sensors[newPath] = sensor;
 
-                try
-                {
-                    SensorMovedEvent?.Invoke(sensor, oldParent.Id);
-                    SensorUpdateView(sensor);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"A subscriber failed on the move of sensor {sensor.Id}");
-                }
-
-                return new SensorMoveResult(SensorMoveOutcome.Moved) { OldPath = oldFullPath, NewPath = newFullPath };
+                return (new SensorMoveResult(SensorMoveOutcome.Moved) { OldPath = oldFullPath, NewPath = newFullPath },
+                    new PublishedMove(sensor, oldParent, destinationRoot, oldFullPath, newFullPath, matchedBefore));
             }
         }
 
@@ -328,6 +365,41 @@ namespace HSMServer.Core.Cache
             AddValueToSensor(sensor, sensor.Path, request.Value);
         }
 
+        private void ReevaluateMovedSensorTemplates(SensorTemplateReevaluationRequest request)
+        {
+            if (TryGetSensorById(request.SensorId, out var sensor) &&
+                OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
+                    (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "template re-evaluation"))
+                ReevaluateTemplates(sensor, request.MatchedBefore);
+        }
+
+        private void UpdateThroughAlias(AliasRegistrationRequest request)
+        {
+            if (TryGetSensorById(request.Update.Id, out var sensor) &&
+                OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
+                    (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "registration through an alias") &&
+                !TryUpdateSensor(request.Update, out var error))
+                _logger.Error($"Registration through an alias failed for sensor {sensor.Id}: {error}");
+        }
+
+        // A request routed by a sensor's root at enqueue time runs only on the
+        // queue that owns the sensor now: otherwise it follows the sensor (at
+        // most MaxAliasHops times) and the caller skips it here. Keeps the
+        // sensor model single-writer across moves (ADR-0018).
+        private bool OnOwningQueue(BaseSensorModel sensor, Guid expectedRootId, int hops,
+            Func<Guid, int, IUpdateRequest> reroute, string what)
+        {
+            if (sensor.Root.Id == expectedRootId)
+                return true;
+
+            if (hops >= MaxAliasHops)
+                _logger.Warn($"Dropped {what} for sensor {sensor.Id}: it kept moving between products");
+            else
+                Dispatch(sensor.Root, reroute(sensor.Root.Id, hops + 1));
+
+            return false;
+        }
+
         private void CountDroppedAliasValue(string reason) =>
             CountAndWarnRateLimited(ref _aliasValuesDropped, () => $"Aliased value dropped: {reason}");
 
@@ -335,6 +407,17 @@ namespace HSMServer.Core.Cache
         {
             if (!TryGetSensorById(request.SensorId, out var sensor))
                 return;
+
+            if (sensor.Root.Id != request.ExpectedRootId)
+            {
+                if (request.Redispatch)
+                    OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
+                        (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "alias removal");
+                else
+                    request.Misrouted = true;
+
+                return;
+            }
 
             var changed = false;
 
@@ -462,8 +545,9 @@ namespace HSMServer.Core.Cache
         }
 
         private void DispatchAliasRemoval(BaseSensorModel sensor, Guid productId, string path, string reason) =>
-            Dispatch(sensor.Root, new SensorAliasMaintenanceRequest(sensor.Id, DateTime.UtcNow)
+            Dispatch(sensor.Root, new SensorAliasMaintenanceRequest(sensor.Id, sensor.Root.Id, DateTime.UtcNow)
             {
+                Redispatch = true,
                 RemoveProductId = productId,
                 RemovePath = path,
                 Initiator = InitiatorInfo.AsSystemInfo(reason),

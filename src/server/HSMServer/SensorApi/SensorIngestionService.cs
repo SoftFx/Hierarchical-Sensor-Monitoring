@@ -1,4 +1,4 @@
-﻿using HSMCommon.TaskResult;
+using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;

@@ -54,8 +54,16 @@ namespace HSMServer.Core.Model.Requests
     /// sensor's SelfDestroy interval and persist recent hits, or remove one alias
     /// (<see cref="RemoveProductId"/>/<see cref="RemovePath"/>) when asked to.
     /// </summary>
-    internal sealed record SensorAliasMaintenanceRequest(Guid SensorId, DateTime UtcNow) : IUpdateRequest
+    internal sealed record SensorAliasMaintenanceRequest(Guid SensorId, Guid ExpectedRootId, DateTime UtcNow) : IUpdateRequest
     {
+        // Fire-and-forget senders let the handler follow a sensor that moved
+        // to another queue; awaiting senders read Misrouted and retry.
+        public bool Redispatch { get; init; }
+
+        public int Hops { get; init; }
+
+        public bool Misrouted { get; set; }
+
         public Guid? RemoveProductId { get; init; }
 
         public string RemovePath { get; init; }
@@ -64,6 +72,18 @@ namespace HSMServer.Core.Model.Requests
 
         public bool Removed { get; set; }
     }
+
+
+    /// <summary>A registration that reached a sensor through an alias of another root product.</summary>
+    internal sealed record AliasRegistrationRequest(Cache.UpdateEntities.SensorUpdate Update, Guid ExpectedRootId, int Hops) : IUpdateRequest;
+
+
+    /// <summary>
+    /// Template re-evaluation of a sensor that moved into another root product:
+    /// runs on the destination's queue, which owns the sensor from now on.
+    /// </summary>
+    internal sealed record SensorTemplateReevaluationRequest(Guid SensorId, System.Collections.Generic.HashSet<Guid> MatchedBefore,
+        Guid ExpectedRootId, int Hops) : IUpdateRequest;
 
 
     // Path validation and normalization shared with ingestion (BaseUpdateRequest).
