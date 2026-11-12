@@ -1,7 +1,7 @@
 # Initiative: Collector session — a persistent WebSocket connection on 443
 
 > Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
-> Status: **design, owner decisions recorded 2026-11-10** (§ Owner Decisions). Transport choice: [ADR-0017](../decisions/0017-collector-session-websocket.md). Implemented so far: step 1 in PR #1663 and step 2 in PR #1665, both open at the time of writing. What this document quotes from them (class and test names, the dependency manifests, the libcurl version floor, test counts, the measured cost of a session) is theirs and exists on no merged branch yet. Nothing is wired into a collector's send path.
+> Status: **design, owner decisions recorded 2026-11-10** (§ Owner Decisions). Transport choice: [ADR-0017](../decisions/0017-collector-session-websocket.md). Implemented so far: step 1 (PR #1663) and step 2 (PR #1665), both merged, and the managed half of step 3: the managed collector can use a session since 3.9.0 (§ Step 3 as built). The native session transport is step 4 (#1668, PR #1669).
 
 ## Problem
 

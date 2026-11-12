@@ -1065,6 +1065,7 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "session_server_ack":
+                    Assert.True(step.Arg(0) == "list" || step.Arg(0) == "commands", $"session_server_ack: unknown op '{step.Arg(0)}'.");
                     SessionServer(state).AckWith(step.Arg(0), int.Parse(step.Arg(1)));
                     break;
 
@@ -1189,6 +1190,8 @@ namespace HSMDataCollector.Tests
 
                 case "expect_session_upgrade_header":
                 {
+                    Assert.True(SessionServer(state).Sessions > 0, "expect_session_upgrade_header: no upgrade has been accepted yet.");
+
                     var headers = SessionServer(state).UpgradeHeaders;
 
                     Assert.True(headers.TryGetValue(step.Arg(0), out var actual), $"The upgrade carried no {step.Arg(0)} header.");
@@ -1200,8 +1203,10 @@ namespace HSMDataCollector.Tests
                 {
                     var server = SessionServer(state);
 
-                    Assert.True(await PollAsync(() => server.Closes.Count > 0, "5").ConfigureAwait(false), "The collector sent no close frame.");
-                    Assert.Equal(1000, server.Closes.Last());
+                    // The last close, not any close: an earlier session of the case may have been
+                    // ended by the collector for a reason of its own.
+                    Assert.True(await PollAsync(() => server.Closes.Count > 0 && server.Closes.Last() == 1000, "5").ConfigureAwait(false),
+                                "The collector did not close its last session with 1000. Close codes: " + string.Join(",", server.Closes));
                     break;
                 }
 

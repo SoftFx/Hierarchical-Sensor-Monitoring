@@ -299,14 +299,27 @@ namespace HSMDataCollector.Tests.Transport
                 status = Volatile.Read(ref _listFailStatus);
             }
 
-            _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, status));
-
             if (status == 0)
+            {
+                _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, 0));
                 return;
+            }
 
-            await SendAsync(socket, status >= 200 && status < 300
-                ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"
-                : $"{{\"ack\":{id.Value},\"status\":{status},\"error\":\"scripted refusal\"}}").ConfigureAwait(false);
+            // Recorded with its status only once the ack is written: a test that sees a request
+            // as accepted and then cuts the session must not race the ack it is counting on.
+            try
+            {
+                await SendAsync(socket, status >= 200 && status < 300
+                    ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"
+                    : $"{{\"ack\":{id.Value},\"status\":{status},\"error\":\"scripted refusal\"}}").ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, 0));
+                throw;
+            }
+
+            _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, status));
         }
 
         private Task SendAsync(WebSocket socket, string text) =>
