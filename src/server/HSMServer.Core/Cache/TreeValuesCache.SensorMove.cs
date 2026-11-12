@@ -145,6 +145,11 @@ namespace HSMServer.Core.Cache
                 outcome = SensorMoveOutcome.Merged;
             }
 
+            Guid? displacesAliasOf = _cache.TryGetValue(root.Id, out var destinationCache) &&
+                destinationCache.Aliases.TryGetValue(check.Path, out var aliasOwner) && aliasOwner.Id != sensor.Id
+                ? aliasOwner.Id
+                : null;
+
             // The deepest existing node on the way, and the ones to create.
             var parent = root;
             var created = new List<string>();
@@ -206,6 +211,7 @@ namespace HSMServer.Core.Cache
                 OldPath = oldPath,
                 NewPath = newPath,
                 OccupantId = occupantId,
+                DisplacesAliasOf = displacesAliasOf,
                 CreatedNodes = created,
                 TemplatesDetached = detached,
                 TemplatesApplied = applied,

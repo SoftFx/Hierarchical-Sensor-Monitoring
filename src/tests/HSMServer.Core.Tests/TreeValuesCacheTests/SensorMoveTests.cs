@@ -251,6 +251,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.Equal((SensorMoveOutcome.Conflict, occupant.Id), (conflict.Outcome, conflict.OccupantId));
                 Assert.Equal(SensorMoveOutcome.Merged, _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/taken", SensorMoveConflict.Merge).Outcome);
 
+                // An alias another sensor holds at the destination is named.
+                var mover = await CreateIntSensorAsync(_fixture.ProductB, _fixture.KeyB, $"{root}/was-here", values: 1);
+                Assert.True((await _valuesCache.MoveSensorAsync(mover.Id, _fixture.ProductB, $"{root}/now-there")).IsOk);
+                Assert.Equal(mover.Id, _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/was-here").DisplacesAliasOf);
+
                 // Nothing changed.
                 Assert.Equal(_fixture.ProductA, sensor.Root.Id);
                 Assert.Empty(sensor.Aliases);

@@ -75,6 +75,22 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     ["product"] = ["The destination must be a root product; give sub-nodes as part of `path` or `node`."],
                 });
 
+            // Two sensors bound for one path: the second would conflict — or,
+            // under merge, absorb and delete the first, which the caller asked
+            // to keep. Refused before anything moves.
+            if (request.Node is not null)
+            {
+                var clash = request.Sensors.Select(_cache.GetSensor).Where(s => s is not null)
+                    .GroupBy(s => s.DisplayName, StringComparer.Ordinal)
+                    .FirstOrDefault(g => g.Count() > 1);
+
+                if (clash is not null)
+                    return PolicyWriteResult<SensorMoveResponseDto>.Fail(PolicyWriteOutcome.Invalid, new Dictionary<string, string[]>
+                    {
+                        ["sensors"] = [$"{clash.Count()} sensors are named '{clash.Key}' and would share one destination path in the node; move them separately with `path`."],
+                    });
+            }
+
             var dryRun = write is { DryRun: true };
             var initiator = dryRun ? null : ChangeSetRecorder.InitiatorOf(user, _users);
 
@@ -114,7 +130,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     Operation = "move",
                     EntityId = request.Sensors.Count == 1 ? request.Sensors[0].ToString() : null,
                     Path = $"{product.DisplayName}/{request.Path ?? request.Node}".TrimEnd('/'),
-                    Affected = previews.Where(p => p.NewPath is not null)
+                    Affected = previews.Where(p => p.Outcome is "moved" or "merged")
                         .Select(p => new PreviewAffectedEntityDto { Id = p.SensorId.ToString(), Path = p.NewPath, Change = p.Outcome })
                         .ToList(),
                     Sensors = previews,
@@ -145,6 +161,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             if (admission is not null)
                 return admission == Forbidden
+                    ? PolicyWriteResult.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage)
+                    : PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+            // Removing the alias changes routing in ITS product (the next value
+            // there creates a new sensor), which may not be the sensor's.
+            var aliasProduct = _authorization.AuthorizeWrite(user, new ApiTokenResource(ApiTokenResourceKind.Product, productId));
+
+            if (aliasProduct != ApiTokenAuthorization.Allowed)
+                return aliasProduct == ApiTokenAuthorization.Forbidden
                     ? PolicyWriteResult.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage)
                     : PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
@@ -243,8 +268,10 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             OldPath = result.OldPath,
             NewPath = result.NewPath,
             OtherSensorId = result.MergedSensorId,
-            MergedValues = result.Outcome is SensorMoveOutcome.Merged ? result.MergedValues : null,
-            MergeCollisions = result.Outcome is SensorMoveOutcome.Merged ? result.MergeCollisions : null,
+            // Present whenever a merge happened — also when the move after it
+            // failed: the absorbed sensor is gone either way.
+            MergedValues = result.MergedSensorId is not null ? result.MergedValues : null,
+            MergeCollisions = result.MergedSensorId is not null ? result.MergeCollisions : null,
             Error = result.Error,
         };
 
@@ -255,6 +282,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             OldPath = preview.OldPath,
             NewPath = preview.NewPath,
             OtherSensorId = preview.OccupantId,
+            DisplacesAliasOf = preview.DisplacesAliasOf,
             CreatedNodes = preview.CreatedNodes,
             TemplatesDetached = preview.TemplatesDetached.Select(t => new SensorMoveTemplateDto { Id = t.Id, Name = t.Name }).ToList(),
             TemplatesApplied = preview.TemplatesApplied.Select(t => new SensorMoveTemplateDto { Id = t.Id, Name = t.Name }).ToList(),

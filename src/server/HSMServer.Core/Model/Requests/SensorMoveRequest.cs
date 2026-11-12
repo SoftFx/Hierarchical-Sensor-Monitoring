@@ -35,6 +35,9 @@ namespace HSMServer.Core.Model.Requests
         /// <summary>The sensor the move would merge (Merged) or collide with (Conflict).</summary>
         public Guid? OccupantId { get; init; }
 
+        /// <summary>Another sensor whose alias the destination path is: the move would displace it.</summary>
+        public Guid? DisplacesAliasOf { get; init; }
+
         /// <summary>Destination nodes the move would create, as full paths.</summary>
         public List<string> CreatedNodes { get; init; } = [];
 

@@ -114,6 +114,49 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task Node_RefusesTwoSensorsOfTheSameName_BeforeMovingAnything()
+        {
+            var first = AddSensor("CPU");
+            var second = AddSensor("CPU");
+
+            var result = await Service().MoveSensorsAsync(Request([first.Id, second.Id], node: "z", onConflict: "merge"), Principal());
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Contains("sensors", result.Failure.Errors.Keys);
+            Assert.Empty(_moves);
+        }
+
+        [Fact]
+        public async Task MergeCounts_TravelWhenTheMoveAfterAMergeFailed()
+        {
+            var sensor = AddSensor("s");
+            var other = Guid.NewGuid();
+            _cache.Setup(c => c.MoveSensorAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
+                    It.IsAny<SensorMoveConflict>(), It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SensorMoveResult(SensorMoveOutcome.Failed, "move failed") { MergedSensorId = other, MergedValues = 3, MergeCollisions = 0 });
+
+            var item = Assert.Single((await Service().MoveSensorsAsync(Request([sensor.Id], path: "x", onConflict: "merge"), Principal())).Value.Results);
+
+            Assert.Equal(("failed", other, 3L, 0L), (item.Outcome, item.OtherSensorId, item.MergedValues, item.MergeCollisions));
+        }
+
+        [Fact]
+        public async Task RemoveAlias_NeedsWriteOnTheAliasProductToo()
+        {
+            var sensor = AddSensor("s");
+            var aliasProduct = Guid.NewGuid();
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Kind == ApiTokenResourceKind.Product && r.Id == aliasProduct)))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            var result = await Service().RemoveAliasAsync(sensor.Id, aliasProduct, "old/s", Principal());
+
+            Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
+            _cache.Verify(c => c.RemoveSensorAliasAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
+                It.IsAny<InitiatorInfo>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
         public async Task EmptyNode_MeansDirectlyUnderTheProduct()
         {
             var a = AddSensor("a");

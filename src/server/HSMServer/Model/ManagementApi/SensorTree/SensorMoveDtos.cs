@@ -70,10 +70,10 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         [Description("Id of the sensor that was absorbed (`merged`) or that holds the path (`conflict`); null otherwise.")]
         public Guid? OtherSensorId { get; init; }
 
-        [Description("`merged` only: values taken over from the absorbed sensor.")]
+        [Description("Values taken over from the absorbed sensor; set whenever a merge happened (`merged`, or `failed` when the move after the merge failed — the absorbed sensor is gone either way).")]
         public long? MergedValues { get; init; }
 
-        [Description("`merged` only: absorbed values dropped because this sensor had a value at the same timestamp.")]
+        [Description("Absorbed values dropped because this sensor had a value at the same timestamp; set whenever a merge happened.")]
         public long? MergeCollisions { get; init; }
 
         [Description("Why the sensor was not moved, or a note on a partial merge; null on a clean success.")]
@@ -108,6 +108,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         [Description("Id of the sensor that would be absorbed (`merged`) or that holds the path (`conflict`).")]
         public Guid? OtherSensorId { get; init; }
+
+        [Description("Id of another moved sensor whose alias (old path) the destination is: the move takes the path over, and values from collectors still sending there would land in this sensor instead.")]
+        public Guid? DisplacesAliasOf { get; init; }
 
         [Description("Destination nodes the move would create, as full paths.")]
         public List<string> CreatedNodes { get; init; }
