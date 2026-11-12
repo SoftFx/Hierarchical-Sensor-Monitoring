@@ -1,4 +1,9 @@
 using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using HSMServer.Core.Cache;
+using HSMServer.Core.TreeStateSnapshot;
+using HSMServer.Core.TreeStateSnapshot.States;
+using Moq;
 using HSMDatabase.AccessManager.Formatters;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Model;
@@ -191,6 +196,100 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        [Fact]
+        [Trait("Category", "Sensor merge")]
+        public async Task Merge_WhenTheOccupantsEntityCannotBeRemoved_SaysSo()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddMinutes(-30);
+
+            var moved = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/a", start);
+            var occupant = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/b", start.AddMinutes(1));
+
+            _failing.FailRemoveSensor = id => id == occupant.Id;
+            SensorMoveResult result;
+            try
+            {
+                result = await _valuesCache.MoveSensorAsync(moved.Id, _fixture.ProductA, $"{root}/b", SensorMoveConflict.Merge);
+            }
+            finally
+            {
+                _failing.FailRemoveSensor = null;
+            }
+
+            // The history is merged and the path is the moved sensor's, but the
+            // leftover entity would come back on restart: the caller must hear it.
+            Assert.Equal(SensorMoveOutcome.Merged, result.Outcome);
+            Assert.NotNull(result.Error);
+            Assert.Contains(occupant.Id.ToString(), result.Error);
+            Assert.Contains("after a restart", result.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/b", out var owner));
+            Assert.Same(moved, owner);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor merge")]
+        public async Task Merge_WhenTheMoveFailsAfterTheAbsorb_ReportsIt_AndPersistsTheAliases()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddMinutes(-30);
+
+            var moved = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/a", start);
+            var occupant = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/b", start.AddMinutes(1), start.AddMinutes(2));
+
+            // Only the move's own entity write fails; the forced persist after it succeeds.
+            var failures = 1;
+            _failing.ShouldFailSensorUpdate = e => e.Id == moved.Id.ToString() && failures-- > 0;
+            SensorMoveResult result;
+            try
+            {
+                result = await _valuesCache.MoveSensorAsync(moved.Id, _fixture.ProductA, $"{root}/b", SensorMoveConflict.Merge);
+            }
+            finally
+            {
+                _failing.ShouldFailSensorUpdate = null;
+            }
+
+            Assert.Equal(SensorMoveOutcome.Failed, result.Outcome);
+            Assert.Equal(occupant.Id, result.MergedSensorId);
+            Assert.Equal(2, result.MergedValues);
+            Assert.Contains("retry the move", result.Error);
+
+            // The sensor stayed where it was, the occupant is gone, and its path
+            // already routes to the sensor - in memory and after a restart.
+            Assert.Equal($"{root}/a", moved.Path);
+            Assert.Null(_valuesCache.GetSensor(occupant.Id));
+            Assert.Equal(3, (await ReadHistoryAsync(moved.Id)).Count);
+
+            await using var restarted = BuildCacheOverTheSameDatabase();
+            var reloaded = restarted.GetSensor(moved.Id);
+            Assert.Contains(reloaded.Aliases, a => a.ProductId == _fixture.ProductA && a.Path == $"{root}/b");
+            Assert.False(restarted.TryGetSensorByPath(_fixture.ProductA, $"{root}/b", out _));
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor merge")]
+        public async Task Merge_OfBarSensors_TakesOverTheOccupantsInProgressBar()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+
+            var moved = await CreateBarAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/a", start);
+            var occupant = await CreateBarAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/b", start.AddMinutes(10), start.AddMinutes(20));
+
+            var result = await _valuesCache.MoveSensorAsync(moved.Id, _fixture.ProductA, $"{root}/b", SensorMoveConflict.Merge);
+
+            Assert.Equal(SensorMoveOutcome.Merged, result.Outcome);
+            Assert.True(result.IsOk, result.Error);
+
+            // Both occupant bars, the in-progress one included, are now the survivor's rows.
+            var history = await ReadHistoryAsync(moved.Id);
+            Assert.Contains(history, v => v is BarBaseValue bar && bar.OpenTime == start.AddMinutes(10));
+            Assert.Contains(history, v => v is BarBaseValue bar && bar.OpenTime == start.AddMinutes(20));
+            Assert.Empty(await ReadHistoryAsync(occupant.Id));
+        }
+
+
         protected override HSMServer.Core.DataLayer.IDatabaseCore WrapDatabase(HSMServer.Core.DataLayer.IDatabaseCore inner) =>
             _failing = new FailingDatabaseCore(inner, _ => false);
 
@@ -215,6 +314,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 new IntSensorValue { Path = path, Time = time, Value = value });
 
             Assert.True(result.IsOk, result.Error);
+        }
+
+        private async Task<BaseSensorModel> CreateBarAsync(Guid productId, Guid key, string path, params DateTime[] openTimes)
+        {
+            foreach (var open in openTimes)
+            {
+                var result = await _valuesCache.AddSensorValueAsync(key, productId, new IntBarSensorValue
+                {
+                    Path = path,
+                    OpenTime = open,
+                    CloseTime = open.AddMinutes(5),
+                    Time = open.AddMinutes(5),
+                    Count = 2,
+                    Min = 1,
+                    Max = 3,
+                    Mean = 2,
+                    LastValue = 3,
+                });
+
+                Assert.True(result.IsOk, result.Error);
+            }
+
+            Assert.True(_valuesCache.TryGetSensorByPath(productId, path, out var sensor), $"bar sensor {path} was not created");
+
+            return sensor;
+        }
+
+        private TreeValuesCache BuildCacheOverTheSameDatabase()
+        {
+            var snapshot = new Mock<ITreeStateSnapshot>();
+            snapshot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
+
+            var database = _databaseCoreManager.DatabaseCore;
+
+            return new TreeValuesCache(database, snapshot.Object, _journalService, _alertScheduleProvider,
+                new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
         }
 
         private async Task<List<BaseValue>> ReadHistoryAsync(Guid sensorId)

@@ -213,7 +213,17 @@ namespace HSMServer.Core.Tests.Infrastructure
             _inner.UpdateSensor(entity);
         }
 
-        public void RemoveSensorWithMetadata(Guid sensorId) => _inner.RemoveSensorWithMetadata(sensorId);
+        // Sensor-move merge (#1720 review): set to make removing a sensor's
+        // entity throw, as a failed database write does.
+        internal Func<Guid, bool> FailRemoveSensor { get; set; }
+
+        public void RemoveSensorWithMetadata(Guid sensorId)
+        {
+            if (FailRemoveSensor?.Invoke(sensorId) == true)
+                throw new System.IO.IOException("injected remove failure");
+
+            _inner.RemoveSensorWithMetadata(sensorId);
+        }
         public void AddSensorValue(Guid sensorId, BaseValue value) => _inner.AddSensorValue(sensorId, value);
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
 

@@ -578,10 +578,10 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"Sensor merged: [{occupant.Id}] {occupant.FullPath} into [{survivor.Id}] {survivor.FullPath}: {request.Copied} copied, {request.Collisions} collisions");
 
-                RemoveSensor(occupant.Id, InitiatorInfo.AsSystemInfo($"Merged into sensor {survivor.Id}"));
-
-                if (TryGetSensorById(occupant.Id, out _))
-                    request.Error = $"Sensor {occupant.Id} was merged but could not be removed.";
+                // The occupant is already out of the index; a failed database
+                // removal would bring it back at this path on restart.
+                if (!RemoveSensor(occupant.Id, InitiatorInfo.AsSystemInfo($"Merged into sensor {survivor.Id}")))
+                    request.Error = $"Sensor {occupant.Id} was merged, but removing it from the database failed (see the log): it comes back at {request.Path} after a restart and must then be removed.";
             }
             catch (Exception ex)
             {

@@ -329,10 +329,14 @@ namespace HSMServer.Core.Model
         public Action<BaseValue> ReceivedNewValue;
 
 
-        // Paths the sensor was moved away from (#1718, ADR-0018). Mutated
-        // only on the owning product's queue thread (move, sweep, removal);
-        // the lock covers the readers on other threads (the ingestion index
-        // rebuild, the API).
+        // Paths the sensor was moved away from (#1718, ADR-0018). Mutated on
+        // the owning product's queue thread (move, sweep, removal) and, during
+        // a merge (#1720), by the index flip on the occupant's queue under the
+        // tree-structure lock. The lock covers every single mutation and the
+        // readers on other threads (the ingestion index rebuild, the API). A
+        // persist builds its entity from a fresh read, and the move's own write
+        // that always follows a flip (or its forced persist) runs after it, so
+        // an alias added by a flip is never left unpersisted.
         private readonly List<SensorAlias> _aliases = [];
 
         public IReadOnlyList<SensorAlias> Aliases
