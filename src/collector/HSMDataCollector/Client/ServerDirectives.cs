@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading;
 using HSMDataCollector.Logging;
 
@@ -13,21 +12,18 @@ namespace HSMDataCollector.Client
     /// Directives are handled inside the collector; there is no public event (owner decision,
     /// 2026-11-10). The library acts on none of the directives that exist today
     /// (<c>update-available</c>, <c>sensor-disable</c>, <c>sensor-enable</c> are matters of the
-    /// agent, which is a native collector host), so each unknown directive is noted once at
-    /// debug level and dropped. One the library should act on later gets a row in
-    /// <see cref="Handlers"/>, still without a public surface.
+    /// agent, which is a native collector host), so each directive is counted, its name is
+    /// noted once at debug level, and it is dropped. One the library should act on later is
+    /// dispatched from <see cref="Receive"/>, still without a public surface.
     /// </summary>
     internal sealed class ServerDirectives
     {
         internal const string HeaderName = "X-Hsm-Directive";
 
-        // How many different unknown directive names are noted before the notes stop. The
-        // names come from the network, so the memory they may take is bounded.
+        // The names come from the network, so what is remembered of them is bounded: this many
+        // different names, each cut to this length.
         private const int MaxNotedNames = 32;
-
-        // directive name -> what the collector does with its argument. Empty in this version.
-        private static readonly Dictionary<string, Action<string>> Handlers =
-            new Dictionary<string, Action<string>>(StringComparer.Ordinal);
+        private const int MaxNameLength = 64;
 
         private readonly ConcurrentDictionary<string, bool> _notedNames = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
         private readonly ICollectorLogger _logger;
@@ -55,15 +51,18 @@ namespace HSMDataCollector.Client
             {
                 Interlocked.Increment(ref _received);
 
+                // "name:argument", or a bare name. No directive is acted on in this version, so
+                // only the name is of interest.
                 var colon = directive.IndexOf(':');
                 var name = (colon < 0 ? directive : directive.Substring(0, colon)).Trim();
-                var argument = colon < 0 ? string.Empty : directive.Substring(colon + 1).Trim();
 
-                if (Handlers.TryGetValue(name, out var handler))
-                {
-                    handler(argument);
+                if (name.Length > MaxNameLength)
+                    name = name.Substring(0, MaxNameLength);
+
+                // The same few names arrive with every answer: look first, and count the table
+                // only for a name that is new.
+                if (_notedNames.ContainsKey(name))
                     return;
-                }
 
                 if (_notedNames.Count < MaxNotedNames && _notedNames.TryAdd(name, true))
                     _logger?.Debug($"Server directive '{name}' is not handled by this collector and is ignored.");

@@ -49,10 +49,12 @@ namespace HSMDataCollector.Core
         /// Headers the collector adds to every request that carries sensor values, next to its
         /// own <c>Key</c> and <c>ClientName</c>. They state facts about the host for the server
         /// (an agent sends <c>X-Agent-Version</c>, which is what makes the server answer with
-        /// directives). Read once, when the collector is created; registrations do not carry
-        /// them. A name the collector sets itself (<c>Key</c>, <c>ClientName</c>), a header of
-        /// the request body or of the connection, a name that is not a plain token and a value
-        /// with a line break are refused at construction.
+        /// directives). Read once, when the collector creates its sender; registrations do not
+        /// carry them. They belong to the built-in sender: with a custom <see cref="DataSender"/>
+        /// they are validated and otherwise unused. A name the collector sets itself
+        /// (<c>Key</c>, <c>ClientName</c>), a header of the request body or of the connection,
+        /// a name that is not a plain token and a value that is not printable ASCII are refused
+        /// at construction.
         /// </summary>
         public IDictionary<string, string> ExtraRequestHeaders { get; } =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -77,15 +79,25 @@ namespace HSMDataCollector.Core
                 if (ch <= ' ' || ch >= 127 || HeaderNameSeparators.IndexOf(ch) >= 0)
                     throw new ArgumentException($"'{name}' is not a valid request header name.", nameof(ExtraRequestHeaders));
 
-            if (ReservedRequestHeaders.Contains(name) || name.StartsWith("Sec-WebSocket-", StringComparison.OrdinalIgnoreCase))
+            if (ReservedRequestHeaders.Contains(name)
+                || name.StartsWith("Content-", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("Sec-WebSocket-", StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException($"The request header '{name}' is set by the collector and cannot be replaced.", nameof(ExtraRequestHeaders));
 
             if (value == null)
                 throw new ArgumentException($"The request header '{name}' has no value.", nameof(ExtraRequestHeaders));
 
+            // Printable ASCII and tab only. A line break would be a second header; anything
+            // outside ASCII is refused by one HTTP stack at send time and mangled by the other.
             foreach (var ch in value)
-                if (ch == '\r' || ch == '\n' || ch == '\0')
-                    throw new ArgumentException($"The value of the request header '{name}' contains a line break.", nameof(ExtraRequestHeaders));
+                if ((ch < ' ' && ch != '\t') || ch >= 127)
+                    throw new ArgumentException($"The value of the request header '{name}' is not printable ASCII.", nameof(ExtraRequestHeaders));
+
+            // The HTTP stack has the last word: a name it files under the content or response
+            // headers would be dropped from the request without a sound.
+            using (var probe = new System.Net.Http.HttpRequestMessage())
+                if (!probe.Headers.TryAddWithoutValidation(name, value))
+                    throw new ArgumentException($"'{name}' cannot be sent as a request header.", nameof(ExtraRequestHeaders));
         }
 
         internal void Validate()

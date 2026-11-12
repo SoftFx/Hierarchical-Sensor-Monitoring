@@ -132,6 +132,10 @@ namespace HSMDataCollector.Tests.Transport
         [InlineData("", "value")]
         [InlineData("X-Injected", "value\r\nKey: other-key")]
         [InlineData("X-Null", null)]
+        [InlineData("X-Not-Ascii", "\u0441\u0435\u0440\u0432\u0435\u0440")]
+        [InlineData("X-Control", "a\u0001b")]
+        [InlineData("Content-Language", "en")]
+        [InlineData("Expires", "0")]
         public void Extra_request_header_the_collector_cannot_send_is_refused_at_construction(string name, string value)
         {
             var options = new CollectorOptions
