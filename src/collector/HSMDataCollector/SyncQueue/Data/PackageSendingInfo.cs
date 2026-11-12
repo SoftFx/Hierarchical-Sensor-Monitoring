@@ -58,9 +58,33 @@ namespace HSMDataCollector.SyncQueue.Data
         internal static string DescribeFailure(HttpResponseMessage response, string serverMessage)
         {
             var reason = string.IsNullOrWhiteSpace(response.ReasonPhrase) ? response.StatusCode.ToString() : response.ReasonPhrase;
+
+            // The reason phrase is the server's (or a proxy's) text too.
+            if (reason.Length > MaxDescriptionPartLength)
+                reason = reason.Substring(0, MaxDescriptionPartLength) + "...";
+
             var text = $"Code: {(int)response.StatusCode} ({reason}).";
 
             return string.IsNullOrEmpty(serverMessage) ? text : $"{text} {serverMessage}";
+        }
+
+        /// <summary>
+        /// The longest piece of text taken from a server's answer into a failure description.
+        /// </summary>
+        internal const int MaxDescriptionPartLength = 256;
+
+        /// <summary>
+        /// The text of a send that got no answer. The message of an <c>HttpRequestException</c>
+        /// only says that the request failed; the cause (name not resolved, connection refused,
+        /// certificate not trusted) is in the innermost exception, so both are kept.
+        /// </summary>
+        internal static string DescribeException(System.Exception ex)
+        {
+            var cause = ex.GetBaseException();
+
+            return ReferenceEquals(cause, ex) || string.IsNullOrEmpty(cause.Message) || ex.Message.Contains(cause.Message)
+                ? ex.Message
+                : $"{ex.Message} {cause.Message}";
         }
     }
 }
