@@ -26,6 +26,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Transport tests shared with the unit project: there they run against the net472 build
+         of the collector, here against net6.0. -->
+    <Compile Include="..\HSMDataCollector.Tests\Transport\*.cs" Link="Transport\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
     <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>

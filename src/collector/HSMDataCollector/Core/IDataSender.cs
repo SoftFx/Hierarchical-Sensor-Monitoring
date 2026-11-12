@@ -26,4 +26,14 @@ namespace HSMDataCollector.Core
     {
         void CancelPendingRequests();
     }
+
+    /// <summary>
+    /// A built-in sender that reports its own faults (a failed attempt it repeats by itself, a
+    /// connection it lost). The collector that created the sender passes its deduplicated error
+    /// channel; until then, and for a sender used on its own, the reports go to the logger.
+    /// </summary>
+    internal interface IErrorReportingSender
+    {
+        void RouteErrorsTo(Action<string> sink);
+    }
 }

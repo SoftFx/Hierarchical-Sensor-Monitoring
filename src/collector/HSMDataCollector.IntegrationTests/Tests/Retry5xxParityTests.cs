@@ -16,9 +16,10 @@ namespace HSMDataCollector.IntegrationTests.Tests
     /// (BaseHandlers.ShouldRetry). Before the fix the Polly pipeline only retried on EXCEPTIONS,
     /// so a returned 5xx was treated as a final outcome — the data path recovered only via the
     /// slower queue re-enqueue (one attempt per collect cycle, each logged as an error). The fix
-    /// makes the BOUNDED data/priority/file pipelines retry 5xx within their own budget, while the
-    /// UNBOUNDED command pipeline deliberately stays exceptions-only so a persistent 5xx can never
-    /// hang it forever. These tests drive the real HsmHttpsClient handler stack against the
+    /// makes the data/priority/file pipelines retry 5xx within their own budget. A command send
+    /// never repeats inside itself (one attempt since #1659 A3; before that it retried exceptions
+    /// without a limit and returned a 5xx at once), so a failed registration always goes back to
+    /// the queue. These tests drive the real HsmHttpsClient handler stack against the
     /// in-process fake server, so they exercise the actual Polly pipelines, not a mock.
     /// </summary>
     [Trait("Category", "Integration")]
@@ -66,9 +67,8 @@ namespace HSMDataCollector.IntegrationTests.Tests
             var command = new AddOrUpdateSensorRequest { Path = "retry/command/int" };
             var info = await client.SendCommandAsync(new[] { command }, CancellationToken.None);
 
-            // The command pipeline is unbounded (int.MaxValue retries) but exceptions-only: a 5xx is
-            // a returned result, so ShouldRetry says no and the send returns the failure immediately.
-            // This is the guard that keeps a persistent server error from hanging commands forever.
+            // A command send is a single attempt (#1659 A3): the 5xx comes back as the result of the
+            // send, and the command queue decides when the package is sent again.
             Assert.False(info.IsSuccess);
             Assert.Equal(1, server.CommandRequests.Count(r => r.Body.Contains("retry/command/int")));
         }

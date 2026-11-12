@@ -45,10 +45,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             string[] pinnedOrder =
             [
                 "UseRouting",
-                // Deprecated-port visibility (#1590): FIRST of the guards — it only
-                // reads the Host header, and the guards below short-circuit (404/401),
-                // so a legacy-port request they reject must already have been logged.
-                "LegacyPortDeprecationMiddleware",
                 "ManagementApiGuardMiddleware",
                 "LegacyBearerGuardMiddleware",
                 // After UseRouting on purpose: the fail-closed endpoint-family

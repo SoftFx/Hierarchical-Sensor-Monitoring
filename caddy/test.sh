@@ -116,42 +116,33 @@ fi
 # Every proxy that remains is the app upstream and must carry the full hsm_upstream
 # treatment: the TLS skip (the app serves its self-signed certificate) and the Host
 # passthrough (HSM builds absolute redirects from the request Host; without it a login
-# redirect points browsers at the docker-internal name). Six proxies carry it today:
-# the primary 443 site, the two deprecated-port aliases, and the catch-all site, whose
-# three addresses each land in their port's server as a second site — one proxy per
-# site, three servers (:443, :44330, :44333).
+# redirect points browsers at the docker-internal name). Two proxies carry it: the
+# HSM_DOMAIN site and the catch-all site, both in the one :443 server.
 transport_hits="$(grep -oF '"insecure_skip_verify":true' "$tmp/no-vl-routes.json" | wc -l | tr -d ' ')"
-[ "$transport_hits" -eq 6 ] || {
-    echo "expected 6 proxies with insecure_skip_verify, got $transport_hits" >&2
+[ "$transport_hits" -eq 2 ] || {
+    echo "expected 2 proxies with insecure_skip_verify, got $transport_hits" >&2
     exit 1
 }
 host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/no-vl-routes.json" | wc -l | tr -d ' ')"
-[ "$host_hits" -eq 6 ] || {
-    echo "expected 6 Host header_up passthroughs, got $host_hits" >&2
+[ "$host_hits" -eq 2 ] || {
+    echo "expected 2 Host header_up passthroughs, got $host_hits" >&2
     exit 1
 }
 
-# Single upstream (#1590): every site — the primary 443 address AND the deprecated
-# 44330/44333 aliases still published through the deprecation window — forwards to the
-# app's one listener on 443. A per-port upstream here would 502 on one of the surfaces,
-# so the legacy dials must be gone while the legacy LISTENERS stay for the window's
-# stragglers.
-if grep -F '"dial":"app:44330"' "$tmp/no-vl-routes.json" >/dev/null; then
-    echo 'legacy per-port upstream app:44330 survived in the adapted configuration' >&2
-    exit 1
-fi
-if grep -F '"dial":"app:44333"' "$tmp/no-vl-routes.json" >/dev/null; then
-    echo 'legacy per-port upstream app:44333 survived in the adapted configuration' >&2
-    exit 1
-fi
-grep -F '"listen":[":44330"]' "$tmp/no-vl-routes.json" >/dev/null || {
-    echo 'deprecated 44330 alias listener missing from the adapted configuration' >&2
+# One port (#1590, aliases removed in #1696): the only HTTPS listener is :443 and every
+# site forwards to the app's one listener on 443. Neither a listener nor an upstream of
+# the old two-port scheme (44330 Sensor API, 44333 Web UI) may come back: a listener
+# would present a retired address as working, a per-port upstream would 502.
+grep -F '"listen":[":443"]' "$tmp/no-vl-routes.json" >/dev/null || {
+    echo 'the :443 listener is missing from the adapted configuration' >&2
     exit 1
 }
-grep -F '"listen":[":44333"]' "$tmp/no-vl-routes.json" >/dev/null || {
-    echo 'deprecated 44333 alias listener missing from the adapted configuration' >&2
-    exit 1
-}
+for retired_port in 44330 44333; do
+    if grep -F ":$retired_port" "$tmp/no-vl-routes.json" >/dev/null; then
+        echo "retired port $retired_port is still referenced by the adapted configuration" >&2
+        exit 1
+    fi
+done
 
 # Compatibility (#1580 review, kept through the #1594 removal): a customised Caddyfile
 # copied from a pre-2.11.4-4 image still contains `import {$HSM_VL_SNIPPET}` (the docs of

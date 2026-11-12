@@ -32,13 +32,28 @@ namespace hsm::http
         // Subprotocol the server selected (Sec-WebSocket-Protocol of the response), empty if none.
         std::string subprotocol;
         std::string error;
+        // The address libcurl connected to, "ip:port" ("[ip]:port" for IPv6); empty when no
+        // connection was made. With a CDN or a proxy in front it is theirs, not the server's.
+        std::string peer;
+    };
+
+    // How the peer ended the connection: filled when Receive returns Closed, cleared by Open.
+    struct WebSocketClosure
+    {
+        // True: a close frame arrived. False: the TCP connection ended without one.
+        bool close_frame = false;
+        // The close frame's status code; 0 when the frame carried none.
+        int code = 0;
+        // The close frame's reason text (at most 123 bytes), as the peer sent it.
+        std::string reason;
     };
 
     enum class WebSocketReceive
     {
         Text,    // a complete message is in `text`
         Timeout, // nothing complete arrived in time; the connection is still open and usable
-        Closed,  // the peer closed the WebSocket or the connection; the connection is released
+        Closed,  // the peer closed the WebSocket or the connection (LastClosure says which); the
+                 // connection is released
         Error    // transport failure, protocol violation, cancellation or an oversized message;
                  // the connection is released
     };
@@ -128,6 +143,9 @@ namespace hsm::http
 
         bool IsOpen() const { return curl_ != nullptr; }
 
+        // How the last Receive that returned Closed saw the connection end.
+        const WebSocketClosure& LastClosure() const { return closure_; }
+
     private:
         enum class Wait
         {
@@ -154,5 +172,6 @@ namespace hsm::http
         std::string message_;      // payload received so far of the message being assembled
         std::string control_;      // payload received so far of the ping or close frame in progress
         std::vector<char> detail_; // libcurl's error text for the handle (CURLOPT_ERRORBUFFER)
+        WebSocketClosure closure_; // how the peer ended the connection, kept past Release
     };
 } // namespace hsm::http
