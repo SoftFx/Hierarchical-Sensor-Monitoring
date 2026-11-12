@@ -1849,7 +1849,7 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Alerts.TtlPolicyDto.Interval">
             <summary>
-            Inactivity interval as a TimeSpan string (e.g. "00:30:00"); null exactly when
+            Inactivity interval as a TimeSpan string (e.g. "00:30:00"), at least 1 minute; null exactly when
             <c>inherit</c> is true (reads: also null for a policy resolving to no interval anywhere).
             </summary>
         </member>

@@ -801,6 +801,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, $"{prefix}.template",
                     "The message template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
 
+            // #1707: a policy that watches Status while carrying the Error
+            // status effect reacts to its own effect — the same rule the
+            // sensor-policy surface applies, so a template cannot mint
+            // self-triggering policies.
+            if ((SensorStatus)policy.SensorStatus == SensorStatus.Error &&
+                (policy.Conditions ?? []).Any(c => c is { } ok && (PolicyProperty)ok.Property == PolicyProperty.Status))
+                Add(errors, $"{prefix}.sensorStatus",
+                    "A policy that reacts to Status must not carry the Error status effect - it would re-trigger itself; drop the effect or watch another property.");
+
             foreach (var (condition, conditionIndex) in (policy.Conditions ?? []).Select((c, i) => (c, i)))
             {
                 var conditionPrefix = $"{prefix}.conditions[{conditionIndex}]";

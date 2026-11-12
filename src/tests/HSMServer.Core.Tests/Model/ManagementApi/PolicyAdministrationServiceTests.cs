@@ -570,6 +570,57 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal(TimeSpan.FromMinutes(45).Ticks, survivor.TTLInterval.Ticks);
         }
 
+        // #1707: two write-path decisions. A retention interval under a
+        // minute is retention thrash (history clears on nearly every value
+        // arrival), and a Status-watching policy with the Error status effect
+        // reacts to its own effect — the effect re-arms the trigger.
+        [Fact]
+        public async Task TtlPolicies_RejectAnIntervalUnderAMinute()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcMinTtl");
+
+            var refused = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:00:30"), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, refused.Failure.Outcome);
+            Assert.Equal("The interval must be at least 1 minute.", refused.Failure.Errors["interval"].Single());
+            Assert.Empty(sensor.Policies.TTLPolicies);
+
+            var atTheBound = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:01:00"), User);
+            Assert.True(atTheBound.Success, atTheBound.Failure?.Message);
+        }
+
+        [Fact]
+        public async Task CreateSensorPolicy_StatusConditionWithErrorEffect_IsRejected()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcSelfTrigger");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Status = "Error",
+                Conditions = [new AlertConditionDto { Property = "Status", Operation = "IsError" }],
+            }, User);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("re-trigger", created.Failure.Errors["status"].Single());
+            Assert.Empty(sensor.Policies);
+
+            // The condition parser is case-insensitive (Enum.TryParse
+            // ignoreCase) — a lowercase "status" must not slip the guard.
+            var lowerCase = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Status = "Error",
+                Conditions = [new AlertConditionDto { Property = "status", Operation = "IsError" }],
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, lowerCase.Failure.Outcome);
+
+            // Without the Error effect the same condition is a legitimate
+            // notification-only policy.
+            var accepted = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Conditions = [new AlertConditionDto { Property = "Status", Operation = "IsError" }],
+            }, User);
+            Assert.True(accepted.Success, accepted.Failure?.Message);
+        }
+
         [Fact]
         public async Task CreateSensorTtlPolicy_MissingIntervalAndInherit_AnswersInvalid()
         {
