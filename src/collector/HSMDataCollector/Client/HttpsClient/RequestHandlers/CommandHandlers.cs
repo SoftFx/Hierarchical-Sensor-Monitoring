@@ -14,9 +14,12 @@ namespace HSMDataCollector.Client.HttpsClient
 {
     internal sealed class CommandHandler : BaseHandlers<CommandRequestBase>
     {
-        protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
-
-        protected override int MaxRequestAttempts => int.MaxValue;
+        // One attempt per send (#1659 A3). This used to be int.MaxValue with a linear pause of up
+        // to 2 minutes: a send against an unreachable server never returned, so the command queue
+        // could neither take newer registrations into the package nor retry on its own period.
+        // A failed send now returns, the queue takes the package back and sends it again after
+        // PackageCollectPeriod, as the native collector does.
+        protected override int MaxRetryAttempts => 0;
 
         internal override object ConvertToRequestData(CommandRequestBase value) => value;
 
