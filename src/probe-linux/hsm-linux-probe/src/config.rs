@@ -253,6 +253,79 @@ pub struct ProbeConfig {
     pub disks: DisksConfig,
     #[serde(default)]
     pub docker: DockerConfig,
+    #[serde(default)]
+    pub network: NetworkConfig,
+}
+
+/// `probe.network { enabled, interfaces }`: the network sensors (#1711). Absent = on, physical
+/// interfaces only.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfig {
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+    /// Interface-name patterns (`*` = any run of characters) of the interfaces every per-interface
+    /// source reports (speed, link health, Wi-Fi), e.g. `["wlp*", "br0"]`. Empty = every physical
+    /// interface (one with `/sys/class/net/<if>/device`).
+    #[serde(default)]
+    pub interfaces: Vec<String>,
+    #[serde(default)]
+    pub reachability: ReachabilityConfig,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interfaces: Vec::new(),
+            reachability: ReachabilityConfig::default(),
+        }
+    }
+}
+
+/// `probe.network.reachability { enabled, internet, gatewayPort }` (#1711): time a TCP connect to
+/// the default gateway and to one internet address. Absent = off.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReachabilityConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// The internet target, an `ip:port` (no host name: a DNS lookup would time the resolver too,
+    /// and fail with it).
+    #[serde(default = "default_internet_target")]
+    pub internet: String,
+    /// The TCP port the gateway is probed on; a refused connect counts as an answer.
+    #[serde(default = "default_gateway_port")]
+    pub gateway_port: u16,
+}
+
+fn default_internet_target() -> String {
+    "1.1.1.1:443".to_string()
+}
+
+fn default_gateway_port() -> u16 {
+    53
+}
+
+impl Default for ReachabilityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            internet: default_internet_target(),
+            gateway_port: default_gateway_port(),
+        }
+    }
+}
+
+impl ReachabilityConfig {
+    /// The internet target as a socket address; validated by [`Config::validate`].
+    /// `None` also for a target that cannot be a remote host: port 0, an unspecified or loopback
+    /// address (a refusal from the probe's own host would look like an answer from the internet).
+    pub fn internet_address(&self) -> Option<std::net::SocketAddr> {
+        let address: std::net::SocketAddr = self.internet.trim().parse().ok()?;
+        let ip = address.ip();
+        (address.port() != 0 && !ip.is_unspecified() && !ip.is_loopback()).then_some(address)
+    }
 }
 
 /// `probe.disks { enabled, exclude, writeSpeed }`: the per-filesystem disk sensors (#1481).
@@ -462,6 +535,7 @@ impl Config {
         }
         self.probe.docker.validate()?;
         self.probe.disks.validate()?;
+        self.probe.network.validate()?;
         self.top_cpu.validate()?;
         self.top_disk_io.validate()?;
         Ok(())
@@ -482,6 +556,38 @@ impl DisksConfig {
             return Err(ConfigError::invalid(format!(
                 "probe.disks.exclude must not contain an empty pattern (got '{bad}')"
             )));
+        }
+        Ok(())
+    }
+}
+
+impl NetworkConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(bad) = self
+            .interfaces
+            .iter()
+            .find(|pattern| pattern.trim().is_empty() || pattern.contains('/'))
+        {
+            return Err(ConfigError::invalid(format!(
+                "probe.network.interfaces entries are interface-name patterns with '*' \
+                 wildcards (got '{bad}')"
+            )));
+        }
+        // Checked only when it is used, as topCpu: a switched-off section never stops the probe.
+        if !self.enabled || !self.reachability.enabled {
+            return Ok(());
+        }
+        if self.reachability.internet_address().is_none() {
+            return Err(ConfigError::invalid(format!(
+                "probe.network.reachability.internet must be a remote ip:port such as \
+                 1.1.1.1:443 (got '{}')",
+                self.reachability.internet
+            )));
+        }
+        if self.reachability.gateway_port == 0 {
+            return Err(ConfigError::invalid(
+                "probe.network.reachability.gatewayPort must be 1-65535",
+            ));
         }
         Ok(())
     }
@@ -641,6 +747,16 @@ mod tests {
         assert_eq!(disks.enabled, Some(true));
         assert!(disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
+        assert!(example.contains("\"network\""));
+        assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
+        // Reachability (#1711) is spelled out, off, with the defaults the owner chose.
+        let reachability = &config.probe.network.reachability;
+        assert!(example.contains("\"reachability\""));
+        assert!(!reachability.enabled);
+        assert_eq!(
+            (reachability.internet.as_str(), reachability.gateway_port),
+            ("1.1.1.1:443", 53)
+        );
         // The topCpu block is spelled out with the agent's defaults, and off.
         assert!(example.contains("\"topCpu\""));
         let top = &config.top_cpu;
@@ -679,6 +795,78 @@ mod tests {
         let disks = &config.probe.disks;
         assert!(disks.enabled.is_none() && disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
+        assert!(config.probe.network.enabled && config.probe.network.interfaces.is_empty());
+        let reachability = &config.probe.network.reachability;
+        assert!(!reachability.enabled, "reachability is opt-in");
+        assert_eq!(
+            (reachability.internet.as_str(), reachability.gateway_port),
+            ("1.1.1.1:443", 53)
+        );
+    }
+
+    #[test]
+    fn the_reachability_section_maps_and_rejects_bad_targets() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "reachability": {
+                 "enabled": true, "internet": "[2606:4700:4700::1111]:443", "gatewayPort": 80 } } } }"#;
+        let reachability = Config::parse(text)
+            .expect("parse")
+            .probe
+            .network
+            .reachability;
+        assert!(reachability.enabled);
+        assert_eq!(reachability.gateway_port, 80);
+        assert_eq!(
+            reachability.internet_address(),
+            Some("[2606:4700:4700::1111]:443".parse().unwrap())
+        );
+
+        for bad in [
+            r#""internet": "one.one.one.one:443""#,
+            r#""internet": "1.1.1.1""#,
+            r#""internet": "1.1.1.1:0""#,
+            r#""internet": "0.0.0.0:443""#,
+            r#""internet": "127.0.0.1:443""#,
+            r#""internet": "[::1]:443""#,
+            r#""gatewayPort": 0"#,
+        ] {
+            let section = |enabled: bool| {
+                format!(
+                    r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "network": {{ "reachability": {{ "enabled": {enabled}, {bad} }} }} }} }}"#
+                )
+            };
+            assert!(
+                matches!(Config::parse(&section(true)), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+            // Switched off, the section is not checked (as topCpu).
+            assert!(Config::parse(&section(false)).is_ok(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_network_section_maps_and_rejects_bad_patterns() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "interfaces": ["wlp*", "br0"] } } }"#;
+        let network = Config::parse(text).expect("parse").probe.network;
+        assert!(network.enabled);
+        assert_eq!(network.interfaces, vec!["wlp*", "br0"]);
+
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "network": { "enabled": false } } }"#;
+        assert!(!Config::parse(text).expect("parse").probe.network.enabled);
+
+        for bad in [r#"[" "]"#, r#"["eth0/1"]"#] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "network": {{ "interfaces": {bad} }} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]
