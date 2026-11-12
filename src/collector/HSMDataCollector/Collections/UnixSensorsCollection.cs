@@ -61,8 +61,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToUnix(new ProcessThreadPoolThreadCount(_prototype.ProcessThreadPoolThreadCount.Get(options)));
         }
 
-        public IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
-            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessThreadPoolThreadCount(options);
+        public IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddProcessMonitoringSensors));
+
+            return AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessThreadPoolThreadCount(options);
+        }
 
         #endregion
 
@@ -79,8 +83,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToUnix(new UnixFreeRamMemory(_prototype.FreeRam.Get(options)));
         }
 
-        public IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
-            AddFreeRamMemory(options).AddTotalCpu(options);
+        public IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddSystemMonitoringSensors));
+
+            return AddFreeRamMemory(options).AddTotalCpu(options);
+        }
 
         #endregion
 
@@ -97,8 +105,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToUnix(new UnixFreeDiskSpacePrediction(_prototype.UnixFreeSpaceOnDiskPrediction.Get(options)));
         }
 
-        public IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
+        public IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddDiskMonitoringSensors));
+
+            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
+        }
 
         #endregion
 
@@ -126,8 +138,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddQueueOverflow(BarSensorOptions options = null) => (IUnixCollection)AddQueueOverflowCommon(options);
 
-        public IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
-            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        public IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllQueueDiagnosticSensors));
+
+            return AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        }
 
         #endregion
 

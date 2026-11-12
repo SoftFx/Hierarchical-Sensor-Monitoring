@@ -79,8 +79,23 @@ namespace HSMDataCollector.Options
         /// move moves the sensor at such a path here, keeping its history, settings and alerts
         /// (merging when this path already has a sensor of the same type). Repeating it on every
         /// registration is safe; older servers ignore it. Null or blank entries are skipped.
+        /// The list belongs to ONE sensor: a helper that builds several sensors from one options
+        /// object (<c>AddSystemMonitoringSensors</c>, <c>AddAllDisksMonitoringSensors</c>, ...)
+        /// refuses options that carry previous paths with an <see cref="ArgumentException"/> —
+        /// set them on each sensor's own <c>Add*</c> call instead.
         /// </summary>
         public List<string> PreviousPaths { get; set; }
+
+        // A previous path is a full path of one sensor: shared by several sensors it would move
+        // that sensor's history into whichever of them registers first (#1724 review).
+        internal static T ForSeveralSensors<T>(T options, string helper) where T : SensorOptions
+        {
+            if (options?.PreviousPaths != null && options.PreviousPaths.Any(p => !string.IsNullOrWhiteSpace(p)))
+                throw new ArgumentException($"{helper} builds several sensors from one options object; " +
+                    "PreviousPaths belongs to one sensor — set it on each sensor's own Add* call.", nameof(options));
+
+            return options;
+        }
 
         internal string CalculateSystemPath()
         {
