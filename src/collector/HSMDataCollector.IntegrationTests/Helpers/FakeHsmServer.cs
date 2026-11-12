@@ -103,6 +103,22 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             }
         }
 
+        // Takes one from a scripted counter while it is above zero. One step, so a test that
+        // sets the counter between a decrement and its undo cannot end up with one more than it
+        // asked for.
+        private static bool TryTakeOne(ref int counter)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref counter);
+                if (current <= 0)
+                    return false;
+
+                if (Interlocked.CompareExchange(ref counter, current - 1, current) == current)
+                    return true;
+            }
+        }
+
         private void Handle(HttpListenerContext context)
         {
             var request = context.Request;
@@ -120,27 +136,21 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
             if (isCommand)
             {
-                if (Interlocked.Decrement(ref _abortCommandRequests) >= 0)
+                if (TryTakeOne(ref _abortCommandRequests))
                 {
                     _requests.Enqueue(new CapturedRequest(request.HttpMethod, path, request.Headers["Key"], request.Headers["ClientName"], body, 0));
                     context.Response.Abort();
                     return;
                 }
-
-                Interlocked.Increment(ref _abortCommandRequests); // floor the counter at 0
             }
 
             var statusCode = HttpStatusCode.OK;
             if (isCommand && _scriptedCommandStatuses.TryDequeue(out var scripted))
                 statusCode = scripted;
-            else if (isData && Interlocked.Decrement(ref _failDataRequests) >= 0)
+            else if (isData && TryTakeOne(ref _failDataRequests))
                 statusCode = HttpStatusCode.ServiceUnavailable;
-            else if (isData)
-                Interlocked.Increment(ref _failDataRequests); // floor the counter at 0
-            else if (isCommand && Interlocked.Decrement(ref _failCommandRequests) >= 0)
+            else if (isCommand && TryTakeOne(ref _failCommandRequests))
                 statusCode = HttpStatusCode.ServiceUnavailable;
-            else if (isCommand)
-                Interlocked.Increment(ref _failCommandRequests); // floor the counter at 0
 
             _requests.Enqueue(new CapturedRequest(
                 request.HttpMethod,
