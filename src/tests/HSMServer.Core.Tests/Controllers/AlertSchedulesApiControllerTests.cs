@@ -491,6 +491,11 @@ namespace HSMServer.Core.Tests.Controllers
             });
 
             Assert.Equal(422, StatusCodeOf(result));
+
+            // The dates themselves are valid — the 422 is the COUNT bound.
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("disabled dates", Assert.IsType<string[]>(details["schedule"]).Single());
             Assert.Empty(_store);
         }
 
