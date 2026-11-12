@@ -25,7 +25,7 @@ migration untouched.
 
 Out of scope: the certificate on public port 443 belongs to the gateway itself
 (`htz-gw.soft-fx.net`) and is wrong for HSM names by design. Clients connect on
-443 (plus the deprecated 44330/44333 aliases, #1590), which are forwarded straight to Caddy — 443 is the port this mode
+443 (the only client port, #1590/#1696), which is forwarded straight to Caddy — 443 is the port this mode
 fixes.
 
 ## Preconditions
@@ -163,7 +163,6 @@ session dies mid-way, remove the leftovers by hand: `rm -rf /tmp/hsmcert.*`.
      | grep -c -- "-----BEGIN CERTIFICATE"
    # served chain: leaf plus every intermediate (2 certs for a single-intermediate PFX)
    curl -o /dev/null -w "%{http_code}\n" https://<domain>/api/sensors/testConnection   # 200
-   curl -o /dev/null -w "%{http_code}\n" https://<domain>:44330/api/sensors/testConnection   # 200 — deprecated alias of 443 (deprecation window, #1590)
    ```
 
    From a corporate workstation the curl needs no `-k`: the Soft-FX root is already

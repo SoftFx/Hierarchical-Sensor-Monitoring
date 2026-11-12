@@ -1,5 +1,7 @@
 #include "agent/agent_runtime.hpp"
 
+#include "agent/retired_port.hpp"
+
 #ifdef _WIN32
 #include "agent/apply_update.hpp"
 #include "agent/config.hpp"
@@ -76,6 +78,121 @@ namespace hsm::agent
     {
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait(lock, [this] { return stop_requested_; });
+    }
+
+    void AgentRuntime::SetServiceConfigPath(std::wstring path)
+    {
+        service_config_path_ = std::move(path);
+    }
+
+    bool AgentRuntime::StopRequested()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return stop_requested_;
+    }
+
+    void AgentRuntime::WaitForStopWatchingRetiredPort()
+    {
+#ifdef _WIN32
+        // The schedule, the confirmation and the throttling are decided by NextRetiredPortStep
+        // (retired_port.cpp, unit-tested); this loop runs the probes and carries out the step.
+        const bool can_move = !service_config_path_.empty();
+        RetiredPortWatchState state;
+        std::chrono::milliseconds delay = kRetiredPortFirstCheckDelay;
+
+        for (;;)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                if (cv_.wait_for(lock, delay, [this] { return stop_requested_; }))
+                    return;
+            }
+
+            const RetiredPortVerdict verdict = JudgeRetiredPort(config_.port, [this](int port) {
+                // A stop that arrived during the previous probe ends the check without another one.
+                if (StopRequested())
+                    return PortAnswer::Nothing;
+                return ProbeServerPort(config_, port);
+            });
+            if (StopRequested())
+                return;
+
+            const RetiredPortStep step = NextRetiredPortStep(state, verdict, can_move);
+            delay = step.next_delay;
+
+            switch (step.action)
+            {
+            case RetiredPortAction::Wait:
+                continue;
+            case RetiredPortAction::ReportUnreachable:
+                Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port, can_move));
+                continue;
+            case RetiredPortAction::ReportUnrecognised:
+                Log(hc::LogLevel::Error, RetiredPortUnrecognisedNotice(config_.port));
+                continue;
+            case RetiredPortAction::ReportManualMove:
+                // A foreground run: report, do not touch the file or the service.
+                Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
+                continue;
+            case RetiredPortAction::Move:
+                break;
+            }
+
+            // Same persist-then-restart sequence as a sensor-group directive: the collector's endpoint
+            // is built once at Start, so the new port needs a fresh process, and config_ itself is
+            // left alone (UpdateChecker reads it on its own thread). The file is read back and only
+            // the port changes, and only while it still names the address and port that were
+            // probed (MoveConfigToStandardPort).
+            //
+            // The directive handler (collector thread) also writes config.json from a copy of
+            // config_, and nothing serializes the two writers. They cannot overlap: a directive
+            // arrives only in the response to a data POST, and the move happens only after the
+            // configured port stopped answering on two checks in a row, so no POST through it, and
+            // no directive, can be in flight. Revisit this if a directive can ever arrive another way.
+            std::string cfg_err;
+            MoveOutcome outcome = MoveOutcome::Failed;
+            try
+            {
+                // The narrow conversion throws for a path the active code page cannot represent.
+                outcome = MoveConfigToStandardPort(std::filesystem::path(service_config_path_).string(),
+                                                   config_.server_address, config_.port, cfg_err);
+            }
+            catch (const std::exception& ex)
+            {
+                cfg_err = ex.what();
+            }
+            if (outcome == MoveOutcome::ChangedSinceStart)
+            {
+                if (step.failure_notice_due)
+                    Log(hc::LogLevel::Error, RetiredPortChangedSinceStartNotice(config_.port));
+                continue;
+            }
+            if (outcome != MoveOutcome::Moved)
+            {
+                if (step.failure_notice_due)
+                    Log(hc::LogLevel::Error,
+                        RetiredPortManualMoveNotice(config_.port) +
+                            " (The agent could not rewrite config.json itself: " + cfg_err + ")");
+                continue;
+            }
+
+            if (!SpawnRestartService())
+            {
+                if (step.failure_notice_due)
+                    Log(hc::LogLevel::Error,
+                        "config: server.port " + std::to_string(config_.port) +
+                            " no longer answers; config.json now says \"port\": 443, but the restart helper could"
+                            " not be started. Restart the HSMAgent service to apply.");
+                continue;
+            }
+
+            Log(hc::LogLevel::Info, RetiredPortSwitchNotice(config_.port));
+            RequestStop();
+            return;
+        }
+#else
+        WaitForStop();
+#endif
     }
 
     void AgentRuntime::RequestStop()
@@ -201,8 +318,12 @@ namespace hsm::agent
                 collector.SetLogger(log_);
 
             // Real server transport (#1165) + the Windows PDH/Win32 live readers (#1164). Both must be
-            // installed before Start.
-            collector.UseHttpTransport();
+            // installed before Start. `server.transport` picks requests or the collector session
+            // (#1668); there is no fallback from one to the other.
+            if (config_.UsesSession())
+                collector.UseSessionTransport();
+            else
+                collector.UseHttpTransport();
             collector.InstallWindowsMetricSources();
 
             // Standard host catalog, gated by the config groups. `computer` is the umbrella bundle
@@ -297,6 +418,14 @@ namespace hsm::agent
             Log(hc::LogLevel::Info,
                 "HSM Agent starting: streaming to " + config_.server_address + ":" + std::to_string(config_.port));
 
+            // A config that still names 44330/44333 (#1655): say so at every start, then watch the
+            // port below. The server cannot report a connection that never reaches it. The log has
+            // no warning level: the notices that describe a working or self-healed state are Info,
+            // "nothing answers" is Error (it reaches the Windows Event Log).
+            const bool retired_port = IsRetiredServerPort(config_.port);
+            if (retired_port)
+                Log(hc::LogLevel::Info, RetiredPortStartupNotice(config_.port, !service_config_path_.empty()));
+
             collector.Start();
 
             if (on_started)
@@ -306,7 +435,10 @@ namespace hsm::agent
             updater.Start();
 #endif
 
-            WaitForStop();
+            if (retired_port)
+                WaitForStopWatchingRetiredPort();
+            else
+                WaitForStop();
 
 #ifdef _WIN32
             updater.Stop();

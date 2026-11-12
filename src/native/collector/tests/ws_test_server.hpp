@@ -168,6 +168,12 @@ namespace hsm::test
             bool echo = true;
             // Send this interim response (e.g. 103) before the final one; 0 = none.
             int interim_status = 0;
+            // Behave like the collector session endpoint of an HSM server: select the session
+            // subprotocol, send a hello frame after the upgrade, answer every request frame with
+            // an ack and every application ping with a pong. `echo` is ignored in this mode.
+            bool session = false;
+            int max_frame_bytes = 4 * 1024 * 1024;
+            int heartbeat_seconds = 30;
         };
 
         WebSocketTestServer()
@@ -176,6 +182,9 @@ namespace hsm::test
         explicit WebSocketTestServer(Options options)
             : options_(std::move(options))
         {
+            refuse_status_.store(options_.refuse_with_status, std::memory_order_release);
+            if (options_.session && options_.subprotocol.empty())
+                options_.subprotocol = "hsm.sensors.v1";
 #if defined(_WIN32)
             WSADATA wsa;
             WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -339,14 +348,34 @@ namespace hsm::test
             return WriteAll(connection_, frame);
         }
 
-        // Starts the close handshake from the server side with the given status code.
-        bool SendClose(uint16_t code)
+        // Starts the close handshake from the server side with the given status code and reason.
+        bool SendClose(uint16_t code, const std::string& reason = {})
         {
             std::string payload;
             payload.push_back(static_cast<char>((code >> 8) & 0xFF));
             payload.push_back(static_cast<char>(code & 0xFF));
+            payload += reason;
             return SendFrame(0x8, /*fin=*/true, payload);
         }
+
+        // Session mode, changeable while the server runs.
+        // Refuse upgrades with this status from now on (0 = accept them).
+        void RefuseUpgradesWith(int status) { refuse_status_.store(status, std::memory_order_release); }
+        // The status of the acks from now on (200 by default).
+        void AckWith(int status) { ack_status_.store(status, std::memory_order_release); }
+        // Accept this many more `list` frames, then answer every later one with 503. A negative
+        // number lifts the limit.
+        void AcceptListFrames(int count) { list_budget_.store(count, std::memory_order_release); }
+        // The statuses of the next `commands` acks, one per frame in order; after them, AckWith's.
+        void AckNextCommandFramesWith(std::vector<int> statuses)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            command_acks_ = std::move(statuses);
+        }
+        // Stop (or resume) acknowledging requests; they are still received and recorded.
+        void StaySilent(bool silent) { silent_.store(silent, std::memory_order_release); }
+        // Application-level pings ({"op":"ping"}) received.
+        int SessionPings() const { return session_pings_.load(std::memory_order_acquire); }
 
         // Drops the TCP connection without a close frame.
         void Drop() { drop_.store(true, std::memory_order_release); }
@@ -504,9 +533,10 @@ namespace hsm::test
             }
 
             const std::string key = ws_detail::HeaderValue(head, "sec-websocket-key");
-            if (options_.refuse_with_status != 0 || key.empty())
+            const int refuse = refuse_status_.load(std::memory_order_acquire);
+            if (refuse != 0 || key.empty())
             {
-                const int status = options_.refuse_with_status != 0 ? options_.refuse_with_status : 400;
+                const int status = refuse != 0 ? refuse : 400;
                 WriteAll(conn, "HTTP/1.1 " + std::to_string(status) + " Refused\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 return false;
             }
@@ -533,6 +563,11 @@ namespace hsm::test
             }
             upgrades_.fetch_add(1, std::memory_order_release);
             connected_.store(true, std::memory_order_release);
+
+            if (options_.session)
+                SendFrame(0x1, /*fin=*/true,
+                          "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" + std::to_string(options_.max_frame_bytes) + ",\"heartbeatSeconds\":" +
+                              std::to_string(options_.heartbeat_seconds) + "}}");
 
             for (;;)
             {
@@ -602,14 +637,66 @@ namespace hsm::test
 
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
-                    received_.push_back(payload);
+                    if (!(options_.session && payload.find("\"op\":\"ping\"") != std::string::npos))
+                        received_.push_back(payload);
                 }
-                if (options_.echo)
+                if (options_.session)
+                    AnswerSessionFrame(payload);
+                else if (options_.echo)
                     SendFrame(0x1, /*fin=*/true, "echo:" + payload);
             }
         }
 
+        // What an HSM server answers to one frame of a collector session.
+        void AnswerSessionFrame(const std::string& payload)
+        {
+            if (payload.find("\"op\":\"ping\"") != std::string::npos)
+            {
+                session_pings_.fetch_add(1, std::memory_order_release);
+                SendFrame(0x1, /*fin=*/true, "{\"op\":\"pong\"}");
+                return;
+            }
+            if (silent_.load(std::memory_order_acquire))
+                return;
+
+            // The collector writes its frames as {"id":N,"op":...}: the id is the first number.
+            const size_t at = payload.find("\"id\":");
+            if (at == std::string::npos)
+                return;
+            size_t end = at + 5;
+            while (end < payload.size() && payload[end] >= 48 && payload[end] <= 57)
+                ++end;
+            const std::string id = payload.substr(at + 5, end - (at + 5));
+
+            int status = ack_status_.load(std::memory_order_acquire);
+            if (payload.find("\"op\":\"list\"") != std::string::npos)
+            {
+                int budget = list_budget_.load(std::memory_order_acquire);
+                if (budget == 0)
+                    status = 503;
+                else if (budget > 0)
+                    list_budget_.store(budget - 1, std::memory_order_release);
+            }
+            else if (payload.find("\"op\":\"commands\"") != std::string::npos)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!command_acks_.empty())
+                {
+                    status = command_acks_.front();
+                    command_acks_.erase(command_acks_.begin());
+                }
+            }
+            SendFrame(0x1, /*fin=*/true,
+                      status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
+                                                    : "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"error\":\"refused by the test\"}");
+        }
+
         Options options_;
+        std::atomic<int> refuse_status_{ 0 };
+        std::atomic<int> ack_status_{ 200 };
+        std::atomic<bool> silent_{ false };
+        std::atomic<int> list_budget_{ -1 };
+        std::atomic<int> session_pings_{ 0 };
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };
@@ -624,6 +711,7 @@ namespace hsm::test
         std::string handshake_head_;        // guarded by mutex_
         std::string last_pong_;             // guarded by mutex_
         std::vector<std::string> received_; // guarded by mutex_
+        std::vector<int> command_acks_;     // guarded by mutex_
         std::vector<int> close_codes_;      // guarded by mutex_
     };
 } // namespace hsm::test
