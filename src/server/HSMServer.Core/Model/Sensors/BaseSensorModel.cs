@@ -323,6 +323,53 @@ namespace HSMServer.Core.Model
         public Action<BaseValue> ReceivedNewValue;
 
 
+        // Paths the sensor was moved away from (#1718, ADR-0018). Mutated
+        // only on the owning product's queue thread (move, sweep, removal);
+        // the lock covers the readers on other threads (the ingestion index
+        // rebuild, the API).
+        private readonly List<SensorAlias> _aliases = [];
+
+        public IReadOnlyList<SensorAlias> Aliases
+        {
+            get
+            {
+                lock (_aliases)
+                    return [.. _aliases];
+            }
+        }
+
+        internal void AddAlias(SensorAlias alias)
+        {
+            lock (_aliases)
+            {
+                _aliases.RemoveAll(a => a.Matches(alias.ProductId, alias.Path));
+                _aliases.Add(alias);
+            }
+        }
+
+        internal SensorAlias RemoveAlias(Guid productId, string path)
+        {
+            lock (_aliases)
+            {
+                var index = _aliases.FindIndex(a => a.Matches(productId, path));
+
+                if (index < 0)
+                    return null;
+
+                var alias = _aliases[index];
+                _aliases.RemoveAt(index);
+
+                return alias;
+            }
+        }
+
+        internal SensorAlias GetAlias(Guid productId, string path)
+        {
+            lock (_aliases)
+                return _aliases.Find(a => a.Matches(productId, path));
+        }
+
+
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
             if (entity.Settings is not null)
@@ -338,6 +385,10 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+
+            if (entity.Aliases is { Count: > 0 })
+                foreach (var alias in entity.Aliases)
+                    _aliases.Add(new SensorAlias(alias));
             
             if (entity.EnumOptions != null)
             {
@@ -463,8 +514,15 @@ namespace HSMServer.Core.Model
             TTLPolicies = Policies.TTLPolicies.Select(p => p.ToEntity()).ToList(),
             ChangeTable = ChangeTable.ToEntity(),
             EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
-            TableSettings = TableSettings.ToEntity()
+            TableSettings = TableSettings.ToEntity(),
+            Aliases = AliasEntities(),
         };
+
+        private List<SensorAliasEntity> AliasEntities()
+        {
+            lock (_aliases)
+                return _aliases.Count == 0 ? null : _aliases.Select(a => a.ToEntity()).ToList();
+        }
 
         protected virtual int GetDisplayCoeff()
         {

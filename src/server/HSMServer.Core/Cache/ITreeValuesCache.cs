@@ -30,6 +30,8 @@ namespace HSMServer.Core.Cache
     {
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
+        /// <summary>A sensor moved (#1718); the Guid is its old parent node id.</summary>
+        event Action<BaseSensorModel, Guid> SensorMovedEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         event Action<string, int, int> RequestProcessed;
 
@@ -85,6 +87,18 @@ namespace HSMServer.Core.Cache
         bool TryGetSensorByPath(Guid productId, string path, out BaseSensorModel sensor);
         Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
         Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Move a sensor to <paramref name="destinationPath"/> (relative to the root
+        /// product <paramref name="destinationProductId"/>), keeping its id, history,
+        /// settings and policies; the old path becomes an alias (#1718, ADR-0018).
+        /// </summary>
+        Task<SensorMoveResult> MoveSensorAsync(Guid sensorId, Guid destinationProductId, string destinationPath,
+            InitiatorInfo initiator = null, CancellationToken token = default);
+
+        /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
+        Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
+            InitiatorInfo initiator = null, CancellationToken token = default);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
         Task CheckSensorsHistoryAsync(CancellationToken token = default);

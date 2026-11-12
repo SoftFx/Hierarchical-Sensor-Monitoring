@@ -37,6 +37,7 @@ namespace HSMServer.Model.TreeViewModel
 
             _cache.ChangeProductEvent += ChangeProductHandler;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.SensorMovedEvent += SensorMovedHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
             foreach (var user in _userManager.GetUsers())
@@ -303,6 +304,22 @@ namespace HSMServer.Model.TreeViewModel
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
                     break;
             }
+        }
+
+        // Sensor move (#1718): the same view model (same id, same dashboards'
+        // references) is relocated under the new parent node.
+        private void SensorMovedHandler(BaseSensorModel model, Guid oldParentId)
+        {
+            if (!Sensors.TryGetValue(model.Id, out var sensor))
+                return;
+
+            if (Nodes.TryGetValue(oldParentId, out var oldParent))
+                oldParent.Sensors.TryRemove(model.Id, out _);
+
+            if (Nodes.TryGetValue(model.Parent.Id, out var newParent))
+                newParent.AddSensor(sensor);
+
+            sensor.Update(model);
         }
 
         private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType action)
