@@ -570,6 +570,27 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal(TimeSpan.FromMinutes(45).Ticks, survivor.TTLInterval.Ticks);
         }
 
+        // #1705: control characters and bidi overrides in the icon or the
+        // message text are client errors on every policy kind.
+        [Fact]
+        public async Task CreateSensorPolicy_RejectsControlAndBidiCharacters()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcControlChars");
+
+            var badIcon = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "icon\u202Espoof"), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, badIcon.Failure.Outcome);
+            Assert.Contains("bidirectional-override", badIcon.Failure.Errors["icon"].Single());
+            Assert.Empty(sensor.Policies);
+
+            var badTemplate = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = "bad\u0000template" },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, badTemplate.Failure.Outcome);
+            Assert.Contains("bidirectional-override", badTemplate.Failure.Errors["notification.template"].Single());
+            Assert.Empty(sensor.Policies);
+        }
+
         [Fact]
         public async Task CreateSensorTtlPolicy_MissingIntervalAndInherit_AnswersInvalid()
         {

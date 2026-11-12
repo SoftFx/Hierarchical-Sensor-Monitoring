@@ -417,6 +417,22 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task CreateSchedule_NameWithAControlOrBidiCharacter_Is422()
+        {
+            // #1705: no legitimate name carries control characters or bidi
+            // overrides (a U+202E name reads backwards); rejected at write
+            // time with the field keyed.
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "evil\u202Ename", Timezone = "UTC", Schedule = ValidYaml,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+
+        [Fact]
         public async Task CreateSchedule_DuplicateName_Is422()
         {
             _store.Add(BuildSchedule("taken"));

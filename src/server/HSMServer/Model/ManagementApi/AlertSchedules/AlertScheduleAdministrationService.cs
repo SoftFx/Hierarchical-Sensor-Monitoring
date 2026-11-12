@@ -16,6 +16,7 @@ using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using ScheduleModel = HSMServer.Core.Model.Policies.AlertSchedule;
 
+using HSMServer.Validation;
 namespace HSMServer.Model.ManagementApi.AlertSchedules
 {
     /// <summary>
@@ -395,6 +396,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 errorMap.Add("name", ["The schedule name is required."]);
             else if (dto.Name.Length > MaxNameLength)
                 errorMap.Add("name", [$"The schedule name must be at most {MaxNameLength} characters."]);
+            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar))
+                // #1705: no legitimate name carries control characters or
+                // bidi overrides; they spoof every renderer.
+                errorMap.Add("name", [$"The schedule name must not contain control or bidirectional-override characters (found {nameChar})."]);
             else if ((_schedules.GetAllSchedules() ?? []).Any(
                      existing => existing.Name == dto.Name && existing.Id != id))
                 errorMap.Add("name", ["The schedule name must be unique."]);
