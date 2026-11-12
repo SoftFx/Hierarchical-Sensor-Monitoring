@@ -1070,13 +1070,18 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
+        // Returns false when the sensor's entity may still be in the database
+        // (the removal threw before or inside the database step): a merge must
+        // report that, the occupant would come back on restart (#1720 review).
+        private bool RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
             List<Guid> purgeIds = null)
         {
+            var removedFromDatabase = false;
+
             try
             {
                 if (!TryGetSensorById(sensorId, out var sensor))
-                    return;
+                    return true;
 
                 RemoveSensorFromCache(sensor);
                 UnindexAliases(sensor);
@@ -1103,6 +1108,7 @@ namespace HSMServer.Core.Cache
                 _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
                 _database.RemoveSensorWithMetadata(sensorId);
+                removedFromDatabase = true;
 
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
@@ -1118,6 +1124,8 @@ namespace HSMServer.Core.Cache
             {
                 _logger.Error($"An error was occured by removing sensor {sensorId}", ex);
             }
+
+            return removedFromDatabase;
         }
 
         public async Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
@@ -3160,6 +3168,12 @@ namespace HSMServer.Core.Cache
                 case SensorTemplateReevaluationRequest request:
                     ReevaluateMovedSensorTemplates(request);
                     break;
+                case SensorAbsorbRequest request:
+                    AbsorbSensor(request);
+                    break;
+                case SensorMergeRefreshRequest request:
+                    RefreshMergedSensor(request);
+                    break;
             }
 
             queue.Stopwatch.Stop();
@@ -4493,9 +4507,11 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorFromCache(BaseSensorModel sensor)
         {
+            // Remove only THIS sensor's entry: during a merge (#1720) the path
+            // already belongs to the moved sensor that absorbs this one.
             if (_cache.TryGetValue(sensor.Root.Id, out var value))
             {
-                value.Sensors.TryRemove(sensor.Path, out _);
+                value.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(sensor.Path, sensor));
             }
 
             _sensorsById.TryRemove(sensor.Id, out _);

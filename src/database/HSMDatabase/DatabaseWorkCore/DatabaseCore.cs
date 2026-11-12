@@ -231,6 +231,68 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        // Sensor-move merge (#1720): the one place a history row changes its
+        // sensor id. A row's partition is chosen by its tick, so the copy of a
+        // row lands in the same partition as the row itself. Existing rows of
+        // the target win (ADR-0018: the moved sensor's row wins a same-tick
+        // collision). Both key ranges are walked in step (both descending), so
+        // memory stays constant whatever the history size; the iterators see
+        // the partition as it was when they opened, so the copies written
+        // meanwhile are never read back. Not atomic: a re-run after a crash
+        // counts the rows the first run copied as collisions. A failed write
+        // throws: the merge then keeps the source sensor.
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
+        {
+            var fromStart = new DbKey(fromSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var fromEnd = new DbKey(fromSensorId, DateTime.MaxValue.Ticks).ToBytes();
+            var intoStart = new DbKey(intoSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var intoEnd = new DbKey(intoSensorId, DateTime.MaxValue.Ticks).ToBytes();
+
+            long copied = 0, collisions = 0;
+
+            foreach (var db in _sensorValuesDatabases)
+            {
+                IEnumerator<long> into = null;
+                var hasInto = false;
+
+                try
+                {
+                    foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
+                    {
+                        // Opened on the first source row: most partitions hold none.
+                        if (into is null)
+                        {
+                            into = db.GetKeysValuesTo(intoStart, intoEnd)
+                                .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
+                                .GetEnumerator();
+                            hasInto = into.MoveNext();
+                        }
+
+                        var tick = DbKey.FromBytes(keyBytes).Timestamp;
+
+                        while (hasInto && into.Current > tick)
+                            hasInto = into.MoveNext();
+
+                        if (hasInto && into.Current == tick)
+                        {
+                            collisions++;
+                            continue;
+                        }
+
+                        // Throws on failure: the caller deletes the source next.
+                        db.PutSensorValueOrThrow(new DbKey(intoSensorId, tick).ToBytes(), valueBytes);
+                        copied++;
+                    }
+                }
+                finally
+                {
+                    into?.Dispose();
+                }
+            }
+
+            return (copied, collisions);
+        }
+
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
         {
             var fromKey = new DbKey(sensorId, DateTime.MinValue.Ticks).ToBytes();

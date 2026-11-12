@@ -289,10 +289,14 @@ namespace HSMDatabase.LevelDB
                 if (CheckValue())
                     return iterator.Value();
 
+                // Past the end: the key range ends at or after the database's
+                // last key — the last key is then the candidate, exactly as
+                // GetValueToFrom handles it. Returning null here lost the newest
+                // value of whichever sensor's id sorts last in a partition (#1720).
                 if (!iterator.IsValid)
-                    return null;
-
-                iterator.Prev();
+                    iterator.SeekToLast();
+                else
+                    iterator.Prev();
 
                 return CheckValue() ? iterator.Value() : null;
             }

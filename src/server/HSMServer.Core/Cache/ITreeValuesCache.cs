@@ -94,7 +94,7 @@ namespace HSMServer.Core.Cache
         /// settings and policies; the old path becomes an alias (#1718, ADR-0018).
         /// </summary>
         Task<SensorMoveResult> MoveSensorAsync(Guid sensorId, Guid destinationProductId, string destinationPath,
-            InitiatorInfo initiator = null, CancellationToken token = default);
+            SensorMoveConflict onConflict = SensorMoveConflict.Fail, InitiatorInfo initiator = null, CancellationToken token = default);
 
         /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
         Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
