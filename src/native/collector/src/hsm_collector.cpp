@@ -6045,9 +6045,14 @@ namespace
         // 2xx is delivered, anything else (or no ack) sends the batch back to the queue.
         bool SessionSendBatch(std::vector<std::string>& batch)
         {
-            int64_t timeout_ms = request_timeout_ms_;
-            if (stop_drain_active_)
-            {
+            // What one frame may wait for its ack: the request timeout, or what is left of the
+            // stop budget. Asked again for every frame: a batch split into several frames must
+            // not spend the remaining budget once per frame. False = the budget is spent.
+            const auto frame_timeout = [this](int64_t& timeout_ms) {
+                timeout_ms = request_timeout_ms_;
+                if (!stop_drain_active_)
+                    return true;
+
                 const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                                            stop_drain_deadline_ - std::chrono::steady_clock::now())
                                            .count();
@@ -6055,7 +6060,12 @@ namespace
                     return false;
 
                 timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
-            }
+                return true;
+            };
+
+            int64_t timeout_ms = 0;
+            if (!frame_timeout(timeout_ms))
+                return false;
 
             const size_t room = session_transport_ ? session_transport_->MaxBodyBytes() : 0;
             if (room == 0)
@@ -6088,7 +6098,11 @@ namespace
                         ++index;
                         continue;
                     }
-                    if (body.size() + element.size() + 2 > room)
+                    // The element, the closing "]" and, behind another element, a comma. The
+                    // frame's first element pays no comma: with the check above that makes it
+                    // always fit, so a frame is never left empty by a value that exactly fills it
+                    // (counting the comma there sent such a value round this loop forever).
+                    if (body.size() + element.size() + (count != 0 ? 2 : 1) > room)
                         break;
                     if (count != 0)
                         body += ',';
@@ -6097,8 +6111,11 @@ namespace
                     ++index;
                 }
                 if (count == 0)
-                    continue;
+                    continue; // only dropped values were left
                 body += ']';
+
+                if (!frame_timeout(timeout_ms))
+                    return false;
 
                 const auto result = session_transport_->Request("list", body, timeout_ms);
                 if (!result.IsSuccess())

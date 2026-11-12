@@ -443,7 +443,11 @@ namespace HSMServer.SensorApi.Sessions
                 var errors = await _ingestion.AddValuesAsync(caller, values);
 
                 // The errors are keyed by path: every value of a refused path is not accepted.
-                session.CountValuesAccepted(errors is null || errors.Count == 0 ? values.Count : values.Count(value => !errors.ContainsKey(value.Path)));
+                // A value without a path is not counted (and must not throw here: the batch is stored, and a
+                // statistic may not turn its ack into a refusal).
+                session.CountValuesAccepted(errors is null || errors.Count == 0
+                    ? values.Count
+                    : values.Count(value => value?.Path is not null && !errors.ContainsKey(value.Path)));
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
             }
             catch (Exception ex)

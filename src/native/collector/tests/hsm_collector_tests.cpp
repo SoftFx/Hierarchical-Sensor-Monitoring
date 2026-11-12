@@ -7455,6 +7455,76 @@ namespace
         Require(drops.count == 1, ("an oversized value must be dropped and reported exactly once, got " + std::to_string(drops.count)).c_str());
     }
 
+    // Values of every size around the frame limit: each one is either sent or dropped, and the
+    // sender goes on. A value that exactly fills a frame on its own used to pass the "too large"
+    // check and fail the "fits this frame" check, so the sender retried it forever.
+    void NativeSessionValueAtTheFrameLimitDoesNotStallTheSender()
+    {
+        if (!WsAvailable("native_session_value_at_the_frame_limit_does_not_stall_the_sender"))
+            return;
+
+        struct Drops
+        {
+            std::mutex mutex;
+            int count = 0;
+        } drops;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 1024;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 50;
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* user_data) {
+                if (std::string(message).find("larger than a collector session frame") != std::string::npos)
+                {
+                    auto* seen = static_cast<Drops*>(user_data);
+                    std::lock_guard<std::mutex> guard(seen->mutex);
+                    ++seen->count;
+                }
+            },
+            &drops);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle text = CreateStringSensor(collector.value, "session/boundary/text");
+        SensorHandle number = CreateIntSensor(collector.value, "session/boundary/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/boundary/number" }) >= 1; }, 15000),
+                "the session must be up before the values are added");
+
+        // One byte apart, from well under the limit to over it: whatever the value's envelope
+        // costs, one of them serializes to exactly the room of a frame.
+        constexpr size_t kShortest = 500;
+        constexpr size_t kLongest = 1000;
+        for (size_t length = kShortest; length <= kLongest; ++length)
+        {
+            const std::string value(length, 'y');
+            Require(hsm_sensor_add_string(text.value, value.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string value failed");
+        }
+        Require(hsm_sensor_add_int(number.value, 5151, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":5151" }) >= 1; }, 30000),
+                "the value behind the ones at the frame limit must be delivered");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const size_t sent = SessionFrames(server, { "\"op\":\"list\"", "yyyyyyyyyy" });
+        int dropped = 0;
+        {
+            std::lock_guard<std::mutex> guard(drops.mutex);
+            dropped = drops.count;
+        }
+        const size_t total = kLongest - kShortest + 1;
+        // The sizes straddle the limit only if some went out and some were dropped.
+        Require(sent >= 1 && dropped >= 1, ("the values must straddle the frame limit: " + std::to_string(sent) + " frame(s) sent, " +
+                                            std::to_string(dropped) + " dropped")
+                                               .c_str());
+        Require(static_cast<size_t>(dropped) < total, "values under the frame limit must not be dropped");
+    }
+
     // The transport on its own: no session means a request fails at once (the caller keeps its
     // data), an ack carries the server's status, and a cancel ends a wait.
     void NativeSessionTransportRequestContract()
@@ -9658,6 +9728,8 @@ namespace
             { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },
             { "native_session_splits_a_registration_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsARegistrationBatchToTheFrameLimit(); } },
             { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
+            { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
+              [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },
             { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },

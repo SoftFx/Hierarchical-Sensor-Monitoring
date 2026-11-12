@@ -584,15 +584,28 @@ namespace hsm::http
                 const int64_t open_ms = ElapsedMs(open_started);
                 size_t frame_bytes = 0;
                 int64_t heartbeat_ms = 0;
+                bool stopped = false;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
-                    up_ = true;
-                    down_reason_.clear();
-                    // A request that gave up on the previous session after that session had
-                    // already ended must not end this one.
-                    reset_requested_ = false;
-                    frame_bytes = max_frame_bytes_;
-                    heartbeat_ms = heartbeat_ms_;
+                    stopped = stop_;
+                    if (!stopped)
+                    {
+                        up_ = true;
+                        down_reason_.clear();
+                        // A request that gave up on the previous session after that session had
+                        // already ended must not end this one.
+                        reset_requested_ = false;
+                        frame_bytes = max_frame_bytes_;
+                        heartbeat_ms = heartbeat_ms_;
+                    }
+                }
+                // A stop that arrived while the hello was read: Stop saw no session and cancelled
+                // this connection. It is not announced as up (nothing is logged on a stop), the
+                // same as an open that failed during a stop.
+                if (stopped)
+                {
+                    connection->Close(0);
+                    return;
                 }
 
                 Counters counters;
