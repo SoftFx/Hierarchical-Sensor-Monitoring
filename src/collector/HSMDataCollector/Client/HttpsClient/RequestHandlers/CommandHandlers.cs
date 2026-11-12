@@ -66,7 +66,10 @@ namespace HSMDataCollector.Client.HttpsClient
                     else
                     {
                         var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        _logger.Error($"Command request for has been faulted. Status Code: {response.StatusCode}, Status Text: {error}.");
+
+                        // Through the deduplicated sink: a server that keeps refusing answers the
+                        // same on every cycle of the command queue (#1659 A4).
+                        _client.ReportError($"Command request has been faulted. Status Code: {(int)response.StatusCode} ({response.StatusCode}), Status Text: {Shorten(error)}.");
                     }
                 }
                 else
@@ -79,6 +82,10 @@ namespace HSMDataCollector.Client.HttpsClient
             {
             }
         }
+
+        // The body of a refused /commands request can be the whole per-path dictionary.
+        private static string Shorten(string text) =>
+            text == null || text.Length <= 512 ? text : text.Substring(0, 512) + "...";
 
         internal override async ValueTask HandleRequestResultAsync(HttpResponseMessage response, CommandRequestBase value, CancellationToken token)
         {

@@ -102,6 +102,10 @@ namespace HSMDataCollector.Core
 
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
+            // The built-in sender reports a failed send through the collector's deduplicated error
+            // channel (#1659 A4). A custom sender reports however it likes.
+            (_dataSender as HsmHttpsClient)?.RouteErrorsTo(_dataProcessor.AddError);
+
             _sensorsStorage = _dataProcessor.SensorStorage;
 
             AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;

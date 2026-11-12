@@ -88,13 +88,18 @@ namespace HSMDataCollector.Client.HttpsClient
             return new ValueTask<bool>(isServerError);
         }
 
+        // A failed attempt that the pipeline is about to repeat. Reported through the client's
+        // error sink, which the collector deduplicates (#1659 A4): during an outage every attempt
+        // of every send fails the same way, and one entry per window says so. The text therefore
+        // names the cause only; the attempt number goes to the debug log.
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Result != null)
-                _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
-
+                _client.ReportError($"Failed to send data. Code = {(int)args.Outcome.Result.StatusCode} ({args.Outcome.Result.StatusCode})");
             else if (args.Outcome.Exception != null)
-                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException?.Message}");
+                _client.ReportError(DescribeException(args.Outcome.Exception));
+
+            _logger.Debug($"Send attempt {args.AttemptNumber + 1} failed; the send repeats it.");
 
             return default;
         }
@@ -107,7 +112,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
-                    return new PackageSendingInfo(request.Length, response);
+                    return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -134,7 +139,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
-                    return new PackageSendingInfo(request.Length, response);
+                    return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -150,9 +155,57 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
 
+        // The final failure of a send. The reported text names the cause only, so a cause that
+        // repeats is one deduplicated entry; the attempt count and the payload size, which differ
+        // from send to send, go to the debug log.
         private void LogSendFailure(Exception ex, HttpRequest<T> request)
         {
-            _logger.Error($"Failed to send data. Attempt number = {MaxRetryAttempts + 1}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+            _client.ReportError(DescribeException(ex));
+            _logger.Debug($"Failed to send data after {MaxRetryAttempts + 1} attempt(s). Payload bytes = {request.Length}");
+        }
+
+        private static string DescribeException(Exception ex) =>
+            $"Failed to send data. Exception = {ex.Message} Inner = {ex.InnerException?.Message}";
+
+        // What the server said about a refused request, for the failure text (#1659 A1). Only a
+        // plain-text body is a message: the JSON a route answers a 400 with is the request batch
+        // itself (/list) or the per-path dictionary (/commands), and sensor values do not belong
+        // in a log line. The response is already buffered, so this reads no socket.
+        private const int MaxServerMessageLength = 256;
+
+        private static async ValueTask<PackageSendingInfo> BuildSendingInfoAsync(int length, HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode)
+                return new PackageSendingInfo(length, response);
+
+            var message = await ReadServerMessageAsync(response).ConfigureAwait(false);
+
+            return new PackageSendingInfo(length, (int)response.StatusCode, PackageSendingInfo.DescribeFailure(response, message));
+        }
+
+        private static async ValueTask<string> ReadServerMessageAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                var content = response.Content;
+
+                if (content == null || !string.Equals(content.Headers.ContentType?.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var text = (await content.ReadAsStringAsync().ConfigureAwait(false))?.Trim();
+
+                if (string.IsNullOrEmpty(text))
+                    return null;
+
+                text = text.Replace('\r', ' ').Replace('\n', ' ');
+
+                return text.Length <= MaxServerMessageLength ? text : text.Substring(0, MaxServerMessageLength) + "...";
+            }
+            catch (Exception)
+            {
+                // The message is a courtesy; the status alone still describes the failure.
+                return null;
+            }
         }
 
 

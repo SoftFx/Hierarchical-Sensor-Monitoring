@@ -27,9 +27,12 @@ DataCollector must never crash the host application. All exceptions from sensor 
 |---|---|
 | Sensor exception | `DataProcessor.AddException(path, ex)` → MessageDeduplicator → log + `CollectorErrorsSensor` |
 | Queue loop failure (retry-forever) | `DataProcessor.AddQueueLoopError(queueName, ex)` → MessageDeduplicator (prevents one log per `PackageCollectPeriod` for a poison package) |
+| Failed send of the built-in HTTP sender (an attempt Polly repeats, the final exception, a refused `/commands` request) | `HsmHttpsClient.ReportError` → `DataProcessor.AddError` → MessageDeduplicator → log + `CollectorErrorsSensor` (#1659 A4, 3.6.4). The text names the cause only (`Failed to send data. Exception = …`, `Failed to send data. Code = 503 (ServiceUnavailable)`, `Command request has been faulted. Status Code: 503 (ServiceUnavailable), …`); the attempt number and the payload size go to Debug, because they differ from send to send and would defeat the deduplication. Before 3.6.4 every attempt wrote its own Error line, so an outage flooded the log. A client constructed on its own (no collector) keeps the plain logger. A custom `IDataSender` is not covered: it reports however it likes |
+| Fault of a built-in source that is not one sensor (top-CPU sample failed as a whole) | `SensorsStorage.ReportError` → `DataProcessor.AddError` → MessageDeduplicator, as `top-CPU sampling error: <message>`, the native collector's line (#1659 A8, 3.6.4). The per-process catches inside a sample stay silent: a protected or exiting process refusing its CPU time is the normal case |
+| Server refused a registration (4xx) | `DataProcessor.ReportRejectedPackage` → MessageDeduplicator (#1659 A2, see `data-pipeline/feature.md`) |
 | Validation reject (NaN/null/bad status) | `DataProcessor.LogDroppedValue(path, reason)` — Debug level |
 | Shutdown discard | `LogDiscardedItems(count, queueName)` — Error level |
-| Queue overflow / retry drop | `QueueOverflowSensor` (never suppressed — see `data-pipeline/feature.md`) |
+| Queue overflow / retry drop | `QueueOverflowSensor` (never suppressed — see `data-pipeline/feature.md`). **Without that sensor** the drops are counted and reported once when the collector stops, at Error: `Collector stop: N value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).` (#1659 A5, 3.6.4; the native collector's line, #1508). Before 3.6.4 a collector without the queue diagnostics group lost them in silence |
 
 ### MessageDeduplicator
 
@@ -53,7 +56,7 @@ DataCollector must never crash the host application. All exceptions from sensor 
 |---|---|
 | `Exceptions/MessageDeduplicator.cs` | Bounded dedup cache with periodic cleanup |
 | `Logging/LoggerManager.cs`, `NLogLogger.cs`, `ICollectorLogger.cs`, `LoggerOptions.cs` | Logging stack (NLog default, custom loggers, swallow-all) |
-| `Core/DataProcessor.cs` | Routing entry points (AddException, AddQueueLoopError, LogDroppedValue) |
+| `Core/DataProcessor.cs` | Routing entry points (AddException, AddQueueLoopError, AddError, ReportRejectedPackage, LogDroppedValue, the stop-time overflow report) |
 | `Core/DataCollector.cs` | Lifecycle event isolation, dispose isolation |
 
 ---

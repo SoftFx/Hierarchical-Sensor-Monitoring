@@ -131,6 +131,8 @@ namespace HSMDataCollector.Core
             else
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
 
+            ReportUnreportedOverflow();
+
             if (failures.Count > 0)
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
         }
@@ -322,6 +324,16 @@ namespace HSMDataCollector.Core
         }
 
         /// <summary>
+        /// A collector fault that is not tied to one sensor or queue (a failed send, a failed
+        /// sample of a built-in source). Deduplicated like every other error: logged and posted
+        /// to <c>Collector errors</c> once per window, with the repeat count when the window ends.
+        /// </summary>
+        public void AddError(string message)
+        {
+            _messageDeduplicator.AddMessage(message);
+        }
+
+        /// <summary>
         /// A package the server refused (4xx) on a queue that does not send a refusal again
         /// (#1659 A2). The items are gone, so this is reported like any other loss: an error in
         /// the log and in the <c>Collector errors</c> sensor, deduplicated so a host that keeps
@@ -402,7 +414,30 @@ namespace HSMDataCollector.Core
             if (droppedCount <= 0)
                 return;
 
-            DefaultSensors.QueueOverflowSensor?.AddValue(queueName, droppedCount);
+            var sensor = DefaultSensors.QueueOverflowSensor;
+
+            // Without the sensor the drops have nowhere to be counted; they are kept for the
+            // stop report so the loss is never silent (#1659 A5, rule "no silent data loss").
+            if (sensor != null)
+                sensor.AddValue(queueName, droppedCount);
+            else
+                Interlocked.Add(ref _unreportedOverflow, droppedCount);
+        }
+
+        // Values evicted from a full queue while no Queue overflow sensor was registered.
+        private long _unreportedOverflow;
+
+        /// <summary>
+        /// One line per run for the drops no sensor counted, at Error: it is the only report of
+        /// that loss. Same wording as the native collector's stop line. Taken with an exchange,
+        /// so a later run does not report this run's drops again.
+        /// </summary>
+        private void ReportUnreportedOverflow()
+        {
+            var lost = Interlocked.Exchange(ref _unreportedOverflow, 0);
+
+            if (lost > 0)
+                _logger.Error($"Collector stop: {lost} value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).");
         }
 
         private void LogDiscardedItems(int count, string queueName)

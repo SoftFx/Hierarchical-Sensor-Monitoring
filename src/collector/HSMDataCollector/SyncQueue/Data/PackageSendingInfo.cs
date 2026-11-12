@@ -31,7 +31,7 @@ namespace HSMDataCollector.SyncQueue.Data
 
             IsSuccess = response?.IsSuccessStatusCode ?? false;
             StatusCode = response != null ? (int?)response.StatusCode : null;
-            Error = !IsSuccess ? response == null ? exception : $"Code: {response.StatusCode}. {response.Content}" : null;
+            Error = !IsSuccess ? response == null ? exception : DescribeFailure(response, serverMessage: null) : null;
         }
 
         /// <summary>
@@ -46,6 +46,19 @@ namespace HSMDataCollector.SyncQueue.Data
             IsSuccess = statusCode >= 200 && statusCode < 300;
             StatusCode = statusCode;
             Error = IsSuccess ? null : error ?? $"Code: {statusCode}.";
+        }
+
+        /// <summary>
+        /// The text of a refused request: the status, its reason phrase and, when the caller
+        /// has read one, the server's own message. Never the content object itself: that
+        /// printed a type name (#1659 A1).
+        /// </summary>
+        internal static string DescribeFailure(HttpResponseMessage response, string serverMessage)
+        {
+            var reason = string.IsNullOrWhiteSpace(response.ReasonPhrase) ? response.StatusCode.ToString() : response.ReasonPhrase;
+            var text = $"Code: {(int)response.StatusCode} ({reason}).";
+
+            return string.IsNullOrEmpty(serverMessage) ? text : $"{text} {serverMessage}";
         }
     }
 }
