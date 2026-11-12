@@ -33,8 +33,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         // A key in SensorsStorage only; never posted to the server.
         internal const string MonitorPath = ".tcp_connection_failure_rate_monitor.";
 
-        // Task.Delay takes no more than this.
+        // Task.Delay takes no more than this, and counts in whole milliseconds: a shorter
+        // period would be a wait of zero and a loop that never yields. A millisecond is the
+        // native collector's minimum as well.
         private static readonly TimeSpan MaxPeriod = TimeSpan.FromMilliseconds(int.MaxValue);
+        private static readonly TimeSpan MinPeriod = TimeSpan.FromMilliseconds(1);
 
         internal const string SensorName = "Connection failures rate";
 
@@ -56,13 +59,13 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         /// <param name="readV6">The same for IPv6.</param>
         internal WindowsTcpFailureRateMonitor(SensorsStorage storage, TimeSpan period, Func<FamilyReading> readV4 = null, Func<FamilyReading> readV6 = null)
         {
-            if (period <= TimeSpan.Zero || period > MaxPeriod)
-                throw new ArgumentOutOfRangeException(nameof(period), $"The sampling period must be greater than zero and at most {MaxPeriod}.");
+            if (period < MinPeriod || period > MaxPeriod)
+                throw new ArgumentOutOfRangeException(nameof(period), $"The sampling period must be at least a millisecond and at most {MaxPeriod}.");
 
             _storage = storage;
             _period = period;
-            _readV4 = readV4 ?? (() => Read(properties => properties.GetTcpIPv4Statistics()));
-            _readV6 = readV6 ?? (() => Read(properties => properties.GetTcpIPv6Statistics()));
+            _readV4 = readV4 ?? (() => ReadFamily(properties => properties.GetTcpIPv4Statistics()));
+            _readV6 = readV6 ?? (() => ReadFamily(properties => properties.GetTcpIPv6Statistics()));
 
             // Created here, not by the first sample: the sensor is in the storage, and so in the
             // registrations of Start, the moment it is asked for. The loop below only pushes.
@@ -101,7 +104,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                 },
             };
 
-        private static FamilyReading Read(Func<IPGlobalProperties, TcpStatistics> family)
+        internal static FamilyReading ReadFamily(Func<IPGlobalProperties, TcpStatistics> family)
         {
             try
             {
@@ -132,11 +135,30 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         public ValueTask<bool> StartAsync()
         {
+            // A monitor added while the collector is starting is started twice: once by its
+            // registration and once by the Start that is under way. The loop of the first start
+            // is ended, and the new one begins only when it has: one loop at a time owns the
+            // accumulator, and none is left running behind a token nobody can cancel.
+            var previous = _loopTask;
+
+            try { _cts?.Cancel(); }
+            catch (ObjectDisposedException) { }
+
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
 
             var token = _cts.Token;
-            _loopTask = Task.Run(() => RunLoopAsync(token));
+
+            _loopTask = Task.Run(async () =>
+            {
+                if (previous != null)
+                {
+                    try { await previous.ConfigureAwait(false); }
+                    catch (Exception) { }
+                }
+
+                await RunLoopAsync(token).ConfigureAwait(false);
+            });
 
             return new ValueTask<bool>(true);
         }
@@ -182,9 +204,18 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         {
             try
             {
+                var v4 = _readV4();
+                var v6 = _readV6();
+
+                // One family that cannot be read sits the tick out quietly (IPv6 not installed).
+                // With neither there is nothing behind the 0 the sensor goes on posting, and
+                // that must not pass for a quiet network. Deduplicated like every other error.
+                if (!v4.Readable && !v6.Readable)
+                    _storage.ReportError("TCP connection failure rate sampling error: the TCP statistics of neither IPv4 nor IPv6 could be read.");
+
                 // The increase of this period goes into the rate sensor, which posts it over the
                 // time it measured. A quiet period pushes nothing, so the posted rate is 0.
-                var delta = _accumulator.Accumulate(_readV4(), _readV6());
+                var delta = _accumulator.Accumulate(v4, v6);
 
                 if (delta.HasValue)
                 {
