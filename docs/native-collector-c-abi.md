@@ -156,6 +156,25 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.12.0** (#1724, sensor move) — one additive entry point.
+  `hsm_sensor_set_previous_paths(sensor, previous_paths, count)` declares the paths the sensor was
+  registered under before a layout change, each a FULL path relative to the product as the server
+  tree shows it (no computer/module prefix is added). The registration carries them as
+  `"PreviousPaths":[...]` right after `EnumOptions`; a server that supports sensor move moves the
+  sensor found at such a path here (history, settings, alerts), merging into a sensor of the same
+  type already at the new path (the first listed path wins); older servers ignore the member.
+  The strings are copied. NULL entries and entries of ASCII whitespace only are dropped — the rule
+  of the managed `SensorOptions.PreviousPaths`, so both collectors send the same bytes. `count == 0`
+  (`previous_paths` may then be NULL) removes the list, and a list left empty after dropping blanks
+  omits the member: such a registration is byte-identical to 0.11.x. A NULL array with a non-zero
+  count, or a NULL sensor, is `HSM_RESULT_INVALID_ARGUMENT`. Re-emission rules as
+  `hsm_sensor_set_description` (0.10.0): before Start the paths ride the Start registration; while
+  running the run's recorded registration is replaced in place and the sensor re-posted on the HTTP
+  transport. The bounded retirement of replaced registration texts (the latest 256) now covers
+  previous-path changes too, so a pointer from `hsm_collector_get_registration_json` follows the
+  0.10.0 rule. Pinned by `native_wire_registration_with_previous_paths_matches_net_byte_layout`
+  and, cross-language, `previous_paths_contract` (verb `create_int_sensor_with_previous_paths`, both
+  drivers). Server behaviour: `aicontext/features/server/sensor-move/feature.md`.
 - **0.11.4** (#1662) — internal building block, ABI unchanged, no behavior change. Adds a WebSocket
   client connection (`src/hsm_ws_connection.{hpp,cpp}`) for the collector session of ADR-0017. It
   is compiled into the HTTP build and **not used by the send path yet**. The WebSocket protocol is

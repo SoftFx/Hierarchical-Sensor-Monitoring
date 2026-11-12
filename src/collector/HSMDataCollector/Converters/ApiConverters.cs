@@ -64,9 +64,9 @@ namespace HSMDataCollector.Converters
         // keeping such a registration byte-identical to a collector that predates sensor move (#1724).
         private static readonly char[] _asciiWhitespace = { ' ', '\t', '\n', '\v', '\f', '\r' };
 
-        private static System.Collections.Generic.List<string> PreviousPathsOf(SensorOptions options)
+        internal static System.Collections.Generic.List<string> PreviousPathsOf(SensorOptions options)
         {
-            var paths = options.PreviousPaths?.Where(p => p != null && p.Trim(_asciiWhitespace).Length > 0).ToList();
+            var paths = options?.PreviousPaths?.Where(p => p != null && p.Trim(_asciiWhitespace).Length > 0).ToList();
 
             return paths?.Count > 0 ? paths : null;
         }

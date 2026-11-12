@@ -53,6 +53,13 @@ namespace HSMDataCollector.Tests
                 Assert.Throws<ArgumentException>(() => collector.Windows.AddAllWindowsLogs(new InstantSensorOptions { PreviousPaths = paths }));
                 Assert.Throws<ArgumentException>(() => collector.Unix.AddSystemMonitoringSensors(new BarSensorOptions { PreviousPaths = paths }));
                 Assert.Throws<ArgumentException>(() => collector.Unix.AddDiskMonitoringSensors(new DiskSensorOptions { PreviousPaths = paths }));
+
+                // Only the bar options carry the paths: refused before any free-space sensor is added.
+                Assert.Throws<ArgumentException>(() => collector.Windows.AddAllDisksMonitoringSensors(null, new DiskBarSensorOptions { PreviousPaths = paths }));
+
+                // The wire's blank rule (ASCII whitespace): a non-breaking space is a real entry.
+                Assert.Throws<ArgumentException>(() => collector.Windows.AddSystemMonitoringSensors(
+                    new BarSensorOptions { PreviousPaths = new List<string> { "\u00A0" } }));
             }
         }
 

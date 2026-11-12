@@ -90,7 +90,7 @@ namespace HSMDataCollector.Options
         // that sensor's history into whichever of them registers first (#1724 review).
         internal static T ForSeveralSensors<T>(T options, string helper) where T : SensorOptions
         {
-            if (options?.PreviousPaths != null && options.PreviousPaths.Any(p => !string.IsNullOrWhiteSpace(p)))
+            if (ApiConverters.PreviousPathsOf(options) != null)
                 throw new ArgumentException($"{helper} builds several sensors from one options object; " +
                     "PreviousPaths belongs to one sensor — set it on each sensor's own Add* call.", nameof(options));
 
