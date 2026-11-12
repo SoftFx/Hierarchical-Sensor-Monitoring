@@ -3034,8 +3034,8 @@ namespace
         }
 
         // CONFORMANCE-UNSUPPORTED: the collector session verbs (#1668). The scripted session server
-        // and these verbs come to this driver with the native session transport (#1668, PR #1669);
-        // until then tests/conformance/collector/session_transport_contract.hsmtest is not
+        // and these verbs come to this driver in the PR that follows this one (#1744), on top of
+        // the native session transport (#1668); until then tests/conformance/collector/session_transport_contract.hsmtest is not
         // registered in CMake, and a fixture that uses one of them fails here by name.
         static const char* const kSessionVerbs[] = {
             "create_collector_on_session",
