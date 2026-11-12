@@ -46,7 +46,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // A package that failed returns to the tail of the queue, behind what was issued during
         // its send, and the server applies the commands of a package in the order they come.
         // Sent in queue order, an older registration of a sensor would then overwrite a newer
-        // one. The order of issue is the order that is right for the server. A list, not a
+        // one. The order of issue is the order that is right for the server. This holds inside
+        // a package only: with more commands queued than one package takes, a failed package
+        // still rotates behind the packages issued after it (#1750). A list, not a
         // deferred query: a sender reads the commands more than once, and every reading must
         // see the same order without sorting again.
         private static IEnumerable<CommandRequestBase> InOrderOfIssue(DataPackage<CommandRequestBase> package) =>
