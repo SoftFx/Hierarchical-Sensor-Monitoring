@@ -84,7 +84,22 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
             ];
 
             Assert.Equal(ascending, await Read(id, From, To, 100));
-            Assert.Equal(ascending.Reverse(), await Read(id, From, To, -100));
+            Assert.Equal(Enumerable.Reverse(ascending), await Read(id, From, To, -100));
+        }
+
+
+        [Fact]
+        public async Task EqualTicks_AcrossTypes_DirectionsMirror()
+        {
+            var id = Guid.NewGuid();
+
+            Add(id, Week2, 15, RecordType.Actions, "W2");
+            Add(id, Week2, 15, RecordType.Changes, "W2");
+
+            Assert.Equal(["W2-A15", "W2-C15"], await Read(id, From, To, 100));
+            Assert.Equal(["W2-C15", "W2-A15"], await Read(id, From, To, -100));
+            Assert.Equal(["W2-A15"], await Read(id, From, To, 1));
+            Assert.Equal(["W2-C15"], await Read(id, From, To, -1));
         }
 
 

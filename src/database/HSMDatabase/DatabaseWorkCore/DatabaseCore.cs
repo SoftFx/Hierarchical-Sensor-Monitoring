@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -747,6 +746,8 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var streams = new List<IEnumerable<(byte[], byte[])>>(2);
 
+                // Actions is 0, so HasFlag(Actions) is always true: every read
+                // includes Actions records (pinned by JournalBorderTests).
                 foreach (var recordType in Enum.GetValues<RecordType>())
                     if (types.HasFlag(recordType))
                     {
@@ -776,17 +777,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private static IEnumerable<(byte[], byte[])> MergeJournalStreamsByTime(List<IEnumerable<(byte[], byte[])>> streams, bool newestFirst)
         {
-            if (streams.Count == 1)
-            {
-                foreach (var pair in streams[0])
-                    yield return pair;
-
-                yield break;
-            }
-
-            // Ticks are the big-endian tail of the key, the same bytes for every record type.
-            static long GetTicks(byte[] key) => BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(key.Length - sizeof(long)));
-
             var enumerators = new List<IEnumerator<(byte[], byte[])>>(streams.Count);
 
             try
@@ -809,10 +799,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
                     for (var i = 1; i < enumerators.Count; i++)
                     {
-                        var ticks = GetTicks(enumerators[i].Current.Item1);
-                        var best = GetTicks(enumerators[next].Current.Item1);
+                        var ticks = JournalKey.GetTime(enumerators[i].Current.Item1);
+                        var best = JournalKey.GetTime(enumerators[next].Current.Item1);
 
-                        if (newestFirst ? ticks > best : ticks < best)
+                        // Equal ticks: the earlier stream wins oldest first and
+                        // the later one newest first, so the two directions
+                        // are exact mirrors of each other.
+                        if (newestFirst ? ticks >= best : ticks < best)
                             next = i;
                     }
 
