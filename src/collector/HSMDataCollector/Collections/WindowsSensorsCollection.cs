@@ -272,18 +272,25 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddNetworkInterfacesSpeed() => ToWindows(new WindowsNetworkInterfaceSpeedMonitor(_storage));
 
-        // Asked for once per collector, like the native enable call: a second request is not a
-        // second monitor (and its period is not applied).
-        private WindowsTcpFailureRateMonitor _tcpFailureRateMonitor;
+        private readonly object _tcpFailureRateGate = new object();
 
         public IWindowsCollection AddNetworkConnectionFailuresRate(TimeSpan? period = null)
         {
-            if (_tcpFailureRateMonitor != null)
-                return this;
+            // Before the monitor is built: building it puts the rate sensor into the storage, and
+            // a Windows-only sensor must not be left there by a call that then throws.
+            EnsureCorrectOs();
 
-            _tcpFailureRateMonitor = new WindowsTcpFailureRateMonitor(_storage, period ?? TimeSpan.FromMinutes(1));
+            lock (_tcpFailureRateGate)
+            {
+                // Asked for once per collector, like the native enable call: a second request is
+                // not a second monitor (and its period is not applied). The storage is the record
+                // of what was taken: a monitor it refused (the collector was stopping) is not there,
+                // so the next call tries again.
+                if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out _))
+                    return this;
 
-            return ToWindows(_tcpFailureRateMonitor);
+                return ToWindows(new WindowsTcpFailureRateMonitor(_storage, period ?? TimeSpan.FromMinutes(1)));
+            }
         }
 
         public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();

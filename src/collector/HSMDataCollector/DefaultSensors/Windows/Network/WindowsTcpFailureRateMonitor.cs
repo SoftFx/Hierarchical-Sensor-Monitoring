@@ -31,11 +31,15 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
     internal sealed class WindowsTcpFailureRateMonitor : ISensor
     {
         // A key in SensorsStorage only; never posted to the server.
-        private const string MonitorPath = ".tcp_connection_failure_rate_monitor.";
+        internal const string MonitorPath = ".tcp_connection_failure_rate_monitor.";
+
+        // Task.Delay takes no more than this.
+        private static readonly TimeSpan MaxPeriod = TimeSpan.FromMilliseconds(int.MaxValue);
 
         internal const string SensorName = "Connection failures rate";
 
-        private readonly TcpFailureRateAccumulator _accumulator = new TcpFailureRateAccumulator();
+        private TcpFailureRateAccumulator _accumulator = new TcpFailureRateAccumulator();
+        private double _pushedTotal;
         private readonly Func<FamilyReading> _readV4;
         private readonly Func<FamilyReading> _readV6;
         private readonly IMonitoringRateSensor _sensor;
@@ -52,8 +56,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         /// <param name="readV6">The same for IPv6.</param>
         internal WindowsTcpFailureRateMonitor(SensorsStorage storage, TimeSpan period, Func<FamilyReading> readV4 = null, Func<FamilyReading> readV6 = null)
         {
-            if (period <= TimeSpan.Zero)
-                throw new ArgumentOutOfRangeException(nameof(period), "The sampling period must be greater than zero.");
+            if (period <= TimeSpan.Zero || period > MaxPeriod)
+                throw new ArgumentOutOfRangeException(nameof(period), $"The sampling period must be greater than zero and at most {MaxPeriod}.");
 
             _storage = storage;
             _period = period;
@@ -111,17 +115,29 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         }
 
 
+        /// <summary>The failed attempts pushed into the rate sensor so far. For tests.</summary>
+        internal double PushedTotal => Volatile.Read(ref _pushedTotal);
+
         public ValueTask<bool> InitAsync()
         {
-            // The first reading seeds the baselines and posts nothing.
+            // Every run starts from baselines of its own, as the native collector builds a new
+            // sampler on each Start: with the baselines of the previous run, everything that
+            // failed while the collector was stopped would come out as one spike. The first
+            // reading only seeds them and posts nothing.
+            _accumulator = new TcpFailureRateAccumulator();
             Sample();
+
             return new ValueTask<bool>(true);
         }
 
         public ValueTask<bool> StartAsync()
         {
+            _cts?.Dispose();
             _cts = new CancellationTokenSource();
-            _loopTask = Task.Run(() => RunLoopAsync(_cts.Token));
+
+            var token = _cts.Token;
+            _loopTask = Task.Run(() => RunLoopAsync(token));
+
             return new ValueTask<bool>(true);
         }
 
@@ -129,15 +145,23 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         {
             _cts?.Cancel();
 
-            if (_loopTask != null)
-            {
-                try { await _loopTask.ConfigureAwait(false); }
-                catch (OperationCanceledException) { }
-            }
+            var loop = _loopTask;
+
+            if (loop == null)
+                return;
+
+            // The loop ends on the cancellation and catches what a sample throws; whatever else
+            // could come out of it must not fault the collector's stop.
+            try { await loop.ConfigureAwait(false); }
+            catch (Exception) { }
         }
 
         public void Dispose()
         {
+            // Cancelled first: a monitor disposed without a stop must not leave its loop running.
+            try { _cts?.Cancel(); }
+            catch (ObjectDisposedException) { }
+
             _cts?.Dispose();
             _cts = null;
         }
@@ -163,7 +187,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                 var delta = _accumulator.Accumulate(_readV4(), _readV6());
 
                 if (delta.HasValue)
+                {
                     _sensor.AddValue(delta.Value);
+                    Interlocked.Exchange(ref _pushedTotal, _pushedTotal + delta.Value);
+                }
             }
             catch (Exception ex)
             {

@@ -151,7 +151,7 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
-        public void Monitor_refuses_a_period_that_is_not_positive()
+        public void Monitor_refuses_a_period_it_cannot_wait_for()
         {
             using (var collector = CreateCollector(new RateRecordingSender()))
             {
@@ -160,6 +160,55 @@ namespace HSMDataCollector.Tests
                     .GetValue(collector);
 
                 Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsTcpFailureRateMonitor(storage, TimeSpan.Zero));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromDays(30)));
+            }
+        }
+
+        [Fact]
+        public async Task Monitor_does_not_post_what_failed_while_it_was_stopped()
+        {
+            long v4 = 100;
+
+            using (var collector = CreateCollector(new RateRecordingSender()))
+            {
+                var storage = (SensorsStorage)typeof(DataCollector)
+                    .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(collector);
+
+                var monitor = new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromHours(1),
+                    readV4: () => new FamilyReading((ulong)Interlocked.Read(ref v4)),
+                    readV6: () => FamilyReading.Unreadable);
+
+                // First run: the baseline is 100.
+                await monitor.InitAsync();
+                await monitor.StartAsync();
+                await monitor.StopAsync();
+
+                // 5000 attempts fail while the monitor is stopped. The next run starts from a
+                // baseline of its own, so they are nobody's increase.
+                Interlocked.Exchange(ref v4, 5100);
+
+                await monitor.InitAsync();
+
+                Assert.Equal(0, monitor.PushedTotal);
+
+                monitor.Dispose();
+            }
+        }
+
+        [Fact]
+        public void Adding_the_sensor_twice_keeps_one_monitor()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            using (var collector = CreateCollector(new RateRecordingSender()))
+            {
+                collector.Windows.AddNetworkConnectionFailuresRate();
+                collector.Windows.AddNetworkConnectionFailuresRate(TimeSpan.FromSeconds(5));
+
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath));
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal)));
             }
         }
 
