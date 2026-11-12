@@ -29,8 +29,9 @@ namespace HSMDataCollector.Core
         private readonly object _lifecycleGate;
         private readonly TimeSpan _stopFlushTimeout;
 
-        // 1 after the data/priority drain boundary has been crossed during a graceful stop. Late
-        // file/command flushes that still produce package diagnostics observe this flag and skip
+        // 1 while a stop drains a queue whose package diagnostics must not be recorded: during the
+        // command flush, which goes first, and from the data/priority drain boundary on (the file
+        // flush). Those flushes still produce package diagnostics; they observe this flag and skip
         // <see cref="AddPackageInfo"/>/<see cref="AddPackageSendingInfo"/> so the diagnostics do
         // not enqueue into already-stopped data queues and survive into a later restart as stale
         // collector telemetry. Reset on every <see cref="Start"/>.
@@ -144,8 +145,8 @@ namespace HSMDataCollector.Core
             // within the request timeout — only the queues that exited cleanly are eligible for
             // flush below (an unresponsive sender would otherwise block flush against itself).
             // We pass the original ShutdownMode through so the queue's processing loop catches
-            // observe the right PreserveCanceledPackages policy (graceful re-enqueues canceled
-            // packages; terminal dispose drops them so we stop bounded under broken transport).
+            // observe the right PreserveCanceledPackages policy (graceful stop and terminal dispose
+            // both re-enqueue the canceled package for the drain below; start-rollback drops it).
             //
             // The four loops are stopped together (#1659 A7): each wait is bounded by the mode's
             // stop timeout, and waiting for them one after another made a sender that ignores
@@ -169,12 +170,14 @@ namespace HSMDataCollector.Core
                 // Registrations first: the values behind them are of little use to a server that
                 // was never told what those sensors are. Their package diagnostics are suppressed
                 // like every diagnostic of a non-data flush (#1075, below).
-                Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
+                var suppressedBefore = Interlocked.Exchange(ref _diagnosticsSuppressedFlag, 1);
 
                 if (commandStopped)
                     await FlushAndLogAsync(_commandQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-                Volatile.Write(ref _diagnosticsSuppressedFlag, 0);
+                // Back to what it was, not to "recorded": a stop that found the boundary already
+                // crossed must not reopen it for the flushes below.
+                Volatile.Write(ref _diagnosticsSuppressedFlag, suppressedBefore);
 
                 if (priorityStopped)
                     await FlushAndLogAsync(_priorityQueue, drainBudget.Token, failures).ConfigureAwait(false);

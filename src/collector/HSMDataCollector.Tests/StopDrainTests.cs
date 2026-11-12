@@ -86,10 +86,14 @@ namespace HSMDataCollector.Tests
 
                 var drained = sender.SendsIn(SenderMode.Hung);
 
-                // One budget: the first hung send uses it up, and the queues after it find it
-                // spent and start nothing. One budget per queue would start a send for each.
-                Assert.True(drained.Count == 1,
-                            $"Expected one send inside the drain budget, got {drained.Count} ({string.Join(", ", drained)}) in {watch.Elapsed}.");
+                // One budget: the first hung send, the registrations, uses it up, and the queues
+                // after it find it spent and start nothing. One budget per queue would start a
+                // send for each of them.
+                var summary = $"Sends inside the drain: {string.Join(", ", drained)}; the stop took {watch.Elapsed}.";
+
+                Assert.True(drained.Contains(SendKind.Command), summary);
+                Assert.False(drained.Contains(SendKind.Data), summary);
+                Assert.False(drained.Contains(SendKind.File), summary);
             }
         }
 
