@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Core
 {
@@ -44,6 +45,49 @@ namespace HSMDataCollector.Core
 
         public int MaxSensors { get; set; } = 100000;
 
+        /// <summary>
+        /// Headers the collector adds to every request that carries sensor values, next to its
+        /// own <c>Key</c> and <c>ClientName</c>. They state facts about the host for the server
+        /// (an agent sends <c>X-Agent-Version</c>, which is what makes the server answer with
+        /// directives). Read once, when the collector is created; registrations do not carry
+        /// them. A name the collector sets itself (<c>Key</c>, <c>ClientName</c>), a header of
+        /// the request body or of the connection, a name that is not a plain token and a value
+        /// with a line break are refused at construction.
+        /// </summary>
+        public IDictionary<string, string> ExtraRequestHeaders { get; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Headers a host may not set: the collector's own, and those that describe the request
+        // body or the connection, which the HTTP stack owns.
+        private static readonly HashSet<string> ReservedRequestHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Key", "ClientName",
+            "Host", "Connection", "Upgrade", "Transfer-Encoding", "Expect", "Proxy-Connection", "Keep-Alive", "TE", "Trailer",
+            "Content-Type", "Content-Length", "Content-Encoding",
+        };
+
+        private const string HeaderNameSeparators = "\"(),/:;<=>?@[\\]{}";
+
+        private static void ValidateExtraRequestHeader(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("An extra request header needs a name.", nameof(ExtraRequestHeaders));
+
+            foreach (var ch in name)
+                if (ch <= ' ' || ch >= 127 || HeaderNameSeparators.IndexOf(ch) >= 0)
+                    throw new ArgumentException($"'{name}' is not a valid request header name.", nameof(ExtraRequestHeaders));
+
+            if (ReservedRequestHeaders.Contains(name) || name.StartsWith("Sec-WebSocket-", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"The request header '{name}' is set by the collector and cannot be replaced.", nameof(ExtraRequestHeaders));
+
+            if (value == null)
+                throw new ArgumentException($"The request header '{name}' has no value.", nameof(ExtraRequestHeaders));
+
+            foreach (var ch in value)
+                if (ch == '\r' || ch == '\n' || ch == '\0')
+                    throw new ArgumentException($"The value of the request header '{name}' contains a line break.", nameof(ExtraRequestHeaders));
+        }
+
         internal void Validate()
         {
             if (string.IsNullOrWhiteSpace(AccessKey))
@@ -75,6 +119,9 @@ namespace HSMDataCollector.Core
 
             if (MaxSensors <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxSensors), "Max sensors must be greater than zero.");
+
+            foreach (var header in ExtraRequestHeaders)
+                ValidateExtraRequestHeader(header.Key, header.Value);
         }
     }
 }

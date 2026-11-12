@@ -21,6 +21,8 @@ namespace HSMDataCollector.Client.HttpsClient
         // PackageCollectPeriod, as the native collector does.
         protected override int MaxRetryAttempts => 0;
 
+        protected override bool CarriesValues => false;
+
         internal override object ConvertToRequestData(CommandRequestBase value) => value;
 
         public CommandHandler(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger)
