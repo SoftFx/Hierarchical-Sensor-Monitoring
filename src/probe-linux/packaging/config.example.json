@@ -4,7 +4,8 @@
     "port": 443,
     "accessKeyFile": "access-key",
     "packageCollectPeriodSec": 15,
-    "requestTimeoutSec": 30
+    "requestTimeoutSec": 30,
+    "transport": "http"
   },
   "logging": {
     "directory": "/var/log/hsm-linux-probe",
@@ -27,6 +28,15 @@
       "samplePeriodSec": 60,
       "oomLatchHours": 24,
       "exclude": []
+    },
+    "network": {
+      "enabled": true,
+      "interfaces": [],
+      "reachability": {
+        "enabled": false,
+        "internet": "1.1.1.1:443",
+        "gatewayPort": 53
+      }
     }
   },
   "topCpu": {

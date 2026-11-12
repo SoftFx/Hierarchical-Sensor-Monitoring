@@ -1,6 +1,6 @@
 # Feature: HSM Agent (Windows service)
 
-> Owner: agent | Last reviewed: 2026-10-14 | Canonical: yes
+> Owner: agent | Last reviewed: 2026-11-11 | Canonical: yes
 > Scope: The standalone **HSM Agent** product (`src/agent/`) — an always-on Windows service that hosts the native collector and streams this computer's metrics to an HSM server with zero client-side configuration. This feature owns the service host, config, and logging; it owns NO wire behavior (that all lives in `collector/` + `integrations/native-collector`).
 
 ---
@@ -167,7 +167,8 @@ exposes no general parser and the epic mandates minimal deps. Platform-agnostic 
 tested on every CI lane. Only `server.address` + `server.accessKey` are required; everything else
 defaults. Maps onto `CollectorOptions` + runtime group gates:
 
-- `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port).
+- `server.{address,port=443,accessKey,allowUntrustedCertificate}` → connection options (443 since #1590; server-generated bundles always carry the resolved port). A `port` of 44330/44333 is accepted but watched — see "Retired server port".
+- `server.transport` (`"http"` default, or `"session"`; #1668, agent 0.5.51) → `UseHttpTransport()` or `UseSessionTransport()`. Any other value refuses to start: a typo must not select the other transport. On `session` the collector sends nothing over the HTTP routes and does not fall back to them; the agent's periodic update check is a request of its own and stays on HTTPS. Server directives (#1198) ride on the response headers of data POSTs, so an agent on the session receives none until the session pushes them (collector session step 5): remote sensor-group switches and the update-available nudge do not arrive, the periodic update check still does.
 - `identity.computerName` (`"auto"`/blank → `GetComputerNameExW` physical DNS host name) → `computer_name`;
   `identity.module` → `module`.
 - `sensors.{computer,system,disk,network,module,process}` — `computer` is the umbrella host bundle;
@@ -248,6 +249,85 @@ agent's real data path, so emitting only on the typed endpoints means it never s
 - Toggling a product's sensor groups (server `ProductController.UpdateSensorGroups`) is gated by the
   **ProductManager** role on that product, like every other product mutation.
 
+## Retired server port (issues #1655, #1696)
+
+Before #1590 the server answered on 44330 (Sensor API) and 44333 (Web UI); #1696 removed the last
+aliases of them, so only 443 answers. An agent installed against the old scheme keeps
+`server.port: 44330` in `config.json`, and a connection that never reaches the server leaves no trace
+there: the agent is the only place that can say what is wrong, and it must not fail silently.
+
+- **Which ports.** Exactly 44330 and 44333 (`IsRetiredServerPort`, `include/agent/retired_port.hpp`).
+  Any other port — 443, a custom one — is never probed or changed: such a config behaves as before.
+- **At every start** with a retired port the agent logs a notice naming the port, 443, the file to
+  edit and the service to restart.
+- **While running** it checks 30 s after start and then every 5 min
+  (`AgentRuntime::WaitForStopWatchingRetiredPort`, on the runtime's own thread in place of the plain
+  stop wait). The verdict is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
+  `GET /api/sensors/testConnection` returns 200 over https under the config's certificate policy, 2 s
+  timeouts set on the request handle; https even for an `http://` address, because the agent's
+  collector never enables plaintext and sends such an address over https too; no WinHTTP proxy, because
+  the collector's libcurl transport ignores the machine-wide WinHTTP proxy — but libcurl does follow
+  `HTTPS_PROXY`/`ALL_PROXY` from the service environment and the probe does not, so on such a host the
+  probe goes direct while the data goes through that proxy; and for 443, the move target,
+  the answer must carry the `X-Hsm-Server` header that only an HSM server's testConnection sets — a
+  bare 200 from another service on 443 of a host whose HSM is pinned to an old port and merely down
+  must not take its agents), asked lazily and in a fixed order. What to do with the verdict —
+  the confirmation, the next delay and the hourly throttling below — is the pure `NextRetiredPortStep`
+  (`retired_port.cpp`, unit-tested); the runtime only probes and carries the step out:
+  1. the retired port answers → keep it. This covers a proxy-less server pinned to the old port
+     (`Kestrel.Port`) and an operator's own port mapping; 443 is not even asked.
+  2. the retired port is dead and 443 answers, **on two checks in a row** (the confirming one a
+     minute after the first) → **move**: rewrite `config.json` with `port: 443` (`WriteAgentConfig`,
+     the directive rewrite), spawn the `--restart-service` helper, stop. The collector's endpoint is
+     built once at `Start`, so the new port needs a fresh process — the same persist-then-restart
+     sequence as a sensor-group directive. The confirmation exists because the move is one-way (443
+     is not a retired port, so nothing watches it afterwards): a server pinned to the old port that is
+     merely restarting must not lose its agents to something else answering on 443 of that host. If
+     the rewrite or the helper fails, the agent stays up, logs an Error naming the manual fix (hourly),
+     and retries at every check.
+  3. the retired port is dead and 443 answers 200 **without** the marker (an HSM server older than
+     the marker, or another service) → nothing changes; an hourly Error says so and names the manual
+     fix. Any answer on the retired port itself, marked or not, keeps it (case 1).
+  4. neither answers → nothing changes; an Error is logged hourly (the collector already logs every
+     failed send).
+- **Service only.** The move needs the config path the run was loaded from (`SetServiceConfigPath`,
+  set by the service host). A `--console` run has none and only reports (an hourly Error with the value
+  to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not. Its
+  start and "nothing answers" notices say so instead of promising a self-move.
+- **What the move writes.** `MoveConfigToStandardPort` reads `config.json` back and changes only the
+  port, and only while the file still names the address and port the probes ran against; an operator
+  who has since pointed it elsewhere is left alone (hourly Error: restart to apply). A file that already
+  says 443 for the probed host counts as moved without a rewrite, so a restart helper that failed to
+  start is retried at the next check. Every setting the
+  config models keeps the value the file has now (a new key, a directive's flag whose restart failed);
+  the file is regenerated from the parsed config, like the directive rewrite, so keys the parser does
+  not know and the layout are not kept. A file that does not load is left untouched and the manual fix
+  is reported instead.
+- **Two writers of config.json.** The sensor-group directive handler (collector thread) and the move
+  (runtime thread) both write `config.json`, unsynchronised. They cannot overlap: a directive arrives
+  only in the response to a data POST, and the move happens only after the configured port stopped
+  answering on two checks in a row. The move site records this.
+- **Stopping.** The probes run on the runtime's thread between two waits for the stop signal. A stop
+  that arrives during a probe waits for that probe only (2 s per WinHTTP phase; a refused connection
+  measured ~4 s on a dual-stack `localhost`), and the second probe is skipped. The service's stop wait
+  hint (16 s) covers that probe plus the collector's bounded drain. At a system shutdown Windows may
+  cut the drain short if a probe was in flight; stop-time data loss is accepted (the stop must never
+  hold up the host).
+- **Log levels.** The agent log has no warning level. The start notice and the move are Info (a
+  working or self-healed state); "nothing is being delivered" is Error, which also reaches the Windows
+  Event Log.
+- **Limits.** The probe proves that *an* HSM server answers on 443 of the same host, not that it
+  knows this agent's access key. The marker (`X-Hsm-Server: 1`, exactly that value) is a "not a
+  stranger" check, not authentication: anything that controls 443 of the configured host can send it,
+  and after the move every data POST carries the access key there. An HSM server older than the marker (before #1696) on 443 is not
+  recognised, so its agents are not moved and get the hourly "answers on 443, but not as an HSM
+  server" Error instead (case 3). The header name lives on both sides (`SensorsController.ServerMarkerHeader`,
+  `kServerMarkerHeader` in `retired_port.hpp`), each pinned to the literal by a test. Only an agent that already runs this code can move: an older agent has
+  to receive it through self-update while its old port still answers, or be repointed by hand
+  (`docs/hsm-agent.md`, "Retired ports 44330 / 44333"). Self-update delivers what
+  `src/server/HSMServer/agent-release.txt` pins, so a server release that drops the old ports is only
+  safe for old agents once that pin names an agent release carrying this code.
+
 ## Top processes by CPU (issue #1175)
 
 Opt-in (`topCpu.enabled`). A dedicated thread in `AgentRuntime` (started after `Start()`, joined
@@ -284,9 +364,17 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 16 cases — config parser + topCpu/update
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 21 cases — config parser + topCpu/update
   config + the sensor-group directive name↔field map + the interactive-launch message text,
-  `agent_launch_hint_message_guides_the_operator`) — run on every platform, registered in `ctest`.
+  `agent_launch_hint_message_guides_the_operator` + the retired-port rules, `agent_retired_port_*`:
+  which ports are retired, the verdict for every probe outcome including "no probe for a port that is
+  not retired", that every notice names the fix (and that a `--console` run's notices promise no
+  self-move), and the watcher step: a move only on the second `SwitchToStandard` in a row, any other
+  verdict in between resets it, a console run never moves, failures are reported once per 12 checks;
+  and the move's write: only the port changes in the file as it is now, a file repointed to another
+  port or host since start is not touched, an unreadable file is left alone, a missing one is not
+  created)
+  — run on every platform, registered in `ctest`.
 - Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
     a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to

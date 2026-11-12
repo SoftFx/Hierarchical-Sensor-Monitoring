@@ -58,7 +58,7 @@ echo "==> build dependencies"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-    build-essential cmake pkg-config libcurl4-openssl-dev ca-certificates curl \
+    build-essential cmake pkg-config libcurl4-openssl-dev nlohmann-json3-dev ca-certificates curl \
     dpkg-dev file >/dev/null
 
 if ! command -v cargo >/dev/null 2>&1; then

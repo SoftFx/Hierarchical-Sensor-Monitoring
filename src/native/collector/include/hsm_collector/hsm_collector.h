@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 11
-#define HSM_COLLECTOR_VERSION_PATCH 4
+#define HSM_COLLECTOR_VERSION_MINOR 12
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -275,6 +275,18 @@ hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
    HSM_RESULT_INVALID_STATE when the library was built without the HTTP transport
    (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
 hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
+
+/* Make the collector session the transport: one persistent WebSocket to the server
+   (GET /api/sensors/session) that carries value batches and sensor registrations as frames, each
+   confirmed by the server. Call instead of hsm_collector_use_http_transport, before Start.
+   A collector on a session sends nothing over the HTTP routes and never falls back to them: while
+   no session is up, values wait in the queue as they do when the server is unreachable.
+   File values cannot travel on a session yet and are refused: hsm_sensor_add_file and
+   hsm_sensor_add_file_from_path return HSM_RESULT_INVALID_STATE. Needs a libcurl of at least 8.14.0
+   built with WebSocket support; without it Start still completes, one error is logged and nothing
+   is delivered. Returns HSM_RESULT_INVALID_STATE unless the collector is stopped, or when the
+   library was built without the HTTP transport. Since 0.12.0. */
+hsm_result_t hsm_collector_use_session_transport(hsm_collector_t* collector);
 
 /* Install the ready-made Windows PDH / Win32 metric-source factory (#1164): the value-typed default
    sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections) read live
@@ -978,7 +990,9 @@ hsm_result_t hsm_sensor_add_rate(
 /* Values-function buffer append (works before Start as well). */
 hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
 
-/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). */
+/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). Returns
+   HSM_RESULT_INVALID_STATE on a running collector that uses the session transport, which cannot
+   carry a file value (hsm_collector_use_session_transport). */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,
@@ -993,7 +1007,8 @@ hsm_result_t hsm_sensor_add_file(
    FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
    an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
    HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
-   BEFORE the file is read, so a no-op never performs the disk read. */
+   BEFORE the file is read, so a no-op never performs the disk read — or uses the session
+   transport, which cannot carry a file value. */
 hsm_result_t hsm_sensor_add_file_from_path(
     hsm_sensor_t* sensor,
     const char* file_path,
