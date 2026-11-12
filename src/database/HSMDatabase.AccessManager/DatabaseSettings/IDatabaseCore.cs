@@ -127,6 +127,14 @@ namespace HSMServer.Core.DataLayer
         void AddSensorValue(Guid sensorId, BaseValue value);
         void ClearSensorValues(Guid sensorId, DateTime from, DateTime to);
 
+        /// <summary>
+        /// Copy every history row of <paramref name="fromSensorId"/> under
+        /// <paramref name="intoSensorId"/>, same tick, same bytes (sensor-move merge,
+        /// #1720). A tick <paramref name="intoSensorId"/> already has keeps its own row
+        /// and counts as a collision. The source rows are left in place.
+        /// </summary>
+        (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId);
+
         byte[] GetLatestValue(Guid sensorId, long to);
 
         byte[] GetFirstValue(Guid sensorId);

@@ -231,6 +231,46 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        // Sensor-move merge (#1720): the one place a history row changes its
+        // sensor id. A row's partition is chosen by its tick, so the copy of a
+        // row lands in the same partition as the row itself. Existing rows of
+        // the survivor win (ADR-0018: the moved sensor's row wins a same-tick
+        // collision); the survivor's ticks of each partition are read once.
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
+        {
+            var fromStart = new DbKey(fromSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var fromEnd = new DbKey(fromSensorId, DateTime.MaxValue.Ticks).ToBytes();
+            var intoStart = new DbKey(intoSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var intoEnd = new DbKey(intoSensorId, DateTime.MaxValue.Ticks).ToBytes();
+
+            long copied = 0, collisions = 0;
+
+            foreach (var db in _sensorValuesDatabases)
+            {
+                HashSet<long> intoTicks = null;
+
+                foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
+                {
+                    intoTicks ??= db.GetKeysValuesTo(intoStart, intoEnd)
+                        .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
+                        .ToHashSet();
+
+                    var tick = DbKey.FromBytes(keyBytes).Timestamp;
+
+                    if (intoTicks.Contains(tick))
+                    {
+                        collisions++;
+                        continue;
+                    }
+
+                    db.PutSensorValue(new DbKey(intoSensorId, tick).ToBytes(), valueBytes);
+                    copied++;
+                }
+            }
+
+            return (copied, collisions);
+        }
+
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
         {
             var fromKey = new DbKey(sensorId, DateTime.MinValue.Ticks).ToBytes();

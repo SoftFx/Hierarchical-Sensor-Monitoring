@@ -342,6 +342,28 @@ namespace HSMServer.Core.Model
         // floor stamped without validating the row) are in
         // aicontext/features/server/overview.md (#1344). All of them point the same way: a
         // retried sensor destroys later, never earlier.
+        // Runs on the queue that owns the sensor (the cache's merge step), the
+        // single writer of Storage, and only once history is loaded: before
+        // that, the lazy load reads the merged rows itself. No policy
+        // evaluation — the copied rows are history, not new deliveries, so
+        // the status is recomputed by the next real value.
+        internal override void RefreshAfterMerge()
+        {
+            if (!IsHistoryLoaded)
+                return;
+
+            var lastBytes = _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
+
+            if (lastBytes is not null && Convert(lastBytes) is T last && !last.IsTimeout &&
+                (Storage.LastValue is null || last.Time > Storage.LastValue.Time))
+                Storage.AddValue(last);
+
+            var firstBytes = _database.GetFirstValue(Id);
+
+            if (firstBytes is not null)
+                Storage.WidenFrom(Convert(firstBytes).Time);
+        }
+
         private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
             // Every attempt stamps the clock, failed or not: the first retry is measured from

@@ -3160,6 +3160,9 @@ namespace HSMServer.Core.Cache
                 case SensorTemplateReevaluationRequest request:
                     ReevaluateMovedSensorTemplates(request);
                     break;
+                case SensorMergeRequest request:
+                    AbsorbSensor(request);
+                    break;
             }
 
             queue.Stopwatch.Stop();
@@ -4493,9 +4496,11 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorFromCache(BaseSensorModel sensor)
         {
+            // Remove only THIS sensor's entry: during a merge (#1720) the path
+            // already belongs to the moved sensor that absorbs this one.
             if (_cache.TryGetValue(sensor.Root.Id, out var value))
             {
-                value.Sensors.TryRemove(sensor.Path, out _);
+                value.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(sensor.Path, sensor));
             }
 
             _sensorsById.TryRemove(sensor.Id, out _);

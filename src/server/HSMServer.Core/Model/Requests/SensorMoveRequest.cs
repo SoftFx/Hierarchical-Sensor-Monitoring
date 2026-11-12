@@ -13,9 +13,25 @@ namespace HSMServer.Core.Model.Requests
         SensorNotFound,
         DestinationNotFound,
         InvalidPath,
-        /// <summary>A real sensor already lives at the destination path.</summary>
+        /// <summary>A real sensor already lives at the destination path (and no merge was asked, or the types differ).</summary>
         Conflict,
         Failed,
+        /// <summary>The sensor moved onto an occupied path and absorbed the occupant's history (#1720).</summary>
+        Merged,
+    }
+
+
+    /// <summary>What a move does when a real sensor already holds the destination path.</summary>
+    public enum SensorMoveConflict
+    {
+        /// <summary>Refuse with <see cref="SensorMoveOutcome.Conflict"/>.</summary>
+        Fail,
+        /// <summary>
+        /// The moved sensor survives with its id, settings and policies and takes over
+        /// the occupant's history rows (its own row wins a same-tick collision); the
+        /// occupant is removed. Sensors of different types never merge.
+        /// </summary>
+        Merge,
     }
 
 
@@ -25,7 +41,16 @@ namespace HSMServer.Core.Model.Requests
 
         public string NewPath { get; init; }
 
-        public bool IsOk => Outcome is SensorMoveOutcome.Moved or SensorMoveOutcome.Unchanged;
+        /// <summary>The absorbed sensor's id (Merged only).</summary>
+        public Guid? MergedSensorId { get; init; }
+
+        /// <summary>History rows copied from the absorbed sensor (Merged only).</summary>
+        public long MergedValues { get; init; }
+
+        /// <summary>Absorbed rows dropped because the moved sensor had a row at the same tick (Merged only).</summary>
+        public long MergeCollisions { get; init; }
+
+        public bool IsOk => Outcome is SensorMoveOutcome.Moved or SensorMoveOutcome.Unchanged or SensorMoveOutcome.Merged;
     }
 
 
@@ -37,7 +62,27 @@ namespace HSMServer.Core.Model.Requests
     internal sealed record SensorMoveRequest(Guid SensorId, Guid SourceRootId, Guid DestinationProductId,
         string DestinationPath, InitiatorInfo Initiator) : IUpdateRequest
     {
+        public SensorMoveConflict OnConflict { get; init; }
+
         public SensorMoveResult Result { get; set; }
+
+        // Set when the move took an occupied path under Merge: the occupant
+        // is unindexed and must be absorbed on its own queue (SensorMergeRequest).
+        public Guid? AbsorbId { get; set; }
+    }
+
+
+    /// <summary>
+    /// Second step of a merge (#1720): on the queue that owns the absorbed sensor,
+    /// copy its history under the survivor's id and remove it.
+    /// </summary>
+    internal sealed record SensorMergeRequest(Guid SurvivorId, Guid AbsorbedId, Guid ExpectedRootId, InitiatorInfo Initiator) : IUpdateRequest
+    {
+        public long Copied { get; set; }
+
+        public long Collisions { get; set; }
+
+        public string Error { get; set; }
     }
 
 

@@ -251,6 +251,12 @@ namespace HSMServer.Core.Model
         // that is worth rationing.
         internal abstract HistoryLoadRetryResult RetryFailedHistoryLoad(DateTime utcNow);
 
+        // Sensor-move merge (#1720): another sensor's history was just copied
+        // under this sensor's id. A sensor whose history is already loaded
+        // takes the newest copied value into its cache and widens From; one
+        // not loaded yet sees the merged rows on its first load anyway.
+        internal abstract void RefreshAfterMerge();
+
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's
         // deferred/failed-load counters. Value is never null: CustomSettingsProperty falls back

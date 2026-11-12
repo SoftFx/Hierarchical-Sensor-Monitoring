@@ -11,13 +11,13 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719). Merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720). The `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
 
 ## Invariants
 
 - **Only sensors move.** Nodes and products are never moved; a move creates missing destination nodes exactly as ingestion does, and leaves empty source nodes to the empty-node sweep (`RunProductsSelfDestroyAsync` → `ClearEmptyNodesAsync`).
 - **The id never changes.** A move writes one row: the sensor entity, with its new parent (`SensorEntity.ProductId`), name (`DisplayName`) and aliases. History rows (`DbKey(SensorId, ticks)`) are never touched.
-- **The destination must be free.** A real sensor at the destination path makes the move a `Conflict` and changes nothing. (A merge mode is #1720.) An alias at the destination does not block: the move displaces it.
+- **The destination must be free, unless a merge is asked.** A real sensor at the destination path makes the move a `Conflict` and changes nothing — with `SensorMoveConflict.Merge` (and only between sensors of the same type) the moved sensor absorbs it instead (see Merge). An alias at the destination never blocks: the move displaces it.
 - **Paths are root-relative** and normalized like ingestion paths (`BaseUpdateRequest`): empty segments are dropped, a leading `/` is ignored, `\` and tabs are invalid, at most 10 segments. The destination product must be a root product.
 - **Settings resolve "as if the sensor had always been there".** Explicit settings and own policies travel with the sensor; settings left "From parent" (TTL, KeepHistory, SelfDestroy) resolve against the new parent chain; alert templates are re-evaluated — templates that stopped matching are detached, templates that started matching are applied, attached templates that still match are left untouched (no journal churn). The decision is made from the templates actually attached, so a lost re-evaluation is repaired by the next one. Across products the re-evaluation is dispatched to the destination's queue, so it completes shortly after `MoveSensorAsync` returns.
 - **A move is serialized with every structural change.** Sensor creation, node/product removal and the move take one tree-structure lock; sensor creation re-checks the ingestion index under it. The lock covers only validation, node creation, the model and index mutation and the entity write; template re-evaluation, the journal record and UI subscribers run after it. The move runs on the queue of the sensor's current root product and publishes the sensor in the destination index only after every model mutation.
@@ -39,6 +39,18 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 
 `SensorMoveResult.Outcome`: `Moved`, `Unchanged` (destination equals the current path), `SensorNotFound`, `DestinationNotFound` (unknown or non-root product), `InvalidPath`, `Conflict` (a real sensor holds the destination; the error names its id), `Failed` (the sensor moved or was removed concurrently, or the entity write failed — the in-memory model is restored, a destination node created for it stays and is swept when empty). `OldPath`/`NewPath` are product-prefixed full paths.
 
+### Merge
+
+`MoveSensorAsync(..., SensorMoveConflict.Merge)` onto a path held by a real sensor of the same type (owner decision 3 of #1718):
+
+- **The moved sensor survives**: its id, settings, policies, journal and dashboard references. The occupant's settings, policies, journal and dashboard panels go away with it.
+- **History**: every row of the occupant is copied under the survivor's id at the same tick (`IDatabaseCore.MergeSensorValues`) — the one place a history row changes its sensor id. On a same-tick collision the survivor keeps its own row; collisions are counted in `SensorMoveResult.MergeCollisions`, logged at `Warn` and journaled.
+- **Newest value**: when the survivor's history is loaded, its newest stored row (possibly a copied one) becomes its cached last value and `From` widens to the oldest row. Status, TTL/expired state and alerts are not re-evaluated from copied rows — they are history, not deliveries; the next real value recomputes them.
+- **Aliases**: the occupant's aliases move to the survivor, so the occupant's old paths keep landing in it too.
+- **Two steps.** Step 1, under the tree-structure lock on the source product's queue: the occupant leaves the ingestion index (a value for the path now resolves to the survivor) and hands over its aliases; the survivor is moved and published. Step 2, `SensorMergeRequest` on the occupant's own queue (the destination's) — every value the occupant had in flight was processed before it: copy the rows, refresh the survivor, journal "Merge sensor", remove the occupant (`RemoveSensor`, which also wipes its rows). Step 2 is not cancellable.
+- **Outcome**: `Merged` with `MergedSensorId`, `MergedValues`, `MergeCollisions`. Different types → `Conflict`. A free destination under `Merge` is a plain `Moved`. If step 2 fails, the result is `Failed` with `MergedSensorId` set: the move itself stands, the occupant was kept.
+- **Irreversible**: a merge cannot be rolled back (#1723 covers plain moves only).
+
 ### Alias lifetime
 
 - Created by every move (old root product + old root-relative path + creation time). Moving back onto an own alias retires that alias.
@@ -52,7 +64,8 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 | Contract | Location | Notes |
 |---|---|---|
 | `MoveSensorAsync`, `RemoveSensorAliasAsync`, `SensorMovedEvent` | `src/server/HSMServer.Core/Cache/ITreeValuesCache.cs` | Core entry used by every surface; no surface re-implements move semantics. |
-| `SensorMoveOutcome`, `SensorMoveResult` | `src/server/HSMServer.Core/Model/Requests/SensorMoveRequest.cs` | |
+| `SensorMoveOutcome`, `SensorMoveResult`, `SensorMoveConflict` | `src/server/HSMServer.Core/Model/Requests/SensorMoveRequest.cs` | |
+| `IDatabaseCore.MergeSensorValues` | `src/database/HSMDatabase/DatabaseWorkCore/DatabaseCore.cs` | Copies rows under another id; target rows win. |
 | `SensorAddOrUpdateRequest.TypeIsExplicit` | `src/server/HSMServer.Core/Model/Requests/SensorAddOrUpdateRequest.cs` | Set by `SensorIngestionService` and the self-monitoring `DataCollectorWrapper` when the registration carries a type. |
 
 ## Key Files
@@ -86,6 +99,7 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 - Template re-evaluation after a cross-product move runs on the destination's queue right after the move; values already queued there ahead of it are evaluated with the sensor's previous template policies.
 - A destination path may name an existing node: the sensor then sits next to a node of the same name, exactly as ingestion would create it.
 - A cross-product alias lets the old product's key keep feeding the moved sensor for as long as values arrive (an alias expires only after a SelfDestroy interval without hits). Only a Manager of both products can create one.
+- A merge interrupted between its two steps (a crash) leaves the occupant persisted but unindexed in memory; after a restart both sensors load at the same path and the path collision keeps one of them in the index. Run the merge again to finish it.
 - Path-based external references (Grafana queries, scripts using the Sensor API by path) see the new path; the alias keeps only ingestion and registration working on the old one.
 - A same-product alias resolves on the product's own queue; a cross-product one costs one extra queue hop per value.
 - A dashboard panel source that a subscription added stays on the panel when the sensor moves out of the subscription's template: a panel does not record which subscription added a source.
@@ -98,3 +112,4 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 ## Tests
 
 `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/SensorMoveTests.cs` — same/cross-product move, history and id preserved, created nodes, conflict, invalid/unknown inputs, unchanged move, "From parent" re-resolution, template re-evaluation, journal record; aliases: same/cross-product redirect, type displacement, registration through an alias (same and cross product), restart, SelfDestroy expiry, move-back retirement, displacement by a move, removal with the sensor and by hand.
+`SensorMergeTests` — history takeover and occupant removal, newest value, same-tick collision, type conflict, cross-product merge with alias adoption, merge into a free path. `HSMDatabase.LevelDB.Tests/SensorValuesDBTests/SensorValuesMergeTests` — the copy primitive and `GetLatestValue` for the sensor whose id sorts last in a partition (a pre-existing lookup bug the merge exposed: the newest row of that sensor read as missing).
