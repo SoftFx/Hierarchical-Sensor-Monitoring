@@ -30,10 +30,11 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
             var journals = GenerateJournalEntities(sensorId, historyValuesCount);
             var journalType = RecordType.Changes;
 
+            // No wait before the read: AddJournalValue is a synchronous LevelDB Put,
+            // so every record is readable as soon as the call returns.
             foreach (var journal in journals)
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
 
-            await Task.Delay(1000);
             var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
                 .Flatten()).Select(x => (JournalKey.FromBytes(x.Key), x.Entity)).ToList();
 
@@ -181,9 +182,16 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
         {
             List<(JournalKey, JournalRecordEntity)> result = new(count);
 
+            // One clock read plus an offset per record, not DateTime.UtcNow per record.
+            // The key is sensorId|type|ticks, so two records stamped with the same tick
+            // are the same LevelDB key and the second Put overwrites the first. The wall
+            // clock guarantees neither distinct nor increasing ticks across a tight loop,
+            // so the read-back used to come up short (912 of 1000) or out of order.
+            var baseTicks = DateTime.UtcNow.Ticks;
+
             for (int i = 0; i < count; i++)
             {
-                var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
+                var key = new JournalKey(sensorId, baseTicks + i, RecordType.Changes);
                 result.Add((key, GetJournalEntity($"TEST_{i}", $"TEST_{i}", $"TEST_{i}")));
             }
 
