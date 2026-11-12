@@ -540,6 +540,36 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
+        [Fact]
+        public async Task Create_StatusConditionWithErrorStatusEffect_Is400()
+        {
+            // #1707: the sensor-policy surface rejects a policy that reacts
+            // to Status while setting it — a template must not be able to
+            // mint self-triggering policies either.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                SensorStatus = (byte)SensorStatus.Error,
+                Conditions =
+                [
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.LastValue },
+                        Operation = (byte)PolicyOperation.IsError,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].sensorStatus", details.Keys);
+            Assert.Empty(_store);
+        }
+
         [Theory]
         [InlineData("policies")]
         [InlineData("ttlPolicies")]

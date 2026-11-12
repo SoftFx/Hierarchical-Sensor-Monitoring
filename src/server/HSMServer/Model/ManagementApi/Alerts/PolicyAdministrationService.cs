@@ -934,6 +934,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
             ValidateEffects(dto?.Notification, dto?.Destination, dto?.Icon, dto?.Status, dto?.ScheduleId,
                 dto?.ConfirmationPeriod, availableChats, errorMap);
 
+            // #1707: a policy that watches Status and carries the Error
+            // status effect reacts to its own effect — the effect re-arms the
+            // trigger. No legitimate use surfaced; reject the combination.
+            // OrdinalIgnoreCase: the condition parser itself is case-insensitive
+            // (Enum.TryParse ignoreCase), so a lowercase "status" must not slip
+            // the guard.
+            if (dto?.Status == "Error" && (dto.Conditions ?? []).Any(c =>
+                    string.Equals(c?.Property, "Status", StringComparison.OrdinalIgnoreCase)))
+                AlertPolicyConditionValidator.Add(errorMap, "status",
+                    "A policy that reacts to Status must not carry the Error status effect - it would re-trigger itself; drop the effect or watch another property.");
+
             errors = ToErrors(errorMap);
 
             return errors.Count == 0;
@@ -967,6 +978,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
             else if (parsed <= TimeSpan.Zero)
             {
                 AlertPolicyConditionValidator.Add(errorMap, "interval", "The interval must be positive.");
+            }
+            else if (parsed < TimeSpan.FromMinutes(1))
+            {
+                // #1707: a retention interval under a minute clears history on
+                // nearly every value arrival — retention thrash, not a window.
+                AlertPolicyConditionValidator.Add(errorMap, "interval",
+                    "The interval must be at least 1 minute.");
             }
             else
             {
