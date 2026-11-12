@@ -711,6 +711,19 @@ add_conformance_test(conformance_module_markers_contract module_markers_contract
 add_conformance_test(conformance_metric_source_contract metric_source_contract.hsmtest)
 add_conformance_test(conformance_default_endpoint_contract default_endpoint_contract.hsmtest)
 
+# The collector session scenarios (#1660 step 3) need the session transport, which exists in the
+# HTTP build only. Their two must-fail fixtures go with them.
+if(HSM_COLLECTOR_HTTP)
+    add_conformance_test(conformance_session_transport_contract session_transport_contract.hsmtest)
+    foreach(session_meta meta_session_ints_once_missing meta_session_accepted_contains_wrong_text)
+        add_test(
+            NAME ${session_meta}
+            COMMAND hsm_collector_tests meta_session_must_fail
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/${session_meta}.hsmtest
+        )
+    endforeach()
+endif()
+
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
 # the folder on Windows only, too.
 if(WIN32)

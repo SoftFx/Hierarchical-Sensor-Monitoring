@@ -374,6 +374,50 @@ namespace hsm::test
         // Drops the TCP connection without a close frame.
         void Drop() { drop_.store(true, std::memory_order_release); }
 
+        // --- The scripted side of a session, for the conformance driver (#1660 step 3). ---
+        // tests/conformance/README.md, "Collector session", is the specification of these.
+
+        // One request frame of a session and how it was answered: the ack's status, or 0 when it
+        // was left without an ack.
+        struct SessionRequest
+        {
+            std::string frame;
+            int status = 0;
+        };
+
+        // Every request frame received so far (heartbeats are not requests), in order.
+        std::vector<SessionRequest> SessionRequests() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return session_requests_;
+        }
+
+        // What the hello of the sessions accepted from now on states.
+        void SetHello(int max_frame_bytes, int heartbeat_seconds)
+        {
+            hello_frame_bytes_.store(max_frame_bytes, std::memory_order_release);
+            hello_heartbeat_seconds_.store(heartbeat_seconds, std::memory_order_release);
+        }
+
+        // The status of the acks of one op ("list" or "commands") from now on. It takes
+        // precedence over AckWith, which sets the status of every op.
+        void AckOpWith(const std::string& op, int status)
+        {
+            (op == "list" ? list_ack_status_ : commands_ack_status_).store(status, std::memory_order_release);
+        }
+
+        // The next `count` requests are recorded and get no ack.
+        void StaySilentFor(int count) { silent_budget_.store(count, std::memory_order_release); }
+
+        // Stop (or resume) answering application-level pings; they are still counted.
+        void AnswerSessionPings(bool answer) { answer_pings_.store(answer, std::memory_order_release); }
+
+        // Upgrade requests refused so far.
+        int RefusedUpgrades() const { return refused_upgrades_.load(std::memory_order_acquire); }
+
+        // Requests that were not a WebSocket upgrade: what a collector on a session must never send.
+        int PlainHttpRequests() const { return plain_http_requests_.load(std::memory_order_acquire); }
+
     private:
         bool WaitReadable(socket_t sock) const
         {
@@ -528,6 +572,10 @@ namespace hsm::test
 
             const std::string key = ws_detail::HeaderValue(head, "sec-websocket-key");
             const int refuse = refuse_status_.load(std::memory_order_acquire);
+            if (key.empty())
+                plain_http_requests_.fetch_add(1, std::memory_order_release);
+            else if (refuse != 0)
+                refused_upgrades_.fetch_add(1, std::memory_order_release);
             if (refuse != 0 || key.empty())
             {
                 const int status = refuse != 0 ? refuse : 400;
@@ -559,9 +607,14 @@ namespace hsm::test
             connected_.store(true, std::memory_order_release);
 
             if (options_.session)
+            {
+                const int scripted_bytes = hello_frame_bytes_.load(std::memory_order_acquire);
+                const int scripted_heartbeat = hello_heartbeat_seconds_.load(std::memory_order_acquire);
                 SendFrame(0x1, /*fin=*/true,
-                          "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" + std::to_string(options_.max_frame_bytes) + ",\"heartbeatSeconds\":" +
-                              std::to_string(options_.heartbeat_seconds) + "}}");
+                          "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" +
+                              std::to_string(scripted_bytes != 0 ? scripted_bytes : options_.max_frame_bytes) + ",\"heartbeatSeconds\":" +
+                              std::to_string(scripted_heartbeat != 0 ? scripted_heartbeat : options_.heartbeat_seconds) + "}}");
+            }
 
             for (;;)
             {
@@ -647,29 +700,53 @@ namespace hsm::test
             if (payload.find("\"op\":\"ping\"") != std::string::npos)
             {
                 session_pings_.fetch_add(1, std::memory_order_release);
-                SendFrame(0x1, /*fin=*/true, "{\"op\":\"pong\"}");
+                if (answer_pings_.load(std::memory_order_acquire))
+                    SendFrame(0x1, /*fin=*/true, "{\"op\":\"pong\"}");
                 return;
             }
-            if (silent_.load(std::memory_order_acquire))
-                return;
 
             // The collector writes its frames as {"id":N,"op":...}: the id is the first number.
             const size_t at = payload.find("\"id\":");
             if (at == std::string::npos)
                 return;
+
+            bool silent = silent_.load(std::memory_order_acquire);
+            if (!silent)
+            {
+                int budget = silent_budget_.load(std::memory_order_acquire);
+                while (budget > 0 && !silent_budget_.compare_exchange_weak(budget, budget - 1, std::memory_order_acq_rel))
+                {
+                }
+                silent = budget > 0;
+            }
+            if (silent)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                session_requests_.push_back({ payload, 0 });
+                return;
+            }
+
             size_t end = at + 5;
             while (end < payload.size() && payload[end] >= 48 && payload[end] <= 57)
                 ++end;
             const std::string id = payload.substr(at + 5, end - (at + 5));
 
+            const bool is_list = payload.find("\"op\":\"list\"") != std::string::npos;
             int status = ack_status_.load(std::memory_order_acquire);
-            if (payload.find("\"op\":\"list\"") != std::string::npos)
+            const int op_status = (is_list ? list_ack_status_ : commands_ack_status_).load(std::memory_order_acquire);
+            if (op_status != 0)
+                status = op_status;
+            if (is_list)
             {
                 int budget = list_budget_.load(std::memory_order_acquire);
                 if (budget == 0)
                     status = 503;
                 else if (budget > 0)
                     list_budget_.store(budget - 1, std::memory_order_release);
+            }
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                session_requests_.push_back({ payload, status });
             }
             SendFrame(0x1, /*fin=*/true,
                       status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
@@ -682,6 +759,14 @@ namespace hsm::test
         std::atomic<bool> silent_{ false };
         std::atomic<int> list_budget_{ -1 };
         std::atomic<int> session_pings_{ 0 };
+        std::atomic<int> hello_frame_bytes_{ 0 };       // 0 = options_.max_frame_bytes
+        std::atomic<int> hello_heartbeat_seconds_{ 0 }; // 0 = options_.heartbeat_seconds
+        std::atomic<int> list_ack_status_{ 0 };         // 0 = ack_status_
+        std::atomic<int> commands_ack_status_{ 0 };     // 0 = ack_status_
+        std::atomic<int> silent_budget_{ 0 };
+        std::atomic<bool> answer_pings_{ true };
+        std::atomic<int> refused_upgrades_{ 0 };
+        std::atomic<int> plain_http_requests_{ 0 };
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };
@@ -693,9 +778,10 @@ namespace hsm::test
         std::mutex send_mutex_;
         socket_t connection_ = INVALID_SOCKET; // guarded by send_mutex_
         mutable std::mutex mutex_;
-        std::string handshake_head_;        // guarded by mutex_
-        std::string last_pong_;             // guarded by mutex_
-        std::vector<std::string> received_; // guarded by mutex_
-        std::vector<int> close_codes_;      // guarded by mutex_
+        std::string handshake_head_;                   // guarded by mutex_
+        std::string last_pong_;                        // guarded by mutex_
+        std::vector<std::string> received_;            // guarded by mutex_
+        std::vector<int> close_codes_;                 // guarded by mutex_
+        std::vector<SessionRequest> session_requests_; // guarded by mutex_
     };
 } // namespace hsm::test

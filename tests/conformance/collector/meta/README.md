@@ -30,6 +30,8 @@ assertions `expect_session_ints_once` and `expect_session_accepted_contains`
 (they read the scripted session server's record, not the recording sender),
 and the unknown-action guard (a typo'd verb must fail loudly, never skip silently).
 
-The two `meta_session_*` fixtures use the collector session verbs, which the
-native driver does not implement yet (`CONFORMANCE-UNSUPPORTED`, #1668): they
-are registered in the native CMake together with the session scenarios.
+The two `meta_session_*` fixtures use the collector session verbs. The native
+driver has those in its HTTP build only, so they are registered in the native
+CMake under `HSM_COLLECTOR_HTTP`, next to the session scenarios, and run through
+the `meta_session_must_fail` entry point (which skips where libcurl has no
+WebSocket, unless `HSM_REQUIRE_WEBSOCKET=1`).

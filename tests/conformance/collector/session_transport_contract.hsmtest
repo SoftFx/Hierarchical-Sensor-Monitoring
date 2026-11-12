@@ -8,8 +8,9 @@
 #
 # New verbs — the collector:
 #   create_collector_on_session|max_values_in_package|collect_period_ms|request_timeout_ms
-#     a collector whose transport is the collector session to the scripted server (identity and
-#     access key as create_collector). request_timeout_ms is also how long a request waits for its ack.
+#     a collector whose transport is the collector session to the scripted server (computer
+#     conformance-host, module conformance-module, access key conformance-key).
+#     request_timeout_ms is also how long a request waits for its ack.
 #     A driver may shorten the pause between attempts to open a session; nothing here depends on it.
 # New verbs — the script (they apply from the moment they run):
 #   session_server_hello|max_frame_bytes|heartbeat_seconds   what the hello of later sessions states

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -692,8 +693,92 @@ namespace
         // is posted. Same lifetime rule as sampled_counters.
         std::vector<std::pair<std::string, std::unique_ptr<ScriptedDiskPrediction>>> prediction_sources;
 
+#if defined(HSM_COLLECTOR_HTTP)
+        // The scripted session server of a session case (create_collector_on_session and the
+        // session_server_* verbs). Declared before the collector, so it is destroyed after it:
+        // the collector's stop closes the session against a server that is still there.
+        std::unique_ptr<hsm::test::WebSocketTestServer> session_server;
+#endif
+
         CollectorHandle collector;
     };
+
+#if defined(HSM_COLLECTOR_HTTP)
+    // The scripted session server of a case, created by the first verb that needs it.
+    hsm::test::WebSocketTestServer& SessionServer(ConformanceState& state)
+    {
+        if (!state.session_server)
+        {
+            hsm::test::WebSocketTestServer::Options options;
+            options.session = true;
+            state.session_server = std::make_unique<hsm::test::WebSocketTestServer>(options);
+        }
+        return *state.session_server;
+    }
+
+    // Re-checks until the condition holds or the timeout (seconds, as written in the fixture) runs
+    // out; a timeout of 0 checks once.
+    template <typename Condition>
+    bool PollSession(Condition condition, const std::string& timeout_seconds)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoi(timeout_seconds));
+        while (!condition())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return true;
+    }
+
+    bool SessionFrameIsOp(const std::string& frame, const std::string& op)
+    {
+        return frame.find("\"op\":\"" + op + "\"") != std::string::npos;
+    }
+
+    bool SessionRequestAccepted(const hsm::test::WebSocketTestServer::SessionRequest& request)
+    {
+        return request.status >= 200 && request.status < 300;
+    }
+
+    size_t SessionRequestsContaining(hsm::test::WebSocketTestServer& server, const std::string& op, const std::string& text, bool accepted_only)
+    {
+        size_t count = 0;
+        for (const auto& request : server.SessionRequests())
+        {
+            if (accepted_only && !SessionRequestAccepted(request))
+                continue;
+            if (SessionFrameIsOp(request.frame, op) && request.frame.find(text) != std::string::npos)
+                ++count;
+        }
+        return count;
+    }
+
+    // The int values of the delivered list frames, read from the wire: an int value is written
+    // {"Type":1,"Value":N,...} by both collectors.
+    std::vector<long long> SessionDeliveredInts(hsm::test::WebSocketTestServer& server)
+    {
+        static const std::string kIntValue = "{\"Type\":1,\"Value\":";
+        std::vector<long long> values;
+        for (const auto& request : server.SessionRequests())
+        {
+            if (!SessionRequestAccepted(request) || !SessionFrameIsOp(request.frame, "list"))
+                continue;
+            for (size_t at = request.frame.find(kIntValue); at != std::string::npos; at = request.frame.find(kIntValue, at + 1))
+            {
+                size_t end = at + kIntValue.size();
+                const size_t start = end;
+                if (end < request.frame.size() && request.frame[end] == '-')
+                    ++end;
+                while (end < request.frame.size() && request.frame[end] >= '0' && request.frame[end] <= '9')
+                    ++end;
+                if (end > start)
+                    values.push_back(std::stoll(request.frame.substr(start, end - start)));
+            }
+        }
+        return values;
+    }
+#endif
 
     // A fixture payload index, where a NEGATIVE index counts back from the end (−1 = last) as the
     // DSL spec documents. A fixture whose tail length depends on scheduler timing can only address
@@ -3033,36 +3118,198 @@ namespace
             return;
         }
 
-        // CONFORMANCE-UNSUPPORTED: the collector session verbs (#1668). The scripted session server
-        // and these verbs come to this driver with the native session transport (#1668, PR #1669);
-        // until then tests/conformance/collector/session_transport_contract.hsmtest is not
-        // registered in CMake, and a fixture that uses one of them fails here by name.
-        static const char* const kSessionVerbs[] = {
-            "create_collector_on_session",
-            "session_server_hello",
-            "session_server_refuse_upgrades",
-            "session_server_accept_upgrades",
-            "session_server_ack",
-            "session_server_stay_silent",
-            "session_server_stop_answering_pings",
-            "session_server_drop_sessions",
-            "expect_session_count",
-            "expect_session_count_at_least",
-            "expect_refused_upgrades_at_least",
-            "expect_session_ints_once",
-            "expect_session_accepted_contains",
-            "expect_session_requests_containing",
-            "expect_session_requests_containing_at_least",
-            "expect_session_no_request_contains",
-            "expect_session_frames_fit",
-            "expect_no_http_requests",
-            "expect_session_upgrade_header",
-            "expect_session_closed_normally",
-        };
-        for (const char* verb : kSessionVerbs)
+        // ---- the collector session as the transport (#1660 step 3) ----
+        // tests/conformance/README.md, "Collector session". The scripted server is the session
+        // mode of tests/ws_test_server.hpp; these verbs exist in the HTTP build only, which is
+        // the build that has a session transport.
+        if (action.rfind("session_server_", 0) == 0 || action.rfind("expect_session_", 0) == 0 || action == "create_collector_on_session" ||
+            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests")
         {
-            if (action == verb)
-                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1668)");
+#if defined(HSM_COLLECTOR_HTTP)
+            auto& server = SessionServer(state);
+
+            if (action == "create_collector_on_session")
+            {
+                Require(step.size() >= 4, "create_collector_on_session requires max values in package, collect period and request timeout");
+                auto options = TestOptions();
+                options.access_key = "conformance-key";
+                options.client_name = "conformance-client";
+                // The plaintext rule of the HTTP transport: an explicit http:// address plus
+                // AllowPlaintextTransport; the session then uses ws://.
+                options.server_address = "http://127.0.0.1";
+                options.port = server.Port();
+                options.allow_plaintext_transport = true;
+                options.max_values_in_package = ToInt(step[1]);
+                options.package_collect_period_ms = ToInt(step[2]);
+                options.request_timeout_ms = ToInt(step[3]);
+                state.collector = CreateCollector(options);
+                Require(hsm_collector_use_session_transport(state.collector.value) == HSM_RESULT_OK, "the session transport must install");
+                return;
+            }
+
+            if (action == "session_server_hello")
+            {
+                Require(step.size() >= 3, "session_server_hello requires max frame bytes and heartbeat seconds");
+                server.SetHello(ToInt(step[1]), ToInt(step[2]));
+                return;
+            }
+
+            if (action == "session_server_refuse_upgrades")
+            {
+                Require(step.size() >= 2, "session_server_refuse_upgrades requires a status");
+                server.RefuseUpgradesWith(ToInt(step[1]));
+                return;
+            }
+
+            if (action == "session_server_accept_upgrades")
+            {
+                server.RefuseUpgradesWith(0);
+                return;
+            }
+
+            if (action == "session_server_ack")
+            {
+                Require(step.size() >= 3, "session_server_ack requires an op and a status");
+                server.AckOpWith(step[1], ToInt(step[2]));
+                return;
+            }
+
+            if (action == "session_server_stay_silent")
+            {
+                Require(step.size() >= 2, "session_server_stay_silent requires a count");
+                server.StaySilentFor(ToInt(step[1]));
+                return;
+            }
+
+            if (action == "session_server_stop_answering_pings")
+            {
+                server.AnswerSessionPings(false);
+                return;
+            }
+
+            if (action == "session_server_drop_sessions")
+            {
+                server.Drop();
+                return;
+            }
+
+            if (action == "expect_session_count" || action == "expect_session_count_at_least")
+            {
+                Require(step.size() >= 3, "expect_session_count requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                const bool exact = action == "expect_session_count";
+                PollSession([&] { return exact ? server.Upgrades() == expected : server.Upgrades() >= expected; }, step[2]);
+                Require(exact ? server.Upgrades() == expected : server.Upgrades() >= expected,
+                        ("expected " + std::string(exact ? "" : "at least ") + step[1] + " session(s), got " + std::to_string(server.Upgrades())).c_str());
+                return;
+            }
+
+            if (action == "expect_refused_upgrades_at_least")
+            {
+                Require(step.size() >= 3, "expect_refused_upgrades_at_least requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession([&] { return server.RefusedUpgrades() >= expected; }, step[2]),
+                        ("expected at least " + step[1] + " refused upgrade(s), got " + std::to_string(server.RefusedUpgrades())).c_str());
+                return;
+            }
+
+            if (action == "expect_session_ints_once")
+            {
+                Require(step.size() >= 4, "expect_session_ints_once requires start, count and a timeout");
+                const long long first = std::stoll(step[1]);
+                const long long count = std::stoll(step[2]);
+                const auto all_there = [&] {
+                    const auto delivered = SessionDeliveredInts(server);
+                    for (long long value = first; value < first + count; ++value)
+                        if (std::find(delivered.begin(), delivered.end(), value) == delivered.end())
+                            return false;
+                    return true;
+                };
+                // Polled until every value is there; exactly-once is then read off one snapshot.
+                PollSession(all_there, step[3]);
+                const auto delivered = SessionDeliveredInts(server);
+                for (long long value = first; value < first + count; ++value)
+                {
+                    const auto times = std::count(delivered.begin(), delivered.end(), value);
+                    Require(times == 1, ("expected int value " + std::to_string(value) + " delivered once on the session, got " +
+                                         std::to_string(times) + " time(s)")
+                                            .c_str());
+                }
+                return;
+            }
+
+            if (action == "expect_session_accepted_contains")
+            {
+                Require(step.size() >= 4, "expect_session_accepted_contains requires an op, a text and a timeout");
+                const auto text = ExpandTextToken(step[2]);
+                Require(PollSession([&] { return SessionRequestsContaining(server, step[1], text, /*accepted_only=*/true) >= 1; }, step[3]),
+                        ("no accepted " + step[1] + " request contains: " + text).c_str());
+                return;
+            }
+
+            if (action == "expect_session_requests_containing" || action == "expect_session_requests_containing_at_least")
+            {
+                Require(step.size() >= 5, "expect_session_requests_containing requires an op, a text, a count and a timeout");
+                const auto text = ExpandTextToken(step[2]);
+                const size_t expected = static_cast<size_t>(ToInt(step[3]));
+                const bool exact = action == "expect_session_requests_containing";
+                const auto holds = [&] {
+                    const size_t count = SessionRequestsContaining(server, step[1], text, /*accepted_only=*/false);
+                    return exact ? count == expected : count >= expected;
+                };
+                PollSession(holds, step[4]);
+                Require(holds(), ("expected " + std::string(exact ? "" : "at least ") + step[3] + " " + step[1] + " request(s) containing '" + text +
+                                  "', got " + std::to_string(SessionRequestsContaining(server, step[1], text, /*accepted_only=*/false)))
+                                     .c_str());
+                return;
+            }
+
+            if (action == "expect_session_no_request_contains")
+            {
+                Require(step.size() >= 2, "expect_session_no_request_contains requires a text");
+                const auto text = ExpandTextToken(step[1]);
+                for (const auto& request : server.SessionRequests())
+                    Require(request.frame.find(text) == std::string::npos, ("a request frame contains: " + text).c_str());
+                return;
+            }
+
+            if (action == "expect_session_frames_fit")
+            {
+                Require(step.size() >= 2, "expect_session_frames_fit requires a size");
+                const size_t limit = static_cast<size_t>(ToInt(step[1]));
+                for (const auto& request : server.SessionRequests())
+                    Require(request.frame.size() <= limit,
+                            ("a frame of " + std::to_string(request.frame.size()) + " bytes is over the limit of " + step[1]).c_str());
+                return;
+            }
+
+            if (action == "expect_no_http_requests")
+            {
+                Require(server.PlainHttpRequests() == 0,
+                        ("the collector made " + std::to_string(server.PlainHttpRequests()) + " HTTP request(s) beside its upgrades").c_str());
+                return;
+            }
+
+            if (action == "expect_session_upgrade_header")
+            {
+                Require(step.size() >= 3, "expect_session_upgrade_header requires a name and a value");
+                std::string name = step[1];
+                for (auto& c : name)
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                const auto actual = hsm::test::ws_detail::HeaderValue(server.HandshakeHead(), name);
+                Require(actual == step[2], ("the upgrade header " + step[1] + " is '" + actual + "', expected '" + step[2] + "'").c_str());
+                return;
+            }
+
+            if (action == "expect_session_closed_normally")
+            {
+                Require(PollSession([&] { return !server.CloseCodes().empty(); }, "5"), "the collector sent no close frame");
+                Require(server.CloseCodes().back() == 1000, "the collector did not close its last session with 1000");
+                return;
+            }
+#else
+            throw std::runtime_error("The collector session verbs need the HTTP build (HSM_COLLECTOR_HTTP): " + action);
+#endif
         }
 
         throw std::runtime_error("Unknown conformance action: " + action);
@@ -9947,6 +10194,20 @@ namespace
             { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_tcp_failure_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
+#if defined(HSM_COLLECTOR_HTTP)
+            // The session scenarios need a libcurl with WebSocket: without one they skip and say
+            // so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
+            { "conformance_session_transport_contract",
+              [](const std::string& path) {
+                  if (WsAvailable("conformance_session_transport_contract"))
+                      RunConformanceContract(path);
+              } },
+            { "meta_session_must_fail",
+              [](const std::string& path) {
+                  if (WsAvailable("meta_session_must_fail"))
+                      RunConformanceContractExpectFailure(path);
+              } },
+#endif
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
