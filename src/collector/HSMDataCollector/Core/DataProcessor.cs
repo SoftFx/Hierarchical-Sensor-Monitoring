@@ -319,7 +319,13 @@ namespace HSMDataCollector.Core
         /// </summary>
         public void AddQueueLoopError(string queueName, Exception ex)
         {
-            var msg = $"Queue: {queueName}, {ex}";
+            // A package the sender failed is described by its message alone. Its stack trace
+            // says nothing about the cause and differs between the first pass of the loop and
+            // the later ones, which made two entries of one failure (#1659 A4).
+            var msg = ex is PackageSendFailedException
+                ? $"Queue: {queueName}, {ex.Message}"
+                : $"Queue: {queueName}, {ex}";
+
             _messageDeduplicator.AddMessage(msg);
         }
 

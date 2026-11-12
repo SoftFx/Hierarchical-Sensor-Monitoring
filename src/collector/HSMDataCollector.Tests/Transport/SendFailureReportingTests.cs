@@ -121,6 +121,7 @@ namespace HSMDataCollector.Tests.Transport
         public async Task Repeated_failure_of_a_send_is_reported_once_per_window()
         {
             var logger = new RecordingLogger();
+            List<string> running;
 
             using (var server = new FakeHsmServer())
             {
@@ -136,20 +137,28 @@ namespace HSMDataCollector.Tests.Transport
 
                     Assert.True(await WaitForAsync(() => server.CommandRequests.Count() >= 5), "The registration was not sent five times.");
 
+                    // Read before the stop: its flush tries once more and says so in a line of
+                    // its own ("queued for clear"), which is the stop's report, not a repeat.
+                    running = logger.Errors;
+
                     await collector.Stop();
                 }
             }
 
-            var reports = logger.Errors.Where(e => e.StartsWith("Failed to send data", StringComparison.Ordinal)).ToList();
+            // The queue reports the package it could not send; the send itself adds no line of
+            // its own, so five failed cycles are one entry.
+            var reports = running.Where(e => e.Contains("Failed to send")).ToList();
 
             Assert.True(reports.Count == 1,
                         $"Expected one report of the failing send, got {reports.Count}: " + string.Join(" | ", reports.Distinct()));
+            Assert.Contains("Queue: Command", reports[0]);
         }
 
         [Fact]
         public async Task Repeated_refusal_of_a_command_package_is_reported_once_per_window()
         {
             var logger = new RecordingLogger();
+            List<string> running;
 
             using (var server = new FakeHsmServer())
             {
@@ -164,15 +173,53 @@ namespace HSMDataCollector.Tests.Transport
 
                     Assert.True(await WaitForAsync(() => server.CommandRequests.Count() >= 5), "The registration was not sent five times.");
 
+                    running = logger.Errors;
+
                     await collector.Stop();
                 }
             }
 
-            var reports = logger.Errors.Where(e => e.StartsWith("Command request has been faulted", StringComparison.Ordinal)).ToList();
+            var reports = running.Where(e => e.Contains("503")).ToList();
 
             Assert.True(reports.Count == 1,
                         $"Expected one report of the refused commands, got {reports.Count}: " + string.Join(" | ", reports.Distinct()));
-            Assert.Contains("503", reports[0]);
+            Assert.Contains("Queue: Command", reports[0]);
+        }
+
+        [Fact]
+        public async Task Sender_that_came_with_the_options_keeps_its_own_error_reports()
+        {
+            var clientLogger = new RecordingLogger();
+            var collectorLogger = new RecordingLogger();
+
+            using (var server = new FakeHsmServer())
+            {
+                server.FailNextDataRequests(1); // one retry inside the send
+
+                var options = OptionsFor(server);
+                var clientLog = new LoggerManager();
+                clientLog.AddLogger(clientLogger);
+
+                // The host's own client: the collector must not redirect what it reports.
+                options.DataSender = new HsmHttpsClient(options, clientLog);
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(collectorLogger);
+                    var sensor = collector.CreateIntSensor("report/foreign");
+                    await collector.Start();
+
+                    sensor.AddValue(7);
+
+                    Assert.True(await WaitForAsync(() => server.DataRequests.Count(r => r.Body.Contains("report/foreign")) >= 2),
+                                "The value was not retried.");
+
+                    await collector.Stop();
+                }
+            }
+
+            Assert.Contains(clientLogger.Errors, e => e.StartsWith("Failed to send data", StringComparison.Ordinal));
+            Assert.DoesNotContain(collectorLogger.Errors, e => e.StartsWith("Failed to send data", StringComparison.Ordinal));
         }
 
         [Fact]

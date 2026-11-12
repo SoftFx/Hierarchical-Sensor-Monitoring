@@ -13,7 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IErrorReportingSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -137,11 +137,7 @@ namespace HSMDataCollector.Client
             tokenSourceToCancel.Cancel();
         }
 
-        /// <summary>
-        /// Sends the reports of failed sends to <paramref name="sink"/> instead of the logger.
-        /// The collector passes its deduplicated error channel (#1659 A4).
-        /// </summary>
-        internal void RouteErrorsTo(Action<string> sink) => Volatile.Write(ref _errorSink, sink);
+        public void RouteErrorsTo(Action<string> sink) => Volatile.Write(ref _errorSink, sink);
 
         internal void ReportError(string message)
         {

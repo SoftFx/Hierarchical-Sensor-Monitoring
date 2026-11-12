@@ -88,10 +88,11 @@ namespace HSMDataCollector.Client.HttpsClient
             return new ValueTask<bool>(isServerError);
         }
 
-        // A failed attempt that the pipeline is about to repeat. Reported through the client's
-        // error sink, which the collector deduplicates (#1659 A4): during an outage every attempt
-        // of every send fails the same way, and one entry per window says so. The text therefore
-        // names the cause only; the attempt number goes to the debug log.
+        // A failed attempt that the pipeline is about to repeat. Nothing above the send sees it
+        // when a later attempt succeeds, so it is reported here, through the client's error sink,
+        // which the collector deduplicates (#1659 A4): during an outage every attempt of every
+        // send fails the same way, and one entry per window says so. The text therefore names
+        // the cause only; the attempt number goes to the debug log.
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Result != null)
@@ -155,13 +156,13 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
 
-        // The final failure of a send. The reported text names the cause only, so a cause that
-        // repeats is one deduplicated entry; the attempt count and the payload size, which differ
-        // from send to send, go to the debug log.
+        // The final failure of a send is the queue's to report: it gets the cause back in the
+        // PackageSendingInfo and reports the package once per window (AddQueueLoopError). An
+        // Error line here as well was a second entry for the same cause (#1659 A4), so this
+        // keeps only the detail that differs from send to send, at Debug.
         private void LogSendFailure(Exception ex, HttpRequest<T> request)
         {
-            _client.ReportError(DescribeException(ex));
-            _logger.Debug($"Failed to send data after {MaxRetryAttempts + 1} attempt(s). Payload bytes = {request.Length}");
+            _logger.Debug($"Failed to send data after {MaxRetryAttempts + 1} attempt(s). Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
         }
 
         private static string DescribeException(Exception ex) =>

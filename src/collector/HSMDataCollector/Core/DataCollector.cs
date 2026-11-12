@@ -94,7 +94,12 @@ namespace HSMDataCollector.Core
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
 
-            options.DataSender = options.DataSender ?? new HsmHttpsClient(options, _logger);
+            // A sender this collector creates is its own. One that came with the options may
+            // belong to the host or to another collector built from the same options instance.
+            IDataSender ownSender = null;
+
+            if (options.DataSender == null)
+                options.DataSender = ownSender = new HsmHttpsClient(options, _logger);
 
             _dataSender = options.DataSender;
 
@@ -102,9 +107,10 @@ namespace HSMDataCollector.Core
 
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
-            // The built-in sender reports a failed send through the collector's deduplicated error
-            // channel (#1659 A4). A custom sender reports however it likes.
-            (_dataSender as HsmHttpsClient)?.RouteErrorsTo(_dataProcessor.AddError);
+            // The sender this collector created reports its faults through the collector's
+            // deduplicated error channel (#1659 A4). A sender that came with the options keeps
+            // whatever it reports to: routing it here would take it away from its owner.
+            (ownSender as IErrorReportingSender)?.RouteErrorsTo(_dataProcessor.AddError);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
 

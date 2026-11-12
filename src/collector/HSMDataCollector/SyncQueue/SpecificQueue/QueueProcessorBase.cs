@@ -475,7 +475,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
                 // current head) reasons — wording stays generic so it's accurate for either.
                 var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
-                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
+                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
