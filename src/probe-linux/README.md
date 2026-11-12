@@ -661,25 +661,31 @@ All have KeepHistory 90 days and Grafana on, and none has an alert.
   reported Wi-Fi interface it is logged once.
 
 **Reachability (opt-in: `probe.network.reachability.enabled`, off by default).** Every 5 s the
-probe times a TCP connect (the standard library's `connect_timeout`, 2 s) to the default gateway
-on `gatewayPort` (`53`) and to `internet` (`1.1.1.1:443`). No ICMP: a ping socket needs a
-capability the unit does not have.
+probe times a TCP connect (the standard library's `connect_timeout`, 1.5 s; both targets at once,
+so a sample stays inside the probe's 2 s stop wait) to the default gateway on `gatewayPort`
+(`53`) and to `internet` (`1.1.1.1:443`). No ICMP: a ping socket needs a capability the unit does
+not have.
 
 | Path (`.computer/Network/Reachability/<Gateway\|Internet>/…`) | Type · unit | Posted | TTL |
 |---|---|---|---|
 | `Connect time ms` | DoubleBar · `Milliseconds` | the successful connects, 1-min bar | none |
-| `Connect failures` | Int · Count | every minute, 0 included (of 12 attempts) | 5 min |
+| `Connect failures` | Int · Count | every minute, 0 included (of about 12 attempts) | 5 min |
 
-- A **refused** connect is an answer (the host sent a reset), so the gateway does not need to
-  listen on the port; its round trip is in the bar.
+- For the **gateway** a refused connect is an answer (the router sent a reset), so it does not
+  need to listen on the port; its round trip is in the bar. For the **internet** target a refusal
+  is a failure: it is expected to listen, and a refusal there comes from a local firewall rule or a
+  router on the way.
 - A **failure** is a timeout or any other error (network unreachable), and for the gateway also
-  "no default route".
+  "no default route". Each failure episode is logged once at WARN with its reason.
 - The gateway is the lowest-metric IPv4 default route in `/proc/net/route`, read on every attempt,
-  so a changed network is followed. An unreadable route file is logged once and skips the gateway
-  attempt; it is not counted as a failure.
+  so a changed network is followed. A default route without a gateway (PPP, a VPN tunnel) and an
+  unreadable route file skip the gateway attempt (logged once, not counted). IPv6-only hosts are
+  not supported.
 - The time bars have no TTL: while every attempt fails they get no value, and `Connect failures`
-  says why. Registered before Start, so the set is pinned (`REACHABILITY_SET`).
-- `internet` must be an `ip:port` (IPv6 as `[addr]:port`): a host name would time the resolver too.
+  shows it. Registered before Start, so the set is pinned (`REACHABILITY_SET`).
+- `internet` must be a remote `ip:port` (IPv6 as `[addr]:port`; not port 0, loopback or
+  unspecified): a host name would time the resolver too. Checked only when reachability is on.
+
 
 **Cost:** one read of `/proc/net/snmp` a minute; `/proc/net/dev` twice and `/proc/net/wireless`
 once every 10 s, plus two small sysfs files per reported interface; with reachability on, two

@@ -318,8 +318,12 @@ impl Default for ReachabilityConfig {
 
 impl ReachabilityConfig {
     /// The internet target as a socket address; validated by [`Config::validate`].
+    /// `None` also for a target that cannot be a remote host: port 0, an unspecified or loopback
+    /// address (a refusal from the probe's own host would look like an answer from the internet).
     pub fn internet_address(&self) -> Option<std::net::SocketAddr> {
-        self.internet.trim().parse().ok()
+        let address: std::net::SocketAddr = self.internet.trim().parse().ok()?;
+        let ip = address.ip();
+        (address.port() != 0 && !ip.is_unspecified() && !ip.is_loopback()).then_some(address)
     }
 }
 
@@ -568,10 +572,14 @@ impl NetworkConfig {
                  wildcards (got '{bad}')"
             )));
         }
+        // Checked only when it is used, as topCpu: a switched-off section never stops the probe.
+        if !self.enabled || !self.reachability.enabled {
+            return Ok(());
+        }
         if self.reachability.internet_address().is_none() {
             return Err(ConfigError::invalid(format!(
-                "probe.network.reachability.internet must be an ip:port such as 1.1.1.1:443 \
-                 (got '{}')",
+                "probe.network.reachability.internet must be a remote ip:port such as \
+                 1.1.1.1:443 (got '{}')",
                 self.reachability.internet
             )));
         }
@@ -815,16 +823,24 @@ mod tests {
         for bad in [
             r#""internet": "one.one.one.one:443""#,
             r#""internet": "1.1.1.1""#,
+            r#""internet": "1.1.1.1:0""#,
+            r#""internet": "0.0.0.0:443""#,
+            r#""internet": "127.0.0.1:443""#,
+            r#""internet": "[::1]:443""#,
             r#""gatewayPort": 0"#,
         ] {
-            let text = format!(
-                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
-                     "probe": {{ "network": {{ "reachability": {{ {bad} }} }} }} }}"#
-            );
+            let section = |enabled: bool| {
+                format!(
+                    r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "network": {{ "reachability": {{ "enabled": {enabled}, {bad} }} }} }} }}"#
+                )
+            };
             assert!(
-                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                matches!(Config::parse(&section(true)), Err(ConfigError::Invalid(_))),
                 "{bad}"
             );
+            // Switched off, the section is not checked (as topCpu).
+            assert!(Config::parse(&section(false)).is_ok(), "{bad}");
         }
     }
 
