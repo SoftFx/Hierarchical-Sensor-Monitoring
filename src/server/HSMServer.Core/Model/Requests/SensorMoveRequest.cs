@@ -1,4 +1,5 @@
 using HSMServer.Core.SensorsUpdatesQueue;
+using System.Collections.Generic;
 using HSMServer.Core.TableOfChanges;
 using System;
 
@@ -18,6 +19,33 @@ namespace HSMServer.Core.Model.Requests
         Failed,
         /// <summary>The sensor moved onto an occupied path and absorbed the occupant's history (#1720).</summary>
         Merged,
+    }
+
+
+    /// <summary>
+    /// What a move would do (#1721 dry run): the predicted outcome and its side
+    /// effects, computed from the live model without changing anything.
+    /// </summary>
+    public sealed record SensorMovePreview(SensorMoveOutcome Outcome, string Error = null)
+    {
+        public string OldPath { get; init; }
+
+        public string NewPath { get; init; }
+
+        /// <summary>The sensor the move would merge (Merged) or collide with (Conflict).</summary>
+        public Guid? OccupantId { get; init; }
+
+        /// <summary>Destination nodes the move would create, as full paths.</summary>
+        public List<string> CreatedNodes { get; init; } = [];
+
+        /// <summary>Alert templates whose alerts the move would remove from the sensor.</summary>
+        public List<(Guid Id, string Name)> TemplatesDetached { get; init; } = [];
+
+        /// <summary>Alert templates whose alerts the move would add to the sensor.</summary>
+        public List<(Guid Id, string Name)> TemplatesApplied { get; init; } = [];
+
+        /// <summary>Effective settings that would change: (name, before, after).</summary>
+        public List<(string Name, string Before, string After)> SettingsChanged { get; init; } = [];
     }
 
 

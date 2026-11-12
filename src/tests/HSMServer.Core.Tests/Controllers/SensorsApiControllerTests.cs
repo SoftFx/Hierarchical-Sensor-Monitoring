@@ -100,7 +100,8 @@ namespace HSMServer.Core.Tests.Controllers
 
         private SensorsApiController CreateController() =>
             new(new SensorTreeReadService(_cache.Object, _authorization.Object),
-                new SensorDeletionAdministrationService(_cache.Object, _authorization.Object, _users.Object))
+                new SensorDeletionAdministrationService(_cache.Object, _authorization.Object, _users.Object),
+                new SensorMoveAdministrationService(_cache.Object, _authorization.Object, _users.Object))
             {
                 ControllerContext = new ControllerContext
                 {

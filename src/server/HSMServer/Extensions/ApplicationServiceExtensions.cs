@@ -156,6 +156,10 @@ namespace HSMServer.ServiceExtensions
             // read-merge-write window, nothing to gate.
             services.AddScoped<SensorDeletionAdministrationService>();
 
+            // The sensor-move write engine (#1721): moves rendered through the
+            // core's own MoveSensorAsync entry (ADR-0018); stateless, scoped.
+            services.AddScoped<SensorMoveAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its policy guards live with the

@@ -11,7 +11,7 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720). The `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721). The `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
 
 ## Invariants
 
@@ -29,11 +29,12 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 
 | # | Workflow | Initiator |
 |---|---|---|
-| 1 | Move a sensor (`ITreeValuesCache.MoveSensorAsync`) | operator through a management surface (#1721, #1722) |
+| 1 | Move a sensor (`ITreeValuesCache.MoveSensorAsync`) — `POST /api/v1/sensors/move`, MCP `move_sensors` (#1721); the Web UI is #1722 | operator / AI agent |
+| 1a | Predict a move (`ITreeValuesCache.PreviewMove`): outcome, nodes to create, alert templates detached/applied, inherited settings that change — the dry run of both surfaces | operator / AI agent |
 | 2 | Value or registration arrives at an old path → lands in the moved sensor | collector |
 | 3 | Value of another type, or a registration with an explicit other type, arrives at an old path → displaces the alias and creates a new sensor there | collector |
 | 4 | Alias expires (`RunSensorsSelfDestroyAsync` → alias pass) | background worker, hourly |
-| 5 | Alias removed by hand (`RemoveSensorAliasAsync`) | operator through a management surface |
+| 5 | Alias removed by hand (`RemoveSensorAliasAsync`) — `DELETE /api/v1/sensors/{id}/aliases`, MCP `remove_sensor_alias`; aliases are listed in `SensorDto.aliases` | operator / AI agent |
 
 ### Move outcomes
 

@@ -96,6 +96,14 @@ namespace HSMServer.Core.Cache
         Task<SensorMoveResult> MoveSensorAsync(Guid sensorId, Guid destinationProductId, string destinationPath,
             SensorMoveConflict onConflict = SensorMoveConflict.Fail, InitiatorInfo initiator = null, CancellationToken token = default);
 
+        /// <summary>
+        /// Predict a move without changing anything (#1721 dry run): outcome, the
+        /// destination nodes it would create, alert templates it would detach or
+        /// apply, effective settings that would change.
+        /// </summary>
+        SensorMovePreview PreviewMove(Guid sensorId, Guid destinationProductId, string destinationPath,
+            SensorMoveConflict onConflict = SensorMoveConflict.Fail);
+
         /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
         Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default);
