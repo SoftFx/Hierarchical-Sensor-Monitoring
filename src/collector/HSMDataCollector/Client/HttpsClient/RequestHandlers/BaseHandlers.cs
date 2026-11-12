@@ -135,7 +135,7 @@ namespace HSMDataCollector.Client.HttpsClient
             catch (Exception ex)
             {
                 LogSendFailure(ex, request);
-                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+                return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
 
@@ -158,7 +158,7 @@ namespace HSMDataCollector.Client.HttpsClient
             catch (Exception ex)
             {
                 LogSendFailure(ex, request);
-                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+                return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
 
@@ -178,8 +178,10 @@ namespace HSMDataCollector.Client.HttpsClient
         // What the server said about a refused request, for the failure text (#1659 A1). Only a
         // plain-text body is a message: the JSON a route answers a 400 with is the request batch
         // itself (/list) or the per-path dictionary (/commands), and sensor values do not belong
-        // in a log line. The response is already buffered, so this reads no socket.
-        private const int MaxServerMessageLength = 256;
+        // in a log line. The response is already buffered, so this reads no socket; a body
+        // that is not small is not a message and is not decoded for the sake of its start.
+        private const int MaxServerMessageLength = PackageSendingInfo.MaxDescriptionPartLength;
+        private const long MaxServerMessageBytes = 16 * 1024;
 
         private static async ValueTask<PackageSendingInfo> BuildSendingInfoAsync(int length, HttpResponseMessage response)
         {
@@ -198,6 +200,11 @@ namespace HSMDataCollector.Client.HttpsClient
                 var content = response.Content;
 
                 if (content == null || !string.Equals(content.Headers.ContentType?.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var length = content.Headers.ContentLength;
+
+                if (!length.HasValue || length.Value > MaxServerMessageBytes)
                     return null;
 
                 var text = (await content.ReadAsStringAsync().ConfigureAwait(false))?.Trim();

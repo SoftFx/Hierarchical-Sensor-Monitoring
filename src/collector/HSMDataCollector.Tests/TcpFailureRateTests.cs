@@ -160,8 +160,96 @@ namespace HSMDataCollector.Tests
                     .GetValue(collector);
 
                 Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsTcpFailureRateMonitor(storage, TimeSpan.Zero));
+                // Task.Delay counts in whole milliseconds: half of one is a loop that never waits.
+                Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromTicks(TimeSpan.TicksPerMillisecond / 2)));
                 Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromDays(30)));
             }
+        }
+
+        [Fact]
+        public async Task Monitor_started_twice_leaves_no_loop_behind_its_stop()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            long reads = 0;
+
+            using (var collector = CreateCollector(new RateRecordingSender()))
+            {
+                var storage = (SensorsStorage)typeof(DataCollector)
+                    .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(collector);
+
+                var monitor = new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromMilliseconds(5),
+                    readV4: () => new FamilyReading((ulong)Interlocked.Increment(ref reads)),
+                    readV6: () => FamilyReading.Unreadable);
+
+                // What a monitor added while the collector is starting gets: a start from its
+                // registration and another from the Start under way.
+                await monitor.StartAsync();
+                await monitor.StartAsync();
+
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+
+                while (Interlocked.Read(ref reads) < 3 && DateTime.UtcNow < deadline)
+                    await Task.Delay(5);
+
+                await monitor.StopAsync();
+
+                var afterStop = Interlocked.Read(ref reads);
+
+                Assert.True(afterStop >= 3, "The monitor never sampled.");
+
+                // Twenty periods: a loop the stop could not reach would have read many times.
+                await Task.Delay(100);
+
+                Assert.Equal(afterStop, Interlocked.Read(ref reads));
+
+                monitor.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Monitor_reports_when_neither_family_can_be_read()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            var logger = new ErrorRecordingLogger();
+
+            using (var collector = CreateCollector(new RateRecordingSender()))
+            {
+                collector.AddCustomLogger(logger);
+
+                var storage = (SensorsStorage)typeof(DataCollector)
+                    .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(collector);
+
+                var monitor = new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromMilliseconds(20),
+                    readV4: () => FamilyReading.Unreadable,
+                    readV6: () => FamilyReading.Unreadable);
+
+                await collector.Start();
+                await monitor.InitAsync();
+
+                Assert.Contains(logger.Errors, e => e.Contains("neither IPv4 nor IPv6"));
+
+                monitor.Dispose();
+                await collector.Stop();
+            }
+        }
+
+        [Fact]
+        public void Monitor_reads_the_counter_of_this_machine()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            // The one line of the monitor that differs between the two builds of the collector:
+            // the OS read behind IPGlobalProperties. IPv4 is always installed.
+            var reading = WindowsTcpFailureRateMonitor.ReadFamily(properties => properties.GetTcpIPv4Statistics());
+
+            Assert.True(reading.Readable, "The IPv4 TCP statistics of this machine could not be read.");
         }
 
         [Fact]
@@ -225,6 +313,37 @@ namespace HSMDataCollector.Tests
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(20),
                 RequestTimeout = TimeSpan.FromSeconds(1),
             });
+        }
+
+        private sealed class ErrorRecordingLogger : HSMDataCollector.Logging.ICollectorLogger
+        {
+            private readonly object _lock = new object();
+            private readonly List<string> _errors = new List<string>();
+
+            internal List<string> Errors
+            {
+                get
+                {
+                    lock (_lock)
+                        return _errors.ToList();
+                }
+            }
+
+            public void Debug(string message) { }
+
+            public void Info(string message) { }
+
+            public void Error(string message)
+            {
+                lock (_lock)
+                    _errors.Add(message);
+            }
+
+            public void Error(Exception ex)
+            {
+                lock (_lock)
+                    _errors.Add(ex.ToString());
+            }
         }
 
         private sealed class RateRecordingSender : IDataSender

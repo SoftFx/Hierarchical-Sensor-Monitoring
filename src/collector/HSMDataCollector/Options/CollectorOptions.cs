@@ -71,13 +71,16 @@ namespace HSMDataCollector.Core
         public IDictionary<string, string> ExtraRequestHeaders { get; } =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Headers a host may not set: the collector's own, and those that describe the request
-        // body or the connection, which the HTTP stack owns.
+        // Headers a host may not set: the collector's own, those that describe the request
+        // body or the connection, which the HTTP stack owns, and the cookie headers, which the
+        // .NET Framework handler rebuilds from its own cookie container (a hand-set Cookie is
+        // sent by the net6.0 build and silently lost by the net472 one).
         private static readonly HashSet<string> ReservedRequestHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Key", "ClientName",
             "Host", "Connection", "Upgrade", "Transfer-Encoding", "Expect", "Proxy-Connection", "Keep-Alive", "TE", "Trailer",
             "Content-Type", "Content-Length", "Content-Encoding",
+            "Cookie", "Cookie2",
         };
 
         private const string HeaderNameSeparators = "\"(),/:;<=>?@[\\]{}";

@@ -179,11 +179,75 @@ namespace HSMDataCollector.Tests.Transport
                 }
             }
 
-            var reports = running.Where(e => e.Contains("503")).ToList();
+            // Every error line about the refused send counts, whatever its wording: the line
+            // this replaced named the status by its enum name, not by its number.
+            var reports = running.Where(e => e.Contains("503") || e.Contains("ServiceUnavailable") || e.Contains("Command") || e.Contains("Failed to send")).ToList();
 
             Assert.True(reports.Count == 1,
                         $"Expected one report of the refused commands, got {reports.Count}: " + string.Join(" | ", reports.Distinct()));
             Assert.Contains("Queue: Command", reports[0]);
+            Assert.Contains("503", reports[0]);
+        }
+
+        [Fact]
+        public async Task Failing_package_that_grows_between_cycles_is_still_one_report()
+        {
+            var logger = new RecordingLogger();
+            var sender = new RefusingDataSender();
+            List<string> running;
+
+            using (var collector = new DataCollector(new CollectorOptions
+            {
+                AccessKey = "report-key",
+                ClientName = "report-client",
+                ComputerName = "report-host",
+                Module = "report-module",
+                DataSender = sender,
+                MaxQueueSize = 1000,
+                MaxValuesInPackage = 50,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
+                RequestTimeout = TimeSpan.FromSeconds(1),
+                ExceptionDeduplicatorWindow = TimeSpan.FromMinutes(10),
+                MaxDeduplicatedMessages = 100,
+            }))
+            {
+                collector.AddCustomLogger(logger);
+
+                var sensor = collector.CreateIntSensor("report/growing");
+
+                await collector.Start();
+
+                // One more value before each of four failed sends: every package is larger than
+                // the one before it, as it is while a key stays blocked or a server stays down.
+                for (var cycle = 1; cycle <= 4; cycle++)
+                {
+                    sensor.AddValue(cycle);
+
+                    Assert.True(await WaitForAsync(() => sender.LargestPackage >= cycle), $"No package of {cycle} value(s) was sent.");
+                }
+
+                running = logger.Errors;
+
+                await collector.Stop();
+            }
+
+            var reports = running.Where(e => e.Contains("Failed to send")).ToList();
+
+            Assert.True(reports.Count == 1,
+                        $"Expected one report of the failing send, got {reports.Count}: " + string.Join(" | ", reports.Distinct()));
+        }
+
+        [Fact]
+        public void Cause_of_a_send_without_an_answer_keeps_the_innermost_message()
+        {
+            var refused = new System.Net.Http.HttpRequestException("An error occurred while sending the request.",
+                                                                   new System.IO.IOException("Unable to connect.", new InvalidOperationException("No connection could be made because the target machine actively refused it")));
+
+            var text = PackageSendingInfo.DescribeException(refused);
+
+            Assert.Contains("An error occurred while sending the request.", text);
+            Assert.Contains("actively refused", text);
+            Assert.Equal("plain", PackageSendingInfo.DescribeException(new InvalidOperationException("plain")));
         }
 
         [Fact]
@@ -266,6 +330,46 @@ namespace HSMDataCollector.Tests.Transport
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Accepts registrations and fails every value package without an answer, remembering
+        /// the size of the largest package of the sensor under test it was handed.
+        /// </summary>
+        private sealed class RefusingDataSender : IDataSender
+        {
+            private int _largestPackage;
+
+            internal int LargestPackage => Volatile.Read(ref _largestPackage);
+
+            public void Dispose() { }
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
+
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<HSMSensorDataObjects.CommandRequestBase> commands, CancellationToken token) => Ok();
+
+            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            {
+                var count = items.Count(i => i.Path.EndsWith("report/growing", StringComparison.Ordinal));
+
+                if (count == 0)
+                    return Ok();
+
+                if (count > Volatile.Read(ref _largestPackage))
+                    Volatile.Write(ref _largestPackage, count);
+
+                return new ValueTask<PackageSendingInfo>(new PackageSendingInfo(1, null, "No connection could be made"));
+            }
+
+            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => Ok();
+
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) => Ok();
+
+            private static ValueTask<PackageSendingInfo> Ok()
+            {
+                using (var response = new HttpResponseMessage(HttpStatusCode.OK))
+                    return new ValueTask<PackageSendingInfo>(new PackageSendingInfo(1, response));
+            }
         }
 
         private sealed class RecordingLogger : ICollectorLogger

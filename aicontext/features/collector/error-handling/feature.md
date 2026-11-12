@@ -32,7 +32,7 @@ DataCollector must never crash the host application. All exceptions from sensor 
 | Collector session (3.9.0) | The session reports its own state: up and ended at Info; an upgrade that cannot be opened through `AddError` (deduplicated: the same refusal repeats with the same words); a value larger than a frame and a file value on a session through `AddError`, both counted as overflow. A package that waits for the session is Debug, not an error per cycle (`../http-client/feature.md`) |
 | Server refused a registration (4xx) | `DataProcessor.ReportRejectedPackage` → MessageDeduplicator (#1659 A2, see `data-pipeline/feature.md`) |
 | Validation reject (NaN/null/bad status) | `DataProcessor.LogDroppedValue(path, reason)` — Debug level |
-| Shutdown discard | `LogDiscardedItems(count, queueName)` — Error level |
+| Shutdown discard | `LogDiscardedItems(count, queueName)` — Info level |
 | Queue overflow / retry drop | `QueueOverflowSensor` (never suppressed — see `data-pipeline/feature.md`). **Without that sensor** the drops are counted and reported once when the collector stops, at Error: `Collector stop: N value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).` (#1659 A5, 3.6.4; the native collector's line, #1508). Before 3.6.4 a collector without the queue diagnostics group lost them in silence |
 
 ### MessageDeduplicator

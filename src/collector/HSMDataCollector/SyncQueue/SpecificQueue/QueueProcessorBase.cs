@@ -517,14 +517,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // the others go back, or what was delivered would arrive twice.
                 var unsettled = Unsettled(package, sendingInfo.Settled);
                 var dropped = ReEnqueueItems(unsettled);
-                var preserved = unsettled.Count - dropped;
-                // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
-                // "discarded"; calling them "preserved" contradicts the very next log line.
-                var fate = IsFlushing ? "queued for clear" : "preserved";
-                // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
-                // current head) reasons — wording stays generic so it's accurate for either.
-                var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
-                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}", sendingInfo.IsTransportDown);
+                // The drop count is the #1088 backstop (a retry refused by a queue at capacity).
+                throw new PackageSendFailedException(QueueName, unsettled.Count - dropped, dropped, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
