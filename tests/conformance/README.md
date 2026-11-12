@@ -198,6 +198,46 @@ Build an alert incrementally, then `alert_stage` it; a following `create_*_with_
 | `wait_sender_parked\|timeout_s` | (#1480) polls until a data send is parked in the hang — its package has already left the queue, so what is added next queues behind it; fails on timeout. C#: the recording sender counts parked sends; native: `hsm_collector_test_hung_send_count` |
 | `release_sender_hang` | (#1480) lifts the hang: a parked send continues (and consumes a charged `set_sender_fail_next` token), later sends are no longer blocked. C#: completes the recording sender's release task; native: `hsm_collector_set_send_hang(false)` |
 
+### Collector session (the transport)
+
+Scenarios of `session_transport_contract.hsmtest` (epic #1660 step 3, ADR-0017). The driver owns a
+**scripted session server**: the server side of `GET /api/sensors/session` over a real WebSocket,
+which accepts or refuses the upgrade, says hello, acknowledges request frames with a chosen status
+or not at all, and records every frame and every plain HTTP request. The collector under test is
+created with its transport set to the session and pointed at that server, so these cases have no
+recording sender and none of the payload assertions above apply to them: what a session case
+asserts on is the **wire text of the frames** (the same bytes in both collectors) and the server's
+record. "Delivered" means: in a request the server acknowledged with a 2xx status. `timeout_s`
+polls until the expectation holds; `0` checks once.
+
+| Verb | Semantics |
+|---|---|
+| `create_collector_on_session\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | a collector whose transport is the collector session to the scripted server (identity and access key of `create_collector`); `request_timeout_ms` is also how long a request waits for its ack. C#: `CollectorOptions.Transport = Session`; native: `hsm_collector_use_session_transport`. A driver may shorten the pause between attempts to open a session; no scenario depends on it |
+| `session_server_hello\|max_frame_bytes\|heartbeat_seconds` | what the hello of the sessions accepted from now on states (default `4194304` and `30`) |
+| `session_server_refuse_upgrades\|status` / `session_server_accept_upgrades` | every upgrade is refused with this HTTP status / upgrades are accepted again (the default) |
+| `session_server_ack\|op\|status` | requests of `op` (`list`, `commands`) are acknowledged with this status from now on (default 200); a status outside 2xx is a failure ack with an `error` text |
+| `session_server_stay_silent\|count` | the next `count` requests are recorded and get no ack |
+| `session_server_stop_answering_pings` | heartbeats are recorded and not answered: to the collector the server has gone quiet |
+| `session_server_drop_sessions` | every open session is cut without a close handshake |
+| `expect_session_count\|count\|timeout_s`, `expect_session_count_at_least\|count\|timeout_s` | upgrades accepted so far |
+| `expect_refused_upgrades_at_least\|count\|timeout_s` | upgrades refused so far: the collector keeps trying |
+| `expect_session_ints_once\|start\|count\|timeout_s` | every int value in `[start, start+count)` is in a delivered `list` frame exactly once (read from the wire: `"Type":1`, `"Value":N`) |
+| `expect_session_accepted_contains\|op\|substring\|timeout_s` | some delivered request of `op` contains the text |
+| `expect_session_requests_containing\|op\|substring\|count\|timeout_s`, `expect_session_requests_containing_at_least\|…` | how many requests of `op`, acknowledged or not, contain the text; with it a case counts sends ("sent once", "sent again") |
+| `expect_session_no_request_contains\|substring` | no request frame of any op contains the text |
+| `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
+| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request |
+| `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
+| `expect_session_closed_normally` | the collector ended its last session with close code 1000 |
+
+Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
+(the WebSocket itself is `HttpListener`'s). **The native driver does not implement these verbs yet**
+(`CONFORMANCE-UNSUPPORTED`, #1668): they arrive with the native session transport, whose test
+fixture `tests/ws_test_server.hpp` is the scripted server there; until then the session fixture and
+its two meta fixtures are not registered in the native CMake. Wall clock: the heartbeat case runs
+on a 1-second heartbeat (2.5 s of silence), and a native collector reopens a session on a backoff
+that starts at a second, so the timeouts of these cases are generous on purpose.
+
 ### Tooling
 
 | Verb | Semantics |
@@ -279,8 +319,9 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. One field is
-in that state: `expect_bar_field … stddev` in the managed driver (#1529 — the managed
+a generic unknown-verb error; the failure list is the port backlog. In that state
+are the collector session verbs in the native driver (#1668, see **Collector session**
+above) and one field: `expect_bar_field … stddev` in the managed driver (#1529 — the managed
 collector does not compute a bar StdDev by owner decision); only the native-only
 fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
 `set_sensor_description`, gained its managed counterpart in #1482.)

@@ -308,11 +308,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         private async Task RunLoopAsync(CancellationToken token)
         {
+            // True when the pause after a failure ended because the transport got its connection
+            // back: what waited for it is dispatched now, not after the next wait for work.
+            var dispatchNow = false;
+
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    await WaitForReadyAsync(token).ConfigureAwait(false);
+                    if (!dispatchNow)
+                        await WaitForReadyAsync(token).ConfigureAwait(false);
+
+                    dispatchNow = false;
+
                     await DispatchPendingAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { }
@@ -327,19 +335,47 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     // a per-package retry cap would re-introduce the old "data dropped on first
                     // server hiccup" regression. Overflow eviction is the backstop: a permanently
                     // failing item rides the queue tail until MaxQueueSize evicts it.
-                    if (_queueManager != null)
+                    //
+                    // A package that waits for the transport to come back is not an error of the
+                    // queue: the transport reports its own state, once, and the queue stays quiet.
+                    if (ex is PackageSendFailedException failed && failed.IsTransportDown)
+                        _logger.Debug(ex.Message);
+                    else if (_queueManager != null)
                         _queueManager.AddQueueLoopError(QueueName, ex);
                     else
                         _logger.Error(ex);
 
                     try
                     {
-                        await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                        dispatchNow = await PauseAfterFailureAsync(ex, token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { }
                 }
             }
         }
+
+        // The pause before a failed package is tried again: the collect period, or, for a
+        // package that only lacked a connection, until the transport has one, whichever comes
+        // first. Returns true in the second case.
+        private async Task<bool> PauseAfterFailureAsync(Exception failure, CancellationToken token)
+        {
+            var pause = DelayAfterFailureAsync(token);
+
+            if (!(failure is PackageSendFailedException failed) || !failed.IsTransportDown || !(_sender is ICollectorTransport transport))
+            {
+                await pause.ConfigureAwait(false);
+                return false;
+            }
+
+            // A floor, so that a connection that comes and goes cannot make this loop spin.
+            await Task.Delay(TransportRetryFloor, token).ConfigureAwait(false);
+
+            var connected = transport.WaitForConnectionAsync(token);
+
+            return await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
+        }
+
+        private static readonly TimeSpan TransportRetryFloor = TimeSpan.FromMilliseconds(100);
 
         private async ValueTask DispatchPendingAsync(CancellationToken token)
         {
@@ -406,6 +442,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
             }
             catch (OperationCanceledException) { }
+            catch (PackageSendFailedException ex) when (ex.IsTransportDown)
+            {
+                // No connection to flush through; the discarded items are counted by the caller.
+                _logger.Debug(ex.Message);
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex);
@@ -456,6 +497,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 throw;
             }
 
+            // Items the sender could never send (a value larger than a session frame) are lost for
+            // good; they are counted where every lost value is counted.
+            if (sendingInfo.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, sendingInfo.DroppedCount);
+
             if (sendingInfo.Error != null)
             {
                 // A refusal (4xx) on a queue whose items never succeed on repeat is final: the
@@ -467,19 +513,41 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     return;
                 }
 
-                var dropped = ReEnqueueItems(package.Items);
-                var preserved = package.Count - dropped;
+                // A sender that delivers a package in parts says which items are settled; only
+                // the others go back, or what was delivered would arrive twice.
+                var unsettled = Unsettled(package, sendingInfo.Settled);
+                var dropped = ReEnqueueItems(unsettled);
+                var preserved = unsettled.Count - dropped;
                 // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
                 // "discarded"; calling them "preserved" contradicts the very next log line.
                 var fate = IsFlushing ? "queued for clear" : "preserved";
                 // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
                 // current head) reasons — wording stays generic so it's accurate for either.
                 var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
-                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
+                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}", sendingInfo.IsTransportDown);
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+        }
+
+        private static IReadOnlyCollection<QueueItem<T>> Unsettled(DataPackage<T> package, bool[] settled)
+        {
+            if (settled == null)
+                return package.Items;
+
+            var unsettled = new List<QueueItem<T>>(package.Count);
+            var position = 0;
+
+            foreach (var item in package.Items)
+            {
+                if (position >= settled.Length || !settled[position])
+                    unsettled.Add(item);
+
+                position++;
+            }
+
+            return unsettled;
         }
 
         /// <summary>

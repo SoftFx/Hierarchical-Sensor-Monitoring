@@ -1,0 +1,782 @@
+#if NET5_0_OR_GREATER
+#nullable disable
+#endif
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.Client.Session;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
+using HSMDataCollector.SyncQueue.Data;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
+using HSMSensorDataObjects.SensorValueRequests;
+using Xunit;
+
+namespace HSMDataCollector.Tests.Transport
+{
+    /// <summary>
+    /// Epic #1660 step 3: the collector session as the transport of the managed collector
+    /// (<c>CollectorOptions.Transport = Session</c>). Every test runs a real collector against
+    /// <see cref="ScriptedSessionServer"/> over a real WebSocket.
+    ///
+    /// Compiled into both collector test projects (net472 and net6.0 builds of the collector).
+    /// </summary>
+    [Trait("Category", "FakeServerE2E")]
+    public sealed class SessionTransportTests
+    {
+        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+
+        private static CollectorOptions OptionsFor(ScriptedSessionServer server)
+        {
+            return new CollectorOptions
+            {
+                ServerAddress = server.ServerAddress,
+                Port = server.Port,
+                AccessKey = "session-key",
+                ClientName = "session-client",
+                ComputerName = "session-host",
+                Module = "session-module",
+                AllowPlaintextTransport = true,
+                Transport = CollectorTransport.Session,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
+                RequestTimeout = TimeSpan.FromSeconds(10),
+                ExceptionDeduplicatorWindow = TimeSpan.FromMinutes(10),
+                SessionTimings = new SessionTimings
+                {
+                    MinBackoff = TimeSpan.FromMilliseconds(20),
+                    MaxBackoff = TimeSpan.FromMilliseconds(100),
+                },
+            };
+        }
+
+        // --- the transport and nothing beside it ---
+
+        [Fact]
+        public async Task Values_and_registrations_travel_on_the_session_and_nothing_over_http()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/int");
+                    await collector.Start();
+
+                    sensor.AddValue(31337);
+
+                    Assert.True(await WaitForAsync(() => server.AcceptedElements("list").Any(e => e.Contains("31337"))), "The value never arrived.");
+                    Assert.True(await WaitForAsync(() => server.AcceptedElements("commands").Any(e => e.Contains("session/int"))), "The registration never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Empty(server.HttpRequests);
+                Assert.Equal(1, server.Sessions);
+
+                var headers = server.UpgradeHeaders;
+
+                Assert.Equal("session-key", headers["Key"]);
+                Assert.Equal("session-client", headers["ClientName"]);
+                Assert.Equal("managed", headers["X-Collector-Kind"]);
+                Assert.Matches(@"^\d+\.\d+\.\d+$", headers["X-Collector-Version"]);
+                Assert.Contains(ScriptedSessionServer.Subprotocol, headers["Sec-WebSocket-Protocol"]);
+            }
+        }
+
+        [Fact]
+        public async Task Frame_body_is_the_http_body_byte_for_byte()
+        {
+            var values = new SensorValueBase[]
+            {
+                new IntSensorValue { Path = "wire/int", Value = 42, Comment = "quote\" and é", Time = new DateTime(2026, 11, 10, 10, 0, 0, DateTimeKind.Utc) },
+                new DoubleSensorValue { Path = "wire/double", Value = 0.1, Time = new DateTime(2026, 11, 10, 10, 0, 1, DateTimeKind.Utc) },
+                new StringSensorValue { Path = "wire/string", Value = "<tag> & 'text'", Time = new DateTime(2026, 11, 10, 10, 0, 2, DateTimeKind.Utc) },
+                new BoolSensorValue { Path = "wire/bool", Value = true, Time = new DateTime(2026, 11, 10, 10, 0, 3, DateTimeKind.Utc) },
+            };
+            var commands = new CommandRequestBase[]
+            {
+                new AddOrUpdateSensorRequest { Path = "wire/int", SensorType = SensorType.IntSensor, Description = "first" },
+                new AddOrUpdateSensorRequest { Path = "wire/double", SensorType = SensorType.DoubleSensor },
+            };
+
+            using (var server = new ScriptedSessionServer())
+            using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
+            {
+                sender.Start();
+
+                Assert.True(await WaitForAsync(() => sender.Connection.IsUp), "The session never came up.");
+
+                Assert.True((await sender.SendDataAsync(values, CancellationToken.None)).IsSuccess);
+                Assert.True((await sender.SendCommandAsync(commands, CancellationToken.None)).IsSuccess);
+
+                await sender.StopAsync(terminal: false);
+
+                var list = server.Requests.Single(r => r.Op == "list");
+                var registration = server.Requests.Single(r => r.Op == "commands");
+
+                // What the HTTP client would have posted to /list and /commands for the same input.
+                Assert.Equal(new HttpRequest<SensorValueBase>(values, "unused").Content, list.Body);
+                Assert.Equal(new HttpRequest<CommandRequestBase>(commands, "unused").Content, registration.Body);
+
+                Assert.Equal($"{{\"id\":{list.Id},\"op\":\"list\",\"body\":{list.Body}}}", list.Frame);
+            }
+        }
+
+        // --- no session, no fallback ---
+
+        [Fact]
+        public async Task Values_wait_while_the_upgrade_is_refused_and_arrive_when_it_is_accepted()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                server.RefuseUpgrades(503);
+
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/queued");
+                    await collector.Start();
+
+                    for (var i = 0; i < 5; i++)
+                        sensor.AddValue(100 + i);
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 3), "The collector did not keep trying to open a session.");
+
+                    // Refused three times and counting: nothing was delivered, and nothing went
+                    // looking for another way in.
+                    Assert.Empty(server.Requests);
+                    Assert.Empty(server.HttpRequests);
+
+                    server.AcceptUpgrades();
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Count >= 5), "The queued values never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(new[] { 100, 101, 102, 103, 104 }, DeliveredInts(server).OrderBy(v => v).ToArray());
+                Assert.Empty(server.HttpRequests);
+            }
+        }
+
+        [Fact]
+        public async Task Refused_upgrade_is_reported_once_and_the_waiting_queue_stays_quiet()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                server.RefuseUpgrades(404);
+
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/refused");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 5), "The collector did not keep trying.");
+
+                    // Several collect cycles went by with a value that could not be sent.
+                    await Task.Delay(300);
+
+                    await collector.Stop();
+                }
+            }
+
+            var reports = logger.Errors.Where(e => e.Contains("Cannot open a collector session")).ToList();
+
+            Assert.True(reports.Count == 1, "Expected one report of the refused upgrade, got: " + string.Join(" | ", logger.Errors));
+            Assert.DoesNotContain(logger.Errors, e => e.Contains("Failed to send package"));
+        }
+
+        // --- the frame limit ---
+
+        [Fact]
+        public async Task Batch_is_split_so_that_every_frame_fits_the_limit()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
+            {
+                var options = OptionsFor(server);
+                options.PackageCollectPeriod = TimeSpan.FromHours(1); // the stop drain sends one package
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sensor = collector.CreateIntSensor("session/split");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/split"), "The session never came up.");
+
+                    for (var i = 0; i < 40; i++)
+                        sensor.AddValue(i);
+
+                    await collector.Stop();
+                }
+
+                var frames = server.Requests.Where(r => r.Op == "list").ToList();
+
+                Assert.True(frames.Count > 1, "40 values fitted one 1100-byte frame.");
+                Assert.All(frames, f => Assert.True(System.Text.Encoding.UTF8.GetByteCount(f.Frame) <= 1100, $"A frame of {f.Frame.Length} bytes went out."));
+                Assert.Equal(Enumerable.Range(0, 40).ToArray(), DeliveredInts(server).ToArray());
+            }
+        }
+
+        [Fact]
+        public async Task Value_larger_than_a_frame_is_dropped_and_reported_and_the_rest_goes_on()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
+            {
+                var options = OptionsFor(server);
+                options.PackageCollectPeriod = TimeSpan.FromHours(1);
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+                    var text = collector.CreateStringSensor("session/huge");
+                    var number = collector.CreateIntSensor("session/small");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/small"), "The session never came up.");
+
+                    number.AddValue(1);
+                    text.AddValue(new string('x', 5000));
+                    number.AddValue(2);
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(new[] { 1, 2 }, DeliveredInts(server).ToArray());
+                Assert.DoesNotContain(server.Requests, r => r.Frame.Length > 1100);
+            }
+
+            Assert.Contains(logger.Errors, e => e.Contains("session/huge") && e.Contains("larger than a collector session frame"));
+            Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
+        }
+
+        [Fact]
+        public async Task Failed_frame_does_not_bring_back_what_was_delivered_or_dropped_before_it()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
+            {
+                // Everything queues up while the upgrade is refused, so it leaves as one package:
+                // a value too large for a frame in the middle of 30 small ones, several frames.
+                server.RefuseUpgrades(503);
+
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var number = collector.CreateIntSensor("session/partial");
+                    var text = collector.CreateStringSensor("session/partial-huge");
+                    await collector.Start();
+
+                    for (var i = 0; i < 15; i++)
+                        number.AddValue(i);
+
+                    text.AddValue(new string('x', 5000));
+
+                    for (var i = 15; i < 30; i++)
+                        number.AddValue(i);
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 1));
+
+                    // The first list frame of the package is accepted, the second is answered 503.
+                    server.FailListFramesAfter(1, 503);
+                    server.AcceptUpgrades();
+
+                    Assert.True(await WaitForAsync(() => server.Requests.Any(r => r.Op == "list" && r.AckStatus == 503)), "No list frame was refused.");
+
+                    server.FailListFramesAfter(-1, 503);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Count >= 30), "The rest of the package never arrived.");
+
+                    await collector.Stop();
+                }
+
+                // Every value once: the frame that was accepted before the failure did not go again.
+                Assert.Equal(Enumerable.Range(0, 30).ToArray(), DeliveredInts(server).OrderBy(v => v).ToArray());
+            }
+
+            // The value that cannot be sent was dropped, and counted, once, not once per attempt.
+            Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
+        }
+
+        // --- a request without an ack ---
+
+        [Fact]
+        public async Task Request_without_an_ack_closes_the_session_and_is_sent_again_on_the_next_one()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.RequestTimeout = TimeSpan.FromMilliseconds(400);
+
+                using (var collector = new DataCollector(options))
+                {
+                    await collector.Start();
+
+                    Assert.True(await WaitForAsync(() => server.Sessions == 1), "The session never came up.");
+
+                    // The next request, the registration of the sensor below, gets no ack.
+                    server.StaySilentFor(1);
+
+                    var sensor = collector.CreateIntSensor("session/no-ack");
+                    sensor.AddValue(7);
+
+                    Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "commands" && r.Body.Contains("session/no-ack"))),
+                                "The registration was not sent again.");
+
+                    await collector.Stop();
+                }
+
+                var registrations = server.Requests.Where(r => r.Op == "commands" && r.Body.Contains("session/no-ack")).ToList();
+
+                Assert.Equal(0, registrations[0].AckStatus);
+                Assert.Equal(1, registrations[0].Session);
+                // Closing the session is what makes a late ack impossible: the repeat is on a new one.
+                Assert.True(registrations.Last().Session > 1, "The request was repeated on the session that had gone silent.");
+                Assert.Equal(new[] { 7 }, DeliveredInts(server).Distinct().ToArray());
+            }
+        }
+
+        [Fact]
+        public async Task Dropped_session_is_reopened_and_what_was_queued_meanwhile_arrives()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/dropped");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(1)), "The first value never arrived.");
+
+                    server.RefuseUpgrades(503);
+                    server.DropSessions();
+
+                    sensor.AddValue(2);
+                    sensor.AddValue(3);
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 2), "The collector did not try to reopen the session.");
+
+                    server.AcceptUpgrades();
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(3)), "The values queued during the outage never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(new[] { 1, 2, 3 }, DeliveredInts(server).Distinct().OrderBy(v => v).ToArray());
+                Assert.True(server.Sessions >= 2);
+                Assert.Empty(server.HttpRequests);
+            }
+        }
+
+        // --- heartbeat ---
+
+        [Fact]
+        public async Task Idle_session_sends_heartbeats_and_stays_up()
+        {
+            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 1 })
+            using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
+            {
+                sender.Start();
+
+                Assert.True(await WaitForAsync(() => server.Pings >= 3), "An idle session sent no heartbeats.");
+                Assert.Equal(1, server.Sessions);
+                Assert.True(sender.Connection.IsUp);
+
+                await sender.StopAsync(terminal: false);
+            }
+        }
+
+        [Fact]
+        public async Task Session_whose_server_went_silent_is_given_up_and_reopened()
+        {
+            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 1 })
+            using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
+            {
+                server.StopAnsweringPings();
+                sender.Start();
+
+                // Two and a half heartbeats without a frame from the server: 2.5 s here.
+                Assert.True(await WaitForAsync(() => server.Sessions >= 2), "The silent session was never given up.");
+
+                await sender.StopAsync(terminal: true);
+            }
+        }
+
+        // --- what a status means ---
+
+        [Fact]
+        public async Task Registration_refused_with_4xx_on_the_session_is_final()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    await collector.Start();
+                    Assert.True(await WaitForAsync(() => server.Sessions == 1));
+
+                    server.AckWith("commands", 400);
+                    collector.CreateIntSensor("session/rejected");
+
+                    Assert.True(await WaitForAsync(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/rejected"))),
+                                "The registration was never sent.");
+
+                    // A later registration is the clock: a re-queued one would ride with it.
+                    server.AckWith("commands", 200);
+                    collector.CreateIntSensor("session/later");
+
+                    Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "commands" && r.Body.Contains("session/later"))),
+                                "The later registration never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Single(server.Requests.Where(r => r.Op == "commands" && r.Body.Contains("session/rejected")));
+            }
+        }
+
+        [Theory]
+        [InlineData(400)]
+        [InlineData(503)]
+        public async Task Value_batch_refused_on_the_session_is_sent_again(int status)
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/again");
+                    await collector.Start();
+                    Assert.True(await WaitForAsync(() => server.Sessions == 1));
+
+                    server.AckWith("list", status);
+                    sensor.AddValue(9);
+
+                    Assert.True(await WaitForAsync(() => server.Requests.Count(r => r.Op == "list" && r.Body.Contains("session/again")) >= 2),
+                                $"A value batch acknowledged {status} was not sent again.");
+
+                    server.AckWith("list", 200);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(9)), "The value never arrived.");
+
+                    await collector.Stop();
+                }
+            }
+        }
+
+        // --- files ---
+
+        [Fact]
+        public async Task File_value_is_refused_before_the_queue_and_said_so()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var file = collector.CreateFileSensor("session/file", "report");
+                    var number = collector.CreateIntSensor("session/after-file");
+                    await collector.Start();
+
+                    file.AddValue("content");
+                    number.AddValue(5);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(5)), "The value after the file never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.DoesNotContain(server.Requests, r => r.Frame.Contains("\"Type\":6"));
+                Assert.Empty(server.HttpRequests);
+            }
+
+            Assert.Single(logger.Errors.Where(e => e.Contains("session/file") && e.Contains("cannot carry file values")));
+        }
+
+        // --- stop ---
+
+        [Fact]
+        public async Task Stop_delivers_what_is_queued_and_closes_the_session_normally()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.PackageCollectPeriod = TimeSpan.FromHours(1);
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sensor = collector.CreateIntSensor("session/stop");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/stop"), "The session never came up.");
+
+                    sensor.AddValue(11);
+                    sensor.AddValue(12);
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(new[] { 11, 12 }, DeliveredInts(server).ToArray());
+                Assert.Equal(new[] { 1000 }, server.Closes.ToArray());
+            }
+        }
+
+        [Fact]
+        public async Task Restarted_collector_opens_a_new_session()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/restart");
+
+                    await collector.Start();
+                    sensor.AddValue(1);
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(1)));
+                    await collector.Stop();
+
+                    await collector.Start();
+                    sensor.AddValue(2);
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(2)), "Nothing arrived after the restart.");
+                    await collector.Stop();
+                }
+
+                Assert.Equal(2, server.Sessions);
+            }
+        }
+
+        // --- the setting ---
+
+        [Fact]
+        public void Http_is_the_default_transport()
+        {
+            Assert.Equal(CollectorTransport.Http, new CollectorOptions().Transport);
+        }
+
+        [Fact]
+        public async Task Session_setting_next_to_a_custom_sender_has_no_effect_and_start_says_so()
+        {
+            var logger = new RecordingLogger();
+            var custom = new AcceptingSender();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.DataSender = custom;
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/custom");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+
+                    Assert.True(await WaitForAsync(() => custom.DataPackages >= 1), "The custom sender was not used.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(0, server.Sessions);
+            }
+
+            Assert.Single(logger.Infos.Where(i => i.Contains("Transport = Session has no effect")));
+        }
+
+        [Fact]
+        public async Task Session_without_the_service_alive_sensor_is_warned_about()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            using (var collector = new DataCollector(OptionsFor(server)))
+            {
+                collector.AddCustomLogger(logger);
+                await collector.Start();
+                await collector.Stop();
+            }
+
+            Assert.Single(logger.Infos.Where(i => i.Contains("without the Service alive sensor")));
+        }
+
+        [Fact]
+        public async Task Test_connection_on_a_session_opens_a_session_and_not_an_http_request()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var reachable = await collector.TestConnection();
+
+                    Assert.True(reachable.IsOk, reachable.Error);
+
+                    server.RefuseUpgrades(404);
+
+                    var refused = await collector.TestConnection();
+
+                    Assert.False(refused.IsOk);
+                    Assert.False(string.IsNullOrEmpty(refused.Error));
+                }
+
+                Assert.Empty(server.HttpRequests);
+            }
+        }
+
+#if !NET5_0_OR_GREATER
+        [Fact]
+        public async Task Untrusted_certificate_setting_makes_the_session_unavailable_on_net_framework()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.AllowUntrustedServerCertificate = true;
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/unavailable");
+
+                    // Start completes and does not throw; one error names the cause.
+                    await collector.Start();
+                    sensor.AddValue(1);
+
+                    await Task.Delay(300);
+                    await collector.Stop();
+                }
+
+                Assert.Equal(0, server.Sessions);
+                Assert.Equal(0, server.RefusedUpgrades);
+                Assert.Empty(server.HttpRequests);
+            }
+
+            Assert.Single(logger.Errors.Where(e => e.Contains("collector session transport is unavailable")));
+        }
+#endif
+
+
+        // Start does not wait for the session. An accepted registration is the proof that the
+        // collector has one: what a test queues after it is drained by Stop over the session.
+        private static Task<bool> RegisteredAsync(ScriptedSessionServer server, string path) =>
+            WaitForAsync(() => server.Accepted.Any(r => r.Op == "commands" && r.Body.Contains(path)));
+
+        // The int values of the accepted list frames, in the order they arrived.
+        private static List<int> DeliveredInts(ScriptedSessionServer server)
+        {
+            var values = new List<int>();
+
+            foreach (var element in server.AcceptedElements("list"))
+            {
+                using (var document = System.Text.Json.JsonDocument.Parse(element))
+                {
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("Type", out var type) && type.GetInt32() == (int)SensorType.IntSensor
+                        && root.TryGetProperty("Value", out var value) && value.TryGetInt32(out var number))
+                        values.Add(number);
+                }
+            }
+
+            return values;
+        }
+
+        private static async Task<bool> WaitForAsync(Func<bool> done)
+        {
+            var deadline = DateTime.UtcNow + Timeout;
+
+            while (!done())
+            {
+                if (DateTime.UtcNow >= deadline)
+                    return false;
+
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+
+            return true;
+        }
+
+        private sealed class AcceptingSender : IDataSender
+        {
+            private int _dataPackages;
+
+            internal int DataPackages => Volatile.Read(ref _dataPackages);
+
+            public void Dispose() { }
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
+
+            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            {
+                Interlocked.Increment(ref _dataPackages);
+                return Accepted();
+            }
+
+            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => Accepted();
+
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) => Accepted();
+
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) => Accepted();
+
+            private static ValueTask<PackageSendingInfo> Accepted() =>
+                new ValueTask<PackageSendingInfo>(new PackageSendingInfo(1, 200, null));
+        }
+
+        private sealed class RecordingLogger : ICollectorLogger
+        {
+            private readonly List<string> _errors = new List<string>();
+            private readonly List<string> _infos = new List<string>();
+
+            internal List<string> Errors
+            {
+                get
+                {
+                    lock (_errors)
+                        return _errors.ToList();
+                }
+            }
+
+            internal List<string> Infos
+            {
+                get
+                {
+                    lock (_infos)
+                        return _infos.ToList();
+                }
+            }
+
+            public void Debug(string message) { }
+
+            public void Info(string message)
+            {
+                lock (_infos)
+                    _infos.Add(message);
+            }
+
+            public void Error(string message)
+            {
+                lock (_errors)
+                    _errors.Add(message);
+            }
+
+            public void Error(Exception ex)
+            {
+                lock (_errors)
+                    _errors.Add(ex.ToString());
+            }
+        }
+    }
+}

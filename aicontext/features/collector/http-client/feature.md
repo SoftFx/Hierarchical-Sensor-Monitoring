@@ -32,12 +32,38 @@
 
 ---
 
+## Collector session transport (managed, 3.9.0; epic #1660 step 3)
+
+`CollectorOptions.Transport = CollectorTransport.Session` replaces `HsmHttpsClient` with `SessionDataSender` (`Client/Session/`): one WebSocket to `GET {base}/session` (`wss` by default, `ws` only where the HTTP client would use `http`), subprotocol `hsm.sensors.v1`, every package a frame the server acknowledges. Protocol: `../../api/wire-contract/feature.md`, design: ADR-0017 and `docs/initiatives/collector-session-websocket.md`. **`http` is the default; a session is opt-in.**
+
+- **No HTTP beside the session and no fallback.** A collector on a session has no HTTP client at all. While no session is up a send fails and the queue keeps the package, as it does when the server is unreachable over HTTP; the queues fill and overflow is reported as usual. Pinned by `expect_no_http_requests` in every session scenario.
+- **The WebSocket is `System.Net.WebSockets.ClientWebSocket`.** The collector frames, masks and parses nothing (owner rule: no self-written protocol code); the JSON envelope is read with System.Text.Json.
+- **A frame body is the HTTP body byte for byte.** Every element is written by the serializer of the HTTP client (`HttpRequest<T>.SerializeElement`) and the elements are joined into the array (`SessionTransportTests.Frame_body_is_the_http_body_byte_for_byte`).
+- **Upgrade headers**: `Key`, `ClientName`, `X-Collector-Kind: managed`, `X-Collector-Version`, then `CollectorOptions.ExtraRequestHeaders`.
+- **Lifecycle** (`SessionConnection`): Start begins connecting in the background and never waits. The first frame must be a `hello` with `maxFrameBytes` >= 1024 and `heartbeatSeconds` in 1..3600. An attempt (connect, upgrade, hello) has 15 s. After a failed attempt or an ended session it tries again on an exponential backoff with jitter, from 1 s to 1 min (each pause between half and the whole step); a session that held for a minute starts the backoff over. A refused upgrade is reported through the deduplicated error channel (`Cannot open a collector session to <url>: <cause>. Values stay queued; retrying.`); `ClientWebSocket` gives no handshake status as a value on these TFMs, but its exception text names it and is passed on. A session that comes up or ends is one Info line each.
+- **Heartbeat at the application level**: `{"op":"ping"}` when nothing was sent for `heartbeatSeconds`; the session is given up after two and a half heartbeats without any frame from the server. `ClientWebSocket`'s own keep-alive stays on, for NAT and proxy timers.
+- **Requests**: `{"id","op","body"}`, one in flight per queue; the ack is awaited for `RequestTimeout`. **A request without an ack in time closes the session** (a late ack is then impossible) and the package goes back to the queue. A session that drops with a request outstanding is the same failed send.
+- **The status of an ack means what the HTTP status means**: 2xx delivered; a registration answered 4xx is final (#1659 A2); anything else is re-sent.
+- **Frame limit**: a package is split so that every frame fits `maxFrameBytes` less 64 bytes for the envelope, and each frame is acknowledged on its own. When a later frame fails, the sender tells the queue which items are settled (`PackageSendingInfo.Settled`: delivered in an earlier frame, or dropped) and only the others are re-enqueued, so nothing delivered is sent twice and nothing dropped is counted twice. **A value that cannot fit a frame on its own is dropped**, reported (`Dropped a value of <path>: its N bytes are larger than a collector session frame`) and counted as overflow; sent, it would close the session and come back for ever. A registration that cannot fit is reported and not sent.
+- **File values are refused before the queue** (`DataProcessor.AddFile`, `ICollectorTransport.CanCarryFiles`): the session has no op for them (step 2b) and there is no HTTP to send them over. One deduplicated error per sensor, counted as overflow. A collector with file sensors stays on `http`.
+- **Frames from the server are bounded at 8 MiB** (the native bound); a larger one ends the session. The server states no limit for its own frames (#1667); a success ack is the per-path error dictionary of one package.
+- **The queues wake when the session comes up** (`ICollectorTransport.WaitForConnectionAsync`): a package that only lacked a connection leaves when there is one, not a collect period later. Without this every Start registered its sensors one `PackageCollectPeriod` late, because Start does not wait for the session. A package waiting for a connection is not an error of the queue and is logged at Debug; the session reports its own state.
+- **Stop**: the drain uses the session if it is up and never waits for a reconnect; then the collector sends close 1000 and gives the server a second to answer (a terminal stop does not wait).
+- **`TestConnection()`** on a session answers "yes" when one is up, otherwise opens a session, reads its hello and closes it. It does not use the HTTP test route.
+- **When a session cannot exist on the host**, Start completes and does not throw, one error names the cause and nothing is delivered: on `net472` together with `AllowUntrustedServerCertificate` (`ClientWebSocket` has no per-connection certificate callback there, and the process-wide one is not the collector's to change), and on an operating system without a WebSocket client (before Windows 8).
+- **Start says** when `Transport = Session` sits next to a custom `DataSender` (the setting has no effect) and when a session is enabled without the `Service alive` sensor (its inactivity alert is the collector's disconnect alert).
+- **Directives pushed on the session** (`{"op":"directive"}`, step 5, not sent by the server yet) are handed to the same `ServerDirectives` receiver as the HTTP headers.
+- Tests: `HSMDataCollector.Tests/Transport/SessionTransportTests.cs` against `ScriptedSessionServer` (both TFMs), the conformance scenarios `tests/conformance/collector/session_transport_contract.hsmtest`, and a manual run against a real local server over TLS.
+
 ## Key Files
 
 | File | Purpose |
 |---|---|
 | `Client/HttpsClient/HsmHttpsClient.cs` | HttpClient lifecycle, dispose, test connection |
 | `Client/HttpsClient/Endpoints.cs` | URL construction from CollectorOptions |
+| `Client/Session/SessionDataSender.cs` | The session as `IDataSender`: frames, splitting to the frame limit, what an ack status means |
+| `Client/Session/SessionConnection.cs` | The WebSocket: open, hello, acks, heartbeat, reconnect with backoff, close |
+| `Client/Session/SessionProtocol.cs` | Names and limits of the session wire, the request envelope, the frame reader |
 | `Client/ServerDirectives.cs` | Receiver of server directives: counted, each name noted once, none acted on |
 | `Client/HttpsClient/RequestHandlers/BaseHandlers.cs` | Polly pipeline, send logic, error logging, `ShouldRetry` (4xx/5xx, #1096) |
 | `../../src/native/collector/src/hsm_http_transport.{hpp,cpp}` | Native (C++) libcurl transport — Post/Get, timeout, cert-bypass, xfer-abort cancel |

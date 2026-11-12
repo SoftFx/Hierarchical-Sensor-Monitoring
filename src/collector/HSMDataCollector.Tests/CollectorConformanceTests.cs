@@ -8,6 +8,7 @@ using HSMDataCollector.Prototypes.Collections.Network;
 using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
+using HSMDataCollector.Tests.Transport;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -49,6 +50,7 @@ namespace HSMDataCollector.Tests
                     await state.Collector.Stop().ConfigureAwait(false);
 
                 state.Collector?.Dispose();
+                state.SessionServer?.Dispose();
             }
         }
 
@@ -91,6 +93,7 @@ namespace HSMDataCollector.Tests
                     await state.Collector.Stop().ConfigureAwait(false);
 
                 state.Collector?.Dispose();
+                state.SessionServer?.Dispose();
             }
 
             Assert.True(detected != null, $"Must-fail fixture '{caseName}' passed — the driver is not detecting wrong expectations.");
@@ -1038,6 +1041,170 @@ namespace HSMDataCollector.Tests
                         state.Collector.Windows.AddNetworkInterfacesSpeed();
                     break;
 
+                // ---- the collector session as the transport (#1660 step 3) ----
+
+                case "create_collector_on_session":
+                    state.Collector = CreateCollectorOnSession(
+                        SessionServer(state),
+                        maxValuesInPackage: int.Parse(step.Arg(0)),
+                        collectPeriodMs: int.Parse(step.Arg(1)),
+                        requestTimeoutMs: int.Parse(step.Arg(2)));
+                    break;
+
+                case "session_server_hello":
+                    SessionServer(state).MaxFrameBytes = int.Parse(step.Arg(0));
+                    SessionServer(state).HeartbeatSeconds = int.Parse(step.Arg(1));
+                    break;
+
+                case "session_server_refuse_upgrades":
+                    SessionServer(state).RefuseUpgrades(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_server_accept_upgrades":
+                    SessionServer(state).AcceptUpgrades();
+                    break;
+
+                case "session_server_ack":
+                    SessionServer(state).AckWith(step.Arg(0), int.Parse(step.Arg(1)));
+                    break;
+
+                case "session_server_stay_silent":
+                    SessionServer(state).StaySilentFor(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_server_stop_answering_pings":
+                    SessionServer(state).StopAnsweringPings();
+                    break;
+
+                case "session_server_drop_sessions":
+                    SessionServer(state).DropSessions();
+                    break;
+
+                case "expect_session_count":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Sessions == expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected {expected} session(s), got {server.Sessions}.");
+                    break;
+                }
+
+                case "expect_session_count_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Sessions >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} session(s), got {server.Sessions}.");
+                    break;
+                }
+
+                case "expect_refused_upgrades_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.RefusedUpgrades >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} refused upgrade(s), got {server.RefusedUpgrades}.");
+                    break;
+                }
+
+                case "expect_session_ints_once":
+                {
+                    var server = SessionServer(state);
+                    var expected = Enumerable.Range(int.Parse(step.Arg(0)), int.Parse(step.Arg(1))).ToList();
+
+                    // Polled until every value is there; exactly-once is then read off the same snapshot.
+                    await PollAsync(() => !expected.Except(SessionDeliveredInts(server)).Any(), step.Arg(2)).ConfigureAwait(false);
+
+                    var delivered = SessionDeliveredInts(server);
+
+                    foreach (var value in expected)
+                        Assert.True(delivered.Count(v => v == value) == 1,
+                                    $"Expected int value {value} delivered once on the session, got {delivered.Count(v => v == value)} time(s). Delivered: {string.Join(",", delivered)}");
+                    break;
+                }
+
+                case "expect_session_accepted_contains":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+
+                    Assert.True(await PollAsync(() => server.Accepted.Any(r => r.Op == op && r.Frame.Contains(text)), step.Arg(2)).ConfigureAwait(false),
+                                $"No accepted {op} request contains: {text}");
+                    break;
+                }
+
+                case "expect_session_requests_containing":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+                    var expected = int.Parse(step.Arg(2));
+                    Func<int> count = () => server.Requests.Count(r => r.Op == op && r.Frame.Contains(text));
+
+                    await PollAsync(() => count() == expected, step.Arg(3)).ConfigureAwait(false);
+
+                    Assert.True(count() == expected, $"Expected {expected} {op} request(s) containing '{text}', got {count()}.");
+                    break;
+                }
+
+                case "expect_session_requests_containing_at_least":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+                    var expected = int.Parse(step.Arg(2));
+                    Func<int> count = () => server.Requests.Count(r => r.Op == op && r.Frame.Contains(text));
+
+                    Assert.True(await PollAsync(() => count() >= expected, step.Arg(3)).ConfigureAwait(false),
+                                $"Expected at least {expected} {op} request(s) containing '{text}', got {count()}.");
+                    break;
+                }
+
+                case "expect_session_no_request_contains":
+                {
+                    var text = ExpandTextToken(step.Arg(0));
+
+                    Assert.DoesNotContain(SessionServer(state).Requests, r => r.Frame.Contains(text));
+                    break;
+                }
+
+                case "expect_session_frames_fit":
+                {
+                    var limit = int.Parse(step.Arg(0));
+
+                    foreach (var request in SessionServer(state).Requests)
+                        Assert.True(Encoding.UTF8.GetByteCount(request.Frame) <= limit,
+                                    $"A {request.Op} frame of {Encoding.UTF8.GetByteCount(request.Frame)} bytes is over the limit of {limit}.");
+                    break;
+                }
+
+                case "expect_no_http_requests":
+                    Assert.True(SessionServer(state).HttpRequests.Count == 0,
+                                "The collector made HTTP requests: " + string.Join(", ", SessionServer(state).HttpRequests));
+                    break;
+
+                case "expect_session_upgrade_header":
+                {
+                    var headers = SessionServer(state).UpgradeHeaders;
+
+                    Assert.True(headers.TryGetValue(step.Arg(0), out var actual), $"The upgrade carried no {step.Arg(0)} header.");
+                    Assert.Equal(step.Arg(1), actual);
+                    break;
+                }
+
+                case "expect_session_closed_normally":
+                {
+                    var server = SessionServer(state);
+
+                    Assert.True(await PollAsync(() => server.Closes.Count > 0, "5").ConfigureAwait(false), "The collector sent no close frame.");
+                    Assert.Equal(1000, server.Closes.Last());
+                    break;
+                }
+
                 case "enable_tcp_connection_failure_rate_sensor":
                     // (#1659 B2) period_ms. Used only by collector/windows/, which runs on Windows.
                     state.Collector.Windows.AddNetworkConnectionFailuresRate(TimeSpan.FromMilliseconds(int.Parse(step.Arg(0))));
@@ -1046,6 +1213,76 @@ namespace HSMDataCollector.Tests
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
+        }
+
+        // The scripted session server of a case, created by the first verb that needs it.
+        private static ScriptedSessionServer SessionServer(ContractState state) =>
+            state.SessionServer ?? (state.SessionServer = new ScriptedSessionServer());
+
+        // A collector whose transport is the collector session to the scripted server: no
+        // recording sender, everything it sends is a frame the server records. The pause between
+        // attempts to open a session is shortened; no scenario depends on it.
+        private static DataCollector CreateCollectorOnSession(ScriptedSessionServer server, int maxValuesInPackage, int collectPeriodMs, int requestTimeoutMs)
+        {
+            return new DataCollector(new CollectorOptions
+            {
+                AccessKey = "conformance-key",
+                ServerAddress = server.ServerAddress,
+                Port = server.Port,
+                AllowPlaintextTransport = true,
+                Transport = CollectorTransport.Session,
+                ClientName = "conformance-client",
+                ComputerName = "conformance-host",
+                Module = "conformance-module",
+                MaxQueueSize = 20000,
+                MaxValuesInPackage = maxValuesInPackage,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
+                RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
+                ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
+                MaxDeduplicatedMessages = 100,
+                SessionTimings = new HSMDataCollector.Client.Session.SessionTimings
+                {
+                    MinBackoff = TimeSpan.FromMilliseconds(50),
+                    MaxBackoff = TimeSpan.FromMilliseconds(500),
+                },
+            });
+        }
+
+        // The int values of the accepted list frames, read from the wire JSON of their elements.
+        private static List<int> SessionDeliveredInts(ScriptedSessionServer server)
+        {
+            var values = new List<int>();
+
+            foreach (var element in server.AcceptedElements("list"))
+            {
+                using (var document = JsonDocument.Parse(element))
+                {
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("Type", out var type) && type.ValueKind == JsonValueKind.Number && type.GetInt32() == 1
+                        && root.TryGetProperty("Value", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+                        values.Add(number);
+                }
+            }
+
+            return values;
+        }
+
+        // Re-checks until the condition holds or the timeout (seconds, as written in the fixture)
+        // runs out; a timeout of 0 checks once.
+        private static async Task<bool> PollAsync(Func<bool> condition, string timeoutSeconds)
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(timeoutSeconds));
+
+            while (!condition())
+            {
+                if (DateTime.UtcNow >= deadline)
+                    return false;
+
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+
+            return true;
         }
 
         private static DataCollector CreateCollector(
@@ -2231,6 +2468,9 @@ namespace HSMDataCollector.Tests
             public DataCollector Collector { get; set; }
 
             public RecordingSender Sender { get; set; }
+
+            // The scripted server of a session case; null in every other case.
+            public ScriptedSessionServer SessionServer { get; set; }
 
             public List<IDisposable> Sensors { get; } = new List<IDisposable>();
 

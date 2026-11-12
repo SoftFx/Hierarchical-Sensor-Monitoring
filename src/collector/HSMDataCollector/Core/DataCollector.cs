@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
+using HSMDataCollector.Client.Session;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
@@ -33,6 +34,9 @@ namespace HSMDataCollector.Core
         private readonly SensorsStorage _sensorsStorage;
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
+
+        // Transport = Session was set next to a custom DataSender; said once per Start.
+        private readonly bool _transportSettingIgnored;
         private readonly DataProcessor _dataProcessor;
         private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
         private readonly ICollectorScheduler _scheduler;
@@ -99,7 +103,18 @@ namespace HSMDataCollector.Core
             IDataSender ownSender = null;
 
             if (options.DataSender == null)
-                options.DataSender = ownSender = new HsmHttpsClient(options, _logger);
+            {
+                // The transport setting chooses the built-in sender. A collector on a session has
+                // no HTTP client at all: there is nothing to fall back to.
+                options.DataSender = ownSender = options.Transport == CollectorTransport.Session
+                    ? (IDataSender)new SessionDataSender(options, _logger)
+                    : new HsmHttpsClient(options, _logger);
+            }
+            else
+            {
+                // A custom sender is the transport of the collector that has one.
+                _transportSettingIgnored = options.Transport == CollectorTransport.Session && !(options.DataSender is ICollectorTransport);
+            }
 
             _dataSender = options.DataSender;
 
@@ -212,6 +227,10 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+
+                // The session starts connecting now, in the background; Start never waits for it.
+                // Until it is up the queues hold what the sensors produce.
+                StartTransport();
             }
 
             // Queues are now running. Any exit path from here must roll them back if the lifecycle
@@ -278,7 +297,54 @@ namespace HSMDataCollector.Core
                 }
             }
 
-            await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
+            try
+            {
+                await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
+            }
+            finally
+            {
+                // After the drain, which used the session if it was up. A graceful stop gives the
+                // close handshake a moment, so the server sees a normal closure.
+                await StopTransportAsync(terminal: mode != ShutdownMode.GracefulStop).ConfigureAwait(false);
+            }
+        }
+
+        private void StartTransport()
+        {
+            try
+            {
+                if (_transportSettingIgnored)
+                    _logger.Info("CollectorOptions.Transport = Session has no effect: the collector uses the custom DataSender it was given.");
+
+                if (!(_dataSender is ICollectorTransport transport))
+                    return;
+
+                // The disconnect alert of a collector is the inactivity alert of its Service alive
+                // sensor. Without that sensor nobody is told when the session, the only path, is gone.
+                if (!System.Linq.Enumerable.Any(_sensorsStorage.Values, sensor => sensor is DefaultSensors.Other.CollectorAlive))
+                    _logger.Info("The collector session is enabled without the Service alive sensor (AddCollectorAlive): the server has no disconnect alert for this collector.");
+
+                transport.Start();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector could not start its transport: {ex}");
+            }
+        }
+
+        private async Task StopTransportAsync(bool terminal)
+        {
+            if (!(_dataSender is ICollectorTransport transport))
+                return;
+
+            try
+            {
+                await transport.StopAsync(terminal).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector could not stop its transport: {ex}");
+            }
         }
 
         private async Task SafeStopProcessor()
@@ -294,6 +360,8 @@ namespace HSMDataCollector.Core
             {
                 _logger.Error($"DataCollector start-rollback stop error: {ex}");
             }
+
+            await StopTransportAsync(terminal: true).ConfigureAwait(false);
         }
 
 

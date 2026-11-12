@@ -29,6 +29,9 @@ namespace HSMDataCollector.Core
         private readonly object _lifecycleGate;
         private readonly TimeSpan _stopFlushTimeout;
 
+        // The sender, when it is a transport with a connection of its own (the collector session).
+        private readonly ICollectorTransport _transport;
+
         // 1 while a stop drains a queue whose package diagnostics must not be recorded: during the
         // command flush, which goes first, and from the data/priority drain boundary on (the file
         // flush). Those flushes still produce package diagnostics; they observe this flag and skip
@@ -78,6 +81,8 @@ namespace HSMDataCollector.Core
             Scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
             _stopFlushTimeout = TimeSpan.FromTicks(Math.Min(Math.Max(options.RequestTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks),
                                                             TimeSpan.FromSeconds(5).Ticks));
+
+            _transport = options.DataSender as ICollectorTransport;
 
             SensorStorage  = new SensorsStorage(options, this, logger);
 
@@ -284,6 +289,16 @@ namespace HSMDataCollector.Core
 
         public void AddFile(ISensor sender, FileSensorValue file)
         {
+            // The collector session has no op for a file value yet, and there is no HTTP to send
+            // it over instead. Refused here, before the queue: queued, it would be sent, refused
+            // and re-queued for ever. Reported and counted like any other lost value.
+            if (_transport != null && !_transport.CanCarryFiles)
+            {
+                AddError($"A file value of {file?.Path} was not sent: the collector session transport cannot carry file values yet.");
+                EmitOverflowDrops(_fileQueue.QueueName, 1);
+                return;
+            }
+
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
         }
 

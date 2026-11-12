@@ -1,0 +1,7 @@
+# MUST-FAIL: only the value 1 is sent on the session, but the fixture demands 1 and 2 delivered.
+# Proves expect_session_ints_once reads the accepted list frames of the scripted session server.
+meta_session_ints_once_missing|create_collector_on_session|50|20|5000
+meta_session_ints_once_missing|create_int_sensor|meta/session/missing
+meta_session_ints_once_missing|start
+meta_session_ints_once_missing|add_int|0|1|Ok|sent
+meta_session_ints_once_missing|expect_session_ints_once|1|2|2

@@ -25,5 +25,11 @@ Rules:
 Covered verb families: `expect_sent_count` (both polling-timeout and exact
 mismatch directions), `expect_payload_contains`, `expect_payload_not_contains`,
 `expect_bar_field`, `expect_bar_posts_sharing_open_time_at_least`, `expect_each_value_once`, `expect_payload_value_sequence`,
-`expect_eventually_value_above`, `expect_no_new_payloads_for_ms`, and the
-unknown-action guard (a typo'd verb must fail loudly, never skip silently).
+`expect_eventually_value_above`, `expect_no_new_payloads_for_ms`, the session
+assertions `expect_session_ints_once` and `expect_session_accepted_contains`
+(they read the scripted session server's record, not the recording sender),
+and the unknown-action guard (a typo'd verb must fail loudly, never skip silently).
+
+The two `meta_session_*` fixtures use the collector session verbs, which the
+native driver does not implement yet (`CONFORMANCE-UNSUPPORTED`, #1668): they
+are registered in the native CMake together with the session scenarios.

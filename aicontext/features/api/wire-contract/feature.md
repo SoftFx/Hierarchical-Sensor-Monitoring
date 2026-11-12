@@ -133,7 +133,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 
 ## Collector session (WebSocket)
 
-The transport that is to replace the HTTP routes above for collectors (#1664, epic #1660, ADR-0017; owner decision of 2026-11-10: HTTP stays only for a transition period). One WebSocket per collector at `GET {base}session`, on the same origin and with the same `Key` / `ClientName` headers as the HTTP routes. The bodies are the same. **No collector uses it yet**, and until the session can carry everything (see request ops below) the HTTP routes are the only complete transport.
+The transport that is to replace the HTTP routes above for collectors (#1664, epic #1660, ADR-0017; owner decision of 2026-11-10: HTTP stays only for a transition period). One WebSocket per collector at `GET {base}session`, on the same origin and with the same `Key` / `ClientName` headers as the HTTP routes. The bodies are the same. The managed collector can use it since 3.9.0 (`CollectorOptions.Transport = Session`, off by default); the native collector's session transport is PR #1669. Until the session can carry everything (see request ops below) the HTTP routes are the only complete transport.
 
 A collector either uses the session or the HTTP routes, by its own setting; the server does not negotiate it. Nothing in the session refers to HTTP: there is no fallback to it, no announcement of sessions in HTTP answers, and no side traffic over it.
 
@@ -165,7 +165,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 ```
 
 - **`hello`** is the first frame the server sends. `maxFrameBytes` is the largest frame it accepts; `heartbeatSeconds` is the heartbeat interval.
-- **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **`file` has no op yet.** A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that will use the session; none does yet), and an element that cannot fit on its own has no way through. Files, such elements and directive push (directives still travel only as headers on HTTP answers) have to be solved before the HTTP routes can go.
+- **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **`file` has no op yet.** A collector must split a batch so that every frame fits `maxFrameBytes`, and an element that cannot fit on its own has no way through: the managed collector drops such a value, reports it and counts it as lost, and refuses a file value before it is queued. Files, such elements and directive push (directives still travel only as headers on HTTP answers) have to be solved before the HTTP routes can go.
 - **`status` is the HTTP status the same request would have got** on that route, with one exception: a body the server cannot parse is `400` (`"malformed body"`), where the HTTP route ends as a `500`.
 - **A success ack** carries the route's success body in `body`: the dictionary of per-path errors, empty when everything was accepted. Its keys are sensor paths exactly as sent.
 - **A failure ack** carries a short `error` text and no `body`. It never echoes the request, unlike the HTTP `400` of `list`. Texts in version 1: `empty batch`, `malformed body`, `unknown op`, `failed to store the batch`, `failed to apply the commands`. They are for logs; a collector decides by `status`.
@@ -174,6 +174,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 - **Growth without a new version.** Unknown envelope fields are ignored by both sides. An unknown request `op` is answered with a `400` ack (`"unknown op"`); an unknown push `op` is ignored by the collector.
 - **Close codes from the server**: `1001` shutdown, `1002` a request frame without an `id`, `1003` a binary frame, `1007` a frame that is not a JSON object, `1008` the access key can no longer send, `1009` a frame over `maxFrameBytes`.
 - **Delivery is at-least-once**, as over HTTP: a batch whose ack was lost may have been stored.
+- **What the collector expects of the server's frames.** A collector waits for an ack as long as it waits for an HTTP response (`RequestTimeout`, 30 s by default) and then closes the session, so a server that takes longer than that to store a batch loses the session as it would lose the HTTP request. The managed collector accepts frames of up to 8 MiB from the server (the native bound) and ends the session on a larger one.
 
 Server behaviour, settings and tests: `aicontext/features/server/collector-session/feature.md`.
 

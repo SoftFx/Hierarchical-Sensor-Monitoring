@@ -33,6 +33,18 @@ namespace HSMDataCollector.Core
 
         public IDataSender DataSender { get; set; }
 
+        /// <summary>
+        /// How the built-in sender talks to the server: over the HTTP routes (the default), or
+        /// over a collector session, one WebSocket on the same address and port. A collector on
+        /// a session never uses the HTTP routes: while no session can be opened its values wait
+        /// in the queues. The setting belongs to the built-in sender; with a custom
+        /// <see cref="DataSender"/> it has no effect, and Start says so.
+        /// </summary>
+        public CollectorTransport Transport { get; set; } = CollectorTransport.Http;
+
+        /// <summary>The session's waits; a seam for tests. Null takes the protocol's defaults.</summary>
+        internal Client.Session.SessionTimings SessionTimings { get; set; }
+
         internal string ServerUrl => ServerAddress.TrimEnd('/');
 
         public bool AllowUntrustedServerCertificate { get; set; }
@@ -131,6 +143,9 @@ namespace HSMDataCollector.Core
 
             if (MaxSensors <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxSensors), "Max sensors must be greater than zero.");
+
+            if (Transport != CollectorTransport.Http && Transport != CollectorTransport.Session)
+                throw new ArgumentOutOfRangeException(nameof(Transport), "The transport is either Http or Session.");
 
             foreach (var header in ExtraRequestHeaders)
                 ValidateExtraRequestHeader(header.Key, header.Value);

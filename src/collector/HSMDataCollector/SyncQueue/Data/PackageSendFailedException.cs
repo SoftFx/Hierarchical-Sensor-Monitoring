@@ -9,6 +9,15 @@ namespace HSMDataCollector.SyncQueue.Data
     /// </summary>
     internal sealed class PackageSendFailedException : InvalidOperationException
     {
-        internal PackageSendFailedException(string message) : base(message) { }
+        internal PackageSendFailedException(string message, bool isTransportDown = false) : base(message)
+        {
+            IsTransportDown = isTransportDown;
+        }
+
+        /// <summary>
+        /// The package was not sent because the transport has no connection, which the transport
+        /// reports itself. The queue keeps the package; a line per cycle would only repeat it.
+        /// </summary>
+        internal bool IsTransportDown { get; }
     }
 }
