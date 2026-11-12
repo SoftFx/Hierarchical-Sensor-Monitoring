@@ -3,3 +3,4 @@ Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE
 wlp3s0: 0000   36.  -74.  -256        0      0      0     12    187        0
 wlx00c0ca: 0000   60.   60.    0        0      0      0      0      0        0
  wlan9: 0000    0     0     0        0      0      0      0      0        0
+ wlan8: 0000   40.  -70   -256        0      0      0      0      0        0

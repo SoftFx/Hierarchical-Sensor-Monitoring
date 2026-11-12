@@ -249,8 +249,7 @@ pub fn parse_wireless(text: &str) -> Result<BTreeMap<String, WirelessReading>, S
             })?;
             Ok(updated.then_some(number))
         };
-        // The quality column is checked like the others (a malformed row is an error), not kept.
-        value(1)?;
+        // Field 1, the quality, is not read at all: an odd value there must not cost the signal.
         let level = value(2)?;
         interfaces.insert(
             name.to_string(),
@@ -322,7 +321,8 @@ pub(crate) mod tests {
     pub const WIFI_DOCKER_DEV: &str = include_str!("fixtures/wifi-docker-dev.txt");
 
     /// `/proc/net/wireless` of the same host, in the kernel's exact format: `wlp3s0` associated at
-    /// −74 dBm, a USB dongle whose driver reports a non-dBm level, and a row with nothing updated.
+    /// −74 dBm, a USB dongle whose driver reports a non-dBm level, a row with nothing updated, and
+    /// a row whose dBm level the driver did not mark updated (no `.`).
     pub const WIFI_WIRELESS: &str = include_str!("fixtures/wifi-wireless.txt");
 
     /// `/sys/class/net` of [`WIFI_DOCKER_DEV`]: only the two NICs have a `device` link and only
@@ -541,6 +541,8 @@ pub(crate) mod tests {
                 // Its level is not in dBm.
                 ("wlx00c0ca".to_string(), WirelessReading::default()),
                 ("wlan9".to_string(), WirelessReading::default()),
+                // −70 dBm, but not marked updated: stale, not a sample.
+                ("wlan8".to_string(), WirelessReading::default()),
             ])
         );
         // A host with no associated Wi-Fi: the two header lines only.
@@ -554,7 +556,7 @@ pub(crate) mod tests {
             String::new(),
             format!("{headers}wlp3s0 0000 36. -74.\n"),
             format!("{headers}wlp3s0: 0000 36.\n"),
-            format!("{headers}wlp3s0: 0000 x. -74.\n"),
+            format!("{headers}wlp3s0: 0000 36. x.\n"),
         ] {
             assert!(parse_wireless(&broken).is_err(), "{broken:?}");
         }

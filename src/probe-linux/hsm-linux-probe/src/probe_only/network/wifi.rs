@@ -245,17 +245,21 @@ mod tests {
     }
 
     #[test]
-    fn a_dongle_without_a_dbm_level_gets_no_sensor() {
+    fn patterns_admit_every_row_but_only_a_fresh_dbm_level_gets_a_sensor() {
         let collector = test_collector();
         let tree = FakeTree::new("net-wifi-dongle");
         tree.file("proc-net/wireless", WIFI_WIRELESS);
-        let mut source = wifi_source(&collector, &tree, &["wlx*", "wlan*"]);
+        // No sysfs: the patterns alone decide, and they admit all four rows.
+        let mut source = wifi_source(&collector, &tree, &["wl*"]);
         let (logger, _) = capture();
         collector.start().expect("start");
         source.sample(&logger);
         let registrations = network_registrations(&collector);
         collector.stop().expect("stop");
-        assert!(registrations.is_empty(), "{registrations:#?}");
+        // wlx00c0ca (non-dBm level), wlan9 (nothing updated) and wlan8 (dBm level not marked
+        // updated) get none.
+        assert_eq!(registrations.len(), 1, "{registrations:#?}");
+        assert!(registrations[0].contains("\"Path\":\".computer/Network/wlp3s0/Signal dBm\""));
     }
 
     #[test]
