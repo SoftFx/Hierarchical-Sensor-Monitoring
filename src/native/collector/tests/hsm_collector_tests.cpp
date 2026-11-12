@@ -7395,6 +7395,115 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
 
+    // The parts of a split registration batch are settled one by one: a part the server refused
+    // with a 4xx is final, a part that got a 5xx is posted again, and neither drags the other
+    // along. One outcome for the whole batch used to post the refused part again on every cycle.
+    void NativeSessionSplitRegistrationRetriesOnlyTheFailedPart()
+    {
+        if (!WsAvailable("native_session_split_registration_retries_only_the_failed_part"))
+            return;
+
+        constexpr int kSensors = 24;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 2048;
+        hsm::test::WebSocketTestServer server(server_options);
+        // The first part is refused for good, the second for now, the rest is accepted.
+        server.AckNextCommandFramesWith({ 400, 503 });
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+
+        std::vector<SensorHandle> sensors;
+        std::vector<std::string> markers;
+        for (int i = 0; i < kSensors; ++i)
+        {
+            const std::string path = "session/split-retry/a-sensor-with-a-long-enough-path/number-" + std::to_string(100 + i);
+            markers.push_back("\"Path\":\"" + path + "\"");
+            sensors.push_back(CreateIntSensor(collector.value, path.c_str()));
+        }
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        const auto command_frames = [&] {
+            std::vector<std::string> frames;
+            for (const auto& frame : server.Received())
+                if (frame.find("\"op\":\"commands\"") != std::string::npos && frame.find("session/split-retry/") != std::string::npos)
+                    frames.push_back(frame);
+            return frames;
+        };
+        const auto frames_with = [&](const std::string& marker) {
+            size_t count = 0;
+            for (const auto& frame : command_frames())
+                count += frame.find(marker) != std::string::npos ? 1 : 0;
+            return count;
+        };
+
+        Require(WaitUntilFor([&] { return command_frames().size() >= 2; }, 20000), "the registration batch must be split");
+        const auto first_frames = command_frames();
+        std::vector<std::string> refused; // in the frame answered 400
+        std::vector<std::string> failed;  // in the frame answered 503
+        for (const auto& marker : markers)
+        {
+            if (first_frames[0].find(marker) != std::string::npos)
+                refused.push_back(marker);
+            else if (first_frames[1].find(marker) != std::string::npos)
+                failed.push_back(marker);
+        }
+        Require(!refused.empty() && !failed.empty(), "the first two frames must each carry sensors of the batch");
+
+        for (const auto& marker : failed)
+            Require(WaitUntilFor([&] { return frames_with(marker) >= 2; }, 20000),
+                    ("a part answered 503 must be posted again: " + marker).c_str());
+
+        // Two more registration cycles: a sensor created now is posted on the next one.
+        for (int round = 0; round < 2; ++round)
+        {
+            const std::string path = "session/split-retry/late-" + std::to_string(round);
+            sensors.push_back(CreateIntSensor(collector.value, path.c_str()));
+            const std::string marker = "\"Path\":\"" + path + "\"";
+            Require(WaitUntilFor([&] { return frames_with(marker) >= 1; }, 20000), "a sensor created while running must be registered");
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        for (const auto& marker : refused)
+            Require(frames_with(marker) == 1, ("a part refused with a 4xx must not be posted again: " + marker + ", posted " +
+                                               std::to_string(frames_with(marker)) + " time(s)")
+                                                  .c_str());
+        for (const auto& marker : markers)
+            Require(frames_with(marker) <= 2, ("an accepted part must not be posted again: " + marker).c_str());
+    }
+
+    // The session has no op for a file value: the call says so instead of reporting success for a
+    // value that was discarded, and nothing is sent for it.
+    void NativeSessionRefusesFileValues()
+    {
+        if (!WsAvailable("native_session_refuses_file_values"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle file;
+        Require(hsm_collector_create_file_sensor(collector.value, "session/file/report", "report", "txt", &file.value) == HSM_RESULT_OK,
+                "file sensor create failed");
+        SensorHandle number = CreateIntSensor(collector.value, "session/file/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/file/number" }) >= 1; }, 15000),
+                "the session must be up before the values are added");
+
+        Require(hsm_sensor_add_file(file.value, "file-content-marker", HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_INVALID_STATE,
+                "a file value on a session must be refused, not reported as accepted");
+        Require(hsm_sensor_add_int(number.value, 6161, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":6161" }) >= 1; }, 20000),
+                "a value behind the refused file must be delivered");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+        Require(SessionFrames(server, { "file-content-marker" }) == 0, "a file value must not be sent on a session");
+    }
+
     // A value that cannot fit a frame is dropped and reported once, even when the frame built
     // around it fails and the rest of the batch goes back to the queue.
     void NativeSessionOversizedValueIsDroppedOnce()
@@ -9727,6 +9836,9 @@ namespace
             { "native_session_splits_a_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsABatchToTheFrameLimit(); } },
             { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },
             { "native_session_splits_a_registration_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsARegistrationBatchToTheFrameLimit(); } },
+            { "native_session_split_registration_retries_only_the_failed_part",
+              [](const std::string&) { NativeSessionSplitRegistrationRetriesOnlyTheFailedPart(); } },
+            { "native_session_refuses_file_values", [](const std::string&) { NativeSessionRefusesFileValues(); } },
             { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
             { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
               [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },

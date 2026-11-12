@@ -366,6 +366,12 @@ namespace hsm::test
         // Accept this many more `list` frames, then answer every later one with 503. A negative
         // number lifts the limit.
         void AcceptListFrames(int count) { list_budget_.store(count, std::memory_order_release); }
+        // The statuses of the next `commands` acks, one per frame in order; after them, AckWith's.
+        void AckNextCommandFramesWith(std::vector<int> statuses)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            command_acks_ = std::move(statuses);
+        }
         // Stop (or resume) acknowledging requests; they are still received and recorded.
         void StaySilent(bool silent) { silent_.store(silent, std::memory_order_release); }
         // Application-level pings ({"op":"ping"}) received.
@@ -671,6 +677,15 @@ namespace hsm::test
                 else if (budget > 0)
                     list_budget_.store(budget - 1, std::memory_order_release);
             }
+            else if (payload.find("\"op\":\"commands\"") != std::string::npos)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!command_acks_.empty())
+                {
+                    status = command_acks_.front();
+                    command_acks_.erase(command_acks_.begin());
+                }
+            }
             SendFrame(0x1, /*fin=*/true,
                       status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
                                                     : "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"error\":\"refused by the test\"}");
@@ -696,6 +711,7 @@ namespace hsm::test
         std::string handshake_head_;        // guarded by mutex_
         std::string last_pong_;             // guarded by mutex_
         std::vector<std::string> received_; // guarded by mutex_
+        std::vector<int> command_acks_;     // guarded by mutex_
         std::vector<int> close_codes_;      // guarded by mutex_
     };
 } // namespace hsm::test

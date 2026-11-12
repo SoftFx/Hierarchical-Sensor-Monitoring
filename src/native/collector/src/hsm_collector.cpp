@@ -2807,11 +2807,15 @@ namespace
         // final here — managed would re-send it every period until the queue evicts it, but a
         // rejected payload or key never succeeds on repeat, and the values carrying the same key
         // already report it.
+        // Split: a batch that went out in several session frames and whose parts ended
+        // differently. Each part is already settled (the parts to retry are queued), so the caller
+        // has nothing to do; it is not Accepted, so no "registered" line is credited to it.
         enum class RegistrationPost
         {
             Accepted,
             Retry,
             Rejected,
+            Split,
         };
 
         RegistrationPost PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
@@ -2850,12 +2854,22 @@ namespace
                 if (room != 0 && body.size() > room)
                 {
                     const auto middle = sensors.begin() + static_cast<std::ptrdiff_t>(sensors.size() / 2);
-                    const RegistrationPost first = PostRegistrationsWire({ sensors.begin(), middle }, runtime);
-                    const RegistrationPost second = PostRegistrationsWire({ middle, sensors.end() }, runtime);
-                    if (first == RegistrationPost::Retry || second == RegistrationPost::Retry)
-                        return RegistrationPost::Retry;
-                    return first == RegistrationPost::Rejected || second == RegistrationPost::Rejected ? RegistrationPost::Rejected
-                                                                                                       : RegistrationPost::Accepted;
+                    const std::vector<std::shared_ptr<NativeSensor>> first_half(sensors.begin(), middle);
+                    const std::vector<std::shared_ptr<NativeSensor>> second_half(middle, sensors.end());
+                    const RegistrationPost first = PostRegistrationsWire(first_half, runtime);
+                    const RegistrationPost second = PostRegistrationsWire(second_half, runtime);
+                    if (first == second && first != RegistrationPost::Split)
+                        return first;
+
+                    // The halves ended differently. The callers re-queue their whole input on
+                    // Retry, which would post an accepted half again and a half refused with a
+                    // 4xx on every cycle; so the half to retry is queued here and the caller is
+                    // told there is nothing left for it to do.
+                    if (first == RegistrationPost::Retry)
+                        RetryRegistrations(first_half);
+                    if (second == RegistrationPost::Retry)
+                        RetryRegistrations(second_half);
+                    return RegistrationPost::Split;
                 }
             }
 
@@ -4141,24 +4155,26 @@ namespace
 
         // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
         // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
-        void EnqueueFileIfRunning(std::string json)
+        // False = refused: the transport cannot carry a file value, and the caller's result says
+        // so. A collector that is not running is the usual silent no-op (true).
+        bool EnqueueFileIfRunning(std::string json)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
                 if (!CanAcceptDataLocked())
-                    return;
+                    return true;
             }
 
 #if defined(HSM_COLLECTOR_HTTP)
             // The session cannot carry a file value yet (it needs an op of its own), and there is
             // no HTTP to send it over instead. Refused here, before the queue: queued, it would be
-            // sent, refused and re-queued for ever.
+            // sent, refused and re-queued for ever. It never was in the queue, so it is not a
+            // queue overflow: the caller gets the refusal and the log says why.
             if (use_session_)
             {
                 LogError("A file value was not sent: the collector session transport cannot carry file values yet.");
-                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
-                return;
+                return false;
             }
 #endif
 
@@ -4170,6 +4186,7 @@ namespace
             }
 
             queue_cv_.notify_all();
+            return true;
         }
 
         // Public liveness/running check for sensors that want to avoid expensive work (e.g. a disk
@@ -6621,8 +6638,8 @@ namespace
 
         // Instant gating: dropped unless the collector is running (values before Start are
         // lost). File payloads dispatch promptly — not gated by the package collect period.
-        collector->EnqueueFileIfRunning(json.str());
-        return HSM_RESULT_OK;
+        // The one refusal: a collector on the session transport cannot send a file value.
+        return collector->EnqueueFileIfRunning(json.str()) ? HSM_RESULT_OK : HSM_RESULT_INVALID_STATE;
     }
 
     hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)

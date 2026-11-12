@@ -376,6 +376,12 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_session_splits_a_registration_batch_to_the_frame_limit
         COMMAND hsm_collector_tests native_session_splits_a_registration_batch_to_the_frame_limit
     )
+    add_test(NAME native_session_split_registration_retries_only_the_failed_part
+        COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
+    )
+    add_test(NAME native_session_refuses_file_values
+        COMMAND hsm_collector_tests native_session_refuses_file_values
+    )
     add_test(NAME native_session_oversized_value_is_dropped_once
         COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
     )
