@@ -32,6 +32,9 @@ namespace HSMDataCollector.Tests
         [InlineData(HttpStatusCode.BadRequest)]
         [InlineData(HttpStatusCode.NotAcceptable)]
         [InlineData(HttpStatusCode.Forbidden)]
+        // A redirect that reaches the queue is one the client could not follow. The native
+        // collector follows none and treats it as final, so the boundary is "below 500".
+        [InlineData(HttpStatusCode.Found)]
         public async Task Registration_rejected_with_4xx_is_not_sent_again(HttpStatusCode status)
         {
             var sender = new ScriptedCommandSender(firstAnswer: status);

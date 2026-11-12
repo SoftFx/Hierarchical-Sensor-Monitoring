@@ -42,9 +42,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 var retryResult = ReEnqueueItem(item);
                 var preserved = retryResult.IsAccepted ? 1 - retryResult.DroppedCount : 0;
-                var fate = IsFlushing ? "queued for clear" : "preserved";
-                var loss = retryResult.DroppedCount > 0 ? $", {retryResult.DroppedCount} dropped" : string.Empty;
-                throw new PackageSendFailedException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
+                throw new PackageSendFailedException(QueueName, preserved, retryResult.DroppedCount, IsFlushing, sendingInfo.Error);
             }
 
             return true;

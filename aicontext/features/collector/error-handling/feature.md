@@ -31,7 +31,7 @@ DataCollector must never crash the host application. All exceptions from sensor 
 | Fault of a built-in source that is not one sensor (top-CPU sample failed as a whole) | `SensorsStorage.ReportError` → `DataProcessor.AddError` → MessageDeduplicator, as `top-CPU sampling error: <message>`, the native collector's line (#1659 A8, 3.6.4). The per-process catches inside a sample stay silent: a protected or exiting process refusing its CPU time is the normal case |
 | Server refused a registration (4xx) | `DataProcessor.ReportRejectedPackage` → MessageDeduplicator (#1659 A2, see `data-pipeline/feature.md`) |
 | Validation reject (NaN/null/bad status) | `DataProcessor.LogDroppedValue(path, reason)` — Debug level |
-| Shutdown discard | `LogDiscardedItems(count, queueName)` — Error level |
+| Shutdown discard | `LogDiscardedItems(count, queueName)` — Info level |
 | Queue overflow / retry drop | `QueueOverflowSensor` (never suppressed — see `data-pipeline/feature.md`). **Without that sensor** the drops are counted and reported once when the collector stops, at Error: `Collector stop: N value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).` (#1659 A5, 3.6.4; the native collector's line, #1508). Before 3.6.4 a collector without the queue diagnostics group lost them in silence |
 
 ### MessageDeduplicator
