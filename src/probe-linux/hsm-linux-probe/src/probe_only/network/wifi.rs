@@ -49,13 +49,30 @@ impl Reading {
         match self {
             Reading::Signal => format!(
                 "Signal of the access point on Wi-Fi interface **{interface}**, dBm \
-                 (`/proc/net/wireless` level): about −50 is strong, below −75 unreliable. \
-                 Sampled every 10 s; the bar's Min shows a dip."
+                 (`/proc/net/wireless` level): how strongly the router's radio reaches this \
+                 card. Always negative; **the closer to 0, the better**. Every 10 dB is ten \
+                 times less power, so −70 is ten times weaker than −60.\n\n\
+                 - −30 … −50: excellent\n\
+                 - −50 … −60: good\n\
+                 - −60 … −67: fine, enough for calls and video\n\
+                 - −67 … −75: weak: works, but retries and short stalls begin\n\
+                 - below −75: unreliable: stalls and disconnects are likely\n\n\
+                 Sampled every 10 s into 1-minute bars: **Min** is the weakest of the minute's \
+                 samples, so a dip shows there even when Mean looks fine (a dip shorter than \
+                 10 s can fall between samples)."
             ),
             Reading::Quality => format!(
-                "Link quality of Wi-Fi interface **{interface}** (`/proc/net/wireless` link): \
-                 0–70 on cfg80211 drivers, the signal clamped to −110…−40 dBm plus 110. \
-                 Sampled every 10 s."
+                "Link quality of Wi-Fi interface **{interface}** (`/proc/net/wireless` link), \
+                 **higher is better**. It is not measured separately: cfg80211 drivers that \
+                 report the signal in dBm (almost all current ones) compute it from the signal \
+                 (quality = signal + 110 dBm, kept within 0…70), so it says the same as \
+                 `Signal dBm` on another scale. A driver of another kind uses its own scale, and \
+                 the list below does not apply to it.\n\n\
+                 - 70: −40 dBm or stronger, the maximum\n\
+                 - 50: −60 dBm, good\n\
+                 - 43: −67 dBm, still fine\n\
+                 - 35: −75 dBm, unreliable below this\n\n\
+                 As a percentage: quality / 70. Sampled every 10 s into 1-minute bars."
             ),
         }
     }
@@ -261,7 +278,10 @@ mod tests {
                 SIGNAL_LEAF,
                 "Signal of the access point on Wi-Fi interface **wlp3s0**, dBm",
             ),
+            // The scale is a markdown list: the newlines travel JSON-escaped.
+            (SIGNAL_LEAF, "\\n- −30 … −50: excellent\\n"),
             (QUALITY_LEAF, "Link quality of Wi-Fi interface **wlp3s0**"),
+            (QUALITY_LEAF, "\\n- 50: −60 dBm, good\\n"),
         ] {
             let json = find(leaf);
             for part in [

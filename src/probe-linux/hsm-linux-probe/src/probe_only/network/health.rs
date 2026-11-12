@@ -66,15 +66,28 @@ impl Counter {
         match self {
             Counter::CarrierChanges => format!(
                 "Times the link of interface **{interface}** went up or down in the minute \
-                 (`carrier_changes`; a short drop counts 2). Posted only when non-zero."
+                 (`carrier_changes`). **Normally nothing is posted**: a value comes only in a \
+                 minute when the link changed, and the last one stays shown, so look at its time. \
+                 Each change counts 1, so a loss of the cable or the Wi-Fi association and its \
+                 recovery count 2 (1 in each minute if they fall in different minutes). It \
+                 catches a drop too short for `Link up` to see."
             ),
             Counter::Errors => format!(
                 "Receive + transmit errors on interface **{interface}** in the minute \
-                 (`/proc/net/dev` errs). Posted only when non-zero."
+                 (`/proc/net/dev` errs): frames that arrived damaged or could not be sent. \
+                 **Normally nothing is posted**: a value comes only in a minute with errors, \
+                 and the last one stays shown, so look at its time. A few a day are noise; \
+                 errors every minute point to a bad cable or port, or radio interference on \
+                 Wi-Fi."
             ),
             Counter::Drops => format!(
                 "Received + transmitted packets dropped on interface **{interface}** in the \
-                 minute (`/proc/net/dev` drop). Posted only when non-zero."
+                 minute (`/proc/net/dev` drop): packets the driver or kernel discarded, for \
+                 example a full receive queue or traffic nobody here listens for. Posted only \
+                 when non-zero. A small steady count is common and harmless on many hosts \
+                 (frames of protocols nothing here handles, broadcast noise); what matters is a \
+                 jump above the usual level, especially together with `Errors` or \
+                 `Carrier changes`."
             ),
         }
     }
@@ -82,8 +95,12 @@ impl Counter {
 
 pub fn link_description(interface: &str) -> String {
     format!(
-        "Whether interface **{interface}** has a link (`operstate` is `up`; for Wi-Fi: associated \
-         with an access point). Checked every 10 s; posted on change and every 5 minutes."
+        "Whether interface **{interface}** has a link (`operstate` is `up`, or `unknown` with a \
+         carrier). **True is normal.** False means no link: the cable is unplugged; Wi-Fi is not \
+         associated with the access point, or is associated but not yet authenticated; for a \
+         VLAN, the device it runs on is down; for a bridge, none of its ports is up. Checked \
+         every 10 s; posted on change and every 5 minutes. A drop shorter than 10 s can be \
+         missed here; `Carrier changes` counts it."
     )
 }
 
