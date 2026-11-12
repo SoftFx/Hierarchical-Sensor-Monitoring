@@ -164,7 +164,13 @@ namespace HSMDataCollector.IntegrationTests.Tests
             await collector.Stop();
 
             Assert.True(later >= 1, "The later registration never reached the server.");
-            Assert.Equal(1, server.CommandRequests.Count(r => r.Body.Contains("e2e/registration/rejected")));
+
+            var posts = server.CommandRequests.Where(r => r.Body.Contains("e2e/registration/rejected")).ToList();
+
+            Assert.Single(posts);
+            // The one post is the one the server refused, so the count above is about the rule
+            // and not about a package the script never touched.
+            Assert.Equal(status, posts[0].Answer);
         }
 
         [Fact]

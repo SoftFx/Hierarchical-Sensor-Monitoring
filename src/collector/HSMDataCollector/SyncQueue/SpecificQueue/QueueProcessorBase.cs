@@ -463,7 +463,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // a missing answer and a 5xx included, goes back for the next cycle.
                 if (RejectionIsFinal && sendingInfo.IsRejected)
                 {
-                    ReportRejectedPackage(package.Count, sendingInfo);
+                    ReportRejectedPackage(DescribeItems(package), sendingInfo);
                     return;
                 }
 
@@ -489,12 +489,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         /// </summary>
         protected virtual bool RejectionIsFinal => false;
 
-        private void ReportRejectedPackage(int count, PackageSendingInfo sendingInfo)
+        /// <summary>
+        /// What a rejected package held, for its report: the count by default; a queue whose
+        /// items carry an identity names a lone item.
+        /// </summary>
+        protected virtual string DescribeItems(DataPackage<T> package) => $"{package.Count} item(s)";
+
+        private void ReportRejectedPackage(string items, PackageSendingInfo sendingInfo)
         {
             if (_queueManager != null)
-                _queueManager.ReportRejectedPackage(QueueName, count, sendingInfo);
+                _queueManager.ReportRejectedPackage(QueueName, items, sendingInfo);
             else
-                _logger.Error(DataProcessor.BuildRejectionMessage(QueueName, count, sendingInfo));
+                _logger.Error(DataProcessor.BuildRejectionMessage(QueueName, items, sendingInfo));
         }
 
         // Self-reports retry-path evictions to the queue manager so every caller — including

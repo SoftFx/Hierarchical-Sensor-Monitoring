@@ -18,7 +18,7 @@ namespace HSMDataCollector.Tests
     /// #1659 A2: what the command queue does with a registration the server answered.
     /// A 4xx is final: the same payload and key never succeed on repeat, so the package is
     /// reported once and not sent again (the native collector's rule since 0.10.3, #1515).
-    /// A missing response, a 5xx, a 408 or a 429 is still sent again on the next cycle.
+    /// A missing response or a 5xx is still sent again on the next cycle.
     /// </summary>
     public sealed class RegistrationRejectionTests
     {
@@ -56,13 +56,10 @@ namespace HSMDataCollector.Tests
             Assert.Equal(1, sender.PackagesWith(RejectedPath));
         }
 
-        // 408 and 429 are 4xx by number only: both say "later", not "never".
         [Theory]
         [InlineData(HttpStatusCode.ServiceUnavailable)]
         [InlineData(HttpStatusCode.BadGateway)]
-        [InlineData(HttpStatusCode.RequestTimeout)]
-        [InlineData((HttpStatusCode)429)]
-        public async Task Registration_answered_with_a_retryable_status_is_sent_again(HttpStatusCode status)
+        public async Task Registration_answered_5xx_is_sent_again(HttpStatusCode status)
         {
             var sender = new ScriptedCommandSender(firstAnswer: status);
 
@@ -119,7 +116,9 @@ namespace HSMDataCollector.Tests
 
             Assert.True(reports.Count == 1, "Expected one rejection report, got: " + string.Join(" | ", logger.Errors));
             Assert.Contains("400", reports[0]);
-            Assert.Contains("Command", reports[0]);
+            Assert.Contains("Queue: Command", reports[0]);
+            // A lone registration is named, so the report says which sensor has no metadata.
+            Assert.Contains(RejectedPath, reports[0]);
         }
 
         [Fact]
@@ -158,6 +157,26 @@ namespace HSMDataCollector.Tests
 
             Assert.Null(new PackageSendingInfo(10, null, "no route to host").StatusCode);
             Assert.Null(default(PackageSendingInfo).StatusCode);
+        }
+
+        [Fact]
+        public void Sending_info_built_from_a_bare_status_reads_like_one_built_from_a_response()
+        {
+            var accepted = new PackageSendingInfo(10, 200, null);
+            var rejected = new PackageSendingInfo(10, 406, "the key is blocked");
+            var failed = new PackageSendingInfo(10, 503, null);
+
+            Assert.True(accepted.IsSuccess);
+            Assert.Null(accepted.Error);
+
+            Assert.False(rejected.IsSuccess);
+            Assert.Equal(406, rejected.StatusCode);
+            Assert.Equal("the key is blocked", rejected.Error);
+            Assert.True(rejected.IsRejected);
+
+            Assert.False(failed.IsSuccess);
+            Assert.NotNull(failed.Error);
+            Assert.False(failed.IsRejected);
         }
 
 

@@ -110,13 +110,6 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                          && !isCommand
                          && !path.EndsWith("/testConnection", StringComparison.Ordinal);
 
-            _requests.Enqueue(new CapturedRequest(
-                request.HttpMethod,
-                path,
-                request.Headers["Key"],
-                request.Headers["ClientName"],
-                body));
-
             var statusCode = HttpStatusCode.OK;
             if (isCommand && _scriptedCommandStatuses.TryDequeue(out var scripted))
                 statusCode = scripted;
@@ -128,6 +121,14 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                 statusCode = HttpStatusCode.ServiceUnavailable;
             else if (isCommand)
                 Interlocked.Increment(ref _failCommandRequests); // floor the counter at 0
+
+            _requests.Enqueue(new CapturedRequest(
+                request.HttpMethod,
+                path,
+                request.Headers["Key"],
+                request.Headers["ClientName"],
+                body,
+                statusCode));
 
             try
             {
@@ -160,8 +161,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
         public sealed class CapturedRequest
         {
-            public CapturedRequest(string method, string path, string key, string clientName, string body)
+            public CapturedRequest(string method, string path, string key, string clientName, string body, HttpStatusCode answer)
             {
+                Answer = answer;
                 Method = method;
                 Path = path;
                 Key = key;
@@ -174,6 +176,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             public string Key { get; }
             public string ClientName { get; }
             public string Body { get; }
+
+            /// <summary>The status this request was answered with.</summary>
+            public HttpStatusCode Answer { get; }
         }
     }
 }

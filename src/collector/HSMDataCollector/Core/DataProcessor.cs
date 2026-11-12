@@ -325,15 +325,16 @@ namespace HSMDataCollector.Core
         /// A package the server refused (4xx) on a queue that does not send a refusal again
         /// (#1659 A2). The items are gone, so this is reported like any other loss: an error in
         /// the log and in the <c>Collector errors</c> sensor, deduplicated so a host that keeps
-        /// registering against a rejected key does not flood either.
+        /// registering against a rejected key does not flood either (a repeat of the same text
+        /// is counted and reported as "N times" when its window ends).
         /// </summary>
-        public void ReportRejectedPackage(string queueName, int count, PackageSendingInfo info)
+        public void ReportRejectedPackage(string queueName, string items, PackageSendingInfo info)
         {
-            _messageDeduplicator.AddMessage(BuildRejectionMessage(queueName, count, info));
+            _messageDeduplicator.AddMessage(BuildRejectionMessage(queueName, items, info));
         }
 
-        internal static string BuildRejectionMessage(string queueName, int count, PackageSendingInfo info) =>
-            $"Queue: {queueName}, the server rejected {count} item(s) with HTTP {info.StatusCode}; they are not sent again. {info.Error}";
+        internal static string BuildRejectionMessage(string queueName, string items, PackageSendingInfo info) =>
+            $"Queue: {queueName}, the server rejected {items} with status {info.StatusCode}; not sent again. {info.Error}";
 
         /// <summary>
         /// Diagnostic hook for callers that silently dropped a value because it failed validation
