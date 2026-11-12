@@ -126,7 +126,9 @@
             }
             else if (action.Action == ActionType.ShowIcon)
             {
-                actions.Add(new HtmlString($"<span>show icon {action.Icon}</span>"));
+                // #1705: the icon is user text folded into HTML — encode it,
+                // a stored <img onerror=...> must render as inert text.
+                actions.Add(new HtmlString($"<span>show icon {System.Net.WebUtility.HtmlEncode(action.Icon)}</span>"));
             }
             else if (action.Action == ActionType.SetStatus)
             {

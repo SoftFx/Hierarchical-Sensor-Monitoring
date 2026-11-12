@@ -21,6 +21,7 @@ using HSMServer.Folders;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
 
+using HSMServer.Validation;
 namespace HSMServer.Model.ManagementApi.Alerts
 {
     /// <summary>
@@ -1009,6 +1010,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 AlertPolicyConditionValidator.Add(errors, "destination",
                     "The destination has no effect without a notification; add a notification or remove the destination.");
             }
+
+            // #1705: control characters and bidi overrides in the icon or the
+            // message text are rejected at write time — no legitimate value
+            // carries them, and they spoof every renderer. Raw HTML is a
+            // renderer concern (the audit): it is escaped or sanitized there.
+            if (TextFieldValidator.HasForbiddenCharacter(icon, out var iconChar))
+                AlertPolicyConditionValidator.Add(errors, "icon",
+                    $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
+
+            if (notification?.Template is { } template &&
+                TextFieldValidator.HasForbiddenCharacter(template, out var templateChar))
+                AlertPolicyConditionValidator.Add(errors, "notification.template",
+                    $"The notification template must not contain control or bidirectional-override characters (found {templateChar}).");
 
             if (status is not null && status is not "Error" and not "Ok")
                 AlertPolicyConditionValidator.Add(errors, "status", "The status effect must be \"Error\" or \"Ok\".");

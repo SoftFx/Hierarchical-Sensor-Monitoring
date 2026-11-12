@@ -3371,5 +3371,17 @@
             (opt-in: enable when ready to roll out, disable to halt).
             </summary>
         </member>
+        <member name="T:HSMServer.Validation.TextFieldValidator">
+            <summary>
+            #1705: the characters no legitimate icon, message template or name
+            ever carries — C0 control characters (NUL above all; tab and newline
+            stay allowed, a message template may be multi-line), DEL, the C1
+            controls, and the bidirectional embeddings/overrides/isolates that
+            spoof display order (a name ending in U+202E reads backwards).
+            Raw HTML is deliberately NOT rejected here: the renderers escape or
+            sanitize it (the #1705 audit), and an emoji-bearing icon is a
+            legitimate value.
+            </summary>
+        </member>
     </members>
 </doc>

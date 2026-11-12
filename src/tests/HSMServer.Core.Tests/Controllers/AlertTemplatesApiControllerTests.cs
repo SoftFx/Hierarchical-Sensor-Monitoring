@@ -540,6 +540,39 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
+        [Fact]
+        public async Task Create_NameWithAControlCharacter_Is400()
+        {
+            // #1705: no legitimate name carries control characters or bidi
+            // overrides; rejected by the structural pass with the field keyed.
+            var dto = BuildDto(name: "bad\u0000name");
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("control or bidirectional-override", Assert.IsType<string[]>(details["name"]).Single());
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_PolicyIconWithABidiOverride_Is400()
+        {
+            // #1705: the icon renders next to every alert message; a bidi
+            // override in it spoofs the text that follows.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with { Icon = "icon\u202Ex" };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].icon", details.Keys);
+            Assert.Empty(_store);
+        }
+
         [Theory]
         [InlineData("policies")]
         [InlineData("ttlPolicies")]
