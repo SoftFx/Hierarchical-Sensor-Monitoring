@@ -56,6 +56,17 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
     {
         public const int MaxNameLength = 200;
 
+        // #1706: a working-time schedule is a small document, not an
+        // arbitrary YAML file. The size bound keeps the stored row and every
+        // re-parse cheap; the date bounds mirror what the UI editor could
+        // reasonably produce (a leap year of disabled days, a baker's
+        // fifty-two weeks of one-off overrides).
+        public const int MaxScheduleYamlLength = 10_000;
+
+        public const int MaxDisabledDates = 366;
+
+        public const int MaxCustomDates = 50;
+
         private readonly IAlertScheduleProvider _schedules;
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
@@ -418,33 +429,66 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             schedule = null;
 
-            try
-            {
-                schedule = _parser.Parse(dto.Schedule ?? string.Empty);
+            // #1706: collected (not Dictionary.Add'ed) — several schedule
+            // errors can coexist and every one of them belongs under the
+            // single "schedule" key.
+            var scheduleErrors = new List<string>();
 
-                // #1598: the parser's model initializes DaySchedules to an
-                // empty list, so a YAML whose root has no daySchedules key
-                // parses into exactly the schedule `daySchedules: []` produces
-                // — a silent no-working-time schedule on a key typo. The
-                // documented contract requires the key (an explicit empty
-                // list stays valid), so the write path checks presence on the
-                // raw YAML; stored rows may omit the key and keep loading
-                // (Parse(AlertScheduleEntity) is untouched).
-                if (!_parser.HasDaySchedulesKey(dto.Schedule))
-                    errorMap.Add("schedule",
-                        ["The 'daySchedules' key is required (an explicit empty list — daySchedules: [] — is valid, but the key must be present)."]);
-
-                // The id is server-owned: generated on create, the route id on
-                // update — never a client-chosen value. Assigned only on the
-                // success path below.
-                schedule.Id = id ?? Guid.NewGuid();
-                schedule.Name = dto.Name;
-                schedule.Timezone = dto.Timezone;
-            }
-            catch (Exception ex)
+            if ((dto.Schedule?.Length ?? 0) > MaxScheduleYamlLength)
             {
-                errorMap.Add("schedule", [ex.Message]);
+                scheduleErrors.Add($"The schedule YAML must be at most {MaxScheduleYamlLength} characters.");
             }
+            else if (_parser.UsesAnchorsOrAliases(dto.Schedule))
+            {
+                // #1706: a working-time window never needs YAML anchors or
+                // aliases (&name / *name), and the expansion can hide
+                // repeated content from the date bounds below.
+                scheduleErrors.Add("The schedule YAML must not use anchors or aliases (&name / *name) — write every entry out.");
+            }
+            else
+            {
+                try
+                {
+                    schedule = _parser.Parse(dto.Schedule ?? string.Empty);
+
+                    // #1598: the parser's model initializes DaySchedules to an
+                    // empty list, so a YAML whose root has no daySchedules key
+                    // parses into exactly the schedule `daySchedules: []` produces
+                    // — a silent no-working-time schedule on a key typo. The
+                    // documented contract requires the key (an explicit empty
+                    // list stays valid), so the write path checks presence on the
+                    // raw YAML; stored rows may omit the key and keep loading
+                    // (Parse(AlertScheduleEntity) is untouched).
+                    if (!_parser.HasDaySchedulesKey(dto.Schedule))
+                        scheduleErrors.Add("The 'daySchedules' key is required (an explicit empty list — daySchedules: [] — is valid, but the key must be present).");
+
+                    if (schedule.DisabledDates.Count > MaxDisabledDates)
+                        scheduleErrors.Add($"At most {MaxDisabledDates} disabled dates are allowed.");
+
+                    if (schedule.Overrides.EnabledDates.Count > MaxDisabledDates)
+                        scheduleErrors.Add($"At most {MaxDisabledDates} enabled-date overrides are allowed.");
+
+                    if (schedule.Overrides.CustomScheduleDates.Count > MaxCustomDates)
+                        scheduleErrors.Add($"At most {MaxCustomDates} custom schedule dates are allowed.");
+
+                    // The id is server-owned: generated on create, the route id on
+                    // update — never a client-chosen value. Assigned only on the
+                    // success path below.
+                    if (scheduleErrors.Count == 0)
+                    {
+                        schedule.Id = id ?? Guid.NewGuid();
+                        schedule.Name = dto.Name;
+                        schedule.Timezone = dto.Timezone;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    scheduleErrors.Add(ex.Message);
+                }
+            }
+
+            if (scheduleErrors.Count > 0)
+                errorMap.Add("schedule", [.. scheduleErrors]);
 
             errors = null;
 

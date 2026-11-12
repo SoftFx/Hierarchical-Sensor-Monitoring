@@ -416,6 +416,85 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        // #1706: a working-time schedule is a small document, not an
+        // arbitrary YAML file — anchors/aliases are rejected (they are an
+        // expansion feature a window never needs, and the expansion can
+        // hide repeated content from the date bounds), the YAML size and the
+        // date counts are bounded.
+        [Fact]
+        public async Task CreateSchedule_YamlWithAnAnchorOrAlias_Is422()
+        {
+            var yaml = """
+                daySchedules: &week
+                  - days: [Mon]
+                    windows:
+                      - { start: "09:00", end: "17:00" }
+                extra: *week
+                """;
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "anchored", Timezone = "UTC", Schedule = yaml,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task CreateSchedule_AnAmpersandInAScalar_IsNotAnAnchor()
+        {
+            // The detection rides the YAML event stream, not text heuristics:
+            // a legitimate 'R&D' id must keep passing.
+            var yaml = """
+                daySchedules:
+                  - id: R&D
+                    days: [Mon]
+                    windows:
+                      - { start: "09:00", end: "17:00" }
+                """;
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "randd", Timezone = "UTC", Schedule = yaml,
+            });
+
+            Assert.Equal(201, StatusCodeOf(result));
+        }
+
+        [Fact]
+        public async Task CreateSchedule_OversizedYaml_Is422()
+        {
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "huge", Timezone = "UTC",
+                Schedule = "daySchedules: [] #" + new string('x', AlertScheduleAdministrationService.MaxScheduleYamlLength),
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task CreateSchedule_TooManyDisabledDates_Is422()
+        {
+            var start = new DateTime(2027, 1, 1);
+
+            var dates = string.Join(", ",
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxDisabledDates + 1)
+                    .Select(i => $"\"{start.AddDays(i):yyyy-MM-dd}\""));
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "many-dates", Timezone = "UTC",
+                Schedule = "daySchedules: []\ndisabledDates: [" + dates + "]",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+
         [Fact]
         public async Task CreateSchedule_DuplicateName_Is422()
         {
