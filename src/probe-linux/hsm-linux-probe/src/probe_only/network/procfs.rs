@@ -207,9 +207,8 @@ pub fn wireless_interfaces(sys_root: &Path) -> Vec<String> {
 /// One associated Wi-Fi interface's row of `/proc/net/wireless`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WirelessReading {
-    /// `link`: 0–70 on cfg80211 drivers (the signal clamped to −110…−40 dBm, plus 110).
-    pub quality: Option<f64>,
-    /// `level` in dBm.
+    /// `level` in dBm. (`link`, the quality, is parsed but not kept: on cfg80211 drivers it is
+    /// this signal plus 110, clamped to 0–70; #1731.)
     pub signal_dbm: Option<f64>,
 }
 
@@ -250,12 +249,12 @@ pub fn parse_wireless(text: &str) -> Result<BTreeMap<String, WirelessReading>, S
             })?;
             Ok(updated.then_some(number))
         };
-        let quality = value(1)?;
+        // The quality column is checked like the others (a malformed row is an error), not kept.
+        value(1)?;
         let level = value(2)?;
         interfaces.insert(
             name.to_string(),
             WirelessReading {
-                quality: quality.map(f64::from),
                 signal_dbm: level.filter(|dbm| *dbm < 0).map(f64::from),
             },
         );
@@ -536,17 +535,11 @@ pub(crate) mod tests {
                 (
                     "wlp3s0".to_string(),
                     WirelessReading {
-                        quality: Some(36.0),
                         signal_dbm: Some(-74.0)
                     }
                 ),
-                (
-                    "wlx00c0ca".to_string(),
-                    WirelessReading {
-                        quality: Some(60.0),
-                        signal_dbm: None
-                    }
-                ),
+                // Its level is not in dBm.
+                ("wlx00c0ca".to_string(), WirelessReading::default()),
                 ("wlan9".to_string(), WirelessReading::default()),
             ])
         );

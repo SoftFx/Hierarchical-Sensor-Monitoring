@@ -225,9 +225,10 @@ The probe registers **two separately pinned sets**:
      `Carrier changes` / `Errors` / `Drops` (Int, Count: per-minute deltas of `carrier_changes`
      and the `/proc/net/dev` rx + tx `errs` / `drop` columns, posted only when non-zero, no TTL,
      created on the first non-zero minute).
-   - **Wi-Fi signal** (Linux only, `network/wifi.rs`): `Signal dBm` and `Link quality`, 1-minute
-     DoubleBars of 10 s samples from `/proc/net/wireless` (a row exists only while associated, so no TTL; a
-     value without the kernel's "updated" `.` and a non-dBm level are skipped). BSSID, channel and
+   - **Wi-Fi signal** (Linux only, `network/wifi.rs`): `Signal dBm`, a 1-minute DoubleBar of 10 s
+     samples from `/proc/net/wireless` (a row exists only while associated, so no TTL; a value
+     without the kernel's "updated" `.` and a non-dBm level are skipped). The `link` quality column
+     is not reported (#1731): on cfg80211 it is the signal plus 110, clamped to 0–70. BSSID, channel and
      channel width need nl80211 and are not reported (owner's decision in #1711: no netlink
      dependency). A missing `/proc/net/wireless` is silent on a host without Wi-Fi.
    - **Reachability** (opt-in, `probe.network.reachability`, off by default; `network/
