@@ -290,13 +290,29 @@ namespace HSMDataCollector.Tests
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 return;
 
+            var logger = new ErrorRecordingLogger();
+
             using (var collector = CreateCollector(new RateRecordingSender()))
             {
+                collector.AddCustomLogger(logger);
+
                 collector.Windows.AddNetworkConnectionFailuresRate();
+                collector.Windows.AddNetworkConnectionFailuresRate();
+
+                // The same request again changes nothing and is nothing to report.
+                Assert.DoesNotContain(logger.Errors, e => e.Contains("already added"));
+
                 collector.Windows.AddNetworkConnectionFailuresRate(TimeSpan.FromSeconds(5));
 
                 Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath));
                 Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal)));
+
+                // The first period stays (the native collector would use the last one), and
+                // the host is told that the second was not applied.
+                var monitor = (WindowsTcpFailureRateMonitor)collector.DefaultSensors.Single(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath);
+
+                Assert.Equal(TimeSpan.FromMinutes(1), monitor.Period);
+                Assert.Contains(logger.Errors, e => e.Contains("already added with a period of 00:01:00") && e.Contains("00:00:05"));
             }
         }
 

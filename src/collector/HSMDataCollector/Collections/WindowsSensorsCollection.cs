@@ -282,14 +282,25 @@ namespace HSMDataCollector.DefaultSensors
 
             lock (_tcpFailureRateGate)
             {
-                // Asked for once per collector, like the native enable call: a second request is
-                // not a second monitor (and its period is not applied). The storage is the record
-                // of what was taken: a monitor it refused (the collector was stopping) is not there,
-                // so the next call tries again.
-                if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out _))
-                    return this;
+                // Asked for once per collector: a second request is not a second monitor. The
+                // storage is the record of what was taken: a monitor it refused (the collector
+                // was stopping) is not there, so the next call tries again.
+                //
+                // The period of the first request stays: the rate sensor was created with it.
+                // The native enable call differs here (the last period given before Start is
+                // the one used), so a second request with another period is reported, not
+                // swallowed: the host gets a rate it did not ask for last.
+                var asked = period ?? TimeSpan.FromMinutes(1);
 
-                return ToWindows(new WindowsTcpFailureRateMonitor(_storage, period ?? TimeSpan.FromMinutes(1)));
+                if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var existing))
+                {
+                    if (existing is WindowsTcpFailureRateMonitor monitor && monitor.Period != asked)
+                        _storage.ReportError($"The TCP connection failure rate sensor was already added with a period of {monitor.Period}; the period {asked} of the second request is not applied.");
+
+                    return this;
+                }
+
+                return ToWindows(new WindowsTcpFailureRateMonitor(_storage, asked));
             }
         }
 
