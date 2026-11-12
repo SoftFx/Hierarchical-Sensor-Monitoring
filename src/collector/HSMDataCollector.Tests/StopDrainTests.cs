@@ -113,6 +113,9 @@ namespace HSMDataCollector.Tests
                 sensor.AddValue(4242);
 
                 Assert.True(await sender.WaitForParkedDataAsync(Timeout), "The value never reached the sender.");
+                // The package that is in flight is the one with the value: a value that waited
+                // in the queue behind another send would be delivered by any drain.
+                Assert.Contains(4242, sender.ParkedInts);
             }
             finally
             {
@@ -135,6 +138,9 @@ namespace HSMDataCollector.Tests
                 sensor.AddValue(4242);
 
                 Assert.True(await sender.WaitForParkedDataAsync(Timeout), "The value never reached the sender.");
+                // The package that is in flight is the one with the value: a value that waited
+                // in the queue behind another send would be delivered by any drain.
+                Assert.Contains(4242, sender.ParkedInts);
 
                 await collector.Stop();
             }
@@ -190,6 +196,7 @@ namespace HSMDataCollector.Tests
             private readonly object _lock = new object();
             private readonly List<KeyValuePair<SenderMode, SendKind>> _sends = new List<KeyValuePair<SenderMode, SendKind>>();
             private readonly List<int> _deliveredInts = new List<int>();
+            private readonly List<int> _parkedInts = new List<int>();
 
             private int _mode;
             private int _hungOnceUsed;
@@ -207,6 +214,16 @@ namespace HSMDataCollector.Tests
                 {
                     lock (_lock)
                         return _deliveredInts.ToList();
+                }
+            }
+
+            /// <summary>The int values of the data sends that waited in a hang.</summary>
+            internal List<int> ParkedInts
+            {
+                get
+                {
+                    lock (_lock)
+                        return _parkedInts.ToList();
                 }
             }
 
@@ -258,7 +275,12 @@ namespace HSMDataCollector.Tests
                 if (hangs)
                 {
                     if (kind == SendKind.Data)
+                    {
+                        lock (_lock)
+                            _parkedInts.AddRange(values.OfType<IntSensorValue>().Select(v => v.Value));
+
                         Interlocked.Increment(ref _parkedData);
+                    }
 
                     await Task.Delay(System.Threading.Timeout.Infinite, token).ConfigureAwait(false);
                 }
