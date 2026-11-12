@@ -261,9 +261,11 @@ there: the agent is the only place that can say what is wrong, and it must not f
   edit and the service to restart.
 - **While running** it checks 30 s after start and then every 5 min
   (`AgentRuntime::WaitForStopWatchingRetiredPort`, on the runtime's own thread in place of the plain
-  stop wait). The decision is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
-  `GET /api/sensors/testConnection` returns 200 under the config's scheme and certificate policy, 3 s
-  timeouts), asked lazily and in a fixed order:
+  stop wait). The verdict is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
+  `GET /api/sensors/testConnection` returns 200 under the config's scheme and certificate policy, 2 s
+  timeouts set on the request handle), asked lazily and in a fixed order. What to do with the verdict —
+  the confirmation, the next delay and the hourly throttling below — is the pure `NextRetiredPortStep`
+  (`retired_port.cpp`, unit-tested); the runtime only probes and carries the step out:
   1. the retired port answers → keep it. This covers a proxy-less server pinned to the old port
      (`Kestrel.Port`) and an operator's own port mapping; 443 is not even asked.
   2. the retired port is dead and 443 answers, **on two checks in a row** (the confirming one a
@@ -279,7 +281,12 @@ there: the agent is the only place that can say what is wrong, and it must not f
      failed send).
 - **Service only.** The move needs the config path the run was loaded from (`SetServiceConfigPath`,
   set by the service host). A `--console` run has none and only reports (an hourly Error with the value
-  to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not.
+  to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not. Its
+  start and "nothing answers" notices say so instead of promising a self-move.
+- **Two writers of config.json.** The sensor-group directive handler (collector thread) and the move
+  (runtime thread) both write `config.json` from a copy of `config_`, unsynchronised. They cannot
+  overlap: a directive arrives only in the response to a data POST, and the move happens only after the
+  configured port stopped answering on two checks in a row. The move site records this.
 - **Stopping.** The probes run on the runtime's thread between two waits for the stop signal. A stop
   that arrives during a probe waits for that probe only (2 s per WinHTTP phase; a refused connection
   measured ~4 s on a dual-stack `localhost`), and the second probe is skipped.
@@ -329,11 +336,14 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 19 cases — config parser + topCpu/update
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 20 cases — config parser + topCpu/update
   config + the sensor-group directive name↔field map + the interactive-launch message text,
   `agent_launch_hint_message_guides_the_operator` + the retired-port rules, `agent_retired_port_*`:
   which ports are retired, the verdict for every probe outcome including "no probe for a port that is
-  not retired", and that every notice names the fix) — run on every platform, registered in `ctest`.
+  not retired", that every notice names the fix (and that a `--console` run's notices promise no
+  self-move), and the watcher step: a move only on the second `SwitchToStandard` in a row, any other
+  verdict in between resets it, a console run never moves, failures are reported once per 12 checks)
+  — run on every platform, registered in `ctest`.
 - Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
     a redirected `%ProgramData%` seeded with the pre-#1279 state (data dir handing `Users` read down to

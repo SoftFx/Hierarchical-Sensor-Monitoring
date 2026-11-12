@@ -31,12 +31,57 @@ namespace hsm::agent
                                                    : RetiredPortVerdict::ServerUnreachable;
     }
 
-    std::string RetiredPortStartupNotice(int configured_port)
+    RetiredPortStep NextRetiredPortStep(RetiredPortWatchState& state, RetiredPortVerdict verdict, bool can_move)
+    {
+        state.repeats = (verdict == state.last_verdict) ? state.repeats + 1 : 0;
+        state.last_verdict = verdict;
+
+        RetiredPortStep step;
+        switch (verdict)
+        {
+        case RetiredPortVerdict::ServerUnreachable:
+            if (state.repeats % kRetiredPortNoticeEveryChecks == 0)
+                step.action = RetiredPortAction::ReportUnreachable;
+            break;
+
+        case RetiredPortVerdict::SwitchToStandard:
+        {
+            if (state.repeats == 0)
+            {
+                // First sighting: confirm soon, change nothing yet.
+                step.next_delay = kRetiredPortConfirmDelay;
+                break;
+            }
+            // Confirmed. Whatever cannot be done by the agent itself is reported from the
+            // confirming check on, hourly.
+            const bool notice_due = (state.repeats - 1) % kRetiredPortNoticeEveryChecks == 0;
+            if (can_move)
+            {
+                step.action = RetiredPortAction::Move;
+                step.failure_notice_due = notice_due;
+            }
+            else if (notice_due)
+            {
+                step.action = RetiredPortAction::ReportManualMove;
+            }
+            break;
+        }
+
+        case RetiredPortVerdict::NotRetired:
+        case RetiredPortVerdict::StillAnswers:
+            break;
+        }
+        return step;
+    }
+
+    std::string RetiredPortStartupNotice(int configured_port, bool can_move)
     {
         return Subject(configured_port) +
-               ". The agent keeps using it while the server answers there; once it stops answering and the server"
-               " answers on 443, the HSMAgent service moves to 443 by itself. To move now, set \"port\": 443 under \"server\""
-               " in config.json and restart the HSMAgent service.";
+               (can_move ? ". The agent keeps using it while the server answers there; once it stops answering and the"
+                           " server answers on 443, the HSMAgent service moves to 443 by itself. To move now, set"
+                           " \"port\": 443 under \"server\" in config.json and restart the HSMAgent service."
+                         : ". The agent keeps using it while the server answers there. A --console run never changes"
+                           " config.json: set \"port\": 443 under \"server\" in config.json and restart the agent.");
     }
 
     std::string RetiredPortSwitchNotice(int configured_port)
@@ -53,11 +98,13 @@ namespace hsm::agent
                " Set \"port\": 443 under \"server\" in config.json and restart the agent.";
     }
 
-    std::string RetiredPortUnreachableNotice(int configured_port)
+    std::string RetiredPortUnreachableNotice(int configured_port, bool can_move)
     {
         return Subject(configured_port) +
                " and the server answers neither there nor on 443, so nothing is being delivered. Check that the"
-               " server is up and that server.address in config.json is right; the HSMAgent service moves to"
-               " 443 by itself as soon as the server answers there.";
+               " server is up and that server.address in config.json is right" +
+               (can_move ? std::string("; the HSMAgent service moves to 443 by itself as soon as the server answers there.")
+                         : std::string("; a --console run never changes config.json, so set \"port\": 443 under"
+                                       " \"server\" there yourself once the server answers on 443."));
     }
 } // namespace hsm::agent

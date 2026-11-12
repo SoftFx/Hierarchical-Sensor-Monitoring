@@ -94,23 +94,11 @@ namespace hsm::agent
     void AgentRuntime::WaitForStopWatchingRetiredPort()
     {
 #ifdef _WIN32
-        // The first check waits for the collector's own first sends; later ones are spaced so that an
-        // agent stranded by a server upgrade is back within minutes, without probing a healthy server
-        // more than a few times an hour.
-        constexpr auto kFirstCheckDelay = std::chrono::seconds(30);
-        constexpr auto kCheckPeriod = std::chrono::minutes(5);
-        // "The retired port is dead and 443 answers" has to hold on two checks in a row before the
-        // config is rewritten: a server pinned to the old port that is merely restarting must not
-        // lose its agents to whatever else answers on 443 of that host. The move is one-way (443 is
-        // not a retired port, so nothing watches it afterwards).
-        constexpr auto kConfirmDelay = std::chrono::minutes(1);
-        // A state the agent cannot fix by itself is reported hourly, not on every check: the
-        // collector already logs every failed send.
-        constexpr int kNoticeEveryChecks = 12;
-
-        auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(kFirstCheckDelay);
-        RetiredPortVerdict last_verdict = RetiredPortVerdict::NotRetired;
-        int repeats = 0; // how many checks in a row have returned last_verdict, minus one
+        // The schedule, the confirmation and the throttling are decided by NextRetiredPortStep
+        // (retired_port.cpp, unit-tested); this loop runs the probes and carries out the step.
+        const bool can_move = !service_config_path_.empty();
+        RetiredPortWatchState state;
+        std::chrono::milliseconds delay = kRetiredPortFirstCheckDelay;
 
         for (;;)
         {
@@ -119,7 +107,6 @@ namespace hsm::agent
                 if (cv_.wait_for(lock, delay, [this] { return stop_requested_; }))
                     return;
             }
-            delay = std::chrono::duration_cast<std::chrono::milliseconds>(kCheckPeriod);
 
             const RetiredPortVerdict verdict = JudgeRetiredPort(config_.port, [this](int port) {
                 // A stop that arrived during the previous probe ends the check without another one.
@@ -128,40 +115,33 @@ namespace hsm::agent
             if (StopRequested())
                 return;
 
-            repeats = (verdict == last_verdict) ? repeats + 1 : 0;
-            last_verdict = verdict;
+            const RetiredPortStep step = NextRetiredPortStep(state, verdict, can_move);
+            delay = step.next_delay;
 
-            if (verdict == RetiredPortVerdict::ServerUnreachable)
+            switch (step.action)
             {
-                if (repeats % kNoticeEveryChecks == 0)
-                    Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port));
+            case RetiredPortAction::Wait:
                 continue;
-            }
-
-            if (verdict != RetiredPortVerdict::SwitchToStandard)
+            case RetiredPortAction::ReportUnreachable:
+                Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port, can_move));
                 continue;
-
-            if (repeats == 0)
-            {
-                delay = std::chrono::duration_cast<std::chrono::milliseconds>(kConfirmDelay);
-                continue;
-            }
-
-            // From here on the agent either moves or says what to do by hand; the latter is
-            // throttled like every other state it cannot fix (first at the confirming check).
-            const bool notice_due = (repeats - 1) % kNoticeEveryChecks == 0;
-
-            if (service_config_path_.empty())
-            {
+            case RetiredPortAction::ReportManualMove:
                 // A foreground run: report, do not touch the file or the service.
-                if (notice_due)
-                    Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
+                Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
                 continue;
+            case RetiredPortAction::Move:
+                break;
             }
 
             // Same persist-then-restart sequence as a sensor-group directive: the collector's endpoint
             // is built once at Start, so the new port needs a fresh process, and config_ itself is
             // left alone (UpdateChecker reads it on its own thread).
+            //
+            // The directive handler (collector thread) also writes config.json from a copy of
+            // config_, and nothing serializes the two writers. They cannot overlap: a directive
+            // arrives only in the response to a data POST, and the move happens only after the
+            // configured port stopped answering on two checks in a row, so no POST through it, and
+            // no directive, can be in flight. Revisit this if a directive can ever arrive another way.
             AgentConfig updated = config_;
             updated.port = kStandardServerPort;
 
@@ -178,7 +158,7 @@ namespace hsm::agent
             }
             if (!saved)
             {
-                if (notice_due)
+                if (step.failure_notice_due)
                     Log(hc::LogLevel::Error,
                         RetiredPortManualMoveNotice(config_.port) +
                             " (The agent could not rewrite config.json itself: " + cfg_err + ")");
@@ -187,7 +167,7 @@ namespace hsm::agent
 
             if (!SpawnRestartService())
             {
-                if (notice_due)
+                if (step.failure_notice_due)
                     Log(hc::LogLevel::Error,
                         "config: server.port " + std::to_string(config_.port) +
                             " no longer answers; config.json now says \"port\": 443, but the restart helper could"
@@ -429,7 +409,7 @@ namespace hsm::agent
             // "nothing answers" is Error (it reaches the Windows Event Log).
             const bool retired_port = IsRetiredServerPort(config_.port);
             if (retired_port)
-                Log(hc::LogLevel::Info, RetiredPortStartupNotice(config_.port));
+                Log(hc::LogLevel::Info, RetiredPortStartupNotice(config_.port, !service_config_path_.empty()));
 
             collector.Start();
 

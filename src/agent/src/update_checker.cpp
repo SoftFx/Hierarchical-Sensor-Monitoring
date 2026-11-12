@@ -223,10 +223,12 @@ namespace hsm::agent
     };
 
     // Do a GET request; return the body in `body_out` and optionally read a named response header.
-    // Returns the HTTP status code, or 0 on transport failure.
+    // Returns the HTTP status code, or 0 on transport failure. A positive `timeout_ms` replaces
+    // WinHTTP's default timeouts (resolve, connect, send, receive) for this request.
     static int HttpGet(const WinHttpSession& sess, const std::wstring& path, bool https,
                        const std::wstring& extra_headers, std::vector<char>& body_out,
-                       std::wstring* resp_header_name = nullptr, std::string* resp_header_out = nullptr)
+                       std::wstring* resp_header_name = nullptr, std::string* resp_header_out = nullptr,
+                       int timeout_ms = 0)
     {
         if (!sess.Valid())
             return 0;
@@ -238,6 +240,11 @@ namespace hsm::agent
 
         if (!extra_headers.empty())
             WinHttpAddRequestHeaders(req, extra_headers.c_str(), static_cast<DWORD>(-1L), WINHTTP_ADDREQ_FLAG_ADD);
+
+        // Set on the request handle itself: it is the handle WinHttpSendRequest/ReceiveResponse use,
+        // so the values apply regardless of what the session or connect handle carries.
+        if (timeout_ms > 0)
+            WinHttpSetTimeouts(req, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
 
         // WINHTTP_OPTION_SECURITY_FLAGS must be set on the request handle, not the session.
         if (https && sess.allow_untrusted)
@@ -375,10 +382,9 @@ namespace hsm::agent
         WinHttpSession sess(url.host, port, url.https, config.allow_untrusted_certificate);
         if (!sess.Valid())
             return false;
-        WinHttpSetTimeouts(sess.session, kProbeTimeoutMs, kProbeTimeoutMs, kProbeTimeoutMs, kProbeTimeoutMs);
 
         std::vector<char> body;
-        return HttpGet(sess, L"/api/sensors/testConnection", url.https, L"", body) == 200;
+        return HttpGet(sess, L"/api/sensors/testConnection", url.https, L"", body, nullptr, nullptr, kProbeTimeoutMs) == 200;
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------

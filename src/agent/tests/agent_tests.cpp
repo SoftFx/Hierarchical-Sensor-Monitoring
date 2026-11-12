@@ -23,6 +23,7 @@
 #include <vector>
 #endif
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -371,11 +372,17 @@ namespace
     {
         const auto contains = [](const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; };
 
-        const std::string startup = hsm::agent::RetiredPortStartupNotice(44330);
+        const std::string startup = hsm::agent::RetiredPortStartupNotice(44330, true);
         Check(contains(startup, "server.port 44330"), "startup notice names the configured port");
         Check(contains(startup, "443"), "startup notice names the port to use");
         Check(contains(startup, "config.json"), "startup notice names the file to edit");
         Check(contains(startup, "HSMAgent"), "startup notice names the service to restart");
+        Check(contains(startup, "by itself"), "service startup notice promises the self-move");
+
+        // A --console run never moves itself, so its notices must not promise that it will.
+        const std::string console_startup = hsm::agent::RetiredPortStartupNotice(44330, false);
+        Check(contains(console_startup, "\"port\": 443"), "console startup notice names the value to set");
+        Check(!contains(console_startup, "by itself"), "console startup notice promises no self-move");
 
         const std::string moved = hsm::agent::RetiredPortSwitchNotice(44333);
         Check(contains(moved, "server.port 44333"), "switch notice names the old port");
@@ -387,10 +394,113 @@ namespace
         Check(contains(manual, "\"port\": 443"), "manual-move notice names the value to set");
         Check(contains(manual, "config.json"), "manual-move notice names the file to edit");
 
-        const std::string unreachable = hsm::agent::RetiredPortUnreachableNotice(44330);
+        const std::string unreachable = hsm::agent::RetiredPortUnreachableNotice(44330, true);
         Check(contains(unreachable, "server.port 44330"), "unreachable notice names the configured port");
         Check(contains(unreachable, "443"), "unreachable notice names the port that was also tried");
         Check(contains(unreachable, "server.address"), "unreachable notice says what to check");
+        Check(contains(unreachable, "by itself"), "service unreachable notice promises the self-move");
+
+        const std::string console_unreachable = hsm::agent::RetiredPortUnreachableNotice(44330, false);
+        Check(contains(console_unreachable, "server.address"), "console unreachable notice says what to check");
+        Check(contains(console_unreachable, "\"port\": 443"), "console unreachable notice names the value to set");
+        Check(!contains(console_unreachable, "by itself"), "console unreachable notice promises no self-move");
+    }
+
+    // The watcher's step function decides when config.json gets rewritten; an off-by-one here would
+    // move an agent after a single transient failure, or flood the log.
+    void RetiredPortWatcherConfirmsAndThrottles()
+    {
+        using hsm::agent::NextRetiredPortStep;
+        using hsm::agent::RetiredPortAction;
+        using hsm::agent::RetiredPortStep;
+        using hsm::agent::RetiredPortVerdict;
+        using hsm::agent::RetiredPortWatchState;
+        using hsm::agent::kRetiredPortCheckPeriod;
+        using hsm::agent::kRetiredPortConfirmDelay;
+        using hsm::agent::kRetiredPortNoticeEveryChecks;
+
+        CheckEq(kRetiredPortNoticeEveryChecks, 12, "failures are reported once per 12 checks");
+        Check(kRetiredPortCheckPeriod * kRetiredPortNoticeEveryChecks == std::chrono::hours(1), "12 checks = one hour");
+        Check(kRetiredPortConfirmDelay < kRetiredPortCheckPeriod, "the confirming check comes sooner than the next regular one");
+
+        // A service run: the first SwitchToStandard only schedules a confirming check, the second moves.
+        {
+            RetiredPortWatchState state;
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "first sighting does not move");
+            Check(step.next_delay == kRetiredPortConfirmDelay, "first sighting is confirmed a minute later");
+
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Move, "confirmed sighting moves");
+            Check(step.failure_notice_due, "a failed move is reported at the confirming check");
+            Check(step.next_delay == kRetiredPortCheckPeriod, "after the confirming check the regular period applies");
+
+            // The move failed (config not written / helper not started): retried at every check,
+            // reported once an hour.
+            int notices = 0;
+            for (int i = 0; i < kRetiredPortNoticeEveryChecks; ++i)
+            {
+                step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+                Check(step.action == RetiredPortAction::Move, "a failed move is retried at every check");
+                notices += step.failure_notice_due ? 1 : 0;
+            }
+            CheckEq(notices, 1, "a failed move is reported once in the next 12 checks");
+            Check(step.failure_notice_due, "the hourly report falls on the 12th retry");
+        }
+
+        // A check in between that sees the retired port answer again resets the confirmation.
+        {
+            RetiredPortWatchState state;
+            NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::StillAnswers, true);
+            Check(step.action == RetiredPortAction::Wait, "a retired port that answers is left alone");
+            Check(step.next_delay == kRetiredPortCheckPeriod, "a port that answers is checked at the regular period");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "a sighting after an interruption needs a new confirmation");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::ServerUnreachable, true);
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, true);
+            Check(step.action == RetiredPortAction::Wait, "an unreachable check in between also resets it");
+        }
+
+        // A console run never moves: it reports at the confirming check, then once an hour.
+        {
+            RetiredPortWatchState state;
+            RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+            Check(step.action == RetiredPortAction::Wait, "console: first sighting says nothing yet");
+            step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+            Check(step.action == RetiredPortAction::ReportManualMove, "console: the confirming check reports");
+            int reports = 0;
+            for (int i = 0; i < kRetiredPortNoticeEveryChecks; ++i)
+            {
+                step = NextRetiredPortStep(state, RetiredPortVerdict::SwitchToStandard, false);
+                Check(step.action != RetiredPortAction::Move, "console never moves");
+                reports += step.action == RetiredPortAction::ReportManualMove ? 1 : 0;
+            }
+            CheckEq(reports, 1, "console reports once in the next 12 checks");
+        }
+
+        // Nothing answers: reported at once, then once an hour; never a move.
+        {
+            RetiredPortWatchState state;
+            int reports = 0;
+            for (int i = 0; i < 2 * kRetiredPortNoticeEveryChecks; ++i)
+            {
+                const RetiredPortStep step = NextRetiredPortStep(state, RetiredPortVerdict::ServerUnreachable, true);
+                Check(step.action != RetiredPortAction::Move, "an unreachable server never causes a move");
+                if (i == 0)
+                    Check(step.action == RetiredPortAction::ReportUnreachable, "unreachable is reported at the first check");
+                reports += step.action == RetiredPortAction::ReportUnreachable ? 1 : 0;
+            }
+            CheckEq(reports, 2, "unreachable is reported twice in 24 checks");
+        }
+
+        // A port that keeps answering is never acted on.
+        {
+            RetiredPortWatchState state;
+            for (int i = 0; i < 2 * kRetiredPortNoticeEveryChecks; ++i)
+                Check(NextRetiredPortStep(state, RetiredPortVerdict::StillAnswers, true).action == RetiredPortAction::Wait,
+                      "an answering retired port is never acted on");
+        }
     }
 
 #ifdef _WIN32
@@ -938,6 +1048,7 @@ namespace
             { "agent_retired_port_names_only_the_old_two", RetiredPortNamesOnlyTheOldTwo },
             { "agent_retired_port_verdict_follows_the_probes", RetiredPortVerdictFollowsTheProbes },
             { "agent_retired_port_notices_name_the_fix", RetiredPortNoticesNameTheFix },
+            { "agent_retired_port_watcher_confirms_and_throttles", RetiredPortWatcherConfirmsAndThrottles },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
