@@ -75,12 +75,19 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     ["product"] = ["The destination must be a root product; give sub-nodes as part of `path` or `node`."],
                 });
 
+            // Admission first: the same-name check below must see only sensors
+            // the caller may move, or it would name hidden sensors and let one
+            // of them fail the whole batch (#1721 review).
+            var admitted = request.Sensors
+                .Select(id => (Id: id, Admission: Admit(id, user, out var sensor), Sensor: sensor))
+                .ToList();
+
             // Two sensors bound for one path: the second would conflict — or,
             // under merge, absorb and delete the first, which the caller asked
             // to keep. Refused before anything moves.
             if (request.Node is not null)
             {
-                var clash = request.Sensors.Select(_cache.GetSensor).Where(s => s is not null)
+                var clash = admitted.Where(a => a.Admission is null).Select(a => a.Sensor)
                     .GroupBy(s => s.DisplayName, StringComparer.Ordinal)
                     .FirstOrDefault(g => g.Count() > 1);
 
@@ -97,10 +104,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             var results = new List<SensorMoveItemDto>(request.Sensors.Count);
             var previews = new List<SensorMovePreviewItemDto>(request.Sensors.Count);
 
-            foreach (var sensorId in request.Sensors)
+            foreach (var (sensorId, admission, sensor) in admitted)
             {
-                var admission = Admit(sensorId, user, out var sensor);
-
                 if (admission is not null)
                 {
                     results.Add(new SensorMoveItemDto { SensorId = sensorId, Outcome = admission, Error = ErrorOf(admission) });
@@ -231,6 +236,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             if ((request.Path is null) == (request.Node is null))
                 errors["path"] = ["Give exactly one of `path` (the full new path of one sensor) and `node` (the destination node; sensors keep their names)."];
+            else if (request.Path is not null && string.IsNullOrWhiteSpace(request.Path))
+                errors["path"] = ["`path` must name the sensor's new path; use `node` with \"\" to move into the product root."];
             else if (request.Path is not null && request.Sensors is { Count: > 1 })
                 errors["path"] = ["`path` moves exactly one sensor; use `node` to move several."];
 

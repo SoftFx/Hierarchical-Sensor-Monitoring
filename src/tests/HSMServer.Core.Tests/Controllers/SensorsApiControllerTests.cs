@@ -8,6 +8,7 @@ using HSMCommon.Model;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
@@ -904,6 +905,45 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(404, StatusCodeOf(result));
             Assert.Equal(ManagementApiErrors.NotFoundMessage, ErrorOf(result).Message);
+        }
+
+        // === Sensor move (#1721): the REST mapping of the move engine ===
+
+        [Fact]
+        public async Task MoveSensors_DryRunHeader_Answers200WithThePreview_AndMovesNothing()
+        {
+            var sensor = AddSensor(_productA, "cpu", "load");
+            _cache.Setup(c => c.GetProduct(_productB.Id)).Returns(_productB);
+            _cache.Setup(c => c.PreviewMove(sensor.Id, _productB.Id, "x/cpu", SensorMoveConflict.Fail))
+                .Returns(new SensorMovePreview(SensorMoveOutcome.Moved) { OldPath = "alpha/cpu", NewPath = "beta/x/cpu" });
+
+            var controller = CreateController();
+            controller.HttpContext.Request.Headers[ChangeSetHeaders.DryRun] = "true";
+
+            var result = await controller.MoveSensors(new SensorMoveRequestDto { Sensors = [sensor.Id], Product = _productB.Id, Path = "x/cpu" });
+
+            var preview = Assert.IsType<SensorMovePreviewDto>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.True(preview.DryRun);
+            Assert.Equal("beta/x/cpu", Assert.Single(preview.Sensors).NewPath);
+            _cache.Verify(c => c.MoveSensorAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
+                It.IsAny<SensorMoveConflict>(), It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task RemoveSensorAlias_MapsTheEngineOutcomes()
+        {
+            var sensor = AddSensor(_productA, "cpu", "load");
+            _cache.Setup(c => c.RemoveSensorAliasAsync(sensor.Id, _productA.Id, "old/cpu", It.IsAny<InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(true);
+
+            Assert.Equal(204, StatusCodeOf(await CreateController().RemoveSensorAlias(sensor.Id, _productA.Id, "old/cpu")));
+            Assert.Equal(404, StatusCodeOf(await CreateController().RemoveSensorAlias(sensor.Id, _productA.Id, "no/such")));
+            Assert.Equal(422, StatusCodeOf(await CreateController().RemoveSensorAlias(sensor.Id, _productA.Id, " ")));
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            Assert.Equal(403, StatusCodeOf(await CreateController().RemoveSensorAlias(sensor.Id, _productA.Id, "old/cpu")));
         }
 
         [Fact]

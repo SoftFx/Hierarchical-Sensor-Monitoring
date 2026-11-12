@@ -171,6 +171,11 @@ namespace HSMServer.Controllers
         /// conflicts, nodes to create, alert templates detached/applied,
         /// inherited settings that change — and applies nothing.
         /// </summary>
+        /// <remarks>The dry run shares status 200 with the real move but not its
+        /// body: with <c>X-HSM-Dry-Run: true</c> the 200 body is a
+        /// <c>SensorMovePreviewDto</c> (<c>dryRun: true</c>, one prediction per
+        /// sensor in <c>sensors</c>), not the <c>SensorMoveResponseDto</c>
+        /// declared below.</remarks>
         [HttpPost("move")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(SensorMoveResponseDto), StatusCodes.Status200OK)]

@@ -127,6 +127,24 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task Node_SameNameCheck_SeesOnlySensorsTheOwnerMayMove()
+        {
+            var visible = AddSensor("CPU");
+            var hidden = AddSensor("CPU");
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Kind == ApiTokenResourceKind.Sensor && r.Id == hidden.Id)))
+                .Returns(ApiTokenAuthorization.NotFound);
+
+            var result = await Service().MoveSensorsAsync(Request([visible.Id, hidden.Id], node: "z"), Principal());
+
+            // No 422 naming the hidden sensor: it is reported like any unknown id.
+            Assert.True(result.Success);
+            Assert.Equal(["moved", "notFound"], result.Value.Results.Select(r => r.Outcome));
+            Assert.Equal(visible.Id, Assert.Single(_moves).SensorId);
+        }
+
+        [Fact]
         public async Task MergeCounts_TravelWhenTheMoveAfterAMergeFailed()
         {
             var sensor = AddSensor("s");
@@ -170,6 +188,8 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         [InlineData(null, null, "path")]
         [InlineData("x", "y", "path")]
         [InlineData("x", null, "onConflict", "sometimes")]
+        [InlineData("", null, "path")]
+        [InlineData("  ", null, "path")]
         public async Task InvalidRequests_Answer422_AndMoveNothing(string path, string node, string field, string onConflict = null)
         {
             var sensor = AddSensor("s");
