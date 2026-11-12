@@ -72,6 +72,7 @@ namespace HSMServer.SensorApi
             {
                 Update = request.Convert(Guid.Empty, info.Key.DisplayName),
                 Type = request.SensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
+                TypeIsExplicit = request.SensorType is not null,
             };
 
             return _cache.AddOrUpdateSensorAsync(coreRequest);
