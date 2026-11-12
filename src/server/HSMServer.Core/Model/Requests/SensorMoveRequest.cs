@@ -87,6 +87,10 @@ namespace HSMServer.Core.Model.Requests
         // Set when step 1 found the types different (a re-check: the occupant
         // may have been replaced since the caller looked).
         public SensorMoveOutcome? Conflict { get; set; }
+
+        // Set when the occupant no longer held the path: nothing to merge,
+        // the move goes ahead as a plain one.
+        public bool Vanished { get; set; }
     }
 
 
@@ -116,6 +120,10 @@ namespace HSMServer.Core.Model.Requests
         public int Hops { get; init; }
 
         public bool Misrouted { get; set; }
+
+        // Persist the sensor's aliases even when nothing changed — after a
+        // merge adopted aliases on another queue (#1720).
+        public bool ForcePersist { get; init; }
 
         public Guid? RemoveProductId { get; init; }
 

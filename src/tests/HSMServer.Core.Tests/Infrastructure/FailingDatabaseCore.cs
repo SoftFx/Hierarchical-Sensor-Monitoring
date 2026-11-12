@@ -217,7 +217,14 @@ namespace HSMServer.Core.Tests.Infrastructure
         public void AddSensorValue(Guid sensorId, BaseValue value) => _inner.AddSensorValue(sensorId, value);
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
 
-        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId) => _inner.MergeSensorValues(fromSensorId, intoSensorId);
+        // Sensor-move merge (#1720): set to make the history copy throw, as a
+        // failed write inside it does.
+        internal Func<Guid, bool> FailMergeFrom { get; set; }
+
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId) =>
+            FailMergeFrom?.Invoke(fromSensorId) == true
+                ? throw new System.IO.IOException("injected merge write failure")
+                : _inner.MergeSensorValues(fromSensorId, intoSensorId);
         public byte[] GetLatestValue(Guid sensorId, long to) => _inner.GetLatestValue(sensorId, to);
         public byte[] GetFirstValue(Guid sensorId) => _inner.GetFirstValue(sensorId);
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);

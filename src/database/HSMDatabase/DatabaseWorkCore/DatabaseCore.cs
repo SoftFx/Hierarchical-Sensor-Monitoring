@@ -239,7 +239,8 @@ namespace HSMDatabase.DatabaseWorkCore
         // memory stays constant whatever the history size; the iterators see
         // the partition as it was when they opened, so the copies written
         // meanwhile are never read back. Not atomic: a re-run after a crash
-        // counts the rows the first run copied as collisions.
+        // counts the rows the first run copied as collisions. A failed write
+        // throws: the merge then keeps the source sensor.
         public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
         {
             var fromStart = new DbKey(fromSensorId, DateTime.MinValue.Ticks).ToBytes();
@@ -251,27 +252,41 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in _sensorValuesDatabases)
             {
-                using var into = db.GetKeysValuesTo(intoStart, intoEnd)
-                    .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
-                    .GetEnumerator();
+                IEnumerator<long> into = null;
+                var hasInto = false;
 
-                var hasInto = into.MoveNext();
-
-                foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
+                try
                 {
-                    var tick = DbKey.FromBytes(keyBytes).Timestamp;
-
-                    while (hasInto && into.Current > tick)
-                        hasInto = into.MoveNext();
-
-                    if (hasInto && into.Current == tick)
+                    foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
                     {
-                        collisions++;
-                        continue;
-                    }
+                        // Opened on the first source row: most partitions hold none.
+                        if (into is null)
+                        {
+                            into = db.GetKeysValuesTo(intoStart, intoEnd)
+                                .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
+                                .GetEnumerator();
+                            hasInto = into.MoveNext();
+                        }
 
-                    db.PutSensorValue(new DbKey(intoSensorId, tick).ToBytes(), valueBytes);
-                    copied++;
+                        var tick = DbKey.FromBytes(keyBytes).Timestamp;
+
+                        while (hasInto && into.Current > tick)
+                            hasInto = into.MoveNext();
+
+                        if (hasInto && into.Current == tick)
+                        {
+                            collisions++;
+                            continue;
+                        }
+
+                        // Throws on failure: the caller deletes the source next.
+                        db.PutSensorValueOrThrow(new DbKey(intoSensorId, tick).ToBytes(), valueBytes);
+                        copied++;
+                    }
+                }
+                finally
+                {
+                    into?.Dispose();
                 }
             }
 

@@ -27,6 +27,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private readonly SensorMoveFixture _fixture;
 
+        private FailingDatabaseCore _failing;
+
 
         public SensorMergeTests(SensorMoveFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
@@ -136,13 +138,43 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // t3 hops to product B's queue; its row is written after the cache
             // update, so wait on the stored history, not on LastValue.
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while ((await ReadHistoryAsync(moved.Id)).Count < 5 && DateTime.UtcNow < deadline)
-                await Task.Delay(25);
-
-            Assert.Equal(5, (await ReadHistoryAsync(moved.Id)).Count);
+            await TestWait.UntilAsync(async () => (await ReadHistoryAsync(moved.Id)).Count == 5,
+                "every path's value was stored in the surviving sensor");
             Assert.Equal(t3, moved.LastValue.Time);
             Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductB, $"{root}/before", out _));
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor merge")]
+        public async Task Merge_WhenTheCopyFails_KeepsTheOccupantAndTheSensor()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddMinutes(-30);
+
+            var moved = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/a", start);
+            var occupant = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/b", start.AddMinutes(1), start.AddMinutes(2));
+
+            _failing.FailMergeFrom = id => id == occupant.Id;
+            SensorMoveResult result;
+            try
+            {
+                result = await _valuesCache.MoveSensorAsync(moved.Id, _fixture.ProductA, $"{root}/b", SensorMoveConflict.Merge);
+            }
+            finally
+            {
+                _failing.FailMergeFrom = null;
+            }
+
+            Assert.Equal(SensorMoveOutcome.Failed, result.Outcome);
+            Assert.Contains("injected", result.Error);
+
+            // Nothing moved, nothing lost.
+            Assert.Same(occupant, _valuesCache.GetSensor(occupant.Id));
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/b", out var stillOccupant));
+            Assert.Same(occupant, stillOccupant);
+            Assert.Equal(2, (await ReadHistoryAsync(occupant.Id)).Count);
+            Assert.Equal($"{root}/a", moved.Path);
+            Assert.Empty(moved.Aliases);
         }
 
         [Fact]
@@ -158,6 +190,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Null(result.MergedSensorId);
         }
 
+
+        protected override HSMServer.Core.DataLayer.IDatabaseCore WrapDatabase(HSMServer.Core.DataLayer.IDatabaseCore inner) =>
+            _failing = new FailingDatabaseCore(inner, _ => false);
 
         private static string Unique() => $"m{Guid.NewGuid():N}"[..12];
 

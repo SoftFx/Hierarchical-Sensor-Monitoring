@@ -9,6 +9,9 @@ namespace HSMDatabase.AccessManager
 
         void PutSensorValue(byte[] key, byte[] value);
 
+        /// <summary>Like <see cref="PutSensorValue"/>, but a failed write throws instead of being logged and swallowed.</summary>
+        void PutSensorValueOrThrow(byte[] key, byte[] value);
+
         void RemoveSensorValues(byte[] from, byte[] to);
 
         byte[] Get(byte[] key, byte[] sensorId);
