@@ -1,7 +1,7 @@
 # Initiative: Collector session — a persistent WebSocket connection on 443
 
 > Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
-> Status: **design, owner decisions recorded 2026-11-10** (§ Owner Decisions). Transport choice: [ADR-0017](../decisions/0017-collector-session-websocket.md). Implemented so far: step 1 (PR #1663) and step 2 (PR #1665), both merged, and step 4, the native session transport (#1668). Step 4 came before step 3 by the owner's choice: the first collector to try a session on a real server is the Linux probe, which is native. The managed collector has no session yet.
+> Status: **design, owner decisions recorded 2026-11-10** (§ Owner Decisions). Transport choice: [ADR-0017](../decisions/0017-collector-session-websocket.md). Implemented so far: step 1 (PR #1663) and step 2 (PR #1665), both merged; step 4, the native session transport (#1668); and step 3, the managed session transport (managed 3.9.0) with the session conformance scenarios in both drivers (§ Step 3 as built). Step 4 came before step 3 by the owner's choice: the first collector to try a session on a real server is the Linux probe, which is native.
 
 ## Problem
 
