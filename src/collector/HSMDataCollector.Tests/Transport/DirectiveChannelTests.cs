@@ -78,6 +78,35 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        [Theory]
+        [InlineData("Authorization", "Bearer abc")]
+        [InlineData("User-Agent", "probe/1.0")]
+        public async Task Extra_request_header_reaches_the_server_as_it_was_set(string name, string value)
+        {
+            using (var server = new FakeHsmServer())
+            {
+                var options = OptionsFor(server);
+                options.ExtraRequestHeaders[name] = value;
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sensor = collector.CreateIntSensor("directive/as-set");
+                    await collector.Start();
+
+                    sensor.AddValue(5);
+
+                    Assert.True(await WaitForAsync(() => server.DataRequests.Any(r => r.Body.Contains("directive/as-set"))), "The value never arrived.");
+
+                    await collector.Stop();
+                }
+
+                var request = server.DataRequests.First(r => r.Body.Contains("directive/as-set"));
+
+                Assert.True(request.Headers.TryGetValue(name, out var sent), $"The value request carries no {name}.");
+                Assert.Equal(value, sent);
+            }
+        }
+
         [Fact]
         public async Task Directives_of_a_value_response_are_received_and_an_unknown_one_is_noted_once()
         {
@@ -136,6 +165,10 @@ namespace HSMDataCollector.Tests.Transport
         [InlineData("X-Control", "a\u0001b")]
         [InlineData("Content-Language", "en")]
         [InlineData("Expires", "0")]
+        // The .NET Framework handler replaces a hand-set Cookie with its own (empty) cookie
+        // container, so the header would be sent on net6.0 and lost on net472.
+        [InlineData("Cookie", "route=a")]
+        [InlineData("cookie2", "$Version=1")]
         public void Extra_request_header_the_collector_cannot_send_is_refused_at_construction(string name, string value)
         {
             var options = new CollectorOptions
