@@ -20,6 +20,10 @@ namespace HSMDataCollector.Client.HttpsClient
 
         protected abstract DelayBackoffType DelayStrategy { get; }
 
+        /// <summary>
+        /// How many times one send repeats a failed request before it returns. Zero means a
+        /// send is a single attempt and the queue alone decides when to try again.
+        /// </summary>
         protected abstract int MaxRequestAttempts { get; }
 
         protected int _timeout = 1000;
@@ -31,6 +35,12 @@ namespace HSMDataCollector.Client.HttpsClient
             _endpoints = endpoints;
             _logger = logger;
             _client = client;
+
+            if (MaxRequestAttempts <= 0)
+            {
+                _pipeline = ResiliencePipeline<HttpResponseMessage>.Empty;
+                return;
+            }
 
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
@@ -60,14 +70,12 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract string GetUri(object rawData);
 
 
-        // Retry predicate (#1096). The default Polly pipeline only retried on EXCEPTIONS, so a
-        // returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
-        // was dropped (silent loss). We now also retry server-side 5xx — but ONLY on the bounded
-        // pipelines (data/priority/file, MaxRetryAttempts = 10). The command pipeline retries
-        // unboundedly (for connection failures while the server restarts); applying result-retry
-        // there would let a persistent 5xx hang a command send forever, so commands stay
-        // exceptions-only and rely on the per-sensor error dictionary in the response. Client 4xx
-        // are permanent (bad payload/auth) and are never retried.
+        // Retry predicate of the pipelines that repeat inside a send (data/priority/file,
+        // MaxRetryAttempts = 10; #1096). The default Polly pipeline only retried on EXCEPTIONS, so
+        // a returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
+        // was dropped (silent loss). A server-side 5xx is retried too. Client 4xx are permanent
+        // (bad payload/auth) and are never retried. The command handler has no in-send retry at
+        // all (#1659 A3), so this never runs for it.
         private ValueTask<bool> ShouldRetry(RetryPredicateArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Exception != null)
@@ -76,7 +84,7 @@ namespace HSMDataCollector.Client.HttpsClient
             var response = args.Outcome.Result;
             var isServerError = response != null && (int)response.StatusCode >= 500;
 
-            return new ValueTask<bool>(isServerError && MaxRequestAttempts != int.MaxValue);
+            return new ValueTask<bool>(isServerError);
         }
 
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
@@ -143,7 +151,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
         private void LogSendFailure(Exception ex, HttpRequest<T> request)
         {
-            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts + 1}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
         }
 
 

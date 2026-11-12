@@ -2719,8 +2719,8 @@ namespace
         //
         // The outcome tells the caller whether to try again. The managed command queue re-enqueues
         // a package whose send failed and re-sends it after PackageCollectPeriod
-        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); its Polly pipeline
-        // only adds in-send retries for exceptions (BaseHandlers.ShouldRetry, #1096). Native retries
+        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); a command send does
+        // not repeat inside itself (managed 3.6.3, #1659 A3). Native retries
         // on the worker's cycle, which is that same period: a transport failure (no HTTP response)
         // and a 5xx (a server restarting behind its proxy answers 502/503) are retried. A 4xx is
         // final, in managed too since 3.6.2 (#1659 A2): a rejected payload or key never succeeds

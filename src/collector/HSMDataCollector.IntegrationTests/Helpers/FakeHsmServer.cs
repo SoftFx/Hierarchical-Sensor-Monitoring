@@ -31,6 +31,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         // Command POSTs (/commands, /addOrUpdate) to fail with 503 before the first success.
         private int _failCommandRequests;
 
+        // Command POSTs whose connection is dropped without any response.
+        private int _abortCommandRequests;
+
         // Statuses scripted for the next command POSTs, one per request, in order.
         private readonly ConcurrentQueue<HttpStatusCode> _scriptedCommandStatuses = new ConcurrentQueue<HttpStatusCode>();
 
@@ -61,6 +64,11 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         /// <summary>The next command POST (/commands or /addOrUpdate) answers
         /// <paramref name="status"/>; it takes precedence over <see cref="FailNextCommandRequests"/>.</summary>
         public void AnswerNextCommandRequest(HttpStatusCode status) => _scriptedCommandStatuses.Enqueue(status);
+
+        /// <summary>The next <paramref name="count"/> command POSTs get no answer at all: the
+        /// connection is dropped, which the collector sees as a failed transport, not a status.
+        /// Such a request is captured with <see cref="CapturedRequest.Answer"/> 0.</summary>
+        public void AbortNextCommandRequests(int count) => Interlocked.Exchange(ref _abortCommandRequests, count);
 
         public IEnumerable<CapturedRequest> CommandRequests =>
             Requests.Where(r => r.Method == "POST"
@@ -110,6 +118,18 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                          && !isCommand
                          && !path.EndsWith("/testConnection", StringComparison.Ordinal);
 
+            if (isCommand)
+            {
+                if (Interlocked.Decrement(ref _abortCommandRequests) >= 0)
+                {
+                    _requests.Enqueue(new CapturedRequest(request.HttpMethod, path, request.Headers["Key"], request.Headers["ClientName"], body, 0));
+                    context.Response.Abort();
+                    return;
+                }
+
+                Interlocked.Increment(ref _abortCommandRequests); // floor the counter at 0
+            }
+
             var statusCode = HttpStatusCode.OK;
             if (isCommand && _scriptedCommandStatuses.TryDequeue(out var scripted))
                 statusCode = scripted;
@@ -133,7 +153,18 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             try
             {
                 context.Response.StatusCode = (int)statusCode;
-                context.Response.Close();
+
+                // The real /commands route answers the dictionary of per-path errors, empty when
+                // every command was accepted, and the collector reads it: an empty body is a
+                // failed send to the command handler.
+                if (isCommand && statusCode == HttpStatusCode.OK)
+                {
+                    var accepted = System.Text.Encoding.UTF8.GetBytes("{}");
+                    context.Response.ContentType = "application/json";
+                    context.Response.Close(accepted, willBlock: true);
+                }
+                else
+                    context.Response.Close();
             }
             catch (HttpListenerException)
             {
