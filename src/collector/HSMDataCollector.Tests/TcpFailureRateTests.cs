@@ -210,6 +210,60 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Monitor_started_from_two_threads_at_once_leaves_no_loop_behind_its_stop()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            using (var collector = CreateCollector(new RateRecordingSender()))
+            {
+                var storage = (SensorsStorage)typeof(DataCollector)
+                    .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(collector);
+
+                // The two starts of a monitor added while the collector is starting come from
+                // two threads. Many rounds: the window in which one start could miss the token
+                // source of the other is a few instructions wide.
+                for (var round = 0; round < 200; round++)
+                {
+                    long reads = 0;
+
+                    var monitor = new WindowsTcpFailureRateMonitor(storage, TimeSpan.FromMilliseconds(1),
+                        readV4: () => new FamilyReading((ulong)Interlocked.Increment(ref reads)),
+                        readV6: () => FamilyReading.Unreadable);
+
+                    using (var gate = new Barrier(2))
+                    {
+                        var starts = new[]
+                        {
+                            Task.Run(() => { gate.SignalAndWait(); return monitor.StartAsync().AsTask(); }),
+                            Task.Run(() => { gate.SignalAndWait(); return monitor.StartAsync().AsTask(); }),
+                        };
+
+                        await Task.WhenAll(starts);
+                    }
+
+                    // A loop that waits for one nobody cancelled never ends, and the stop waits
+                    // for it: that is how the race shows when the two starts are not one step.
+                    var stop = monitor.StopAsync().AsTask();
+
+                    Assert.True(await Task.WhenAny(stop, Task.Delay(TimeSpan.FromSeconds(15))) == stop, $"Round {round}: the stop never returned.");
+
+                    var afterStop = Interlocked.Read(ref reads);
+
+                    // Ten periods: a loop the stop could not reach would have read by now.
+                    await Task.Delay(10);
+
+                    Assert.True(afterStop == Interlocked.Read(ref reads), $"Round {round}: a loop went on sampling after the stop.");
+
+                    monitor.Dispose();
+
+                    Assert.False(await monitor.StartAsync(), "A disposed monitor was started.");
+                }
+            }
+        }
+
+        [Fact]
         public async Task Monitor_reports_when_neither_family_can_be_read()
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

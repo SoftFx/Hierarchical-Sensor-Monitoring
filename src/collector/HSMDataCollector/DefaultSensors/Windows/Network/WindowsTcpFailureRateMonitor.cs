@@ -55,8 +55,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private readonly SensorsStorage _storage;
         private readonly TimeSpan _period;
 
+        // Start, Stop and Dispose swap the token source and the loop task as one step. The two
+        // starts of a monitor added while the collector is starting come from two threads (the
+        // host's, through the registration, and the Start under way): without this, each could
+        // leave a token source the other never saw, and its loop would outlive every stop.
+        // Not the sample lock: a slow sample must not hold a stop.
+        private readonly object _lifecycleLock = new object();
+
         private CancellationTokenSource _cts;
         private Task _loopTask;
+        private bool _disposed;
 
         public string SensorPath { get; } = MonitorPath;
 
@@ -151,35 +159,48 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             // registration and once by the Start that is under way. The loop of the first start
             // is ended, and the new one begins only when it has: one loop at a time owns the
             // accumulator, and none is left running behind a token nobody can cancel.
-            var previous = _loopTask;
-
-            try { _cts?.Cancel(); }
-            catch (ObjectDisposedException) { }
-
-            _cts?.Dispose();
-            _cts = new CancellationTokenSource();
-
-            var token = _cts.Token;
-
-            _loopTask = Task.Run(async () =>
+            lock (_lifecycleLock)
             {
-                if (previous != null)
-                {
-                    try { await previous.ConfigureAwait(false); }
-                    catch (Exception) { }
-                }
+                // A start that lost the race with Dispose begins nothing.
+                if (_disposed)
+                    return new ValueTask<bool>(false);
 
-                await RunLoopAsync(token).ConfigureAwait(false);
-            });
+                var previous = _loopTask;
+
+                try { _cts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
+
+                var token = _cts.Token;
+
+                _loopTask = Task.Run(async () =>
+                {
+                    if (previous != null)
+                    {
+                        try { await previous.ConfigureAwait(false); }
+                        catch (Exception) { }
+                    }
+
+                    await RunLoopAsync(token).ConfigureAwait(false);
+                });
+            }
 
             return new ValueTask<bool>(true);
         }
 
         public async ValueTask StopAsync()
         {
-            _cts?.Cancel();
+            Task loop;
 
-            var loop = _loopTask;
+            lock (_lifecycleLock)
+            {
+                try { _cts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+
+                loop = _loopTask;
+            }
 
             if (loop == null)
                 return;
@@ -192,12 +213,17 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         public void Dispose()
         {
-            // Cancelled first: a monitor disposed without a stop must not leave its loop running.
-            try { _cts?.Cancel(); }
-            catch (ObjectDisposedException) { }
+            lock (_lifecycleLock)
+            {
+                _disposed = true;
 
-            _cts?.Dispose();
-            _cts = null;
+                // Cancelled first: a monitor disposed without a stop must not leave its loop running.
+                try { _cts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+
+                _cts?.Dispose();
+                _cts = null;
+            }
         }
 
 
