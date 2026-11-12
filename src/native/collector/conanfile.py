@@ -18,7 +18,7 @@ class HsmCollectorConan(ConanFile):
     """
 
     name = "hsm-collector"
-    version = "0.11.4"
+    version = "0.12.0"
     license = "See repository (SoftFx/Hierarchical-Sensor-Monitoring)"
     url = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring"
     description = "Native C++ HSM DataCollector — stable C ABI core + header-only RAII C++ wrapper."
@@ -38,7 +38,11 @@ class HsmCollectorConan(ConanFile):
     def requirements(self):
         # libcurl is a private dependency of the static core, pulled in only for the HTTP transport.
         if self.options.http:
+            # 8.10.1 is older than the 8.14.0 a collector session needs: a Conan build has the HTTP
+            # transport only, and hsm_collector_use_session_transport reports that at Start.
             self.requires("libcurl/8.10.1")
+            # The session transport reads the server's JSON frames with it. Header-only.
+            self.requires("nlohmann_json/3.11.3")
 
     def layout(self):
         cmake_layout(self)
@@ -82,6 +86,7 @@ class HsmCollectorConan(ConanFile):
             core.system_libs.append("iphlpapi")
         if self.options.http:
             core.requires.append("libcurl::libcurl")
+            core.requires.append("nlohmann_json::nlohmann_json")
 
         # Header-only wrapper: no libs, just the include dir + a link to the core.
         cpp = self.cpp_info.components["cpp"]

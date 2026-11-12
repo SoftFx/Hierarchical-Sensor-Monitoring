@@ -29,8 +29,9 @@ namespace HSMDataCollector.Core
         private readonly object _lifecycleGate;
         private readonly TimeSpan _stopFlushTimeout;
 
-        // 1 after the data/priority drain boundary has been crossed during a graceful stop. Late
-        // file/command flushes that still produce package diagnostics observe this flag and skip
+        // 1 while a stop drains a queue whose package diagnostics must not be recorded: during the
+        // command flush, which goes first, and from the data/priority drain boundary on (the file
+        // flush). Those flushes still produce package diagnostics; they observe this flag and skip
         // <see cref="AddPackageInfo"/>/<see cref="AddPackageSendingInfo"/> so the diagnostics do
         // not enqueue into already-stopped data queues and survive into a later restart as stale
         // collector telemetry. Reset on every <see cref="Start"/>.
@@ -131,6 +132,8 @@ namespace HSMDataCollector.Core
             else
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
 
+            ReportUnreportedOverflow();
+
             if (failures.Count > 0)
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
         }
@@ -142,50 +145,55 @@ namespace HSMDataCollector.Core
             // within the request timeout — only the queues that exited cleanly are eligible for
             // flush below (an unresponsive sender would otherwise block flush against itself).
             // We pass the original ShutdownMode through so the queue's processing loop catches
-            // observe the right PreserveCanceledPackages policy (graceful re-enqueues canceled
-            // packages; terminal dispose drops them so we stop bounded under broken transport).
+            // observe the right PreserveCanceledPackages policy (graceful stop and terminal dispose
+            // both re-enqueue the canceled package for the drain below; start-rollback drops it).
+            //
+            // The four loops are stopped together (#1659 A7): each wait is bounded by the mode's
+            // stop timeout, and waiting for them one after another made a sender that ignores
+            // cancellation cost four of those in a row.
             var dataStopped = false;
             var priorityStopped = false;
             var fileStopped = false;
             var commandStopped = false;
 
-            await TryStopPhase(async () =>
+            await Task.WhenAll(
+                TryStopPhase(async () => dataStopped = await _dataQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => priorityStopped = await _priorityQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => fileStopped = await _fileQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => commandStopped = await _commandQueue.StopAsync(mode).ConfigureAwait(false), failures)).ConfigureAwait(false);
+
+            // One budget for the whole drain (#1659 A7), as in the native collector: a stop must
+            // not hold its host's restart for a budget per queue. A queue that finds the budget
+            // spent sends nothing and its items are discarded and counted.
+            using (var drainBudget = new CancellationTokenSource(GetFlushTimeout(mode)))
             {
-                dataStopped = await _dataQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                // Registrations first: the values behind them are of little use to a server that
+                // was never told what those sensors are. Their package diagnostics are suppressed
+                // like every diagnostic of a non-data flush (#1075, below).
+                var suppressedBefore = Interlocked.Exchange(ref _diagnosticsSuppressedFlag, 1);
 
-            await TryStopPhase(async () =>
-            {
-                priorityStopped = await _priorityQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                if (commandStopped)
+                    await FlushAndLogAsync(_commandQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            await TryStopPhase(async () =>
-            {
-                fileStopped = await _fileQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                // Back to what it was, not to "recorded": a stop that found the boundary already
+                // crossed must not reopen it for the flushes below.
+                Volatile.Write(ref _diagnosticsSuppressedFlag, suppressedBefore);
 
-            await TryStopPhase(async () =>
-            {
-                commandStopped = await _commandQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                if (priorityStopped)
+                    await FlushAndLogAsync(_priorityQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            if (priorityStopped)
-                await FlushAndLogAsync(_priorityQueue, mode, failures).ConfigureAwait(false);
+                if (dataStopped)
+                    await FlushAndLogAsync(_dataQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            if (dataStopped)
-                await FlushAndLogAsync(_dataQueue, mode, failures).ConfigureAwait(false);
+                // Self-diagnostics boundary (#1075). After the data/priority queues have drained their
+                // accepted user data, any further diagnostic value generated by the file flush would
+                // have nowhere safe to land — the data queue is no longer accepting writes, and a
+                // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
+                Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
-            // Self-diagnostics boundary (#1075). After the data/priority queues have drained their
-            // accepted user data, any further diagnostic value generated by the file/command flushes
-            // would have nowhere safe to land — the data queue is no longer accepting writes, and a
-            // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
-            Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
-
-            if (fileStopped)
-                await FlushAndLogAsync(_fileQueue, mode, failures).ConfigureAwait(false);
-
-            if (commandStopped)
-                await FlushAndLogAsync(_commandQueue, mode, failures).ConfigureAwait(false);
+                if (fileStopped)
+                    await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures).ConfigureAwait(false);
+            }
         }
 
         private async Task StopWithoutFlushAsync(ShutdownMode mode, List<Exception> failures)
@@ -207,12 +215,11 @@ namespace HSMDataCollector.Core
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
         }
 
-        private async Task FlushAndLogAsync(IQueueProcessor queue, ShutdownMode mode, List<Exception> failures)
+        private async Task FlushAndLogAsync(IQueueProcessor queue, CancellationToken drainBudget, List<Exception> failures)
         {
             await TryStopPhase(async () =>
             {
-                using (var flushCancellation = new CancellationTokenSource(GetFlushTimeout(mode)))
-                    await queue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+                await queue.FlushAsync(drainBudget).ConfigureAwait(false);
 
                 LogDiscardedItems(queue.ClearQueue(), queue.QueueName);
             }, failures).ConfigureAwait(false);
@@ -309,7 +316,7 @@ namespace HSMDataCollector.Core
 
         /// <summary>
         /// Deduplicated error logging for the queue processing/flush loops. Retry-forever on a
-        /// non-retryable failure (e.g. server returns 4xx for a poison value) would otherwise
+        /// failure that repeats (e.g. server returns 4xx for a poison value) would otherwise
         /// produce one log entry per <see cref="CollectorOptions.PackageCollectPeriod"/> cycle;
         /// routing the identical error through <see cref="MessageDeduplicator"/> collapses the
         /// flood to one entry per dedup window while preserving the per-cycle retry behavior
@@ -317,9 +324,47 @@ namespace HSMDataCollector.Core
         /// </summary>
         public void AddQueueLoopError(string queueName, Exception ex)
         {
-            var msg = $"Queue: {queueName}, {ex}";
+            // A package the sender failed is described by its report alone. Its stack trace
+            // says nothing about the cause and differs between the first pass of the loop and
+            // the later ones, and its item counts change from cycle to cycle; either in the key
+            // made several entries of one failure (#1659 A4). The counts stay at Debug.
+            string msg;
+
+            if (ex is PackageSendFailedException failed)
+            {
+                msg = $"Queue: {queueName}, {failed.Report}";
+                _logger.Debug($"Queue: {queueName}, {failed.Message}");
+            }
+            else
+                msg = $"Queue: {queueName}, {ex}";
+
             _messageDeduplicator.AddMessage(msg);
         }
+
+        /// <summary>
+        /// A collector fault that is not tied to one sensor or queue (a failed send, a failed
+        /// sample of a built-in source). Deduplicated like every other error: logged and posted
+        /// to <c>Collector errors</c> once per window, with the repeat count when the window ends.
+        /// </summary>
+        public void AddError(string message)
+        {
+            _messageDeduplicator.AddMessage(message);
+        }
+
+        /// <summary>
+        /// A package the server refused (4xx) on a queue that does not send a refusal again
+        /// (#1659 A2). The items are gone, so this is reported like any other loss: an error in
+        /// the log and in the <c>Collector errors</c> sensor, deduplicated so a host that keeps
+        /// registering against a rejected key does not flood either (a repeat of the same text
+        /// is counted and reported as "N times" when its window ends).
+        /// </summary>
+        public void ReportRejectedPackage(string queueName, string items, PackageSendingInfo info)
+        {
+            _messageDeduplicator.AddMessage(BuildRejectionMessage(queueName, items, info));
+        }
+
+        internal static string BuildRejectionMessage(string queueName, string items, PackageSendingInfo info) =>
+            $"Queue: {queueName}, the server rejected {items} with status {info.StatusCode}; not sent again. {info.Error}";
 
         /// <summary>
         /// Diagnostic hook for callers that silently dropped a value because it failed validation
@@ -387,7 +432,30 @@ namespace HSMDataCollector.Core
             if (droppedCount <= 0)
                 return;
 
-            DefaultSensors.QueueOverflowSensor?.AddValue(queueName, droppedCount);
+            var sensor = DefaultSensors.QueueOverflowSensor;
+
+            // Without the sensor the drops have nowhere to be counted; they are kept for the
+            // stop report so the loss is never silent (#1659 A5, rule "no silent data loss").
+            if (sensor != null)
+                sensor.AddValue(queueName, droppedCount);
+            else
+                Interlocked.Add(ref _unreportedOverflow, droppedCount);
+        }
+
+        // Values evicted from a full queue while no Queue overflow sensor was registered.
+        private long _unreportedOverflow;
+
+        /// <summary>
+        /// One line per run for the drops no sensor counted, at Error: it is the only report of
+        /// that loss. Same wording as the native collector's stop line. Taken with an exchange,
+        /// so a later run does not report this run's drops again.
+        /// </summary>
+        private void ReportUnreportedOverflow()
+        {
+            var lost = Interlocked.Exchange(ref _unreportedOverflow, 0);
+
+            if (lost > 0)
+                _logger.Error($"Collector stop: {lost} value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).");
         }
 
         private void LogDiscardedItems(int count, string queueName)

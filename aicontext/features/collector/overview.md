@@ -278,5 +278,4 @@ C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inve
 
 ## Known Issues
 
-- Polly retry does not handle HTTP 4xx/5xx (`ShouldHandle` not configured) — data silently lost on server errors
 - Queue overflow drops oldest items without per-drop logging (only aggregate overflow count via `QueueOverflowSensor`; retry-path drops are counted there too since #1088/#1090)

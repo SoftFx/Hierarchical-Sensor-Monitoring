@@ -634,6 +634,16 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
+        <member name="F:HSMServer.Controllers.SensorsController.ServerMarkerHeader">
+            <summary>
+            Response header that marks a <c>testConnection</c> answer as coming from an HSM server.
+            The HSM Agent's retired-port check (#1655) moves an agent off 44330/44333 only when 443
+            answers with it, so that a foreign service answering 200 on 443 of a host whose HSM is
+            pinned to an old port (and merely down) cannot take its agents. A "not a stranger" check,
+            not authentication: the agent accepts exactly the value "1" (kServerMarkerValue in
+            src/agent/include/agent/retired_port.hpp).
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Session">
             <summary>
             The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
@@ -1165,12 +1175,11 @@
             <summary>
             The fallback port baked into a bundle when no external URL carries an explicit one:
             the port the requesting admin actually used, so a non-standard deployment keeps
-            working — except the deprecated 44330/44333 aliases, which must not be baked into
-            NEW bundles (they stop answering when the deprecation window closes), and a missing
-            port (the standard https://host), which both mean the default 443. A legacy port
+            working — except the retired 44330/44333 ports of the old two-port scheme, which
+            the product no longer publishes and which must not be baked into a bundle, and a
+            missing port (the standard https://host): both mean the default 443. A retired port
             that IS the server's own listener (a proxy-less deployment pinned to the old
-            address) is kept: it is the address that answers there, not an alias that will
-            disappear with the window.
+            address) is kept: it is the address that answers there.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentBundleOptions">

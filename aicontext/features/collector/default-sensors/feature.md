@@ -533,7 +533,10 @@ group** (no `Queue overflow` sensor) nothing folds the counter, so at Stop it ho
 drops and no report was ever made: native then logs `Collector stop: N value(s) dropped from the full
 send queue during this run (Queue overflow sensor not registered).` at Error instead — the native logger
 has no Warning level, and this line is the run's only trace of the loss (rule #8; #1508, native 0.10.2).
-Pinned by `native_stop_overflow_log_without_the_queue_sensor_names_the_run`. Pinned
+Pinned by `native_stop_overflow_log_without_the_queue_sensor_names_the_run`. Managed logs the same line
+since 3.6.4 (#1659 A5, `SilentLossReportingTests`); before that a managed collector without the sensor
+dropped those values without a trace. (The first line above, for drops after the final report, has no
+managed counterpart: managed adds each drop to the bar at once.) Pinned
 cross-language by `queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` (both drivers:
 park a send with `wait_sender_parked`, fill the queue to capacity, `release_sender_hang` into an injected
 failure, `expect_bar_sum` on the overflow bar — the SUM only, because of the shape difference above),

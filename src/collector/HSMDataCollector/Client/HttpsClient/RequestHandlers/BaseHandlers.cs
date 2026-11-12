@@ -18,9 +18,14 @@ namespace HSMDataCollector.Client.HttpsClient
         protected readonly ICollectorLogger _logger;
         protected readonly Endpoints _endpoints;
 
-        protected abstract DelayBackoffType DelayStrategy { get; }
+        /// <summary>
+        /// How many times one send repeats a failed request before it returns. Zero means a
+        /// send is a single attempt and the queue alone decides when to try again.
+        /// </summary>
+        protected abstract int MaxRetryAttempts { get; }
 
-        protected abstract int MaxRequestAttempts { get; }
+        /// <summary>The pause between the retries of one send; read only when there are any.</summary>
+        protected virtual DelayBackoffType DelayStrategy => DelayBackoffType.Exponential;
 
         protected int _timeout = 1000;
 
@@ -32,9 +37,15 @@ namespace HSMDataCollector.Client.HttpsClient
             _logger = logger;
             _client = client;
 
+            if (MaxRetryAttempts <= 0)
+            {
+                _pipeline = ResiliencePipeline<HttpResponseMessage>.Empty;
+                return;
+            }
+
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
-                MaxRetryAttempts = MaxRequestAttempts,
+                MaxRetryAttempts = MaxRetryAttempts,
                 BackoffType      = DelayStrategy,
 
                 MaxDelay = TimeSpan.FromMinutes(2),
@@ -60,14 +71,12 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract string GetUri(object rawData);
 
 
-        // Retry predicate (#1096). The default Polly pipeline only retried on EXCEPTIONS, so a
-        // returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
-        // was dropped (silent loss). We now also retry server-side 5xx — but ONLY on the bounded
-        // pipelines (data/priority/file, MaxRetryAttempts = 10). The command pipeline retries
-        // unboundedly (for connection failures while the server restarts); applying result-retry
-        // there would let a persistent 5xx hang a command send forever, so commands stay
-        // exceptions-only and rely on the per-sensor error dictionary in the response. Client 4xx
-        // are permanent (bad payload/auth) and are never retried.
+        // Retry predicate of the pipelines that repeat inside a send (data/priority/file,
+        // MaxRetryAttempts = 10; #1096). The default Polly pipeline only retried on EXCEPTIONS, so
+        // a returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
+        // was dropped (silent loss). A server-side 5xx is retried too. Client 4xx are permanent
+        // (bad payload/auth) and are never retried. The command handler has no in-send retry at
+        // all (#1659 A3), so this never runs for it.
         private ValueTask<bool> ShouldRetry(RetryPredicateArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Exception != null)
@@ -76,16 +85,23 @@ namespace HSMDataCollector.Client.HttpsClient
             var response = args.Outcome.Result;
             var isServerError = response != null && (int)response.StatusCode >= 500;
 
-            return new ValueTask<bool>(isServerError && MaxRequestAttempts != int.MaxValue);
+            return new ValueTask<bool>(isServerError);
         }
 
+        // A failed attempt that the pipeline is about to repeat. Nothing above the send sees it
+        // when a later attempt succeeds, so it is reported here, through the client's error sink,
+        // which the collector deduplicates (#1659 A4): during an outage every attempt of every
+        // send fails the same way, and one entry per window says so. The text therefore names
+        // the cause only; the attempt number goes to the debug log. The cause is spelled as the
+        // queue spells it when the whole send fails, so one outage reads the same in both lines.
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Result != null)
-                _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
-
+                _client.ReportError(DescribeAttempt(PackageSendingInfo.DescribeFailure(args.Outcome.Result, serverMessage: null)));
             else if (args.Outcome.Exception != null)
-                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException?.Message}");
+                _client.ReportError(DescribeAttempt(PackageSendingInfo.DescribeException(args.Outcome.Exception)));
+
+            _logger.Debug($"Send attempt {args.AttemptNumber + 1} failed; the send repeats it.");
 
             return default;
         }
@@ -98,7 +114,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
-                    return new PackageSendingInfo(request.Length, response);
+                    return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -113,7 +129,7 @@ namespace HSMDataCollector.Client.HttpsClient
             catch (Exception ex)
             {
                 LogSendFailure(ex, request);
-                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+                return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
 
@@ -125,7 +141,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
-                    return new PackageSendingInfo(request.Length, response);
+                    return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -136,14 +152,73 @@ namespace HSMDataCollector.Client.HttpsClient
             catch (Exception ex)
             {
                 LogSendFailure(ex, request);
-                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+                return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
 
 
+        // The final failure of a send is the queue's to report: it gets the cause back in the
+        // PackageSendingInfo and reports the package once per window (AddQueueLoopError). An
+        // Error line here as well was a second entry for the same cause (#1659 A4), so this
+        // keeps only the detail that differs from send to send, at Debug.
         private void LogSendFailure(Exception ex, HttpRequest<T> request)
         {
-            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+            _logger.Debug($"Failed to send data after {MaxRetryAttempts + 1} attempt(s). Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+        }
+
+        private static string DescribeAttempt(string cause) => $"Failed to send data. {cause}";
+
+        // What the server said about a refused request, for the failure text (#1659 A1). Only a
+        // plain-text body is a message: the JSON a route answers a 400 with is the request batch
+        // itself (/list) or the per-path dictionary (/commands), and sensor values do not belong
+        // in a log line. The response is already buffered, so this reads no socket; a body
+        // that is not small is not a message and is not decoded for the sake of its start.
+        //
+        // Only below 500. A refusal carries a fixed text that explains it ("AccessKey is
+        // blocked."). The body of a 5xx is as often a proxy's page with a request id or a time
+        // in it: the failure text is the key the report is deduplicated by, and a text that
+        // differs from answer to answer would make every cycle of an outage a new report.
+        private const int MaxServerMessageLength = PackageSendingInfo.MaxDescriptionPartLength;
+        private const long MaxServerMessageBytes = 16 * 1024;
+
+        internal static async ValueTask<PackageSendingInfo> BuildSendingInfoAsync(int length, HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode)
+                return new PackageSendingInfo(length, response);
+
+            var message = (int)response.StatusCode < 500 ? await ReadServerMessageAsync(response).ConfigureAwait(false) : null;
+
+            return new PackageSendingInfo(length, (int)response.StatusCode, PackageSendingInfo.DescribeFailure(response, message));
+        }
+
+        private static async ValueTask<string> ReadServerMessageAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                var content = response.Content;
+
+                if (content == null || !string.Equals(content.Headers.ContentType?.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var length = content.Headers.ContentLength;
+
+                if (!length.HasValue || length.Value > MaxServerMessageBytes)
+                    return null;
+
+                var text = (await content.ReadAsStringAsync().ConfigureAwait(false))?.Trim();
+
+                if (string.IsNullOrEmpty(text))
+                    return null;
+
+                text = text.Replace('\r', ' ').Replace('\n', ' ');
+
+                return text.Length <= MaxServerMessageLength ? text : text.Substring(0, MaxServerMessageLength) + "...";
+            }
+            catch (Exception)
+            {
+                // The message is a courtesy; the status alone still describes the failure.
+                return null;
+            }
         }
 
 
