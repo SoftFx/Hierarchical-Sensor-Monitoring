@@ -6,6 +6,7 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Model.Sensors;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
+using HSMCommon.TaskResult;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -217,6 +218,55 @@ namespace HSMServer.Core.Cache
                 TemplatesApplied = applied,
                 SettingsChanged = settings,
             };
+        }
+
+        // Sensor move requested by a collector's registration (#1724, owner decision 7): the
+        // sensors registered under `previousPaths` (full product-relative paths) move to `path`,
+        // merging into whatever already holds it. The key's own product only, and the key must
+        // be allowed to add sensors (and nodes, through the path check). The FIRST listed path
+        // that still has a sensor wins — its settings and alerts survive — so the list is walked
+        // from the last entry: each later one moves or merges first and the first one merges
+        // last, absorbing them. Idempotent: a moved path is an alias afterwards, not a sensor,
+        // and is skipped. Failures are logged and never fail the registration itself — a stale
+        // old path must not stop the collector from registering its new one.
+        public async Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path,
+            IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token = default)
+        {
+            var target = new SensorPathCheck(productId, path ?? string.Empty);
+
+            if (!target.TryCheckRequest(out var error))
+                return TaskResult.FromError(error);
+
+            if (!TryCheckKeyWritePermissions(key, target.PathParts, out error))
+                return TaskResult.FromError(error);
+
+            if (!GetAccessKeyModel(key).IsValid(KeyPermissions.CanAddSensors, out error))
+                return TaskResult.FromError(error);
+
+            for (var i = (previousPaths?.Count ?? 0) - 1; i >= 0; i--)
+            {
+                if (string.IsNullOrWhiteSpace(previousPaths[i]))
+                    continue;
+
+                var previous = new SensorPathCheck(productId, previousPaths[i]);
+
+                if (!previous.TryCheckRequest(out _) || string.Equals(previous.Path, target.Path, StringComparison.Ordinal) ||
+                    !TryGetSensorFromCache(productId, previous.Path, out var old))
+                    continue;
+
+                if (type.HasValue && old.Type != type.Value)
+                {
+                    _logger.Warn($"Previous path {previous.Path} of {target.Path} skipped: it is a {old.Type} sensor, the registration a {type.Value} one");
+                    continue;
+                }
+
+                var result = await MoveSensorAsync(old.Id, productId, target.Path, SensorMoveConflict.Merge, initiator, token);
+
+                if (!result.IsOk)
+                    _logger.Warn($"Previous path {previous.Path} of {target.Path} not applied: {result.Outcome} {result.Error}");
+            }
+
+            return TaskResult.Ok;
         }
 
         private bool TryGetOccupant(Guid sensorId, Guid productId, string destinationPath, out BaseSensorModel occupant, out string path)

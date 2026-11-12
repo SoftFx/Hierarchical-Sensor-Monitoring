@@ -58,6 +58,16 @@ namespace HSMDataCollector.Converters
         }
 
 
+        // Null or blank entries are dropped, and an empty result is null: the member is then
+        // omitted from the wire (JsonRequestConverter), keeping such a registration byte-identical
+        // to a collector that predates sensor move (#1724).
+        private static System.Collections.Generic.List<string> PreviousPathsOf(SensorOptions options)
+        {
+            var paths = options.PreviousPaths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+
+            return paths?.Count > 0 ? paths : null;
+        }
+
         private static AddOrUpdateSensorRequest ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
         {
             return new AddOrUpdateSensorRequest
@@ -69,6 +79,8 @@ namespace HSMDataCollector.Converters
 
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
+
+                PreviousPaths = PreviousPathsOf(options),
 
                 TTLs = options.TtlAlerts?.Select(a => a.TtlValue?.Ticks).ToList()
                     ?? options.TTLs?.Select(t => t?.Ticks).ToList(),

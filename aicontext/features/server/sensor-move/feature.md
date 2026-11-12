@@ -11,7 +11,7 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). Collector `PreviousPaths` (#1724) follows. There is no separate rollback: a plain move is undone by moving the sensor back (its old path is its own alias, so the move back meets no conflict and retires the alias); #1723 was closed as not planned.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722), collector `PreviousPaths` (#1724). There is no separate rollback: a plain move is undone by moving the sensor back (its old path is its own alias, so the move back meets no conflict and retires the alias); #1723 was closed as not planned.
 
 ## Invariants
 
@@ -33,6 +33,7 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 | 1a | Predict a move (`ITreeValuesCache.PreviewMove`): outcome, nodes to create, alert templates detached/applied, inherited settings that change — the dry run of both surfaces | operator / AI agent |
 | 2 | Value or registration arrives at an old path → lands in the moved sensor | collector |
 | 3 | Value of another type, or a registration with an explicit other type, arrives at an old path → displaces the alias and creates a new sensor there | collector |
+| 3a | Registration declaring `PreviousPaths` → the old sensor moves (or merges) to the registration path first (`ApplyPreviousPathsAsync`, #1724) | collector |
 | 4 | Alias expires (`RunSensorsSelfDestroyAsync` → alias pass) | background worker, hourly |
 | 5 | Alias removed by hand (`RemoveSensorAliasAsync`) — `DELETE /api/v1/sensors/{id}/aliases`, MCP `remove_sensor_alias`; aliases are listed in `SensorDto.aliases` | operator / AI agent |
 
@@ -60,6 +61,15 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 - **Adopted aliases are persisted by the survivor's own queue**: by the move's entity write, or — if the move fails after step 1 — by a forced alias-persist request on the survivor's queue. They then expire by the survivor's SelfDestroy interval, measured from their own last hit.
 - **Outcome**: `Merged` with `MergedSensorId`, `MergedValues`, `MergeCollisions`. Different types → `Conflict` (checked before step 1 and again inside it). A free destination under `Merge` is a plain `Moved`. If the move fails after step 1, the result is `Failed` with the merge counts set: the occupant is already merged and its path already routes to the survivor; retry the move.
 - **Irreversible**: a merge cannot be undone — the absorbed sensor and its settings are gone. Preview it with the dry run.
+
+### Collectors: `PreviousPaths` (#1724)
+
+A collector that changes its layout declares, per sensor, the paths the sensor was registered under before; the server moves the history there on registration (owner decision 7):
+
+- **Collector surface.** Managed (`HSMDataCollector` 3.7.0): `SensorOptions.PreviousPaths` (`List<string>`, also merged from custom options onto default-sensor prototypes). Native (0.12.0): `hsm_sensor_set_previous_paths(sensor, paths, count)` (C ABI, a new function — the options structs are unchanged) and `Sensor::SetPreviousPaths(std::vector<std::string>)` in the C++ wrapper; before Start the paths ride the Start registration, while running the sensor is re-registered. Entries are FULL product-relative paths as the tree shows them — no computer/module prefix is added, so a renamed computer or module node can be expressed. Blank entries are dropped.
+- **Wire.** `AddOrUpdateSensorRequest.PreviousPaths`, omitted when unused (see `features/api/wire-contract`). It travels on `/api/sensors/commands` and on the collector session alike: both feed `SensorIngestionService.AddOrUpdateSensorAsync`.
+- **Server.** Before the registration is applied, `ITreeValuesCache.ApplyPreviousPathsAsync` (outside the product queue) moves each previous path's sensor to the registration path with `SensorMoveConflict.Merge` — the key's own product only, the key must pass the path's write check and have `CanAddSensors`. The list is walked from the LAST entry so the FIRST listed path that still has a sensor merges last and survives (its settings and alerts win); a sensor the collector's value already created at the new path is absorbed the same way, so the order of value vs registration does not matter. A previous path that is no longer a sensor (already moved — it is an alias now — or never existed) is skipped, which makes re-registering on every start a no-op; a type mismatch with an explicit registration type is skipped and logged. Failures are logged, never fail the registration. Moves and merges are journaled with the collector key as initiator.
+- **Conformance.** `previous_paths_contract.hsmtest` (verb `create_int_sensor_with_previous_paths`, both drivers); wire bytes pinned by `WireFormatGoldenLockTests.Registration_with_previous_paths_*` and the native `native_wire_registration_with_previous_paths_matches_net_byte_layout`.
 
 ### Alias lifetime
 

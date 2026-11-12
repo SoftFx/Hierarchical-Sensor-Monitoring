@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace hsm::collector
 {
@@ -49,6 +50,21 @@ namespace hsm::collector
         void AttachAlert(const Alert& alert)
         {
             detail::ThrowIfFailed(hsm_sensor_attach_alert(handle_, alert.handle()), "Failed to attach alert to sensor.");
+        }
+
+        /// Paths this sensor was registered under before a layout change (sensor move, 0.12.0):
+        /// full paths relative to the product, no computer/module prefix. A server that supports
+        /// sensor move moves the sensor at such a path here on registration, history included.
+        /// Blank entries are skipped; an empty list removes them.
+        void SetPreviousPaths(const std::vector<std::string>& paths)
+        {
+            std::vector<const char*> raw;
+            raw.reserve(paths.size());
+            for (const auto& path : paths)
+                raw.push_back(path.c_str());
+
+            detail::ThrowIfFailed(hsm_sensor_set_previous_paths(handle_, raw.empty() ? nullptr : raw.data(), raw.size()),
+                                  "Failed to set the sensor's previous paths.");
         }
 
         /// Underlying C handle (borrowed; still owned by this object).

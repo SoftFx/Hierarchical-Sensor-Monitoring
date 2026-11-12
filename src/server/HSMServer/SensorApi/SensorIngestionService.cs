@@ -63,10 +63,21 @@ namespace HSMServer.SensorApi
             return result.IsOk ? null : result.Error;
         }
 
-        public Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request)
+        public async Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request)
         {
             if (info is null)
-                return Task.FromResult(_invalidRequestResult);
+                return _invalidRequestResult;
+
+            // Sensor move from the collector (#1724): the sensor registered under an old path
+            // moves here first, so the registration below updates it instead of a new one.
+            if (request.PreviousPaths is { Count: > 0 })
+            {
+                var moved = await _cache.ApplyPreviousPathsAsync(info.Key.Id, info.Product.Id, request.Path, request.PreviousPaths,
+                    request.SensorType?.Convert(), HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(info.Key.DisplayName, false));
+
+                if (!moved.IsOk)
+                    return moved;
+            }
 
             var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, request.Path)
             {
@@ -75,7 +86,7 @@ namespace HSMServer.SensorApi
                 TypeIsExplicit = request.SensorType is not null,
             };
 
-            return _cache.AddOrUpdateSensorAsync(coreRequest);
+            return await _cache.AddOrUpdateSensorAsync(coreRequest);
         }
     }
 }

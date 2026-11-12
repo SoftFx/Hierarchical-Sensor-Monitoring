@@ -14,6 +14,22 @@ namespace HSMDataCollector.Converters
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         {
+            // A registration without previous paths (#1724) leaves the member out, so it stays
+            // byte-identical to the wire of collectors that predate sensor move and the server
+            // contract tests pinning it. System.Text.Json 6 (the net6 target) has no contract
+            // customization, hence the node round trip — registrations are rare.
+            if (value is HSMSensorDataObjects.SensorRequests.AddOrUpdateSensorRequest registration && registration.PreviousPaths == null)
+            {
+                var node = JsonSerializer.SerializeToNode(registration, registration.GetType(), options) as System.Text.Json.Nodes.JsonObject;
+
+                if (node != null)
+                {
+                    node.Remove(nameof(HSMSensorDataObjects.SensorRequests.AddOrUpdateSensorRequest.PreviousPaths));
+                    node.WriteTo(writer, options);
+                    return;
+                }
+            }
+
             JsonSerializer.Serialize(writer, value, value.GetType(), options);
         }
     }

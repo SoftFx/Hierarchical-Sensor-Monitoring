@@ -207,6 +207,16 @@ namespace HSMDataCollector.Tests
                         }));
                     break;
 
+                case "create_int_sensor_with_previous_paths":
+                    // #1724: the managed surface is the options property; native sets them on the handle.
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new InstantSensorOptions
+                        {
+                            PreviousPaths = step.Arg(1).Split(';').Select(ExpandTextToken).ToList(),
+                        }));
+                    break;
+
                 case "create_enum_sensor_with_options":
                     AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(
                         ExpandTextToken(step.Arg(0)),
@@ -1798,6 +1808,10 @@ namespace HSMDataCollector.Tests
                    $"\"AggregateData\":{Bool(request.AggregateData)}," +
                    $"\"EnableGrafana\":{Bool(request.EnableGrafana)}," +
                    $"\"DefaultAlertsOptions\":{((long)request.DefaultAlertsOptions).ToString(CultureInfo.InvariantCulture)}" +
+                   // Sensor move (#1724): present only when the sensor has previous paths, like the wire.
+                   (request.PreviousPaths == null
+                       ? ""
+                       : ",\"PreviousPaths\":[" + string.Join(",", request.PreviousPaths.Select(p => "\"" + EscapeJson(p) + "\"")) + "]") +
                    "}";
         }
 

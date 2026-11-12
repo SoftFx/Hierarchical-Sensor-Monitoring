@@ -1065,6 +1065,29 @@ namespace
             return;
         }
 
+        // Sensor move (#1724): hsm_sensor_set_previous_paths (0.12.0) before Start, or right after a
+        // runtime create — the managed counterpart is the InstantSensorOptions.PreviousPaths property.
+        if (action == "create_int_sensor_with_previous_paths")
+        {
+            Require(step.size() >= 3, "create_int_sensor_with_previous_paths requires path and previous paths");
+            const auto path = ExpandTextToken(step[1]);
+
+            std::vector<std::string> previous;
+            for (const auto& entry : SplitBy(step[2], ';'))
+                previous.push_back(ExpandTextToken(entry));
+
+            std::vector<const char*> raw;
+            for (const auto& entry : previous)
+                raw.push_back(entry.c_str());
+
+            auto sensor = CreateIntSensor(state.collector.value, path.c_str());
+            Require(hsm_sensor_set_previous_paths(sensor.value, raw.data(), raw.size()) == HSM_RESULT_OK,
+                    "hsm_sensor_set_previous_paths failed");
+
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "create_int_sensor_with_options")
         {
             Require(step.size() >= 5, "create_int_sensor_with_options requires path, ttl_ms, unit, description");
@@ -7818,6 +7841,38 @@ namespace
             "AddOrUpdateSensorRequest wire layout");
     }
 
+    // Sensor move (#1724): hsm_sensor_set_previous_paths puts the member right after EnumOptions —
+    // byte-identical to WireFormatGoldenLockTests.Registration_with_previous_paths_matches_the_native_golden_bytes —
+    // drops blank entries, and clearing the list removes the member again.
+    void NativeWireRegistrationWithPreviousPathsMatchesNetByteLayout()
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        auto collector = CreateCollector(options);
+
+        SensorHandle sensor;
+        Require(
+            hsm_collector_create_int_sensor_with_options(collector.value, "p/move", 60000, 3, "d", &sensor.value) == HSM_RESULT_OK,
+            "previous-paths sensor create");
+
+        const char* paths[] = { "garage-server/System/CPU", nullptr, " \t ", "old/move" };
+        Require(hsm_sensor_set_previous_paths(sensor.value, paths, 4) == HSM_RESULT_OK, "set previous paths");
+
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"garage-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}",
+            "AddOrUpdateSensorRequest wire layout with PreviousPaths");
+
+        Require(hsm_sensor_set_previous_paths(sensor.value, nullptr, 0) == HSM_RESULT_OK, "clear previous paths");
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)).find("PreviousPaths") == std::string::npos,
+            "a cleared list omits the member");
+
+        Require(hsm_sensor_set_previous_paths(sensor.value, nullptr, 1) == HSM_RESULT_INVALID_ARGUMENT, "null array with a count");
+        Require(hsm_sensor_set_previous_paths(nullptr, paths, 1) == HSM_RESULT_INVALID_ARGUMENT, "null sensor");
+    }
+
     // Build the canonical alert scenario through the C ABI and assert the sensor's wire
     // registration is byte-identical to the .NET golden (WireFormatGoldenLockTests
     // .Registration_with_alerts_matches_the_native_golden_bytes). Locks AlertUpdateRequest field
@@ -9018,6 +9073,7 @@ namespace
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_wire_registration_with_previous_paths_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithPreviousPathsMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
             { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
             { "native_module_version_sensors_emit_start_value", [](const std::string&) { NativeModuleVersionSensorsEmitStartValueOnStart(); } },
@@ -9233,6 +9289,7 @@ namespace
             { "conformance_timespan_version_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_previous_paths_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
