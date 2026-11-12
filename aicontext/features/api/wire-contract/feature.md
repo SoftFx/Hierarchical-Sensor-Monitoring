@@ -114,6 +114,7 @@ What the .NET collector actually emits (`Client/HttpsClient/RequestHandlers/Http
 - TimeSpan: .NET "c" format `[-][d.]hh:mm:ss[.fffffff]` (days prefix possible; 7-digit fraction omitted when zero).
 - Version: `a.b[.c[.d]]`.
 - Polymorphic batch (`list` endpoint): items discriminated by the **numeric `Type` property** (`SensorType` value) — the server's converter scans for a property named `Type` (case-insensitive) and switches on its int value. There is no string discriminator.
+- String sensor values and comments are sanitized at INGESTION: HTML tags are stripped (`HtmlSanitizerService` — `markdown` and `br` survive), and the credential part of a connection string (`scheme://user:pass@host`) is masked to `scheme://***@host` before anything is stored (#1709) — the scheme and host stay readable for monitoring; an equality policy on a full connection string therefore no longer matches once the value is masked. Values already stored before the fix keep their secret, so an exposed credential must be rotated.
 - Registration time fields (`TTLs`, `KeepHistory`, `SelfDestroy`, alert `ConfirmationPeriod`) go on the wire as **`long` ticks** (`Converters/ApiConverters.cs`). When `TtlAlerts` are present their `TtlValue`s override `options.TTLs`. `IsSingletonSensor` is OR-ed with `IsComputerSensor` at conversion.
 
 ## Endpoints

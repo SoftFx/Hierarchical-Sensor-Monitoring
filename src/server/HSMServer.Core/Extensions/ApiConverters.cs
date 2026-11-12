@@ -50,10 +50,13 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                // #1709: mask scheme://user:pass@ BEFORE the sanitizer — a
+                // credential-bearing connection string must never reach
+                // storage, while the scheme and host stay readable.
+                Comment = HtmlSanitizerService.Sanitize(CredentialMasker.MaskCredentials(value.Comment)),
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = HtmlSanitizerService.Sanitize(value.Value)
+                Value = HtmlSanitizerService.Sanitize(CredentialMasker.MaskCredentials(value.Value))
             };
 
 
