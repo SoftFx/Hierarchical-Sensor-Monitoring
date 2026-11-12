@@ -33,7 +33,7 @@ HSM cannot move a sensor. A collector that changes its layout leaves the old sen
 5. **Alerts and settings behave as if the sensor had always been there.** Own alerts and explicit settings follow the sensor; "From parent" settings resolve against the new parent; alert templates are re-evaluated (non-matching detached, newly matching applied).
 6. **Permissions.** Web UI: Manager of both root products or admin. `/api/v1` and MCP: a read-write token whose owner may write both. Collector key: within its own product only, `CanAddSensors` (+`CanAddNodes` when nodes are created); merge allowed.
 7. **Collectors declare `PreviousPaths`** — full product-relative paths on the sensor's options, sent with registration as an optional field of `AddOrUpdateSensorRequest`. The server moves (merging if both exist) while registering. Idempotent; ignored by an old server; works on HTTP and on the WebSocket session (both use `SensorIngestionService.ApplyCommandAsync`). Native: an appended options field (MINOR).
-8. **Journal and undo.** Every move journals "Move sensor old → new" with its initiator. A plain move is rollbackable (a move back, conflict-checked); a merge is irreversible.
+8. **Journal and undo.** Every move journals "Move sensor old → new" with its initiator. There is no separate rollback (revised by the owner on 2026-11-12, #1723 closed as not planned): a plain move is undone by moving the sensor back — its old path is its own alias, so the move back meets no conflict and retires the alias, and it is journaled like any move. A merge is irreversible; its dry run is the preview.
 
 ## Proposed Direction
 
@@ -47,7 +47,7 @@ HSM cannot move a sensor. A collector that changes its layout leaves the old sen
 | 2 | #1720 | Core merge into an occupied destination |
 | 3 | #1721 | `/api/v1` endpoint + MCP `move_sensors` |
 | 4 | #1722 | Web UI action in the sensor tree; aliases on the sensor page |
-| 5 | #1723 | Rollback of a plain move through the unified journal |
+| 5 | ~~#1723~~ | ~~Rollback of a plain move~~ — not planned: a move back is the undo (decision 8) |
 | 6 | #1724 | `PreviousPaths` in the DTO, both collectors and the conformance corpus |
 
 ## Risks

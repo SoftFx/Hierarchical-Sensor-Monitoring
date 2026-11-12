@@ -11,7 +11,7 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). Rollback (#1723) and collector `PreviousPaths` (#1724) follow.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). Collector `PreviousPaths` (#1724) follows. There is no separate rollback: a plain move is undone by moving the sensor back (its old path is its own alias, so the move back meets no conflict and retires the alias); #1723 was closed as not planned.
 
 ## Invariants
 
@@ -59,7 +59,7 @@ Delivered so far: the core move and aliases (#1719), merge into an occupied dest
 - **Races with the caller's look.** An occupant that appears after the caller checked turns a would-be `Conflict` into a second pass that merges it; one that disappears before step 1 turns the merge into a plain move.
 - **Adopted aliases are persisted by the survivor's own queue**: by the move's entity write, or — if the move fails after step 1 — by a forced alias-persist request on the survivor's queue. They then expire by the survivor's SelfDestroy interval, measured from their own last hit.
 - **Outcome**: `Merged` with `MergedSensorId`, `MergedValues`, `MergeCollisions`. Different types → `Conflict` (checked before step 1 and again inside it). A free destination under `Merge` is a plain `Moved`. If the move fails after step 1, the result is `Failed` with the merge counts set: the occupant is already merged and its path already routes to the survivor; retry the move.
-- **Irreversible**: a merge cannot be rolled back (#1723 covers plain moves only).
+- **Irreversible**: a merge cannot be undone — the absorbed sensor and its settings are gone. Preview it with the dry run.
 
 ### Alias lifetime
 

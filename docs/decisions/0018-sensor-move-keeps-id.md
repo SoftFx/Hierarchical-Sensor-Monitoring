@@ -47,4 +47,4 @@ A collector that is not updated keeps sending to the old path. Today a value at 
 ## References
 
 - Epic #1718, step #1719; initiative `docs/initiatives/sensor-move.md`
-- ADR-0013 (unified journal) — rollback of a plain move is #1723
+- ADR-0013 (unified journal) — a move is journaled but has no rollback entry: the undo of a plain move is a move back (#1723 closed as not planned)
