@@ -524,6 +524,20 @@ namespace HSMServer.Core.Model
                 return _aliases.Count == 0 ? null : _aliases.Select(a => a.ToEntity()).ToList();
         }
 
+        /// <summary>Records the alias hits <paramref name="written"/> carried as persisted; call after the write returned.</summary>
+        internal void MarkAliasHitsPersisted(SensorEntity written)
+        {
+            if (written?.Aliases is null)
+                return;
+
+            lock (_aliases)
+                foreach (var entity in written.Aliases)
+                    foreach (var alias in _aliases)
+                        if (string.Equals(alias.ProductId.ToString(), entity.ProductId, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(alias.Path, entity.Path, StringComparison.Ordinal))
+                            alias.MarkPersisted(entity.LastHit);
+        }
+
         protected virtual int GetDisplayCoeff()
         {
             return 1;

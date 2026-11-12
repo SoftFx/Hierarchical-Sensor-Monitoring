@@ -1,4 +1,5 @@
 using HSMCommon.Model;
+using HSMServer.Core.DataLayer;
 using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -420,6 +421,89 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        [Fact]
+        [Trait("Category", "Sensor move")]
+        public async Task Move_WhenTheEntityWriteFails_RestoresTheSensorWhereItWas()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+
+            var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailSensorUpdate = e => e.Id == sensor.Id.ToString(),
+            };
+            await using var cache = BuildCacheOverTheSameDatabase(failing);
+            Assert.True(cache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out var loaded));
+            var oldParent = loaded.Parent;
+
+            var result = await cache.MoveSensorAsync(loaded.Id, _fixture.ProductB, $"{root}/new");
+
+            Assert.Equal(SensorMoveOutcome.Failed, result.Outcome);
+            Assert.True(cache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out var stillThere));
+            Assert.Same(loaded, stillThere);
+            Assert.Same(oldParent, loaded.Parent);
+            Assert.Equal("old", loaded.DisplayName);
+            Assert.Empty(loaded.Aliases);
+            Assert.False(cache.TryGetSensorByPath(_fixture.ProductB, $"{root}/new", out _));
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor alias")]
+        public async Task Alias_HitIsNotMarkedPersisted_WhenTheWriteFails()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductA, $"{root}/new")).IsOk);
+
+            var fail = true;
+            var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailSensorUpdate = e => fail && e.Id == sensor.Id.ToString(),
+            };
+            await using var cache = BuildCacheOverTheSameDatabase(failing);
+            Assert.True(cache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new", out var loaded));
+
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, $"{root}/old", DateTime.UtcNow);
+            Assert.True((await cache.AddSensorValueAsync(_fixture.KeyA, _fixture.ProductA, value)).IsOk);
+            var alias = loaded.Aliases.Single();
+            Assert.True(alias.HasUnpersistedHit);
+
+            await cache.RunAliasMaintenanceAsync();
+            Assert.True(alias.HasUnpersistedHit, "a failed write marked the hit as persisted");
+
+            fail = false;
+            await cache.RunAliasMaintenanceAsync();
+            Assert.False(alias.HasUnpersistedHit);
+
+            var stored = _databaseCoreManager.DatabaseCore.GetAllSensors().Single(e => e.Id == sensor.Id.ToString());
+            Assert.Equal(alias.LastHit.Ticks, stored.Aliases.Single().LastHit);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor alias")]
+        public async Task Alias_RegistrationWithoutAType_UpdatesTheMovedSensor_AndKeepsTheAlias()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductA, $"{root}/new")).IsOk);
+
+            // The request type defaults to something other than the sensor's;
+            // only an explicit type may displace the alias.
+            var registration = new SensorAddOrUpdateRequest(_fixture.ProductA, $"{root}/old")
+            {
+                Update = new SensorUpdate { Id = Guid.Empty, Description = "untyped registration" },
+                Type = SensorType.Double,
+                TypeIsExplicit = false,
+            };
+
+            Assert.True((await _valuesCache.AddOrUpdateSensorAsync(registration)).IsOk);
+
+            Assert.Equal("untyped registration", sensor.Description);
+            Assert.Single(sensor.Aliases);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out _), "the old path was recreated");
+        }
+
+
         private static string Unique() => $"n{Guid.NewGuid():N}"[..12];
 
         private async Task<BaseSensorModel> CreateIntSensorAsync(Guid productId, Guid key, string path, int values)
@@ -481,12 +565,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return template;
         }
 
-        private TreeValuesCache BuildCacheOverTheSameDatabase()
+        private TreeValuesCache BuildCacheOverTheSameDatabase(IDatabaseCore database = null)
         {
             var snapshot = new Mock<ITreeStateSnapshot>();
             snapshot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
 
-            var database = _databaseCoreManager.DatabaseCore;
+            database ??= _databaseCoreManager.DatabaseCore;
 
             return new TreeValuesCache(database, snapshot.Object, _journalService, _alertScheduleProvider,
                 new HSMServer.Core.ChangeSets.ChangeSetJournal(database));

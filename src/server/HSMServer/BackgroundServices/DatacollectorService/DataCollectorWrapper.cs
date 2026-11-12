@@ -294,6 +294,7 @@ namespace HSMServer.BackgroundServices
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
                         Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
+                        TypeIsExplicit = sensorType is not null,
                     };
 
                     await _cache.AddOrUpdateSensorAsync(coreRequest, token);

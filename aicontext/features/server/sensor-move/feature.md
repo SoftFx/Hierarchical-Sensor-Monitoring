@@ -7,7 +7,7 @@
 
 ## Overview
 
-A sensor can be moved to another path — inside its root product or into another one — and keeps its id. Everything keyed by the id follows it with no migration: history, journal records, policies (own and template-derived), TTL policies, mute state, dashboard panels, undo references. Its old path becomes a **sensor alias**: values and registrations sent there still land in the moved sensor, so a collector that has not been updated loses nothing and the old node does not come back empty.
+A sensor can be moved to another path — inside its root product or into another one — and keeps its id. Everything keyed by the id follows it with no migration: history, journal records, policies (own and template-derived), TTL policies, mute state, dashboard panel sources, undo references. A dashboard panel subscription (a path template) that covers the new path adds the moved sensor, as it would add a new one. Its old path becomes a **sensor alias**: values and registrations sent there still land in the moved sensor, so a collector that has not been updated loses nothing and the old node does not come back empty.
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
@@ -42,7 +42,7 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 ### Alias lifetime
 
 - Created by every move (old root product + old root-relative path + creation time). Moving back onto an own alias retires that alias.
-- **Hit**: every value or registration through the alias stamps its last-hit time (lock-free). Hits are persisted at most hourly, by the alias pass.
+- **Hit**: every value or registration through the alias stamps its last-hit time (lock-free). Hits are persisted at most hourly, by the alias pass; a hit counts as persisted only once the entity write returned, so a failed write is retried by the next pass.
 - **Expiry**: the alias pass removes an alias when nothing came through it for longer than the sensor's effective SelfDestroy interval (measured from the newest of creation and last hit). A sensor whose SelfDestroy is `Never`/`None` keeps its aliases until they are removed by hand. An alias whose product was deleted is removed by the same pass.
 - **Displacement**: a sensor moved onto the path, a value of another type, or a registration with an explicit other type. A registration without a type (the core defaults it to Boolean) never displaces.
 - **Removal with the sensor**: removing a sensor removes its aliases from the index.
@@ -53,7 +53,7 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 |---|---|---|
 | `MoveSensorAsync`, `RemoveSensorAliasAsync`, `SensorMovedEvent` | `src/server/HSMServer.Core/Cache/ITreeValuesCache.cs` | Core entry used by every surface; no surface re-implements move semantics. |
 | `SensorMoveOutcome`, `SensorMoveResult` | `src/server/HSMServer.Core/Model/Requests/SensorMoveRequest.cs` | |
-| `SensorAddOrUpdateRequest.TypeIsExplicit` | `src/server/HSMServer.Core/Model/Requests/SensorAddOrUpdateRequest.cs` | Set by `SensorIngestionService` when the wire registration carries a type. |
+| `SensorAddOrUpdateRequest.TypeIsExplicit` | `src/server/HSMServer.Core/Model/Requests/SensorAddOrUpdateRequest.cs` | Set by `SensorIngestionService` and the self-monitoring `DataCollectorWrapper` when the registration carries a type. |
 
 ## Key Files
 
@@ -65,6 +65,7 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 | `src/server/HSMServer.Core/Model/BaseNodeModel.cs` | `MoveTo` — re-parent and rename without rebuilding policies |
 | `src/server/HSMServer.Core/Model/ProductModel.cs` | `DetachMovedSensor` / `AttachMovedSensor` — product policy groups |
 | `src/server/HSMServer/Model/TreeViewModels/TreeViewModel.cs` | Relocates the sensor's view model on `SensorMovedEvent` |
+| `src/server/HSMServer/Dashboards/Dashboard.cs` | Offers a moved sensor to the panel subscriptions on `SensorMovedEvent` |
 
 ## Storage / Persistence
 
@@ -87,6 +88,7 @@ Delivered so far: the core move and aliases (#1719). Merge into an occupied dest
 - A cross-product alias lets the old product's key keep feeding the moved sensor for as long as values arrive (an alias expires only after a SelfDestroy interval without hits). Only a Manager of both products can create one.
 - Path-based external references (Grafana queries, scripts using the Sensor API by path) see the new path; the alias keeps only ingestion and registration working on the old one.
 - A same-product alias resolves on the product's own queue; a cross-product one costs one extra queue hop per value.
+- A dashboard panel source that a subscription added stays on the panel when the sensor moves out of the subscription's template: a panel does not record which subscription added a source.
 
 ## Dependencies
 

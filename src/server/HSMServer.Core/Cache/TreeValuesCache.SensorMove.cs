@@ -252,7 +252,7 @@ namespace HSMServer.Core.Cache
 
                 try
                 {
-                    _database.UpdateSensor(sensor.ToEntity());
+                    WriteSensorEntity(sensor);
                 }
                 catch
                 {
@@ -481,7 +481,16 @@ namespace HSMServer.Core.Cache
             }
 
             if (changed)
-                _database.UpdateSensor(sensor.ToEntity());
+                WriteSensorEntity(sensor);
+        }
+
+        // Alias hits count as persisted only after the write returned (#1719 review).
+        private void WriteSensorEntity(BaseSensorModel sensor)
+        {
+            var entity = sensor.ToEntity();
+
+            _database.UpdateSensor(entity);
+            sensor.MarkAliasHitsPersisted(entity);
         }
 
         // Mirrors BaseSensorModel.ShouldDestroy's interval states (None never
@@ -549,7 +558,7 @@ namespace HSMServer.Core.Cache
                 {
                     try
                     {
-                        _database.UpdateSensor(sensor.ToEntity());
+                        WriteSensorEntity(sensor);
                     }
                     catch (Exception ex)
                     {

@@ -75,18 +75,30 @@ namespace HSMServer.Core.Model.Sensors
             }
         }
 
-        internal SensorAliasEntity ToEntity()
+        // Pure: the hit counts as persisted only once the entity write has
+        // returned (MarkPersisted), so a failed write is retried by the next
+        // alias pass instead of waiting out PersistHitAfter.
+        internal SensorAliasEntity ToEntity() => new()
         {
-            var lastHit = Interlocked.Read(ref _lastHitTicks);
-            Interlocked.Exchange(ref _persistedLastHitTicks, lastHit);
+            ProductId = ProductId.ToString(),
+            Path = Path,
+            CreationDate = CreationDate.Ticks,
+            LastHit = Interlocked.Read(ref _lastHitTicks),
+        };
 
-            return new SensorAliasEntity
+        internal void MarkPersisted(long lastHitTicks)
+        {
+            var current = Interlocked.Read(ref _persistedLastHitTicks);
+
+            while (lastHitTicks > current)
             {
-                ProductId = ProductId.ToString(),
-                Path = Path,
-                CreationDate = CreationDate.Ticks,
-                LastHit = lastHit,
-            };
+                var observed = Interlocked.CompareExchange(ref _persistedLastHitTicks, lastHitTicks, current);
+
+                if (observed == current)
+                    break;
+
+                current = observed;
+            }
         }
     }
 }
