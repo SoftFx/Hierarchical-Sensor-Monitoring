@@ -136,7 +136,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // t3 hops to product B's queue; its row is written after the cache
             // update, so wait on the stored history, not on LastValue.
-            await TestWait.UntilAsync(() => ReadHistoryAsync(moved.Id).Result.Count == 5, "every path's value was stored in the surviving sensor");
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while ((await ReadHistoryAsync(moved.Id)).Count < 5 && DateTime.UtcNow < deadline)
+                await Task.Delay(25);
+
+            Assert.Equal(5, (await ReadHistoryAsync(moved.Id)).Count);
             Assert.Equal(t3, moved.LastValue.Time);
             Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductB, $"{root}/before", out _));
         }

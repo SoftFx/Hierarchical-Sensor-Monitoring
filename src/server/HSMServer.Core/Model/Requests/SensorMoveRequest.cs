@@ -62,28 +62,36 @@ namespace HSMServer.Core.Model.Requests
     internal sealed record SensorMoveRequest(Guid SensorId, Guid SourceRootId, Guid DestinationProductId,
         string DestinationPath, InitiatorInfo Initiator) : IUpdateRequest
     {
-        public SensorMoveConflict OnConflict { get; init; }
-
         public SensorMoveResult Result { get; set; }
-
-        // Set when the move took an occupied path under Merge: the occupant
-        // is unindexed and must be absorbed on its own queue (SensorMergeRequest).
-        public Guid? AbsorbId { get; set; }
     }
 
 
     /// <summary>
-    /// Second step of a merge (#1720): on the queue that owns the absorbed sensor,
-    /// copy its history under the survivor's id and remove it.
+    /// First step of a merge (#1720), on the queue that owns the occupant: copy its
+    /// history under the survivor's id, turn its path and aliases into aliases of the
+    /// survivor, remove it. The move that follows lands on a path that is then only
+    /// the survivor's own alias.
     /// </summary>
-    internal sealed record SensorMergeRequest(Guid SurvivorId, Guid AbsorbedId, Guid ExpectedRootId, InitiatorInfo Initiator) : IUpdateRequest
+    internal sealed record SensorAbsorbRequest(Guid SurvivorId, Guid OccupantId, Guid RootId, string Path, InitiatorInfo Initiator) : IUpdateRequest
     {
         public long Copied { get; set; }
 
         public long Collisions { get; set; }
 
         public string Error { get; set; }
+
+        // The occupant is gone (its rows copied): from here on a failure must not
+        // be reported as "nothing happened".
+        public bool Absorbed { get; set; }
+
+        // Set when step 1 found the types different (a re-check: the occupant
+        // may have been replaced since the caller looked).
+        public SensorMoveOutcome? Conflict { get; set; }
     }
+
+
+    /// <summary>Last step of a merge: refresh the survivor's cache on the queue that owns it.</summary>
+    internal sealed record SensorMergeRefreshRequest(Guid SensorId, Guid ExpectedRootId, int Hops) : IUpdateRequest;
 
 
     /// <summary>

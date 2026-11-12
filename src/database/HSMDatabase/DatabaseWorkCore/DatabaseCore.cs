@@ -234,8 +234,12 @@ namespace HSMDatabase.DatabaseWorkCore
         // Sensor-move merge (#1720): the one place a history row changes its
         // sensor id. A row's partition is chosen by its tick, so the copy of a
         // row lands in the same partition as the row itself. Existing rows of
-        // the survivor win (ADR-0018: the moved sensor's row wins a same-tick
-        // collision); the survivor's ticks of each partition are read once.
+        // the target win (ADR-0018: the moved sensor's row wins a same-tick
+        // collision). Both key ranges are walked in step (both descending), so
+        // memory stays constant whatever the history size; the iterators see
+        // the partition as it was when they opened, so the copies written
+        // meanwhile are never read back. Not atomic: a re-run after a crash
+        // counts the rows the first run copied as collisions.
         public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
         {
             var fromStart = new DbKey(fromSensorId, DateTime.MinValue.Ticks).ToBytes();
@@ -247,17 +251,20 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in _sensorValuesDatabases)
             {
-                HashSet<long> intoTicks = null;
+                using var into = db.GetKeysValuesTo(intoStart, intoEnd)
+                    .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
+                    .GetEnumerator();
+
+                var hasInto = into.MoveNext();
 
                 foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
                 {
-                    intoTicks ??= db.GetKeysValuesTo(intoStart, intoEnd)
-                        .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
-                        .ToHashSet();
-
                     var tick = DbKey.FromBytes(keyBytes).Timestamp;
 
-                    if (intoTicks.Contains(tick))
+                    while (hasInto && into.Current > tick)
+                        hasInto = into.MoveNext();
+
+                    if (hasInto && into.Current == tick)
                     {
                         collisions++;
                         continue;

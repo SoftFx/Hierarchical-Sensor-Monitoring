@@ -3160,8 +3160,11 @@ namespace HSMServer.Core.Cache
                 case SensorTemplateReevaluationRequest request:
                     ReevaluateMovedSensorTemplates(request);
                     break;
-                case SensorMergeRequest request:
+                case SensorAbsorbRequest request:
                     AbsorbSensor(request);
+                    break;
+                case SensorMergeRefreshRequest request:
+                    RefreshMergedSensor(request);
                     break;
             }
 

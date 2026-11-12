@@ -56,39 +56,66 @@ namespace HSMServer.Core.Cache
 
             initiator ??= InitiatorInfo.System;
 
-            var request = new SensorMoveRequest(sensorId, sensor.Root.Id, destinationProductId, destinationPath, initiator)
-            {
-                OnConflict = onConflict,
-            };
+            SensorAbsorbRequest absorb = null;
 
+            if (onConflict is SensorMoveConflict.Merge)
+            {
+                var path = new SensorPathCheck(destinationProductId, destinationPath ?? string.Empty);
+
+                if (path.TryCheckRequest(out _) && TryGetSensorFromCache(destinationProductId, path.Path, out var occupant) && occupant.Id != sensorId)
+                {
+                    if (occupant.Type != sensor.Type)
+                        return TypeConflict(occupant, sensor, $"{occupant.RootProductName}/{path.Path}");
+
+                    // Merge (#1720), step 1 on the occupant's own queue. Not
+                    // cancellable from here on: a merge is not left half-done
+                    // by a caller that went away.
+                    absorb = new SensorAbsorbRequest(sensorId, occupant.Id, destinationProductId, path.Path, initiator);
+                    var absorbed = await ProcessRequestAsync(destinationProductId, absorb, CancellationToken.None);
+
+                    absorb.Error ??= absorbed.IsOk ? null : absorbed.Error;
+
+                    if (absorb.Error is not null && !absorb.Absorbed)
+                        return new SensorMoveResult(absorb.Conflict ?? SensorMoveOutcome.Failed, absorb.Error);
+
+                    token = CancellationToken.None;
+                }
+            }
+
+            var request = new SensorMoveRequest(sensorId, sensor.Root.Id, destinationProductId, destinationPath, initiator);
             var queued = await ProcessRequestAsync(request.SourceRootId, request, token);
             var result = request.Result ?? new SensorMoveResult(SensorMoveOutcome.Failed, queued.IsOk ? MovedConcurrentlyError : queued.Error);
 
-            if (request.AbsorbId is not { } absorbId)
+            if (absorb is null)
                 return result;
 
-            // Second step on the queue that owns the absorbed sensor (the
-            // destination's): every value it had in flight was handled before
-            // this item, and new ones already resolve to the moved sensor. Not
-            // cancellable: an unindexed occupant must not be left behind.
-            var merge = new SensorMergeRequest(sensorId, absorbId, destinationProductId, initiator);
-            await ProcessRequestAsync(destinationProductId, merge, CancellationToken.None);
-
-            return merge.Error is null
-                ? result with
+            if (!result.IsOk)
+                return result with
                 {
-                    Outcome = SensorMoveOutcome.Merged,
-                    MergedSensorId = absorbId,
-                    MergedValues = merge.Copied,
-                    MergeCollisions = merge.Collisions,
-                }
-                : new SensorMoveResult(SensorMoveOutcome.Failed, $"Moved, but merging sensor {absorbId} failed: {merge.Error}")
-                {
-                    OldPath = result.OldPath,
-                    NewPath = result.NewPath,
-                    MergedSensorId = absorbId,
+                    Outcome = SensorMoveOutcome.Failed,
+                    Error = $"Sensor {absorb.OccupantId} was merged into this sensor and its path now routes here, but the move failed: {result.Error} Retry the move.",
+                    MergedSensorId = absorb.OccupantId,
+                    MergedValues = absorb.Copied,
+                    MergeCollisions = absorb.Collisions,
                 };
+
+            // Step 3 on the queue that owns the survivor now.
+            if (TryGetSensorById(sensorId, out var survivor))
+                await ProcessRequestAsync(survivor.Root.Id, new SensorMergeRefreshRequest(sensorId, survivor.Root.Id, Hops: 0), CancellationToken.None);
+
+            return result with
+            {
+                Outcome = SensorMoveOutcome.Merged,
+                Error = absorb.Error,
+                MergedSensorId = absorb.OccupantId,
+                MergedValues = absorb.Copied,
+                MergeCollisions = absorb.Collisions,
+            };
         }
+
+        private static SensorMoveResult TypeConflict(BaseSensorModel occupant, BaseSensorModel sensor, string fullPath) =>
+            new(SensorMoveOutcome.Conflict,
+                $"Sensor '{fullPath}' (id {occupant.Id}) is {occupant.Type}, the moved sensor is {sensor.Type}: sensors of different types are never merged.");
 
         public async Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default)
@@ -257,28 +284,9 @@ namespace HSMServer.Core.Cache
 
                 var destinationCache = GetOrAddCachedValue(destinationRoot);
 
-                BaseSensorModel absorbed = null;
-                List<SensorAlias> adoptedAliases = null;
-
                 if (destinationCache.Sensors.TryGetValue(newPath, out var occupant))
-                {
-                    if (request.OnConflict is not SensorMoveConflict.Merge)
-                        return (new SensorMoveResult(SensorMoveOutcome.Conflict,
-                            $"Sensor '{newFullPath}' already exists (id {occupant.Id}).") { OldPath = oldFullPath, NewPath = newFullPath }, null);
-
-                    if (occupant.Type != sensor.Type)
-                        return (new SensorMoveResult(SensorMoveOutcome.Conflict,
-                            $"Sensor '{newFullPath}' (id {occupant.Id}) is {occupant.Type}, the moved sensor is {sensor.Type}: sensors of different types are never merged.")
-                            { OldPath = oldFullPath, NewPath = newFullPath }, null);
-
-                    // Merge (#1720): the occupant leaves the path now — a value
-                    // for it from here on resolves to the moved sensor — and is
-                    // absorbed by the next step on its own queue. Its aliases
-                    // follow the survivor, so its old paths keep landing too.
-                    absorbed = occupant;
-                    destinationCache.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(newPath, occupant));
-                    adoptedAliases = AdoptAliases(occupant, sensor);
-                }
+                    return (new SensorMoveResult(SensorMoveOutcome.Conflict,
+                        $"Sensor '{newFullPath}' already exists (id {occupant.Id}).") { OldPath = oldFullPath, NewPath = newFullPath }, null);
 
                 // Missing nodes are created exactly as ingestion creates them;
                 // an empty one left behind by a failed move is swept like any
@@ -308,12 +316,6 @@ namespace HSMServer.Core.Cache
                     if (retiredAlias is not null)
                         sensor.AddAlias(retiredAlias);
 
-                    if (absorbed is not null)
-                    {
-                        AdoptAliases(sensor, absorbed, adoptedAliases);
-                        destinationCache.Sensors.TryAdd(newPath, absorbed);
-                    }
-
                     newParent.DetachMovedSensor(sensor);
                     sensor.MoveTo(oldParent, oldName);
                     oldParent.AttachMovedSensor(sensor);
@@ -330,8 +332,6 @@ namespace HSMServer.Core.Cache
                 // Publish last (see the class comment).
                 oldCache.Aliases[oldPath] = sensor;
                 destinationCache.Sensors[newPath] = sensor;
-
-                request.AbsorbId = absorbed?.Id;
 
                 return (new SensorMoveResult(SensorMoveOutcome.Moved) { OldPath = oldFullPath, NewPath = newFullPath },
                     new PublishedMove(sensor, oldParent, destinationRoot, oldFullPath, newFullPath));
@@ -435,84 +435,116 @@ namespace HSMServer.Core.Cache
             AddValueToSensor(sensor, sensor.Path, request.Value);
         }
 
-        // Hand `from`'s aliases (all of them, or just `only`) to `to` and re-point
-        // their index entries. Under the tree-structure lock.
-        private List<SensorAlias> AdoptAliases(BaseSensorModel from, BaseSensorModel to, List<SensorAlias> only = null)
+        // Hand every alias of `from` to `to` and re-point their index entries.
+        // Under the tree-structure lock.
+        private void AdoptAliases(BaseSensorModel from, BaseSensorModel to)
         {
-            var moved = new List<SensorAlias>();
-
-            foreach (var alias in only ?? [.. from.Aliases])
+            foreach (var alias in from.Aliases)
             {
                 if (from.RemoveAlias(alias.ProductId, alias.Path) is null)
                     continue;
 
                 to.AddAlias(alias);
-                moved.Add(alias);
 
                 if (_cache.TryGetValue(alias.ProductId, out var cachedValue))
                     cachedValue.Aliases.TryUpdate(alias.Path, to, from);
             }
-
-            return moved;
         }
 
-        // The merge's second step (#1720), on the absorbed sensor's queue.
-        private void AbsorbSensor(SensorMergeRequest request)
+        // Merge step 1 (#1720), on the occupant's own queue: no value of the
+        // occupant is being added while this runs, and values already queued
+        // behind it resolve through the alias this step installs. Until the
+        // occupant leaves the index nothing is lost on a failure (copied rows
+        // only fill ticks the survivor did not have); after that the survivor
+        // owns the path through an alias, so the occupant's data has a home
+        // whatever happens to the move that follows.
+        private void AbsorbSensor(SensorAbsorbRequest request)
         {
             try
             {
-                if (!TryGetSensorById(request.AbsorbedId, out var absorbed))
+                if (!TryGetSensorById(request.OccupantId, out var occupant) || occupant.Root.Id != request.RootId ||
+                    !_cache.TryGetValue(request.RootId, out var cachedValue) ||
+                    !cachedValue.Sensors.TryGetValue(request.Path, out var indexed) || indexed.Id != occupant.Id)
                 {
-                    request.Error = $"Sensor {request.AbsorbedId} was removed before the merge.";
+                    request.Error = $"Sensor {request.OccupantId} no longer holds the destination path; retry the move.";
                     return;
                 }
 
-                // Unindexed, the occupant can still be moved by id; one that left
-                // this queue meanwhile is no longer this merge's to absorb.
-                if (absorbed.Root.Id != request.ExpectedRootId)
+                if (!TryGetSensorById(request.SurvivorId, out var survivor))
                 {
-                    request.Error = $"Sensor {request.AbsorbedId} was moved before the merge; it was kept.";
+                    request.Error = $"Sensor {request.SurvivorId} was not found.";
                     return;
                 }
 
-                (request.Copied, request.Collisions) = _database.MergeSensorValues(absorbed.Id, request.SurvivorId);
-
-                var survivorPath = TryGetSensorById(request.SurvivorId, out var survivor) ? survivor.FullPath : request.SurvivorId.ToString();
-
-                // The survivor's newest value may now be one of the copied rows.
-                // Its cache is touched only on the queue that owns it; one that
-                // moved on meanwhile picks the rows up from the database.
-                if (survivor is not null && survivor.Root.Id == absorbed.Root.Id)
+                if (survivor.Type != occupant.Type)
                 {
-                    survivor.RefreshAfterMerge();
-                    SensorUpdateView(survivor);
+                    request.Error = TypeConflict(occupant, survivor, occupant.FullPath).Error;
+                    request.Conflict = SensorMoveOutcome.Conflict;
+                    return;
                 }
+
+                // A bar's in-progress bar exists only in memory: store it so it
+                // is copied with the rest.
+                if (occupant is IBarSensor bar && bar.LocalLastValue != default)
+                    SaveSensorValueToDb(bar.LocalLastValue, occupant.Id);
+
+                (request.Copied, request.Collisions) = _database.MergeSensorValues(occupant.Id, survivor.Id);
+
+                lock (_treeStructureLock)
+                {
+                    cachedValue.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(request.Path, occupant));
+                    cachedValue.Aliases[request.Path] = survivor;
+
+                    survivor.AddAlias(new SensorAlias(request.RootId, request.Path, DateTime.UtcNow));
+                    AdoptAliases(occupant, survivor);
+                }
+
+                request.Absorbed = true;
 
                 if (request.Collisions > 0)
-                    _logger.Warn($"Sensor merge: {request.Collisions} row(s) of [{absorbed.Id}] dropped, the survivor [{request.SurvivorId}] had a row at the same tick");
+                    _logger.Warn($"Sensor merge: {request.Collisions} row(s) of [{occupant.Id}] dropped, the survivor [{survivor.Id}] had a row at the same tick");
 
-                _journalService.AddRecord(new JournalRecordModel(request.SurvivorId, request.Initiator)
+                try
                 {
-                    Enviroment = "Merge sensor",
-                    PropertyName = "History",
-                    OldValue = $"{absorbed.FullPath} ({absorbed.Id})",
-                    NewValue = $"{request.Copied} value(s) taken over, {request.Collisions} same-tick collision(s) kept the survivor's row",
-                    Path = survivorPath,
-                    Kind = JournalKinds.TreeCrud,
-                    ProductId = absorbed.Root.Id.ToString(),
-                });
+                    _journalService.AddRecord(new JournalRecordModel(survivor.Id, request.Initiator)
+                    {
+                        Enviroment = "Merge sensor",
+                        PropertyName = "History",
+                        OldValue = $"{occupant.FullPath} ({occupant.Id})",
+                        NewValue = $"{request.Copied} value(s) taken over, {request.Collisions} same-tick collision(s) kept this sensor's row",
+                        Path = survivor.FullPath,
+                        Kind = JournalKinds.TreeCrud,
+                        ProductId = request.RootId.ToString(),
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, $"Journaling the merge of sensor {occupant.Id} failed");
+                }
 
-                _logger.Info($"Sensor merged: [{absorbed.Id}] {absorbed.FullPath} into [{request.SurvivorId}] {survivorPath}: {request.Copied} copied, {request.Collisions} collisions");
+                _logger.Info($"Sensor merged: [{occupant.Id}] {occupant.FullPath} into [{survivor.Id}] {survivor.FullPath}: {request.Copied} copied, {request.Collisions} collisions");
 
-                RemoveSensor(absorbed.Id, InitiatorInfo.AsSystemInfo($"Merged into sensor {request.SurvivorId}"));
+                RemoveSensor(occupant.Id, InitiatorInfo.AsSystemInfo($"Merged into sensor {survivor.Id}"));
 
-                if (TryGetSensorById(absorbed.Id, out _))
-                    request.Error = $"Sensor {absorbed.Id} was merged but could not be removed.";
+                if (TryGetSensorById(occupant.Id, out _))
+                    request.Error = $"Sensor {occupant.Id} was merged but could not be removed.";
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Sensor merge failed: [{request.AbsorbedId}] into [{request.SurvivorId}]");
+                _logger.Error(ex, $"Sensor merge failed: [{request.OccupantId}] into [{request.SurvivorId}]");
                 request.Error = ex.Message;
+            }
+        }
+
+        // Merge step 3: the survivor's newest value may now be a copied row.
+        private void RefreshMergedSensor(SensorMergeRefreshRequest request)
+        {
+            if (TryGetSensorById(request.SensorId, out var sensor) &&
+                OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
+                    (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "merge refresh"))
+            {
+                sensor.RefreshAfterMerge();
+                SensorUpdateView(sensor);
             }
         }
 
