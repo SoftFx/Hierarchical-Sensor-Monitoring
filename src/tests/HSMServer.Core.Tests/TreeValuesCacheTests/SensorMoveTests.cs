@@ -223,6 +223,52 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         [Fact]
+        [Trait("Category", "Sensor move")]
+        public async Task Preview_PredictsTheMove_WithoutChangingAnything()
+        {
+            var root = Unique();
+            var destinationTemplate = BuildTtlTemplate(_fixture.FolderB, $"{SensorMoveFixture.ProductBName}/{root}/dst/*");
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(destinationTemplate)).Success);
+
+            try
+            {
+                var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/s", values: 1);
+                var occupant = await CreateIntSensorAsync(_fixture.ProductB, _fixture.KeyB, $"{root}/taken", values: 1);
+
+                var keepHistory = new TimeIntervalModel(TimeSpan.FromDays(9).Ticks);
+                Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = _fixture.ProductB, KeepHistory = keepHistory }, default)).IsOk);
+
+                var preview = _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/dst/s");
+
+                Assert.Equal(SensorMoveOutcome.Moved, preview.Outcome);
+                Assert.Equal($"{SensorMoveFixture.ProductBName}/{root}/dst/s", preview.NewPath);
+                // The occupant already created `{root}` in B; only `dst` is new.
+                Assert.Equal([$"{SensorMoveFixture.ProductBName}/{root}/dst"], preview.CreatedNodes);
+                Assert.Contains(preview.TemplatesApplied, t => t.Id == destinationTemplate.Id);
+                Assert.Contains(preview.SettingsChanged, s => s.Name == "KeepHistory" && s.After == keepHistory.ToString());
+
+                var conflict = _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/taken");
+                Assert.Equal((SensorMoveOutcome.Conflict, occupant.Id), (conflict.Outcome, conflict.OccupantId));
+                Assert.Equal(SensorMoveOutcome.Merged, _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/taken", SensorMoveConflict.Merge).Outcome);
+
+                // An alias another sensor holds at the destination is named.
+                var mover = await CreateIntSensorAsync(_fixture.ProductB, _fixture.KeyB, $"{root}/was-here", values: 1);
+                Assert.True((await _valuesCache.MoveSensorAsync(mover.Id, _fixture.ProductB, $"{root}/now-there")).IsOk);
+                Assert.Equal(mover.Id, _valuesCache.PreviewMove(sensor.Id, _fixture.ProductB, $"{root}/was-here").DisplacesAliasOf);
+
+                // Nothing changed.
+                Assert.Equal(_fixture.ProductA, sensor.Root.Id);
+                Assert.Empty(sensor.Aliases);
+                Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductB, $"{root}/dst/s", out _));
+                Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId == destinationTemplate.Id);
+            }
+            finally
+            {
+                await _valuesCache.RemoveAlertTemplateAsync(destinationTemplate.Id);
+            }
+        }
+
+        [Fact]
         [Trait("Category", "Sensor alias")]
         public async Task Alias_WithinProduct_RedirectsValuesToTheMovedSensor()
         {

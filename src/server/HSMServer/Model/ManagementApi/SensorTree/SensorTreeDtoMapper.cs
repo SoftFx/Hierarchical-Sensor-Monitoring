@@ -97,6 +97,13 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Parent = sensor.Parent is { } parent ? ToNodeRef(parent) : null,
             LastValue = ToValueDto(sensor, sensor.LastValue),
             EnumOptions = sensor.Type == SensorType.Enum ? ToEnumOptions(sensor) : null,
+            Aliases = sensor.Aliases.Select(a => new SensorAliasDto
+            {
+                ProductId = a.ProductId,
+                Path = a.Path,
+                CreationDate = a.CreationDate.ToUtcInstant(),
+                LastHit = a.LastHit.Ticks > 0 ? a.LastHit.ToUtcInstant() : null,
+            }).ToList(),
         };
 
 

@@ -104,6 +104,121 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // A read-only mirror of the move's validation (MoveSensorUnderLock) and
+        // of what CompleteMove/merge would change. Lock-free: a prediction, the
+        // real move re-validates everything.
+        public SensorMovePreview PreviewMove(Guid sensorId, Guid destinationProductId, string destinationPath,
+            SensorMoveConflict onConflict = SensorMoveConflict.Fail)
+        {
+            if (!TryGetSensorById(sensorId, out var sensor) || sensor.Parent is null)
+                return new SensorMovePreview(SensorMoveOutcome.SensorNotFound, $"Sensor {sensorId} was not found.");
+
+            var check = new SensorPathCheck(destinationProductId, destinationPath ?? string.Empty);
+
+            if (!check.TryCheckRequest(out var pathError))
+                return new SensorMovePreview(SensorMoveOutcome.InvalidPath, pathError);
+
+            if (!TryGetProduct(destinationProductId, out var root) || !root.IsRoot)
+                return new SensorMovePreview(SensorMoveOutcome.DestinationNotFound, $"Product {destinationProductId} was not found.");
+
+            var oldPath = sensor.FullPath;
+            var newPath = $"{root.DisplayName}/{check.Path}";
+
+            if (sensor.Root.Id == root.Id && string.Equals(sensor.Path, check.Path, StringComparison.Ordinal))
+                return new SensorMovePreview(SensorMoveOutcome.Unchanged) { OldPath = oldPath, NewPath = newPath };
+
+            var outcome = SensorMoveOutcome.Moved;
+            Guid? occupantId = null;
+
+            if (TryGetSensorFromCache(root.Id, check.Path, out var occupant) && occupant.Id != sensor.Id)
+            {
+                occupantId = occupant.Id;
+
+                if (onConflict is not SensorMoveConflict.Merge)
+                    return new SensorMovePreview(SensorMoveOutcome.Conflict, $"Sensor '{newPath}' already exists (id {occupant.Id}).")
+                    { OldPath = oldPath, NewPath = newPath, OccupantId = occupantId };
+
+                if (occupant.Type != sensor.Type)
+                    return new SensorMovePreview(SensorMoveOutcome.Conflict, TypeConflict(occupant, sensor, newPath).Error)
+                    { OldPath = oldPath, NewPath = newPath, OccupantId = occupantId };
+
+                outcome = SensorMoveOutcome.Merged;
+            }
+
+            Guid? displacesAliasOf = _cache.TryGetValue(root.Id, out var destinationCache) &&
+                destinationCache.Aliases.TryGetValue(check.Path, out var aliasOwner) && aliasOwner.Id != sensor.Id
+                ? aliasOwner.Id
+                : null;
+
+            // The deepest existing node on the way, and the ones to create.
+            var parent = root;
+            var created = new List<string>();
+            var parts = check.PathParts;
+
+            for (var i = 0; i < parts.Length - 1; i++)
+            {
+                var next = created.Count == 0
+                    ? parent.SubProducts.Values.FirstOrDefault(p => p.DisplayName == parts[i])
+                    : null;
+
+                if (next is null)
+                    created.Add($"{root.DisplayName}/{string.Join('/', parts[..(i + 1)])}");
+                else
+                    parent = next;
+            }
+
+            var attached = sensor.Policies.Select(p => p.TemplateId)
+                .Concat(sensor.Policies.TTLPolicies.Select(t => t.TemplateId))
+                .OfType<Guid>()
+                .ToHashSet();
+
+            var detached = new List<(Guid, string)>();
+            var applied = new List<(Guid, string)>();
+
+            foreach (var template in _alertTemplates.Values.OrderBy(t => t.Id))
+            {
+                var matches = template.IsMatch(newPath, sensor.Type, root.FolderId);
+
+                if (matches && !attached.Contains(template.Id))
+                    applied.Add((template.Id, template.Name));
+                else if (!matches && attached.Contains(template.Id))
+                    detached.Add((template.Id, template.Name));
+            }
+
+            // A setting the sensor does not set itself resolves through the
+            // parent chain: at the destination, the deepest existing node's
+            // chain (nodes the move creates inherit from it as well).
+            var settings = new List<(string, string, string)>();
+
+            void Compare(string name, Model.NodeSettings.TimeIntervalSettingProperty own, Model.NodeSettings.TimeIntervalSettingProperty destination)
+            {
+                if (own.IsSet)
+                    return;
+
+                var before = own.Value?.ToString();
+                var after = destination.Value?.ToString();
+
+                if (!string.Equals(before, after, StringComparison.Ordinal))
+                    settings.Add((name, before, after));
+            }
+
+            Compare("TTL", sensor.Settings.TTL, parent.Settings.TTL);
+            Compare("KeepHistory", sensor.Settings.KeepHistory, parent.Settings.KeepHistory);
+            Compare("SelfDestroy", sensor.Settings.SelfDestroy, parent.Settings.SelfDestroy);
+
+            return new SensorMovePreview(outcome)
+            {
+                OldPath = oldPath,
+                NewPath = newPath,
+                OccupantId = occupantId,
+                DisplacesAliasOf = displacesAliasOf,
+                CreatedNodes = created,
+                TemplatesDetached = detached,
+                TemplatesApplied = applied,
+                SettingsChanged = settings,
+            };
+        }
+
         private bool TryGetOccupant(Guid sensorId, Guid productId, string destinationPath, out BaseSensorModel occupant, out string path)
         {
             var check = new SensorPathCheck(productId, destinationPath ?? string.Empty);

@@ -80,7 +80,9 @@ namespace HSMServer.Core.Tests.Mcp
             "list_products",
             "list_sensor_policies",
             "list_sensor_ttl_policies",
+            "move_sensors",
             "mute_sensor",
+            "remove_sensor_alias",
             "rollback_journal_record",
             "unmute_sensor",
             "update_alert_schedule",
@@ -491,7 +493,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(33, tools.Count);
+                Assert.Equal(35, tools.Count);
 
                 foreach (var tool in tools)
                 {
