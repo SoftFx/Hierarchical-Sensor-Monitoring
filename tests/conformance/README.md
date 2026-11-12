@@ -215,10 +215,13 @@ polls until the expectation holds; `0` checks once.
 | `create_collector_on_session\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | a collector whose transport is the collector session to the scripted server (identity and access key of `create_collector`); `request_timeout_ms` is also how long a request waits for its ack. C#: `CollectorOptions.Transport = Session`; native: `hsm_collector_use_session_transport`. A driver may shorten the pause between attempts to open a session; no scenario depends on it |
 | `session_server_hello\|max_frame_bytes\|heartbeat_seconds` | what the hello of the sessions accepted from now on states (default `4194304` and `30`) |
 | `session_server_refuse_upgrades\|status` / `session_server_accept_upgrades` | every upgrade is refused with this HTTP status / upgrades are accepted again (the default) |
-| `session_server_ack\|op\|status` | requests of `op` (`list`, `commands`) are acknowledged with this status from now on (default 200); a status outside 2xx is a failure ack with an `error` text |
+| `session_server_ack\|op\|status` | requests of `op` (`list`, `commands`) are acknowledged with this status from now on (default 200); a status outside 2xx is a failure ack with an `error` text. `0` is no status and is refused: `session_server_stay_silent` leaves a request without an ack |
 | `session_server_stay_silent\|count` | the next `count` requests are recorded and get no ack |
 | `session_server_stop_answering_pings` | heartbeats are recorded and not answered: to the collector the server has gone quiet |
 | `session_server_drop_sessions` | every open session is cut without a close handshake |
+| `session_server_close_sessions\|code` | every open session is closed by the server with this close code (a server that shuts down says `1001`); the answer is left to the collector |
+| `session_http_request` | the **driver** makes one plain HTTP request to the scripted server: what `expect_no_http_requests` must see, for its must-fail fixture |
+| `expect_session_pings_at_least\|count\|timeout_s` | heartbeats (`op` `ping`) received from the collector so far |
 | `expect_session_count\|count\|timeout_s`, `expect_session_count_at_least\|count\|timeout_s` | upgrades accepted so far |
 | `expect_refused_upgrades_at_least\|count\|timeout_s` | upgrades refused so far: the collector keeps trying |
 | `expect_session_ints_once\|start\|count\|timeout_s` | every int value in `[start, start+count)` is in a delivered `list` frame exactly once (read from the wire: `"Type":1`, `"Value":N`) |
@@ -228,13 +231,13 @@ polls until the expectation holds; `0` checks once.
 | `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
 | `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request |
 | `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
-| `expect_session_closed_normally` | the collector ended its last session with close code 1000 |
+| `expect_session_closed_normally` | the last close frame the collector sent carries code 1000: its close at stop, or its answer to the server's close. Polled for 5 s. A session that was cut sends none, so pair it with `expect_session_count` where the number of sessions matters |
 
 Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
 (the WebSocket itself is `HttpListener`'s). **The native driver does not implement these verbs yet**
 (`CONFORMANCE-UNSUPPORTED`, #1668): they arrive with the native session transport, whose test
 fixture `tests/ws_test_server.hpp` is the scripted server there; until then the session fixture and
-its two meta fixtures are not registered in the native CMake. Wall clock: the heartbeat case runs
+its `meta_session_*` fixtures are not registered in the native CMake. Wall clock: the heartbeat case runs
 on a 1-second heartbeat (2.5 s of silence), and a native collector reopens a session on a backoff
 that starts at a second, so the timeouts of these cases are generous on purpose.
 

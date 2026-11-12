@@ -267,8 +267,11 @@ namespace HSMDataCollector.Tests.Transport
 
             using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
             {
-                // Everything queues up while the upgrade is refused, so it leaves as one package:
-                // a value too large for a frame in the middle of 30 small ones, several frames.
+                // Everything queues up while the upgrade is refused, so it leaves as one package
+                // of several frames: 30 small values and one too large for a frame. A frame of
+                // 1100 bytes holds at most seven of the small ones, so the large one, ninth in
+                // the package, is dropped while the SECOND frame is filled, the frame that fails:
+                // it is settled by nothing but its own drop.
                 server.RefuseUpgrades(503);
 
                 using (var collector = new DataCollector(OptionsFor(server)))
@@ -278,12 +281,12 @@ namespace HSMDataCollector.Tests.Transport
                     var text = collector.CreateStringSensor("session/partial-huge");
                     await collector.Start();
 
-                    for (var i = 0; i < 15; i++)
+                    for (var i = 0; i < 8; i++)
                         number.AddValue(i);
 
                     text.AddValue(new string('x', 5000));
 
-                    for (var i = 15; i < 30; i++)
+                    for (var i = 8; i < 30; i++)
                         number.AddValue(i);
 
                     Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 1));
@@ -305,8 +308,46 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Equal(Enumerable.Range(0, 30).ToArray(), DeliveredInts(server).OrderBy(v => v).ToArray());
             }
 
-            // The value that cannot be sent was dropped, and counted, once, not once per attempt.
+            // The value that cannot be sent was dropped, and counted, once, not once per attempt:
+            // it was settled by the pass that failed and did not come back with the rest.
+            Assert.Single(logger.Errors.Where(e => e.Contains("session/partial-huge") && e.Contains("larger than a collector session frame")));
             Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
+        }
+
+        [Fact]
+        public async Task Frames_filled_to_the_brim_still_fit_the_limit()
+        {
+            const int limit = 1100;
+            const int count = 600;
+
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = limit })
+            {
+                var options = OptionsFor(server);
+                options.PackageCollectPeriod = TimeSpan.FromHours(1); // the stop drain sends them
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sensor = collector.CreateStringSensor("session/brim");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/brim"), "The session never came up.");
+
+                    // Values of every length from 0 to 96 bytes, over and over: the frames are
+                    // cut at about a hundred different fill levels, many of them within a few
+                    // bytes of the room. A frame that counted its envelope or its separators
+                    // wrong goes over the limit in one of them.
+                    for (var i = 0; i < count; i++)
+                        sensor.AddValue(new string('x', i % 97));
+
+                    await collector.Stop();
+                }
+
+                var frames = server.Requests.Where(r => r.Op == "list").ToList();
+                var largest = frames.Max(f => System.Text.Encoding.UTF8.GetByteCount(f.Frame));
+
+                Assert.True(largest <= limit, $"A frame of {largest} bytes went out against a limit of {limit}.");
+                Assert.Equal(count, server.AcceptedElements("list").Count(e => e.Contains("session/brim")));
+            }
         }
 
         [Fact]
@@ -395,6 +436,12 @@ namespace HSMDataCollector.Tests.Transport
                     server.StaySilentFor(1);
 
                     var sensor = collector.CreateIntSensor("session/no-ack");
+
+                    // The value only when the registration has taken the silent slot: the two
+                    // travel on queues of their own, and the value could be first otherwise.
+                    Assert.True(await WaitForAsync(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/no-ack") && r.AckStatus == 0)),
+                                "The registration was never sent.");
+
                     sensor.AddValue(7);
 
                     Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "commands" && r.Body.Contains("session/no-ack"))),
@@ -452,7 +499,9 @@ namespace HSMDataCollector.Tests.Transport
         [Fact]
         public async Task Idle_session_sends_heartbeats_and_stays_up()
         {
-            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 1 })
+            // Two seconds, not one: the session is given up after two and a half heartbeats
+            // without a frame, and a pong that is a second late must not look like that.
+            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 2 })
             using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
             {
                 sender.Start();
@@ -593,6 +642,185 @@ namespace HSMDataCollector.Tests.Transport
         // --- stop ---
 
         [Fact]
+        public async Task Collector_started_through_the_obsolete_initialize_opens_its_session()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/initialize");
+
+#pragma warning disable CS0618 // the entry point under test
+                    collector.Initialize(false);
+#pragma warning restore CS0618
+
+                    sensor.AddValue(9);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(9)), "A collector started through Initialize delivered nothing.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Empty(server.HttpRequests);
+            }
+        }
+
+        [Fact]
+        public async Task Close_from_the_server_is_answered_with_a_close_and_the_session_is_reopened()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor("session/server-close");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/server-close"), "The session never came up.");
+
+                    // A server that shuts down: "going away", and it waits for the answer.
+                    server.CloseSessions(1001);
+
+                    Assert.True(await WaitForAsync(() => server.Closes.Count >= 1), "The collector dropped the session instead of answering the close.");
+                    Assert.Equal(1000, server.Closes[0]);
+
+                    sensor.AddValue(3);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(3)), "The value after the close never arrived.");
+                    Assert.True(server.Sessions >= 2, "The session was not opened again.");
+
+                    await collector.Stop();
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Hello_with_limits_the_collector_cannot_work_with_is_refused_and_reported()
+        {
+            var logger = new RecordingLogger();
+
+            // Below the smallest frame limit a session may state.
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 512 })
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/hello");
+                    await collector.Start();
+
+                    sensor.AddValue(4);
+
+                    Assert.True(await WaitForAsync(() => server.Sessions >= 2), "The collector did not try again after a hello it cannot work with.");
+                    Assert.Empty(server.Requests);
+
+                    server.MaxFrameBytes = 4096;
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(4)), "The value never arrived on a session with a usable hello.");
+
+                    await collector.Stop();
+                }
+            }
+
+            Assert.Contains(logger.Errors, e => e.Contains("limits this collector cannot work with"));
+        }
+
+        [Fact]
+        public async Task Second_collector_from_the_same_options_does_not_close_the_session_of_the_first()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var first = new DataCollector(options))
+                using (var second = new DataCollector(options))
+                {
+                    var sensor = first.CreateIntSensor("session/owner");
+
+                    await first.Start();
+                    await second.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/owner"), "The session never came up.");
+
+                    // The second collector shares the sender of the first and does not own it.
+                    await second.Stop();
+
+                    sensor.AddValue(21);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(21)), "The first collector lost its session to the stop of the second.");
+                    Assert.Equal(1, server.Sessions);
+                    Assert.Empty(server.Closes);
+
+                    await first.Stop();
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Send_file_on_a_session_says_that_the_file_was_not_sent()
+        {
+            var logger = new RecordingLogger();
+            var path = System.IO.Path.GetTempFileName();
+
+            try
+            {
+                System.IO.File.WriteAllText(path, "content");
+
+                using (var server = new ScriptedSessionServer())
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var file = collector.CreateFileSensor("session/send-file", "report");
+                    await collector.Start();
+
+                    Assert.False(await file.SendFile(path), "SendFile reported a file as sent on a transport that cannot carry one.");
+
+                    await collector.Stop();
+                }
+            }
+            finally
+            {
+                System.IO.File.Delete(path);
+            }
+
+            Assert.Single(logger.Errors.Where(e => e.Contains("session/send-file") && e.Contains("cannot carry file values")));
+        }
+
+        [Fact]
+        public async Task Request_that_is_no_upgrade_is_on_the_record_of_the_scripted_server()
+        {
+            // What "no HTTP request on a session" is checked against must itself be seen to work.
+            using (var server = new ScriptedSessionServer())
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                using (var response = await client.GetAsync($"{server.ServerAddress}:{server.Port}/api/sensors/list"))
+                    Assert.Equal(404, (int)response.StatusCode);
+
+                Assert.Equal(new[] { "GET /api/sensors/list" }, server.HttpRequests.ToArray());
+            }
+        }
+
+        [Fact]
+        public async Task Untrusted_certificate_setting_does_not_stand_in_the_way_of_a_plaintext_session()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.AllowUntrustedServerCertificate = true; // left on from a development config
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sensor = collector.CreateIntSensor("session/plaintext");
+                    await collector.Start();
+
+                    sensor.AddValue(8);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(8)), "A plaintext session was refused over a certificate setting.");
+
+                    await collector.Stop();
+                }
+            }
+        }
+
+        [Fact]
         public async Task Stop_delivers_what_is_queued_and_closes_the_session_normally()
         {
             using (var server = new ScriptedSessionServer())
@@ -614,6 +842,9 @@ namespace HSMDataCollector.Tests.Transport
                 }
 
                 Assert.Equal(new[] { 11, 12 }, DeliveredInts(server).ToArray());
+
+                // Stop waits a moment for the server's answer to its close and no longer.
+                Assert.True(await WaitForAsync(() => server.Closes.Count == 1), "The collector sent no close frame.");
                 Assert.Equal(new[] { 1000 }, server.Closes.ToArray());
             }
         }
@@ -729,6 +960,9 @@ namespace HSMDataCollector.Tests.Transport
             {
                 var options = OptionsFor(server);
                 options.AllowUntrustedServerCertificate = true;
+                // A TLS session: only there is a certificate the setting could excuse.
+                options.ServerAddress = "https://localhost";
+                options.AllowPlaintextTransport = false;
 
                 using (var collector = new DataCollector(options))
                 {

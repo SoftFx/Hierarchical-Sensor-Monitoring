@@ -1066,6 +1066,7 @@ namespace HSMDataCollector.Tests
 
                 case "session_server_ack":
                     Assert.True(step.Arg(0) == "list" || step.Arg(0) == "commands", $"session_server_ack: unknown op '{step.Arg(0)}'.");
+                    Assert.True(int.Parse(step.Arg(1)) > 0, "session_server_ack: 0 is no status; session_server_stay_silent leaves a request without an ack.");
                     SessionServer(state).AckWith(step.Arg(0), int.Parse(step.Arg(1)));
                     break;
 
@@ -1080,6 +1081,32 @@ namespace HSMDataCollector.Tests
                 case "session_server_drop_sessions":
                     SessionServer(state).DropSessions();
                     break;
+
+                case "session_server_close_sessions":
+                    SessionServer(state).CloseSessions(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_http_request":
+                {
+                    // The driver's own request, not the collector's: it puts on the server's
+                    // record what expect_no_http_requests looks for.
+                    var server = SessionServer(state);
+
+                    using (var client = new System.Net.Http.HttpClient())
+                    using (await client.GetAsync($"{server.ServerAddress}:{server.Port}/api/sensors/list").ConfigureAwait(false)) { }
+
+                    break;
+                }
+
+                case "expect_session_pings_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Pings >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} heartbeat(s) from the collector, got {server.Pings}.");
+                    break;
+                }
 
                 case "expect_session_count":
                 {

@@ -1,0 +1,8 @@
+# MUST-FAIL: a value is delivered on the session, then every frame is demanded to fit 10 bytes.
+# Proves expect_session_frames_fit measures the frames the scripted session server recorded.
+meta_session_frames_fit_too_small|create_collector_on_session|50|20|5000
+meta_session_frames_fit_too_small|create_int_sensor|meta/session/frames
+meta_session_frames_fit_too_small|start
+meta_session_frames_fit_too_small|add_int|0|1|Ok|sent
+meta_session_frames_fit_too_small|expect_session_ints_once|1|1|15
+meta_session_frames_fit_too_small|expect_session_frames_fit|10

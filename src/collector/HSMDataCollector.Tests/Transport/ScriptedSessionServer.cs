@@ -42,6 +42,10 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentDictionary<string, int> _ackStatus = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         private readonly Task _loop;
 
+        // Guards the counters of the script: they are set by the test and counted down by the
+        // sessions, and a check-then-act on two threads would lose one of the two.
+        private readonly object _script = new object();
+
         private Dictionary<string, string> _upgradeHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private int _refuseStatus;
         private int _listFramesBeforeFailure = -1;
@@ -87,12 +91,32 @@ namespace HSMDataCollector.Tests.Transport
         /// </summary>
         public void FailListFramesAfter(int accepted, int status)
         {
-            Volatile.Write(ref _listFailStatus, status);
-            Volatile.Write(ref _listFramesBeforeFailure, accepted);
+            lock (_script)
+            {
+                _listFailStatus = status;
+                _listFramesBeforeFailure = accepted;
+            }
         }
 
         /// <summary>The next <paramref name="requests"/> requests are recorded and get no ack.</summary>
-        public void StaySilentFor(int requests) => Interlocked.Exchange(ref _silentRequests, requests);
+        public void StaySilentFor(int requests)
+        {
+            lock (_script)
+                _silentRequests = requests;
+        }
+
+        /// <summary>
+        /// Closes every open session from the server's side with this close code, as a server
+        /// that shuts down does, and leaves the answer to the collector.
+        /// </summary>
+        public void CloseSessions(int code)
+        {
+            foreach (var session in _open.ToArray())
+            {
+                try { session.Value.CloseOutputAsync((WebSocketCloseStatus)code, string.Empty, CancellationToken.None).GetAwaiter().GetResult(); }
+                catch (Exception) { }
+            }
+        }
 
         /// <summary>Heartbeats are recorded and not answered: to the collector the server has gone quiet.</summary>
         public void StopAnsweringPings() => Volatile.Write(ref _answerPings, 0);
@@ -215,7 +239,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 var buffer = new ArraySegment<byte>(new byte[64 * 1024]);
 
-                while (socket.State == WebSocketState.Open)
+                while (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseSent)
                 {
                     string text;
 
@@ -230,7 +254,12 @@ namespace HSMDataCollector.Tests.Transport
                             if (result.MessageType == WebSocketMessageType.Close)
                             {
                                 _closes.Enqueue((int)(result.CloseStatus ?? 0));
-                                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None).ConfigureAwait(false);
+
+                                // Nothing to answer when the close is itself the answer to
+                                // CloseSessions.
+                                if (socket.State == WebSocketState.CloseReceived)
+                                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None).ConfigureAwait(false);
+
                                 return;
                             }
 
@@ -283,20 +312,22 @@ namespace HSMDataCollector.Tests.Transport
             if (!id.HasValue)
                 return;
 
-            if (Interlocked.Decrement(ref _silentRequests) >= 0)
-            {
-                _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, 0));
-                return;
-            }
-
-            Interlocked.Increment(ref _silentRequests); // floor the counter at 0
-
             var status = _ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200;
 
-            if (op == "list" && Volatile.Read(ref _listFramesBeforeFailure) >= 0 && Interlocked.Decrement(ref _listFramesBeforeFailure) < 0)
+            lock (_script)
             {
-                Volatile.Write(ref _listFramesBeforeFailure, 0);
-                status = Volatile.Read(ref _listFailStatus);
+                if (_silentRequests > 0)
+                {
+                    _silentRequests--;
+                    status = 0;
+                }
+                else if (op == "list" && _listFramesBeforeFailure >= 0)
+                {
+                    if (_listFramesBeforeFailure == 0)
+                        status = _listFailStatus;
+                    else
+                        _listFramesBeforeFailure--;
+                }
             }
 
             if (status == 0)

@@ -370,9 +370,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             // A floor, so that a connection that comes and goes cannot make this loop spin.
             await Task.Delay(TransportRetryFloor, token).ConfigureAwait(false);
 
-            var connected = transport.WaitForConnectionAsync(token);
+            // The wait for a connection ends with this pause, whichever of the two is first:
+            // left pending, one more waiter would stay behind every cycle of an outage.
+            using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                var connected = transport.WaitForConnectionAsync(wait.Token);
+                var woken = await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
 
-            return await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
+                wait.Cancel();
+                _ = connected.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+                return woken;
+            }
         }
 
         private static readonly TimeSpan TransportRetryFloor = TimeSpan.FromMilliseconds(100);

@@ -529,6 +529,11 @@ namespace HSMDataCollector.Client.Session
 
                 session.Cancel();
 
+                // The other loop ends on the cancellation; what it throws on the way is not news.
+                // Observed before anything below can throw: a stop leaves through the catch.
+                Observe(receive);
+                Observe(heartbeat);
+
                 string why;
 
                 try
@@ -543,10 +548,6 @@ namespace HSMDataCollector.Client.Session
                 {
                     why = Describe(ex);
                 }
-
-                // The other loop ends on the cancellation; what it throws on the way is not news.
-                Observe(receive);
-                Observe(heartbeat);
 
                 token.ThrowIfCancellationRequested();
 
@@ -563,7 +564,13 @@ namespace HSMDataCollector.Client.Session
                 var text = await ReceiveAsync(socket, buffer, token).ConfigureAwait(false);
 
                 if (text == null)
-                    return $"closed by the server{DescribeClose(socket)}";
+                {
+                    var why = $"closed by the server{DescribeClose(socket)}";
+
+                    await AnswerCloseAsync(socket).ConfigureAwait(false);
+
+                    return why;
+                }
 
                 Volatile.Write(ref _lastReceivedTicks, Stopwatch.GetTimestamp());
 
@@ -594,6 +601,34 @@ namespace HSMDataCollector.Client.Session
                 }
             }
         }
+
+        // The server closed the session and waits for the close that answers it. ClientWebSocket
+        // sends none by itself, and a session that is dropped instead reads on the server as a
+        // connection that broke after its close. Best effort and short: the session is over
+        // either way.
+        private async Task AnswerCloseAsync(ClientWebSocket socket)
+        {
+            if (socket.State != WebSocketState.CloseReceived)
+                return;
+
+            if (!await _sendLock.WaitAsync(CloseAnswerTimeout).ConfigureAwait(false))
+                return;
+
+            try
+            {
+                using (var timeout = new CancellationTokenSource(CloseAnswerTimeout))
+                    await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, string.Empty, timeout.Token).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
+        private static readonly TimeSpan CloseAnswerTimeout = TimeSpan.FromSeconds(1);
 
         // Says something when nothing was sent for a whole interval, and gives the session up
         // when the server has been silent for two and a half.

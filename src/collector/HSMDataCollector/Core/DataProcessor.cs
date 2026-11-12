@@ -292,14 +292,22 @@ namespace HSMDataCollector.Core
             // The collector session has no op for a file value yet, and there is no HTTP to send
             // it over instead. Refused here, before the queue: queued, it would be sent, refused
             // and re-queued for ever. Reported and counted like any other lost value.
-            if (_transport != null && !_transport.CanCarryFiles && _lifecycle.CanAcceptData)
+            if (RefusesFiles && _lifecycle.CanAcceptData)
             {
-                AddError($"A file value of {file?.Path} was not sent: the collector session transport cannot carry file values yet.");
-                EmitOverflowDrops(_fileQueue.QueueName, 1);
+                ReportRefusedFile(file?.Path);
                 return;
             }
 
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
+        }
+
+        /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
+        internal bool RefusesFiles => _transport != null && !_transport.CanCarryFiles;
+
+        internal void ReportRefusedFile(string path)
+        {
+            AddError($"A file value of {path} was not sent: the collector session transport cannot carry file values yet.");
+            EmitOverflowDrops(_fileQueue.QueueName, 1);
         }
 
         // Wraps each queue's typed Enqueue with the collector-wide lifecycle gate. When the
