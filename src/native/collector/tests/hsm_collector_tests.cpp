@@ -3012,9 +3012,11 @@ namespace
             const auto content = ExpandTextToken(step[2]);
             const char* content_ptr = step[2] == "token:null" ? nullptr : content.c_str();
             const auto comment = ExpandTextToken(step[4]);
-            Require(
-                hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
-                "add_file_value failed");
+            const hsm_result_t added = hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str());
+            // A collector on a session refuses a file value at the call (the session has no op
+            // for it yet): that refusal is what a session case adds the value to see. The managed
+            // collector refuses it at the same place and its AddValue returns nothing either way.
+            Require(added == HSM_RESULT_OK || (state.session_server && added == HSM_RESULT_INVALID_STATE), "add_file_value failed");
             return;
         }
 
