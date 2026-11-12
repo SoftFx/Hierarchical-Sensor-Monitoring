@@ -372,6 +372,24 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_WithoutARegistrationType_MoveOnlyTheFirstListedType()
+        {
+            var root = Unique();
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/int", DateTime.UtcNow.AddMinutes(-2));
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Double, $"{root}/double", DateTime.UtcNow.AddMinutes(-1));
+            Assert.True((await _valuesCache.AddSensorValueAsync(_fixture.KeyA, _fixture.ProductA, value)).IsOk);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/double", out var other));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                [$"{root}/int", $"{root}/double"], null, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/new", first.Path);
+            Assert.Equal($"{root}/double", other.Path);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
         public async Task PreviousPath_OfAnotherProduct_IsNotReachable()
         {
             var root = Unique();

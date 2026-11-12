@@ -69,15 +69,11 @@ namespace HSMServer.SensorApi
                 return _invalidRequestResult;
 
             // Sensor move from the collector (#1724): the sensor registered under an old path
-            // moves here first, so the registration below updates it instead of a new one.
+            // moves here first, so the registration below updates it instead of a new one. It
+            // never blocks the registration (refusals are logged inside).
             if (request.PreviousPaths is { Count: > 0 })
-            {
-                var moved = await _cache.ApplyPreviousPathsAsync(info.Key.Id, info.Product.Id, request.Path, request.PreviousPaths,
+                await _cache.ApplyPreviousPathsAsync(info.Key.Id, info.Product.Id, request.Path, request.PreviousPaths,
                     request.SensorType?.Convert(), HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(info.Key.DisplayName, false));
-
-                if (!moved.IsOk)
-                    return moved;
-            }
 
             var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, request.Path)
             {

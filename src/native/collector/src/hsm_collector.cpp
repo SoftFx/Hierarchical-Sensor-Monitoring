@@ -2343,9 +2343,10 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        // Replace the registration's previous paths (#1724) and rebuild the payload. Null and
-        // whitespace-only entries are skipped (the managed collector drops them too); an empty
-        // result removes the member. Same re-emission rules as AttachAlert.
+        // Replace the registration's previous paths (#1724) and rebuild the payload. Null entries
+        // and entries of ASCII whitespace only are skipped — the managed collector's exact rule
+        // (PreviousPathsOf) — and an empty result removes the member. Same re-emission rules as
+        // AttachAlert.
         hsm_result_t SetPreviousPaths(const char* const* paths, size_t count)
         {
             std::vector<std::string> kept;
@@ -2354,7 +2355,7 @@ namespace
                 if (paths[i] == nullptr)
                     continue;
                 const std::string path = paths[i];
-                if (path.find_first_not_of(" \t\r\n") != std::string::npos)
+                if (path.find_first_not_of(" \t\n\v\f\r") != std::string::npos)
                     kept.push_back(path);
             }
 

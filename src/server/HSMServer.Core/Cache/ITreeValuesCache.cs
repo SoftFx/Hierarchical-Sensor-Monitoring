@@ -107,7 +107,7 @@ namespace HSMServer.Core.Cache
         /// <summary>
         /// A collector registration's previous paths (#1724): move the sensors registered under
         /// them (full product-relative paths) to <paramref name="path"/>, merging into a sensor
-        /// already there. The access key's product only; failures are logged, not returned.
+        /// already there. The access key's product only; refusals are logged and the result is always Ok.
         /// </summary>
         Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path, IReadOnlyList<string> previousPaths,
             SensorType? type, InitiatorInfo initiator, CancellationToken token = default);

@@ -222,48 +222,67 @@ namespace HSMServer.Core.Cache
 
         // Sensor move requested by a collector's registration (#1724, owner decision 7): the
         // sensors registered under `previousPaths` (full product-relative paths) move to `path`,
-        // merging into whatever already holds it. The key's own product only, and the key must
-        // be allowed to add sensors (and nodes, through the path check). The FIRST listed path
-        // that still has a sensor wins — its settings and alerts survive — so the list is walked
-        // from the last entry: each later one moves or merges first and the first one merges
-        // last, absorbing them. Idempotent: a moved path is an alias afterwards, not a sensor,
-        // and is skipped. Failures are logged and never fail the registration itself — a stale
-        // old path must not stop the collector from registering its new one.
+        // merging into whatever already holds it. The key's own product only. The FIRST listed
+        // path that still has a sensor wins — its settings and alerts survive — so the list is
+        // walked from the last entry: each later one moves or merges first and the first one
+        // merges last, absorbing them. Idempotent: a moved path is an alias afterwards, not a
+        // sensor, and is skipped — so the key's permissions (the path's write check and
+        // CanAddSensors) are asked only when there is something to move, and a key that may not
+        // add sensors keeps re-registering its existing ones. Nothing here fails the registration:
+        // every refusal is logged and the result is Ok — a stale or invalid old path must not
+        // stop the collector from registering its new one.
         public async Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path,
             IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token = default)
         {
             var target = new SensorPathCheck(productId, path ?? string.Empty);
 
             if (!target.TryCheckRequest(out var error))
-                return TaskResult.FromError(error);
+                return TaskResult.Ok; // the registration itself reports the invalid path
 
-            if (!TryCheckKeyWritePermissions(key, target.PathParts, out error))
-                return TaskResult.FromError(error);
+            var found = new List<(string Path, BaseSensorModel Sensor)>();
 
-            if (!GetAccessKeyModel(key).IsValid(KeyPermissions.CanAddSensors, out error))
-                return TaskResult.FromError(error);
-
-            for (var i = (previousPaths?.Count ?? 0) - 1; i >= 0; i--)
+            foreach (var raw in previousPaths ?? [])
             {
-                if (string.IsNullOrWhiteSpace(previousPaths[i]))
+                if (string.IsNullOrWhiteSpace(raw))
                     continue;
 
-                var previous = new SensorPathCheck(productId, previousPaths[i]);
+                var previous = new SensorPathCheck(productId, raw);
 
-                if (!previous.TryCheckRequest(out _) || string.Equals(previous.Path, target.Path, StringComparison.Ordinal) ||
-                    !TryGetSensorFromCache(productId, previous.Path, out var old))
-                    continue;
+                if (previous.TryCheckRequest(out _) && !string.Equals(previous.Path, target.Path, StringComparison.Ordinal) &&
+                    TryGetSensorFromCache(productId, previous.Path, out var old) && found.TrueForAll(f => f.Sensor.Id != old.Id))
+                    found.Add((previous.Path, old));
+            }
 
-                if (type.HasValue && old.Type != type.Value)
+            if (found.Count == 0)
+                return TaskResult.Ok;
+
+            if (!TryCheckKeyWritePermissions(key, target.PathParts, out error) ||
+                !GetAccessKeyModel(key).IsValid(KeyPermissions.CanAddSensors, out error))
+            {
+                _logger.Warn($"Previous paths of {target.Path} not applied: {error}");
+                return TaskResult.Ok;
+            }
+
+            // The reference type: the registration's own, else the sensor already at the target,
+            // else the first listed one — a sensor of another type never moves (it could not
+            // merge, and a later entry of the right type would then hit a conflict).
+            var reference = type
+                ?? (TryGetSensorFromCache(productId, target.Path, out var current) ? current.Type : found[0].Sensor.Type);
+
+            for (var i = found.Count - 1; i >= 0; i--)
+            {
+                var (previousPath, old) = found[i];
+
+                if (old.Type != reference)
                 {
-                    _logger.Warn($"Previous path {previous.Path} of {target.Path} skipped: it is a {old.Type} sensor, the registration a {type.Value} one");
+                    _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: it is a {old.Type} sensor, the registration's is {reference}");
                     continue;
                 }
 
                 var result = await MoveSensorAsync(old.Id, productId, target.Path, SensorMoveConflict.Merge, initiator, token);
 
                 if (!result.IsOk)
-                    _logger.Warn($"Previous path {previous.Path} of {target.Path} not applied: {result.Outcome} {result.Error}");
+                    _logger.Warn($"Previous path {previousPath} of {target.Path} not applied: {result.Outcome} {result.Error}");
             }
 
             return TaskResult.Ok;
