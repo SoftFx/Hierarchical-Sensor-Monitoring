@@ -13,6 +13,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
+        // A registration the server refused (bad payload, bad or blocked key) is refused again on
+        // every repeat, so it is not re-enqueued. The native collector has the same rule (#1515).
+        protected override bool RejectionIsFinal => true;
+
         protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
             var package = GetPackage();

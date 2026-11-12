@@ -309,7 +309,7 @@ namespace HSMDataCollector.Core
 
         /// <summary>
         /// Deduplicated error logging for the queue processing/flush loops. Retry-forever on a
-        /// non-retryable failure (e.g. server returns 4xx for a poison value) would otherwise
+        /// failure that repeats (e.g. server returns 4xx for a poison value) would otherwise
         /// produce one log entry per <see cref="CollectorOptions.PackageCollectPeriod"/> cycle;
         /// routing the identical error through <see cref="MessageDeduplicator"/> collapses the
         /// flood to one entry per dedup window while preserving the per-cycle retry behavior
@@ -320,6 +320,20 @@ namespace HSMDataCollector.Core
             var msg = $"Queue: {queueName}, {ex}";
             _messageDeduplicator.AddMessage(msg);
         }
+
+        /// <summary>
+        /// A package the server refused (4xx) on a queue that does not send a refusal again
+        /// (#1659 A2). The items are gone, so this is reported like any other loss: an error in
+        /// the log and in the <c>Collector errors</c> sensor, deduplicated so a host that keeps
+        /// registering against a rejected key does not flood either.
+        /// </summary>
+        public void ReportRejectedPackage(string queueName, int count, PackageSendingInfo info)
+        {
+            _messageDeduplicator.AddMessage(BuildRejectionMessage(queueName, count, info));
+        }
+
+        internal static string BuildRejectionMessage(string queueName, int count, PackageSendingInfo info) =>
+            $"Queue: {queueName}, the server rejected {count} item(s) with HTTP {info.StatusCode}; they are not sent again. {info.Error}";
 
         /// <summary>
         /// Diagnostic hook for callers that silently dropped a value because it failed validation
