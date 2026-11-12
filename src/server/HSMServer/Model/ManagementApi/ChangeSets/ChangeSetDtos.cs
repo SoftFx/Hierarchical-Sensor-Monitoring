@@ -65,6 +65,10 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         public string AfterSchedule { get; init; }
 
+        /// <summary>How many visible fan-out images the entry holds in total; page Fanout with offset/limit (#1688).</summary>
+        public int FanoutTotal { get; init; }
+
+        /// <summary>The fan-out PAGE (offset/limit of the details request, default the first 10) — every image grows the response linearly, so an unbounded render would be unreadable past a few dozen sensors (#1688).</summary>
         public List<NodeImageDto> Fanout { get; init; }
     }
 

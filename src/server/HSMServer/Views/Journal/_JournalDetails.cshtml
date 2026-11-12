@@ -94,9 +94,12 @@
                             </div>
                         </div>
                     }
-                    @if (entry.Fanout is { Count: > 0 })
+                    @if (entry.Fanout is { Count: > 0 } || entry.FanoutTotal > 0)
                     {
-                        <div class="fw-bold mt-1">Fan-out (@entry.Fanout.Count nodes)</div>
+                        @* #1688: the rendered list is a page over the fan-out; the header names the total. *@
+                        <div class="fw-bold mt-1">
+                            Fan-out (@entry.Fanout.Count of @entry.FanoutTotal nodes)
+                        </div>
                         @foreach (var image in entry.Fanout)
                         {
                             <details class="mb-1">

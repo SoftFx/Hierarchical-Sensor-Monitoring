@@ -445,6 +445,50 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.False(record.RolledBack);
         }
 
+        [Fact]
+        public async Task GetRecord_TemplateFanout_IsABoundedPageByDefault()
+        {
+            // #1688: the per-entry fan-out images grow linearly with the
+            // number of sensors a template touched (about 1.2 KB each), so an
+            // unbounded render made the record unreadable through MCP past a
+            // few dozen sensors. The default page is bounded, fanoutTotal
+            // carries the honest count, and the caller pages with
+            // fanoutOffset/fanoutLimit.
+            const int sensors = 45;
+
+            for (var i = 0; i < sensors; i++)
+                await CreateSensorAsync($"jrnFanout/s{i}");
+
+            var changeSetId = Guid.NewGuid();
+            var created = await _templates.CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnFanout/*"]),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var record = RecordOf(changeSetId);
+
+            var defaultDetails = _journal.GetRecord(record.Id, TokenUser).Value;
+            var defaultEntry = Assert.Single(defaultDetails.ChangeSet.Entries);
+
+            Assert.Equal(sensors, defaultEntry.FanoutTotal);
+            Assert.Equal(ChangeSetAdministrationService.DefaultFanoutLimit, defaultEntry.Fanout.Count);
+
+            var next = _journal.GetRecord(record.Id, TokenUser,
+                fanoutOffset: ChangeSetAdministrationService.DefaultFanoutLimit).Value;
+
+            // The offset pages; the limit stays the bounded default.
+            Assert.Equal(ChangeSetAdministrationService.DefaultFanoutLimit, Assert.Single(next.ChangeSet.Entries).Fanout.Count);
+
+            var lastFive = _journal.GetRecord(record.Id, TokenUser, fanoutOffset: sensors - 5, fanoutLimit: 5).Value;
+
+            Assert.Equal(5, Assert.Single(lastFive.ChangeSet.Entries).Fanout.Count);
+
+            // An oversized limit never buys an unbounded render: it falls to
+            // the ceiling, and the page is still bounded by what exists.
+            var capped = _journal.GetRecord(record.Id, TokenUser, fanoutLimit: int.MaxValue).Value;
+
+            Assert.Equal(sensors, Assert.Single(capped.ChangeSet.Entries).Fanout.Count);
+        }
+
 
         [Fact]
         public async Task Rollback_ByRecord_NonAdminTokenOwner_IsForbidden()

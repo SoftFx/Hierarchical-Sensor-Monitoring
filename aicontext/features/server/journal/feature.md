@@ -26,8 +26,8 @@ Every monitoring-tree configuration change — from the web editor, the REST man
 ## Surfaces
 
 - **Web** (`/Journal`, Configuration menu): the global page with author/time/kind/product filters, an Operation column (Create / Update / Delete / Rollback badges plus the "rolled back" marker on undone writes), details modal (the record plus its undo group's before/after images), admin-only Rollback with the dry-run-backed confirmation dialog; the per-node Journal tabs show the same records for the node with the same operation badge on record-local derivations (see Known Limitations), and a Rollback button on rollbackable rows for admins.
-- **REST**: `GET /api/v1/journal` (author/fromUtc/toUtc/kind/productId/entityId filters, limit ≤ 200 + offset), `GET /api/v1/journal/{recordId}` (record + undo-group details), `POST /api/v1/journal/{recordId}/rollback?force=&dryRun=` (admin owner only).
-- **MCP**: `list_journal_records` (paged envelope), `get_journal_record`, `rollback_journal_record` (force/dryRun, admin owner only).
+- **REST**: `GET /api/v1/journal` (author/fromUtc/toUtc/kind/productId/entityId filters, limit ≤ 200 + offset), `GET /api/v1/journal/{recordId}` (record + undo-group details), `POST /api/v1/journal/{recordId}/rollback?force=&dryRun=` (admin owner only). The details' per-entry fan-out (the per-sensor images of a template write) is a PAGE (#1688): `fanoutOffset`/`fanoutLimit` query parameters select it (default the first 10, limit capped at 200 — every image grows the response linearly), `fanoutTotal` carries the honest count; the web details modal rides the ceiling. `rollback` with `dryRun` stays compact regardless (a per-entity conflict list).
+- **MCP**: `list_journal_records` (paged envelope), `get_journal_record` (the fan-out page rides `fanoutOffset`/`fanoutLimit` arguments, default bounded — #1688), `rollback_journal_record` (force/dryRun, admin owner only).
 - **Internal (no external surface)**: the change-set store (`Databases/ChangeSets` LevelDB folder), `ChangeSetJournal`, `ChangeSetRecorder`, the rollback engine — reachable only through journal records.
 
 ## Primary Workflows

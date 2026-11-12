@@ -3,6 +3,7 @@ using HSMServer.Authentication;
 using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Journal;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -110,11 +111,16 @@ public class JournalController : BaseController
             result.Success ? result.Value : new List<JournalRecordDto>());
     }
 
-    /// <summary>The details view: the record plus its undo group's before/after images.</summary>
+    /// <summary>
+    /// The details view: the record plus its undo group's before/after
+    /// images. The fan-out page rides the area's list ceiling (#1688): the
+    /// modal renders up to 200 images, the count header names the total.
+    /// </summary>
     [HttpGet]
     public IActionResult Details(string id)
     {
-        var result = _journal.GetRecord(id, User, new CookieJournalRecordAccess(CurrentUser, _cache));
+        var result = _journal.GetRecord(id, User, new CookieJournalRecordAccess(CurrentUser, _cache),
+            fanoutLimit: ChangeSetAdministrationService.MaxFanoutLimit);
 
         return result.Success ? PartialView("_JournalDetails", result.Value) : NotFound();
     }
