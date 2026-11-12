@@ -82,7 +82,10 @@ namespace HSMDataCollector.Options
         /// The list belongs to ONE sensor: a helper that builds several sensors from one options
         /// object (<c>AddSystemMonitoringSensors</c>, <c>AddAllDisksMonitoringSensors</c>, ...)
         /// refuses options that carry previous paths with an <see cref="ArgumentException"/> —
-        /// set them on each sensor's own <c>Add*</c> call instead.
+        /// set them on each sensor's own <c>Add*</c> call instead. The same holds for your own
+        /// sensors: do not reuse an options object that carries previous paths across several
+        /// <c>Create*Sensor</c> calls — the sensors would share the list, and the first of them to
+        /// register would take the old sensor's history (a merge cannot be undone).
         /// </summary>
         public List<string> PreviousPaths { get; set; }
 

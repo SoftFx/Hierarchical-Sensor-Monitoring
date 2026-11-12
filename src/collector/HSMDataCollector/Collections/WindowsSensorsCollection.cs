@@ -178,7 +178,8 @@ namespace HSMDataCollector.DefaultSensors
             SensorOptions.ForSeveralSensors(options, nameof(AddDiskMonitoringSensors));
             SensorOptions.ForSeveralSensors(diskBarOptions, nameof(AddDiskMonitoringSensors));
 
-            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions) .AddDiskAverageWriteSpeed(diskBarOptions);
+            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
+                .AddDiskAverageWriteSpeed(diskBarOptions);
         }
 
         public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null)
