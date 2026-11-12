@@ -7,7 +7,9 @@ namespace HSMServer.Core.Tests.Controllers
 {
     // The HSM Agent moves itself off a retired port (44330/44333) only when 443 of the same host
     // answers testConnection with the server marker (#1655): a bare 200 from a foreign service must
-    // not be enough. The header name is duplicated in src/agent/src/update_checker.cpp.
+    // not be enough. The agent's copy of the header name is kServerMarkerHeader in
+    // src/agent/include/agent/retired_port.hpp, pinned to the same literal by the agent test
+    // agent_retired_port_names_only_the_old_two: rename both sides together or neither.
     public class SensorsTestConnectionTests
     {
         [Fact]

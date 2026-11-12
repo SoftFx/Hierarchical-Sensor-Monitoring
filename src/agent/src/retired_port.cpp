@@ -26,11 +26,19 @@ namespace hsm::agent
         if (!IsRetiredServerPort(configured_port))
             return RetiredPortVerdict::NotRetired;
 
-        if (hsm_answers_on(configured_port))
+        if (hsm_answers_on(configured_port) != PortAnswer::Nothing)
             return RetiredPortVerdict::StillAnswers;
 
-        return hsm_answers_on(kStandardServerPort) ? RetiredPortVerdict::SwitchToStandard
-                                                   : RetiredPortVerdict::ServerUnreachable;
+        switch (hsm_answers_on(kStandardServerPort))
+        {
+        case PortAnswer::HsmServer:
+            return RetiredPortVerdict::SwitchToStandard;
+        case PortAnswer::Unidentified:
+            return RetiredPortVerdict::UnrecognisedOnStandard;
+        case PortAnswer::Nothing:
+            break;
+        }
+        return RetiredPortVerdict::ServerUnreachable;
     }
 
     RetiredPortStep NextRetiredPortStep(RetiredPortWatchState& state, RetiredPortVerdict verdict, bool can_move)
@@ -44,6 +52,11 @@ namespace hsm::agent
         case RetiredPortVerdict::ServerUnreachable:
             if (state.repeats % kRetiredPortNoticeEveryChecks == 0)
                 step.action = RetiredPortAction::ReportUnreachable;
+            break;
+
+        case RetiredPortVerdict::UnrecognisedOnStandard:
+            if (state.repeats % kRetiredPortNoticeEveryChecks == 0)
+                step.action = RetiredPortAction::ReportUnrecognised;
             break;
 
         case RetiredPortVerdict::SwitchToStandard:
@@ -76,17 +89,24 @@ namespace hsm::agent
         return step;
     }
 
-    bool MoveConfigToStandardPort(const std::string& path, std::string& error)
+    MoveOutcome MoveConfigToStandardPort(const std::string& path, const std::string& probed_address, int probed_port,
+                                         std::string& error)
     {
         AgentConfig current;
         std::string load_error;
         if (!LoadAgentConfig(path, current, load_error))
         {
             error = "reading it back failed: " + load_error;
-            return false;
+            return MoveOutcome::Failed;
         }
+        // The probes ran against the values the agent started with. An operator who has since
+        // pointed the file elsewhere (another port, another host) decides; the agent does not
+        // overwrite a choice it never probed.
+        if (current.port != probed_port || current.server_address != probed_address)
+            return MoveOutcome::ChangedSinceStart;
+
         current.port = kStandardServerPort;
-        return WriteAgentConfig(path, current, error);
+        return WriteAgentConfig(path, current, error) ? MoveOutcome::Moved : MoveOutcome::Failed;
     }
 
     std::string RetiredPortStartupNotice(int configured_port, bool can_move)
@@ -121,5 +141,21 @@ namespace hsm::agent
                (can_move ? std::string("; the HSMAgent service moves to 443 by itself as soon as the server answers there.")
                          : std::string("; a --console run never changes config.json, so set \"port\": 443 under"
                                        " \"server\" there yourself once the server answers on 443."));
+    }
+
+    std::string RetiredPortUnrecognisedNotice(int configured_port)
+    {
+        return Subject(configured_port) +
+               " and no longer answers, so nothing is being delivered. Something answers on 443 of the same host,"
+               " but not as an HSM server of this release or later (an older HSM server, or another service), so"
+               " the agent does not move there. If it is your HSM server, set \"port\": 443 under \"server\" in"
+               " config.json and restart the agent; updating the server makes the agent move by itself.";
+    }
+
+    std::string RetiredPortChangedSinceStartNotice(int configured_port)
+    {
+        return Subject(configured_port) +
+               " and no longer answers, but config.json no longer names that address and port: it was changed"
+               " after the agent started, so the agent leaves it as it is. Restart the HSMAgent service to apply it.";
     }
 } // namespace hsm::agent

@@ -23,24 +23,38 @@ namespace hsm::agent
     /// True for 44330 and 44333, the ports of the pre-#1590 two-port scheme.
     bool IsRetiredServerPort(int port) noexcept;
 
+    /// Response header an HSM server's `testConnection` answer carries. The server side is
+    /// `SensorsController.ServerMarkerHeader`; both sides pin the literal in a test
+    /// (`agent_retired_port_names_only_the_old_two`, `SensorsTestConnectionTests`).
+    inline constexpr const char* kServerMarkerHeader = "X-Hsm-Server";
+
     enum class RetiredPortVerdict
     {
         NotRetired,        ///< the configured port is not a retired one: nothing to check
-        StillAnswers,      ///< an HSM server answers on the retired port: keep using it
+        StillAnswers,      ///< something answers on the retired port: keep using it
         SwitchToStandard,  ///< the retired port is dead and an HSM server answers on 443: move there
+        UnrecognisedOnStandard, ///< the retired port is dead; 443 answers, but not as an HSM server
         ServerUnreachable, ///< neither port answers: keep the config, tell the operator what to check
     };
 
-    /// Returns true when the HSM Sensor API answers on `port` of the configured server host. For
-    /// 443, the move target, the runtime's probe also requires the answer to identify itself as an
-    /// HSM server (the `X-Hsm-Server` header of testConnection).
-    using ServerPortProbe = std::function<bool(int port)>;
+    /// What a probe of one port heard.
+    enum class PortAnswer
+    {
+        Nothing,      ///< no 200 from `GET /api/sensors/testConnection`
+        Unidentified, ///< a 200 without the `X-Hsm-Server` marker (another service, or an HSM server
+                      ///< older than the marker)
+        HsmServer,    ///< a 200 with the marker
+    };
+
+    /// Probes `port` of the configured server host.
+    using ServerPortProbe = std::function<PortAnswer(int port)>;
 
     /// Decide what to do about the configured port. Probes lazily and in a fixed order: nothing is
     /// probed for a port that is not retired (such a config behaves exactly as before), and 443 is
     /// probed only after the retired port failed to answer, so a server that still serves the old
     /// port (a proxy-less deployment pinned to it, or an operator's own port mapping) is never
-    /// second-guessed.
+    /// second-guessed. Any answer keeps the retired port (an HSM server pinned there may predate the
+    /// marker, and keeping a port is never harmful); only a marked answer on 443 justifies a move.
     RetiredPortVerdict JudgeRetiredPort(int configured_port, const ServerPortProbe& hsm_answers_on);
 
     /// When the runtime checks a retired port. The first check waits for the collector's own first
@@ -61,6 +75,7 @@ namespace hsm::agent
     {
         Wait,              ///< nothing to do or say at this check
         ReportUnreachable, ///< log RetiredPortUnreachableNotice
+        ReportUnrecognised, ///< log RetiredPortUnrecognisedNotice
         ReportManualMove,  ///< log RetiredPortManualMoveNotice (a run that cannot move itself)
         Move,              ///< rewrite config.json to 443 and restart the service
     };
@@ -87,11 +102,20 @@ namespace hsm::agent
     /// not own nor bounce a service it is not; such a run only reports.
     RetiredPortStep NextRetiredPortStep(RetiredPortWatchState& state, RetiredPortVerdict verdict, bool can_move);
 
-    /// The move itself: rewrite the config file at `path` so that its server port is 443. The
-    /// file is read back first and only the port changes, so an edit made to it since the agent
-    /// started is kept. Returns false, with `error` set and the file untouched, when the file
-    /// cannot be read or parsed, or when the write fails.
-    bool MoveConfigToStandardPort(const std::string& path, std::string& error);
+    enum class MoveOutcome
+    {
+        Moved,             ///< the file now says port 443
+        ChangedSinceStart, ///< the file no longer names the probed address and port: left as it is
+        Failed,            ///< the file could not be read, parsed or written: `error` says why
+    };
+
+    /// The move itself: rewrite the config file at `path` so that its server port is 443, but only
+    /// while the file still names `probed_address` and `probed_port`, the values the probes ran
+    /// against. The file is read back first and only the port changes, so every setting the config
+    /// models keeps the value the file has now (the file is regenerated from the parsed config, as
+    /// the sensor-group directive does: keys the parser does not know, and the layout, are not kept).
+    MoveOutcome MoveConfigToStandardPort(const std::string& path, const std::string& probed_address, int probed_port,
+                                         std::string& error);
 
     /// Logged once at every start while config.json names a retired port.
     std::string RetiredPortStartupNotice(int configured_port, bool can_move);
@@ -105,4 +129,10 @@ namespace hsm::agent
 
     /// Logged while neither the retired port nor 443 answers.
     std::string RetiredPortUnreachableNotice(int configured_port, bool can_move);
+
+    /// Logged while the retired port is dead and 443 answers without identifying as an HSM server.
+    std::string RetiredPortUnrecognisedNotice(int configured_port);
+
+    /// Logged when the move found config.json changed since the agent started.
+    std::string RetiredPortChangedSinceStartNotice(int configured_port);
 } // namespace hsm::agent

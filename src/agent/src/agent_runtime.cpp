@@ -110,10 +110,9 @@ namespace hsm::agent
 
             const RetiredPortVerdict verdict = JudgeRetiredPort(config_.port, [this](int port) {
                 // A stop that arrived during the previous probe ends the check without another one.
-                // The move target has to prove it is an HSM server; for the configured port any
-                // answer counts (an older HSM pinned there predates the marker, and keeping a
-                // port is never harmful).
-                return !StopRequested() && HsmServerAnswersOnPort(config_, port, port == kStandardServerPort);
+                if (StopRequested())
+                    return PortAnswer::Nothing;
+                return ProbeServerPort(config_, port);
             });
             if (StopRequested())
                 return;
@@ -128,6 +127,9 @@ namespace hsm::agent
             case RetiredPortAction::ReportUnreachable:
                 Log(hc::LogLevel::Error, RetiredPortUnreachableNotice(config_.port, can_move));
                 continue;
+            case RetiredPortAction::ReportUnrecognised:
+                Log(hc::LogLevel::Error, RetiredPortUnrecognisedNotice(config_.port));
+                continue;
             case RetiredPortAction::ReportManualMove:
                 // A foreground run: report, do not touch the file or the service.
                 Log(hc::LogLevel::Error, RetiredPortManualMoveNotice(config_.port));
@@ -138,8 +140,9 @@ namespace hsm::agent
 
             // Same persist-then-restart sequence as a sensor-group directive: the collector's endpoint
             // is built once at Start, so the new port needs a fresh process, and config_ itself is
-            // left alone (UpdateChecker reads it on its own thread). Only the port changes, in the
-            // file as it is now: an edit made since start (a new key, an address) is kept.
+            // left alone (UpdateChecker reads it on its own thread). The file is read back and only
+            // the port changes, and only while it still names the address and port that were
+            // probed (MoveConfigToStandardPort).
             //
             // The directive handler (collector thread) also writes config.json from a copy of
             // config_, and nothing serializes the two writers. They cannot overlap: a directive
@@ -147,17 +150,24 @@ namespace hsm::agent
             // configured port stopped answering on two checks in a row, so no POST through it, and
             // no directive, can be in flight. Revisit this if a directive can ever arrive another way.
             std::string cfg_err;
-            bool saved = false;
+            MoveOutcome outcome = MoveOutcome::Failed;
             try
             {
                 // The narrow conversion throws for a path the active code page cannot represent.
-                saved = MoveConfigToStandardPort(std::filesystem::path(service_config_path_).string(), cfg_err);
+                outcome = MoveConfigToStandardPort(std::filesystem::path(service_config_path_).string(),
+                                                   config_.server_address, config_.port, cfg_err);
             }
             catch (const std::exception& ex)
             {
                 cfg_err = ex.what();
             }
-            if (!saved)
+            if (outcome == MoveOutcome::ChangedSinceStart)
+            {
+                if (step.failure_notice_due)
+                    Log(hc::LogLevel::Error, RetiredPortChangedSinceStartNotice(config_.port));
+                continue;
+            }
+            if (outcome != MoveOutcome::Moved)
             {
                 if (step.failure_notice_due)
                     Log(hc::LogLevel::Error,

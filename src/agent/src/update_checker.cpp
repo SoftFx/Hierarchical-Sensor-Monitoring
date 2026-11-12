@@ -372,14 +372,11 @@ namespace hsm::agent
     // waits for that one probe only (the runtime skips the second).
     static constexpr int kProbeTimeoutMs = 2000;
 
-    // Set by the server's testConnection (SensorsController.ServerMarkerHeader).
-    static const wchar_t* const kServerMarkerHeader = L"X-Hsm-Server";
-
-    bool HsmServerAnswersOnPort(const AgentConfig& config, int port, bool require_server_marker)
+    PortAnswer ProbeServerPort(const AgentConfig& config, int port)
     {
         const ServerUrl url = ParseServerUrl(config.server_address, port);
         if (!url.ok)
-            return false;
+            return PortAnswer::Nothing;
 
         // `port`, not url.port: a port written into server.address does not reach the collector's
         // endpoint either, and the question here is about the port the collector is using.
@@ -394,13 +391,15 @@ namespace hsm::agent
         // (a proxy that only lets CONNECT through to 443 would make a working 44330 look dead).
         WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate, WINHTTP_ACCESS_TYPE_NO_PROXY);
         if (!sess.Valid())
-            return false;
+            return PortAnswer::Nothing;
 
         std::vector<char> body;
-        std::wstring marker_name = kServerMarkerHeader;
+        std::wstring marker_name = Utf8ToWide(kServerMarkerHeader); // retired_port.hpp
         std::string marker;
         const int status = HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, &marker_name, &marker, kProbeTimeoutMs);
-        return status == 200 && (!require_server_marker || !marker.empty());
+        if (status != 200)
+            return PortAnswer::Nothing;
+        return marker.empty() ? PortAnswer::Unidentified : PortAnswer::HsmServer;
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------

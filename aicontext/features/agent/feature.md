@@ -282,15 +282,22 @@ there: the agent is the only place that can say what is wrong, and it must not f
      merely restarting must not lose its agents to something else answering on 443 of that host. If
      the rewrite or the helper fails, the agent stays up, logs an Error naming the manual fix (hourly),
      and retries at every check.
-  3. neither answers → nothing changes; an Error is logged hourly (the collector already logs every
+  3. the retired port is dead and 443 answers 200 **without** the marker (an HSM server older than
+     the marker, or another service) → nothing changes; an hourly Error says so and names the manual
+     fix. Any answer on the retired port itself, marked or not, keeps it (case 1).
+  4. neither answers → nothing changes; an Error is logged hourly (the collector already logs every
      failed send).
 - **Service only.** The move needs the config path the run was loaded from (`SetServiceConfigPath`,
   set by the service host). A `--console` run has none and only reports (an hourly Error with the value
   to set): a foreground run must not rewrite a file it may not own, nor bounce a service it is not. Its
   start and "nothing answers" notices say so instead of promising a self-move.
 - **What the move writes.** `MoveConfigToStandardPort` reads `config.json` back and changes only the
-  port, so an edit made since start (a new key, an address, a directive's flag whose restart failed)
-  is kept; a file that does not load is left untouched and the manual fix is reported instead.
+  port, and only while the file still names the address and port the probes ran against; an operator
+  who has since pointed it elsewhere is left alone (hourly Error: restart to apply). Every setting the
+  config models keeps the value the file has now (a new key, a directive's flag whose restart failed);
+  the file is regenerated from the parsed config, like the directive rewrite, so keys the parser does
+  not know and the layout are not kept. A file that does not load is left untouched and the manual fix
+  is reported instead.
 - **Two writers of config.json.** The sensor-group directive handler (collector thread) and the move
   (runtime thread) both write `config.json`, unsynchronised. They cannot overlap: a directive arrives
   only in the response to a data POST, and the move happens only after the configured port stopped
@@ -306,7 +313,9 @@ there: the agent is the only place that can say what is wrong, and it must not f
   Event Log.
 - **Limits.** The probe proves that *an* HSM server answers on 443 of the same host, not that it
   knows this agent's access key. An HSM server older than the marker (before #1696) on 443 is not
-  recognised, so its agents are not moved and get the hourly "no HSM server answers" Error instead. Only an agent that already runs this code can move: an older agent has
+  recognised, so its agents are not moved and get the hourly "answers on 443, but not as an HSM
+  server" Error instead (case 3). The header name lives on both sides (`SensorsController.ServerMarkerHeader`,
+  `kServerMarkerHeader` in `retired_port.hpp`), each pinned to the literal by a test. Only an agent that already runs this code can move: an older agent has
   to receive it through self-update while its old port still answers, or be repointed by hand
   (`docs/hsm-agent.md`, "Retired ports 44330 / 44333"). Self-update delivers what
   `src/server/HSMServer/agent-release.txt` pins, so a server release that drops the old ports is only
@@ -355,8 +364,9 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
   not retired", that every notice names the fix (and that a `--console` run's notices promise no
   self-move), and the watcher step: a move only on the second `SwitchToStandard` in a row, any other
   verdict in between resets it, a console run never moves, failures are reported once per 12 checks;
-  and the move's write: only the port changes in the file as it is now, an unreadable file is left
-  alone, a missing one is not created)
+  and the move's write: only the port changes in the file as it is now, a file repointed to another
+  port or host since start is not touched, an unreadable file is left alone, a missing one is not
+  created)
   — run on every platform, registered in `ctest`.
 - Windows-only data-dir ACL tests (#1279, same exe, 4 cases).
   - `agent_dir_acl_is_protected_system_and_admins_only` drives the real `EnsureDirectories()` against
