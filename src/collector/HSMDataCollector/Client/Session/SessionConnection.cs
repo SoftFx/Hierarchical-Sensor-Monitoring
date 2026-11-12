@@ -63,15 +63,23 @@ namespace HSMDataCollector.Client.Session
         private readonly ServerDirectives _directives;
         private readonly SessionTimings _timings;
 
-        private CancellationTokenSource _run;
-        private Task _loop;
+        // One run per Start. A loop that is slow to notice its stop (a connect that does not
+        // honour cancellation) must neither keep the next Start from running nor write the state
+        // of the run that replaced it.
+        private sealed class Run
+        {
+            internal readonly CancellationTokenSource Cancellation = new CancellationTokenSource();
+            internal volatile bool Stopping;
+            internal Task Loop;
+        }
+
+        private Run _current;
 
         // The session being served, and what its hello stated. Written by the loop, read by senders.
         private volatile ClientWebSocket _socket;
         private volatile TaskCompletionSource<string> _reset;
         private volatile TaskCompletionSource<bool> _upSignal = NewSignal();
         private volatile string _downReason = NoSession;
-        private volatile bool _stopping;
         private int _maxFrameBytes;
         private long _heartbeatTicks;
         private long _lastSentTicks;
@@ -138,18 +146,20 @@ namespace HSMDataCollector.Client.Session
         {
             lock (_lifecycle)
             {
-                if (_loop != null && !_loop.IsCompleted)
+                var running = _current;
+
+                if (running != null && !running.Stopping && !running.Loop.IsCompleted)
                     return;
 
-                _stopping = false;
-                _downReason = "connecting";
-                _run?.Dispose();
-                _run = new CancellationTokenSource();
+                var run = new Run();
 
-                var token = _run.Token;
-                _loop = Task.Run(() => RunAsync(token));
+                _downReason = "connecting";
+                _current = run;
+                run.Loop = Task.Run(() => RunAsync(run));
             }
         }
+
+        private bool IsCurrent(Run run) => ReferenceEquals(Volatile.Read(ref _current), run);
 
         /// <summary>
         /// Ends the session and the loop. With a session up and a positive
@@ -159,18 +169,19 @@ namespace HSMDataCollector.Client.Session
         /// </summary>
         internal async Task StopAsync(TimeSpan linger)
         {
-            Task loop;
-            CancellationTokenSource run;
+            Run run;
 
             lock (_lifecycle)
             {
-                loop = _loop;
-                run = _run;
-                _stopping = true;
+                run = _current;
+
+                if (run == null)
+                    return;
+
+                run.Stopping = true;
             }
 
-            if (loop == null)
-                return;
+            var loop = run.Loop;
 
             var socket = _socket;
 
@@ -203,7 +214,7 @@ namespace HSMDataCollector.Client.Session
                 }
             }
 
-            try { run.Cancel(); }
+            try { run.Cancellation.Cancel(); }
             catch (ObjectDisposedException) { }
 
             try { _socket?.Abort(); }
@@ -217,8 +228,6 @@ namespace HSMDataCollector.Client.Session
         {
             try { StopAsync(TimeSpan.Zero).GetAwaiter().GetResult(); }
             catch (Exception) { }
-
-            _run?.Dispose();
         }
 
         /// <summary>
@@ -282,7 +291,8 @@ namespace HSMDataCollector.Client.Session
 
                 token.ThrowIfCancellationRequested();
 
-                RequestReset($"a {op} request got no ack within {timeout.TotalSeconds:0.###} s");
+                // Worded without the op: the same cause for every queue is one deduplicated report.
+                RequestReset($"a request got no ack within {timeout.TotalSeconds:0.###} s");
 
                 return SessionAck.NoAck("no ack in time");
             }
@@ -293,8 +303,9 @@ namespace HSMDataCollector.Client.Session
         }
 
 
-        private async Task RunAsync(CancellationToken token)
+        private async Task RunAsync(Run run)
         {
+            var token = run.Cancellation.Token;
             var attempt = 0;
 
             while (!token.IsCancellationRequested)
@@ -350,7 +361,11 @@ namespace HSMDataCollector.Client.Session
                     MarkDown(socket);
                 }
 
-                if (token.IsCancellationRequested || _stopping)
+                // A run that was replaced by a new Start only leaves: the state is the new run's.
+                if (!IsCurrent(run))
+                    break;
+
+                if (token.IsCancellationRequested || run.Stopping)
                 {
                     _downReason = "the collector is stopping";
                     FailAllPending(_downReason);
@@ -365,7 +380,17 @@ namespace HSMDataCollector.Client.Session
                     _logger?.Info($"The collector session ended after {lived.Elapsed.TotalSeconds:0.#} s: {why}. Reconnecting.");
 
                     if (lived.Elapsed >= _timings.StableSession)
+                    {
                         attempt = 0;
+                    }
+                    else
+                    {
+                        // A session that opens and ends at once, again and again, delivers nothing
+                        // and looks healthy at Info level (a server that takes the upgrade and
+                        // never acknowledges, or closes right after its hello). Said as an error,
+                        // deduplicated: the cause repeats with the same words.
+                        _reportError?.Invoke($"The collector session to {_url} ended early: {why}. Values stay queued; reconnecting.");
+                    }
                 }
                 else
                 {
@@ -383,6 +408,8 @@ namespace HSMDataCollector.Client.Session
                     break;
                 }
             }
+
+            run.Cancellation.Dispose();
         }
 
         private void Configure(ClientWebSocket socket)
@@ -440,7 +467,7 @@ namespace HSMDataCollector.Client.Session
         // The first frame of a session: the limits the collector has to respect.
         private static async Task<SessionFrame> ReadHelloAsync(ClientWebSocket socket, CancellationToken token)
         {
-            var text = await ReceiveAsync(socket, token).ConfigureAwait(false);
+            var text = await ReceiveAsync(socket, NewReceiveBuffer(), token).ConfigureAwait(false);
 
             if (text == null)
                 throw new InvalidOperationException($"the server closed the session before its hello{DescribeClose(socket)}");
@@ -529,9 +556,11 @@ namespace HSMDataCollector.Client.Session
 
         private async Task<string> ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token)
         {
+            var buffer = NewReceiveBuffer();
+
             while (true)
             {
-                var text = await ReceiveAsync(socket, token).ConfigureAwait(false);
+                var text = await ReceiveAsync(socket, buffer, token).ConfigureAwait(false);
 
                 if (text == null)
                     return $"closed by the server{DescribeClose(socket)}";
@@ -586,21 +615,25 @@ namespace HSMDataCollector.Client.Session
             }
         }
 
+        // The caller's token decides whether the frame is started, not whether a write that has
+        // begun is finished: cancelling a WebSocket write aborts the whole connection, and a stop
+        // that cancels a queue in the middle of a frame would take away the session its own drain
+        // is about to use. A write that has begun is bounded by the send timeout alone.
         private async Task SendAsync(ClientWebSocket socket, byte[] frame, CancellationToken token)
         {
             await _sendLock.WaitAsync(token).ConfigureAwait(false);
 
             try
             {
-                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(token))
-                {
-                    timeout.CancelAfter(_timings.SendTimeout);
+                token.ThrowIfCancellationRequested();
 
+                using (var timeout = new CancellationTokenSource(_timings.SendTimeout))
+                {
                     try
                     {
                         await socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Text, true, timeout.Token).ConfigureAwait(false);
                     }
-                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    catch (OperationCanceledException)
                     {
                         throw new TimeoutException($"a frame could not be written within {_timings.SendTimeout.TotalSeconds:0.###} s");
                     }
@@ -616,11 +649,13 @@ namespace HSMDataCollector.Client.Session
 
         // One whole text message, or null when the server closed. A message is assembled from
         // its fragments by ClientWebSocket's own EndOfMessage; this only bounds its size.
-        private static async Task<string> ReceiveAsync(ClientWebSocket socket, CancellationToken token)
+        // `buffer` is the caller's, one per session: an ack or a pong is a few dozen bytes and
+        // arrives in one read, so the common case allocates only its text.
+        private static async Task<string> ReceiveAsync(ClientWebSocket socket, ArraySegment<byte> buffer, CancellationToken token)
         {
-            var buffer = new ArraySegment<byte>(new byte[16 * 1024]);
+            MemoryStream message = null;
 
-            using (var message = new MemoryStream())
+            try
             {
                 while (true)
                 {
@@ -632,7 +667,13 @@ namespace HSMDataCollector.Client.Session
                     if (result.MessageType != WebSocketMessageType.Text)
                         throw new InvalidOperationException("the server sent a binary frame");
 
-                    message.Write(buffer.Array, 0, result.Count);
+                    if (result.EndOfMessage && message == null)
+                        return Encoding.UTF8.GetString(buffer.Array, buffer.Offset, result.Count);
+
+                    if (message == null)
+                        message = new MemoryStream();
+
+                    message.Write(buffer.Array, buffer.Offset, result.Count);
 
                     if (message.Length > SessionProtocol.MaxInboundFrameBytes)
                         throw new InvalidOperationException($"the server sent a frame larger than {SessionProtocol.MaxInboundFrameBytes} bytes");
@@ -641,7 +682,13 @@ namespace HSMDataCollector.Client.Session
                         return Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
                 }
             }
+            finally
+            {
+                message?.Dispose();
+            }
         }
+
+        private static ArraySegment<byte> NewReceiveBuffer() => new ArraySegment<byte>(new byte[16 * 1024]);
 
         private void RequestReset(string why) => _reset?.TrySetResult(why);
 

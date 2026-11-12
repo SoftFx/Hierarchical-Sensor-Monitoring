@@ -82,7 +82,8 @@ namespace HSMDataCollector.Tests.Transport
 
         /// <summary>
         /// Accepts this many more <c>list</c> frames, then answers every later one with
-        /// <paramref name="status"/>. A negative number lifts the limit.
+        /// <paramref name="status"/>, or with nothing at all when the status is 0. A negative
+        /// number lifts the limit.
         /// </summary>
         public void FailListFramesAfter(int accepted, int status)
         {
@@ -299,6 +300,9 @@ namespace HSMDataCollector.Tests.Transport
             }
 
             _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, status));
+
+            if (status == 0)
+                return;
 
             await SendAsync(socket, status >= 200 && status < 300
                 ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"

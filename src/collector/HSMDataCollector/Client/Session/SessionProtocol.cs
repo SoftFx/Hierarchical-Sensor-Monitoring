@@ -60,13 +60,18 @@ namespace HSMDataCollector.Client.Session
         /// </summary>
         internal static byte[] BuildRequest(long id, string op, string body)
         {
-            var text = new StringBuilder(body.Length + EnvelopeRoom)
-                .Append("{\"id\":").Append(id)
-                .Append(",\"op\":\"").Append(op)
-                .Append("\",\"body\":").Append(body)
-                .Append('}');
+            var head = $"{{\"id\":{id},\"op\":\"{op}\",\"body\":";
+            var utf8 = Encoding.UTF8;
 
-            return Encoding.UTF8.GetBytes(text.ToString());
+            // Head, body and the closing brace written into one array: the body is the large
+            // part and is not copied into an intermediate string first.
+            var frame = new byte[utf8.GetByteCount(head) + utf8.GetByteCount(body) + 1];
+            var written = utf8.GetBytes(head, 0, head.Length, frame, 0);
+
+            written += utf8.GetBytes(body, 0, body.Length, frame, written);
+            frame[written] = (byte)'}';
+
+            return frame;
         }
     }
 

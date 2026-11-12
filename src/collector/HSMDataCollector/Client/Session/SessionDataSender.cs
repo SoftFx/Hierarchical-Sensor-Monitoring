@@ -286,7 +286,19 @@ namespace HSMDataCollector.Client.Session
                 body.Append(']');
                 contentSize += body.Length;
 
-                var ack = await _connection.RequestAsync(op, body.ToString(), _requestTimeout, token).ConfigureAwait(false);
+                SessionAck ack;
+
+                try
+                {
+                    ack = await _connection.RequestAsync(op, body.ToString(), _requestTimeout, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested && (frameStart > 0 || unsendable > 0))
+                {
+                    // Cancelled part of the way through a package (a stop). The exception would
+                    // send the whole package back, and what was delivered before this frame would
+                    // go twice; said as a failed send, the queue takes back only the rest.
+                    return PackageSendingInfo.NotSent("cancelled", settled, dropped);
+                }
 
                 if (ack.IsSuccess)
                 {

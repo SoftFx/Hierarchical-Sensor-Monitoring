@@ -309,6 +309,72 @@ namespace HSMDataCollector.Tests.Transport
             Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
         }
 
+        [Fact]
+        public async Task Stop_in_the_middle_of_a_split_package_does_not_send_its_delivered_frames_again()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
+            {
+                server.RefuseUpgrades(503);
+
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var number = collector.CreateIntSensor("session/stop-split");
+                    await collector.Start();
+
+                    for (var i = 0; i < 30; i++)
+                        number.AddValue(i);
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 1));
+
+                    // The first list frame is acknowledged, the second is left without an answer:
+                    // the stop below finds the send waiting in the middle of the package.
+                    server.FailListFramesAfter(1, 0);
+                    server.AcceptUpgrades();
+
+                    Assert.True(await WaitForAsync(() => server.Requests.Count(r => r.Op == "list") >= 2), "The second frame was never sent.");
+
+                    server.FailListFramesAfter(-1, 0);
+
+                    await collector.Stop();
+                }
+
+                // The drain delivered the rest, and the frame that was acknowledged before the stop
+                // did not go a second time.
+                Assert.Equal(Enumerable.Range(0, 30).ToArray(), DeliveredInts(server).OrderBy(v => v).ToArray());
+            }
+        }
+
+        [Fact]
+        public async Task Server_that_takes_the_upgrade_and_never_acknowledges_is_reported_as_an_error()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.RequestTimeout = TimeSpan.FromMilliseconds(200);
+
+                server.StaySilentFor(int.MaxValue);
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/never-acked");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+
+                    // Each session comes up, gets no ack, and is closed: three of them and counting.
+                    Assert.True(await WaitForAsync(() => server.Sessions >= 3), "The session was not reopened.");
+
+                    await collector.Stop();
+                }
+            }
+
+            // Sessions that open and end at once deliver nothing; that is an error, said once.
+            Assert.Single(logger.Errors.Where(e => e.Contains("ended early") && e.Contains("no ack")));
+        }
+
         // --- a request without an ack ---
 
         [Fact]
@@ -506,6 +572,24 @@ namespace HSMDataCollector.Tests.Transport
             Assert.Single(logger.Errors.Where(e => e.Contains("session/file") && e.Contains("cannot carry file values")));
         }
 
+        [Fact]
+        public void File_value_sent_to_a_collector_that_is_not_running_is_not_reported()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            using (var collector = new DataCollector(OptionsFor(server)))
+            {
+                collector.AddCustomLogger(logger);
+                var file = collector.CreateFileSensor("session/file-before-start", "report");
+
+                // Not started: the value is not accepted, on any transport, and that is not a loss.
+                file.AddValue("content");
+            }
+
+            Assert.DoesNotContain(logger.Errors, e => e.Contains("cannot carry file values"));
+        }
+
         // --- stop ---
 
         [Fact]
@@ -609,7 +693,7 @@ namespace HSMDataCollector.Tests.Transport
                 await collector.Stop();
             }
 
-            Assert.Single(logger.Infos.Where(i => i.Contains("without the Service alive sensor")));
+            Assert.Single(logger.Infos.Where(i => i.Contains("Service alive sensor (AddCollectorAlive) is not registered")));
         }
 
         [Fact]

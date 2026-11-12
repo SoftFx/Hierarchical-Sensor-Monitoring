@@ -321,8 +321,8 @@ namespace HSMDataCollector.Core
 
                 // The disconnect alert of a collector is the inactivity alert of its Service alive
                 // sensor. Without that sensor nobody is told when the session, the only path, is gone.
-                if (!System.Linq.Enumerable.Any(_sensorsStorage.Values, sensor => sensor is DefaultSensors.Other.CollectorAlive))
-                    _logger.Info("The collector session is enabled without the Service alive sensor (AddCollectorAlive): the server has no disconnect alert for this collector.");
+                if (!_sensorsStorage.Values.Any(sensor => sensor is DefaultSensors.Other.CollectorAlive))
+                    _logger.Info("The collector session is enabled and the Service alive sensor (AddCollectorAlive) is not registered at Start: without it the server has no disconnect alert for this collector.");
 
                 transport.Start();
             }
