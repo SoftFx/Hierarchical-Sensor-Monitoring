@@ -262,8 +262,10 @@ there: the agent is the only place that can say what is wrong, and it must not f
 - **While running** it checks 30 s after start and then every 5 min
   (`AgentRuntime::WaitForStopWatchingRetiredPort`, on the runtime's own thread in place of the plain
   stop wait). The verdict is the pure `JudgeRetiredPort`, fed by one probe (`HsmServerAnswersOnPort`:
-  `GET /api/sensors/testConnection` returns 200 under the config's scheme and certificate policy, 2 s
-  timeouts set on the request handle), asked lazily and in a fixed order. What to do with the verdict —
+  `GET /api/sensors/testConnection` returns 200 over https under the config's certificate policy, 2 s
+  timeouts set on the request handle; https even for an `http://` address, because the agent's
+  collector never enables plaintext and sends such an address over https too), asked lazily and in a
+  fixed order. What to do with the verdict —
   the confirmation, the next delay and the hourly throttling below — is the pure `NextRetiredPortStep`
   (`retired_port.cpp`, unit-tested); the runtime only probes and carries the step out:
   1. the retired port answers → keep it. This covers a proxy-less server pinned to the old port
@@ -289,7 +291,10 @@ there: the agent is the only place that can say what is wrong, and it must not f
   configured port stopped answering on two checks in a row. The move site records this.
 - **Stopping.** The probes run on the runtime's thread between two waits for the stop signal. A stop
   that arrives during a probe waits for that probe only (2 s per WinHTTP phase; a refused connection
-  measured ~4 s on a dual-stack `localhost`), and the second probe is skipped.
+  measured ~4 s on a dual-stack `localhost`), and the second probe is skipped. The service's stop wait
+  hint (16 s) covers that probe plus the collector's bounded drain. At a system shutdown Windows may
+  cut the drain short if a probe was in flight; stop-time data loss is accepted (the stop must never
+  hold up the host).
 - **Log levels.** The agent log has no warning level. The start notice and the move are Info (a
   working or self-healed state); "nothing is being delivered" is Error, which also reaches the Windows
   Event Log.

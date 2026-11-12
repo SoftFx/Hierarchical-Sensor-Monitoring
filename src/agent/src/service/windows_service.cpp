@@ -65,7 +65,10 @@ namespace hsm::agent
             case SERVICE_CONTROL_STOP:
             case SERVICE_CONTROL_SHUTDOWN:
             case SERVICE_CONTROL_PRESHUTDOWN:
-                SetState(SERVICE_STOP_PENDING, NO_ERROR, 8000);
+                // Covers the collector's bounded stop drain (5 s) plus, for an agent watching a
+                // retired port (#1655), one reachability probe already in flight (2 s per WinHTTP
+                // phase, the connect phase once per resolved address).
+                SetState(SERVICE_STOP_PENDING, NO_ERROR, 16000);
                 if (AgentRuntime* runtime = g_runtime.load())
                     runtime->RequestStop();
                 return NO_ERROR;

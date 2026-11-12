@@ -60,8 +60,9 @@ namespace hsm::agent
     };
 
     /// True when an HSM Sensor API answers on `port` of the configured server host: a
-    /// `GET /api/sensors/testConnection` there returns 200 within a few seconds, under the config's
-    /// scheme and certificate policy. Used by the retired-port check (#1655). `port` always wins over
-    /// a port written into `server.address`, the way the collector's endpoint builder treats it.
+    /// `GET /api/sensors/testConnection` there returns 200 within a few seconds, over https (as the
+    /// agent's collector sends, even for an `http://` address) and under the config's certificate
+    /// policy. Used by the retired-port check (#1655). `port` always wins over a port written into
+    /// `server.address`, the way the collector's endpoint builder treats it.
     bool HsmServerAnswersOnPort(const AgentConfig& config, int port);
 } // namespace hsm::agent

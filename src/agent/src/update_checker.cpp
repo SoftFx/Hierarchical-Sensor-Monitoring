@@ -379,12 +379,18 @@ namespace hsm::agent
 
         // `port`, not url.port: a port written into server.address does not reach the collector's
         // endpoint either, and the question here is about the port the collector is using.
-        WinHttpSession sess(url.host, port, url.https, config.allow_untrusted_certificate);
+        //
+        // Always TLS, whatever scheme server.address names: the agent never enables the collector's
+        // plaintext transport, so the endpoint builder (MakeEndpoints, allow_plaintext = false)
+        // sends an "http://" address over https as well. A plain-HTTP probe would get a 400 from
+        // the server's TLS listener and call a working server unreachable.
+        constexpr bool kHttps = true;
+        WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate);
         if (!sess.Valid())
             return false;
 
         std::vector<char> body;
-        return HttpGet(sess, L"/api/sensors/testConnection", url.https, L"", body, nullptr, nullptr, kProbeTimeoutMs) == 200;
+        return HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, nullptr, nullptr, kProbeTimeoutMs) == 200;
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------
