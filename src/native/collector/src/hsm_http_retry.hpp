@@ -7,10 +7,15 @@
 //  DataHandlers.cs + CommandHandlers.cs). Pure arithmetic, no libcurl — compiled into the
 // always-on core so the retry decision + the backoff schedule are unit-tested in the /WX lane.
 //
-// Two pipeline shapes, exactly as Polly is configured on the managed side:
+// Two pipeline shapes, as Polly was configured on the managed side when this was written:
 //   * Bounded (data / priority / file):   MaxRetryAttempts = 10,           Exponential backoff.
 //   * Unbounded (commands / addOrUpdate): MaxRetryAttempts = int.MaxValue, Linear backoff.
 // Both use Delay = 1s and MaxDelay = 2min.
+//
+// The collector's send path uses neither: a native send is one attempt and the worker's cycle
+// retries. The managed command handler dropped its unbounded pipeline for the same shape in
+// 3.6.3 (#1659 A3), so Commands() below describes a pipeline that no longer exists there; the
+// bounded data pipeline is still the managed one.
 //
 // ShouldRetry mirrors the #1096 BaseHandlers.ShouldRetry fix:
 //   * a transport-level failure (connect refused / timeout / cancelled == a thrown exception

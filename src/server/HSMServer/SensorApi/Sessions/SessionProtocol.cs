@@ -25,6 +25,8 @@ namespace HSMServer.SensorApi.Sessions
         public const string AgentVersionHeader = "X-Agent-Version";
         public const string CollectorVersionHeader = "X-Collector-Version";
         public const string CollectorKindHeader = "X-Collector-Kind";
+        // The collector's name, as on every Sensor API request.
+        public const string ClientNameHeader = "ClientName";
 
         public const string OpList = "list";
         public const string OpCommands = "commands";

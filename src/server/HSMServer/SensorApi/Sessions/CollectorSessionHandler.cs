@@ -28,6 +28,11 @@ namespace HSMServer.SensorApi.Sessions
     // Refusals before the upgrade are ordinary HTTP statuses. After it, the session ends
     // by a close handshake (either side), by the connection going away, or by silence; none
     // of these is an error of the server and none is logged as one.
+    //
+    // What is logged: every session that opens (Info) and every session that ends (Info for
+    // an orderly close by either side, Warn otherwise), both under the session's short id,
+    // and every refused upgrade (at most one line a minute for each kind of refusal). The
+    // lines carry the key's name, never its value: the value is the key.
     public sealed class CollectorSessionHandler
     {
         private const string MalformedBody = "malformed body";
@@ -57,7 +62,7 @@ namespace HSMServer.SensorApi.Sessions
         // after the frame, so one large answer does not stay allocated for the session.
         private const int KeepOutputBytes = 64 * 1024;
 
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly CollectorSessionsConfig _config;
         private readonly CollectorSessionRegistry _registry;
@@ -69,6 +74,11 @@ namespace HSMServer.SensorApi.Sessions
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
+
+        // Refused upgrades, one throttle per kind of refusal.
+        private readonly RefusalThrottle _badUpgradeRefusals = new();
+        private readonly RefusalThrottle _accessRefusals = new();
+        private readonly RefusalThrottle _shutdownRefusals = new();
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
@@ -103,30 +113,37 @@ namespace HSMServer.SensorApi.Sessions
 
             if (!context.WebSockets.IsWebSocketRequest)
             {
+                LogRefusal(context, _badUpgradeRefusals, StatusCodes.Status400BadRequest, "not a WebSocket upgrade", LogLevel.Warn);
                 await Refuse(context, StatusCodes.Status400BadRequest, "A WebSocket upgrade is expected");
                 return;
             }
 
             if (!context.TryGetPublicApiInfo(out var caller))
             {
+                // No usable key: missing, malformed or unknown. Which one is not known here,
+                // and the value is not logged in any case.
+                LogRefusal(context, _accessRefusals, StatusCodes.Status406NotAcceptable, "no valid access key", LogLevel.Warn);
                 await context.SetAccessError("An access key is required");
                 return;
             }
 
             if (!caller.Key.IsValid(KeyPermissions.CanSendSensorData, out var keyError))
             {
+                LogRefusal(context, _accessRefusals, StatusCodes.Status406NotAcceptable, $"the key \"{CollectorSession.Printable(caller.Key.DisplayName)}\" cannot send data: {keyError?.TrimEnd('.')}", LogLevel.Warn);
                 await context.SetAccessError(keyError);
                 return;
             }
 
             if (!context.WebSockets.WebSocketRequestedProtocols.Contains(SessionProtocol.Subprotocol))
             {
+                LogRefusal(context, _badUpgradeRefusals, StatusCodes.Status400BadRequest, $"the subprotocol {SessionProtocol.Subprotocol} was not offered", LogLevel.Warn);
                 await Refuse(context, StatusCodes.Status400BadRequest, $"The subprotocol {SessionProtocol.Subprotocol} is required");
                 return;
             }
 
             if (_stopping)
             {
+                LogRefusal(context, _shutdownRefusals, StatusCodes.Status503ServiceUnavailable, ShutdownReason, LogLevel.Info);
                 await Refuse(context, StatusCodes.Status503ServiceUnavailable, ShutdownReason);
                 return;
             }
@@ -169,7 +186,7 @@ namespace HSMServer.SensorApi.Sessions
                 _registry.Register(session);
                 SessionProtocol.MarkUpgraded(context);
 
-                _logger.Debug($"Collector session {session.Id} opened: {caller.TelemetryPath} from {caller.RemoteIP}");
+                LogOpened(session);
 
                 // The shutdown sweep may have run between the reservation and the registration.
                 if (_stopping)
@@ -179,12 +196,14 @@ namespace HSMServer.SensorApi.Sessions
             }
             catch (Exception ex) when (IsConnectionEnd(ex))
             {
-                // The collector went away, or the server cut a silent session off.
+                // The collector went away, or the server cut a silent session off. In the
+                // second case the cause is noted already, and this note does not replace it.
+                session?.NoteEnd($"the connection ended without a close handshake ({ex.GetType().Name}: {ex.Message})", abnormal: true);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Collector session {session?.Id} failed: {ex}");
-                session?.Abort("internal error");
+                _logger.Error($"Collector session {session?.ShortId} failed: {ex}");
+                session?.Abort($"internal error ({ex.GetType().Name})");
             }
             finally
             {
@@ -192,7 +211,15 @@ namespace HSMServer.SensorApi.Sessions
 
                 if (session is not null)
                 {
-                    _logger.Debug($"Collector session {session.Id} closed{(session.EndReason is null ? string.Empty : $": {session.EndReason}")}");
+                    try
+                    {
+                        LogClosed(session);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to log the end of collector session {session.ShortId}: {ex}");
+                    }
+
                     session.Dispose();
                 }
                 else if (socket is not null)
@@ -259,6 +286,7 @@ namespace HSMServer.SensorApi.Sessions
                 {
                     case SessionFrameKind.Close:
                         // The collector closed. Answer the handshake if we have not started one.
+                        session.NoteCollectorClose();
                         await session.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty);
                         return;
 
@@ -351,7 +379,7 @@ namespace HSMServer.SensorApi.Sessions
                 // only keeps itself alive. A ping is not a use of the key, though.
                 if (!TryRefreshCaller(session, countsAsKeyUsage: !isPing, out var caller, out var accessError))
                 {
-                    _logger.Debug($"Collector session {session.Id} lost its access: {accessError}");
+                    _logger.Debug($"Collector session {session.ShortId} lost its access: {accessError}");
                     await session.CloseAsync(SessionProtocol.ClosePolicyViolation, Truncate(accessError));
                     return false;
                 }
@@ -372,14 +400,15 @@ namespace HSMServer.SensorApi.Sessions
                 switch (request.Op)
                 {
                     case SessionProtocol.OpList:
-                        await HandleListAsync(caller, request, id, output);
+                        await HandleListAsync(session, caller, request, id, output);
                         break;
 
                     case SessionProtocol.OpCommands:
-                        await HandleCommandsAsync(caller, request, id, output);
+                        await HandleCommandsAsync(session, caller, request, id, output);
                         break;
 
                     default:
+                        session.CountRequestRefused();
                         SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, UnknownOp);
                         break;
                 }
@@ -393,16 +422,18 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
-        private async Task HandleListAsync(PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output)
+        private async Task HandleListAsync(CollectorSession session, PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output)
         {
             if (!TryReadBody<List<SensorValueBase>>(request, SensorApiJson.Values, out var values))
             {
+                session.CountRequestRefused();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, MalformedBody);
                 return;
             }
 
             if (values.Count == 0)
             {
+                session.CountRequestRefused();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, EmptyBatch);
                 return;
             }
@@ -411,22 +442,30 @@ namespace HSMServer.SensorApi.Sessions
             {
                 var errors = await _ingestion.AddValuesAsync(caller, values);
 
+                // The errors are keyed by path: every value of a refused path is not accepted.
+                // A value without a path is not counted (and must not throw here: the batch is stored, and a
+                // statistic may not turn its ack into a refusal).
+                session.CountValuesAccepted(errors is null || errors.Count == 0
+                    ? values.Count
+                    : values.Count(value => value?.Path is not null && !errors.ContainsKey(value.Path)));
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
             }
             catch (Exception ex)
             {
                 // The HTTP route answers 400 here as well.
-                _logger.Error($"Failed to put data of collector session frame {id}: {ex}");
+                _logger.Error($"Failed to put data of collector session {session.ShortId} frame {id}: {ex}");
 
+                session.CountRequestRefused();
                 output.Clear();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, StoreFailed);
             }
         }
 
-        private async Task HandleCommandsAsync(PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output)
+        private async Task HandleCommandsAsync(CollectorSession session, PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output)
         {
             if (!TryReadBody<List<CommandRequestBase>>(request, SensorApiJson.Commands, out var commands))
             {
+                session.CountRequestRefused();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, MalformedBody);
                 return;
             }
@@ -448,8 +487,9 @@ namespace HSMServer.SensorApi.Sessions
             catch (Exception ex)
             {
                 // The HTTP route answers 400 here as well.
-                _logger.Error($"Failed to update sensors of collector session frame {id}: {ex}");
+                _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {ex}");
 
+                session.CountRequestRefused();
                 output.Clear();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, CommandsFailed);
             }
@@ -512,11 +552,80 @@ namespace HSMServer.SensorApi.Sessions
             return true;
         }
 
-        private async Task Violation(CollectorSession session, WebSocketCloseStatus status, string reason)
-        {
-            _logger.Warn($"Collector session {session.Id} ({session.Caller.TelemetryPath}) is closed with {(int)status}: {reason}");
+        // The close line of the session reports it, as a warning.
+        private static Task Violation(CollectorSession session, WebSocketCloseStatus status, string reason) => session.CloseAsync(status, reason);
 
-            await session.CloseAsync(status, reason);
+        // For the tests, which read what the handler logs without touching the process-wide
+        // NLog configuration.
+        internal void UseLogger(Logger logger) => _logger = logger;
+
+        private void LogOpened(CollectorSession session)
+        {
+            var caller = session.Caller;
+
+            // The client's words (its name, what it says it is) are made printable first.
+            _logger.Info($"Collector session {session.ShortId} opened: product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", " +
+                         $"key \"{CollectorSession.Printable(caller.Key.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", " +
+                         $"collector {CollectorSession.Printable(session.CollectorKind) ?? "(kind not stated)"} {CollectorSession.Printable(session.CollectorVersion) ?? "(version not stated)"}" +
+                         $"{(session.AgentVersion is null ? string.Empty : $", agent {CollectorSession.Printable(session.AgentVersion)}")}, from {session.RemoteIP}; {_registry.Count} session(s) open.");
+        }
+
+        private void LogClosed(CollectorSession session)
+        {
+            var caller = session.Caller;
+            var end = session.End ?? new SessionEnd("it ended without a recorded cause", Abnormal: true);
+
+            var line = $"Collector session {session.ShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
+                       $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
+                       $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
+                       $"values accepted {session.ValuesAccepted}, requests refused {session.RequestsRefused}; " +
+                       $"last frame from the collector {FormatDuration(session.SinceLastFrame)} before the end; {_registry.Count} session(s) open.";
+
+            if (end.Abnormal)
+                _logger.Warn(line);
+            else
+                _logger.Info(line);
+        }
+
+        // One line per kind of refusal at most once a minute (the same throttle as the limit
+        // warnings): a collector that retries every second with a wrong key must not flood
+        // the log. The line says how many refusals of that kind went unlogged before it.
+        private void LogRefusal(HttpContext context, RefusalThrottle throttle, int status, string reason, LogLevel level)
+        {
+            if (!IsTimeToWarn(ref throttle.WarnedAtTicks))
+            {
+                Interlocked.Increment(ref throttle.Unlogged);
+                return;
+            }
+
+            var unlogged = Interlocked.Exchange(ref throttle.Unlogged, 0);
+            var address = context.Connection.RemoteIpAddress;
+
+            if (address is { IsIPv4MappedToIPv6: true })
+                address = address.MapToIPv4();
+
+            var client = CollectorSession.Printable(ReadFact(context, SessionProtocol.ClientNameHeader));
+
+            _logger.Log(level, $"A collector session upgrade is refused with {status}: {reason}. Client \"{client ?? "(no ClientName)"}\" from {address?.ToString() ?? "an unknown address"}" +
+                               $"{(unlogged > 0 ? $"; {unlogged} more refusal(s) of this kind since the last such line were not logged" : string.Empty)}.");
+        }
+
+        // "850 ms", "12.3 s", "5m 03s", "3h 12m 05s": the native collector's format.
+        internal static string FormatDuration(TimeSpan duration)
+        {
+            var ms = Math.Max(0L, (long)duration.TotalMilliseconds);
+
+            if (ms < 1000)
+                return $"{ms} ms";
+
+            if (ms < 60_000)
+                return $"{ms / 1000}.{ms % 1000 / 100} s";
+
+            var seconds = ms / 1000;
+
+            return seconds < 3600
+                ? $"{seconds / 60}m {seconds % 60:00}s"
+                : $"{seconds / 3600}h {seconds / 60 % 60:00}m {seconds % 60:00}s";
         }
 
         // A refused collector cannot deliver until a slot is free: the session is its
@@ -588,6 +697,14 @@ namespace HSMServer.SensorApi.Sessions
 
         private static bool IsConnectionEnd(Exception ex) =>
             ex is WebSocketException or OperationCanceledException or IOException or ObjectDisposedException;
+
+
+        private sealed class RefusalThrottle
+        {
+            public long WarnedAtTicks;
+
+            public long Unlogged;
+        }
 
 
         // Ends a session that makes no progress for `limit` while the loop waits for the

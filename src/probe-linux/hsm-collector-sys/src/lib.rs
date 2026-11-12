@@ -233,6 +233,12 @@ pub const HSM_DEFAULT_PROCESS_CPU: hsm_default_sensor_t = 0;
 pub const HSM_DEFAULT_PROCESS_MEMORY: hsm_default_sensor_t = 1;
 pub const HSM_DEFAULT_PROCESS_THREAD_COUNT: hsm_default_sensor_t = 2;
 pub const HSM_DEFAULT_PRODUCT_VERSION: hsm_default_sensor_t = 63;
+/// `.computer/Network/Connections Established Count`, `Connection Failures Count` and
+/// `Connections Reset Count`: the catalog rows the probe registers and feeds from `/proc/net/snmp`
+/// (#1711).
+pub const HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED: hsm_default_sensor_t = 50;
+pub const HSM_DEFAULT_NETWORK_CONNECTION_FAILURES: hsm_default_sensor_t = 51;
+pub const HSM_DEFAULT_NETWORK_CONNECTIONS_RESET: hsm_default_sensor_t = 52;
 
 /// Mirrors `hsm_default_sensor_params_t`. Start from [`hsm_default_sensor_params_default`].
 #[repr(C)]
@@ -276,6 +282,10 @@ extern "C" {
 
     /// Switch from the in-memory recording sender to the real libcurl transport. Call before Start.
     pub fn hsm_collector_use_http_transport(collector: *mut hsm_collector_t) -> hsm_result_t;
+
+    /// Switch to the collector session: one WebSocket instead of a request per batch, and nothing
+    /// over the HTTP routes. Call before Start. Since the native collector 0.12.0.
+    pub fn hsm_collector_use_session_transport(collector: *mut hsm_collector_t) -> hsm_result_t;
 
     pub fn hsm_collector_set_logger(
         collector: *mut hsm_collector_t,
@@ -321,6 +331,14 @@ extern "C" {
     pub fn hsm_collector_registration_count(collector: *const hsm_collector_t) -> usize;
     /// The canonical registration JSON at `index`; the text is owned by the collector.
     pub fn hsm_collector_get_registration_json(
+        collector: *const hsm_collector_t,
+        index: usize,
+        out_json: *mut *const c_char,
+    ) -> hsm_result_t;
+    /// Number of value payloads the in-memory sender recorded (no transport installed).
+    pub fn hsm_collector_sent_count(collector: *const hsm_collector_t) -> usize;
+    /// The recorded value payload at `index`; the text is owned by the collector.
+    pub fn hsm_collector_get_sent_json(
         collector: *const hsm_collector_t,
         index: usize,
         out_json: *mut *const c_char,
@@ -663,6 +681,9 @@ mod layout_tests {
             HSM_ALERT_ICON_ARROW_DOWN,
             HSM_ALERT_ICON_CLOCK,
             HSM_ALERT_ICON_HOURGLASS,
+            HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED,
+            HSM_DEFAULT_NETWORK_CONNECTION_FAILURES,
+            HSM_DEFAULT_NETWORK_CONNECTIONS_RESET,
         ];
         // Same set on both sides: nothing bound here that build.rs did not check, and nothing
         // checked there that is not bound.
