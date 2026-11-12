@@ -37,7 +37,7 @@ Rewritten in the #1071–#1075 lifecycle refactor (PR #1080) and hardened by #10
 - **A rejected registration is final (#1659 A2, 3.6.2)**: on the **command** queue a package the server answered with a **4xx** (`PackageSendingInfo.IsRejected`, from the new `StatusCode`) is not re-enqueued. The same payload and key are refused again on every repeat, so before 3.6.2 such a package came back every `PackageCollectPeriod` until overflow evicted it. It is reported once through the deduplicator (log + `Collector errors`): `Queue: Command, the server rejected 12 command(s) with status 400; not sent again. …`, a lone registration by its path (`the command for <path>`). A missing answer and a 5xx are still re-sent. The boundary is the native one (`status <= 0 || status >= 500` is retried), so every 4xx is final, 408 and 429 included. The rule is per queue (`QueueProcessorBase.RejectionIsFinal`, on for `CommandQueueProcessor` only): a **value** package answered 4xx still returns to the queue, which is what the native collector does with a value batch. A sensor whose registration was rejected is registered again by the next Start.
 - **#1088 (the single retry-drop)**: a retry that meets an already-**full** queue is dropped instead of evicting a queued value via the tail-write + overflow path — the retry is the oldest data (newest-wins). Reported via `DataProcessor.ReportRequeueEviction` → `QueueOverflowSensor` (reporting lives in per-item `ReEnqueueItem`, so FileQueueProcessor's single-item retries are covered too).
 - **#1090 removed (2026-06):** the earlier below-capacity head-drop — a `_buildDateMirror` head comparison that dropped a retry older than the FIFO head even with room — was removed from **both** collectors. For a large history buffer it discarded values that did not need to be lost; the monitoring-history contract drops only on overflow. (`QueueItem.BuildDate` survives for `DataPackage` time-in-queue stats; the mirror and `IsOlderThanQueueHead` are gone.)
-- **Cancellation**: on `OperationCanceledException`, packages are re-enqueued only when the shutdown mode preserves them (`PreserveCanceledPackages` — GracefulStop yes, TerminalDispose no).
+- **Cancellation**: on `OperationCanceledException`, the package is re-enqueued when the shutdown mode preserves it (`PreserveCanceledPackages`): GracefulStop and, since 3.6.5 (#1659 A6), TerminalDispose. The drain below then sends it again. Before 3.6.5 a `Dispose()` dropped the package it had cancelled in flight, the oldest accepted data, even against a healthy server. StartRollback still discards.
 
 ## Shutdown modes & drain order
 
@@ -45,13 +45,19 @@ Rewritten in the #1071–#1075 lifecycle refactor (PR #1080) and hardened by #10
 
 | Mode | Clear on stop | Flush accepted work | Preserve canceled | Stop wait timeout |
 |---|---|---|---|---|
-| GracefulStop | no | yes | yes | `RequestTimeout` |
-| TerminalDispose | no | yes | no | `min(RequestTimeout, 1 s)` |
+| GracefulStop | no | yes | yes | `min(RequestTimeout, 5 s)` |
+| TerminalDispose | no | yes | yes (3.6.5) | `min(RequestTimeout, 1 s)` |
 | StartRollback | immediately | no | no | `min(RequestTimeout, 1 s)` |
 
-Drain order in `DataProcessor.StopWithFlushAsync`: stop all queues → flush Priority → flush Data → **set diagnostics-suppression flag (#1075)** → flush File → flush Command → per-queue `ClearQueue()` + `LogDiscardedItems`. Flush timeout is `RequestTimeout` clamped to [1 s, 5 s].
+Drain in `DataProcessor.StopWithFlushAsync` (#1659 A7, 3.6.5):
 
-Diagnostics suppression: after the data-drain boundary, `AddPackageInfo`/`AddPackageSendingInfo` become no-ops so late file/command flushes cannot enqueue stale self-diagnostics into stopped data queues (would survive restart as stale telemetry). **Overflow reporting is exempt** — data loss must stay visible even during shutdown. Flag resets on every Start.
+1. **Stop the four queue loops together.** Each wait is bounded by the stop wait timeout above; they run concurrently, so a sender that ignores cancellation costs one such wait, not four in a row.
+2. **One drain budget for all queues**: `RequestTimeout` clamped to [1 s, 5 s] on a graceful stop, `min(that, 1 s)` on a terminal dispose. This is the native `StopDrainBudgetMs`. A queue that finds the budget spent starts no send; its items are discarded and counted (`LogDiscardedItems`). Before 3.6.5 every queue had a budget of its own, about 20 s in the worst case of a hung server.
+3. **Order: Command → Priority → Data → File**, each followed by `ClearQueue()` + `LogDiscardedItems`. Registrations go first, as the native drain posts pending registrations before the values (`DrainQueueOnStop` → `FlushRuntimeRegistrations`): values are of little use to a server that was never told what their sensors are. Before 3.6.5 commands were last.
+
+Worst case for a stop is therefore the stop wait plus the drain budget: 10 s graceful, 2 s terminal.
+
+Diagnostics suppression: `AddPackageInfo`/`AddPackageSendingInfo` are no-ops during the command flush and from the data-drain boundary on, so the command and file flushes cannot enqueue stale self-diagnostics into stopped data queues (would survive restart as stale telemetry). **Overflow reporting is exempt** — data loss must stay visible even during shutdown. Flag resets on every Start.
 
 Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "N preserved" in the run loop but "N queued for clear" when running inside `FlushAsync` (`IsFlushing`), because ClearQueue discards those items moments later; "+M dropped" counts retry-filter drops.
 
@@ -71,12 +77,12 @@ Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "
 
 - FIFO per queue; at-least-once delivery; no cross-queue ordering guarantees.
 - Monitoring history: every value is kept until the buffer overflows. A failed retry is re-enqueued and retried (at-least-once) and is dropped only when the buffer is already full (#1088) — never below capacity.
-- Graceful stop preserves accepted work via bounded flush; terminal dispose stays bounded even when the sender ignores cancellation.
+- Graceful stop and terminal dispose both hand accepted work, the package cancelled in flight included, to one bounded drain; both stay bounded even when the sender ignores cancellation.
 - Values are dropped (not queued) while the collector is stopped; values CAN be enqueued during Stopping (final flushes).
 
 ## Tests
 
-`src/collector/HSMDataCollector.Tests/CollectorQueueShutdownTests.cs` (lifecycle, #1088/#1090 regressions, flush wording), `RegistrationRejectionTests.cs` (a 4xx on a registration is final, a 5xx / no answer / a value 4xx is re-sent), `CollectorStabilityTests.cs` (stop-race file flush), `CollectorTransportChaosTests.cs`, `CollectorStressTests.cs` (gated soak/stress).
+`src/collector/HSMDataCollector.Tests/CollectorQueueShutdownTests.cs` (lifecycle, #1088/#1090 regressions, flush wording), `RegistrationRejectionTests.cs` (a 4xx on a registration is final, a 5xx / no answer / a value 4xx is re-sent), `StopDrainTests.cs` (drain order, the single budget, the in-flight package on Stop and Dispose), `CollectorStabilityTests.cs` (stop-race file flush), `CollectorTransportChaosTests.cs`, `CollectorStressTests.cs` (gated soak/stress).
 
 ## Native port (C++) — #1097
 
