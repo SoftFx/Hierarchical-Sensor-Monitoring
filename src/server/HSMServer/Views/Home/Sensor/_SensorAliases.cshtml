@@ -29,7 +29,7 @@
                     var alias = aliases[i];
                     var rowId = $"sensorAlias_{Model.EncodedId}_{i}";
                     var product = Cache.GetProduct(alias.ProductId)?.DisplayName ?? alias.ProductId.ToString();
-                    var lastHit = alias.LastHit.Ticks > 0 ? alias.LastHit.ToLocalTime().ToString("g") : "never";
+                    var lastHit = alias.LastHit.Ticks > 0 ? $"{alias.LastHit:yyyy-MM-dd HH:mm} UTC" : "never";
 
                     <tr id="@rowId">
                         <td class="text-break">@product/@alias.Path</td>

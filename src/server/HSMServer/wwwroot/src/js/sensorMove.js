@@ -85,11 +85,15 @@ function renderPreview(preview) {
 }
 
 function renderResult(response) {
-    const lines = (response.results ?? [])
+    const results = response.results ?? [];
+    const lines = results
         .filter(r => !['moved', 'merged', 'unchanged'].includes(r.outcome))
         .map(r => `${escapeHtml(r.oldPath ?? r.sensorId)}: ${escapeHtml(r.error ?? outcomeLabels[r.outcome] ?? r.outcome)}`);
+    const unchanged = results.filter(r => r.outcome === 'unchanged').length;
 
     let message = `Moved ${response.moved} sensor(s).`;
+    if (unchanged)
+        message += ` ${unchanged} already at the destination.`;
     if (lines.length)
         message += `<br/><span style="color: red">${lines.join('<br/>')}</span>`;
 
@@ -105,8 +109,14 @@ window.openMoveSensorsModal = function (ids) {
     }).done(html => {
         $('#moveSensors_partial').html(html);
 
+        const buttons = $('#moveSensors_previewBtn, #moveSensors_moveBtn');
+        const busy = request => {
+            buttons.prop('disabled', true);
+            return request.always(() => buttons.prop('disabled', false));
+        };
+
         $('#moveSensors_previewBtn').on('click', () => {
-            moveRequest(true)
+            busy(moveRequest(true))
                 .done(renderPreview)
                 .fail(xhr => $('#moveSensors_preview').html(`<div class="text-danger">${escapeHtml(failureText(xhr))}</div>`));
         });
@@ -114,7 +124,7 @@ window.openMoveSensorsModal = function (ids) {
         $('#moveSensors_moveBtn').on('click', () => {
             const merge = $('#moveSensors_merge').is(':checked');
 
-            const run = () => moveRequest(false)
+            const run = () => busy(moveRequest(false))
                 .done(response => {
                     $('#moveSensors_modal').modal('hide');
                     renderResult(response);
@@ -143,7 +153,10 @@ window.removeSensorAlias = function (button) {
         type: 'POST',
         data: { sensorId: sensorId, productId: productId, path: path, __RequestVerificationToken: antiForgeryToken() },
     }).done(() => {
+        const block = $(`#${rowId}`).closest('[id^="sensorAliases_"]');
         $(`#${rowId}`).remove();
+        if (block.find('tr').length === 0)
+            block.remove();
         showToast(`Alias '${escapeHtml(path)}' removed.`);
     }).fail(xhr => showToast(escapeHtml(failureText(xhr))));
 };

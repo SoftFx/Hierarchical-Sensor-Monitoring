@@ -11,7 +11,7 @@ A sensor can be moved to another path — inside its root product or into anothe
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
-Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). The `/api/v1` and MCP surfaces (#1721), the Web UI (#1722), rollback (#1723) and collector `PreviousPaths` (#1724) follow.
+Delivered so far: the core move and aliases (#1719), merge into an occupied destination (#1720), the `/api/v1` and MCP surfaces with a dry-run preview (#1721), the Web UI (#1722). Rollback (#1723) and collector `PreviousPaths` (#1724) follow.
 
 ## Invariants
 

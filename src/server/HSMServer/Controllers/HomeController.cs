@@ -24,6 +24,7 @@ using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
@@ -59,14 +60,14 @@ namespace HSMServer.Controllers
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
         private readonly PolicyAdministrationService _policies;
-        private readonly HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService _mover;
+        private readonly SensorMoveAdministrationService _mover;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
                               IDatabaseCore database, IAlertScheduleProvider provider,
                               PolicyAdministrationService policies,
-                              HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService mover) : base(userManager)
+                              SensorMoveAdministrationService mover) : base(userManager)
         {
             _mover = mover;
             _treeValuesCache = treeValuesCache;
@@ -277,13 +278,16 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetMoveSensorsModal([FromQuery] string[] ids)
         {
+            // Every selected sensor goes to the server, managed or not: the
+            // move answers "no rights" for the ones the user may not move
+            // instead of the modal silently dropping them.
             var sensors = (ids ?? [])
                 .Select(id => _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(id)))
-                .Where(s => s is not null && CurrentUser.IsManager(s.Root.Id))
+                .Where(s => s?.Root is not null)
                 .ToList();
 
             if (sensors.Count == 0)
-                return BadRequest("Select sensors of a product you manage.");
+                return BadRequest("Select one or more sensors.");
 
             var first = sensors[0];
 
@@ -308,7 +312,9 @@ namespace HSMServer.Controllers
             if (model is null)
                 return BadRequest(new { error = "A move request is required." });
 
-            var request = new HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto
+            model.SensorIds ??= [];
+
+            var request = new SensorMoveRequestDto
             {
                 Sensors = model.SensorIds.Select(SensorPathHelper.DecodeGuid).ToList(),
                 Product = model.ProductId,
@@ -318,7 +324,7 @@ namespace HSMServer.Controllers
             };
 
             var result = await _mover.MoveSensorsAsync(request,
-                new HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess(CurrentUser, _treeValuesCache),
+                new CookieSensorMoveAccess(CurrentUser, _treeValuesCache),
                 new ChangeSetWriteOptions { DryRun = model.DryRun }, HttpContext.RequestAborted);
 
             if (!result.Success)
@@ -332,7 +338,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> RemoveSensorAlias(Guid sensorId, Guid productId, string path)
         {
             var result = await _mover.RemoveAliasAsync(sensorId, productId, path,
-                new HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess(CurrentUser, _treeValuesCache), HttpContext.RequestAborted);
+                new CookieSensorMoveAccess(CurrentUser, _treeValuesCache), HttpContext.RequestAborted);
 
             return result.Success ? Ok() : BadRequest(new { error = MoveFailureText(result.Failure) });
         }
