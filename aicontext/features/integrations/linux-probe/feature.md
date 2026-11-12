@@ -218,8 +218,18 @@ The probe registers **two separately pinned sets**:
    - **Rule #10.** It binds one path to one mechanism per OS. Across OSes the meaning carries
      over (the same MIB counters). A managed Unix implementation, if ever written, must read the
      same files.
-   - **Not yet built:** link health, Wi-Fi signal and reachability (groups 2–4 of #1711) wait for
-     the owner's agreement in the issue.
+   - **Link health** (Linux only, `network/health.rs`), per reported interface: `Link up` (Bool,
+     AggregateData, from `operstate`, `unknown` → `carrier`; checked every 10 s, posted on change
+     and every 5 min, TTL 15 min; created the first time the interface is seen up), and
+     `Carrier changes` / `Errors` / `Drops` (Int, Count: per-minute deltas of `carrier_changes`
+     and the `/proc/net/dev` rx + tx `errs` / `drop` columns, posted only when non-zero, no TTL,
+     created on the first non-zero minute).
+   - **Wi-Fi signal** (Linux only, `network/wifi.rs`): `Signal dBm` and `Link quality`, 1-minute
+     DoubleBars of 10 s samples from `/proc/net/wireless` (a row exists only while associated; a
+     value without the kernel's "updated" `.` and a non-dBm level are skipped). BSSID, channel and
+     channel width need nl80211 and are not reported (owner's decision in #1711: no netlink
+     dependency). A missing `/proc/net/wireless` is silent on a host without Wi-Fi.
+   - **Not built:** reachability (group 4 of #1711) and `Connection failures rate`.
    - Pinned by `NETWORK_SET` and `network::tests::the_tcp_sensors_are_the_windows_catalog_rows`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,

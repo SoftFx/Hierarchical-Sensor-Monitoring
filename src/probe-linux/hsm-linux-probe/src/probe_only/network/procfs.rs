@@ -61,22 +61,29 @@ pub fn counter_delta(previous: Option<u64>, current: u64) -> Option<i32> {
     (delta > 0).then(|| i32::try_from(delta).unwrap_or(i32::MAX))
 }
 
-/// Received and transmitted octets of one interface (`/proc/net/dev` columns 1 and 9).
+/// One interface's `/proc/net/dev` counters: octets (columns 1 and 9) for the speed, and the
+/// receive + transmit sums of `errs` (columns 3 and 11) and `drop` (columns 4 and 12) for health.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct InterfaceOctets {
+pub struct DevCounters {
     pub rx_bytes: u64,
     pub tx_bytes: u64,
+    pub errors: u64,
+    pub drops: u64,
 }
 
 /// The 16 counter columns of a `/proc/net/dev` row (8 receive, 8 transmit).
 const DEV_COLUMNS: usize = 16;
+const RX_ERRS_COLUMN: usize = 2;
+const RX_DROP_COLUMN: usize = 3;
 const TX_BYTES_COLUMN: usize = 8;
+const TX_ERRS_COLUMN: usize = 10;
+const TX_DROP_COLUMN: usize = 11;
 
 /// Parse `/proc/net/dev`: two header lines, then `<name>:<16 counters>` per interface. The kernel
 /// pads the name to 6 characters and the first counter to 8, so a long name or a large counter
 /// leaves no space after the `:` (`wlp3s0:18446744073 …`) — the row is split at the colon, which
 /// an interface name cannot contain.
-pub fn parse_dev(dev: &str) -> Result<BTreeMap<String, InterfaceOctets>, String> {
+pub fn parse_dev(dev: &str) -> Result<BTreeMap<String, DevCounters>, String> {
     let mut lines = dev.lines();
     match lines.next() {
         Some(header) if header.starts_with("Inter-|") => {}
@@ -107,9 +114,11 @@ pub fn parse_dev(dev: &str) -> Result<BTreeMap<String, InterfaceOctets>, String>
         };
         interfaces.insert(
             name.to_string(),
-            InterfaceOctets {
+            DevCounters {
                 rx_bytes: column(0)?,
                 tx_bytes: column(TX_BYTES_COLUMN)?,
+                errors: column(RX_ERRS_COLUMN)?.saturating_add(column(TX_ERRS_COLUMN)?),
+                drops: column(RX_DROP_COLUMN)?.saturating_add(column(TX_DROP_COLUMN)?),
             },
         );
     }
@@ -140,6 +149,118 @@ pub fn is_loopback(sys_root: &Path, name: &str) -> bool {
     }
 }
 
+fn interface_file(sys_root: &Path, name: &str, file: &str) -> Result<String, String> {
+    let path = sys_root.join("class/net").join(name).join(file);
+    std::fs::read_to_string(&path)
+        .map(|text| text.trim().to_string())
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))
+}
+
+/// Whether the interface has a link, from its RFC 2863 `operstate`: `up` is a link; `down`,
+/// `lowerlayerdown`, `dormant` (Wi-Fi not associated), `notpresent` and `testing` are not.
+/// Drivers that do not track it report `unknown`; then the `carrier` file decides.
+pub fn link_up(sys_root: &Path, name: &str) -> Result<bool, String> {
+    let state = interface_file(sys_root, name, "operstate")?;
+    match state.as_str() {
+        "up" => Ok(true),
+        "down" | "lowerlayerdown" | "dormant" | "notpresent" | "testing" => Ok(false),
+        "unknown" => match interface_file(sys_root, name, "carrier")?.as_str() {
+            "1" => Ok(true),
+            "0" => Ok(false),
+            other => Err(format!("{name}: unexpected carrier '{other}'")),
+        },
+        other => Err(format!("{name}: unexpected operstate '{other}'")),
+    }
+}
+
+/// `carrier_changes`: how many times the link went up or down since the interface was created (a
+/// flap counts 2). `None` when the kernel has no such file (before 3.15) or it is unreadable.
+pub fn carrier_changes(sys_root: &Path, name: &str) -> Option<u64> {
+    interface_file(sys_root, name, "carrier_changes")
+        .ok()?
+        .parse()
+        .ok()
+}
+
+/// Whether the interface is a Wi-Fi one (cfg80211 creates `/sys/class/net/<if>/wireless`).
+pub fn is_wireless(sys_root: &Path, name: &str) -> bool {
+    sys_root
+        .join("class/net")
+        .join(name)
+        .join("wireless")
+        .is_dir()
+}
+
+/// Whether any interface of the host is a Wi-Fi one.
+pub fn any_wireless(sys_root: &Path) -> bool {
+    std::fs::read_dir(sys_root.join("class/net"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .any(|entry| is_wireless(sys_root, &entry.file_name().to_string_lossy()))
+        })
+        .unwrap_or(false)
+}
+
+/// One associated Wi-Fi interface's row of `/proc/net/wireless`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WirelessReading {
+    /// `link`: 0–70 on cfg80211 drivers (the signal clamped to −110…−40 dBm, plus 110).
+    pub quality: Option<f64>,
+    /// `level` in dBm.
+    pub signal_dbm: Option<f64>,
+}
+
+/// Parse `/proc/net/wireless`. The kernel (`wireless_seq_printf_stats`) prints a row only for an
+/// interface that has statistics — for cfg80211, a station associated with an access point — as
+/// `%6s: %04x  %3d%c  %3d%c  %3d%c …`: status, then link quality, level and noise, each followed
+/// by `.` when the driver updated it and a space when it did not. A value without its `.` is
+/// stale or invalid and is left out; so is a level that is not in dBm (the kernel prints a dBm
+/// level as a negative number, any other scale as 0–255).
+pub fn parse_wireless(text: &str) -> Result<BTreeMap<String, WirelessReading>, String> {
+    let mut lines = text.lines();
+    match lines.next() {
+        Some(header) if header.starts_with("Inter-|") => {}
+        _ => return Err("/proc/net/wireless does not start with its 'Inter-|' header".into()),
+    }
+    lines.next();
+    let mut interfaces = BTreeMap::new();
+    for line in lines.filter(|line| !line.trim().is_empty()) {
+        let (name, fields) = line
+            .split_once(':')
+            .ok_or_else(|| format!("/proc/net/wireless row without a name: '{}'", line.trim()))?;
+        let name = name.trim();
+        let fields: Vec<&str> = fields.split_whitespace().collect();
+        if name.is_empty() || fields.len() < 3 {
+            return Err(format!(
+                "/proc/net/wireless row for '{name}' has {} fields, expected at least 3",
+                fields.len()
+            ));
+        }
+        let value = |index: usize| -> Result<Option<i32>, String> {
+            let field = fields[index];
+            let (digits, updated) = match field.strip_suffix('.') {
+                Some(digits) => (digits, true),
+                None => (field, false),
+            };
+            let number = digits.parse::<i32>().map_err(|_| {
+                format!("/proc/net/wireless field {index} of '{name}' is not a number: '{field}'")
+            })?;
+            Ok(updated.then_some(number))
+        };
+        let quality = value(1)?;
+        let level = value(2)?;
+        interfaces.insert(
+            name.to_string(),
+            WirelessReading {
+                quality: quality.map(f64::from),
+                signal_dbm: level.filter(|dbm| *dbm < 0).map(f64::from),
+            },
+        );
+    }
+    Ok(interfaces)
+}
+
 /// One interface's speed over an interval, MB/s (1 MB = 1024² bytes, as on Windows).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Speed {
@@ -154,8 +275,8 @@ const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
 /// interface re-created under the same name) is skipped for this interval; one that moved no
 /// octet at all gives no speed, so a perpetually idle interface never gets a sensor.
 pub fn speeds(
-    previous: &BTreeMap<String, InterfaceOctets>,
-    current: &BTreeMap<String, InterfaceOctets>,
+    previous: &BTreeMap<String, DevCounters>,
+    current: &BTreeMap<String, DevCounters>,
     elapsed: Duration,
 ) -> BTreeMap<String, Speed> {
     let seconds = elapsed.as_secs_f64();
@@ -199,21 +320,32 @@ pub(crate) mod tests {
     /// counters wider than their column run into the name, as they do on a long-running host.
     pub const WIFI_DOCKER_DEV: &str = include_str!("fixtures/wifi-docker-dev.txt");
 
-    /// `/sys/class/net` of [`WIFI_DOCKER_DEV`]: only the two NICs have a `device` link.
+    /// `/proc/net/wireless` of the same host, in the kernel's exact format: `wlp3s0` associated at
+    /// −74 dBm, a USB dongle whose driver reports a non-dBm level, and a row with nothing updated.
+    pub const WIFI_WIRELESS: &str = include_str!("fixtures/wifi-wireless.txt");
+
+    /// `/sys/class/net` of [`WIFI_DOCKER_DEV`]: only the two NICs have a `device` link and only
+    /// `wlp3s0` is Wi-Fi; it is up, the Ethernet port has no cable.
     pub fn wifi_docker_sysfs(tree: &FakeTree) {
-        for (name, kind, physical) in [
-            ("lo", "772", false),
-            ("wlp3s0", "1", true),
-            ("enp2s0", "1", true),
-            ("docker0", "1", false),
-            ("br-5f1c2a9e0b7d", "1", false),
-            ("veth1a2b3c4", "1", false),
+        for (name, kind, physical, operstate) in [
+            ("lo", "772", false, "unknown"),
+            ("wlp3s0", "1", true, "up"),
+            ("enp2s0", "1", true, "down"),
+            ("docker0", "1", false, "up"),
+            ("br-5f1c2a9e0b7d", "1", false, "down"),
+            ("veth1a2b3c4", "1", false, "up"),
         ] {
             tree.file(&format!("sys/class/net/{name}/type"), &format!("{kind}\n"));
+            tree.file(
+                &format!("sys/class/net/{name}/operstate"),
+                &format!("{operstate}\n"),
+            );
+            tree.file(&format!("sys/class/net/{name}/carrier_changes"), "2\n");
             if physical {
                 tree.file(&format!("sys/class/net/{name}/device/uevent"), "");
             }
         }
+        tree.file("sys/class/net/wlp3s0/wireless/.keep", "");
     }
 
     #[test]
@@ -280,16 +412,19 @@ pub(crate) mod tests {
         let host = parse_dev(WIFI_DOCKER_DEV).expect("parse");
         assert_eq!(
             host["wlp3s0"],
-            InterfaceOctets {
+            DevCounters {
                 rx_bytes: 18_446_744_073,
-                tx_bytes: 2_345_678_901
+                tx_bytes: 2_345_678_901,
+                errors: 0,
+                drops: 1237,
             }
         );
         assert_eq!(
             host["br-5f1c2a9e0b7d"],
-            InterfaceOctets {
+            DevCounters {
                 rx_bytes: 22_334_455,
-                tx_bytes: 33_445_566
+                tx_bytes: 33_445_566,
+                ..DevCounters::default()
             }
         );
         assert_eq!(host.len(), 6);
@@ -329,9 +464,10 @@ pub(crate) mod tests {
 
     #[test]
     fn speeds_follow_the_windows_sampler() {
-        let octets = |rx: u64, tx: u64| InterfaceOctets {
+        let octets = |rx: u64, tx: u64| DevCounters {
             rx_bytes: rx,
             tx_bytes: tx,
+            ..DevCounters::default()
         };
         let mb = 1024 * 1024;
         let previous = BTreeMap::from([
@@ -357,5 +493,75 @@ pub(crate) mod tests {
             )])
         );
         assert!(speeds(&previous, &current, Duration::ZERO).is_empty());
+    }
+
+    #[test]
+    fn the_link_follows_operstate_and_carrier_when_unknown() {
+        let tree = FakeTree::new("net-link");
+        wifi_docker_sysfs(&tree);
+        let sys = tree.0.join("sys");
+        assert_eq!(link_up(&sys, "wlp3s0"), Ok(true));
+        assert_eq!(link_up(&sys, "enp2s0"), Ok(false));
+        for (state, carrier, expected) in [
+            ("dormant", None, Ok(false)),
+            ("lowerlayerdown", None, Ok(false)),
+            ("unknown", Some("1"), Ok(true)),
+            ("unknown", Some("0"), Ok(false)),
+        ] {
+            tree.file("sys/class/net/tun0/operstate", &format!("{state}\n"));
+            if let Some(carrier) = carrier {
+                tree.file("sys/class/net/tun0/carrier", &format!("{carrier}\n"));
+            }
+            assert_eq!(link_up(&sys, "tun0"), expected, "{state} {carrier:?}");
+        }
+        tree.file("sys/class/net/tun0/operstate", "sideways\n");
+        assert!(link_up(&sys, "tun0").is_err());
+        assert!(link_up(&sys, "gone0").is_err(), "no such interface");
+
+        assert_eq!(carrier_changes(&sys, "wlp3s0"), Some(2));
+        assert_eq!(carrier_changes(&sys, "gone0"), None);
+        assert!(is_wireless(&sys, "wlp3s0") && !is_wireless(&sys, "enp2s0"));
+        assert!(any_wireless(&sys));
+        assert!(!any_wireless(&tree.0.join("nowhere")));
+    }
+
+    #[test]
+    fn wireless_rows_keep_only_updated_values_and_dbm_levels() {
+        let rows = parse_wireless(WIFI_WIRELESS).expect("parse");
+        assert_eq!(
+            rows,
+            BTreeMap::from([
+                (
+                    "wlp3s0".to_string(),
+                    WirelessReading {
+                        quality: Some(36.0),
+                        signal_dbm: Some(-74.0)
+                    }
+                ),
+                (
+                    "wlx00c0ca".to_string(),
+                    WirelessReading {
+                        quality: Some(60.0),
+                        signal_dbm: None
+                    }
+                ),
+                ("wlan9".to_string(), WirelessReading::default()),
+            ])
+        );
+        // A host with no associated Wi-Fi: the two header lines only.
+        let headers: String = WIFI_WIRELESS
+            .lines()
+            .take(2)
+            .map(|l| format!("{l}\n"))
+            .collect();
+        assert_eq!(parse_wireless(&headers), Ok(BTreeMap::new()));
+        for broken in [
+            String::new(),
+            format!("{headers}wlp3s0 0000 36. -74.\n"),
+            format!("{headers}wlp3s0: 0000 36.\n"),
+            format!("{headers}wlp3s0: 0000 x. -74.\n"),
+        ] {
+            assert!(parse_wireless(&broken).is_err(), "{broken:?}");
+        }
     }
 }

@@ -27,7 +27,7 @@
 //! Timeout when the source stops.
 //!
 //! The speed bars copy `RunNetworkSpeedLoop`'s registration: DoubleBar, 1-minute bars of samples
-//! taken every [`SPEED_SAMPLE_PERIOD`] (the agent's 10 s), precision 2, `MBytes_sec`, EMA,
+//! taken every [`SAMPLE_PERIOD`] (the agent's 10 s), precision 2, `MBytes_sec`, EMA,
 //! KeepHistory 90 days, TTL 5 min, Grafana on, the same description; created when a direction
 //! first moves at least [`MIN_DISPLAYABLE`] MB/s, never for an idle one. Two differences, both
 //! from what a custom bar can express through the C ABI: the probe's bars are posted when they
@@ -40,9 +40,16 @@
 //! only physical ones ([`procfs::is_physical`]): a Docker host's `veth` pairs get a new name each
 //! time a container is recreated and would leave a trail of timed-out sensors. `probe.network.
 //! interfaces` (name patterns) replaces that rule; loopback is never reported. At most
-//! [`MAX_INTERFACES`] interfaces get sensors.
+//! [`MAX_INTERFACES`] interfaces get sensors, per source.
+//!
+//! # Linux-only additions (no Windows counterpart)
+//!
+//! - [`health`]: per interface, `Link up`, `Carrier changes`, `Errors`, `Drops`.
+//! - [`wifi`]: per Wi-Fi interface, `Signal dBm` and `Link quality` bars.
 
+pub mod health;
 pub mod procfs;
+pub mod wifi;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -52,7 +59,7 @@ use hsm_collector::{
     Collector, DoubleBarSensor, IntSensor, NetworkCounter, SensorOptions, STATISTICS_EMA,
 };
 
-use self::procfs::{InterfaceOctets, TcpCounters};
+use self::procfs::{DevCounters, TcpCounters};
 use super::disks::mounts::glob_matches;
 use super::{FailureLog, HostEnvironment, Source};
 use crate::config::NetworkConfig;
@@ -66,7 +73,7 @@ pub const SENT_LEAF: &str = "Sent MB,sec";
 /// The catalog rows' post period (`post_period_ms = 60000`).
 pub const TCP_PERIOD: Duration = Duration::from_secs(60);
 /// HsmAgent's `hsm_collector_enable_network_interface_speed_sensors(collector, 10000)`.
-pub const SPEED_SAMPLE_PERIOD: Duration = Duration::from_secs(10);
+pub const SAMPLE_PERIOD: Duration = Duration::from_secs(10);
 /// `CreateDefaultBarSensor(path, DOUBLE_BAR, 60000, kDefaultBarPrecision, …)`.
 pub const BAR_PERIOD: Duration = Duration::from_secs(60);
 /// Windows `MarkBuiltInPushBar(15000, 15000)`; carried by the ABI, not partially posted here.
@@ -84,10 +91,6 @@ pub const MIN_DISPLAYABLE: f64 = 0.005;
 /// A bound on interfaces with sensors (the server has no sensor delete; a pattern like `*` on a
 /// Docker host would otherwise grow the tree with every recreated container).
 pub const MAX_INTERFACES: usize = 32;
-
-pub fn speed_path(interface: &str, leaf: &str) -> String {
-    format!("{CATEGORY}/{interface}/{leaf}")
-}
 
 /// `RunNetworkSpeedLoop`: `<Average received|Average sent> network speed on interface **<if>**.`
 pub fn speed_description(direction: Direction, interface: &str) -> String {
@@ -123,13 +126,100 @@ pub fn register<'c>(
             "network: cannot register the TCP connection sensors: {error}"
         )),
     }
+    let filter = InterfaceFilter::new(config, environment);
     sources.push(Box::new(InterfaceSpeed::new(
         collector,
-        config,
+        filter.clone(),
         environment.proc_net.join("dev"),
-        environment.sys_root.clone(),
+    )));
+    sources.push(Box::new(health::InterfaceHealth::new(
+        collector,
+        filter.clone(),
+        environment.proc_net.join("dev"),
+    )));
+    sources.push(Box::new(wifi::WifiSignal::new(
+        collector,
+        filter,
+        environment.proc_net.join("wireless"),
     )));
     sources
+}
+
+/// Which interfaces the per-interface sources report: never loopback (as on Windows,
+/// `IF_TYPE_SOFTWARE_LOOPBACK`); with no `probe.network.interfaces` patterns, the physical ones.
+#[derive(Clone, Debug)]
+pub struct InterfaceFilter {
+    sys_root: PathBuf,
+    patterns: Vec<String>,
+}
+
+impl InterfaceFilter {
+    pub fn new(config: &NetworkConfig, environment: &HostEnvironment) -> Self {
+        Self {
+            sys_root: environment.sys_root.clone(),
+            patterns: config.interfaces.clone(),
+        }
+    }
+
+    pub fn sys_root(&self) -> &std::path::Path {
+        &self.sys_root
+    }
+
+    pub fn reported(&self, name: &str) -> bool {
+        if procfs::is_loopback(&self.sys_root, name) {
+            return false;
+        }
+        if self.patterns.is_empty() {
+            procfs::is_physical(&self.sys_root, name)
+        } else {
+            self.patterns
+                .iter()
+                .any(|pattern| glob_matches(pattern, name))
+        }
+    }
+}
+
+/// The bound of [`MAX_INTERFACES`] interfaces with sensors, one per source. An interface once
+/// admitted keeps its slot (the server has no sensor delete, so freeing it would not shrink the
+/// tree); the first refusal is logged.
+pub struct InterfaceCap {
+    what: &'static str,
+    admitted: BTreeSet<String>,
+    logged: bool,
+}
+
+impl InterfaceCap {
+    pub fn new(what: &'static str) -> Self {
+        Self {
+            what,
+            admitted: BTreeSet::new(),
+            logged: false,
+        }
+    }
+
+    pub fn admit(&mut self, interface: &str, logger: &Logger) -> bool {
+        if self.admitted.contains(interface) {
+            return true;
+        }
+        if self.admitted.len() >= MAX_INTERFACES {
+            if !self.logged {
+                logger.warn(format!(
+                    "network: {MAX_INTERFACES} interfaces have {} sensors, the cap; '{interface}' \
+                     and later ones get none (narrow probe.network.interfaces)",
+                    self.what
+                ));
+                self.logged = true;
+            }
+            return false;
+        }
+        self.admitted.insert(interface.to_string());
+        true
+    }
+}
+
+/// The path of a per-interface sensor.
+pub fn interface_path(interface: &str, leaf: &str) -> String {
+    format!("{CATEGORY}/{interface}/{leaf}")
 }
 
 /// The three TCP counters, one read of `/proc/net/snmp` a minute.
@@ -216,19 +306,17 @@ impl Source for TcpConnections<'_> {
     }
 }
 
-/// Per-interface receive/send speed from `/proc/net/dev`, sampled every [`SPEED_SAMPLE_PERIOD`].
+/// Per-interface receive/send speed from `/proc/net/dev`, sampled every [`SAMPLE_PERIOD`].
 struct InterfaceSpeed<'c> {
     collector: &'c Collector,
     dev: PathBuf,
-    sys_root: PathBuf,
-    patterns: Vec<String>,
+    filter: InterfaceFilter,
     /// The previous reading of the reported interfaces and when it was taken.
-    previous: Option<(Instant, BTreeMap<String, InterfaceOctets>)>,
+    previous: Option<(Instant, BTreeMap<String, DevCounters>)>,
     received: BTreeMap<String, DoubleBarSensor<'c>>,
     sent: BTreeMap<String, DoubleBarSensor<'c>>,
-    /// Interfaces with at least one speed sensor, against [`MAX_INTERFACES`].
-    tracked: BTreeSet<String>,
-    cap_logged: bool,
+    /// Interfaces with speed sensors.
+    cap: InterfaceCap,
     read_failures: FailureLog,
     registration_failures: FailureLog,
     post_failures: FailureLog,
@@ -237,39 +325,18 @@ struct InterfaceSpeed<'c> {
 const SPEED_WHAT: &str = "network: interface speed (/proc/net/dev)";
 
 impl<'c> InterfaceSpeed<'c> {
-    fn new(
-        collector: &'c Collector,
-        config: &NetworkConfig,
-        dev: PathBuf,
-        sys_root: PathBuf,
-    ) -> Self {
+    fn new(collector: &'c Collector, filter: InterfaceFilter, dev: PathBuf) -> Self {
         Self {
             collector,
             dev,
-            sys_root,
-            patterns: config.interfaces.clone(),
+            filter,
             previous: None,
             received: BTreeMap::new(),
             sent: BTreeMap::new(),
-            tracked: BTreeSet::new(),
-            cap_logged: false,
+            cap: InterfaceCap::new("speed"),
             read_failures: FailureLog::default(),
             registration_failures: FailureLog::default(),
             post_failures: FailureLog::default(),
-        }
-    }
-
-    /// Whether the interface is reported: never loopback; with no patterns, the physical ones.
-    fn reported(&self, name: &str) -> bool {
-        if procfs::is_loopback(&self.sys_root, name) {
-            return false;
-        }
-        if self.patterns.is_empty() {
-            procfs::is_physical(&self.sys_root, name)
-        } else {
-            self.patterns
-                .iter()
-                .any(|pattern| glob_matches(pattern, name))
         }
     }
 
@@ -278,7 +345,7 @@ impl<'c> InterfaceSpeed<'c> {
         let current = match dev.and_then(|text| procfs::parse_dev(&text)) {
             Ok(all) => all
                 .into_iter()
-                .filter(|(name, _)| self.reported(name))
+                .filter(|(name, _)| self.filter.reported(name))
                 .collect::<BTreeMap<_, _>>(),
             Err(reason) => {
                 // Windows drops the baseline on a failed read: a speed over the whole gap divided
@@ -334,17 +401,7 @@ impl<'c> InterfaceSpeed<'c> {
         registrations: &mut Result<(), String>,
         posts: &mut Result<(), String>,
     ) {
-        if value < MIN_DISPLAYABLE {
-            return;
-        }
-        if !self.tracked.contains(interface) && self.tracked.len() >= MAX_INTERFACES {
-            if !self.cap_logged {
-                logger.warn(format!(
-                    "network: {MAX_INTERFACES} interfaces have speed sensors, the cap; '{interface}' \
-                     and later ones get none (narrow probe.network.interfaces)"
-                ));
-                self.cap_logged = true;
-            }
+        if value < MIN_DISPLAYABLE || !self.cap.admit(interface, logger) {
             return;
         }
         let (sensors, leaf) = match direction {
@@ -352,7 +409,7 @@ impl<'c> InterfaceSpeed<'c> {
             Direction::Sent => (&mut self.sent, SENT_LEAF),
         };
         if !sensors.contains_key(interface) {
-            let path = speed_path(interface, leaf);
+            let path = interface_path(interface, leaf);
             let options = SensorOptions::default()
                 .with_is_computer_sensor(true)
                 .with_unit(UNIT_MBYTES_SEC)
@@ -370,7 +427,6 @@ impl<'c> InterfaceSpeed<'c> {
             ) {
                 Ok(sensor) => {
                     sensors.insert(interface.to_string(), sensor);
-                    self.tracked.insert(interface.to_string());
                 }
                 Err(error) => {
                     // Not cached: the next sample tries again.
@@ -381,14 +437,19 @@ impl<'c> InterfaceSpeed<'c> {
         }
         if let Some(sensor) = sensors.get(interface) {
             if let Err(error) = sensor.add(value) {
-                *posts = Err(format!("{}: {error}", speed_path(interface, leaf)));
+                *posts = Err(format!("{}: {error}", interface_path(interface, leaf)));
             }
         }
     }
 }
 
 /// Log a sample's registration or post outcome once per episode.
-fn report(log: &mut FailureLog, logger: &Logger, what: &str, outcome: Result<(), String>) {
+pub(crate) fn report(
+    log: &mut FailureLog,
+    logger: &Logger,
+    what: &str,
+    outcome: Result<(), String>,
+) {
     match outcome {
         Ok(()) => log.succeeded(logger, what),
         Err(reason) => log.failed(logger, what, &reason),
@@ -401,7 +462,7 @@ impl Source for InterfaceSpeed<'_> {
     }
 
     fn period(&self) -> Duration {
-        SPEED_SAMPLE_PERIOD
+        SAMPLE_PERIOD
     }
 
     fn sample(&mut self, logger: &Logger) {
@@ -434,7 +495,7 @@ pub(crate) mod tests {
         wifi_docker_sysfs(tree);
     }
 
-    fn capture() -> (Logger, Arc<Mutex<Vec<String>>>) {
+    pub fn capture() -> (Logger, Arc<Mutex<Vec<String>>>) {
         let lines = Arc::new(Mutex::new(Vec::new()));
         let logger = Logger::with_sink(Level::Debug, {
             let lines = Arc::clone(&lines);
@@ -443,12 +504,20 @@ pub(crate) mod tests {
         (logger, lines)
     }
 
-    fn network_registrations(collector: &Collector) -> Vec<String> {
+    pub fn network_registrations(collector: &Collector) -> Vec<String> {
         collector
             .registrations()
             .into_iter()
             .filter(|json| json.contains("\"Path\":\".computer/Network/"))
             .collect()
+    }
+
+    /// The filter of a fake host.
+    pub fn test_filter(config: &NetworkConfig, tree: &FakeTree) -> InterfaceFilter {
+        InterfaceFilter {
+            sys_root: tree.0.join("sys"),
+            patterns: config.interfaces.clone(),
+        }
     }
 
     fn speed_source<'c>(
@@ -462,9 +531,8 @@ pub(crate) mod tests {
         };
         InterfaceSpeed::new(
             collector,
-            &config,
+            test_filter(&config, tree),
             tree.0.join("proc-net/dev"),
-            tree.0.join("sys"),
         )
     }
 
@@ -495,7 +563,7 @@ pub(crate) mod tests {
         };
         let (logger, _) = capture();
         let sources = register(&collector, &NetworkConfig::default(), &environment, &logger);
-        assert_eq!(sources.len(), 2);
+        assert_eq!(sources.len(), 4, "tcp, speed, health, Wi-Fi");
         collector.start().expect("start");
         let registrations = network_registrations(&collector);
         collector.stop().expect("stop");
@@ -684,7 +752,7 @@ pub(crate) mod tests {
             "veth1a2b3c4",
         ]
         .into_iter()
-        .filter(|name| source.reported(name))
+        .filter(|name| source.filter.reported(name))
         .collect();
         assert_eq!(reported, ["wlp3s0", "br-5f1c2a9e0b7d"]);
     }

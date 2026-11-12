@@ -577,8 +577,9 @@ is one read of `/proc/stat` plus one small read per process per minute.
 
 ### Network (#1711)
 
-The Windows hosts' `.computer/Network/…` sensors on the same paths: the three TCP counters and the
-per-interface speed bars (`probe_only/network/`). **On unless `probe.network.enabled` is `false`.**
+The Windows hosts' `.computer/Network/…` sensors on the same paths (the three TCP counters and the
+per-interface speed bars), plus Linux-only link health and Wi-Fi signal (`probe_only/network/`).
+**On unless `probe.network.enabled` is `false`.**
 
 **Placement.** Probe-only acquisition, by the owner's rule for this epic (as for top CPU): the
 collector reads these counters only on Windows (PDH, `GetIfTable2`) and the managed collector has
@@ -629,8 +630,38 @@ characters) replaces that rule, for example `["wlp*", "br0"]`. Loopback is never
 (`wlp3s0`), not the Windows aliases (`Wi-Fi`), so a template written for one interface name
 matches with `*`.
 
-**Cost:** one read of `/proc/net/snmp` a minute and one of `/proc/net/dev` every 10 s, both from
-the probe's own network namespace (the unit has no `PrivateNetwork`, so it is the host's).
+**Link health and Wi-Fi signal (Linux only, no Windows counterpart).** Per reported interface
+(the same interface rule and cap, counted per source), so the tree shows *when* the network
+stalled and whether the radio was the cause:
+
+| Path (`.computer/Network/<iface>/…`) | Type · unit | Posted | TTL | Source |
+|---|---|---|---|---|
+| `Link up` | Bool, AggregateData | checked every 10 s; posted on change and every 5 min | 15 min | `/sys/class/net/<if>/operstate` (`up`; `unknown` → `carrier`) |
+| `Carrier changes` | Int · Count | per minute, **only when non-zero** | none | `/sys/class/net/<if>/carrier_changes`, delta |
+| `Errors` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `errs`, delta |
+| `Drops` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `drop`, delta |
+| `Signal dBm` | DoubleBar | a sample every 10 s into a 1-min bar | 5 min | `/proc/net/wireless` `level` (dBm only) |
+| `Link quality` | DoubleBar | a sample every 10 s into a 1-min bar | 5 min | `/proc/net/wireless` `link` (0–70 on cfg80211) |
+
+All have KeepHistory 90 days and Grafana on, and none has an alert.
+
+- `Link up` is created the first time the interface is seen up, so an Ethernet port that never
+  had a cable gets no sensor that is false forever. For Wi-Fi, `dormant` (not associated) is down.
+  A drop shorter than 10 s is missed by `Link up` but counted by `Carrier changes` (a drop counts 2).
+- The three counters follow the TCP delta rule above, with a 1-minute window: the window's whole
+  movement is posted once, at its end. Their sensors are created on the first non-zero minute and
+  have no TTL of their own, like the Docker `Restart count`.
+- The Wi-Fi bars exist only for interfaces in `/proc/net/wireless`, which lists one only while it
+  is associated: a disconnected minute has no value, and `Link up` says why. A value the driver did
+  not mark updated (no `.` after it) is skipped, and so is a level that is not in dBm.
+- **Not reported:** the access point (BSSID), channel and channel width. Only nl80211 (generic
+  netlink) has them, and by the owner's decision in #1711 the probe adds no netlink dependency.
+  A kernel without `/proc/net/wireless` (cloud kernels) is fine on a host without Wi-Fi; with a
+  Wi-Fi interface it is logged once.
+
+**Cost:** one read of `/proc/net/snmp` a minute; `/proc/net/dev` twice and `/proc/net/wireless`
+once every 10 s, plus two small sysfs files per reported interface. All from the probe's own
+network namespace (the unit has no `PrivateNetwork`, so it is the host's).
 
 ### Advanced, opt-in (not advertised)
 
