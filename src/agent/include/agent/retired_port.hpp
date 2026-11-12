@@ -31,7 +31,9 @@ namespace hsm::agent
         ServerUnreachable, ///< neither port answers: keep the config, tell the operator what to check
     };
 
-    /// Returns true when an HSM Sensor API answers on `port` of the configured server host.
+    /// Returns true when the HSM Sensor API answers on `port` of the configured server host. For
+    /// 443, the move target, the runtime's probe also requires the answer to identify itself as an
+    /// HSM server (the `X-Hsm-Server` header of testConnection).
     using ServerPortProbe = std::function<bool(int port)>;
 
     /// Decide what to do about the configured port. Probes lazily and in a fixed order: nothing is
@@ -84,6 +86,12 @@ namespace hsm::agent
     /// `can_move` is false for a foreground `--console` run, which must not rewrite a file it may
     /// not own nor bounce a service it is not; such a run only reports.
     RetiredPortStep NextRetiredPortStep(RetiredPortWatchState& state, RetiredPortVerdict verdict, bool can_move);
+
+    /// The move itself: rewrite the config file at `path` so that its server port is 443. The
+    /// file is read back first and only the port changes, so an edit made to it since the agent
+    /// started is kept. Returns false, with `error` set and the file untouched, when the file
+    /// cannot be read or parsed, or when the write fails.
+    bool MoveConfigToStandardPort(const std::string& path, std::string& error);
 
     /// Logged once at every start while config.json names a retired port.
     std::string RetiredPortStartupNotice(int configured_port, bool can_move);

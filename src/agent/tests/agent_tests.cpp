@@ -406,6 +406,53 @@ namespace
         Check(!contains(console_unreachable, "by itself"), "console unreachable notice promises no self-move");
     }
 
+    // The move rewrites the file as it is on disk, not the snapshot the agent started with: an edit
+    // made since start (a new key, a sensor flag from a directive whose restart failed) survives.
+    void RetiredPortMoveKeepsTheFileAsItIsNow()
+    {
+        const std::filesystem::path path = std::filesystem::temp_directory_path() / "hsm_agent_retired_move.json";
+        const auto write_text = [&path](const std::string& text) {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            out << text;
+        };
+
+        // What the file says now (the agent may have started with another key and network on).
+        write_text(R"({
+            "server": { "address": "https://hsm.example", "port": 44330, "accessKey": "edited-after-start", "allowUntrustedCertificate": true },
+            "identity": { "computerName": "BUILD01", "module": "Custom" },
+            "sensors": { "computer": true, "system": true, "disk": true, "network": false, "module": true, "process": true }
+        })");
+
+        std::string error;
+        Check(hsm::agent::MoveConfigToStandardPort(path.string(), error), "the move succeeds: " + error);
+
+        AgentConfig moved;
+        Check(hsm::agent::LoadAgentConfig(path.string(), moved, error), "the moved file loads: " + error);
+        CheckEq(moved.port, 443, "the port is 443");
+        CheckEq(moved.access_key, std::string("edited-after-start"), "a key edited since start is kept");
+        CheckEq(moved.server_address, std::string("https://hsm.example"), "the address is kept");
+        Check(moved.allow_untrusted_certificate, "the certificate policy is kept");
+        Check(!moved.sensors_network, "a sensor flag changed since start is kept");
+        CheckEq(moved.computer_name, std::string("BUILD01"), "the identity is kept");
+
+        // A file that does not parse is not replaced (the agent reports the manual fix instead).
+        const std::string broken = "{ \"server\": { \"port\": 44330, ";
+        write_text(broken);
+        error.clear();
+        Check(!hsm::agent::MoveConfigToStandardPort(path.string(), error), "an unreadable file is not moved");
+        Check(!error.empty(), "the failure says why");
+        std::ifstream in(path, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        in.close();
+        CheckEq(ss.str(), broken, "an unreadable file is left as it was");
+
+        std::filesystem::remove(path);
+        error.clear();
+        Check(!hsm::agent::MoveConfigToStandardPort(path.string(), error), "a missing file is not created");
+        Check(!std::filesystem::exists(path), "no file appears where there was none");
+    }
+
     // The watcher's step function decides when config.json gets rewritten; an off-by-one here would
     // move an agent after a single transient failure, or flood the log.
     void RetiredPortWatcherConfirmsAndThrottles()
@@ -1049,6 +1096,7 @@ namespace
             { "agent_retired_port_verdict_follows_the_probes", RetiredPortVerdictFollowsTheProbes },
             { "agent_retired_port_notices_name_the_fix", RetiredPortNoticesNameTheFix },
             { "agent_retired_port_watcher_confirms_and_throttles", RetiredPortWatcherConfirmsAndThrottles },
+            { "agent_retired_port_move_keeps_the_file_as_it_is_now", RetiredPortMoveKeepsTheFileAsItIsNow },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },

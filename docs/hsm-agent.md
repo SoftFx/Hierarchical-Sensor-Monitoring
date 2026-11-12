@@ -102,9 +102,10 @@ An agent whose `config.json` still says `"port": 44330` cannot connect once the 
 are upgraded, and the server cannot see a connection that never arrives.
 
 - **Agent 0.5.50 and later** handles it. At every start it logs that `server.port` is a retired port.
-  When that port stops answering and the server answers on 443 (confirmed by a second check a minute
-  later), the service rewrites `config.json` to `"port": 443`, logs the move and restarts itself — no
-  operator action. If neither port answers it
+  When that port stops answering and an HSM server answers on 443 (confirmed by a second check a
+  minute later; a server from this release on, which marks its `testConnection` answer, so that some
+  other service on 443 cannot take the agent), the service rewrites `config.json` to `"port": 443`,
+  logs the move and restarts itself — no operator action. If neither port answers it
   logs an error every hour and changes nothing. A `--console` run only reports what to change.
 - **Older agents** only log `Could not connect to server`. Set `"port": 443` under `"server"` in
   `%ProgramData%\HSM Agent\config.json` and restart the service (`sc stop HSMAgent`, then

@@ -1,5 +1,7 @@
 #include "agent/retired_port.hpp"
 
+#include "agent/config.hpp"
+
 namespace hsm::agent
 {
     namespace
@@ -74,6 +76,19 @@ namespace hsm::agent
         return step;
     }
 
+    bool MoveConfigToStandardPort(const std::string& path, std::string& error)
+    {
+        AgentConfig current;
+        std::string load_error;
+        if (!LoadAgentConfig(path, current, load_error))
+        {
+            error = "reading it back failed: " + load_error;
+            return false;
+        }
+        current.port = kStandardServerPort;
+        return WriteAgentConfig(path, current, error);
+    }
+
     std::string RetiredPortStartupNotice(int configured_port, bool can_move)
     {
         return Subject(configured_port) +
@@ -101,7 +116,7 @@ namespace hsm::agent
     std::string RetiredPortUnreachableNotice(int configured_port, bool can_move)
     {
         return Subject(configured_port) +
-               " and the server answers neither there nor on 443, so nothing is being delivered. Check that the"
+               " and no HSM server answers there or on 443, so nothing is being delivered. Check that the"
                " server is up and that server.address in config.json is right" +
                (can_move ? std::string("; the HSMAgent service moves to 443 by itself as soon as the server answers there.")
                          : std::string("; a --console run never changes config.json, so set \"port\": 443 under"

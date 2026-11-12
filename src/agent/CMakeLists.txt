@@ -90,7 +90,8 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_retired_port_names_only_the_old_two
             agent_retired_port_verdict_follows_the_probes
             agent_retired_port_notices_name_the_fix
-            agent_retired_port_watcher_confirms_and_throttles)
+            agent_retired_port_watcher_confirms_and_throttles
+            agent_retired_port_move_keeps_the_file_as_it_is_now)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 

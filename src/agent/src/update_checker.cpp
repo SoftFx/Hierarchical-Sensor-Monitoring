@@ -201,10 +201,11 @@ namespace hsm::agent
         HINTERNET connect = nullptr;
         bool allow_untrusted = false; // forwarded to each request handle (session-level has no effect)
 
-        explicit WinHttpSession(const std::string& host, int port, bool /*https*/, bool allow_untr)
+        explicit WinHttpSession(const std::string& host, int port, bool /*https*/, bool allow_untr,
+                                DWORD access_type = WINHTTP_ACCESS_TYPE_DEFAULT_PROXY)
             : allow_untrusted(allow_untr)
         {
-            session = WinHttpOpen(L"HSMAgent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+            session = WinHttpOpen(L"HSMAgent/1.0", access_type, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
             if (!session)
                 return;
 
@@ -371,7 +372,10 @@ namespace hsm::agent
     // waits for that one probe only (the runtime skips the second).
     static constexpr int kProbeTimeoutMs = 2000;
 
-    bool HsmServerAnswersOnPort(const AgentConfig& config, int port)
+    // Set by the server's testConnection (SensorsController.ServerMarkerHeader).
+    static const wchar_t* const kServerMarkerHeader = L"X-Hsm-Server";
+
+    bool HsmServerAnswersOnPort(const AgentConfig& config, int port, bool require_server_marker)
     {
         const ServerUrl url = ParseServerUrl(config.server_address, port);
         if (!url.ok)
@@ -385,12 +389,18 @@ namespace hsm::agent
         // sends an "http://" address over https as well. A plain-HTTP probe would get a 400 from
         // the server's TLS listener and call a working server unreachable.
         constexpr bool kHttps = true;
-        WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate);
+        // No proxy: the collector's libcurl transport ignores the machine-wide WinHTTP proxy
+        // (netsh winhttp), so a probe through it could see a different network than the data does
+        // (a proxy that only lets CONNECT through to 443 would make a working 44330 look dead).
+        WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate, WINHTTP_ACCESS_TYPE_NO_PROXY);
         if (!sess.Valid())
             return false;
 
         std::vector<char> body;
-        return HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, nullptr, nullptr, kProbeTimeoutMs) == 200;
+        std::wstring marker_name = kServerMarkerHeader;
+        std::string marker;
+        const int status = HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, &marker_name, &marker, kProbeTimeoutMs);
+        return status == 200 && (!require_server_marker || !marker.empty());
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------

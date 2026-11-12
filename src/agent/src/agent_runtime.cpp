@@ -110,7 +110,10 @@ namespace hsm::agent
 
             const RetiredPortVerdict verdict = JudgeRetiredPort(config_.port, [this](int port) {
                 // A stop that arrived during the previous probe ends the check without another one.
-                return !StopRequested() && HsmServerAnswersOnPort(config_, port);
+                // The move target has to prove it is an HSM server; for the configured port any
+                // answer counts (an older HSM pinned there predates the marker, and keeping a
+                // port is never harmful).
+                return !StopRequested() && HsmServerAnswersOnPort(config_, port, port == kStandardServerPort);
             });
             if (StopRequested())
                 return;
@@ -135,22 +138,20 @@ namespace hsm::agent
 
             // Same persist-then-restart sequence as a sensor-group directive: the collector's endpoint
             // is built once at Start, so the new port needs a fresh process, and config_ itself is
-            // left alone (UpdateChecker reads it on its own thread).
+            // left alone (UpdateChecker reads it on its own thread). Only the port changes, in the
+            // file as it is now: an edit made since start (a new key, an address) is kept.
             //
             // The directive handler (collector thread) also writes config.json from a copy of
             // config_, and nothing serializes the two writers. They cannot overlap: a directive
             // arrives only in the response to a data POST, and the move happens only after the
             // configured port stopped answering on two checks in a row, so no POST through it, and
             // no directive, can be in flight. Revisit this if a directive can ever arrive another way.
-            AgentConfig updated = config_;
-            updated.port = kStandardServerPort;
-
             std::string cfg_err;
             bool saved = false;
             try
             {
                 // The narrow conversion throws for a path the active code page cannot represent.
-                saved = WriteAgentConfig(std::filesystem::path(service_config_path_).string(), updated, cfg_err);
+                saved = MoveConfigToStandardPort(std::filesystem::path(service_config_path_).string(), cfg_err);
             }
             catch (const std::exception& ex)
             {

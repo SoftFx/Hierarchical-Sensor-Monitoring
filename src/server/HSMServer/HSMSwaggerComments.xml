@@ -603,6 +603,14 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
+        <member name="F:HSMServer.Controllers.SensorsController.ServerMarkerHeader">
+            <summary>
+            Response header that marks a <c>testConnection</c> answer as coming from an HSM server.
+            The HSM Agent's retired-port check (#1655) moves an agent off 44330/44333 only when 443
+            answers with it, so that a foreign service answering 200 on 443 of a host whose HSM is
+            pinned to an old port (and merely down) cannot take its agents.
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Session">
             <summary>
             The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
