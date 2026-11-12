@@ -191,15 +191,17 @@ pub fn is_wireless(sys_root: &Path, name: &str) -> bool {
         .is_dir()
 }
 
-/// Whether any interface of the host is a Wi-Fi one.
-pub fn any_wireless(sys_root: &Path) -> bool {
+/// The host's Wi-Fi interfaces.
+pub fn wireless_interfaces(sys_root: &Path) -> Vec<String> {
     std::fs::read_dir(sys_root.join("class/net"))
         .map(|entries| {
             entries
                 .flatten()
-                .any(|entry| is_wireless(sys_root, &entry.file_name().to_string_lossy()))
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| is_wireless(sys_root, name))
+                .collect()
         })
-        .unwrap_or(false)
+        .unwrap_or_default()
 }
 
 /// One associated Wi-Fi interface's row of `/proc/net/wireless`.
@@ -521,8 +523,8 @@ pub(crate) mod tests {
         assert_eq!(carrier_changes(&sys, "wlp3s0"), Some(2));
         assert_eq!(carrier_changes(&sys, "gone0"), None);
         assert!(is_wireless(&sys, "wlp3s0") && !is_wireless(&sys, "enp2s0"));
-        assert!(any_wireless(&sys));
-        assert!(!any_wireless(&tree.0.join("nowhere")));
+        assert_eq!(wireless_interfaces(&sys), ["wlp3s0"]);
+        assert!(wireless_interfaces(&tree.0.join("nowhere")).is_empty());
     }
 
     #[test]

@@ -640,19 +640,20 @@ stalled and whether the radio was the cause:
 | `Carrier changes` | Int · Count | per minute, **only when non-zero** | none | `/sys/class/net/<if>/carrier_changes`, delta |
 | `Errors` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `errs`, delta |
 | `Drops` | Int · Count | per minute, **only when non-zero** | none | `/proc/net/dev` rx + tx `drop`, delta |
-| `Signal dBm` | DoubleBar | a sample every 10 s into a 1-min bar | 5 min | `/proc/net/wireless` `level` (dBm only) |
-| `Link quality` | DoubleBar | a sample every 10 s into a 1-min bar | 5 min | `/proc/net/wireless` `link` (0–70 on cfg80211) |
+| `Signal dBm` | DoubleBar | a sample every 10 s into a 1-min bar | none | `/proc/net/wireless` `level` (dBm only) |
+| `Link quality` | DoubleBar | a sample every 10 s into a 1-min bar | none | `/proc/net/wireless` `link` (0–70 on cfg80211) |
 
 All have KeepHistory 90 days and Grafana on, and none has an alert.
 
 - `Link up` is created the first time the interface is seen up, so an Ethernet port that never
   had a cable gets no sensor that is false forever. For Wi-Fi, `dormant` (not associated) is down.
+  An interface that leaves `/proc/net/dev` (a USB adapter unplugged) is posted as down.
   A drop shorter than 10 s is missed by `Link up` but counted by `Carrier changes` (a drop counts 2).
 - The three counters follow the TCP delta rule above, with a 1-minute window: the window's whole
   movement is posted once, at its end. Their sensors are created on the first non-zero minute and
   have no TTL of their own, like the Docker `Restart count`.
 - The Wi-Fi bars exist only for interfaces in `/proc/net/wireless`, which lists one only while it
-  is associated: a disconnected minute has no value, and `Link up` says why. A value the driver did
+  is associated: a disconnected minute has no value, and `Link up` says why (so they have no TTL). A value the driver did
   not mark updated (no `.` after it) is skipped, and so is a level that is not in dBm.
 - **Not reported:** the access point (BSSID), channel and channel width. Only nl80211 (generic
   netlink) has them, and by the owner's decision in #1711 the probe adds no netlink dependency.

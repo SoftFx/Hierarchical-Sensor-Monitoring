@@ -166,7 +166,7 @@ impl<'c> InterfaceHealth<'c> {
     /// what moved during it is posted once, at its end.
     pub fn window_deltas(
         &mut self,
-        current: BTreeMap<String, HealthCounters>,
+        mut current: BTreeMap<String, HealthCounters>,
         now: Instant,
     ) -> Vec<(String, Counter, i32)> {
         let previous = match self.window.take() {
@@ -192,6 +192,13 @@ impl<'c> InterfaceHealth<'c> {
                 if let Some(delta) = procfs::counter_delta(before, value) {
                     deltas.push((name.clone(), counter, delta));
                 }
+            }
+        }
+        // A `carrier_changes` that could not be read now keeps the old baseline, so the next
+        // window posts what moved across both instead of starting over.
+        for (name, counters) in current.iter_mut() {
+            if counters.carrier_changes.is_none() {
+                counters.carrier_changes = previous.get(name).and_then(|p| p.carrier_changes);
             }
         }
         self.window = Some((now, current));
@@ -225,6 +232,17 @@ impl<'c> InterfaceHealth<'c> {
             }
             let carrier_changes = procfs::carrier_changes(self.filter.sys_root(), name);
             current.insert(name.clone(), HealthCounters::from_dev(dev, carrier_changes));
+        }
+        // An interface with a `Link up` sensor that left /proc/net/dev (a USB adapter unplugged, a
+        // driver reset that removed the netdev) has no link.
+        let gone: Vec<String> = self
+            .links
+            .keys()
+            .filter(|name| !current.contains_key(*name))
+            .cloned()
+            .collect();
+        for name in gone {
+            self.post_link(&name, false, now, logger, &mut registrations, &mut posts);
         }
         for (name, counter, delta) in self.window_deltas(current, now) {
             self.post_counter(
@@ -467,7 +485,12 @@ mod tests {
         assert_eq!(
             source.window_deltas(reading(None, 0, 175), at(180)),
             [("wlp3s0".to_string(), Counter::Drops, 5)],
-            "no carrier_changes file; errors went down (re-baselined)"
+            "carrier_changes unreadable; errors went down (re-baselined)"
+        );
+        assert_eq!(
+            source.window_deltas(reading(Some(6), 0, 175), at(240)),
+            [("wlp3s0".to_string(), Counter::CarrierChanges, 2)],
+            "the unreadable minute kept the carrier baseline"
         );
     }
 
@@ -536,8 +559,17 @@ mod tests {
         ] {
             assert!(drops.contains(part), "missing {part} in {drops}");
         }
-        collector.stop().expect("stop");
         assert_eq!(source.links["wlp3s0"].last.map(|(up, _)| up), Some(true));
+
+        // The Wi-Fi adapter is unplugged: its row leaves /proc/net/dev, and its link is down.
+        let rows = [("lo", 0, 0, 0, 0), ("enp2s0", 0, 0, 0, 0)];
+        source.sample_at(
+            Ok(dev(&rows)),
+            t0 + COUNTER_PERIOD + Duration::from_secs(10),
+            &logger,
+        );
+        collector.stop().expect("stop");
+        assert_eq!(source.links["wlp3s0"].last.map(|(up, _)| up), Some(false));
         assert!(lines.lock().unwrap().iter().all(|l| !l.contains("ERROR")));
     }
 

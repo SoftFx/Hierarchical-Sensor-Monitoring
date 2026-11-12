@@ -7,7 +7,8 @@
 //!
 //! Both are 1-minute DoubleBars of samples taken every [`SAMPLE_PERIOD`], so a dip shows in the
 //! bar's Min. A sensor is created with its first value. The kernel prints a row only while the
-//! interface is associated, so a disconnected minute has no value (`Link up` tells why).
+//! interface is associated, so a disconnected minute has no value (`Link up` tells why); that is
+//! also why they have no TTL: a long disconnect would otherwise put them in Timeout.
 //!
 //! Only these two. The access point (BSSID), channel and channel width are reported only by
 //! nl80211 (generic netlink); by the owner's decision in #1711 the probe does not add a netlink
@@ -22,7 +23,7 @@ use hsm_collector::{Collector, DoubleBarSensor, SensorOptions};
 
 use super::{
     interface_path, procfs, report, InterfaceCap, InterfaceFilter, BAR_PERIOD, BAR_POST_PERIOD,
-    BAR_PRECISION, KEEP_HISTORY, SAMPLE_PERIOD, SPEED_TTL,
+    BAR_PRECISION, KEEP_HISTORY, SAMPLE_PERIOD,
 };
 use crate::logging::Logger;
 use crate::probe_only::{FailureLog, Source};
@@ -90,11 +91,13 @@ impl<'c> WifiSignal<'c> {
     fn read(&self) -> Result<Option<String>, String> {
         match std::fs::read_to_string(&self.wireless) {
             Ok(text) => Ok(Some(text)),
-            // A kernel without wireless extensions in procfs (a cloud kernel) has no file; on a
-            // host without Wi-Fi that is normal, not a failure.
+            // A kernel without wireless extensions in procfs (a cloud kernel) has no file; with no
+            // reported Wi-Fi interface that is normal, not a failure.
             Err(error)
                 if error.kind() == ErrorKind::NotFound
-                    && !procfs::any_wireless(self.filter.sys_root()) =>
+                    && !procfs::wireless_interfaces(self.filter.sys_root())
+                        .iter()
+                        .any(|name| self.filter.reported(name)) =>
             {
                 Ok(None)
             }
@@ -163,7 +166,6 @@ impl<'c> WifiSignal<'c> {
             let options = SensorOptions::default()
                 .with_is_computer_sensor(true)
                 .with_keep_history(KEEP_HISTORY)
-                .with_ttl(SPEED_TTL)
                 .with_enable_grafana(true)
                 .with_description(reading.description(interface));
             match self.collector.double_bar_sensor(
@@ -263,7 +265,7 @@ mod tests {
             let json = find(leaf);
             for part in [
                 "\"SensorType\":5,",
-                "\"TTLTicks\":[3000000000]",
+                "\"TTLTicks\":null",
                 "\"KeepHistory\":77760000000000",
                 "\"EnableGrafana\":true",
                 "\"IsSingletonSensor\":true",
@@ -304,6 +306,12 @@ mod tests {
         );
 
         wifi_docker_sysfs(&tree);
+        let mut excluded = wifi_source(&collector, &tree, &["enp*"]);
+        excluded.sample(&logger);
+        assert!(
+            lines.lock().unwrap().is_empty(),
+            "Wi-Fi not reported: silent"
+        );
         source.sample(&logger);
         source.sample(&logger);
         tree.file("proc-net/wireless", WIFI_WIRELESS);
