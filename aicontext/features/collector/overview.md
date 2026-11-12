@@ -275,6 +275,7 @@ C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inve
 - `AllowUntrustedServerCertificate` (false) — opt-in for self-signed certs
 - `ExceptionDeduplicatorWindow` (1h) — deduplication window for error messages
 - `MaxDeduplicatedMessages` (1000) — max unique messages in deduplicator cache
+- `ExtraRequestHeaders` (empty) — headers added to value requests (e.g. `X-Agent-Version`); see `http-client/feature.md`, directive channel
 
 ## Known Issues
 

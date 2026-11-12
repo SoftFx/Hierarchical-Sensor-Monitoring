@@ -37,6 +37,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         // Statuses scripted for the next command POSTs, one per request, in order.
         private readonly ConcurrentQueue<HttpStatusCode> _scriptedCommandStatuses = new ConcurrentQueue<HttpStatusCode>();
 
+        // X-Hsm-Directive values added to every data response.
+        private string[] _directives = new string[0];
+
         // Answers scripted for the next data POSTs, one per request, in order.
         private readonly ConcurrentQueue<ScriptedAnswer> _scriptedDataAnswers = new ConcurrentQueue<ScriptedAnswer>();
 
@@ -78,6 +81,10 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         /// <see cref="FailNextDataRequests"/>.</summary>
         public void AnswerNextDataRequest(HttpStatusCode status, string body = null, string contentType = "text/plain") =>
             _scriptedDataAnswers.Enqueue(new ScriptedAnswer(status, body, contentType));
+
+        /// <summary>Directives the server piggybacks on every data response from now on, one
+        /// <c>X-Hsm-Directive</c> header each, as the real server does for an agent.</summary>
+        public void SendDirectivesOnDataResponses(params string[] directives) => Volatile.Write(ref _directives, directives);
 
         public IEnumerable<CapturedRequest> CommandRequests =>
             Requests.Where(r => r.Method == "POST"
@@ -147,7 +154,7 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             {
                 if (TryTakeOne(ref _abortCommandRequests))
                 {
-                    _requests.Enqueue(new CapturedRequest(request.HttpMethod, path, request.Headers["Key"], request.Headers["ClientName"], body, 0));
+                    _requests.Enqueue(new CapturedRequest(request.HttpMethod, path, request.Headers["Key"], request.Headers["ClientName"], body, 0, CopyHeaders(request)));
                     context.Response.Abort();
                     return;
                 }
@@ -170,11 +177,16 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                 request.Headers["Key"],
                 request.Headers["ClientName"],
                 body,
-                statusCode));
+                statusCode,
+                CopyHeaders(request)));
 
             try
             {
                 context.Response.StatusCode = (int)statusCode;
+
+                if (isData)
+                    foreach (var directive in Volatile.Read(ref _directives))
+                        context.Response.AppendHeader("X-Hsm-Directive", directive);
 
                 // The real /commands route answers the dictionary of per-path errors, empty when
                 // every command was accepted, and the collector reads it: an empty body is a
@@ -197,6 +209,16 @@ namespace HSMDataCollector.IntegrationTests.Helpers
             {
                 // client went away mid-response — irrelevant to the assertions
             }
+        }
+
+        private static Dictionary<string, string> CopyHeaders(HttpListenerRequest request)
+        {
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var name in request.Headers.AllKeys)
+                headers[name] = request.Headers[name];
+
+            return headers;
         }
 
         private static int GetFreeTcpPort()
@@ -233,9 +255,10 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
         public sealed class CapturedRequest
         {
-            public CapturedRequest(string method, string path, string key, string clientName, string body, HttpStatusCode answer)
+            public CapturedRequest(string method, string path, string key, string clientName, string body, HttpStatusCode answer, Dictionary<string, string> headers)
             {
                 Answer = answer;
+                Headers = headers;
                 Method = method;
                 Path = path;
                 Key = key;
@@ -251,6 +274,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
             /// <summary>The status this request was answered with.</summary>
             public HttpStatusCode Answer { get; }
+
+            /// <summary>The request headers, by case-insensitive name.</summary>
+            public Dictionary<string, string> Headers { get; }
         }
     }
 }

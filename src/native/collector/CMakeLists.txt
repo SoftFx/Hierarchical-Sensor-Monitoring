@@ -724,6 +724,12 @@ add_conformance_test(conformance_module_markers_contract module_markers_contract
 add_conformance_test(conformance_metric_source_contract metric_source_contract.hsmtest)
 add_conformance_test(conformance_default_endpoint_contract default_endpoint_contract.hsmtest)
 
+# collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
+# the folder on Windows only, too.
+if(WIN32)
+    add_conformance_test(conformance_tcp_failure_rate_contract windows/tcp_failure_rate_contract.hsmtest)
+endif()
+
 add_test(
     NAME native_default_sensors_wire_golden
     COMMAND hsm_collector_tests native_default_sensors_wire_golden
