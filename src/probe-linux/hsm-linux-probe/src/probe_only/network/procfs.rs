@@ -207,8 +207,8 @@ pub fn wireless_interfaces(sys_root: &Path) -> Vec<String> {
 /// One associated Wi-Fi interface's row of `/proc/net/wireless`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WirelessReading {
-    /// `level` in dBm. (`link`, the quality, is parsed but not kept: on cfg80211 drivers it is
-    /// this signal plus 110, clamped to 0–70; #1731.)
+    /// `level` in dBm. (`link`, the quality, is not read: on cfg80211 drivers it is this signal
+    /// plus 110, clamped to 0–70; #1731.)
     pub signal_dbm: Option<f64>,
 }
 
@@ -552,6 +552,16 @@ pub(crate) mod tests {
             .map(|l| format!("{l}\n"))
             .collect();
         assert_eq!(parse_wireless(&headers), Ok(BTreeMap::new()));
+        // Junk in the quality column, which is not read, does not cost the signal (#1731).
+        assert_eq!(
+            parse_wireless(&format!("{headers}wlp3s0: 0000 x. -74.\n")),
+            Ok(BTreeMap::from([(
+                "wlp3s0".to_string(),
+                WirelessReading {
+                    signal_dbm: Some(-74.0)
+                }
+            )]))
+        );
         for broken in [
             String::new(),
             format!("{headers}wlp3s0 0000 36. -74.\n"),
