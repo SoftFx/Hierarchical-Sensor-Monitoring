@@ -182,12 +182,12 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
         {
             List<(JournalKey, JournalRecordEntity)> result = new(count);
 
-            // One clock read plus an offset per record, not DateTime.UtcNow per record.
-            // The key is sensorId|type|ticks, so two records stamped with the same tick
-            // are the same LevelDB key and the second Put overwrites the first. The wall
-            // clock guarantees neither distinct nor increasing ticks across a tight loop,
-            // so the read-back used to come up short (912 of 1000) or out of order.
-            var baseTicks = DateTime.UtcNow.Ticks;
+            // Keys must be distinct and increasing: the key is sensorId|type|ticks, so a
+            // repeated tick is the same LevelDB key and the later Put overwrites the
+            // earlier one. The wall clock guarantees neither across a tight loop. The base
+            // is a fixed mid-week instant so all records land in one weekly shard; a run
+            // straddling a week boundary would read the newer shard first.
+            var baseTicks = new DateTime(2026, 1, 7, 12, 0, 0, DateTimeKind.Utc).Ticks;
 
             for (int i = 0; i < count; i++)
             {
