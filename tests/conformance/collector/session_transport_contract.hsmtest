@@ -45,6 +45,8 @@
 # - A collector on a session never makes an HTTP request, in any case below.
 # - Start does not wait for the session. A case that needs it up first waits for an accepted
 #   registration, never for a time.
+# - One kind of sensor per case: the drivers do not agree on what a sensor index counts across
+#   kinds (per kind in the managed driver, creation order in the native one).
 
 # Values and registrations travel as frames; nothing goes over HTTP; a stop closes the session.
 session_carries_values_and_registrations|create_collector_on_session|50|20|5000
@@ -95,12 +97,12 @@ batch_is_split_to_the_frame_limit|stop
 value_larger_than_a_frame_is_dropped|session_server_hello|2048|30
 value_larger_than_a_frame_is_dropped|create_collector_on_session|50|20|5000
 value_larger_than_a_frame_is_dropped|create_string_sensor|contract/session/huge
-value_larger_than_a_frame_is_dropped|create_int_sensor|contract/session/small
 value_larger_than_a_frame_is_dropped|start
-value_larger_than_a_frame_is_dropped|add_int|0|1|Ok|before
+value_larger_than_a_frame_is_dropped|add_string|0|before|Ok|small
 value_larger_than_a_frame_is_dropped|add_string|0|repeat:x:5000|Ok|huge
-value_larger_than_a_frame_is_dropped|add_int|0|2|Ok|after
-value_larger_than_a_frame_is_dropped|expect_session_ints_once|1|2|20
+value_larger_than_a_frame_is_dropped|add_string|0|after|Ok|small
+value_larger_than_a_frame_is_dropped|expect_session_accepted_contains|list|"Value":"before"|20
+value_larger_than_a_frame_is_dropped|expect_session_accepted_contains|list|"Value":"after"|20
 value_larger_than_a_frame_is_dropped|expect_session_no_request_contains|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 value_larger_than_a_frame_is_dropped|expect_session_frames_fit|2048
 value_larger_than_a_frame_is_dropped|stop
@@ -173,14 +175,14 @@ value_batch_refused_with_4xx_is_sent_again|expect_session_ints_once|9|1|20
 value_batch_refused_with_4xx_is_sent_again|stop
 
 # The session has no op for a file value yet. It is refused where it is sent: it never becomes a
-# frame, it is not sent over HTTP either, and the values after it are delivered.
+# frame and it is not sent over HTTP either. Checked after the stop, whose drain would have sent
+# anything that was queued (the session is up: the registration was acknowledged on it).
 file_value_is_not_sent_on_a_session|create_collector_on_session|50|20|5000
 file_value_is_not_sent_on_a_session|create_file_sensor|contract/session/file|report|txt
-file_value_is_not_sent_on_a_session|create_int_sensor|contract/session/after-file
 file_value_is_not_sent_on_a_session|start
+file_value_is_not_sent_on_a_session|expect_session_accepted_contains|commands|contract/session/file"|15
 file_value_is_not_sent_on_a_session|add_file_value|0|content|Ok|file
-file_value_is_not_sent_on_a_session|add_int|0|5|Ok|after
-file_value_is_not_sent_on_a_session|expect_session_ints_once|5|1|15
-file_value_is_not_sent_on_a_session|expect_session_no_request_contains|"Type":6
 file_value_is_not_sent_on_a_session|stop
+file_value_is_not_sent_on_a_session|expect_session_requests_containing|list|"body"|0|0
+file_value_is_not_sent_on_a_session|expect_session_no_request_contains|"Type":6
 file_value_is_not_sent_on_a_session|expect_no_http_requests
