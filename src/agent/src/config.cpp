@@ -491,7 +491,7 @@ namespace hsm::agent
                 error = "'server' must be an object";
                 return false;
             }
-            if (!ReadString(*server, "address", out.server_address, error) || !ReadInt(*server, "port", out.port, error) || !ReadString(*server, "accessKey", out.access_key, error) || !ReadBool(*server, "allowUntrustedCertificate", out.allow_untrusted_certificate, error))
+            if (!ReadString(*server, "address", out.server_address, error) || !ReadInt(*server, "port", out.port, error) || !ReadString(*server, "accessKey", out.access_key, error) || !ReadBool(*server, "allowUntrustedCertificate", out.allow_untrusted_certificate, error) || !ReadString(*server, "transport", out.transport, error))
                 return false;
         }
 
@@ -567,6 +567,12 @@ namespace hsm::agent
         if (out.port <= 0 || out.port > 65535)
         {
             error = "config: 'server.port' must be between 1 and 65535";
+            return false;
+        }
+        // A typo must not silently select the other transport.
+        if (out.transport != "http" && out.transport != "session")
+        {
+            error = "config: 'server.transport' must be 'http' or 'session'";
             return false;
         }
         if (out.top_cpu_enabled)
@@ -650,7 +656,8 @@ namespace hsm::agent
             << "    \"address\": \"" << esc(c.server_address) << "\",\n"
             << "    \"port\": " << c.port << ",\n"
             << "    \"accessKey\": \"" << esc(c.access_key) << "\",\n"
-            << "    \"allowUntrustedCertificate\": " << b(c.allow_untrusted_certificate) << "\n"
+            << "    \"allowUntrustedCertificate\": " << b(c.allow_untrusted_certificate) << ",\n"
+            << "    \"transport\": \"" << esc(c.transport) << "\"\n"
             << "  },\n"
             << "  \"identity\": {\n"
             << "    \"computerName\": \"" << esc(c.computer_name) << "\",\n"

@@ -52,7 +52,7 @@ namespace hsm::collector
             detail::ThrowIfFailed(hsm_sensor_attach_alert(handle_, alert.handle()), "Failed to attach alert to sensor.");
         }
 
-        /// Paths this sensor was registered under before a layout change (sensor move, 0.12.0):
+        /// Paths this sensor was registered under before a layout change (sensor move, 0.13.0):
         /// full paths relative to the product, no computer/module prefix. A server that supports
         /// sensor move moves the sensor at such a path here on registration, history included.
         /// Blank entries are skipped; an empty list removes them.

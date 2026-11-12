@@ -742,6 +742,116 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // What the server logs about a session: who opened it, and when it ends, who ended it
+        // and why, after how long, with what traffic. Under one short id, without the key.
+        [Fact]
+        public async Task Log_ClosedByTheCollector_SaysWhoWhyAndHowMuch()
+        {
+            await using var host = await StartHost();
+
+            string id;
+
+            using (var socket = await OpenAsync(host, configure: options =>
+                   {
+                       options.SetRequestHeader("X-Collector-Kind", "native");
+                       options.SetRequestHeader("X-Collector-Version", "0.12.0");
+                   }))
+            {
+                id = host.Registry.GetSessions().Single().Id.ToString("N")[..8];
+
+                await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{IntValue("log/int", 1)}]}}");
+                Assert.Equal(200, (int)(await ReceiveAsync(socket))["status"]);
+
+                await SendAsync(socket, "{\"id\":2,\"op\":\"list\",\"body\":[]}");
+                Assert.Equal(400, (int)(await ReceiveAsync(socket))["status"]);
+
+                // A reason that tries to start a log line of its own.
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done\nforged", Deadline());
+            }
+
+            await TestWait.UntilAsync(() => host.Log.Matching($"Collector session {id} closed").Length == 1, $"the close line of {id}:{Environment.NewLine}{host.Log.Dump()}");
+
+            var opened = Assert.Single(host.Log.Matching($"Collector session {id} opened: "));
+            Assert.Equal(NLog.LogLevel.Info, opened.Level);
+            Assert.Contains($"product \"{TestProductsManager.ProductName}\", key \"{TestProductsManager.TestProductKey.DisplayName}\", client \"{ClientName}\"", opened.Message);
+            Assert.Contains("collector native 0.12.0, from 127.0.0.1; 1 session(s) open.", opened.Message);
+
+            var closed = Assert.Single(host.Log.Matching($"Collector session {id} closed after "));
+            Assert.Equal(NLog.LogLevel.Info, closed.Level);
+            Assert.Contains(": the collector closed it with 1000, reason \"done?forged\".", closed.Message);
+            Assert.Contains("frames in 3 (", closed.Message);
+            Assert.Contains("values accepted 1, requests refused 1", closed.Message);
+            Assert.Contains("last frame from the collector ", closed.Message);
+            Assert.Contains("0 session(s) open.", closed.Message);
+
+            Assert.DoesNotContain(_key, host.Log.Dump());
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_SilentSession_IsAWarningThatNamesTheSilence()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var watch = Assert.Single(host.Time.Timers);
+
+            await TestWait.UntilAsync(() => watch.IsArmed, "the watch to run while the server waits for a frame");
+            watch.Fire();
+
+            await TestWait.UntilAsync(() => host.Log.Matching("closed after ").Length == 1, $"the close line:{Environment.NewLine}{host.Log.Dump()}");
+
+            var closed = Assert.Single(host.Log.Matching("closed after "));
+            Assert.Equal(NLog.LogLevel.Warn, closed.Level);
+            Assert.Contains("the server cut the connection without a close handshake: no progress within three heartbeats", closed.Message);
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_ConnectionAbortedByTheCollector_IsAWarningWithoutACloseFrame()
+        {
+            await using var host = await StartHost();
+
+            var socket = await OpenAsync(host);
+
+            socket.Abort();
+            socket.Dispose();
+
+            await TestWait.UntilAsync(() => host.Log.Matching("closed after ").Length == 1, $"the close line:{Environment.NewLine}{host.Log.Dump()}");
+
+            var closed = Assert.Single(host.Log.Matching("closed after "));
+            Assert.Equal(NLog.LogLevel.Warn, closed.Level);
+            Assert.Contains("the connection ended without a close handshake (", closed.Message);
+            Assert.DoesNotContain("closed it with", closed.Message);
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_RefusedUpgrades_AreOneLineAMinute_WithoutTheKey()
+        {
+            await using var host = await StartHost();
+
+            // A key that exists but may not send: the session handler refuses it. (A key the
+            // server does not know is refused before the handler, by the Sensor API middleware,
+            // like on every HTTP route.)
+            var readOnlyKey = AddKey(KeyPermissions.CanReadSensorData).ToString();
+
+            for (var i = 0; i < 3; i++)
+                Assert.Equal(HttpStatusCode.NotAcceptable, await RefusedUpgradeStatus(host, readOnlyKey, Subprotocol));
+
+            var refused = Assert.Single(host.Log.Matching("A collector session upgrade is refused with 406"));
+            Assert.Equal(NLog.LogLevel.Warn, refused.Level);
+            Assert.Contains("cannot send data", refused.Message);
+            Assert.Contains($"Client \"{ClientName}\" from 127.0.0.1", refused.Message);
+            Assert.DoesNotContain(readOnlyKey, host.Log.Dump());
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+
         private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null)
         {
             var config = new CollectorSessionsConfig();

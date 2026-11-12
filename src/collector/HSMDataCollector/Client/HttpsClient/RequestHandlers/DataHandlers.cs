@@ -11,7 +11,7 @@ namespace HSMDataCollector.Client.HttpsClient
     {
         protected override DelayBackoffType DelayStrategy => DelayBackoffType.Exponential;
 
-        protected override int MaxRequestAttempts => 10;
+        protected override int MaxRetryAttempts => 10;
 
 
         public DataHandlers(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger) { }

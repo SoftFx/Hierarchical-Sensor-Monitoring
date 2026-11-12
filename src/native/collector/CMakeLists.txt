@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.12.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.13.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -157,10 +157,22 @@ endif()
 option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
 if(HSM_COLLECTOR_HTTP)
     find_package(CURL REQUIRED)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp)
+    # The session transport reads the server's JSON frames (hello, acks) with nlohmann/json: the
+    # collector carries no parser of its own for bytes that come off the network. Header-only and
+    # private, so it adds nothing to what a consumer of the built library links.
+    find_package(nlohmann_json REQUIRED)
+    get_target_property(HSM_NLOHMANN_JSON_INCLUDES nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp)
+    target_include_directories(hsm_collector_core SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${CURL_INCLUDE_DIRS})
+    if(WIN32)
+        # The WebSocket connection waits on its socket with select(). The collector core now uses
+        # it (session transport), so every consumer of the static core links Winsock; a libcurl
+        # DLL does not bring it along.
+        target_link_libraries(hsm_collector_core PUBLIC ws2_32)
+    endif()
 endif()
 
 # Header-only C++ RAII wrapper over the C ABI.
@@ -323,6 +335,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refused_upgrade_reports_status
         COMMAND hsm_collector_tests native_ws_refused_upgrade_reports_status
     )
+    add_test(NAME native_ws_tells_a_close_frame_from_a_tcp_close
+        COMMAND hsm_collector_tests native_ws_tells_a_close_frame_from_a_tcp_close
+    )
     add_test(NAME native_ws_assembles_fragmented_messages
         COMMAND hsm_collector_tests native_ws_assembles_fragmented_messages
     )
@@ -331,6 +346,52 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_ws_refuses_binary_and_oversized_messages
         COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
+    )
+    # #1668: the collector session as the transport. Like the native_ws_* tests above they need a
+    # libcurl with WebSocket and skip, saying so, on one without.
+    add_test(NAME native_session_delivers_registrations_and_values
+        COMMAND hsm_collector_tests native_session_delivers_registrations_and_values
+    )
+    add_test(NAME native_session_queues_while_refused_and_delivers_after_connect
+        COMMAND hsm_collector_tests native_session_queues_while_refused_and_delivers_after_connect
+    )
+    add_test(NAME native_session_reconnects_after_a_drop
+        COMMAND hsm_collector_tests native_session_reconnects_after_a_drop
+    )
+    add_test(NAME native_session_logs_how_a_session_ended
+        COMMAND hsm_collector_tests native_session_logs_how_a_session_ended
+    )
+    add_test(NAME native_session_logs_open_failures_by_kind
+        COMMAND hsm_collector_tests native_session_logs_open_failures_by_kind
+    )
+    add_test(NAME native_session_ack_timeout_reopens_and_resends
+        COMMAND hsm_collector_tests native_session_ack_timeout_reopens_and_resends
+    )
+    add_test(NAME native_session_splits_a_batch_to_the_frame_limit
+        COMMAND hsm_collector_tests native_session_splits_a_batch_to_the_frame_limit
+    )
+    add_test(NAME native_session_partly_delivered_batch_is_not_sent_twice
+        COMMAND hsm_collector_tests native_session_partly_delivered_batch_is_not_sent_twice
+    )
+    add_test(NAME native_session_splits_a_registration_batch_to_the_frame_limit
+        COMMAND hsm_collector_tests native_session_splits_a_registration_batch_to_the_frame_limit
+    )
+    add_test(NAME native_session_split_registration_retries_only_the_failed_part
+        COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
+    )
+    add_test(NAME native_session_refuses_file_values
+        COMMAND hsm_collector_tests native_session_refuses_file_values
+    )
+    add_test(NAME native_session_oversized_value_is_dropped_once
+        COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
+    )
+    add_test(NAME native_session_value_at_the_frame_limit_does_not_stall_the_sender
+        COMMAND hsm_collector_tests native_session_value_at_the_frame_limit_does_not_stall_the_sender
+    )
+    # A regression here is a sender that spins forever: fail in a minute, not at ctest's default.
+    set_tests_properties(native_session_value_at_the_frame_limit_does_not_stall_the_sender PROPERTIES TIMEOUT 90)
+    add_test(NAME native_session_transport_request_contract
+        COMMAND hsm_collector_tests native_session_transport_request_contract
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server

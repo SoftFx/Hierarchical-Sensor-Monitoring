@@ -130,12 +130,12 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `file` | `FileSensorValue` |
 | `commands` | command batch (response: error dictionary keyed by sensor path) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` |
-| `testConnection` | — |
+| `testConnection` | — (response: 200 with header `X-Hsm-Server: 1`, which identifies an HSM server; the HSM Agent's retired-port check relies on it, #1655) |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
 
 ## Collector session (WebSocket)
 
-The transport that is to replace the HTTP routes above for collectors (#1664, epic #1660, ADR-0017; owner decision of 2026-11-10: HTTP stays only for a transition period). One WebSocket per collector at `GET {base}session`, on the same origin and with the same `Key` / `ClientName` headers as the HTTP routes. The bodies are the same. **No collector uses it yet**, and until the session can carry everything (see request ops below) the HTTP routes are the only complete transport.
+A second transport for collectors, beside the HTTP routes above (#1664, epic #1660, ADR-0017). The HTTP routes are not retired (owner decision of 2026-11-11: script clients such as PowerShell use them); a collector uses one transport or the other, with no fallback between them. One WebSocket per collector at `GET {base}session`, on the same origin and with the same `Key` / `ClientName` headers as the HTTP routes. The bodies are the same. **The native collector can use it** (collector 0.12.0, #1668: a setting of the agent and of the Linux probe, off by default); the managed collector cannot yet. Until the session can carry everything (see request ops below) the HTTP routes are the only complete transport.
 
 A collector either uses the session or the HTTP routes, by its own setting; the server does not negotiate it. Nothing in the session refers to HTTP: there is no fallback to it, no announcement of sessions in HTTP answers, and no side traffic over it.
 
@@ -167,7 +167,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 ```
 
 - **`hello`** is the first frame the server sends. `maxFrameBytes` is the largest frame it accepts; `heartbeatSeconds` is the heartbeat interval.
-- **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **`file` has no op yet.** A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that will use the session; none does yet), and an element that cannot fit on its own has no way through. Files, such elements and directive push (directives still travel only as headers on HTTP answers) have to be solved before the HTTP routes can go.
+- **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **`file` has no op yet.** A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that use the session; the native collector splits both `list` and `commands` batches), and an element that cannot fit on its own has no way through. Files, such elements and directive push (directives still travel only as headers on HTTP answers) have to be solved before a collector can do everything on a session.
 - **`status` is the HTTP status the same request would have got** on that route, with one exception: a body the server cannot parse is `400` (`"malformed body"`), where the HTTP route ends as a `500`.
 - **A success ack** carries the route's success body in `body`: the dictionary of per-path errors, empty when everything was accepted. Its keys are sensor paths exactly as sent.
 - **A failure ack** carries a short `error` text and no `body`. It never echoes the request, unlike the HTTP `400` of `list`. Texts in version 1: `empty batch`, `malformed body`, `unknown op`, `failed to store the batch`, `failed to apply the commands`. They are for logs; a collector decides by `status`.

@@ -56,7 +56,8 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 
 ```
 :443   -> HSMServer, single port: Web UI + Sensor API (via Caddy; direct mode maps it straight)
-:44330/:44333 -> deprecated aliases through the deprecation window (#1590), removed in a follow-up release
+:80    -> ACME HTTP-01 challenge + redirect to 443 (Caddy only)
+(44330/44333, the ports of the pre-#1590 two-port scheme, are retired: nothing listens on or publishes them, #1696)
 ```
 
 ## Architecture Rules — ALWAYS follow these
@@ -106,7 +107,7 @@ When adding new functionality:
 - `Dispose()` must work from any state and must not throw
 - `CollectorScheduler` is a per-collector instance (owned and disposed by its `DataCollector`); there is no process-global scheduler
 - Sensor values are queued in `Channel<QueueItem<T>>` and sent in batches by `QueueProcessorBase`; overflow/retry policy per `aicontext/features/collector/data-pipeline/feature.md`
-- HTTP retries use Polly with exponential backoff; `BaseHandlers.ShouldRetry` retries 5xx on bounded data/priority/file requests only — commands retry on exceptions, 4xx never (#1096)
+- HTTP retries use Polly with exponential backoff on data/priority/file requests only: `BaseHandlers.ShouldRetry` retries exceptions and 5xx, 4xx never (#1096). A command send is a single attempt; the command queue re-sends a failed package on its next cycle and drops one the server rejected with a 4xx (#1659 A2, A3)
 - `MessageDeduplicator` bounds cache size to prevent memory leaks from diverse exception messages
 
 ## Versioning

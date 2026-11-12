@@ -174,6 +174,11 @@ const ENUM_VALUES: &[(&str, i64)] = &[
     ("HSM_ALERT_ICON_ARROW_DOWN", 11),
     ("HSM_ALERT_ICON_CLOCK", 100),
     ("HSM_ALERT_ICON_HOURGLASS", 101),
+    // Catalog rows the probe registers by id (#1711): a renumbered row would register a different
+    // sensor under the network node.
+    ("HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED", 50),
+    ("HSM_DEFAULT_NETWORK_CONNECTION_FAILURES", 51),
+    ("HSM_DEFAULT_NETWORK_CONNECTIONS_RESET", 52),
 ];
 
 fn main() {

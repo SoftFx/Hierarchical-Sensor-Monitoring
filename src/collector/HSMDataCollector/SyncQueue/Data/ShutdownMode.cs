@@ -18,8 +18,9 @@ namespace HSMDataCollector.SyncQueue.Data
 
         /// <summary>
         /// Terminal <c>DataCollector.Dispose()</c>: cancel quickly under broken/nonresponsive
-        /// transport. Do not preserve canceled in-flight packages forever; clear queue leftovers
-        /// after a bounded flush so the process can exit.
+        /// transport. A canceled in-flight package goes back to the queue for the bounded flush,
+        /// as on a graceful stop; queue leftovers are cleared after that flush so the process
+        /// can exit.
         /// </summary>
         TerminalDispose,
 
@@ -35,13 +36,15 @@ namespace HSMDataCollector.SyncQueue.Data
     internal static class ShutdownModeExtensions
     {
         /// <summary>
-        /// True when canceled in-flight packages should be re-enqueued so a follow-up flush can
-        /// retry them. Only graceful stop preserves work; terminal dispose discards because the
-        /// transport is being torn down and we should not loop forever, and start-rollback
-        /// discards because the collector never finished entering the running phase.
+        /// True when canceled in-flight packages should be re-enqueued so the follow-up flush can
+        /// retry them. Graceful stop and terminal dispose both do (#1659 A6): the package the
+        /// stop interrupted is the oldest accepted data, and dropping it on Dispose lost it even
+        /// against a healthy server. Neither can loop on it: the flush is bounded and the queue
+        /// is cleared after it. Start-rollback discards, because the collector never finished
+        /// entering the running phase.
         /// </summary>
         internal static bool PreserveCanceledPackages(this ShutdownMode mode) =>
-            mode == ShutdownMode.GracefulStop;
+            mode != ShutdownMode.StartRollback;
 
         /// <summary>
         /// True when the queue should attempt a bounded flush of accepted items before the

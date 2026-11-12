@@ -13,7 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IErrorReportingSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -30,6 +30,10 @@ namespace HSMDataCollector.Client
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
         private int _disposed;
+
+        // Where a failed send is reported. The logger until the collector that owns this client
+        // routes it to its deduplicator (RouteErrorsTo); a client used on its own keeps the logger.
+        private Action<string> _errorSink;
 
         // Bounded connection lifetime forces periodic DNS re-resolution (#1102-E4): without it a
         // busy keep-alive connection sticks to a stale IP indefinitely (e.g. after an LB move).
@@ -131,6 +135,18 @@ namespace HSMDataCollector.Client
             // it once the in-flight requests fall away. Total leak across the collector lifetime
             // is bounded by the number of CancelPendingRequests calls (typically one, at dispose).
             tokenSourceToCancel.Cancel();
+        }
+
+        public void RouteErrorsTo(Action<string> sink) => Volatile.Write(ref _errorSink, sink);
+
+        internal void ReportError(string message)
+        {
+            var sink = Volatile.Read(ref _errorSink);
+
+            if (sink != null)
+                sink(message);
+            else
+                _logger?.Error(message);
         }
 
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
