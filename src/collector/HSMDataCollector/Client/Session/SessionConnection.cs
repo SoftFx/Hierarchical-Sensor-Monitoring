@@ -604,8 +604,9 @@ namespace HSMDataCollector.Client.Session
 
         // The server closed the session and waits for the close that answers it. ClientWebSocket
         // sends none by itself, and a session that is dropped instead reads on the server as a
-        // connection that broke after its close. Best effort and short: the session is over
-        // either way.
+        // connection that broke after its close. The answer echoes the server's status code, as
+        // RFC 6455 5.5.1 suggests and as the native collector does. Best effort and short: the
+        // session is over either way.
         private async Task AnswerCloseAsync(ClientWebSocket socket)
         {
             if (socket.State != WebSocketState.CloseReceived)
@@ -617,7 +618,7 @@ namespace HSMDataCollector.Client.Session
             try
             {
                 using (var timeout = new CancellationTokenSource(CloseAnswerTimeout))
-                    await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, string.Empty, timeout.Token).ConfigureAwait(false);
+                    await socket.CloseOutputAsync(socket.CloseStatus ?? WebSocketCloseStatus.NormalClosure, string.Empty, timeout.Token).ConfigureAwait(false);
             }
             catch (Exception)
             {

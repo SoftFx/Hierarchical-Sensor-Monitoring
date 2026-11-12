@@ -43,9 +43,10 @@
 #   expect_session_frames_fit|max_bytes                      every request frame is at most max_bytes (UTF-8)
 #   expect_no_http_requests                                  the server received nothing but upgrades
 #   expect_session_upgrade_header|name|value                 a request header of the last accepted upgrade
-#   expect_session_closed_normally                           the last close frame the collector sent carries
-#                                                            code 1000 (its close at stop, or its answer to the
-#                                                            server's close); polled for 5 s
+#   expect_session_close_code|code|timeout_s                 the last close frame the collector sent carries
+#                                                            this code
+#   expect_session_closed_normally                           expect_session_close_code|1000|5: how a collector
+#                                                            ends a session at stop
 #
 # Contract notes:
 # - Frames carry the WIRE format (aicontext/features/api/wire-contract/feature.md), the same bytes
@@ -239,14 +240,15 @@ idle_session_is_kept_alive_by_heartbeats|expect_session_count|1|0
 idle_session_is_kept_alive_by_heartbeats|stop
 idle_session_is_kept_alive_by_heartbeats|expect_no_http_requests
 
-# A close from the server (a server that shuts down says 1001) is answered with a close frame,
-# not with a dropped connection, and the session is opened again.
+# A close from the server (a server that shuts down says 1001) is answered with a close frame
+# that echoes its code (RFC 6455 5.5.1), not with a dropped connection, and the session is opened
+# again.
 close_from_the_server_is_answered_and_the_session_reopened|create_collector_on_session|50|20|5000
 close_from_the_server_is_answered_and_the_session_reopened|create_int_sensor|contract/session/closed
 close_from_the_server_is_answered_and_the_session_reopened|start
 close_from_the_server_is_answered_and_the_session_reopened|expect_session_accepted_contains|commands|contract/session/closed"|15
 close_from_the_server_is_answered_and_the_session_reopened|session_server_close_sessions|1001
-close_from_the_server_is_answered_and_the_session_reopened|expect_session_closed_normally
+close_from_the_server_is_answered_and_the_session_reopened|expect_session_close_code|1001|5
 close_from_the_server_is_answered_and_the_session_reopened|add_int|0|6|Ok|after-close
 close_from_the_server_is_answered_and_the_session_reopened|expect_session_ints_once|6|1|25
 close_from_the_server_is_answered_and_the_session_reopened|expect_session_count_at_least|2|5

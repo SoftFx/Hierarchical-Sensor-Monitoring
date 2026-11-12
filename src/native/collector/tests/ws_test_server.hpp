@@ -408,10 +408,14 @@ namespace hsm::test
         }
 
         // The status of the acks of one op ("list" or "commands") from now on. It takes
-        // precedence over AckWith, which sets the status of every op.
+        // precedence over AckWith, which sets the status of every op. A request of any other op
+        // is not touched by it.
         void AckOpWith(const std::string& op, int status)
         {
-            (op == "list" ? list_ack_status_ : commands_ack_status_).store(status, std::memory_order_release);
+            if (op == "list")
+                list_ack_status_.store(status, std::memory_order_release);
+            else if (op == "commands")
+                commands_ack_status_.store(status, std::memory_order_release);
         }
 
         // The next `count` requests are recorded and get no ack.
@@ -425,6 +429,36 @@ namespace hsm::test
 
         // Requests that were not a WebSocket upgrade: what a collector on a session must never send.
         int PlainHttpRequests() const { return plain_http_requests_.load(std::memory_order_acquire); }
+
+        // How many times the accept loop found no connection waiting. Two more of these while no
+        // connection is being served mean that everything that was in the listen backlog has
+        // been read.
+        uint64_t IdleAcceptPolls() const { return idle_accept_polls_.load(std::memory_order_acquire); }
+
+        // One request that is no upgrade, made by the test itself: what PlainHttpRequests counts.
+        // Returns when the server has answered and closed, so the request is counted by then.
+        bool SendPlainHttpRequest() const
+        {
+            const socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock == INVALID_SOCKET)
+                return false;
+
+            sockaddr_in address{};
+            address.sin_family = AF_INET;
+            address.sin_port = htons(static_cast<uint16_t>(port_));
+            address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+            const bool sent = connect(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
+                              WriteAll(sock, "GET /api/sensors/list HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+
+            char buffer[256];
+            while (sent && recv(sock, buffer, static_cast<int>(sizeof(buffer)), 0) > 0)
+            {
+            }
+
+            closesocket(sock);
+            return sent;
+        }
 
     private:
         bool WaitReadable(socket_t sock) const
@@ -476,10 +510,16 @@ namespace hsm::test
 
         static bool WriteAll(socket_t sock, const std::string& data)
         {
+            // A peer that has gone must be an error here, not a SIGPIPE that ends the test binary.
+#if defined(MSG_NOSIGNAL)
+            const int flags = MSG_NOSIGNAL;
+#else
+            const int flags = 0;
+#endif
             size_t sent = 0;
             while (sent < data.size())
             {
-                const int n = send(sock, data.data() + sent, static_cast<int>(data.size() - sent), 0);
+                const int n = send(sock, data.data() + sent, static_cast<int>(data.size() - sent), flags);
                 if (n <= 0)
                     return false;
                 sent += static_cast<size_t>(n);
@@ -543,7 +583,10 @@ namespace hsm::test
                     return;
                 }
                 if (ready == 0)
+                {
+                    idle_accept_polls_.fetch_add(1, std::memory_order_release);
                     continue;
+                }
 
                 const socket_t conn = accept(listen_, nullptr, nullptr);
                 if (conn == INVALID_SOCKET)
@@ -745,8 +788,11 @@ namespace hsm::test
             const std::string id = payload.substr(at + 5, end - (at + 5));
 
             const bool is_list = payload.find("\"op\":\"list\"") != std::string::npos;
+            const bool is_commands = !is_list && payload.find("\"op\":\"commands\"") != std::string::npos;
             int status = ack_status_.load(std::memory_order_acquire);
-            const int op_status = (is_list ? list_ack_status_ : commands_ack_status_).load(std::memory_order_acquire);
+            const int op_status = is_list       ? list_ack_status_.load(std::memory_order_acquire)
+                                  : is_commands ? commands_ack_status_.load(std::memory_order_acquire)
+                                                : 0;
             if (op_status != 0)
                 status = op_status;
             if (is_list)
@@ -781,6 +827,7 @@ namespace hsm::test
         std::atomic<bool> answer_pings_{ true };
         std::atomic<int> refused_upgrades_{ 0 };
         std::atomic<int> plain_http_requests_{ 0 };
+        std::atomic<uint64_t> idle_accept_polls_{ 0 };
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };

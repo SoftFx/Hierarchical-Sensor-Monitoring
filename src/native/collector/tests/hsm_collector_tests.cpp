@@ -3171,6 +3171,7 @@ namespace
             {
                 Require(step.size() >= 3, "session_server_ack requires an op and a status");
                 Require(step[1] == "list" || step[1] == "commands", ("session_server_ack: unknown op '" + step[1] + "'").c_str());
+                Require(ToInt(step[2]) > 0, "session_server_ack: 0 is no status; session_server_stay_silent leaves a request without an ack");
                 server.AckOpWith(step[1], ToInt(step[2]));
                 return;
             }
@@ -3191,6 +3192,45 @@ namespace
             if (action == "session_server_drop_sessions")
             {
                 server.Drop();
+                return;
+            }
+
+            if (action == "session_server_close_sessions")
+            {
+                Require(step.size() >= 2, "session_server_close_sessions requires a close code");
+                // False when no session is open: there is then nothing to close.
+                (void)server.SendClose(static_cast<uint16_t>(ToInt(step[1])));
+                return;
+            }
+
+            if (action == "session_http_request")
+            {
+                // The driver's own request, not the collector's: it puts on the server's record
+                // what expect_no_http_requests looks for.
+                Require(server.SendPlainHttpRequest(), "session_http_request: the scripted server did not take the request");
+                return;
+            }
+
+            if (action == "expect_session_pings_at_least")
+            {
+                Require(step.size() >= 3, "expect_session_pings_at_least requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession([&] { return server.SessionPings() >= expected; }, step[2]),
+                        ("expected at least " + step[1] + " heartbeat(s) from the collector, got " + std::to_string(server.SessionPings())).c_str());
+                return;
+            }
+
+            if (action == "expect_session_close_code")
+            {
+                Require(step.size() >= 3, "expect_session_close_code requires a code and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession(
+                            [&] {
+                                const auto codes = server.CloseCodes();
+                                return !codes.empty() && codes.back() == expected;
+                            },
+                            step[2]),
+                        ("the last close frame of the collector does not carry " + step[1]).c_str());
                 return;
             }
 
@@ -3288,10 +3328,15 @@ namespace
             if (action == "expect_no_http_requests")
             {
                 // The fixture serves one connection at a time: a request made while a session is
-                // open waits in the listen backlog and is read when the session has ended. When
-                // none is open, give the accept loop a moment to read what may be waiting.
-                if (!server.Connected())
-                    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+                // open waits in the listen backlog and is read when the session has ended. So the
+                // check waits until no session is open, and then until the accept loop has twice
+                // found nothing waiting: by then whatever was in the backlog has been read and
+                // counted. No fixed pause decides what is seen.
+                Require(PollSession([&] { return !server.Connected(); }, "10"),
+                        "expect_no_http_requests: a session is still open; place it after stop or while no session is open");
+                const auto idle = server.IdleAcceptPolls();
+                Require(PollSession([&] { return server.IdleAcceptPolls() >= idle + 2; }, "10"),
+                        "expect_no_http_requests: the scripted server did not come to rest");
                 Require(server.PlainHttpRequests() == 0,
                         ("the collector made " + std::to_string(server.PlainHttpRequests()) + " HTTP request(s) beside its upgrades").c_str());
                 return;

@@ -712,10 +712,16 @@ add_conformance_test(conformance_metric_source_contract metric_source_contract.h
 add_conformance_test(conformance_default_endpoint_contract default_endpoint_contract.hsmtest)
 
 # The collector session scenarios (#1660 step 3) need the session transport, which exists in the
-# HTTP build only. Their two must-fail fixtures go with them.
+# HTTP build only. Their must-fail fixtures go with them.
 if(HSM_COLLECTOR_HTTP)
     add_conformance_test(conformance_session_transport_contract session_transport_contract.hsmtest)
-    foreach(session_meta meta_session_ints_once_missing meta_session_accepted_contains_wrong_text)
+    foreach(session_meta
+            meta_session_ints_once_missing
+            meta_session_ints_once_duplicate
+            meta_session_accepted_contains_wrong_text
+            meta_session_frames_fit_too_small
+            meta_session_no_request_contains_present
+            meta_session_http_request_seen)
         add_test(
             NAME ${session_meta}
             COMMAND hsm_collector_tests meta_session_must_fail
