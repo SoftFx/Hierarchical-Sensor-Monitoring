@@ -226,6 +226,8 @@ struct InterfaceSpeed<'c> {
     previous: Option<(Instant, BTreeMap<String, InterfaceOctets>)>,
     received: BTreeMap<String, DoubleBarSensor<'c>>,
     sent: BTreeMap<String, DoubleBarSensor<'c>>,
+    /// Interfaces with at least one speed sensor, against [`MAX_INTERFACES`].
+    tracked: BTreeSet<String>,
     cap_logged: bool,
     read_failures: FailureLog,
     registration_failures: FailureLog,
@@ -249,6 +251,7 @@ impl<'c> InterfaceSpeed<'c> {
             previous: None,
             received: BTreeMap::new(),
             sent: BTreeMap::new(),
+            tracked: BTreeSet::new(),
             cap_logged: false,
             read_failures: FailureLog::default(),
             registration_failures: FailureLog::default(),
@@ -334,9 +337,7 @@ impl<'c> InterfaceSpeed<'c> {
         if value < MIN_DISPLAYABLE {
             return;
         }
-        let known = self.received.contains_key(interface) || self.sent.contains_key(interface);
-        let tracked: BTreeSet<&String> = self.received.keys().chain(self.sent.keys()).collect();
-        if !known && tracked.len() >= MAX_INTERFACES {
+        if !self.tracked.contains(interface) && self.tracked.len() >= MAX_INTERFACES {
             if !self.cap_logged {
                 logger.warn(format!(
                     "network: {MAX_INTERFACES} interfaces have speed sensors, the cap; '{interface}' \
@@ -369,6 +370,7 @@ impl<'c> InterfaceSpeed<'c> {
             ) {
                 Ok(sensor) => {
                     sensors.insert(interface.to_string(), sensor);
+                    self.tracked.insert(interface.to_string());
                 }
                 Err(error) => {
                     // Not cached: the next sample tries again.
