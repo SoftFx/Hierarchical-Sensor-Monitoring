@@ -1038,6 +1038,11 @@ namespace HSMDataCollector.Tests
                         state.Collector.Windows.AddNetworkInterfacesSpeed();
                     break;
 
+                case "enable_tcp_connection_failure_rate_sensor":
+                    // (#1659 B2) period_ms. Used only by collector/windows/, which runs on Windows.
+                    state.Collector.Windows.AddNetworkConnectionFailuresRate(TimeSpan.FromMilliseconds(int.Parse(step.Arg(0))));
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
@@ -2159,8 +2164,19 @@ namespace HSMDataCollector.Tests
             return cases.ToDictionary(x => x.Key, x => (IReadOnlyList<ContractStep>)x.Value, StringComparer.Ordinal);
         }
 
-        private static IReadOnlyList<string> FindContractFiles() =>
-            Directory.GetFiles(FindContractDirectory(), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        // The shared fixtures, plus collector/windows/ on Windows: scenarios for sensors that exist
+        // only there (the native driver registers that folder under if(WIN32)).
+        private static IReadOnlyList<string> FindContractFiles()
+        {
+            var directory = FindContractDirectory();
+            var files = Directory.GetFiles(directory, "*.hsmtest").ToList();
+            var windowsOnly = Path.Combine(directory, "windows");
+
+            if (DataCollector.IsWindowsOS && Directory.Exists(windowsOnly))
+                files.AddRange(Directory.GetFiles(windowsOnly, "*.hsmtest"));
+
+            return files.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }
 
         private static IReadOnlyList<string> FindMetaContractFiles() =>
             Directory.GetFiles(Path.Combine(FindContractDirectory(), "meta"), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();

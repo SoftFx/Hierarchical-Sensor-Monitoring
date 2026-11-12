@@ -121,6 +121,16 @@ namespace HSMDataCollector.PublicInterface
         /// </summary>
         IWindowsCollection AddNetworkInterfacesSpeed();
 
+        /// <summary>
+        /// Adds the rate of failed TCP connection attempts, ".computer/Network/Connection failures rate":
+        /// every <paramref name="period"/> (1 minute by default) the increase of the failed-attempt
+        /// counter of IPv4 and IPv6 (<c>MIB_TCPSTATS.dwAttemptFails</c>) is posted as failures per
+        /// second, shown per minute, with an alert when it stays above 1 per second for 5 minutes.
+        /// Opt-in: it is not part of <see cref="AddAllNetworkSensors"/>. The native collector has the
+        /// same sensor (<c>hsm_collector_enable_tcp_connection_failure_rate_sensor</c>).
+        /// </summary>
+        IWindowsCollection AddNetworkConnectionFailuresRate(TimeSpan? period = null);
+
         IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null);
 
 
