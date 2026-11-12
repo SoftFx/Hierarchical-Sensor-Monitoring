@@ -29,8 +29,9 @@ namespace HSMDataCollector.Core
         private readonly object _lifecycleGate;
         private readonly TimeSpan _stopFlushTimeout;
 
-        // 1 after the data/priority drain boundary has been crossed during a graceful stop. Late
-        // file/command flushes that still produce package diagnostics observe this flag and skip
+        // 1 while a stop drains a queue whose package diagnostics must not be recorded: during the
+        // command flush, which goes first, and from the data/priority drain boundary on (the file
+        // flush). Those flushes still produce package diagnostics; they observe this flag and skip
         // <see cref="AddPackageInfo"/>/<see cref="AddPackageSendingInfo"/> so the diagnostics do
         // not enqueue into already-stopped data queues and survive into a later restart as stale
         // collector telemetry. Reset on every <see cref="Start"/>.
@@ -144,50 +145,55 @@ namespace HSMDataCollector.Core
             // within the request timeout — only the queues that exited cleanly are eligible for
             // flush below (an unresponsive sender would otherwise block flush against itself).
             // We pass the original ShutdownMode through so the queue's processing loop catches
-            // observe the right PreserveCanceledPackages policy (graceful re-enqueues canceled
-            // packages; terminal dispose drops them so we stop bounded under broken transport).
+            // observe the right PreserveCanceledPackages policy (graceful stop and terminal dispose
+            // both re-enqueue the canceled package for the drain below; start-rollback drops it).
+            //
+            // The four loops are stopped together (#1659 A7): each wait is bounded by the mode's
+            // stop timeout, and waiting for them one after another made a sender that ignores
+            // cancellation cost four of those in a row.
             var dataStopped = false;
             var priorityStopped = false;
             var fileStopped = false;
             var commandStopped = false;
 
-            await TryStopPhase(async () =>
+            await Task.WhenAll(
+                TryStopPhase(async () => dataStopped = await _dataQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => priorityStopped = await _priorityQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => fileStopped = await _fileQueue.StopAsync(mode).ConfigureAwait(false), failures),
+                TryStopPhase(async () => commandStopped = await _commandQueue.StopAsync(mode).ConfigureAwait(false), failures)).ConfigureAwait(false);
+
+            // One budget for the whole drain (#1659 A7), as in the native collector: a stop must
+            // not hold its host's restart for a budget per queue. A queue that finds the budget
+            // spent sends nothing and its items are discarded and counted.
+            using (var drainBudget = new CancellationTokenSource(GetFlushTimeout(mode)))
             {
-                dataStopped = await _dataQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                // Registrations first: the values behind them are of little use to a server that
+                // was never told what those sensors are. Their package diagnostics are suppressed
+                // like every diagnostic of a non-data flush (#1075, below).
+                var suppressedBefore = Interlocked.Exchange(ref _diagnosticsSuppressedFlag, 1);
 
-            await TryStopPhase(async () =>
-            {
-                priorityStopped = await _priorityQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                if (commandStopped)
+                    await FlushAndLogAsync(_commandQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            await TryStopPhase(async () =>
-            {
-                fileStopped = await _fileQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                // Back to what it was, not to "recorded": a stop that found the boundary already
+                // crossed must not reopen it for the flushes below.
+                Volatile.Write(ref _diagnosticsSuppressedFlag, suppressedBefore);
 
-            await TryStopPhase(async () =>
-            {
-                commandStopped = await _commandQueue.StopAsync(mode).ConfigureAwait(false);
-            }, failures).ConfigureAwait(false);
+                if (priorityStopped)
+                    await FlushAndLogAsync(_priorityQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            if (priorityStopped)
-                await FlushAndLogAsync(_priorityQueue, mode, failures).ConfigureAwait(false);
+                if (dataStopped)
+                    await FlushAndLogAsync(_dataQueue, drainBudget.Token, failures).ConfigureAwait(false);
 
-            if (dataStopped)
-                await FlushAndLogAsync(_dataQueue, mode, failures).ConfigureAwait(false);
+                // Self-diagnostics boundary (#1075). After the data/priority queues have drained their
+                // accepted user data, any further diagnostic value generated by the file flush would
+                // have nowhere safe to land — the data queue is no longer accepting writes, and a
+                // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
+                Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
-            // Self-diagnostics boundary (#1075). After the data/priority queues have drained their
-            // accepted user data, any further diagnostic value generated by the file/command flushes
-            // would have nowhere safe to land — the data queue is no longer accepting writes, and a
-            // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
-            Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
-
-            if (fileStopped)
-                await FlushAndLogAsync(_fileQueue, mode, failures).ConfigureAwait(false);
-
-            if (commandStopped)
-                await FlushAndLogAsync(_commandQueue, mode, failures).ConfigureAwait(false);
+                if (fileStopped)
+                    await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures).ConfigureAwait(false);
+            }
         }
 
         private async Task StopWithoutFlushAsync(ShutdownMode mode, List<Exception> failures)
@@ -209,12 +215,11 @@ namespace HSMDataCollector.Core
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
         }
 
-        private async Task FlushAndLogAsync(IQueueProcessor queue, ShutdownMode mode, List<Exception> failures)
+        private async Task FlushAndLogAsync(IQueueProcessor queue, CancellationToken drainBudget, List<Exception> failures)
         {
             await TryStopPhase(async () =>
             {
-                using (var flushCancellation = new CancellationTokenSource(GetFlushTimeout(mode)))
-                    await queue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+                await queue.FlushAsync(drainBudget).ConfigureAwait(false);
 
                 LogDiscardedItems(queue.ClearQueue(), queue.QueueName);
             }, failures).ConfigureAwait(false);
