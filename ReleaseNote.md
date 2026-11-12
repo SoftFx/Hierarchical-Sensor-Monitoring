@@ -35,4 +35,4 @@
 * A stale merge-conflict artifact (`_AlertSchedule.cshtml.orig`) no longer ships in clones; `*.orig`/`*.rej`/`*.bak` are git-ignored (#1640).
 
 ## Dependencies
-* Bundled HSMDataCollector 3.5.0, HsmAgent 0.5.28 and the Linux probe 0.10.0 — all unchanged since 3.41.9.
+* Bundled HsmAgent 0.5.50 (was 0.5.28): moves itself off a retired 44330/44333 to 443 (#1655). HSMDataCollector 3.5.0 and the Linux probe 0.10.0 are unchanged since 3.41.9.
