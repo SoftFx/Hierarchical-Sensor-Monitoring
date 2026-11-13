@@ -411,10 +411,10 @@ namespace HSMServer.Controllers
 
             try
             {
+                var accepted = new List<(PublicApiRequestInfo Info, CommandRequestBase Command)>(sensorCommands.Count);
+
                 for (var i = 0; i < sensorCommands.Count; i++)
                 {
-                    var path = sensorCommands[i].Path;
-
                     // Only a registration reads the caller; any other command is refused
                     // without it, exactly as before the logic moved to the service.
                     PublicApiRequestInfo info = null;
@@ -427,7 +427,7 @@ namespace HSMServer.Controllers
                             // The rejection reason (unknown/expired/blocked key) is the
                             // per-path error the caller reads, not the generic
                             // invalid-request text (#1649).
-                            response[path] = infoRequest.Error;
+                            response[sensorCommands[i].Path] = infoRequest.Error;
 
                             continue;
                         }
@@ -435,11 +435,11 @@ namespace HSMServer.Controllers
                         info = infoRequest.Value;
                     }
 
-                    var error = await _ingestion.ApplyCommandAsync(info, sensorCommands[i]);
-
-                    if (error is not null)
-                        response[path] = error;
+                    accepted.Add((info, sensorCommands[i]));
                 }
+
+                foreach (var (path, error) in await _ingestion.ApplyCommandsAsync(accepted))
+                    response[path] = error;
 
                 return Ok(response);
             }

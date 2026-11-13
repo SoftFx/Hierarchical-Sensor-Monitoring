@@ -472,15 +472,7 @@ namespace HSMServer.SensorApi.Sessions
 
             try
             {
-                var errors = new Dictionary<string, string>(commands.Count);
-
-                foreach (var command in commands)
-                {
-                    var error = await _ingestion.ApplyCommandAsync(caller, command);
-
-                    if (error is not null)
-                        errors[command.Path] = error;
-                }
+                var errors = await _ingestion.ApplyCommandsAsync(commands.Select(command => (caller, command)).ToList());
 
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
             }

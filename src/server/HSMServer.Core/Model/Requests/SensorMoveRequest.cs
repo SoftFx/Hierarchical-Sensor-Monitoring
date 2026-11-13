@@ -52,6 +52,14 @@ namespace HSMServer.Core.Model.Requests
     }
 
 
+    /// <summary>
+    /// One sensor registration of a collector's batch, as <c>ApplyPreviousPathsAsync</c> needs
+    /// it (#1724): the path it registers, the paths the sensor was registered under before,
+    /// and its type when the registration carries one.
+    /// </summary>
+    public sealed record PreviousPathsRegistration(string Path, IReadOnlyList<string> PreviousPaths, HSMCommon.Model.SensorType? Type);
+
+
     /// <summary>What a move does when a real sensor already holds the destination path.</summary>
     public enum SensorMoveConflict
     {
