@@ -42,6 +42,7 @@ namespace HSMServer.Controllers
     public class SensorsController : ControllerBase
     {
         private const string InvalidRequest = SensorIngestionService.InvalidRequest;
+        private const string KeyRequired = "An access key is required";
 
         private const string DirectiveHeader = "X-Hsm-Directive";
         private const string AgentVersionHeader = "X-Agent-Version";
@@ -414,6 +415,13 @@ namespace HSMServer.Controllers
         [TypeFilter<SendDataKeyPermissionFilter>]
         public async Task<ActionResult<Dictionary<string, string>>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
+            // A request with no key at all, neither the Key header nor a key in any command,
+            // is the request's fault: the access error every other key problem gets, and
+            // nothing is applied (#1756). It used to end as a null reference inside the
+            // loop, which is a 500 since #1749.
+            if (sensorCommands.Count > 0 && sensorCommands.TrueForAll(HasNoKey))
+                return StatusCode(StatusCodes.Status406NotAcceptable, KeyRequired);
+
             var response = new Dictionary<string, string>(sensorCommands.Count);
 
             Exception firstFault = null;
@@ -430,7 +438,7 @@ namespace HSMServer.Controllers
                     PublicApiRequestInfo info = null;
                     if (sensorCommands[i] is AddOrUpdateSensorRequest)
                     {
-                        var infoRequest = await IsValidPublicApiRequest(sensorCommands[i]);
+                        var infoRequest = await IsValidRegistrationRequest(sensorCommands[i]);
 
                         if (!infoRequest.IsOk)
                         {
@@ -612,12 +620,35 @@ namespace HSMServer.Controllers
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
         {
-            var infoRequest = await IsValidPublicApiRequest(apiRequest);
+            var infoRequest = await IsValidRegistrationRequest(apiRequest);
 
             if (!infoRequest.IsOk)
                 return TaskResult.FromError(infoRequest.Error);
 
             return await _ingestion.AddOrUpdateSensorAsync(infoRequest.Value, apiRequest);
+        }
+
+        private bool HasNoKey(BaseRequest request) => request.Key is null && !HttpContext.TryGetPublicApiInfo(out _);
+
+        // Who sends a registration. The value routes resolve their caller with
+        // IsValidPublicApiRequest alone and are not touched by the two cases handled here
+        // (#1756), both of which matter for a registration only: a collector takes a 4xx on
+        // it as final and sends a 5xx again.
+        //   - No key at all is the request's fault: the access error, where the lookup
+        //     below would fail on the missing key with a null reference, a 500.
+        //   - A key that could not be looked up because the server itself failed is not a
+        //     refused key: it leaves as an exception, which both routes answer 500.
+        private async Task<TaskResult<PublicApiRequestInfo>> IsValidRegistrationRequest(BaseRequest request)
+        {
+            if (HasNoKey(request))
+                return TaskResult<PublicApiRequestInfo>.FromError(KeyRequired);
+
+            var infoRequest = await IsValidPublicApiRequest(request);
+
+            if (!infoRequest.IsOk && HttpContext.HasPublicApiFault())
+                throw new InvalidOperationException(infoRequest.Error);
+
+            return infoRequest;
         }
 
         private Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)

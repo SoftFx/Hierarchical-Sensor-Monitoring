@@ -199,6 +199,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
         private ITreeValuesCache _inner;
         private volatile string[] _faultedPaths = [];
+        private volatile bool _keyLookupFaults;
 
 
         public ITreeValuesCache Cache { get; private set; }
@@ -218,12 +219,22 @@ namespace HSMServer.Core.Tests.SensorApi
         // The registrations of these paths fail from now on, and only they.
         public void FaultOn(params string[] paths) => _faultedPaths = paths;
 
+        // Looking an access key up fails from now on: the server cannot tell who is asking.
+        public void FaultOnKeyLookup() => _keyLookupFaults = true;
+
         // The fault has passed.
-        public void Recover() => _faultedPaths = [];
+        public void Recover()
+        {
+            _faultedPaths = [];
+            _keyLookupFaults = false;
+        }
 
 
         protected override object Invoke(MethodInfo targetMethod, object[] args)
         {
+            if (_keyLookupFaults && targetMethod.Name == nameof(ITreeValuesCache.TryGetKey))
+                throw new InvalidOperationException(FaultText);
+
             if (targetMethod.Name == nameof(ITreeValuesCache.AddOrUpdateSensorAsync) &&
                 args[0] is SensorAddOrUpdateRequest registration && _faultedPaths.Contains(registration.Path))
                 return Task.FromException<TaskResult>(new InvalidOperationException(FaultText));

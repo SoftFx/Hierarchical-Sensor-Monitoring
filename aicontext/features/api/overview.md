@@ -59,8 +59,8 @@ A collector takes a **4xx** on a registration as a final refusal and never sends
 |---|---|---|
 | `200` | applied; a registration the server refuses has its reason under its path, the rest of the batch is applied | applied |
 | `400` | the body cannot be read, or the list has a `null` element or a command without a path; nothing is applied | the body cannot be read |
-| `406` | the key in the `Key` header is rejected | the key is rejected, or the server refuses the registration |
-| `500` | some commands faulted (an exception, the server's own fault), the others were applied; send the batch again. The body holds the per-path errors of the refused commands | an exception while the server applied the registration (its own fault) |
+| `406` | the key in the `Key` header is rejected, or the request has no key at all | the key is rejected or missing, or the server refuses the registration |
+| `500` | some commands faulted (the server's own fault: an exception, a fault of the sensor cache or a failed write to the store, #1756), the others were applied; send the batch again. The body holds the per-path errors of the refused commands. Also when the server failed while looking the access key up | the server's own fault while it applied the registration or looked the access key up |
 
 The full table, what a collector does with each row, and what is not covered: [`wire-contract/feature.md`](./wire-contract/feature.md#statuses-of-the-registration-routes-1749).
 

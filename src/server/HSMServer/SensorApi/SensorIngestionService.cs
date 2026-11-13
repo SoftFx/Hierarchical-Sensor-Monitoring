@@ -125,6 +125,12 @@ namespace HSMServer.SensorApi
                 TypeIsExplicit = request.SensorType is not null,
             };
 
+            // A path with no part in it ("" or "/") names no sensor. The cache has no check
+            // of its own for a registration and fails on it with an exception, which is a
+            // fault there (#1756); it is the request's, so it is refused here.
+            if (coreRequest.PathParts.Length == 0)
+                return RefuseUnconvertible(request, MissingPath, cause: null);
+
             // Sensor move from the collector (#1724): the sensor registered under an old path
             // moves here first, so the registration below updates it instead of a new one. It
             // never blocks the registration (refusals are logged inside). A move it makes stands
@@ -134,7 +140,16 @@ namespace HSMServer.SensorApi
                     coreRequest.TypeIsExplicit ? coreRequest.Type : null,
                     HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(keyName, false));
 
-            return await _cache.AddOrUpdateSensorAsync(coreRequest);
+            var result = await _cache.AddOrUpdateSensorAsync(coreRequest);
+
+            // A fault of the cache or of the store while the registration was applied
+            // (#1756) leaves as an exception, like every fault of this service: both
+            // transports answer it 500 and go on with the rest of the package, and the
+            // collector sends the registration again. The cache has logged the cause.
+            if (result.IsFault)
+                throw new RegistrationFaultException(coreRequest.Path, result.Error);
+
+            return result;
         }
 
         // The parts of a registration the conversion dereferences without a check.
@@ -170,4 +185,10 @@ namespace HSMServer.SensorApi
             return TaskResult.FromError($"{UnconvertibleRegistration}: {reason}");
         }
     }
+
+
+    // The cache or the store failed while a registration was applied (#1756). The cause
+    // is in the server's log, where the cache wrote it; this carries its text.
+    public sealed class RegistrationFaultException(string path, string cause)
+        : Exception($"The registration of \"{CollectorSession.Printable(path, 200)}\" was not applied: {cause}");
 }

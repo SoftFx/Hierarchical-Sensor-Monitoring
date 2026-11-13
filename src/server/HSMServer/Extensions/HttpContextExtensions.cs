@@ -8,6 +8,7 @@ namespace HSMServer.Extensions
     public static class HttpContextExtensions
     {
         private const string RequestInfoKey = nameof(PublicApiRequestInfo);
+        private const string RequestFaultKey = "PublicApiRequestFault";
 
 
         public static bool TryReadInfo(this HttpContext context, string key, out string value)
@@ -31,6 +32,13 @@ namespace HSMServer.Extensions
 
             return info is not null;
         }
+
+        // The caller of the request could not be resolved because the server itself failed
+        // while looking the key up (#1756): not a refusal of the key. The value routes do
+        // not ask and answer the access error as before; the registration routes answer 500.
+        public static void SetPublicApiFault(this HttpContext context) => context.Items[RequestFaultKey] = true;
+
+        public static bool HasPublicApiFault(this HttpContext context) => context.Items.ContainsKey(RequestFaultKey);
 
         public static Task SetAccessError(this HttpContext context, string error)
         {
