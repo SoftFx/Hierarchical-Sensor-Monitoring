@@ -755,6 +755,7 @@ namespace HSMServer.Core.Tests.Controllers
         [InlineData(999)]
         [InlineData(-1)]
         [InlineData(256)]
+        [InlineData(50)] // in-range but undefined in the enum: suppressed the same way (#1677 review)
         public async Task Create_UnknownSensorType_OutsideTheByteRange_Is400WithFieldKey(int sensorType)
         {
             // #1607: the enum-coded fields bind as int, so out-of-range values
@@ -764,7 +765,9 @@ namespace HSMServer.Core.Tests.Controllers
             // per-condition pass used to judge the conditions against the
             // byte-truncated cast ((SensorType)999 = 231) and add a
             // "Property 'Value' is not supported by 231 templates." error
-            // naming a type the caller never sent.
+            // naming a type the caller never sent. In-range undefined values
+            // (50) are skipped the same way: their condition messages would
+            // name a defined neighbour type the caller never sent either.
             var dto = BuildDto(sensorType: sensorType);
 
             var result = await CreateController().CreateTemplate(dto);

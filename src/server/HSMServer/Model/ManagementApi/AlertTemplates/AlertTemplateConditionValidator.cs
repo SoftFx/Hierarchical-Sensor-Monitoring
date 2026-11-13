@@ -65,14 +65,16 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         // the map already and the write fails on them.
         public static void AddConditionErrors(AlertTemplateDto dto, Dictionary<string, List<string>> errors)
         {
-            // #1677: an unknown sensor type (e.g. 999) byte-truncates in the
-            // rule lookup below ((SensorType)999 = 231), so the per-condition
-            // messages would judge the conditions against — and name — a type
-            // the caller never sent. The structural pass has already rejected
-            // the type under its own key; skip the condition pass entirely
-            // and let that one error speak.
-            if (dto.SensorType != AlertTemplateModel.AnyType &&
-                !(dto.SensorType is >= 0 and <= byte.MaxValue && Enum.IsDefined((SensorType)dto.SensorType)))
+            // #1677: an unknown sensor type (e.g. 999, or an in-range undefined
+            // value like 50) byte-truncates in the rule lookup below
+            // ((SensorType)999 = 231), so the per-condition messages would
+            // judge the conditions against — and name — a type the caller
+            // never sent. The structural pass has already rejected the type
+            // under "sensorType"; skip while that error is in the map — the
+            // same deferral style as the TTL conditions skip below — and let
+            // one error speak. AnyType never trips the structural rule, so it
+            // keeps its full condition validation.
+            if (errors.ContainsKey("sensorType"))
                 return;
 
             foreach (var (policy, index) in (dto.Policies ?? []).Select((p, i) => (p, i)))
@@ -120,11 +122,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         public static bool TryValidateCondition(int templateSensorType, PolicyConditionDto condition,
             out string key, out string message)
         {
-            // int since #1607: the DTO's SensorType is int on the wire, and
-            // this pass runs alongside structural errors, so an out-of-range
-            // value can reach here — the rule lookup then misses and the
-            // message names the raw value, while the structural pass carries
-            // the sensorType error itself.
+            // int since #1607: the DTO's SensorType is int on the wire. The
+            // public walker above defers to the structural pass whenever the
+            // type is invalid (#1677), so only defined values — or AnyType —
+            // reach here through it; the rule-lookup-miss branch below now
+            // serves direct callers only.
 
             var property = (PolicyProperty)condition.Property;
             var operation = (PolicyOperation)condition.Operation;
