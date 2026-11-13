@@ -2804,6 +2804,8 @@ namespace
                 else
                     LogMessage(level == hsm::http::SessionLogLevel::Info ? HSM_LOG_LEVEL_INFO : HSM_LOG_LEVEL_DEBUG, message);
             };
+            // Directives the server pushes go where the X-Hsm-Directive headers go over HTTP.
+            options.on_directive = [this](const std::string& directive) { DispatchServerDirective(directive); };
 
             session_transport_ = std::make_unique<hsm::http::SessionTransport>(std::move(options));
             session_transport_->Start();
@@ -6189,13 +6191,7 @@ namespace
                 for (const auto& h : response.response_headers)
                 {
                     if (h.name == "x-hsm-directive")
-                    {
-                        const auto colon = h.value.find(':');
-                        if (colon != std::string::npos)
-                            directive_callback_(h.value.substr(0, colon).c_str(), h.value.substr(colon + 1).c_str(), directive_user_data_);
-                        else
-                            directive_callback_(h.value.c_str(), "", directive_user_data_);
-                    }
+                        DispatchServerDirective(h.value);
                 }
             }
 
@@ -6232,6 +6228,22 @@ namespace
 #endif
 
 #if defined(HSM_COLLECTOR_HTTP)
+        // One server directive, "name:argument" or a bare name, to the host's callback as verb and
+        // payload: the text of one X-Hsm-Directive header line over HTTP, or the body of one
+        // {"op":"directive"} push on the session (#1660 step 5). Both paths split it the same way,
+        // so the host sees the same calls in the same order whichever transport carried them.
+        void DispatchServerDirective(const std::string& directive)
+        {
+            if (directive_callback_ == nullptr)
+                return;
+
+            const auto colon = directive.find(':');
+            if (colon != std::string::npos)
+                directive_callback_(directive.substr(0, colon).c_str(), directive.substr(colon + 1).c_str(), directive_user_data_);
+            else
+                directive_callback_(directive.c_str(), "", directive_user_data_);
+        }
+
         // The data queue's batch as `list` frames on the session. A batch that does not fit one
         // frame is split; every frame is acknowledged on its own. The result is the HTTP rule:
         // 2xx is delivered, anything else (or no ack) sends the batch back to the queue.

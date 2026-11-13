@@ -146,9 +146,11 @@ namespace hsm::agent
             //
             // The directive handler (collector thread) also writes config.json from a copy of
             // config_, and nothing serializes the two writers. They cannot overlap: a directive
-            // arrives only in the response to a data POST, and the move happens only after the
-            // configured port stopped answering on two checks in a row, so no POST through it, and
-            // no directive, can be in flight. Revisit this if a directive can ever arrive another way.
+            // arrives in the response to a data POST, or (server.transport = session, #1660 step 5)
+            // as a push on the collector session, which is a connection to the same port; and the
+            // move happens only after the configured port stopped answering on two checks in a
+            // row, so no POST through it, no session on it, and no directive, can be in flight.
+            // Revisit this if a directive can ever arrive another way.
             std::string cfg_err;
             MoveOutcome outcome = MoveOutcome::Failed;
             try
@@ -233,7 +235,8 @@ namespace hsm::agent
             // X-Agent-Version: server uses it to decide whether to emit update-available directives.
             opts.extra_request_headers.push_back({"X-Agent-Version", HSM_AGENT_VERSION});
 
-            // Handle server directives delivered via data-POST response headers (#1198).
+            // Handle server directives delivered via data-POST response headers (#1198), or pushed
+            // on the collector session when server.transport is "session" (#1660 step 5).
             opts.on_server_directive = [this, &updater](const std::string& verb, const std::string& payload)
             {
                 if (verb == "update-available")

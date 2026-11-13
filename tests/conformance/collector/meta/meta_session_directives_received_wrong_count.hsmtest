@@ -1,0 +1,8 @@
+# MUST-FAIL: one directive is pushed, but the fixture demands two. Proves expect_directives_received
+# counts what reached the collector's directive receiver.
+meta_session_directives_received_wrong_count|create_collector_on_session|50|20|5000
+meta_session_directives_received_wrong_count|create_int_sensor|meta/session/directives
+meta_session_directives_received_wrong_count|start
+meta_session_directives_received_wrong_count|expect_session_accepted_contains|commands|meta/session/directives"|15
+meta_session_directives_received_wrong_count|session_server_push_directive|sensor-disable:network
+meta_session_directives_received_wrong_count|expect_directives_received|2|2

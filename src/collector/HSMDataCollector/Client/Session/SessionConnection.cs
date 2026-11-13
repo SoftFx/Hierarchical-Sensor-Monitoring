@@ -657,8 +657,13 @@ namespace HSMDataCollector.Client.Session
                         await SendAsync(socket, SessionProtocol.Pong, token).ConfigureAwait(false);
                         break;
 
+                    // A directive pushed by the server (#1660 step 5) goes where the X-Hsm-Directive
+                    // headers of an HTTP answer go. Its body is the text of one header line; a body
+                    // that is not a string carries no directive and is ignored, as in the native
+                    // collector.
                     case SessionProtocol.OpDirective:
-                        _directives?.Receive(frame.Body);
+                        if (frame.BodyIsString)
+                            _directives?.Receive(frame.Body);
                         break;
 
                     // A pong only has to arrive: it was counted above as a sign of life. An op

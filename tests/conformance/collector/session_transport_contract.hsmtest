@@ -27,6 +27,9 @@
 #   session_http_request                                     the DRIVER makes one plain HTTP request to the
 #                                                            scripted server (for the must-fail fixture of
 #                                                            expect_no_http_requests)
+#   session_server_push_directive|directive                  every open session gets the push
+#                                                            {"op":"directive","body":"<directive>"} (#1660 step 5)
+#   session_server_push_frame|frame                          every open session gets this frame as it is
 # New verbs — assertions (timeout_s: polled until it holds; 0 checks once):
 #   expect_session_count|count|timeout_s                     upgrades accepted so far equal count
 #   expect_session_count_at_least|count|timeout_s
@@ -47,6 +50,11 @@
 #                                                            this code
 #   expect_session_closed_normally                           expect_session_close_code|1000|5: how a collector
 #                                                            ends a session at stop
+#   expect_directives_received|count|timeout_s               the collector handed exactly count server
+#                                                            directives to its receiver (managed: the internal
+#                                                            ServerDirectives; native: the host callback)
+#   expect_directive_received|index|directive                the index-th of them (0 = the first), written
+#                                                            name:argument as the server sent it
 #
 # Contract notes:
 # - Frames carry the WIRE format (aicontext/features/api/wire-contract/feature.md), the same bytes
@@ -285,3 +293,27 @@ close_from_the_server_is_answered_and_the_session_reopened|expect_session_ints_o
 close_from_the_server_is_answered_and_the_session_reopened|expect_session_count_at_least|2|5
 close_from_the_server_is_answered_and_the_session_reopened|stop
 close_from_the_server_is_answered_and_the_session_reopened|expect_no_http_requests
+
+# Directives the server pushes on the session (#1660 step 5) reach the collector's directive
+# receiver whole and in the order they were pushed, as the headers of an HTTP answer do; a directive
+# whose body is not a string carries nothing and is ignored, and so is an unknown push op (by
+# contract); neither changes the session.
+directives_pushed_on_the_session_reach_the_host_in_order|create_collector_on_session|50|20|5000
+directives_pushed_on_the_session_reach_the_host_in_order|create_int_sensor|contract/session/directives
+directives_pushed_on_the_session_reach_the_host_in_order|start
+directives_pushed_on_the_session_reach_the_host_in_order|expect_session_accepted_contains|commands|contract/session/directives"|15
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|sensor-disable:network
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"news","body":"sensor-disable:disk"}
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"directive","body":{"not":"a string"}}
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|update-available:9.9.9
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|sensor-enable:network
+directives_pushed_on_the_session_reach_the_host_in_order|expect_directives_received|3|15
+directives_pushed_on_the_session_reach_the_host_in_order|expect_directive_received|0|sensor-disable:network
+directives_pushed_on_the_session_reach_the_host_in_order|expect_directive_received|1|update-available:9.9.9
+directives_pushed_on_the_session_reach_the_host_in_order|expect_directive_received|2|sensor-enable:network
+directives_pushed_on_the_session_reach_the_host_in_order|add_int|0|8|Ok|after-push
+directives_pushed_on_the_session_reach_the_host_in_order|expect_session_ints_once|8|1|15
+directives_pushed_on_the_session_reach_the_host_in_order|expect_session_count|1|0
+directives_pushed_on_the_session_reach_the_host_in_order|stop
+directives_pushed_on_the_session_reach_the_host_in_order|expect_directives_received|3|0
+directives_pushed_on_the_session_reach_the_host_in_order|expect_no_http_requests

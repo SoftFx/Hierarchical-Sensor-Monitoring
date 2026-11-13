@@ -54,8 +54,9 @@ namespace hsm::collector
         std::vector<std::pair<std::string, std::string>> extra_request_headers;
 
         // Called on the send thread whenever the server returns an X-Hsm-Directive response
-        // header. First arg: verb ("update-available", "sensor-disable", …). Second arg: payload
-        // after the colon, or empty string when absent.
+        // header, and on the session thread for every directive the server pushes on a collector
+        // session (#1660 step 5). First arg: verb ("update-available", "sensor-disable", …).
+        // Second arg: payload after the colon, or empty string when absent.
         std::function<void(const std::string&, const std::string&)> on_server_directive;
     };
 

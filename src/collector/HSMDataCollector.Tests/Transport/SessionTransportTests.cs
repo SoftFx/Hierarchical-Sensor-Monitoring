@@ -860,6 +860,53 @@ namespace HSMDataCollector.Tests.Transport
             Assert.DoesNotContain(logger.Errors, e => e.Contains("Queue: File"));
         }
 
+        // --- directive push (#1660 step 5) ---
+
+        // A directive the server pushes reaches the collector's directive receiver, whole and in
+        // the order of the pushes, as the X-Hsm-Directive headers of an HTTP answer do. A push whose
+        // body is not a string and a push op the collector does not know change nothing, and the
+        // session carries on.
+        [Fact]
+        public async Task Pushed_directives_reach_the_receiver_in_order()
+        {
+            var received = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.ExtraRequestHeaders["X-Agent-Version"] = "0.5.1";
+
+                using (var collector = new DataCollector(options))
+                {
+                    var directives = ((SessionDataSender)options.DataSender).Directives;
+                    directives.Observer = received.Enqueue;
+
+                    var sensor = collector.CreateIntSensor("session/directives");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/directives"), "The session never came up.");
+                    Assert.Equal("0.5.1", server.UpgradeHeaders["X-Agent-Version"]);
+
+                    Assert.Equal(1, server.PushDirective("update-available:0.6.0"));
+                    server.Push("{\"op\":\"directive\",\"body\":{\"not\":\"a string\"}}");
+                    server.Push("{\"op\":\"news\",\"body\":\"sensor-disable:disk\"}");
+                    server.PushDirective("sensor-disable:network");
+
+                    Assert.True(await WaitForAsync(() => received.Count >= 2), "The pushed directives never reached the receiver.");
+
+                    sensor.AddValue(17);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(17)), "The value after the pushes never arrived.");
+
+                    await collector.Stop();
+
+                    Assert.Equal(new[] { "update-available:0.6.0", "sensor-disable:network" }, received.ToArray());
+                    Assert.Equal(2, directives.ReceivedCount);
+                    Assert.Equal(1, server.Sessions);
+                }
+            }
+        }
+
         // --- stop ---
 
         [Fact]

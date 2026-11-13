@@ -374,14 +374,17 @@ namespace hsm::http
     void SessionTransport::HandleFrame(const std::string& text, Counters& counters)
     {
         const auto frame = nlohmann::json::parse(text, nullptr, /*allow_exceptions=*/false);
-        // Anything that is not an ack is a push or a pong. This version acts on neither (a pong
-        // is only counted); unknown ops are ignored by contract.
+        // Anything that is not an ack is a push or a pong. A pong is only counted; a directive goes
+        // to the host (#1660 step 5); unknown ops are ignored by contract.
         if (!frame.is_object())
             return;
         if (!frame.contains("ack") || !frame["ack"].is_number_unsigned())
         {
-            if (StringField(frame, "op") == "pong")
+            const std::string op = StringField(frame, "op");
+            if (op == "pong")
                 ++counters.pongs;
+            else if (op == "directive")
+                HandleDirective(StringField(frame, "body"));
             return;
         }
 
@@ -404,6 +407,28 @@ namespace hsm::http
             pending_.erase(found);
         }
         cv_.notify_all();
+    }
+
+    void SessionTransport::HandleDirective(const std::string& directive)
+    {
+        // A directive whose body is not a string, or is empty, carries nothing to act on.
+        if (directive.empty() || !options_.on_directive)
+            return;
+
+        // Not once a stop has begun: the host may be inside its stop, holding locks of its own.
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (stop_)
+                return;
+        }
+
+        try
+        {
+            options_.on_directive(directive);
+        }
+        catch (...)
+        {
+        }
     }
 
     std::string SessionTransport::Serve(WebSocketConnection& connection, Counters& counters)

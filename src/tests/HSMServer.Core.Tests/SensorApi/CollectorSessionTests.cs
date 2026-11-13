@@ -6,6 +6,7 @@ using HSMServer.ServerConfiguration;
 using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -240,6 +241,131 @@ namespace HSMServer.Core.Tests.SensorApi
 
             // The /file route refuses the same value with a 406.
             Assert.Equal(HttpStatusCode.NotAcceptable, overFile.Status);
+        }
+
+        // --- directive push (#1660 step 5) ---
+
+        // A directive-aware agent states X-Agent-Version. Right after the hello its session gets
+        // the whole set: the same texts, in the same order, as the X-Hsm-Directive headers of an
+        // HTTP answer to the same key and agent version.
+        [Fact]
+        public async Task Directives_AfterTheHello_AreTheHeadersOfAnHttpAnswer_InTextAndOrder()
+        {
+            var webRoot = StageAgent("9.9.9");
+
+            try
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["network", "module"]);
+
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+
+                var overHttp = await HttpDirectivesAsync(host, "0.5.1");
+
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+                var pushed = await ReceiveDirectivesAsync(socket, overHttp.Length);
+
+                Assert.Equal(new[] { "update-available:9.9.9", "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk",
+                              "sensor-disable:network", "sensor-disable:module", "sensor-enable:process" }, overHttp);
+                Assert.Equal(overHttp, pushed);
+
+                // Nothing more: the next frame is the answer to a ping.
+                await SendAsync(socket, "{\"op\":\"ping\"}");
+                Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_NotForASessionThatStatesNoAgentVersion()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+
+            // No push at all: the only timer of the session is its silence watch.
+            Assert.Single(host.Time.Timers);
+        }
+
+        [Fact]
+        public async Task Directives_ASwitchedGroup_IsPushedAloneAtTheNextCheck()
+        {
+            try
+            {
+                await using var host = await StartHost();
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // Auto-update is off: the six sensor groups.
+                Assert.Equal(6, (await ReceiveDirectivesAsync(socket, 6)).Length);
+
+                var check = await PushTimerAsync(host, TimeSpan.FromSeconds(15));
+
+                // A check that finds nothing new pushes nothing.
+                check.Fire();
+                await ExpectNoPushAsync(socket);
+
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["disk"]);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-disable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+
+                // Switched back on: the directive that changed again, and only it.
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-enable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_TheWholeSet_IsPushedAgainAtTheReannouncement()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            var first = await ReceiveDirectivesAsync(socket, 6);
+
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(first, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
+        [Fact]
+        public async Task Directives_ANewlyStagedAgent_IsPushedAtTheNextCheck()
+        {
+            var webRoot = StageAgent("0.5.1");
+
+            try
+            {
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // The staged agent is the running one: no update.
+                Assert.DoesNotContain(await ReceiveDirectivesAsync(socket, 6), directive => directive.StartsWith("update-available"));
+
+                File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), "0.6.0");
+
+                // The staged version is read again once its cache is 15 s old.
+                host.Time.Advance(TimeSpan.FromSeconds(16));
+                (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+                Assert.Equal(new[] { "update-available:0.6.0" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
         }
 
         [Fact]
@@ -867,9 +993,13 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("127.0.0.1", session.RemoteIP);
             Assert.InRange(session.ConnectedAtUtc, before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
 
+            // A session that states an agent version gets the directives of its product first
+            // (#1660 step 5): the six sensor groups, auto-update being off.
+            await ReceiveDirectivesAsync(socket, 6);
+
             await Task.Delay(50);
             await SendAsync(socket, "{\"op\":\"ping\"}");
-            await ReceiveAsync(socket);
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
 
             Assert.True(Assert.Single(host.Registry.GetSessions()).LastFrameAtUtc > session.LastFrameAtUtc, "an inbound frame must move last-frame-at");
 
@@ -1153,13 +1283,85 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null)
+        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null, AgentConfig agent = null, string webRoot = null)
         {
             var config = new CollectorSessionsConfig();
 
             configure?.Invoke(config);
 
-            return SensorApiTestHost.StartAsync(_valuesCache, config);
+            return SensorApiTestHost.StartAsync(_valuesCache, config, agent, webRoot);
+        }
+
+        // A web root whose agent/version.txt stages this agent version.
+        private static string StageAgent(string version)
+        {
+            var webRoot = Path.Combine(Path.GetTempPath(), $"hsm-session-directives-{Guid.NewGuid():N}");
+
+            Directory.CreateDirectory(Path.Combine(webRoot, "agent"));
+            File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), version);
+
+            return webRoot;
+        }
+
+        private Task<ClientWebSocket> OpenAgentSessionAsync(SensorApiTestHost host, string agentVersion) =>
+            OpenAsync(host, configure: options => options.SetRequestHeader("X-Agent-Version", agentVersion));
+
+        // The X-Hsm-Directive headers of an accepted /list answer, in order.
+        private async Task<string[]> HttpDirectivesAsync(SensorApiTestHost host, string agentVersion)
+        {
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, "list"))
+            {
+                Content = new StringContent($"[{IntValue("directives/http", 1)}]", Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.Add("ClientName", ClientName);
+            request.Headers.Add("Key", _key);
+            request.Headers.Add("X-Agent-Version", agentVersion);
+
+            using var response = await http.SendAsync(request, Deadline());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            return response.Headers.TryGetValues("X-Hsm-Directive", out var values) ? values.ToArray() : [];
+        }
+
+        // The bodies of the next `count` frames, each of which must be a directive push.
+        private static async Task<string[]> ReceiveDirectivesAsync(ClientWebSocket socket, int count)
+        {
+            var directives = new string[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                var frame = await ReceiveAsync(socket);
+
+                Assert.True((string)frame["op"] == "directive", $"expected a directive push, the session sent {frame.ToJsonString()}");
+                Assert.Null(frame["id"]);
+                Assert.Null(frame["ack"]);
+
+                directives[i] = (string)frame["body"];
+            }
+
+            return directives;
+        }
+
+        // Nothing was pushed: the next frame is the answer to a ping.
+        private static async Task ExpectNoPushAsync(ClientWebSocket socket)
+        {
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+
+            var frame = await ReceiveAsync(socket);
+
+            Assert.True((string)frame["op"] == "pong", $"expected nothing before the pong, the session sent {frame.ToJsonString()}");
+        }
+
+        // A timer of the directive push, by its period: 15 s for the check, 5 min for the
+        // re-announcement. Created when the session opens, after the hello.
+        private static async Task<ManualTimer> PushTimerAsync(SensorApiTestHost host, TimeSpan period)
+        {
+            await TestWait.UntilAsync(() => host.Time.Timers.Any(timer => timer.DueTime == period), $"the directive timer of {period}");
+
+            return host.Time.Timers.Single(timer => timer.DueTime == period);
         }
 
         private Guid AddKey(KeyPermissions? permissions = null)

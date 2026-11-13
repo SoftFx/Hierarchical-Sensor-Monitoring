@@ -15,7 +15,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void TestConnection_answers_ok_with_the_server_marker()
         {
-            var controller = new SensorsController(null, null, null, null, null, null)
+            var controller = new SensorsController(null, null, null, null, null)
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
             };

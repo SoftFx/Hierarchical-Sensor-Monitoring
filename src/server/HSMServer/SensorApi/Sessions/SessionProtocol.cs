@@ -16,6 +16,7 @@ namespace HSMServer.SensorApi.Sessions
     //   server to collector  {"ack":17,"status":200,"body":{...}}          its answer
     //                        {"ack":17,"status":400,"error":"..."}         its answer, failed
     //   server to collector  {"op":"hello","body":{...}}                   a push
+    //                        {"op":"directive","body":"name:argument"}  a push (#1660 step 5)
     //   either               {"op":"ping"} / {"op":"pong"}                 heartbeat
     internal static class SessionProtocol
     {
@@ -33,6 +34,7 @@ namespace HSMServer.SensorApi.Sessions
         public const string OpPing = "ping";
         public const string OpPong = "pong";
         public const string OpHello = "hello";
+        public const string OpDirective = "directive";
 
         // The status of an ack is the HTTP status the same request would have got.
         public const int StatusOk = 200;
@@ -82,6 +84,17 @@ namespace HSMServer.SensorApi.Sessions
             writer.WriteNumber(_maxFrameBytes, maxFrameBytes);
             writer.WriteNumber(_heartbeatSeconds, heartbeatSeconds);
             writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        // One server directive (#1660 step 5): the text of one X-Hsm-Directive header line.
+        public static void WriteDirective(IBufferWriter<byte> output, string directive)
+        {
+            using var writer = new Utf8JsonWriter(output);
+
+            writer.WriteStartObject();
+            writer.WriteString(_op, OpDirective);
+            writer.WriteString(_body, directive);
             writer.WriteEndObject();
         }
 

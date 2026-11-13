@@ -303,6 +303,17 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
+        // True once the server is ending the session from outside the handler loop (shutdown):
+        // its close went out, or waits for the frame in progress. Nothing more is pushed then.
+        public bool IsClosing
+        {
+            get
+            {
+                lock (_gate)
+                    return _closing || _closeRequest is not null;
+            }
+        }
+
         // True while a close asked for from outside waits for the frame in progress.
         internal bool HasDeferredClose
         {

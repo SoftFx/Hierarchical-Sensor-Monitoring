@@ -1134,8 +1134,38 @@ namespace HSMDataCollector.Tests
                         SessionServer(state),
                         maxValuesInPackage: int.Parse(step.Arg(0)),
                         collectPeriodMs: int.Parse(step.Arg(1)),
-                        requestTimeoutMs: int.Parse(step.Arg(2)));
+                        requestTimeoutMs: int.Parse(step.Arg(2)),
+                        directives: state.Directives);
                     break;
+
+                case "session_server_push_directive":
+                    Assert.True(SessionServer(state).PushDirective(step.Arg(0)) > 0, "session_server_push_directive: no session is open.");
+                    break;
+
+                case "session_server_push_frame":
+                    Assert.True(SessionServer(state).Push(step.Arg(0)) > 0, "session_server_push_frame: no session is open.");
+                    break;
+
+                case "expect_directives_received":
+                {
+                    var expected = int.Parse(step.Arg(0));
+
+                    await PollAsync(() => state.Directives.Count >= expected, step.Arg(1)).ConfigureAwait(false);
+
+                    Assert.True(state.Directives.Count == expected,
+                                $"Expected {expected} directive(s) at the collector, got {state.Directives.Count}: {string.Join(" | ", state.Directives)}");
+                    break;
+                }
+
+                case "expect_directive_received":
+                {
+                    var index = int.Parse(step.Arg(0));
+                    var received = state.Directives.ToArray();
+
+                    Assert.True(index < received.Length, $"expect_directive_received: only {received.Length} directive(s) arrived, no #{index}.");
+                    Assert.Equal(step.Arg(1), received[index]);
+                    break;
+                }
 
                 case "session_server_hello":
                     SessionServer(state).MaxFrameBytes = int.Parse(step.Arg(0));
@@ -1350,9 +1380,13 @@ namespace HSMDataCollector.Tests
         // A collector whose transport is the collector session to the scripted server: no
         // recording sender, everything it sends is a frame the server records. The pause between
         // attempts to open a session is shortened; no scenario depends on it.
-        private static DataCollector CreateCollectorOnSession(ScriptedSessionServer server, int maxValuesInPackage, int collectPeriodMs, int requestTimeoutMs)
+        // The directives the collector receives are recorded into `directives`, whole and in order of
+        // arrival: the managed collector handles them inside (no public surface), so the driver reads
+        // its internal receiver, where the HTTP header path hands them too.
+        private static DataCollector CreateCollectorOnSession(ScriptedSessionServer server, int maxValuesInPackage, int collectPeriodMs, int requestTimeoutMs,
+            System.Collections.Concurrent.ConcurrentQueue<string> directives)
         {
-            return new DataCollector(new CollectorOptions
+            var options = new CollectorOptions
             {
                 AccessKey = "conformance-key",
                 ServerAddress = server.ServerAddress,
@@ -1373,7 +1407,13 @@ namespace HSMDataCollector.Tests
                     MinBackoff = TimeSpan.FromMilliseconds(50),
                     MaxBackoff = TimeSpan.FromMilliseconds(500),
                 },
-            });
+            };
+
+            var collector = new DataCollector(options);
+
+            ((HSMDataCollector.Client.Session.SessionDataSender)options.DataSender).Directives.Observer = directives.Enqueue;
+
+            return collector;
         }
 
         // The int values of the accepted list frames, read from the wire JSON of their elements.
@@ -2617,6 +2657,9 @@ namespace HSMDataCollector.Tests
 
             // The scripted server of a session case; null in every other case.
             public ScriptedSessionServer SessionServer { get; set; }
+
+            // The server directives the collector of a session case received, in order (#1660 step 5).
+            public System.Collections.Concurrent.ConcurrentQueue<string> Directives { get; } = new System.Collections.Concurrent.ConcurrentQueue<string>();
 
             public List<IDisposable> Sensors { get; } = new List<IDisposable>();
 

@@ -1076,10 +1076,16 @@ hsm_result_t hsm_collector_set_collector_version_override(
     hsm_collector_t* collector,
     const char* version);
 
-/* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
-   a successful data-POST response. `verb` is the directive name (e.g. "update-available");
-   `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.
-   `user_data` must outlive the collector. NULL callback clears the handler. */
+/* Server-directive callback. Over HTTP: called on the worker thread for every X-Hsm-Directive
+   header in a successful data-POST response. On the collector session
+   (hsm_collector_use_session_transport): called on the session thread for every directive the
+   server pushes ({"op":"directive"}, #1660 step 5), in the order they arrive, never while the
+   collector holds a lock of its own and not once Stop has begun; the server pushes the whole set
+   when the session opens, a directive when it changes, and the whole set again every 5 minutes.
+   Either way `verb` is the directive name (e.g. "update-available"); `payload` is the
+   colon-separated argument (e.g. "0.5.2") or an empty string when absent. The server sends
+   directives only to a client that states X-Agent-Version (hsm_collector_set_extra_request_header).
+   `user_data` must outlive the collector. NULL callback clears the handler. Set before Start. */
 typedef void (*hsm_server_directive_callback_t)(
     const char* verb,
     const char* payload,

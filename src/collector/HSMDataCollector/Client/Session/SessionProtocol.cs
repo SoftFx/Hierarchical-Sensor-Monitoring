@@ -121,20 +121,27 @@ namespace HSMDataCollector.Client.Session
 
         internal string Error { get; }
 
-        /// <summary>The raw JSON of <c>body</c>, or null when the frame has none.</summary>
+        /// <summary>
+        /// The <c>body</c>: the value of a string, the raw JSON of anything else, or null when the
+        /// frame has none.
+        /// </summary>
         internal string Body { get; }
+
+        /// <summary>True when <c>body</c> is a JSON string (a directive's body is one).</summary>
+        internal bool BodyIsString { get; }
 
         internal int MaxFrameBytes { get; }
 
         internal int HeartbeatSeconds { get; }
 
-        private SessionFrame(long? ack, int status, string op, string error, string body, int maxFrameBytes, int heartbeatSeconds)
+        private SessionFrame(long? ack, int status, string op, string error, string body, bool bodyIsString, int maxFrameBytes, int heartbeatSeconds)
         {
             Ack = ack;
             Status = status;
             Op = op;
             Error = error;
             Body = body;
+            BodyIsString = bodyIsString;
             MaxFrameBytes = maxFrameBytes;
             HeartbeatSeconds = heartbeatSeconds;
         }
@@ -168,6 +175,7 @@ namespace HSMDataCollector.Client.Session
                     var error = ReadString(root, "error");
 
                     string body = null;
+                    var bodyIsString = false;
                     var maxFrameBytes = 0;
                     var heartbeatSeconds = 0;
 
@@ -175,7 +183,8 @@ namespace HSMDataCollector.Client.Session
                     {
                         // A directive's body is a string and is taken as its value; everything
                         // else is kept as the JSON it is.
-                        body = bodyElement.ValueKind == JsonValueKind.String ? bodyElement.GetString() : bodyElement.GetRawText();
+                        bodyIsString = bodyElement.ValueKind == JsonValueKind.String;
+                        body = bodyIsString ? bodyElement.GetString() : bodyElement.GetRawText();
 
                         if (bodyElement.ValueKind == JsonValueKind.Object)
                         {
@@ -184,7 +193,7 @@ namespace HSMDataCollector.Client.Session
                         }
                     }
 
-                    frame = new SessionFrame(ack, status, op, error, body, maxFrameBytes, heartbeatSeconds);
+                    frame = new SessionFrame(ack, status, op, error, body, bodyIsString, maxFrameBytes, heartbeatSeconds);
 
                     return true;
                 }

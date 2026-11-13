@@ -7,7 +7,8 @@ namespace HSMDataCollector.Client
 {
     /// <summary>
     /// The collector's end of the server directive channel (#1198): the directives the server
-    /// attaches to its answers (<c>X-Hsm-Directive: name:argument</c>).
+    /// attaches to its answers (<c>X-Hsm-Directive: name:argument</c>), and the directives it pushes
+    /// on a collector session (<c>{"op":"directive","body":"name:argument"}</c>, #1660 step 5).
     ///
     /// Directives are handled inside the collector; there is no public event (owner decision,
     /// 2026-11-10). The library acts on none of the directives that exist today
@@ -49,6 +50,13 @@ namespace HSMDataCollector.Client
         /// <summary>How many different directive names are remembered. For tests.</summary>
         internal int NotedNamesCount => _notedNames.Count;
 
+        /// <summary>
+        /// For tests: sees every directive as it arrived, whole and in order of arrival, from the
+        /// HTTP headers and from the session alike. Not a public surface (owner decision: no public
+        /// directive event); null in a collector.
+        /// </summary>
+        internal Action<string> Observer { get; set; }
+
         private bool TryTakeNoteSlot()
         {
             while (true)
@@ -75,6 +83,8 @@ namespace HSMDataCollector.Client
             try
             {
                 Interlocked.Increment(ref _received);
+
+                Observer?.Invoke(directive);
 
                 // "name:argument", or a bare name. No directive is acted on in this version, so
                 // only the name is of interest.

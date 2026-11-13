@@ -1,7 +1,7 @@
 # Feature: Collector Session (server side)
 
-> Owner: server | Last reviewed: 2026-11-10 | Canonical: yes
-> Scope: server - the WebSocket session a collector may hold with the server: the endpoint, its limits and endings, the session registry and its self-monitoring
+> Owner: server | Last reviewed: 2026-11-13 | Canonical: yes
+> Scope: server - the WebSocket session a collector may hold with the server: the endpoint, its limits and endings, directive push, the session registry and its self-monitoring
 
 ---
 
@@ -9,9 +9,9 @@
 
 A collector may hold one persistent WebSocket with the server at `GET /api/sensors/session` and send its value batches and sensor registrations as frames on it. The server answers each frame with an ack that carries the HTTP status the same request would have got on the matching HTTP route. The frame format is part of the Sensor API wire contract: `aicontext/features/api/wire-contract/feature.md` § Collector session.
 
-This is step 2 of the collector session (#1664, epic #1660, ADR-0017). **No collector uses it yet.** Directive push over the session is a later step.
+Built in step 2 of the collector session (#1664, epic #1660, ADR-0017); directive push came with step 5. Both collectors can use it (native since 0.12.0, managed since 3.9.0), off by default.
 
-**The session is a transport a collector can be set to; the HTTP Sensor API stays beside it** (owner decisions: 2026-11-10, no fallback between the two; 2026-11-11, the HTTP routes are not retired, because script clients such as PowerShell use them and a WebSocket is inconvenient there). The HTTP Sensor API is unchanged. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. A file value travels as an element of a `list` frame (#1660 step 2b; the server needed no change for it: the `list` op reads the polymorphic batch of `/list`, which takes a file value, and stores it as `/file` would). Two things a collector on a session cannot do yet: send an element larger than a frame (a file of more than about 1 MiB at the default `MaxFrameBytes`), and receive agent directives, which still reach a collector only as headers on HTTP answers until directive push is built.
+**The session is a transport a collector can be set to; the HTTP Sensor API stays beside it** (owner decisions: 2026-11-10, no fallback between the two; 2026-11-11, the HTTP routes are not retired, because script clients such as PowerShell use them and a WebSocket is inconvenient there). The HTTP Sensor API is unchanged. Nothing in the session depends on it: a collector with a session does not fall back to HTTP, is not told about sessions through HTTP answers, and sends nothing over HTTP on the side. A file value travels as an element of a `list` frame (#1660 step 2b; the server needed no change for it: the `list` op reads the polymorphic batch of `/list`, which takes a file value, and stores it as `/file` would). One thing a collector on a session cannot do: send an element larger than a frame (a file of more than about 1 MiB at the default `MaxFrameBytes`). Agent directives are pushed on the session (#1660 step 5, § Directive push below).
 
 Which transport a collector uses is a setting of the collector (`http` or `session`), not something the server negotiates.
 
@@ -41,6 +41,7 @@ Which transport a collector uses is a setting of the collector (`http` or `sessi
 | 3 | Heartbeat (`ping` / `pong`), silence detection | collector / server |
 | 4 | End a session: close from either side, violation, lost access, silence, shutdown | collector / server |
 | 5 | See how many sessions are open | operator |
+| 6 | Push the directives of an agent | server |
 
 ## API / Public Contracts
 
@@ -100,8 +101,19 @@ Startup validation names the key and the allowed range. The section is written i
 | `src/server/HSMServer/SensorApi/Sessions/CollectorSession.cs` | One WebSocket: bounded receive, serialized sends, the two ways to close |
 | `src/server/HSMServer/SensorApi/Sessions/CollectorSessionRegistry.cs` | Live sessions, the cap, the close-all at shutdown |
 | `src/server/HSMServer/SensorApi/Sessions/SessionProtocol.cs` | Names, close codes and frame writers of version 1 |
+| `src/server/HSMServer/SensorApi/Sessions/DirectivePush.cs` | The directive push of one session: whole set after the hello, changes every 15 s, whole set every 5 min |
+| `src/server/HSMServer/SensorApi/AgentDirectives.cs` | The directive set of an agent, shared with the `X-Hsm-Directive` headers of the HTTP routes; the 15 s cache of the staged agent version |
 | `src/server/HSMServer/Middleware/Telemetry/ISensorApiTelemetry.cs` | The `Clients/...` self-monitoring counters behind an interface |
 | `src/tests/HSMServer.Core.Tests/SensorApi/*` | The tests and their host |
+
+## Directive push (#1660 step 5)
+
+A session whose upgrade stated `X-Agent-Version` gets the agent directives (#1198) as pushes, `{"op":"directive","body":"<one X-Hsm-Directive line>"}`; any other session gets none, as an HTTP client without that header gets no header.
+
+- **The set** is `AgentDirectives.For(agentVersion, product)`, the same call the HTTP routes make for their headers (it was `SensorsController.EmitAgentDirectives`): `update-available:<staged>` when `Agent.AutoUpdateEnabled` is on and `wwwroot/agent/version.txt` names a newer agent than the stated one, then `sensor-enable:` or `sensor-disable:` for `computer`, `system`, `disk`, `network`, `module`, `process`, in that order. The staged version is read through a 15 s cache (one per server; it used to be a static of the controller). The key and its product are looked up afresh for every computation.
+- **When** (`DirectivePush`): the whole set right after the `hello`; then every 15 s (`CheckPeriod`, the age of the staged-version cache) the set is computed again and every directive that was not in the previous set is pushed, in order; every 5 minutes (`ReannouncePeriod`) the whole set again, which is what retries a failed agent update. Both periods are timers of the server's `TimeProvider`.
+- **How**: a push is a frame like an ack and goes through the session's serialized send. Nothing is pushed once the server is closing the session (`CollectorSession.IsClosing`, shutdown); a push that fails because the connection is gone ends the push loop quietly, and the handler loop reports the session's end as always. A failure to look the key up skips that round. A round that pushed something logs one `Debug` line.
+- **Cost**: two timers and one waiting task per directive-aware session; nothing for any other session.
 
 ## Data Flow
 
@@ -110,6 +122,7 @@ upgrade request --> TelemetryMiddleware (Key -> product, key, client)  --> Senso
                 --> CollectorSessionHandler: checks, slot, accept, hello
 frame           --> parse envelope --> re-check access --> SensorIngestionService --> ITreeValuesCache
                 <-- ack {ack, status, body | error}
+agent session   <-- {op: directive} pushes: after hello, on change (15 s check), whole set every 5 min (DirectivePush)
 ```
 
 The handler loop is the only reader of a session's socket. Sends are serialized per session, so an ack and the close at shutdown cannot interleave.
@@ -146,17 +159,17 @@ An idle session holds about **22 KiB of managed memory** on the server (measured
 ## Dependencies
 
 - Depends on: the Sensor API authentication (`TelemetryCollector`), `ITreeValuesCache`, the server's self-monitoring collector.
-- Used by: nothing yet. Planned: the managed and the native collector (epic #1660, steps 3 and 4), directive push (step 5).
+- Used by: the managed collector (`CollectorOptions.Transport = Session`, 3.9.0) and the native collector (`hsm_collector_use_session_transport`, 0.12.0; the agent's and the probe's `transport` setting). Directive push (step 5) reaches the agent through the native collector's directive callback.
 
 ## Tests
 
-`src/tests/HSMServer.Core.Tests/SensorApi/CollectorSessionTests.cs`: a real `ClientWebSocket` and `HttpClient` against the real Sensor API (middleware, controller, ingestion service, session handler) on a real Kestrel listener over the real cache. Covered: the handshake access matrix, the required subprotocol, sessions switched off, ack status and body equal to the HTTP route for the same body (`list` and `commands`, accepted and partly refused, a registration the server cannot convert, a `commands` body it cannot read, a `commands` list with a null element or a command without a path, a fault on one command of a `commands` batch with the commands around it applied and the resend after it, several faults in one frame logged once, the same fault on every resend logged once; the last three through `FaultingCache`, which makes the registration of the paths a test names throw), a file value in a `list` frame stored as the same value over `/file` and `/list`, a file the server refuses an entry of the ack as on `/list` (`FileValue_*`, #1660 step 2b), failure acks without echo, unknown op and unknown envelope fields, ping, the five violations with their close codes, the session cap and the limit per address with slot release, the silence limit (also with a frame arriving in pieces), lost access (on a data frame and on a ping), registry contents, shutdown (idle, and with a batch inside the store), a vanished collector, traffic counting, and the HTTP routes after the extraction of the ingestion service. The `Log_*` tests pin the log lines (opened and closed by the collector with its code and a printable reason, silence, an aborted connection, a refused upgrade throttled to one line, no key value) through `SensorApiTestHost.Log`: the host gives the handler a logger from its own `LogFactory` (`CollectorSessionHandler.UseLogger`), so the process-wide NLog configuration is untouched and the tests still run in parallel.
+`src/tests/HSMServer.Core.Tests/SensorApi/CollectorSessionTests.cs`: a real `ClientWebSocket` and `HttpClient` against the real Sensor API (middleware, controller, ingestion service, session handler) on a real Kestrel listener over the real cache. Covered: the handshake access matrix, the required subprotocol, sessions switched off, ack status and body equal to the HTTP route for the same body (`list` and `commands`, accepted and partly refused, a registration the server cannot convert, a `commands` body it cannot read, a `commands` list with a null element or a command without a path, a fault on one command of a `commands` batch with the commands around it applied and the resend after it, several faults in one frame logged once, the same fault on every resend logged once; the last three through `FaultingCache`, which makes the registration of the paths a test names throw), a file value in a `list` frame stored as the same value over `/file` and `/list`, a file the server refuses an entry of the ack as on `/list` (`FileValue_*`, #1660 step 2b), failure acks without echo, unknown op and unknown envelope fields, ping, the five violations with their close codes, the session cap and the limit per address with slot release, the silence limit (also with a frame arriving in pieces), lost access (on a data frame and on a ping), registry contents, shutdown (idle, and with a batch inside the store), a vanished collector, traffic counting, the HTTP routes after the extraction of the ingestion service, and directive push (`Directives_*`: the set after the hello equals the headers of an HTTP answer in text and order; none, and no push timer, for a session without `X-Agent-Version`; a switched group pushed alone at the next check, and nothing at a check without a change; the whole set at the re-announcement; a newly staged agent once the staged-version cache is 15 s old). The `Log_*` tests pin the log lines (opened and closed by the collector with its code and a printable reason, silence, an aborted connection, a refused upgrade throttled to one line, no key value) through `SensorApiTestHost.Log`: the host gives the handler a logger from its own `LogFactory` (`CollectorSessionHandler.UseLogger`), so the process-wide NLog configuration is untouched and the tests still run in parallel.
 
-The silence limit runs on a `TimeProvider`. The tests replace it with a manual clock, so none of them waits for real seconds: they assert that the watch is running, that a frame starts it again, and what happens when it fires.
+The silence limit and the two directive timers run on a `TimeProvider`. The tests replace it with a manual clock, so none of them waits for real seconds: they assert that the watch is running, that a frame starts it again, and what happens when it fires; they fire the directive timers by hand, and move the clock's readings forward (`ManualTimeProvider.Advance`) to age the staged-version cache.
 
 The test host runs only the part of the pipeline the Sensor API passes through. The full pipeline (HTTPS, the guards, cookie and token authentication in front of the endpoint) was checked by hand against a locally started server when the feature was written: upgrade, `hello`, a `list` and a `commands` frame with their acks, ping, the two refusals, and an empty error log.
 
-Not covered at all: the bundled reverse proxy in front of the endpoint, a WebSocket over HTTP/2, a collector that stops reading (the send is bounded by the silence limit, untested), the ten-limit budget of a frame that never ends, and behaviour at thousands of sessions.
+Not covered at all: that nothing is pushed once a session is being closed at shutdown, the bundled reverse proxy in front of the endpoint, a WebSocket over HTTP/2, a collector that stops reading (the send is bounded by the silence limit, untested), the ten-limit budget of a frame that never ends, and behaviour at thousands of sessions.
 
 ## Known Issues / Limitations
 

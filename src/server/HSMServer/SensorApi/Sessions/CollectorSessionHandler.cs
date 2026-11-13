@@ -69,6 +69,7 @@ namespace HSMServer.SensorApi.Sessions
         private readonly SensorIngestionService _ingestion;
         private readonly ISensorApiTelemetry _telemetry;
         private readonly ITreeValuesCache _cache;
+        private readonly AgentDirectives _directives;
         private readonly TimeProvider _time;
 
         private volatile bool _stopping;
@@ -82,13 +83,14 @@ namespace HSMServer.SensorApi.Sessions
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
-            ISensorApiTelemetry telemetry, ITreeValuesCache cache, IHostApplicationLifetime lifetime, TimeProvider time)
+            ISensorApiTelemetry telemetry, ITreeValuesCache cache, AgentDirectives directives, IHostApplicationLifetime lifetime, TimeProvider time)
         {
             _config = config.CollectorSessions ?? new CollectorSessionsConfig();
             _registry = registry;
             _ingestion = ingestion;
             _telemetry = telemetry;
             _cache = cache;
+            _directives = directives;
             _time = time;
 
             // ApplicationStopping fires before the web server starts waiting for its
@@ -266,6 +268,12 @@ namespace HSMServer.SensorApi.Sessions
 
             silence.Arm();
             await session.SendAsync(output.WrittenMemory, aborted);
+
+            // Directives for a directive-aware agent (#1660 step 5): the rule of the header path,
+            // a client that stated X-Agent-Version. After the hello, which must be the first frame.
+            await using var push = session.AgentVersion is null
+                ? null
+                : new DirectivePush(session, _directives, _cache, _telemetry, _logger, _time);
 
             while (true)
             {

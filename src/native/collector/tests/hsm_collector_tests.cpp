@@ -711,6 +711,16 @@ namespace
         // collector of such a case sends over the HTTP transport, and this server is its sender.
         // Declared before the collector for the same reason as the session server.
         std::unique_ptr<hsm::test::HttpRecordingServer> send_record_server;
+
+        // The server directives the collector of a session case handed to its host callback
+        // (#1660 step 5), in order, written "verb:payload" ("verb" when the payload is empty).
+        // Declared before the collector, which may call the callback until it is destroyed.
+        struct DirectiveLog
+        {
+            std::mutex mutex;
+            std::vector<std::string> received;
+        };
+        std::unique_ptr<DirectiveLog> directives;
 #endif
 
         CollectorHandle collector;
@@ -3365,7 +3375,8 @@ namespace
         // mode of tests/ws_test_server.hpp; these verbs exist in the HTTP build only, which is
         // the build that has a session transport.
         if (action.rfind("session_server_", 0) == 0 || action.rfind("expect_session_", 0) == 0 || action == "create_collector_on_session" ||
-            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests" || action == "session_http_request")
+            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests" || action == "session_http_request" ||
+            action == "expect_directives_received" || action == "expect_directive_received")
         {
 #if defined(HSM_COLLECTOR_HTTP)
             auto& server = SessionServer(state);
@@ -3386,6 +3397,61 @@ namespace
                 options.request_timeout_ms = ToInt(step[3]);
                 state.collector = CreateCollector(options);
                 Require(hsm_collector_use_session_transport(state.collector.value) == HSM_RESULT_OK, "the session transport must install");
+                state.directives = std::make_unique<ConformanceState::DirectiveLog>();
+                Require(hsm_collector_set_server_directive_handler(
+                            state.collector.value,
+                            [](const char* verb, const char* payload, void* user_data) {
+                                auto* log = static_cast<ConformanceState::DirectiveLog*>(user_data);
+                                std::string directive = verb != nullptr ? verb : "";
+                                if (payload != nullptr && *payload != '\0')
+                                    directive += std::string(":") + payload;
+                                std::lock_guard<std::mutex> guard(log->mutex);
+                                log->received.push_back(std::move(directive));
+                            },
+                            state.directives.get()) == HSM_RESULT_OK,
+                        "the directive handler of a session case must install");
+                return;
+            }
+
+            if (action == "session_server_push_directive" || action == "session_server_push_frame")
+            {
+                Require(step.size() >= 2, (action + " requires a text").c_str());
+                const std::string frame =
+                    action == "session_server_push_frame" ? step[1] : nlohmann::json{ { "op", "directive" }, { "body", step[1] } }.dump();
+                Require(server.SendText(frame), (action + ": no session is open").c_str());
+                return;
+            }
+
+            if (action == "expect_directives_received")
+            {
+                Require(step.size() >= 3, "expect_directives_received requires a count and a timeout");
+                Require(state.directives != nullptr, "expect_directives_received: no collector on a session");
+                const size_t expected = static_cast<size_t>(ToInt(step[1]));
+                const auto received = [&] {
+                    std::lock_guard<std::mutex> guard(state.directives->mutex);
+                    return state.directives->received;
+                };
+                PollSession([&] { return received().size() >= expected; }, step[2]);
+                const auto got = received();
+                std::string joined;
+                for (const auto& directive : got)
+                    joined += (joined.empty() ? "" : " | ") + directive;
+                Require(got.size() == expected, ("expected " + step[1] + " directive(s) at the host, got " + std::to_string(got.size()) + ": " + joined).c_str());
+                return;
+            }
+
+            if (action == "expect_directive_received")
+            {
+                Require(step.size() >= 3, "expect_directive_received requires an index and a directive");
+                Require(state.directives != nullptr, "expect_directive_received: no collector on a session");
+                const size_t index = static_cast<size_t>(ToInt(step[1]));
+                std::vector<std::string> got;
+                {
+                    std::lock_guard<std::mutex> guard(state.directives->mutex);
+                    got = state.directives->received;
+                }
+                Require(index < got.size(), ("expect_directive_received: only " + std::to_string(got.size()) + " directive(s) arrived").c_str());
+                Require(got[index] == step[2], ("directive #" + step[1] + " is '" + got[index] + "', expected '" + step[2] + "'").c_str());
                 return;
             }
 
@@ -8126,6 +8192,69 @@ namespace
         Require(SessionFrames(server, { "UnixTimeMs" }) == 0, "a session frame must carry the wire format, not the canonical one");
     }
 
+    // #1660 step 5: a directive the server pushes reaches the host callback as a header line does,
+    // split at the first colon into verb and payload, in the order of the pushes; a push with a
+    // body that is not a string and an unknown push op are ignored; the session carries on.
+    void NativeSessionHandsPushedDirectivesToTheHost()
+    {
+        if (!WsAvailable("native_session_hands_pushed_directives_to_the_host"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        struct Calls
+        {
+            std::mutex mutex;
+            std::vector<std::pair<std::string, std::string>> received;
+        } calls;
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_set_extra_request_header(collector.value, "X-Agent-Version", "0.5.1") == HSM_RESULT_OK, "extra header failed");
+        Require(hsm_collector_set_server_directive_handler(
+                    collector.value,
+                    [](const char* verb, const char* payload, void* user_data) {
+                        auto* log = static_cast<Calls*>(user_data);
+                        std::lock_guard<std::mutex> guard(log->mutex);
+                        log->received.emplace_back(verb, payload);
+                    },
+                    &calls) == HSM_RESULT_OK,
+                "directive handler failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle number = CreateIntSensor(collector.value, "session/directives/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/directives/number" }) >= 1; }, 15000),
+                "the session must be up before the server pushes");
+        Contains(server.AcceptedHandshakeHead(), "X-Agent-Version: 0.5.1");
+
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"update-available:0.6.0\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":{\"not\":\"a string\"}}"), "push failed");
+        Require(server.SendText("{\"op\":\"news\",\"body\":\"sensor-disable:disk\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"sensor-disable:network\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"bare-name\"}"), "push failed");
+
+        const auto received = [&] {
+            std::lock_guard<std::mutex> guard(calls.mutex);
+            return calls.received;
+        };
+        Require(WaitUntilFor([&] { return received().size() >= 3; }, 10000), "the pushed directives must reach the host");
+
+        // The session goes on: a value is still delivered and acknowledged.
+        Require(hsm_sensor_add_int(number.value, 5151, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":5151" }) >= 1; }, 20000),
+                "a value after the pushes must be delivered");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            { "update-available", "0.6.0" },
+            { "sensor-disable", "network" },
+            { "bare-name", "" },
+        };
+        Require(received() == expected, "the host must get exactly the three directives, split and in order");
+        Require(server.Upgrades() == 1, "the pushes must not end the session");
+    }
+
     // A value that cannot fit a frame is dropped and reported once, even when the frame built
     // around it fails and the rest of the batch goes back to the queue.
     void NativeSessionOversizedValueIsDroppedOnce()
@@ -10704,6 +10833,7 @@ namespace
             { "native_session_split_registration_retries_only_the_failed_part",
               [](const std::string&) { NativeSessionSplitRegistrationRetriesOnlyTheFailedPart(); } },
             { "native_session_delivers_file_values", [](const std::string&) { NativeSessionDeliversFileValues(); } },
+            { "native_session_hands_pushed_directives_to_the_host", [](const std::string&) { NativeSessionHandsPushedDirectivesToTheHost(); } },
             { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
             { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
               [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },
