@@ -33,6 +33,9 @@ namespace HSMDataCollector.SyncQueue.Data
 
             IsSuccess = response?.IsSuccessStatusCode ?? false;
             StatusCode = response != null ? (int?)response.StatusCode : null;
+            Settled = null;
+            DroppedCount = 0;
+            IsTransportDown = false;
             Error = !IsSuccess ? response == null ? exception : DescribeFailure(response, serverMessage: null) : null;
         }
 
@@ -48,7 +51,53 @@ namespace HSMDataCollector.SyncQueue.Data
             IsSuccess = statusCode >= 200 && statusCode < 300;
             StatusCode = statusCode;
             Error = IsSuccess ? null : error ?? $"Code: {statusCode}.";
+            Settled = null;
+            DroppedCount = 0;
+            IsTransportDown = false;
         }
+
+        /// <summary>
+        /// For a failed send: which items of the package, by position, are settled all the same
+        /// (delivered, refused for good, or dropped and counted). The queue takes back only the
+        /// others. Null when none is. Set by a sender that delivers a package in parts.
+        /// </summary>
+        internal bool[] Settled { get; }
+
+        /// <summary>Items the sender dropped because they can never be sent; counted as overflow.</summary>
+        internal int DroppedCount { get; }
+
+        /// <summary>
+        /// The failure is a state of the transport that the transport reports itself (no
+        /// session). The queue keeps the package and does not write an error per cycle about it.
+        /// </summary>
+        internal bool IsTransportDown { get; }
+
+        private PackageSendingInfo(double contentSize, bool isSuccess, int? statusCode, string error, bool[] settled, int droppedCount, bool isTransportDown)
+        {
+            ContentSize = contentSize;
+            IsSuccess = isSuccess;
+            StatusCode = statusCode;
+            Error = error;
+            Settled = settled;
+            DroppedCount = droppedCount;
+            IsTransportDown = isTransportDown;
+        }
+
+        /// <summary>Nothing reached the server, or no answer came back: there is no status.</summary>
+        internal static PackageSendingInfo NotSent(string reason, bool[] settled = null, int droppedCount = 0) =>
+            new PackageSendingInfo(0, false, null, reason ?? "not sent", settled, droppedCount, isTransportDown: true);
+
+        /// <summary>The server answered the whole package with one status.</summary>
+        internal static PackageSendingInfo Answered(double contentSize, int statusCode, string error, int droppedCount)
+        {
+            var isSuccess = statusCode >= 200 && statusCode < 300;
+
+            return new PackageSendingInfo(contentSize, isSuccess, statusCode, isSuccess ? null : error ?? $"Code: {statusCode}.", null, droppedCount, false);
+        }
+
+        /// <summary>The server refused a part of the package; <paramref name="settled"/> marks what is done with all the same.</summary>
+        internal static PackageSendingInfo Failed(double contentSize, int statusCode, string error, bool[] settled, int droppedCount) =>
+            new PackageSendingInfo(contentSize, false, statusCode, error ?? $"Code: {statusCode}.", settled, droppedCount, false);
 
         /// <summary>
         /// The text of a refused request: the status, its reason phrase and, when the caller

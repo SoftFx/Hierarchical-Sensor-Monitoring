@@ -327,10 +327,14 @@ namespace HSMDataCollector.DefaultSensors
                 // was stopping) is not there, so the next call tries again.
                 //
                 // The period of the first request stays: the rate sensor was created with it.
-                // The native enable call differs here (the last period given before Start is
-                // the one used), so a second request with another period is reported, not
-                // swallowed: the host gets a rate it did not ask for last.
+                // A second request with another period is reported, not swallowed: the host
+                // gets a rate it did not ask for last. The native enable call follows the same
+                // rule since native 0.13.1 (#1752).
                 var asked = period ?? TimeSpan.FromMinutes(1);
+
+                // Before the look at what is already there: whether a period that cannot be
+                // used throws must not depend on which call it comes in.
+                WindowsTcpFailureRateMonitor.EnsurePeriod(asked);
 
                 if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var existing))
                 {

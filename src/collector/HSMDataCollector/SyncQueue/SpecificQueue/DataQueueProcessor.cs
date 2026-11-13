@@ -33,8 +33,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (package.Count == 0)
                 return false;
 
+            var sender = Sender;
+
             await DispatchPackageAsync(package,
-                                       (items, t) => _sender.SendDataAsync(items, t),
+                                       (items, t) => sender.SendDataAsync(items, t),
                                        token).ConfigureAwait(false);
             return true;
         }

@@ -1,0 +1,256 @@
+# HSM collector conformance v1 — the collector session as the transport (epic #1660 step 3, ADR-0017).
+# Format: case|action|arg1|arg2|...
+#
+# The driver owns a SCRIPTED SESSION SERVER: the server side of GET /api/sensors/session, over a
+# real WebSocket. It accepts or refuses the upgrade, says hello, acknowledges request frames with
+# a chosen status or not at all, and records every frame and every plain HTTP request. The
+# collector under test is created with its transport set to the session and pointed at it.
+#
+# New verbs — the collector:
+#   create_collector_on_session|max_values_in_package|collect_period_ms|request_timeout_ms
+#     a collector whose transport is the collector session to the scripted server (computer
+#     conformance-host, module conformance-module, access key conformance-key).
+#     request_timeout_ms is also how long a request waits for its ack.
+#     A driver may shorten the pause between attempts to open a session; nothing here depends on it.
+# New verbs — the script (they apply from the moment they run):
+#   session_server_hello|max_frame_bytes|heartbeat_seconds   what the hello of later sessions states
+#                                                            (default 4194304 and 30)
+#   session_server_refuse_upgrades|status                    every upgrade is refused with this HTTP status
+#   session_server_accept_upgrades                           upgrades are accepted again (the default)
+#   session_server_ack|op|status                             requests of op (list, commands) are acknowledged
+#                                                            with this status (default 200; 0 is no status)
+#   session_server_stay_silent|count                         the next count requests are recorded and get no ack
+#   session_server_stop_answering_pings                      heartbeats are recorded and not answered
+#   session_server_drop_sessions                             every open session is cut without a close handshake
+#   session_server_close_sessions|code                       every open session is closed by the server with this
+#                                                            close code; the answer is left to the collector
+#   session_http_request                                     the DRIVER makes one plain HTTP request to the
+#                                                            scripted server (for the must-fail fixture of
+#                                                            expect_no_http_requests)
+# New verbs — assertions (timeout_s: polled until it holds; 0 checks once):
+#   expect_session_count|count|timeout_s                     upgrades accepted so far equal count
+#   expect_session_count_at_least|count|timeout_s
+#   expect_refused_upgrades_at_least|count|timeout_s
+#   expect_session_pings_at_least|count|timeout_s            heartbeats (op ping) received from the collector so far
+#   expect_session_ints_once|start|count|timeout_s           every int value in [start, start+count) is in an
+#                                                            accepted (2xx) list frame exactly once
+#   expect_session_accepted_contains|op|substring|timeout_s  some accepted request of op contains the text
+#   expect_session_requests_containing|op|substring|count|timeout_s
+#                                                            the requests of op (acknowledged or not) whose
+#                                                            frame contains the text number exactly count
+#   expect_session_requests_containing_at_least|op|substring|count|timeout_s
+#   expect_session_no_request_contains|substring             no request frame of any op contains the text
+#   expect_session_frames_fit|max_bytes                      every request frame is at most max_bytes (UTF-8)
+#   expect_no_http_requests                                  the server received nothing but upgrades
+#   expect_session_upgrade_header|name|value                 a request header of the last accepted upgrade
+#   expect_session_close_code|code|timeout_s                 the last close frame the collector sent carries
+#                                                            this code
+#   expect_session_closed_normally                           expect_session_close_code|1000|5: how a collector
+#                                                            ends a session at stop
+#
+# Contract notes:
+# - Frames carry the WIRE format (aicontext/features/api/wire-contract/feature.md), the same bytes
+#   in both collectors, so text assertions are on the wire: "Value":42, "Type":6, a path's tail.
+# - "Delivered" means: in a request the scripted server acknowledged with a 2xx status.
+# - A collector on a session never makes an HTTP request: every case below ends with
+#   expect_no_http_requests after its stop.
+# - Start does not wait for the session. A case that needs it up first waits for an accepted
+#   registration, never for a time.
+# - One kind of sensor per case: the drivers do not agree on what a sensor index counts across
+#   kinds (per kind in the managed driver, creation order in the native one).
+
+# Values and registrations travel as frames; nothing goes over HTTP; a stop closes the session.
+session_carries_values_and_registrations|create_collector_on_session|50|20|5000
+session_carries_values_and_registrations|create_int_sensor|contract/session/int
+session_carries_values_and_registrations|start
+session_carries_values_and_registrations|add_int|0|42|Ok|first
+session_carries_values_and_registrations|expect_session_ints_once|42|1|15
+session_carries_values_and_registrations|expect_session_accepted_contains|commands|contract/session/int"|15
+session_carries_values_and_registrations|expect_session_accepted_contains|list|"Value":42|15
+session_carries_values_and_registrations|stop
+session_carries_values_and_registrations|expect_session_count|1|5
+session_carries_values_and_registrations|expect_session_upgrade_header|Key|conformance-key
+session_carries_values_and_registrations|expect_session_closed_normally
+session_carries_values_and_registrations|expect_no_http_requests
+
+# No session, no delivery, and no other way in: values wait in the queue while the upgrade is
+# refused and arrive when it is accepted.
+values_wait_while_the_upgrade_is_refused|session_server_refuse_upgrades|503
+values_wait_while_the_upgrade_is_refused|create_collector_on_session|50|20|5000
+values_wait_while_the_upgrade_is_refused|create_int_sensor|contract/session/queued
+values_wait_while_the_upgrade_is_refused|start
+values_wait_while_the_upgrade_is_refused|add_int_sequence|1|5|100|Ok|queued
+values_wait_while_the_upgrade_is_refused|expect_refused_upgrades_at_least|2|20
+values_wait_while_the_upgrade_is_refused|expect_session_requests_containing|list|"Value"|0|0
+values_wait_while_the_upgrade_is_refused|expect_no_http_requests
+values_wait_while_the_upgrade_is_refused|session_server_accept_upgrades
+values_wait_while_the_upgrade_is_refused|expect_session_ints_once|100|5|20
+values_wait_while_the_upgrade_is_refused|stop
+values_wait_while_the_upgrade_is_refused|expect_no_http_requests
+
+# A batch that does not fit one frame is split; every frame fits the limit the hello stated.
+# The 40 values queue up while the upgrade is refused, so they leave as one batch.
+batch_is_split_to_the_frame_limit|session_server_hello|2048|30
+batch_is_split_to_the_frame_limit|session_server_refuse_upgrades|503
+batch_is_split_to_the_frame_limit|create_collector_on_session|50|20|5000
+batch_is_split_to_the_frame_limit|create_int_sensor|contract/session/split
+batch_is_split_to_the_frame_limit|start
+batch_is_split_to_the_frame_limit|add_int_sequence|1|40|0|Ok|split
+batch_is_split_to_the_frame_limit|expect_refused_upgrades_at_least|1|20
+batch_is_split_to_the_frame_limit|session_server_accept_upgrades
+batch_is_split_to_the_frame_limit|expect_session_ints_once|0|40|20
+batch_is_split_to_the_frame_limit|expect_session_requests_containing_at_least|list|"Value"|2|0
+batch_is_split_to_the_frame_limit|expect_session_frames_fit|2048
+batch_is_split_to_the_frame_limit|stop
+batch_is_split_to_the_frame_limit|expect_no_http_requests
+
+# A value that cannot fit a frame on its own is not sent (it would close the session and come
+# back for ever); the values around it are delivered.
+value_larger_than_a_frame_is_dropped|session_server_hello|2048|30
+value_larger_than_a_frame_is_dropped|create_collector_on_session|50|20|5000
+value_larger_than_a_frame_is_dropped|create_string_sensor|contract/session/huge
+value_larger_than_a_frame_is_dropped|start
+value_larger_than_a_frame_is_dropped|add_string|0|before|Ok|small
+value_larger_than_a_frame_is_dropped|add_string|0|repeat:x:5000|Ok|huge
+value_larger_than_a_frame_is_dropped|add_string|0|after|Ok|small
+value_larger_than_a_frame_is_dropped|expect_session_accepted_contains|list|"Value":"before"|20
+value_larger_than_a_frame_is_dropped|expect_session_accepted_contains|list|"Value":"after"|20
+value_larger_than_a_frame_is_dropped|expect_session_no_request_contains|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+value_larger_than_a_frame_is_dropped|expect_session_frames_fit|2048
+value_larger_than_a_frame_is_dropped|stop
+value_larger_than_a_frame_is_dropped|expect_no_http_requests
+
+# A request without an ack is a failed send: the session is closed (a late ack is then impossible)
+# and the batch is delivered on the next session.
+request_without_an_ack_is_resent_on_a_new_session|create_collector_on_session|50|20|1000
+request_without_an_ack_is_resent_on_a_new_session|create_int_sensor|contract/session/no-ack
+request_without_an_ack_is_resent_on_a_new_session|start
+request_without_an_ack_is_resent_on_a_new_session|expect_session_accepted_contains|commands|contract/session/no-ack"|15
+request_without_an_ack_is_resent_on_a_new_session|session_server_stay_silent|1
+request_without_an_ack_is_resent_on_a_new_session|add_int|0|7|Ok|no-ack
+request_without_an_ack_is_resent_on_a_new_session|expect_session_ints_once|7|1|25
+request_without_an_ack_is_resent_on_a_new_session|expect_session_count_at_least|2|5
+request_without_an_ack_is_resent_on_a_new_session|expect_session_requests_containing_at_least|list|"Value":7|2|0
+request_without_an_ack_is_resent_on_a_new_session|stop
+request_without_an_ack_is_resent_on_a_new_session|expect_no_http_requests
+
+# A session that drops is opened again, and what queued up meanwhile is delivered. Exactly-once is
+# asserted for the values of the outage only: the first value was acknowledged just before the
+# session was cut, and whether that ack reached the collector is the network's to decide
+# (delivery is at-least-once).
+dropped_session_is_reopened|create_collector_on_session|50|20|5000
+dropped_session_is_reopened|create_int_sensor|contract/session/dropped
+dropped_session_is_reopened|start
+dropped_session_is_reopened|add_int|0|1|Ok|first
+dropped_session_is_reopened|expect_session_ints_once|1|1|15
+dropped_session_is_reopened|session_server_refuse_upgrades|503
+dropped_session_is_reopened|session_server_drop_sessions
+dropped_session_is_reopened|add_int|0|2|Ok|outage
+dropped_session_is_reopened|add_int|0|3|Ok|outage
+dropped_session_is_reopened|expect_refused_upgrades_at_least|1|20
+dropped_session_is_reopened|session_server_accept_upgrades
+dropped_session_is_reopened|expect_session_ints_once|2|2|25
+dropped_session_is_reopened|expect_session_count_at_least|2|5
+dropped_session_is_reopened|stop
+dropped_session_is_reopened|expect_no_http_requests
+
+# Heartbeat: a server that sends nothing for two and a half heartbeats is given up, and the
+# session is opened again. heartbeat_seconds is 1, so the silence is 2.5 s of wall clock.
+silent_server_is_given_up_and_the_session_reopened|session_server_hello|4194304|1
+silent_server_is_given_up_and_the_session_reopened|session_server_stop_answering_pings
+silent_server_is_given_up_and_the_session_reopened|create_collector_on_session|50|20|5000
+silent_server_is_given_up_and_the_session_reopened|start
+silent_server_is_given_up_and_the_session_reopened|expect_session_count_at_least|2|25
+silent_server_is_given_up_and_the_session_reopened|stop
+silent_server_is_given_up_and_the_session_reopened|expect_no_http_requests
+
+# The status of an ack is the HTTP status the request would have got, and means the same.
+# A registration answered 4xx is final: it is not sent again (#1659 A2). The later registration
+# is the clock: a registration that went back to the queue would have been sent again by then.
+registration_refused_with_4xx_is_final|create_collector_on_session|50|20|5000
+registration_refused_with_4xx_is_final|create_int_sensor|contract/session/first
+registration_refused_with_4xx_is_final|start
+registration_refused_with_4xx_is_final|expect_session_accepted_contains|commands|contract/session/first"|15
+registration_refused_with_4xx_is_final|session_server_ack|commands|400
+registration_refused_with_4xx_is_final|create_int_sensor|contract/session/rejected
+registration_refused_with_4xx_is_final|expect_session_requests_containing|commands|contract/session/rejected"|1|15
+registration_refused_with_4xx_is_final|session_server_ack|commands|200
+registration_refused_with_4xx_is_final|create_int_sensor|contract/session/later
+registration_refused_with_4xx_is_final|expect_session_accepted_contains|commands|contract/session/later"|15
+registration_refused_with_4xx_is_final|expect_session_requests_containing|commands|contract/session/rejected"|1|0
+registration_refused_with_4xx_is_final|stop
+registration_refused_with_4xx_is_final|expect_no_http_requests
+
+# A value batch answered 4xx goes back to the queue and is sent again, as over HTTP.
+value_batch_refused_with_4xx_is_sent_again|create_collector_on_session|50|20|5000
+value_batch_refused_with_4xx_is_sent_again|create_int_sensor|contract/session/again
+value_batch_refused_with_4xx_is_sent_again|start
+value_batch_refused_with_4xx_is_sent_again|expect_session_accepted_contains|commands|contract/session/again"|15
+value_batch_refused_with_4xx_is_sent_again|session_server_ack|list|400
+value_batch_refused_with_4xx_is_sent_again|add_int|0|9|Ok|refused
+value_batch_refused_with_4xx_is_sent_again|expect_session_requests_containing_at_least|list|"Value":9|2|20
+value_batch_refused_with_4xx_is_sent_again|session_server_ack|list|200
+value_batch_refused_with_4xx_is_sent_again|expect_session_ints_once|9|1|20
+value_batch_refused_with_4xx_is_sent_again|stop
+value_batch_refused_with_4xx_is_sent_again|expect_no_http_requests
+
+# The session has no op for a file value yet. It is refused where it is sent: it never becomes a
+# frame and it is not sent over HTTP either. Checked after the stop, whose drain would have sent
+# anything that was queued (the session is up: the registration was acknowledged on it).
+file_value_is_not_sent_on_a_session|create_collector_on_session|50|20|5000
+file_value_is_not_sent_on_a_session|create_file_sensor|contract/session/file|report|txt
+file_value_is_not_sent_on_a_session|start
+file_value_is_not_sent_on_a_session|expect_session_accepted_contains|commands|contract/session/file"|15
+file_value_is_not_sent_on_a_session|add_file_value|0|content|Ok|file
+file_value_is_not_sent_on_a_session|stop
+file_value_is_not_sent_on_a_session|expect_session_requests_containing|list|"body"|0|0
+file_value_is_not_sent_on_a_session|expect_session_no_request_contains|"Type":6
+file_value_is_not_sent_on_a_session|expect_no_http_requests
+
+# The hello states the limits of a session, and a collector does not work on a session whose
+# limits it cannot respect: a frame limit below 1024 bytes (or a heartbeat outside 1..3600 s) ends
+# the session before any request is sent on it, and the collector tries again. With a usable
+# hello the value that waited is delivered.
+hello_the_collector_cannot_work_with_is_refused|session_server_hello|512|30
+hello_the_collector_cannot_work_with_is_refused|create_collector_on_session|50|20|5000
+hello_the_collector_cannot_work_with_is_refused|create_int_sensor|contract/session/hello
+hello_the_collector_cannot_work_with_is_refused|start
+hello_the_collector_cannot_work_with_is_refused|add_int|0|4|Ok|waits
+hello_the_collector_cannot_work_with_is_refused|expect_session_count_at_least|2|20
+hello_the_collector_cannot_work_with_is_refused|expect_session_requests_containing|commands|"body"|0|0
+hello_the_collector_cannot_work_with_is_refused|expect_session_requests_containing|list|"body"|0|0
+hello_the_collector_cannot_work_with_is_refused|session_server_hello|4194304|30
+hello_the_collector_cannot_work_with_is_refused|expect_session_ints_once|4|1|25
+hello_the_collector_cannot_work_with_is_refused|stop
+hello_the_collector_cannot_work_with_is_refused|expect_no_http_requests
+
+# Heartbeat, the collector's half: an idle session is kept alive by the collector's own pings
+# (the server gives a session up after three silent heartbeats), and a session whose pings are
+# answered stays the one session. heartbeat_seconds is 2: three pings are about 6 s of wall clock,
+# and a pong that is a second late is still far from the 5 s of silence that ends a session.
+idle_session_is_kept_alive_by_heartbeats|session_server_hello|4194304|2
+idle_session_is_kept_alive_by_heartbeats|create_collector_on_session|50|20|5000
+idle_session_is_kept_alive_by_heartbeats|create_int_sensor|contract/session/idle
+idle_session_is_kept_alive_by_heartbeats|start
+idle_session_is_kept_alive_by_heartbeats|expect_session_accepted_contains|commands|contract/session/idle"|15
+idle_session_is_kept_alive_by_heartbeats|expect_session_pings_at_least|3|30
+idle_session_is_kept_alive_by_heartbeats|add_int|0|5|Ok|after-idle
+idle_session_is_kept_alive_by_heartbeats|expect_session_ints_once|5|1|15
+idle_session_is_kept_alive_by_heartbeats|expect_session_count|1|0
+idle_session_is_kept_alive_by_heartbeats|stop
+idle_session_is_kept_alive_by_heartbeats|expect_no_http_requests
+
+# A close from the server (a server that shuts down says 1001) is answered with a close frame
+# that echoes its code (RFC 6455 5.5.1), not with a dropped connection, and the session is opened
+# again.
+close_from_the_server_is_answered_and_the_session_reopened|create_collector_on_session|50|20|5000
+close_from_the_server_is_answered_and_the_session_reopened|create_int_sensor|contract/session/closed
+close_from_the_server_is_answered_and_the_session_reopened|start
+close_from_the_server_is_answered_and_the_session_reopened|expect_session_accepted_contains|commands|contract/session/closed"|15
+close_from_the_server_is_answered_and_the_session_reopened|session_server_close_sessions|1001
+close_from_the_server_is_answered_and_the_session_reopened|expect_session_close_code|1001|5
+close_from_the_server_is_answered_and_the_session_reopened|add_int|0|6|Ok|after-close
+close_from_the_server_is_answered_and_the_session_reopened|expect_session_ints_once|6|1|25
+close_from_the_server_is_answered_and_the_session_reopened|expect_session_count_at_least|2|5
+close_from_the_server_is_answered_and_the_session_reopened|stop
+close_from_the_server_is_answered_and_the_session_reopened|expect_no_http_requests

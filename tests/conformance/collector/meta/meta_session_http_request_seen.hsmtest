@@ -1,0 +1,11 @@
+# MUST-FAIL: after the collector has stopped, the DRIVER makes one plain HTTP request to the
+# scripted session server, and the fixture then demands that none was received.
+# Proves expect_no_http_requests sees a request that is not an upgrade: the assertion every
+# session scenario ends with, and the one that pins "a collector on a session never uses HTTP".
+meta_session_http_request_seen|create_collector_on_session|50|20|5000
+meta_session_http_request_seen|create_int_sensor|meta/session/http
+meta_session_http_request_seen|start
+meta_session_http_request_seen|expect_session_accepted_contains|commands|meta/session/http"|15
+meta_session_http_request_seen|stop
+meta_session_http_request_seen|session_http_request
+meta_session_http_request_seen|expect_no_http_requests

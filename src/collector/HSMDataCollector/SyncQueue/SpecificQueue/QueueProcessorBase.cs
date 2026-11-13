@@ -36,6 +36,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
         protected ChannelWriter<QueueItem<T>> Writer => _channel.Writer;
         protected readonly IDataSender _sender;
+
+        // What the stop drain sends through (#1747): a built-in sender that repeats a failed
+        // request inside a send gives a view of itself that does not; any other sender, a
+        // host's own included, is used as it is.
+        private readonly IDataSender _drainSender;
+
         protected readonly CollectorOptions _options;
         protected CancellationTokenSource _cancellationTokenSource;
         protected readonly ICollectorLogger _logger;
@@ -58,12 +64,30 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // the misleading "preserved" wording used in the normal retry loop (#1087 A).
         private int _inFlushFlag;
 
+        // The items of a package that was not delivered, on a queue that keeps the order of
+        // issue (KeepsOrderOfIssue, #1750). They are ahead of everything in the channel: the
+        // next package starts with them. Kept in the order of issue.
+        //
+        // They are part of the queue in every respect: counted by QueueCount (so by the
+        // capacity checks, the drain loop and the wait for work), taken by GetPackage, removed
+        // and counted by ClearQueue. Nothing reads or writes the list outside _heldLock: the
+        // dispatcher (the run loop or the stop drain, never both at once) fills and empties
+        // it, and a clear can come from a stop on another thread.
+        private readonly List<QueueItem<T>> _held = new List<QueueItem<T>>();
+        private readonly object _heldLock = new object();
+
+        // _held.Count, written under _heldLock, for the readers that take no lock.
+        private int _heldCount;
+
+        private static readonly Comparison<QueueItem<T>> ByIssue = (left, right) => left.Sequence.CompareTo(right.Sequence);
+
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _drainSender = (_sender as IStopDrainSender)?.StopDrain ?? _sender;
             _queueManager = queueManager;
             _logger = logger;
 
@@ -246,13 +270,34 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
             {
-                if (!TryDequeue(out _))
+                if (!TryEvictOldest())
                     break;
 
                 dropped++;
             }
 
             return EnqueueResult.Accept(dropped);
+        }
+
+        // Overflow drops the oldest item. Held items are older than anything in the channel,
+        // so they go first: a package the server never takes cannot sit ahead of the queue for
+        // ever while newer items are evicted behind it.
+        private bool TryEvictOldest()
+        {
+            if (Volatile.Read(ref _heldCount) > 0)
+            {
+                lock (_heldLock)
+                {
+                    if (_held.Count > 0)
+                    {
+                        _held.RemoveAt(0);
+                        Volatile.Write(ref _heldCount, _held.Count);
+                        return true;
+                    }
+                }
+            }
+
+            return TryDequeue(out _);
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
@@ -286,6 +331,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             var estimatedCount = Math.Min(QueueCount + 16, _options.MaxValuesInPackage);
             var package = new DataPackage<T>(estimatedCount);
 
+            // What an earlier package could not deliver goes first (#1750); the channel fills
+            // the room that is left.
+            TakeHeld(package);
+
             while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
                 if (Validate(item.Value))
@@ -294,6 +343,76 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             return package;
         }
+
+        private void TakeHeld(DataPackage<T> package)
+        {
+            if (Volatile.Read(ref _heldCount) == 0)
+                return;
+
+            lock (_heldLock)
+            {
+                // All of them as a rule: they came out of one package. The bound is for a host
+                // that lowered MaxValuesInPackage in between; the rest stays held, in order.
+                var take = Math.Min(_held.Count, _options.MaxValuesInPackage - package.Count);
+
+                for (var index = 0; index < take; index++)
+                    package.AddValue(_held[index]);
+
+                if (take > 0)
+                    _held.RemoveRange(0, take);
+
+                Volatile.Write(ref _heldCount, _held.Count);
+            }
+        }
+
+        // Puts the items of a package that was not delivered ahead of the channel. Returns how
+        // many of them were dropped at capacity.
+        private int HoldItems(IEnumerable<QueueItem<T>> items)
+        {
+            var dropped = 0;
+
+            lock (_heldLock)
+            {
+                foreach (var item in items)
+                {
+                    // The #1088 backstop, as in EnqueueCore: a retry that meets a full queue is
+                    // dropped and counted. Held items count against MaxQueueSize like queued ones.
+                    if (Reader.Count + _held.Count >= _options.MaxQueueSize)
+                    {
+                        dropped++;
+                        continue;
+                    }
+
+                    _held.Add(item);
+                }
+
+                // A package comes back in the order it was sent in, so this changes something
+                // only when items were already held (see TakeHeld).
+                if (_held.Count > 1)
+                    _held.Sort(ByIssue);
+
+                Volatile.Write(ref _heldCount, _held.Count);
+            }
+
+            if (dropped > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, dropped);
+
+            return dropped;
+        }
+
+        /// <summary>
+        /// True for a queue whose items must reach the server in the order they were issued in
+        /// (#1750). The items of a package that was not delivered are then held ahead of the
+        /// queue, and the next package starts with them, so nothing issued later can be
+        /// delivered before them. Off by default: a failed package of values returns to the
+        /// tail of its queue, as it does in the native collector. The command queue turns it on.
+        /// </summary>
+        protected virtual bool KeepsOrderOfIssue => false;
+
+        // Where the items of a package that was not delivered go. Returns how many were dropped
+        // at capacity (#1088), so the failure report can say so.
+        private int ReturnItems(IReadOnlyCollection<QueueItem<T>> items) =>
+            KeepsOrderOfIssue ? HoldItems(items) : ReEnqueueItems(items);
 
         private bool Validate(T item)
         {
@@ -308,11 +427,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         private async Task RunLoopAsync(CancellationToken token)
         {
+            // True when the pause after a failure ended because the transport got its connection
+            // back: what waited for it is dispatched now, not after the next wait for work.
+            var dispatchNow = false;
+
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    await WaitForReadyAsync(token).ConfigureAwait(false);
+                    if (!dispatchNow)
+                        await WaitForReadyAsync(token).ConfigureAwait(false);
+
+                    dispatchNow = false;
+
                     await DispatchPendingAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { }
@@ -326,20 +453,61 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     // depends on preserving accepted work even under transient transport failure;
                     // a per-package retry cap would re-introduce the old "data dropped on first
                     // server hiccup" regression. Overflow eviction is the backstop: a permanently
-                    // failing item rides the queue tail until MaxQueueSize evicts it.
-                    if (_queueManager != null)
+                    // failing item rides the queue tail (on a queue that keeps the order of
+                    // issue: stays ahead of the queue) until MaxQueueSize evicts it.
+                    //
+                    // A package that waits for the transport to come back is not an error of the
+                    // queue: the transport reports its own state, once, and the queue stays quiet.
+                    // Unless that transport belongs to another collector: it reports there, and
+                    // not at all while its owner is stopped, so here the queue is the only voice
+                    // (deduplicated like every queue error).
+                    if (ex is PackageSendFailedException failed && failed.IsTransportDown && !(_queueManager?.TransportReportsElsewhere ?? false))
+                        _logger.Debug(ex.Message);
+                    else if (_queueManager != null)
                         _queueManager.AddQueueLoopError(QueueName, ex);
                     else
                         _logger.Error(ex);
 
                     try
                     {
-                        await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                        dispatchNow = await PauseAfterFailureAsync(ex, token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { }
                 }
             }
         }
+
+        // The pause before a failed package is tried again: the collect period, or, for a
+        // package that only lacked a connection, until the transport has one, whichever comes
+        // first. Returns true in the second case.
+        private async Task<bool> PauseAfterFailureAsync(Exception failure, CancellationToken token)
+        {
+            var pause = DelayAfterFailureAsync(token);
+
+            if (!(failure is PackageSendFailedException failed) || !failed.IsTransportDown || !(_sender is ICollectorTransport transport))
+            {
+                await pause.ConfigureAwait(false);
+                return false;
+            }
+
+            // A floor, so that a connection that comes and goes cannot make this loop spin.
+            await Task.Delay(TransportRetryFloor, token).ConfigureAwait(false);
+
+            // The wait for a connection ends with this pause, whichever of the two is first:
+            // left pending, one more waiter would stay behind every cycle of an outage.
+            using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                var connected = transport.WaitForConnectionAsync(wait.Token);
+                var woken = await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
+
+                wait.Cancel();
+                _ = connected.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+                return woken;
+            }
+        }
+
+        private static readonly TimeSpan TransportRetryFloor = TimeSpan.FromMilliseconds(100);
 
         private async ValueTask DispatchPendingAsync(CancellationToken token)
         {
@@ -353,6 +521,14 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual async ValueTask WaitForReadyAsync(CancellationToken token)
         {
+            // Held items are work that is ready, and nothing writes them to the channel: a wait
+            // on the channel alone would leave a failed package unsent until the next item is
+            // issued. After a failed send the loop has paused before it comes here
+            // (PauseAfterFailureAsync); a queue without held items behaves the same way when its
+            // channel is not empty.
+            if (Volatile.Read(ref _heldCount) > 0)
+                return;
+
             await Reader.WaitToReadAsync(token).ConfigureAwait(false);
         }
 
@@ -360,8 +536,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual bool ShouldContinueDispatching() => true;
 
-        public virtual async Task FlushAsync(CancellationToken token)
+        public virtual async Task<FlushResult> FlushAsync(CancellationToken token)
         {
+            // The first failed send ends the drain (#1747): every catch below leaves the loop,
+            // and the caller is told, so that the queues behind this one do not try the same
+            // server again. This is the queue's rule and holds for any sender.
+            var sendFailed = false;
+
             Volatile.Write(ref _inFlushFlag, 1);
             try
             {
@@ -369,6 +550,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 while (!IsEmpty && !token.IsCancellationRequested)
                 {
+                    // Published for the dispatch that starts on the next line, which takes it
+                    // before its first await (BeginDrainSend).
+                    var drainSend = new DrainSend();
+                    Volatile.Write(ref _drainSend, drainSend);
+
                     var dispatch = TryDispatchOneAsync(token);
                     bool dispatched;
 
@@ -384,8 +570,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         // cancellation: the run-loop side is protected by StopAsync's WhenAny
                         // timeout, but a sender that hangs for the FIRST time here would block
                         // this await forever and lock the host's restart. Race each dispatch
-                        // against the flush token and abandon the in-flight send when it fires —
-                        // losing the in-flight items is preferable to an unbounded Stop.
+                        // against the flush token and give the in-flight send up when the
+                        // sender does not come back: losing its items is preferable to an
+                        // unbounded Stop.
                         var dispatchTask = dispatch.AsTask();
 
                         if (cancellationFired == null)
@@ -393,9 +580,26 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                         if (await Task.WhenAny(dispatchTask, cancellationFired).ConfigureAwait(false) != dispatchTask)
                         {
-                            ObserveAbandonedDispatch(dispatchTask);
-                            _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
-                            return;
+                            // The budget fired with a send in flight (#1748). The same token
+                            // cancelled the send, so a sender that honours cancellation is on
+                            // its way back: it gets a moment, and then nothing is wrong and
+                            // nothing is said. Only a sender that is still away after that
+                            // moment has ignored the cancellation.
+                            var graceOver = WaitBeforeAbandon(dispatchTask);
+
+                            if (await Task.WhenAny(dispatchTask, graceOver).ConfigureAwait(false) != dispatchTask && drainSend.TryAbandon())
+                            {
+                                // From here the package is the drain's: the send, when it
+                                // comes back, touches neither the queue nor the counts.
+                                ObserveAbandonedDispatch(dispatchTask);
+                                _logger.Error($"{QueueName} flush gave up a send that did not return after the stop budget cancelled it: IDataSender ignores cancellation. Its {drainSend.Items} item(s) are counted as discarded.");
+                                return new FlushResult(sendFailed: false, abandoned: drainSend.Items);
+                            }
+
+                            // The send came back in time, or came back first in the race with
+                            // the line above: its dispatch has the package and is settling it
+                            // (no sender code is left to wait for), so the await below is short
+                            // and the clear that follows this flush sees what it put back.
                         }
 
                         dispatched = await dispatchTask.ConfigureAwait(false);
@@ -405,15 +609,30 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         break;
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                // The budget fired in the middle of a send: the drain is over for every queue
+                // anyway. A sender that gave the send up without being asked has failed it.
+                sendFailed = !token.IsCancellationRequested;
+            }
+            catch (PackageSendFailedException ex) when (ex.IsTransportDown)
+            {
+                // No connection to flush through; the discarded items are counted by the caller.
+                sendFailed = true;
+                _logger.Debug(ex.Message);
+            }
             catch (Exception ex)
             {
+                sendFailed = true;
                 _logger.Error(ex);
             }
             finally
             {
+                Volatile.Write(ref _drainSend, null);
                 Volatile.Write(ref _inFlushFlag, 0);
             }
+
+            return new FlushResult(sendFailed);
         }
 
         // The abandoned dispatch keeps running on the hung sender; observe its eventual fault so
@@ -425,10 +644,70 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
 
+        // How long a send may take to come back once the stop budget has cancelled it. A send
+        // that honours its token is back in milliseconds; this is the margin for a busy thread
+        // pool, and it is what a stop can take beyond its budget, once (a spent budget starts
+        // no further send). Too short a moment would only bring back a wrong Error line: who
+        // gets the package is decided by DrainSend, not by this.
+        private static readonly TimeSpan AbandonGrace = TimeSpan.FromMilliseconds(250);
+
+        /// <summary>
+        /// The wait before the drain gives up a send that the budget has cancelled: it is given
+        /// the dispatch that is in flight and returns the task that ends the wait. A delay of
+        /// <see cref="AbandonGrace"/>; tests replace it to decide themselves which comes first,
+        /// the return of the send or the end of the wait.
+        /// </summary>
+        internal Func<Task, Task> WaitBeforeAbandon { get; set; } = _ => Task.Delay(AbandonGrace);
+
+        // The send of the drain that is in flight; null outside a drain. Written by FlushAsync,
+        // read by the dispatch it starts.
+        private DrainSend _drainSend;
+
+        /// <summary>
+        /// Called by a dispatch right before it hands <paramref name="items"/> items to the
+        /// sender, and before its first await: FlushAsync published the send for exactly this
+        /// call. Null in the run loop, whose packages nobody gives up. (The run loop of a queue
+        /// has exited before its drain begins, so it never picks up a send of the drain.)
+        /// </summary>
+        protected DrainSend BeginDrainSend(int items)
+        {
+            var drainSend = Volatile.Read(ref _drainSend);
+
+            if (drainSend != null)
+                drainSend.Items = items;
+
+            return drainSend;
+        }
+
+        /// <summary>
+        /// Called by a dispatch when its send has come back, before it settles the package in
+        /// any way. False when the stop drain has given this send up: its items are counted as
+        /// discarded and the queue may have been cleared and even started again since, so
+        /// nothing of the package goes back into the queue, the overflow count or the package
+        /// diagnostics.
+        /// </summary>
+        protected bool OwnsPackage(DrainSend drainSend, int items)
+        {
+            if (drainSend == null || drainSend.TryReturn())
+                return true;
+
+            _logger.Debug($"{QueueName}: a send the stop drain had given up has returned; its {items} item(s) were counted as discarded then and are not queued again.");
+
+            return false;
+        }
+
         // True while the bounded post-stop drain is running. Subclasses use this to reword
         // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
         // before ClearQueue discards them.
         protected bool IsFlushing => Volatile.Read(ref _inFlushFlag) == 1;
+
+        /// <summary>
+        /// The sender of the dispatch that is starting now: the single-attempt view inside the
+        /// stop drain, the sender itself in the run loop. Read it when the send starts. The run
+        /// loop of a queue has exited before its drain begins (DataProcessor flushes only a
+        /// queue whose StopAsync returned true), so the two never read it at the same time.
+        /// </summary>
+        protected IDataSender Sender => IsFlushing ? _drainSender : _sender;
 
         protected async ValueTask DispatchPackageAsync(
             DataPackage<T> package,
@@ -438,6 +717,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (package == null || package.Count == 0)
                 return;
 
+            var drainSend = BeginDrainSend(package.Count);
             PackageSendingInfo sendingInfo;
 
             try
@@ -446,15 +726,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
             catch (OperationCanceledException)
             {
-                if (PreserveCanceledPackages)
-                    ReEnqueueItems(package.Items);
+                if (OwnsPackage(drainSend, package.Count) && PreserveCanceledPackages)
+                    ReturnItems(package.Items);
                 throw;
             }
             catch
             {
-                ReEnqueueItems(package.Items);
+                if (OwnsPackage(drainSend, package.Count))
+                    ReturnItems(package.Items);
                 throw;
             }
+
+            if (!OwnsPackage(drainSend, package.Count))
+                return;
+
+            // Items the sender could never send (a value larger than a session frame) are lost for
+            // good; they are counted where every lost value is counted.
+            if (sendingInfo.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, sendingInfo.DroppedCount);
 
             if (sendingInfo.Error != null)
             {
@@ -467,13 +756,35 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     return;
                 }
 
-                var dropped = ReEnqueueItems(package.Items);
+                // A sender that delivers a package in parts says which items are settled; only
+                // the others go back, or what was delivered would arrive twice.
+                var unsettled = Unsettled(package, sendingInfo.Settled);
+                var dropped = ReturnItems(unsettled);
                 // The drop count is the #1088 backstop (a retry refused by a queue at capacity).
-                throw new PackageSendFailedException(QueueName, package.Count - dropped, dropped, IsFlushing, sendingInfo.Error);
+                throw new PackageSendFailedException(QueueName, unsettled.Count - dropped, dropped, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+        }
+
+        private static IReadOnlyCollection<QueueItem<T>> Unsettled(DataPackage<T> package, bool[] settled)
+        {
+            if (settled == null)
+                return package.Items;
+
+            var unsettled = new List<QueueItem<T>>(package.Count);
+            var position = 0;
+
+            foreach (var item in package.Items)
+            {
+                if (position >= settled.Length || !settled[position])
+                    unsettled.Add(item);
+
+                position++;
+            }
+
+            return unsettled;
         }
 
         /// <summary>
@@ -527,7 +838,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected bool PreserveCanceledPackages => CurrentShutdownMode.PreserveCanceledPackages();
 
-        internal int QueueCount => Reader.Count;
+        // Everything the queue holds: the channel and the held items ahead of it.
+        internal int QueueCount => Reader.Count + Volatile.Read(ref _heldCount);
 
         protected bool IsEmpty => QueueCount == 0;
 
@@ -586,7 +898,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public int ClearQueue()
         {
-            int count = 0;
+            int count;
+
+            // Held items are discarded and counted with the rest: left behind, they would be
+            // sent by the next Start without anyone having said they were kept.
+            lock (_heldLock)
+            {
+                count = _held.Count;
+                _held.Clear();
+                Volatile.Write(ref _heldCount, 0);
+            }
+
             while (TryDequeue(out _))
                 count++;
 

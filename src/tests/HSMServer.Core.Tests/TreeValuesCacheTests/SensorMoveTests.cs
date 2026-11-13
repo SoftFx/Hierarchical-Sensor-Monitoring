@@ -328,6 +328,84 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out _), "the old path was recreated");
         }
 
+        // "A collector that has not been updated loses nothing": its key may well be one that
+        // sends data but adds nothing. The alias is an existing sensor, so nothing is added —
+        // also when the emptied old node has been swept meanwhile.
+        [Theory]
+        [Trait("Category", "Sensor alias")]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Alias_DeliversAValue_SentWithAKeyThatMayNotAddSensors(bool asBatch, bool oldNodeRemoved)
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/s", values: 1);
+            var oldNode = sensor.Parent;
+            var sendOnly = AddSendOnlyKey(_fixture.ProductA);
+
+            // The premise: before the move this key feeds the sensor.
+            await AddIntAsync(_fixture.ProductA, sendOnly, $"{root}/old/s", DateTime.UtcNow.AddSeconds(1));
+
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductB, $"{root}/new/s")).IsOk);
+
+            if (oldNodeRemoved)
+            {
+                await _valuesCache.RemoveProductAsync(oldNode.Id);
+                Assert.Null(_valuesCache.GetProduct(oldNode.Id));
+            }
+
+            var time = DateTime.UtcNow.AddSeconds(5);
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, $"{root}/old/s", time);
+
+            if (asBatch)
+                Assert.Empty(await _valuesCache.AddSensorValuesAsync(sendOnly, _fixture.ProductA, [value]));
+            else
+            {
+                var result = await _valuesCache.AddSensorValueAsync(sendOnly, _fixture.ProductA, value);
+                Assert.True(result.IsOk, result.Error);
+            }
+
+            await TestWait.UntilAsync(() => sensor.LastValue?.Time == time, "the aliased value reached the moved sensor");
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old/s", out _), "the old path was recreated");
+        }
+
+        // A value of another type would displace the alias and create a sensor: that still
+        // needs the right to add one.
+        [Fact]
+        [Trait("Category", "Sensor alias")]
+        public async Task Alias_ValueOfAnotherType_FromAKeyThatMayNotAddSensors_IsRefused()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductA, $"{root}/new")).IsOk);
+
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Double, $"{root}/old", DateTime.UtcNow);
+            var result = await _valuesCache.AddSensorValueAsync(AddSendOnlyKey(_fixture.ProductA), _fixture.ProductA, value);
+
+            Assert.False(result.IsOk);
+            Assert.Contains(nameof(KeyPermissions.CanAddSensors), result.Error);
+            Assert.Single(sensor.Aliases);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/old", out _));
+        }
+
+        // A value for a blocked sensor is refused, not dropped in silence — through its old
+        // path as well.
+        [Fact]
+        [Trait("Category", "Sensor alias")]
+        public async Task Alias_OfABlockedSensor_RefusesTheValue()
+        {
+            var root = Unique();
+            var sensor = await CreateIntSensorAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", values: 1);
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductA, $"{root}/new")).IsOk);
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, State = SensorState.Blocked })).IsOk);
+
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, $"{root}/old", DateTime.UtcNow.AddSeconds(5));
+            var result = await _valuesCache.AddSensorValueAsync(_fixture.KeyA, _fixture.ProductA, value);
+
+            Assert.False(result.IsOk);
+            Assert.Contains("is blocked", result.Error);
+        }
+
         [Fact]
         [Trait("Category", "Sensor alias")]
         public async Task Alias_ValueOfAnotherType_DisplacesTheAlias()
@@ -598,6 +676,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(result.IsOk, result.Error);
         }
+
+        private Guid AddSendOnlyKey(Guid productId) =>
+            _valuesCache.AddAccessKey(new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(
+                productId: productId.ToString(),
+                permissions: KeyPermissions.CanSendSensorData | KeyPermissions.CanReadSensorData))).Id;
 
         private async Task<int> CountHistoryRowsAsync(Guid sensorId)
         {

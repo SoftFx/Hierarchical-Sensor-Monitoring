@@ -3,10 +3,13 @@
 /// @file
 /// @brief Sampler for the rate of failed TCP connection attempts (Windows).
 /// Reads MIB_TCPSTATS.dwAttemptFails (IPv4+IPv6) and returns the per-call delta to feed a Rate sensor.
-/// Portable header; the OS read is #if _WIN32 guarded, the baseline/delta math is portable.
+/// Portable header; the OS read is #if _WIN32 guarded, the baseline/delta math and the sampler seam
+/// (family readers in, error report out) are portable.
 
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <string>
 
 namespace hsm::collector
 {
@@ -50,20 +53,61 @@ namespace hsm::collector
         FamilyBaseline v6_;
     };
 
+    /// What the sampler reports when the TCP statistics of neither address family can be read. The
+    /// managed collector (WindowsTcpFailureRateMonitor) reports the same text for the same condition.
+    inline constexpr const char* kTcpNeitherFamilyReadableError =
+        "TCP connection failure rate sampling error: the TCP statistics of neither IPv4 nor IPv6 could be read.";
+
+    /// Portable sampler: one tick reads each address family through an injected reader and feeds the
+    /// accumulator. This is the seam the unit tests drive; WindowsTcpFailureSampler supplies the OS
+    /// readers.
+    ///
+    /// A tick on which NEITHER family can be read is reported through `report_error`: nothing stands
+    /// behind the 0 the rate sensor goes on posting, and that must not pass for a quiet network (root
+    /// rule 8). One unreadable family sits the tick out quietly (IPv6 not installed, for one). The
+    /// report is made on every such tick, the seeding one included; collapsing a run of them to one
+    /// line per window is the job of the collector's deduplicated error channel behind the callback,
+    /// as it is for the managed monitor.
+    ///
+    /// Not thread-safe: one thread samples.
+    class TcpFailureRateSampler
+    {
+    public:
+        using FamilyReading = TcpFailureRateAccumulator::FamilyReading;
+        using FamilyReader = std::function<FamilyReading()>;
+        using ErrorReporter = std::function<void(const std::string&)>;
+
+        /// The readers must be callable; an empty `report_error` reports nowhere.
+        TcpFailureRateSampler(FamilyReader read_v4, FamilyReader read_v6, ErrorReporter report_error);
+
+        /// The first call seeds the baselines and returns std::nullopt; later calls return the failed
+        /// connection attempts since the previous call (IPv4+IPv6), or std::nullopt when there is
+        /// nothing to post (see TcpFailureRateAccumulator::Accumulate).
+        std::optional<double> Sample();
+
+    private:
+        FamilyReader read_v4_;
+        FamilyReader read_v6_;
+        ErrorReporter report_error_;
+        TcpFailureRateAccumulator accumulator_;
+    };
+
 #ifdef _WIN32
     /// Stateful sampler: call Sample() repeatedly. The first call seeds the baseline and returns
     /// std::nullopt; subsequent calls return the number of failed TCP connection attempts since the
     /// previous call (the combined IPv4+IPv6 dwAttemptFails delta). Returns std::nullopt on a counter
     /// reset/wrap, a read error, or a zero delta (a quiet host posts nothing — the rate window stays 0).
+    /// A thin GetTcpStatisticsEx binding of TcpFailureRateSampler: a tick on which neither family
+    /// could be read is reported through `report_error`.
     class WindowsTcpFailureSampler
     {
     public:
-        WindowsTcpFailureSampler() = default;
+        explicit WindowsTcpFailureSampler(TcpFailureRateSampler::ErrorReporter report_error);
 
         std::optional<double> Sample();
 
     private:
-        TcpFailureRateAccumulator accumulator_;
+        TcpFailureRateSampler sampler_;
     };
 #endif // _WIN32
 } // namespace hsm::collector

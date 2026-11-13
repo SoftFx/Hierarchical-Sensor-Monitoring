@@ -125,10 +125,10 @@ Contract: collector `Stop()` must return within a small bounded time even when t
 
 - The bar partial-bar flush on sensor stop only **enqueues** (no network) — it cannot block.
 - `QueueProcessorBase.StopAsync` races the processing loop against `ShutdownMode.StopWaitTimeout` (graceful: `min(RequestTimeout, 5s)` — the 5 s cap is deliberate and independent of the default 30 s `RequestTimeout`; terminal dispose: `min(RequestTimeout, 1s)`). A sender hung **in the run loop** while ignoring cancellation makes StopAsync return `false` and the flush for that queue is **skipped**.
-- `FlushAsync` runs under a `CancellationTokenSource` with timeout `clamp(RequestTimeout, 1s, 5s)`; a token-respecting sender (the real HTTP client) gets cancelled mid-send (`OperationCanceledException` → graceful re-enqueue → `ClearQueue` logs the discard).
-- A sender that ignores cancellation and hangs **for the first time on the flush dispatch itself** is handled inside `FlushAsync`: each dispatch is raced against the flush token via `Task.WhenAny`, and the in-flight dispatch is abandoned (fault observed, error logged, its items lost) when the timeout fires.
+- The stop drain (`FlushAsync` of each queue) runs under one `CancellationTokenSource` for all queues, with timeout `clamp(RequestTimeout, 1s, 5s)` (`min(that, 1s)` on a terminal dispose). A send of the drain is one attempt, and the first failed value send ends the drain (#1747), so a server that refuses connections or answers 5xx does not cost the budget at all. A server that accepts and never answers does: a token-respecting sender (the real HTTP client) is cancelled mid-send (`OperationCanceledException` → graceful re-enqueue → `ClearQueue` logs the discard).
+- A sender that ignores cancellation and hangs **for the first time on the flush dispatch itself** is handled inside `FlushAsync`: each dispatch is raced against the flush token via `Task.WhenAny`; when the token fires, the send gets a moment (250 ms) to come back, and a send that is still away after it is given up (fault observed, error logged, its items counted as discarded; when it returns later it puts nothing back, #1748).
 
-Every transport-facing wait in the graceful stop path is therefore capped at 5 s, regardless of `RequestTimeout`. Tests: `CollectorStopBoundednessTests` (four hang scenarios incl. pending partial bar and the default-`RequestTimeout` cap), conformance `flush_contract.hsmtest` (`stop_with_hanging_sender_*` cases, cross-language via `set_sender_hang` + `stop_expect_under_ms`), transport-level coverage in `CollectorTransportChaosTests`.
+Every transport-facing wait in the graceful stop path is therefore capped at 5 s (plus that one moment), regardless of `RequestTimeout`. Details: [`data-pipeline/feature.md`](./data-pipeline/feature.md#shutdown-modes--drain-order). Tests: `CollectorStopBoundednessTests` (four hang scenarios incl. pending partial bar and the default-`RequestTimeout` cap), conformance `flush_contract.hsmtest` (`stop_with_hanging_sender_*` cases, cross-language via `set_sender_hang` + `stop_expect_under_ms`), transport-level coverage in `CollectorTransportChaosTests`.
 
 ### Scheduler ownership
 
@@ -275,6 +275,7 @@ C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inve
 - `AllowUntrustedServerCertificate` (false) — opt-in for self-signed certs
 - `ExceptionDeduplicatorWindow` (1h) — deduplication window for error messages
 - `MaxDeduplicatedMessages` (1000) — max unique messages in deduplicator cache
+- `Transport` (`Http`) — `Http` or `Session` (a collector session over one WebSocket, opt-in, no fallback to HTTP); see `http-client/feature.md`
 - `ExtraRequestHeaders` (empty) — headers added to value requests (e.g. `X-Agent-Version`); see `http-client/feature.md`, directive channel
 
 ## Known Issues

@@ -336,6 +336,23 @@ namespace hsm::test
             fail_remaining_ = count;
         }
 
+        // How EVERY request is answered from now on, whatever its path (the conformance driver's
+        // set_sender_mode, #1751): with 200, with 503 Service Unavailable (a server that is down
+        // behind its proxy), or not at all (recorded and held open like a hang_path_prefix
+        // request). Read when a request has arrived, so set it while no request is on its way.
+        enum class Answer
+        {
+            Ok,
+            Unavailable,
+            Never,
+        };
+
+        void SetAnswer(Answer answer)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            answer_ = answer;
+        }
+
     private:
         friend class HttpKeepAliveServer; // reuses ReadRequest
 
@@ -384,6 +401,7 @@ namespace hsm::test
                 const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
                 const bool reject = !reject_path_prefix_.empty() && recorded.path.rfind(reject_path_prefix_, 0) == 0;
                 bool fail = false;
+                Answer answer = Answer::Ok;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
                     if (fail_remaining_ > 0 && recorded.path.rfind(fail_path_prefix_, 0) == 0)
@@ -391,10 +409,11 @@ namespace hsm::test
                         --fail_remaining_;
                         fail = true;
                     }
+                    answer = answer_;
                     requests_.push_back(std::move(recorded));
                 }
 
-                if (hang)
+                if (hang || answer == Answer::Never)
                 {
                     hung_.push_back(conn); // never answered; closed by the destructor
                     continue;
@@ -403,7 +422,9 @@ namespace hsm::test
                 static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string gateway = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                const std::string& response = fail ? gateway : (reject ? bad : ok);
+                static const std::string unavailable =
+                    "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                const std::string& response = fail ? gateway : (reject ? bad : (answer == Answer::Unavailable ? unavailable : ok));
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
@@ -475,6 +496,7 @@ namespace hsm::test
         std::vector<Recorded> requests_;
         std::string fail_path_prefix_; // guarded by mutex_
         int fail_remaining_ = 0;       // guarded by mutex_
+        Answer answer_ = Answer::Ok;   // guarded by mutex_
     };
 
     // Keep-alive variant for the connection-reuse tests (#1653). Every request is answered 200
