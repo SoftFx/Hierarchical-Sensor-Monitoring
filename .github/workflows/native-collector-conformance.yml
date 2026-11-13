@@ -226,11 +226,14 @@ jobs:
       # and the WebSocket connection (#1662). The vcpkg curl of this lane is built with the
       # `websockets` feature on both platforms, so HSM_REQUIRE_WEBSOCKET turns "libcurl has no
       # WebSocket" from a skip into a failure: the native_ws_* tests cannot pass by not running.
+      # The same holds for the session transport tests (native_session_*, #1668) and for the
+      # collector session conformance scenarios and their must-fail fixtures (*session*, #1660
+      # step 3), which exist only in this build.
       - name: Test (HTTP lane)
         if: steps.changes.outputs.run == 'true'
         env:
           HSM_REQUIRE_WEBSOCKET: '1'
-        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws"
+        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws|native_session|conformance_session|meta_session"
 
       - name: Upload HTTP transport logs on failure
         if: failure()

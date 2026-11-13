@@ -213,7 +213,7 @@ polls until the expectation holds; `0` checks once.
 
 | Verb | Semantics |
 |---|---|
-| `create_collector_on_session\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | a collector whose transport is the collector session to the scripted server (identity and access key of `create_collector`); `request_timeout_ms` is also how long a request waits for its ack. C#: `CollectorOptions.Transport = Session`; native: `hsm_collector_use_session_transport`. A driver may shorten the pause between attempts to open a session; no scenario depends on it |
+| `create_collector_on_session\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | a collector whose transport is the collector session to the scripted server (computer `conformance-host`, module `conformance-module`, access key `conformance-key`); `request_timeout_ms` is also how long a request waits for its ack. C#: `CollectorOptions.Transport = Session`; native: `hsm_collector_use_session_transport`. A driver may shorten the pause between attempts to open a session; no scenario depends on it |
 | `session_server_hello\|max_frame_bytes\|heartbeat_seconds` | what the hello of the sessions accepted from now on states (default `4194304` and `30`) |
 | `session_server_refuse_upgrades\|status` / `session_server_accept_upgrades` | every upgrade is refused with this HTTP status / upgrades are accepted again (the default) |
 | `session_server_ack\|op\|status` | requests of `op` (`list`, `commands`) are acknowledged with this status from now on (default 200); a status outside 2xx is a failure ack with an `error` text. `0` is no status and is refused: `session_server_stay_silent` leaves a request without an ack |
@@ -230,16 +230,20 @@ polls until the expectation holds; `0` checks once.
 | `expect_session_requests_containing\|op\|substring\|count\|timeout_s`, `expect_session_requests_containing_at_least\|…` | how many requests of `op`, acknowledged or not, contain the text; with it a case counts sends ("sent once", "sent again") |
 | `expect_session_no_request_contains\|substring` | no request frame of any op contains the text |
 | `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
-| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request |
+| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request. Place it after `stop` or while no session is open: the native scripted server serves one connection at a time and reads a request made during a session only when that session has ended |
 | `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
 | `expect_session_close_code\|code\|timeout_s` | the last close frame the collector sent carries this code. A collector answers a server's close with the code it received. A session that was cut sends no close frame, so pair it with `expect_session_count` where the number of sessions matters |
 | `expect_session_closed_normally` | `expect_session_close_code\|1000\|5`: how a collector ends a session at stop |
 
 Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
-(the WebSocket itself is `HttpListener`'s). **The native driver does not implement these verbs yet**
-(`CONFORMANCE-UNSUPPORTED`, #1668): they arrive with the native session transport, whose test
-fixture `tests/ws_test_server.hpp` is the scripted server there; until then the session fixture and
-its `meta_session_*` fixtures are not registered in the native CMake. Wall clock: the heartbeat case runs
+(the WebSocket itself is `HttpListener`'s); the native one is the session mode of
+`src/native/collector/tests/ws_test_server.hpp`. **The native driver has these verbs in the HTTP
+build only** (`HSM_COLLECTOR_HTTP`), the build that has a session transport: the session fixture
+and its `meta_session_*` fixtures are registered in CMake under that option and run in the CI HTTP lane,
+where `HSM_REQUIRE_WEBSOCKET=1` makes a libcurl without WebSocket a failure, not a skip. In a
+build without the HTTP transport a session verb fails by name. Sensor indexes: a session case uses
+**one kind of sensor**, because the drivers do not agree on what an index counts across kinds (per
+kind in the managed driver, creation order in the native one). Wall clock: the heartbeat case runs
 on a 1-second heartbeat (2.5 s of silence), and a native collector reopens a session on a backoff
 that starts at a second, so the timeouts of these cases are generous on purpose.
 
@@ -324,9 +328,8 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. In that state
-are the collector session verbs in the native driver (#1668, see **Collector session**
-above) and one field: `expect_bar_field … stddev` in the managed driver (#1529 — the managed
+a generic unknown-verb error; the failure list is the port backlog. One field is
+in that state: `expect_bar_field … stddev` in the managed driver (#1529 — the managed
 collector does not compute a bar StdDev by owner decision); only the native-only
 fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
 `set_sensor_description`, gained its managed counterpart in #1482.)
