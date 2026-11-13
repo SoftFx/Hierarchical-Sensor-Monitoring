@@ -81,9 +81,20 @@ namespace HSMDataCollector.Core
         public string Module => _options?.Module;
 
 
+        // Raised by LogAndRaise under _opLock, together with the transition, so subscribers see the
+        // events in transition order. The handler contract (do not block, do not wait for another
+        // lifecycle operation) is documented on IDataCollector.
+
+        /// <inheritdoc/>
         public event Action ToStarting;
+
+        /// <inheritdoc/>
         public event Action ToRunning;
+
+        /// <inheritdoc/>
         public event Action ToStopping;
+
+        /// <inheritdoc/>
         public event Action ToStopped;
 
 
@@ -287,13 +298,13 @@ namespace HSMDataCollector.Core
             {
                 _logger.Error($"DataCollector starting error: {ex}");
 
-                await SafeStopProcessor().ConfigureAwait(false);
+                var rollback = TryBeginStartRollback();
+                if (rollback == null)
+                    return;
 
-                lock (_opLock)
-                {
-                    if (_lifecycle.AbortStart())
-                        LogAndRaise(CollectorStatus.Stopped);
-                }
+                await rollback.ConfigureAwait(false);
+
+                EndStartRollback(rollback);
             }
         }
 
@@ -482,6 +493,11 @@ namespace HSMDataCollector.Core
 
                 LogAndRaise(CollectorStatus.Starting);
 
+                // As in Start: a ToStarting handler may have stopped or disposed the collector.
+                // That stop owns the processor; starting queues behind it would leave them running.
+                if (!Status.IsStartingOrRunning())
+                    return;
+
                 _logger.Info("Initialize timer...");
 
                 try
@@ -506,32 +522,101 @@ namespace HSMDataCollector.Core
                 StartTransport();
             }
 
+            // The same init-race protection as Start (#1061): the in-flight sensor initialization
+            // is published as _currentStartInitTask under _opLock, so a Stop or Dispose that takes
+            // the lock after it waits for the initialization before it stops and disposes the
+            // sensors and queues the initialization is still touching.
             try
             {
-                _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-
-                bool completed;
+                Task initTask;
                 lock (_opLock)
                 {
-                    completed = _lifecycle.CompleteStart();
-                    if (completed)
-                        LogAndRaise(CollectorStatus.Running);
+                    // A Stop or Dispose that ran since the lock above owns the processor stop.
+                    if (!Status.IsStartingOrRunning())
+                        return;
+
+                    initTask = _dataProcessor.InitAsync();
+                    _currentStartInitTask = initTask;
                 }
 
-                if (!completed)
-                    SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
+                try
+                {
+                    initTask.ConfigureAwait(false).GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    lock (_opLock)
+                    {
+                        if (ReferenceEquals(_currentStartInitTask, initTask))
+                            _currentStartInitTask = null;
+                    }
+                }
+
+                lock (_opLock)
+                {
+                    // CompleteStart fails only when a Stop or Dispose moved the lifecycle out of
+                    // Starting; that caller owns the processor stop and has waited for initTask.
+                    // A rollback stop here would run a second, start-rollback stop that clears the
+                    // queues the owner is draining, so, as in Start, there is nothing left to do.
+                    if (_lifecycle.CompleteStart())
+                        LogAndRaise(CollectorStatus.Running);
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error($"DataCollector initialization error: {ex}");
 
-                SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
+                var rollback = TryBeginStartRollback();
+                if (rollback == null)
+                    return;
 
-                lock (_opLock)
-                {
-                    if (_lifecycle.AbortStart())
-                        LogAndRaise(CollectorStatus.Stopped);
-                }
+                rollback.ConfigureAwait(false).GetAwaiter().GetResult();
+
+                EndStartRollback(rollback);
+            }
+        }
+
+        /// <summary>
+        /// Starts the rollback of a start whose sensor initialization failed, or returns null when
+        /// the rollback is not this start's to run.
+        /// </summary>
+        /// <remarks>
+        /// Invariant: the processor is stopped by exactly one caller. The decision and the publish
+        /// happen under <c>_opLock</c>, the lock every Stop and Dispose takes to decide whether it
+        /// owns the processor stop:
+        /// <list type="bullet">
+        /// <item>a Stop or Dispose that already moved the lifecycle out of Starting owns the stop and
+        /// has waited for the failed initialization, so a start-rollback stop beside it would clear
+        /// the queues it is draining: return null;</item>
+        /// <item>otherwise the rollback is published as <c>_currentProcessorStopTask</c>, so a Stop or
+        /// Dispose that comes while it runs joins it instead of starting a second stop.</item>
+        /// </list>
+        /// </remarks>
+        private Task TryBeginStartRollback()
+        {
+            lock (_opLock)
+            {
+                if (Status != CollectorStatus.Starting)
+                    return null;
+
+                var rollback = SafeStopProcessor();
+                _currentProcessorStopTask = rollback;
+                return rollback;
+            }
+        }
+
+        private void EndStartRollback(Task rollback)
+        {
+            lock (_opLock)
+            {
+                if (ReferenceEquals(_currentProcessorStopTask, rollback))
+                    _currentProcessorStopTask = null;
+
+                // A Stop that joined the rollback has moved the lifecycle to Stopping and completes
+                // the stop itself. A Dispose that joined it ends the start too: whichever of the two
+                // takes the lock first raises ToStopped, the other finds the start already ended.
+                if (_lifecycle.AbortStart())
+                    LogAndRaise(CollectorStatus.Stopped);
             }
         }
 
@@ -599,9 +684,13 @@ namespace HSMDataCollector.Core
                     // Race the continuation: whichever path acquires _opLock first calls CompleteStop;
                     // the other finds the transition already done and no-ops. Either way ToStopped fires
                     // exactly once, and always before component disposal below.
+                    // The in-flight stop can also be the rollback of a failed start (TryBeginStartRollback):
+                    // the lifecycle is then still Starting, and ending the start here when the
+                    // rollback's own continuation has not yet done so keeps ToStopped before the
+                    // disposal below.
                     lock (_opLock)
                     {
-                        if (_lifecycle.CompleteStop())
+                        if (_lifecycle.CompleteStop() || _lifecycle.AbortStart())
                             LogAndRaise(CollectorStatus.Stopped);
                     }
                 }

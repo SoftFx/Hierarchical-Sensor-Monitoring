@@ -94,7 +94,7 @@ service_status_registers_enum_options|expect_registration_contains|0|"Key":1,"Va
 service_status_registers_enum_options|expect_registration_contains|0|"ConfirmationPeriod":3000000000
 service_status_registers_enum_options|expect_registration_contains|0|"AggregateData":true
 
-# Module: collector alive — Bool, TTL alert (Conditions:null) -> TtlAlerts, TTLTicks [null], KeepHistory 180d.
+# Module: collector alive — Bool, TTL alert (Conditions:null) with its own 5-minute inactivity period (#1666) -> TtlAlerts, TTLTicks [3000000000], KeepHistory 180d.
 collector_alive_registers_ttl_alert|create_collector
 collector_alive_registers_ttl_alert|add_default_sensor|collector_alive
 collector_alive_registers_ttl_alert|start
@@ -102,7 +102,7 @@ collector_alive_registers_ttl_alert|stop
 collector_alive_registers_ttl_alert|expect_registration_count|1
 collector_alive_registers_ttl_alert|expect_registration_contains|0|.module/Service alive"
 collector_alive_registers_ttl_alert|expect_registration_contains|0|"SensorType":0,
-collector_alive_registers_ttl_alert|expect_registration_contains|0|"TTLTicks":[null]
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"TTLTicks":[3000000000]
 collector_alive_registers_ttl_alert|expect_registration_contains|0|"KeepHistory":155520000000000
 collector_alive_registers_ttl_alert|expect_registration_contains|0|"TtlAlerts":[{"Conditions":null
 collector_alive_registers_ttl_alert|expect_registration_contains|0|"Template":"[$product]$path"

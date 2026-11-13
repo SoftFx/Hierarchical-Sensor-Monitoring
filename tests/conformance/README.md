@@ -300,6 +300,10 @@ polls until the expectation holds; `0` checks once.
 | `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
 | `expect_session_close_code\|code\|timeout_s` | the last close frame the collector sent carries this code. A collector answers a server's close with the code it received. A session that was cut sends no close frame, so pair it with `expect_session_count` where the number of sessions matters |
 | `expect_session_closed_normally` | `expect_session_close_code\|1000\|5`: how a collector ends a session at stop |
+| `session_server_push_directive\|directive` | (#1660 step 5) every open session that has had its hello gets the push `{"op":"directive","body":"<directive>"}`; the case fails when no session is open |
+| `session_server_push_frame\|frame` | every open session that has had its hello gets this frame as it is: an unknown push op, a `directive` whose body is not a string |
+| `expect_directives_received\|count\|timeout_s` | the collector handed exactly `count` server directives to its receiver: polled until there are at least `count`, then equality. Managed: the internal `ServerDirectives` (read through its test-only `Observer`), where the HTTP header path hands them too; native: the host callback of `hsm_collector_set_server_directive_handler`, which `create_collector_on_session` installs |
+| `expect_directive_received\|index\|directive` | the `index`-th of them (0 = the first) is `directive`, written `name:argument` as the server sent it (native: `verb:payload`, or `verb` when the payload is empty) |
 
 Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
 (the WebSocket itself is `HttpListener`'s); the native one is the session mode of

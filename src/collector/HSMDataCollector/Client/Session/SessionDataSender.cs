@@ -74,9 +74,6 @@ namespace HSMDataCollector.Client.Session
         /// <summary>The directives the server pushes on the session (#1660 step 5) arrive here.</summary>
         internal ServerDirectives Directives { get; }
 
-        /// <summary>The session has no op for a file value yet (#1660 step 2b).</summary>
-        public bool CanCarryFiles => false;
-
 
         // The HTTP client's address rule (https unless plaintext is allowed and asked for),
         // with the WebSocket scheme of the same security.
@@ -194,12 +191,13 @@ namespace HSMDataCollector.Client.Session
             SendAsync(SessionProtocol.OpCommands, commands, isRegistration: true, token);
 
         /// <summary>
-        /// Never reached through the collector: a file value is refused before it is queued while
-        /// the transport is a session (<see cref="CanCarryFiles"/>), because the file queue would
-        /// send, fail and re-queue it for ever. A direct caller gets the refusal as a status.
+        /// A file value is one element of a <c>list</c> frame (#1660 step 2b): the <c>/list</c> batch
+        /// takes a file value as it takes any other, and that is how the native collector sends its
+        /// file values. A file whose element does not fit a frame is dropped, reported and counted,
+        /// like any value larger than a frame.
         /// </summary>
         public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) =>
-            new ValueTask<PackageSendingInfo>(new PackageSendingInfo(0, 400, "the collector session transport cannot carry file values yet"));
+            SendAsync<SensorValueBase>(SessionProtocol.OpList, new SensorValueBase[] { file }, isRegistration: false, token);
 
         /// <summary>
         /// Whether a session can be opened. With one up the answer is yes; otherwise a session is

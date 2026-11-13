@@ -83,7 +83,20 @@ namespace HSMServer.Core.Tests.SensorApi
     // on it, so no test waits for real seconds and none can be cut off by a slow machine.
     internal sealed class ManualTimeProvider : TimeProvider
     {
+        private long _offsetTicks;
+
+
         public ConcurrentQueue<ManualTimer> Timers { get; } = new();
+
+
+        // Moves the clock's readings (GetUtcNow, GetTimestamp) forward. Timers are not touched:
+        // they fire only when a test fires them.
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
+
+        public override long GetTimestamp() =>
+            base.GetTimestamp() + (long)(Interlocked.Read(ref _offsetTicks) * (double)TimestampFrequency / TimeSpan.TicksPerSecond);
 
 
         public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
@@ -262,6 +275,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public CollectorSessionRegistry Registry => _app.Services.GetRequiredService<CollectorSessionRegistry>();
 
+        public CollectorSessionHandler Handler => _app.Services.GetRequiredService<CollectorSessionHandler>();
+
         public Uri HttpBase { get; }
 
         public Uri SessionUri { get; }
@@ -280,15 +295,17 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions)
+        // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
+        // setting and the folder whose agent/version.txt names the staged agent.
+        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null)
         {
             var telemetry = new RecordingTelemetry();
 
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.CollectorSessions).Returns(sessions);
-            config.SetupGet(c => c.Agent).Returns(new AgentConfig());
+            config.SetupGet(c => c.Agent).Returns(agent ?? new AgentConfig());
 
-            var builder = WebApplication.CreateBuilder();
+            var builder = webRoot is null ? WebApplication.CreateBuilder() : WebApplication.CreateBuilder(new WebApplicationOptions { WebRootPath = webRoot });
 
             builder.Logging.ClearProviders();
             builder.WebHost.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -298,6 +315,7 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton(config.Object);
             builder.Services.AddSingleton<TelemetryCollector>();
             builder.Services.AddSingleton<SensorIngestionService>();
+            builder.Services.AddSingleton<AgentDirectives>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
             builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());

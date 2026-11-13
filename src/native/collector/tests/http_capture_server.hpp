@@ -56,9 +56,10 @@ namespace hsm::test
     public:
         // `only_path`: capture the first request to this path; answer every other request with
         // `response_status` and keep listening (e.g. skip a runtime /commands registration to
-        // capture the /list value batch that follows it).
-        explicit HttpCaptureServer(int response_status = 200, std::string only_path = {})
-            : response_status_(response_status), only_path_(std::move(only_path))
+        // capture the /list value batch that follows it). `extra_response_headers`: header lines,
+        // each ending in CRLF, added to every answer (e.g. X-Hsm-Directive lines).
+        explicit HttpCaptureServer(int response_status = 200, std::string only_path = {}, std::string extra_response_headers = {})
+            : response_status_(response_status), only_path_(std::move(only_path)), extra_response_headers_(std::move(extra_response_headers))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -212,7 +213,7 @@ namespace hsm::test
             }
 
             const std::string response =
-                "HTTP/1.1 " + std::to_string(response_status_) + " X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                "HTTP/1.1 " + std::to_string(response_status_) + " X\r\n" + extra_response_headers_ + "Content-Length: 0\r\nConnection: close\r\n\r\n";
             send(conn, response.c_str(), static_cast<int>(response.size()), 0);
             closesocket(conn);
             return captured || only_path_.empty();
@@ -239,6 +240,7 @@ namespace hsm::test
         int port_ = 0;
         int response_status_;
         std::string only_path_;
+        std::string extra_response_headers_;
         std::atomic<bool> stop_{ false };
         std::thread worker_;
         CapturedRequest request_;

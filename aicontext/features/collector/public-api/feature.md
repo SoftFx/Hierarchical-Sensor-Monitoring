@@ -47,7 +47,7 @@ Lifecycle state machine, gates, registration phases, event ordering, and the dis
 - `Task Start()` / `Start(Task customStartingTask)` — idempotent; custom task runs between processor start and sensor init; failure rolls back to Stopped.
 - `Task Stop()` / `Stop(Task customStoppingTask)` — idempotent; awaits dynamic sensor-start tasks; custom-task failure logged, stop proceeds.
 - `Dispose()` — idempotent, terminal, never throws; joins an in-flight Stop and wins the shutdown-mode choice (`TerminalDispose`).
-- Events `ToStarting/ToRunning/ToStopping/ToStopped` + portable `ILifecycleListener` via `AddLifecycleListener(...)`.
+- Events `ToStarting/ToRunning/ToStopping/ToStopped` + portable `ILifecycleListener` via `AddLifecycleListener(...)`. Handlers run synchronously under the lifecycle lock: they must not block and must not wait synchronously for another lifecycle operation (XML docs on `IDataCollector`, #1061).
 - Properties: `Status`, `ComputerName`, `Module`, `Windows` (IWindowsCollection), `Unix` (IUnixCollection), `DefaultSensors` (`IEnumerable<ISensor>` — public `ISensor` contract: `SensorPath`, `InitAsync`, `StartAsync`, `StopAsync`, `IDisposable`; `SensorBase` additionally exposes `SendValue(SensorValueBase)` and the `ExceptionThrowing` event). `IWindowsCollection`/`IUnixCollection` are themselves `IDisposable`.
 - Logging: `AddNLog(LoggerOptions)` (embedded `collector.nlog.config` fallback; `ConfigPath`, `WriteDebug`), `AddCustomLogger(ICollectorLogger)`. Fluent, chainable, callable pre/post Start.
 - Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths (`SensorsStorage`).
@@ -102,7 +102,7 @@ Fluent builders (`Core/Builders/SensorBuilders.cs`, extension methods — `IData
 
 ## Obsolete surface (kept for compat, do not extend)
 
-`Initialize()` overloads (sync-block on Start), `InitializeSystemMonitoring` / `InitializeProcessMonitoring` / `InitializeOsMonitoring` / `MonitorServiceAlive` / `InitializeWindowsUpdateMonitoring` (superseded by `Windows`/`Unix` collections), `ValuesQueueOverflow` event (never fires). New ports should not reproduce these.
+`Initialize()` overloads (sync-block on Start; same init-race protection as `Start`, #1061), `InitializeSystemMonitoring` / `InitializeProcessMonitoring` / `InitializeOsMonitoring` / `MonitorServiceAlive` / `InitializeWindowsUpdateMonitoring` (superseded by `Windows`/`Unix` collections), `ValuesQueueOverflow` event (never fires). New ports should not reproduce these.
 
 ## Key Files
 

@@ -577,6 +577,50 @@ namespace
         return json.str();
     }
 
+#if defined(HSM_COLLECTOR_HTTP)
+    // True when `text` (UTF-8) is empty or consists only of the characters .NET's
+    // char.IsWhiteSpace accepts, so that string.IsNullOrWhiteSpace in the managed collector and this
+    // agree on the same bytes: U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000..U+200A,
+    // U+2028, U+2029, U+202F, U+205F, U+3000. Matched as their UTF-8 byte sequences; anything else,
+    // an invalid sequence included, is not whitespace.
+    bool IsWhiteSpaceOnlyUtf8(const std::string& text)
+    {
+        const auto byte = [&](size_t at) { return at < text.size() ? static_cast<unsigned char>(text[at]) : 0u; };
+
+        size_t at = 0;
+        while (at < text.size())
+        {
+            const unsigned b0 = byte(at);
+            if (b0 == 0x20 || (b0 >= 0x09 && b0 <= 0x0D))
+            {
+                at += 1;
+                continue;
+            }
+
+            const unsigned b1 = byte(at + 1);
+            if (b0 == 0xC2 && (b1 == 0x85 || b1 == 0xA0))
+            {
+                at += 2;
+                continue;
+            }
+
+            const unsigned b2 = byte(at + 2);
+            // U+1680
+            const bool ogham = b0 == 0xE1 && b1 == 0x9A && b2 == 0x80;
+            // U+2000..U+200A, U+2028, U+2029, U+202F
+            const bool general = b0 == 0xE2 && b1 == 0x80 && ((b2 >= 0x80 && b2 <= 0x8A) || b2 == 0xA8 || b2 == 0xA9 || b2 == 0xAF);
+            // U+205F
+            const bool math = b0 == 0xE2 && b1 == 0x81 && b2 == 0x9F;
+            // U+3000
+            const bool ideographic = b0 == 0xE3 && b1 == 0x80 && b2 == 0x80;
+            if (!ogham && !general && !math && !ideographic)
+                return false;
+            at += 3;
+        }
+        return true;
+    }
+#endif
+
     // .NET serializes List<byte> as a numeric JSON array ([104,105]), NOT base64 (#1096 §15).
     std::string ByteArrayJson(const std::string& content)
     {
@@ -1284,13 +1328,17 @@ namespace
     // new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc), AlertRepeatMode.Hourly, instantSend = true.
     constexpr const char* kDefaultScheduledTimeIso = "0001-01-01T12:00:00Z";
 
+    // The inactivity period of the ".module/Service alive" TTL alert (#1666): 5 minutes, the
+    // managed ServiceAlivePrototype.InactivityPeriod.
+    constexpr int64_t kServiceAliveInactivityMs = 300000;
+
     enum class DefaultAlertKind : int32_t
     {
         None = 0,
         EmaScheduledWarning,      // IfEmaMean/IfEmaValue <op> target -> InstantHourly (+Warning icon)
         FreeDiskScheduled,        // IfEmaValue <= target -> InstantHourly + ArrowDown + SensorError ({name} in template)
         ValueNotificationWarning, // IfValue <op> target -> ThenSendNotification + Warning
-        ServiceAliveTtl,          // IfInactivityPeriodIs() -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
+        ServiceAliveTtl,          // IfInactivityPeriodIs(5 min) -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
         ServiceStatus             // IfValue != target + AndConfirmationPeriod(5m) -> InstantHourly
     };
 
@@ -1509,8 +1557,13 @@ namespace
 
         if (spec.kind == DefaultAlertKind::ServiceAliveTtl)
         {
-            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(): TtlValue unset
+            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(5 min)
             alert.conditions_is_null = true; // SpecialAlertAction has a null conditions list
+            // The alert's own inactivity period (#1666), managed ServiceAlivePrototype.InactivityPeriod:
+            // the collector-off alert fires only after 5 minutes of silence. It becomes the
+            // registration's TTLs entry ([3000000000] ticks), byte-identical with the managed one.
+            alert.has_inactivity = true;
+            alert.inactivity_ms = kServiceAliveInactivityMs;
         }
         else
         {
@@ -1607,7 +1660,7 @@ namespace
         {
             AlertData alert = BuildDefaultAlert(def.alert, resolved_name);
             if (alert.kind == HSM_ALERT_KIND_TTL)
-                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (here [null])
+                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (Service alive: [5 min])
             else
                 reg.alerts.push_back(std::move(alert));
         }
@@ -2795,6 +2848,8 @@ namespace
                 else
                     LogMessage(level == hsm::http::SessionLogLevel::Info ? HSM_LOG_LEVEL_INFO : HSM_LOG_LEVEL_DEBUG, message);
             };
+            // Directives the server pushes go where the X-Hsm-Directive headers go over HTTP.
+            options.on_directive = [this](const std::string& directive) { DispatchServerDirective(directive); };
 
             session_transport_ = std::make_unique<hsm::http::SessionTransport>(std::move(options));
             session_transport_->Start();
@@ -3082,6 +3137,37 @@ namespace
             if (send_wire_)
                 return BuildWireBarJson(bar, UnixTimeMilliseconds(), path);
             return MonitoringBarJson(bar, path);
+        }
+
+        // A file value in the outgoing format, as OutgoingValueJson does for the other values. On a
+        // live transport it is the FileSensorValue wire (`List<byte>` as a numeric array); before
+        // #1660 step 2b it went out in the canonical form below on every transport, which the
+        // server cannot read, so over HTTP the whole /list batch around it was refused and sent
+        // again on every cycle. The comment is always a string, as the managed file sensor sends
+        // it (its AddValue and SendFile pass "" when no comment is given).
+        std::string OutgoingFileJson(
+            const std::string& path,
+            const std::string& content,
+            const std::string& name,
+            const std::string& extension,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            if (send_wire_)
+                return BuildWireFileJson(extension, name, content, comment, /*comment_is_null=*/false, status, UnixTimeMilliseconds(), path);
+
+            // Canonical cross-language file payload (string content asserted as UTF-8 text).
+            std::ostringstream json;
+            json << "{"
+                 << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
+                 << "\"Path\":\"" << EscapeJson(path) << "\","
+                 << "\"Value\":\"" << EscapeJson(content) << "\","
+                 << "\"Name\":\"" << EscapeJson(name) << "\","
+                 << "\"Extension\":\"" << EscapeJson(extension) << "\","
+                 << "\"Status\":" << static_cast<int>(status) << ","
+                 << "\"Comment\":\"" << EscapeJson(comment) << "\","
+                 << "\"UnixTimeMs\":" << UnixTimeMilliseconds() << "}";
+            return json.str();
         }
 
         // Surface a metric-source read failure through the deduplicated error log so a wedged live
@@ -4201,29 +4287,16 @@ namespace
         }
 
         // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
-        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
-        // False = refused: the transport cannot carry a file value, and the caller's result says
-        // so. A collector that is not running is the usual silent no-op (true).
-        bool EnqueueFileIfRunning(std::string json)
+        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly. A collector that
+        // is not running is the usual silent no-op.
+        void EnqueueFileIfRunning(std::string json)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
                 if (!CanAcceptDataLocked())
-                    return true;
+                    return;
             }
-
-#if defined(HSM_COLLECTOR_HTTP)
-            // The session cannot carry a file value yet (it needs an op of its own), and there is
-            // no HTTP to send it over instead. Refused here, before the queue: queued, it would be
-            // sent, refused and re-queued for ever. It never was in the queue, so it is not a
-            // queue overflow: the caller gets the refusal and the log says why.
-            if (use_session_)
-            {
-                LogError("A file value was not sent: the collector session transport cannot carry file values yet.");
-                return false;
-            }
-#endif
 
             Enqueue(std::move(json), /*is_file=*/true);
 
@@ -4233,7 +4306,6 @@ namespace
             }
 
             queue_cv_.notify_all();
-            return true;
         }
 
         // Public liveness/running check for sensors that want to avoid expensive work (e.g. a disk
@@ -6163,13 +6235,7 @@ namespace
                 for (const auto& h : response.response_headers)
                 {
                     if (h.name == "x-hsm-directive")
-                    {
-                        const auto colon = h.value.find(':');
-                        if (colon != std::string::npos)
-                            directive_callback_(h.value.substr(0, colon).c_str(), h.value.substr(colon + 1).c_str(), directive_user_data_);
-                        else
-                            directive_callback_(h.value.c_str(), "", directive_user_data_);
-                    }
+                        DispatchServerDirective(h.value);
                 }
             }
 
@@ -6206,6 +6272,24 @@ namespace
 #endif
 
 #if defined(HSM_COLLECTOR_HTTP)
+        // One server directive, "name:argument" or a bare name, to the host's callback as verb and
+        // payload: the text of one X-Hsm-Directive header line over HTTP, or the body of one
+        // {"op":"directive"} push on the session (#1660 step 5). Both paths split it the same way,
+        // so the host sees the same calls in the same order whichever transport carried them.
+        // A directive that is empty or whitespace only carries nothing and is not handed on, as the
+        // managed ServerDirectives.Receive skips it (string.IsNullOrWhiteSpace).
+        void DispatchServerDirective(const std::string& directive)
+        {
+            if (directive_callback_ == nullptr || IsWhiteSpaceOnlyUtf8(directive))
+                return;
+
+            const auto colon = directive.find(':');
+            if (colon != std::string::npos)
+                directive_callback_(directive.substr(0, colon).c_str(), directive.substr(colon + 1).c_str(), directive_user_data_);
+            else
+                directive_callback_(directive.c_str(), "", directive_user_data_);
+        }
+
         // The data queue's batch as `list` frames on the session. A batch that does not fit one
         // frame is split; every frame is acknowledged on its own. The result is the HTTP rule:
         // 2xx is delivered, anything else (or no ack) sends the batch back to the queue.
@@ -6777,23 +6861,11 @@ namespace
 
         const auto normalized_comment = TrimComment(CopyString(comment));
 
-        // Canonical cross-language file payload (string content asserted as UTF-8 text).
-        std::ostringstream json;
-        json << "{"
-             << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
-             << "\"Path\":\"" << EscapeJson(path_) << "\","
-             << "\"Value\":\"" << EscapeJson(content) << "\","
-             << "\"Name\":\"" << EscapeJson(name) << "\","
-             << "\"Extension\":\"" << EscapeJson(extension) << "\","
-             << "\"Status\":" << static_cast<int>(status) << ","
-             << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
-             << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
-             << "}";
-
         // Instant gating: dropped unless the collector is running (values before Start are
-        // lost). File payloads dispatch promptly — not gated by the package collect period.
-        // The one refusal: a collector on the session transport cannot send a file value.
-        return collector->EnqueueFileIfRunning(json.str()) ? HSM_RESULT_OK : HSM_RESULT_INVALID_STATE;
+        // lost). File payloads dispatch promptly — not gated by the package collect period. On a
+        // session a file value travels in a `list` frame like every other value (#1660 step 2b).
+        collector->EnqueueFileIfRunning(collector->OutgoingFileJson(path_, content, name, extension, status, normalized_comment));
+        return HSM_RESULT_OK;
     }
 
     hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)

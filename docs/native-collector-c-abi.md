@@ -156,6 +156,17 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.14.0** (#1660 steps 2b and 5, #1666) — no new entry point, behaviour changes:
+  - `hsm_sensor_add_file*` return `HSM_RESULT_OK` on a collector session (they returned
+    `HSM_RESULT_INVALID_STATE`): a file value travels as an element of a `list` frame, and one
+    whose element does not fit the server's frame limit is dropped, reported and counted as
+    overflow.
+  - A file value leaves the queue in the wire format on every transport. Before, it left in the
+    canonical corpus format, which the server cannot read, so over HTTP the whole `/list` batch
+    that carried a file was refused and sent again every cycle.
+  - Directives the server pushes on a session reach the host's directive callback, as the `X-Hsm-Directive` header lines do over HTTP.
+  - The default `Service alive` TTL alert carries its own 5-minute inactivity period
+    (`"TTLs":[3000000000]`; it carried none).
 - **0.13.1** (#1752, parity with the managed `Connection failures rate` sensor) — no ABI change;
   two behaviours of `hsm_collector_enable_tcp_connection_failure_rate_sensor` (Windows).
   **Asked for more than once, the first period stays**: until now the last period given before

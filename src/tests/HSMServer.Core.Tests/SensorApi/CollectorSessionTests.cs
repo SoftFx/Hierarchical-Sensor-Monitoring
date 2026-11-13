@@ -6,6 +6,7 @@ using HSMServer.ServerConfiguration;
 using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -161,6 +162,245 @@ namespace HSMServer.Core.Tests.SensorApi
                 $"HTTP answered {httpRejected.Body}, the session {rejectedAck["body"]?.ToJsonString()}");
             Assert.Equal("Path for the sensor is too long.", (string)rejectedAck["body"]["parity/a/b/c/d/e/f/g/h/i/j"]);
             Assert.Single(rejectedAck["body"].AsObject());
+        }
+
+        // #1660 step 2b: a collector sends a file value on the session as an element of a list
+        // frame. It is stored exactly as the same value posted to the HTTP /file route, and as the
+        // same element posted to /list (where the native collector has always sent its files).
+        [Fact]
+        public async Task FileValue_InAListFrame_IsStoredAsOverTheFileRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var content = Enumerable.Range(0, 300).Select(i => (byte)(i % 256)).ToArray();
+            var time = DateTime.UtcNow.AddMinutes(-1);
+
+            string FileValue(string path) =>
+                $"{{\"Type\":6,\"Extension\":\"csv\",\"Name\":\"report\",\"Value\":[{string.Join(",", content)}],\"Comment\":\"note\"," +
+                $"\"Time\":\"{time:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overFile = await PostAsync(host, "file", FileValue("file/http-file"), _key);
+            var overList = await PostAsync(host, "list", $"[{FileValue("file/http-list")}]", _key);
+
+            await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{FileValue("file/session")}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, overFile.Status);
+            Assert.Equal(HttpStatusCode.OK, overList.Status);
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+
+            HSMCommon.Model.FileValue Stored(string path)
+            {
+                Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor), $"no sensor at {path}");
+
+                return HSMServer.Core.Extensions.SensorValueExtensions.DecompressContent(Assert.IsType<HSMCommon.Model.FileValue>(sensor.LastValue));
+            }
+
+            await TestWait.UntilAsync(() => new[] { "file/http-file", "file/http-list", "file/session" }
+                                                .All(path => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor) && sensor.LastValue is not null),
+                "the three file values to reach their sensors");
+
+            var expected = Stored("file/http-file");
+
+            Assert.Equal(content, expected.Value);
+            Assert.Equal(("report", "csv", "note"), (expected.Name, expected.Extension, expected.Comment));
+
+            foreach (var path in new[] { "file/http-list", "file/session" })
+            {
+                var stored = Stored(path);
+
+                Assert.Equal(expected.Value, stored.Value);
+                Assert.Equal((expected.Name, expected.Extension, expected.Comment, expected.Status, expected.Time, expected.OriginalSize),
+                             (stored.Name, stored.Extension, stored.Comment, stored.Status, stored.Time, stored.OriginalSize));
+            }
+        }
+
+        // A file the server refuses is an entry of the ack's dictionary, as on /list (the /file
+        // route answers it 406, which a collector would send again on every cycle).
+        [Fact]
+        public async Task FileValue_TheServerRefuses_IsAnEntryOfTheAck_AsOnTheListRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            // A path deeper than a sensor path may be: the value is refused.
+            const string path = "file/a/b/c/d/e/f/g/h/i/j";
+            var file = $"{{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"n\",\"Value\":[104,105],\"Comment\":null,\"Time\":\"{DateTime.UtcNow:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overList = await PostAsync(host, "list", $"[{file}]", _key);
+            var overFile = await PostAsync(host, "file", file, _key);
+
+            await SendAsync(socket, $"{{\"id\":2,\"op\":\"list\",\"body\":[{file}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP /list answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+            Assert.Equal("Path for the sensor is too long.", (string)ack["body"][path]);
+
+            // The /file route refuses the same value with a 406.
+            Assert.Equal(HttpStatusCode.NotAcceptable, overFile.Status);
+        }
+
+        // --- directive push (#1660 step 5) ---
+
+        // A directive-aware agent states X-Agent-Version. Right after the hello its session gets
+        // the whole set: the same texts, in the same order, as the X-Hsm-Directive headers of an
+        // HTTP answer to the same key and agent version.
+        [Fact]
+        public async Task Directives_AfterTheHello_AreTheHeadersOfAnHttpAnswer_InTextAndOrder()
+        {
+            var webRoot = StageAgent("9.9.9");
+
+            try
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["network", "module"]);
+
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+
+                var overHttp = await HttpDirectivesAsync(host, "0.5.1");
+
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+                var pushed = await ReceiveDirectivesAsync(socket, overHttp.Length);
+
+                Assert.Equal(new[] { "update-available:9.9.9", "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk",
+                              "sensor-disable:network", "sensor-disable:module", "sensor-enable:process" }, overHttp);
+                Assert.Equal(overHttp, pushed);
+
+                // Nothing more: the next frame is the answer to a ping.
+                await SendAsync(socket, "{\"op\":\"ping\"}");
+                Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_NotForASessionThatStatesNoAgentVersion()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+
+            // No push at all: the only timer of the session is its silence watch.
+            Assert.Single(host.Time.Timers);
+        }
+
+        [Fact]
+        public async Task Directives_ASwitchedGroup_IsPushedAloneAtTheNextCheck()
+        {
+            try
+            {
+                await using var host = await StartHost();
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // Auto-update is off: the six sensor groups.
+                Assert.Equal(6, (await ReceiveDirectivesAsync(socket, 6)).Length);
+
+                var check = await PushTimerAsync(host, TimeSpan.FromSeconds(15));
+
+                // A check that finds nothing new pushes nothing.
+                check.Fire();
+                await ExpectNoPushAsync(socket);
+
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["disk"]);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-disable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+
+                // Switched back on: the directive that changed again, and only it.
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-enable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_TheWholeSet_IsPushedAgainAtTheReannouncement()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            var first = await ReceiveDirectivesAsync(socket, 6);
+
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(first, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
+        // A push that fails while the session is up does not end the pushes: it is logged, what
+        // was not sent goes out at the next check, in order, and the re-announcements go on.
+        [Fact]
+        public async Task Directives_APushThatFails_IsSentAgainAtTheNextCheck_AndThePushesGoOn()
+        {
+            await using var host = await StartHost();
+
+            var failures = 1;
+            host.Handler.PushSend = (session, frame, token) =>
+                Interlocked.Decrement(ref failures) >= 0
+                    ? Task.FromException(new InvalidOperationException("the send failed"))
+                    : session.SendAsync(frame, token);
+
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            // The first send of the first round fails: nothing of that round goes out.
+            await TestWait.UntilAsync(() => Volatile.Read(ref failures) <= 0, "the failing push");
+            await TestWait.UntilAsync(() => host.Log.Matching("A directive push of collector session", "the send failed").Length == 1, "the failed push to be logged");
+            await ExpectNoPushAsync(socket);
+
+            // The next check pushes what the collector was not told, the whole set in order.
+            (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+            var pushed = await ReceiveDirectivesAsync(socket, 6);
+
+            Assert.Equal(new[] { "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk", "sensor-enable:network", "sensor-enable:module", "sensor-enable:process" }, pushed);
+            await ExpectNoPushAsync(socket);
+
+            // The loop is still there: the re-announcement comes.
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(pushed, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
+        [Fact]
+        public async Task Directives_ANewlyStagedAgent_IsPushedAtTheNextCheck()
+        {
+            var webRoot = StageAgent("0.5.1");
+
+            try
+            {
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // The staged agent is the running one: no update.
+                Assert.DoesNotContain(await ReceiveDirectivesAsync(socket, 6), directive => directive.StartsWith("update-available"));
+
+                File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), "0.6.0");
+
+                // The staged version is read again once its cache is 15 s old.
+                host.Time.Advance(TimeSpan.FromSeconds(16));
+                (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+                Assert.Equal(new[] { "update-available:0.6.0" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
         }
 
         [Fact]
@@ -788,9 +1028,13 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("127.0.0.1", session.RemoteIP);
             Assert.InRange(session.ConnectedAtUtc, before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
 
+            // A session that states an agent version gets the directives of its product first
+            // (#1660 step 5): the six sensor groups, auto-update being off.
+            await ReceiveDirectivesAsync(socket, 6);
+
             await Task.Delay(50);
             await SendAsync(socket, "{\"op\":\"ping\"}");
-            await ReceiveAsync(socket);
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
 
             Assert.True(Assert.Single(host.Registry.GetSessions()).LastFrameAtUtc > session.LastFrameAtUtc, "an inbound frame must move last-frame-at");
 
@@ -1074,13 +1318,85 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null)
+        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null, AgentConfig agent = null, string webRoot = null)
         {
             var config = new CollectorSessionsConfig();
 
             configure?.Invoke(config);
 
-            return SensorApiTestHost.StartAsync(_valuesCache, config);
+            return SensorApiTestHost.StartAsync(_valuesCache, config, agent, webRoot);
+        }
+
+        // A web root whose agent/version.txt stages this agent version.
+        private static string StageAgent(string version)
+        {
+            var webRoot = Path.Combine(Path.GetTempPath(), $"hsm-session-directives-{Guid.NewGuid():N}");
+
+            Directory.CreateDirectory(Path.Combine(webRoot, "agent"));
+            File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), version);
+
+            return webRoot;
+        }
+
+        private Task<ClientWebSocket> OpenAgentSessionAsync(SensorApiTestHost host, string agentVersion) =>
+            OpenAsync(host, configure: options => options.SetRequestHeader("X-Agent-Version", agentVersion));
+
+        // The X-Hsm-Directive headers of an accepted /list answer, in order.
+        private async Task<string[]> HttpDirectivesAsync(SensorApiTestHost host, string agentVersion)
+        {
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, "list"))
+            {
+                Content = new StringContent($"[{IntValue("directives/http", 1)}]", Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.Add("ClientName", ClientName);
+            request.Headers.Add("Key", _key);
+            request.Headers.Add("X-Agent-Version", agentVersion);
+
+            using var response = await http.SendAsync(request, Deadline());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            return response.Headers.TryGetValues("X-Hsm-Directive", out var values) ? values.ToArray() : [];
+        }
+
+        // The bodies of the next `count` frames, each of which must be a directive push.
+        private static async Task<string[]> ReceiveDirectivesAsync(ClientWebSocket socket, int count)
+        {
+            var directives = new string[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                var frame = await ReceiveAsync(socket);
+
+                Assert.True((string)frame["op"] == "directive", $"expected a directive push, the session sent {frame.ToJsonString()}");
+                Assert.Null(frame["id"]);
+                Assert.Null(frame["ack"]);
+
+                directives[i] = (string)frame["body"];
+            }
+
+            return directives;
+        }
+
+        // Nothing was pushed: the next frame is the answer to a ping.
+        private static async Task ExpectNoPushAsync(ClientWebSocket socket)
+        {
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+
+            var frame = await ReceiveAsync(socket);
+
+            Assert.True((string)frame["op"] == "pong", $"expected nothing before the pong, the session sent {frame.ToJsonString()}");
+        }
+
+        // A timer of the directive push, by its period: 15 s for the check, 5 min for the
+        // re-announcement. Created when the session opens, after the hello.
+        private static async Task<ManualTimer> PushTimerAsync(SensorApiTestHost host, TimeSpan period)
+        {
+            await TestWait.UntilAsync(() => host.Time.Timers.Any(timer => timer.DueTime == period), $"the directive timer of {period}");
+
+            return host.Time.Timers.Single(timer => timer.DueTime == period);
         }
 
         private Guid AddKey(KeyPermissions? permissions = null)

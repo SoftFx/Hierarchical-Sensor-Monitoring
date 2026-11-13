@@ -28,6 +28,7 @@
 //   -> {"id":17,"op":"list","body":[...]}      <- {"ack":17,"status":200,"body":{...}}
 //   -> {"op":"ping"}                           <- {"op":"pong"}
 //   <- {"op":"hello","body":{"maxFrameBytes":N,"heartbeatSeconds":S}}   first frame of a session
+//   <- {"op":"directive","body":"name:argument"}                       a push (#1660 step 5)
 namespace hsm::http
 {
     class WebSocketConnection;
@@ -64,6 +65,11 @@ namespace hsm::http
         // Where the transport reports what happens to the session. Called from the session thread
         // and from Start; must not throw.
         std::function<void(SessionLogLevel, const std::string&)> log;
+        // Where a directive the server pushes goes (#1660 step 5): the body of every
+        // {"op":"directive","body":"name:argument"} frame, in the order the frames arrive. Called
+        // on the session thread, never while the transport holds its lock, and not once Stop has
+        // begun. A throw is swallowed.
+        std::function<void(const std::string&)> on_directive;
     };
 
     class SessionTransport
@@ -136,6 +142,7 @@ namespace hsm::http
         // `permanent`: the server answered with something that a retry will not change.
         bool ReadHello(WebSocketConnection& connection, int64_t timeout_ms, std::string& why, bool& permanent);
         void HandleFrame(const std::string& text, Counters& counters);
+        void HandleDirective(const std::string& directive);
         void FailAll(const std::string& why);
         // Waits before the next attempt; false when stopping.
         bool WaitBeforeRetry(int attempt);

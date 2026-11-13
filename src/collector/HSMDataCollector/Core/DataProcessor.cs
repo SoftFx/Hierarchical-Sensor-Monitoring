@@ -29,9 +29,6 @@ namespace HSMDataCollector.Core
         private readonly object _lifecycleGate;
         private readonly TimeSpan _stopFlushTimeout;
 
-        // The sender, when it is a transport with a connection of its own (the collector session).
-        private readonly ICollectorTransport _transport;
-
         // 1 while a stop drains a queue whose package diagnostics must not be recorded: during the
         // command flush, which goes first, and from the data/priority drain boundary on (the file
         // flush). Those flushes still produce package diagnostics; they observe this flag and skip
@@ -81,8 +78,6 @@ namespace HSMDataCollector.Core
             Scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
             _stopFlushTimeout = TimeSpan.FromTicks(Math.Min(Math.Max(options.RequestTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks),
                                                             TimeSpan.FromSeconds(5).Ticks));
-
-            _transport = options.DataSender as ICollectorTransport;
 
             SensorStorage  = new SensorsStorage(options, this, logger);
 
@@ -316,15 +311,6 @@ namespace HSMDataCollector.Core
 
         public void AddFile(ISensor sender, FileSensorValue file)
         {
-            // The collector session has no op for a file value yet, and there is no HTTP to send
-            // it over instead. Refused here, before the queue: queued, it would be sent, refused
-            // and re-queued for ever. Reported and counted like any other lost value.
-            if (RefusesFiles && _lifecycle.CanAcceptData)
-            {
-                ReportRefusedFile(file?.Path);
-                return;
-            }
-
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
         }
 
@@ -335,15 +321,6 @@ namespace HSMDataCollector.Core
         /// here a package that waits for the transport is the queue's to report.
         /// </summary>
         internal bool TransportReportsElsewhere { get; set; }
-
-        /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
-        internal bool RefusesFiles => _transport != null && !_transport.CanCarryFiles;
-
-        internal void ReportRefusedFile(string path)
-        {
-            AddError($"A file value of {path} was not sent: the collector session transport cannot carry file values yet.");
-            EmitOverflowDrops(_fileQueue.QueueName, 1);
-        }
 
         // Wraps each queue's typed Enqueue with the collector-wide lifecycle gate. When the
         // collector is not in an accepting state we surface RejectedCollectorNotAcceptingData

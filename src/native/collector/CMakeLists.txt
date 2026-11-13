@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.13.1 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.14.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -381,8 +381,11 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_session_split_registration_retries_only_the_failed_part
         COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
     )
-    add_test(NAME native_session_refuses_file_values
-        COMMAND hsm_collector_tests native_session_refuses_file_values
+    add_test(NAME native_session_delivers_file_values
+        COMMAND hsm_collector_tests native_session_delivers_file_values
+    )
+    add_test(NAME native_session_hands_pushed_directives_to_the_host
+        COMMAND hsm_collector_tests native_session_hands_pushed_directives_to_the_host
     )
     add_test(NAME native_session_oversized_value_is_dropped_once
         COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
@@ -397,6 +400,12 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
+    )
+    add_test(NAME native_http_posts_file_values_in_the_wire_format
+        COMMAND hsm_collector_tests native_http_posts_file_values_in_the_wire_format
+    )
+    add_test(NAME native_http_hands_header_directives_to_the_host
+        COMMAND hsm_collector_tests native_http_hands_header_directives_to_the_host
     )
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start
@@ -747,7 +756,9 @@ if(HSM_COLLECTOR_HTTP)
             meta_session_accepted_contains_wrong_text
             meta_session_frames_fit_too_small
             meta_session_no_request_contains_present
-            meta_session_http_request_seen)
+            meta_session_http_request_seen
+            meta_session_directives_received_wrong_count
+            meta_session_directive_received_wrong_text)
         add_test(
             NAME ${session_meta}
             COMMAND hsm_collector_tests meta_session_must_fail

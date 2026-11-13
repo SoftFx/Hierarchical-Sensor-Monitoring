@@ -1,6 +1,6 @@
 # Feature: CollectorScheduler
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-11-13 | Canonical: yes
 > Scope: Collector - per-collector timer wheel for all periodic sensor actions
 
 ---
@@ -35,6 +35,8 @@
 
 `WindowsServiceStatusSensor` intentionally keeps a raw `ScheduledTask` (needs `CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight poll completes).
 
+**A disposed sensor leaves nothing in the wheel (#1066).** Every owner stops its handles (or its raw task) on the dispose path too, not only on `StopAsync`: `SensorBase.Dispose()` runs `DisposeAsyncCore()`, which is `StopAsync()` by default; the bar sensor overrides it with `StopCoreAsync(flushPartialBar: false)` (both handles stopped, no partial-bar flush) and the last-value sensor with `base.StopAsync()`. `SensorsStorage.Dispose()` therefore stops every schedule even without a prior collector `Stop()`, and after `DataCollector.Dispose()` returns every sensor task is disposed, out of the wheel and refuses `TryAttachRun`, the only way the worker starts a run. A run the worker dispatched before the stop is awaited by `StopAsync` for at most ~1 s; if it outlives that bound, the lifecycle epoch of monitoring and bar sensors drops the value it builds.
+
 ## Key Files
 
 | File | Purpose |
@@ -45,7 +47,7 @@
 
 ## Tests
 
-`CollectorSchedulerTests.cs`, `ScheduledTaskHandleTests.cs`, `CollectorTimerStressTests.cs` in `src/collector/HSMDataCollector.Tests/`.
+`CollectorSchedulerTests.cs`, `ScheduledTaskHandleTests.cs`, `CollectorTimerStressTests.cs` in `src/collector/HSMDataCollector.Tests/`. `SensorScheduleDisposeTests.cs` (#1066: monitoring, bar and disk-prediction schedules after `SensorsStorage.Dispose()` with the scheduler running, and after `DataCollector.Dispose()`; both TFMs).
 
 ## Native port (C++)
 

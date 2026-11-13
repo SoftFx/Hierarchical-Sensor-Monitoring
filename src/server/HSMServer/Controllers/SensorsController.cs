@@ -44,28 +44,22 @@ namespace HSMServer.Controllers
         private const string InvalidRequest = SensorIngestionService.InvalidRequest;
         private const string KeyRequired = "An access key is required";
 
-        private const string DirectiveHeader = "X-Hsm-Directive";
-        private const string AgentVersionHeader = "X-Agent-Version";
-        private static readonly string[] _knownSensorGroups = ["computer", "system", "disk", "network", "module", "process"];
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly SensorIngestionService _ingestion;
         private readonly CollectorSessionHandler _sessions;
         private readonly TelemetryCollector _telemetry;
         private readonly ITreeValuesCache _cache;
-        private readonly IWebHostEnvironment _environment;
-        private readonly IServerConfig _config;
+        private readonly AgentDirectives _directives;
 
 
         public SensorsController(SensorIngestionService ingestion, CollectorSessionHandler sessions, ITreeValuesCache cache,
-            TelemetryCollector telemetry, IWebHostEnvironment environment, IServerConfig config)
+            TelemetryCollector telemetry, AgentDirectives directives)
         {
             _telemetry = telemetry;
             _ingestion = ingestion;
             _sessions = sessions;
             _cache = cache;
-            _environment = environment;
-            _config = config;
+            _directives = directives;
         }
 
 
@@ -533,75 +527,17 @@ namespace HSMServer.Controllers
             }
         }
 
+        // The directives of a directive-aware agent (#1198) ride every accepted answer to a data
+        // request; the set is computed by AgentDirectives, which the collector session uses too
+        // (#1660 step 5). A client that does not state X-Agent-Version gets none.
         private void EmitAgentDirectives()
         {
-            // Phase 1: update-available — only when X-Agent-Version request header is present and
-            // the server has a newer binary staged in wwwroot/agent/.
-            // NOTE: agent/staged versions are plain numeric "x.y.z"; a semver pre-release/build suffix
-            // would fail Version.TryParse and silently skip the directive (acceptable by contract).
-            var agentVersionHeader = Request.Headers[AgentVersionHeader].ToString();
-            if (_config.Agent.AutoUpdateEnabled
-                && !string.IsNullOrEmpty(agentVersionHeader)
-                && Version.TryParse(agentVersionHeader, out var agentVer)
-                && !string.IsNullOrEmpty(_environment?.WebRootPath))
-            {
-                var staged = ReadStagedVersion(_environment.WebRootPath);
-                if (Version.TryParse(staged, out var stagedVer) && stagedVer > agentVer)
-                    Response.Headers.Append(DirectiveHeader, $"update-available:{staged}");
-            }
+            var agentVersion = Request.Headers[AgentDirectives.AgentVersionHeader].ToString();
 
-            // Phase 2: sensor-disable / sensor-enable — driven by per-product DisabledSensorGroups.
-            // Only for directive-aware agents (those that send X-Agent-Version); ordinary
-            // HSMDataCollector clients ignore these, so don't append six headers to their every POST.
-            if (string.IsNullOrEmpty(agentVersionHeader) || !HttpContext.TryGetPublicApiInfo(out var info))
-                return;
+            HttpContext.TryGetPublicApiInfo(out var info);
 
-            // Emit the FULL desired state (enable OR disable) for every known group, not just the
-            // disabled ones — otherwise re-enabling a group in the UI never reaches the agent: the
-            // server would simply stop sending the disable, leaving the agent's persisted config
-            // stuck disabled. The agent no-ops a directive whose state is unchanged, so the extra
-            // headers are cheap.
-            foreach (var group in _knownSensorGroups)
-            {
-                var verb = info.Product.DisabledSensorGroups.Contains(group) ? "sensor-disable" : "sensor-enable";
-                Response.Headers.Append(DirectiveHeader, $"{verb}:{group}");
-            }
-        }
-
-        private static string _stagedVersionCache = "0.0.0";
-        private static long _stagedVersionReadAtTicks; // DateTime.UtcNow.Ticks of last disk read; 0 = never
-        private static readonly object _stagedVersionLock = new();
-        private const long StagedVersionCacheTtlTicks = 15 * TimeSpan.TicksPerSecond;
-
-        // wwwroot/agent/version.txt is consulted on every data POST (the /list batch endpoint is the
-        // server's hottest path), but only changes when ops stage a new binary. Cache it with a short
-        // TTL so the hot path hits memory instead of synchronous disk I/O, while still picking up a
-        // newly staged version within the TTL window. Cache hits are lock-free.
-        private static string ReadStagedVersion(string webRootPath)
-        {
-            var nowTicks = DateTime.UtcNow.Ticks;
-            if (nowTicks - System.Threading.Interlocked.Read(ref _stagedVersionReadAtTicks) < StagedVersionCacheTtlTicks)
-                return _stagedVersionCache;
-
-            lock (_stagedVersionLock)
-            {
-                if (nowTicks - _stagedVersionReadAtTicks < StagedVersionCacheTtlTicks)
-                    return _stagedVersionCache; // another thread refreshed while we waited
-
-                try
-                {
-                    var path = System.IO.Path.Combine(webRootPath, "agent", "version.txt");
-                    var text = System.IO.File.ReadAllText(path).Trim();
-                    _stagedVersionCache = string.IsNullOrEmpty(text) ? "0.0.0" : text;
-                }
-                catch
-                {
-                    _stagedVersionCache = "0.0.0";
-                }
-
-                System.Threading.Interlocked.Exchange(ref _stagedVersionReadAtTicks, nowTicks);
-                return _stagedVersionCache;
-            }
+            foreach (var directive in _directives.For(agentVersion, info?.Product))
+                Response.Headers.Append(AgentDirectives.Header, directive);
         }
 
         private async Task<TaskResult> TryBuildAndAddData<T>(T value)

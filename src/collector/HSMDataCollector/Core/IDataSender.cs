@@ -45,12 +45,6 @@ namespace HSMDataCollector.Core
         /// package leaves when the connection is there and not a collect period later.
         /// </summary>
         System.Threading.Tasks.Task WaitForConnectionAsync(System.Threading.CancellationToken token);
-
-        /// <summary>
-        /// False when the transport has no way to carry a file value. The collector then refuses
-        /// a file value before it is queued: queued, it would be sent, refused and re-queued for ever.
-        /// </summary>
-        bool CanCarryFiles { get; }
     }
 
     /// <summary>

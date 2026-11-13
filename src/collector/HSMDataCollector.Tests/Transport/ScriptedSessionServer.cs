@@ -39,6 +39,10 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentQueue<string> _httpRequests = new ConcurrentQueue<string>();
         private readonly ConcurrentQueue<int> _closes = new ConcurrentQueue<int>();
         private readonly ConcurrentDictionary<int, WebSocket> _open = new ConcurrentDictionary<int, WebSocket>();
+        // The open sessions that have had their hello: what a push goes to.
+        private readonly ConcurrentDictionary<int, WebSocket> _greeted = new ConcurrentDictionary<int, WebSocket>();
+        // A WebSocket takes one send at a time; acks come from the session loops, pushes from the test.
+        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
         private readonly ConcurrentDictionary<string, int> _ackStatus = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         private readonly Task _loop;
 
@@ -117,6 +121,30 @@ namespace HSMDataCollector.Tests.Transport
                 catch (Exception) { }
             }
         }
+
+        /// <summary>
+        /// Sends this frame, as it is, to every open session that has had its hello: a push from
+        /// the server. Returns how many sessions it went to.
+        /// </summary>
+        public int Push(string frame)
+        {
+            var sent = 0;
+
+            foreach (var session in _greeted.ToArray())
+            {
+                try
+                {
+                    SendAsync(session.Value, frame).GetAwaiter().GetResult();
+                    sent++;
+                }
+                catch (Exception) { }
+            }
+
+            return sent;
+        }
+
+        /// <summary>Pushes one server directive (#1660 step 5): <c>{"op":"directive","body":"..."}</c>.</summary>
+        public int PushDirective(string directive) => Push($"{{\"op\":\"directive\",\"body\":{JsonSerializer.Serialize(directive)}}}");
 
         /// <summary>Heartbeats are recorded and not answered: to the collector the server has gone quiet.</summary>
         public void StopAnsweringPings() => Volatile.Write(ref _answerPings, 0);
@@ -237,6 +265,8 @@ namespace HSMDataCollector.Tests.Transport
             {
                 await SendAsync(socket, $"{{\"op\":\"hello\",\"body\":{{\"maxFrameBytes\":{MaxFrameBytes},\"heartbeatSeconds\":{HeartbeatSeconds}}}}}").ConfigureAwait(false);
 
+                _greeted[index] = socket;
+
                 var buffer = new ArraySegment<byte>(new byte[64 * 1024]);
 
                 while (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseSent)
@@ -275,6 +305,7 @@ namespace HSMDataCollector.Tests.Transport
             }
             finally
             {
+                _greeted.TryRemove(index, out _);
                 _open.TryRemove(index, out _);
                 socket.Dispose();
             }
@@ -353,8 +384,19 @@ namespace HSMDataCollector.Tests.Transport
             _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, status));
         }
 
-        private Task SendAsync(WebSocket socket, string text) =>
-            socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(text)), WebSocketMessageType.Text, true, _stop.Token);
+        private async Task SendAsync(WebSocket socket, string text)
+        {
+            await _sendLock.WaitAsync(_stop.Token).ConfigureAwait(false);
+
+            try
+            {
+                await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(text)), WebSocketMessageType.Text, true, _stop.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
 
         private static int GetFreeTcpPort()
         {

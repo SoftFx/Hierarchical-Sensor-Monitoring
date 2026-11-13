@@ -38,6 +38,14 @@
     <Compile Include="..\HSMDataCollector.Tests\StopDrainFailedSendTests.cs" Link="Shared\StopDrainFailedSendTests.cs" />
     <Compile Include="..\HSMDataCollector.Tests\StopDrainAbandonedSendTests.cs" Link="Shared\StopDrainAbandonedSendTests.cs" />
     <Compile Include="..\HSMDataCollector.Tests\CommandOrderAcrossPackagesTests.cs" Link="Shared\CommandOrderAcrossPackagesTests.cs" />
+    <!-- Sensor schedules on Dispose (#1066): the scheduler and the sensor stops run on two
+         runtimes. -->
+    <Compile Include="..\HSMDataCollector.Tests\SensorScheduleDisposeTests.cs" Link="Shared\SensorScheduleDisposeTests.cs" />
+    <!-- The obsolete Initialize racing Stop and Dispose (#1061): the lifecycle lock and the
+         queue stops run on two runtimes. -->
+    <Compile Include="..\HSMDataCollector.Tests\ObsoleteInitializeLifecycleTests.cs" Link="Shared\ObsoleteInitializeLifecycleTests.cs" />
+    <!-- A failed start and its rollback racing Stop and Dispose: one processor stop. -->
+    <Compile Include="..\HSMDataCollector.Tests\FailedStartRollbackTests.cs" Link="Shared\FailedStartRollbackTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -100,6 +100,8 @@ Additive, portable-friendly APIs sit alongside the legacy surface (nothing remov
 
 `CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).
 
+`CanAcceptData` is read on every enqueue and takes no lock (#1061): it depends only on the internal `_status`, a `volatile` field that every transition writes under the lifecycle lock. A lock would give no more, since the caller acts on the answer after releasing it either way; a value that loses the race with a stop is rejected by the stopped queue. The other `CollectorLifecycle` reads combine `_status` with `_disposed` and stay under the lock.
+
 Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
 - `Status` reports `Disposed` immediately when `Dispose()` is entered.
 - `CanAcceptData` is computed from the *internal* (pre-dispose) status. While the stop is still in flight it returns true so sensors can flush final values. Once `CompleteStop` fires (`internal _status = Stopped`), `CanAcceptData` returns false.
@@ -107,13 +109,17 @@ Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
 
 ### Lifecycle event ordering
 
-`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls.
+`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls. A handler that waits synchronously for another lifecycle operation (`Stop().Wait()`, or a wait on a thread that calls `Start`/`Stop`/`Dispose`) deadlocks, since that operation needs `_opLock`. This contract is public XML documentation on the `IDataCollector` events and on `ILifecycleListener` (#1061).
 
 ### Dispose racing Stop
 
 If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight processor stop task (`_currentProcessorStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
 
 If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is already in flight, the stopping path waits for `_currentStartInitTask` before stopping and disposing components. It does not wait for the user-supplied pre-init `customStartingTask`; if stop/dispose happens while that task is pending, the later `Start()` continuation observes that lifecycle is no longer starting/running and exits without entering initialization.
+
+The obsolete synchronous `Initialize()` follows the same rules (#1061): it re-checks the status after `ToStarting` and before the sensor initialization, publishes that initialization as `_currentStartInitTask` under `_opLock`, and, when `CompleteStart` fails because a `Stop()`/`Dispose()` took over, returns without a start-rollback stop of its own. The processor is stopped once, by the caller that moved the lifecycle out of `Starting`. Before, a `Dispose()` racing `Initialize()` stopped and disposed sensors whose `InitAsync` was still running, and `Initialize()` then ran a second, `StartRollback` stop that cleared the queues the dispose was draining. Tests: `ObsoleteInitializeLifecycleTests` (both TFMs).
+
+A sensor initialization that **fails** (in `Start()` or in `Initialize()`) follows the same single-owner rule. If a `Stop()`/`Dispose()` already moved the lifecycle out of `Starting`, that caller owns the processor stop and the failed start only logs. Otherwise the start rolls back (`StartRollback`), and the rollback is published as `_currentProcessorStopTask` under `_opLock`, so a `Stop()` or `Dispose()` that comes while it runs joins it instead of starting a second stop beside it; a joining `Dispose()` ends the start itself, so `ToStopped` fires once, before the disposal. Tests: `FailedStartRollbackTests` (both TFMs).
 
 ### Queue state machine
 
@@ -210,7 +216,7 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 - `BarMonitoringSensorBase` composes a second handle for the bar-collect loop, on top of the inherited send handle.
 - `FreeDiskSpacePredictionBase` composes a handle for its disk-speed sampling loop.
 
-`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
+`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. A sensor stops its handles on `Dispose()` as well as on `StopAsync()` (`DisposeAsyncCore`), so disposing the sensor storage without a prior stop leaves no task in the timer wheel (#1066, [`scheduling/`](./scheduling/feature.md)). `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
 
 Disk free-space read failures are sensor errors, not lifecycle failures. The regular free-space sensor emits an `Error` value with the exception message, while disk prediction startup and sampling report the exception through the normal collector error path, keep the sensor started, and allow later scheduled samples to recover if the OS metric becomes readable again.
 
