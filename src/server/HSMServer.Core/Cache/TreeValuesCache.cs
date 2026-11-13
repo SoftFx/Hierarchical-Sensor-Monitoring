@@ -938,14 +938,25 @@ namespace HSMServer.Core.Cache
                         return true;
 
                     case AliasResolution.None:
-                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error, out storeFailed))
+                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, checkStore: true, out sensor, out error, out storeFailed))
                             return false;
                         break;
                 }
             }
 
             update = update with { Id = sensor.Id };
-            return TryUpdateSensor(update, out error, out storeFailed);
+            return TryUpdateSensor(update, checkStore: true, out error, out storeFailed);
+        }
+
+        // The write of a sensor's row on the registration path (#1756). The store's void
+        // methods do not tell a write the storage engine failed on (it logs it and
+        // returns), which is what every other caller of them relies on; a registration
+        // must know, so it asks for the outcome and turns a reported failure into the
+        // exception a throwing store would have raised at the same place.
+        private static void ThrowIfNotWritten(Exception failure)
+        {
+            if (failure is not null)
+                throw new InvalidOperationException($"The store did not write the sensor: {failure.Message}", failure);
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
@@ -963,12 +974,17 @@ namespace HSMServer.Core.Cache
         // after applying it (EvaluationError; the policy applied and
         // persisted). Null for every other caller.
         private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null) =>
-            TryUpdateSensor(update, out error, out _, policyFailures);
+            TryUpdateSensor(update, checkStore: false, out error, out _, policyFailures);
 
         // storeFailed (#1756): true when the update failed in the write to the store, the
         // one failure here that is known to be able to pass on a repeat. Only the
         // registration path asks; for every other caller this is the method it was.
-        private bool TryUpdateSensor(SensorUpdate update, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
+        //
+        // checkStore: true on the registration path only. The write then asks the store
+        // for its outcome (UpdateSensorChecked), so a write the storage engine failed on
+        // without throwing is seen too. False for every other caller: the void write, with
+        // which such a failure is logged by the store and not seen here, as always.
+        private bool TryUpdateSensor(SensorUpdate update, bool checkStore, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
         {
             storeFailed = false;
 
@@ -987,7 +1003,12 @@ namespace HSMServer.Core.Cache
                 var entity = sensor.ToEntity();
 
                 storing = true;
-                _database.UpdateSensor(entity);
+
+                if (checkStore)
+                    ThrowIfNotWritten(_database.UpdateSensorChecked(entity));
+                else
+                    _database.UpdateSensor(entity);
+
                 storing = false;
 
                 SensorUpdateView(sensor);
@@ -3967,11 +3988,16 @@ namespace HSMServer.Core.Cache
         // re-checks the index under it so a cross-product move that just
         // published a sensor at this path is reused, not duplicated (ADR-0018).
         private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error) =>
-            TryAddSensor(request, type, productId, options, out sensor, out error, out _);
+            TryAddSensor(request, type, productId, options, checkStore: false, out sensor, out error, out _);
 
         // storeFailed (#1756): true when the sensor was not created because the write of
         // its row to the store failed. Only the registration path asks.
-        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        //
+        // checkStore: true on the registration path only, see TryUpdateSensor. False for
+        // the sensor a first value creates: its row is written with the void method, so a
+        // write the storage engine fails on without throwing leaves the sensor in memory,
+        // as it always did.
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             storeFailed = false;
 
@@ -3985,11 +4011,11 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
 
-                return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error, out storeFailed);
+                return TryAddSensorUnderLock(request, type, productId, options, checkStore, out sensor, out error, out storeFailed);
             }
         }
 
-        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             sensor = null;
             error = string.Empty;
@@ -4040,7 +4066,14 @@ namespace HSMServer.Core.Cache
                 var row = sensor.ToEntity();
 
                 storing = true;
-                _database.AddSensor(row);
+
+                // A reported failure is thrown here, so that the sensor is rolled back
+                // below exactly as when the store itself throws.
+                if (checkStore)
+                    ThrowIfNotWritten(_database.AddSensorChecked(row));
+                else
+                    _database.AddSensor(row);
+
                 storing = false;
                 persisted = true;
 

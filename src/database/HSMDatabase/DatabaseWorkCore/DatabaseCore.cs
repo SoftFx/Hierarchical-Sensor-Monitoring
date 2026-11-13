@@ -214,6 +214,26 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
+        // The same writes as the two methods above, with their outcome (#1756): null when
+        // written, otherwise the failure. A sensor whose id was listed and whose row was
+        // then not written is taken off the list again: its caller treats it as not
+        // created, and an id without a row is only skipped when the sensors are loaded.
+        public Exception AddSensorChecked(SensorEntity entity)
+        {
+            if (_environmentDatabase.WriteSensorIdToList(entity.Id) is { } listFailure)
+                return listFailure;
+
+            var rowFailure = _environmentDatabase.WriteSensor(entity);
+
+            if (rowFailure is not null)
+                _environmentDatabase.RemoveSensorIdFromList(entity.Id);
+
+            return rowFailure;
+        }
+
+        public Exception UpdateSensorChecked(SensorEntity entity) =>
+            _environmentDatabase.WriteSensor(entity);
+
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to)
         {
             var fromTicks = from.ToUniversalTime().Ticks;

@@ -201,10 +201,23 @@ namespace HSMServer.Core.Tests.Infrastructure
         // constructor's predicate fails the creation and the update of a row alike.
         internal Func<SensorEntity, bool> ShouldFailSensorAdd { get; set; }
 
+        // The way the real store fails (#1756): the LevelDB layer catches a failed write of
+        // a sensor row, logs it and does not throw. Set to lose the write of a row like
+        // that: the void methods return as if it were written, the checked ones report it.
+        // The hooks above make the store throw instead, which the real one does not do for
+        // a failed write.
+        internal Func<SensorEntity, bool> ShouldLoseSensorAdd { get; set; }
+        internal Func<SensorEntity, bool> ShouldLoseSensorUpdate { get; set; }
+
+        public const string LostWrite = "Simulated write the storage engine failed on";
+
         public void AddSensor(SensorEntity entity)
         {
             if (ShouldFailSensorAdd?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+
+            if (ShouldLoseSensorAdd?.Invoke(entity) == true)
+                return;
 
             _inner.AddSensor(entity);
         }
@@ -214,7 +227,30 @@ namespace HSMServer.Core.Tests.Infrastructure
             if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
 
+            if (ShouldLoseSensorUpdate?.Invoke(entity) == true)
+                return;
+
             _inner.UpdateSensor(entity);
+        }
+
+        public Exception AddSensorChecked(SensorEntity entity)
+        {
+            if (ShouldFailSensorAdd?.Invoke(entity) == true || _shouldFail(entity))
+                throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+
+            return ShouldLoseSensorAdd?.Invoke(entity) == true
+                ? new System.IO.IOException(LostWrite)
+                : _inner.AddSensorChecked(entity);
+        }
+
+        public Exception UpdateSensorChecked(SensorEntity entity)
+        {
+            if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
+                throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
+
+            return ShouldLoseSensorUpdate?.Invoke(entity) == true
+                ? new System.IO.IOException(LostWrite)
+                : _inner.UpdateSensorChecked(entity);
         }
 
         // Sensor-move merge (#1720 review): set to make removing a sensor's

@@ -348,7 +348,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Sensors
 
-        public void AddSensorIdToList(string sensorId)
+        // AddSensorIdToList and AddSensor do what they always did: a failed write is logged
+        // here and the caller is not told. WriteSensorIdToList and WriteSensor are the same
+        // writes with their outcome (#1756): null when the row was written, otherwise the
+        // exception of the failed write (logged as before, never thrown). The void methods
+        // are those with the outcome dropped, so the two cannot drift apart.
+        public void AddSensorIdToList(string sensorId) => WriteSensorIdToList(sensorId);
+
+        public Exception WriteSensorIdToList(string sensorId)
         {
             void AddSensorIdToListIfNotExist(List<string> sensorIds)
             {
@@ -356,10 +363,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     sensorIds.Add(sensorId);
             }
 
-            UpdateSensorIdsList(AddSensorIdToListIfNotExist, $"Failed to add sensor id {sensorId} to list");
+            return UpdateSensorIdsList(AddSensorIdToListIfNotExist, $"Failed to add sensor id {sensorId} to list");
         }
 
-        public void AddSensor(SensorEntity entity)
+        public void AddSensor(SensorEntity entity) => WriteSensor(entity);
+
+        public Exception WriteSensor(SensorEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
             var bytesValue = JsonSerializer.SerializeToUtf8Bytes(entity);
@@ -367,10 +376,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             try
             {
                 _database.Put(bytesKey, bytesValue);
+
+                return null;
             }
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to add sensor info for {entity.Id}");
+
+                return e;
             }
         }
 
@@ -413,7 +426,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
-        private void UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
+        // Null when the list was written, otherwise the logged exception (#1756).
+        private Exception UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
         {
             try
             {
@@ -422,10 +436,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 updateListAction?.Invoke(sensorIds);
 
                 _database.Put(_sensorIdsKey, JsonSerializer.SerializeToUtf8Bytes(sensorIds));
+
+                return null;
             }
             catch (Exception e)
             {
                 _logger.Error(e, errorMessage);
+
+                return e;
             }
         }
 

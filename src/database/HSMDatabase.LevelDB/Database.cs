@@ -209,7 +209,9 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void Put(byte[] key, byte[] value)
+        // Virtual for the tests of what the workers do with a write that fails: LevelDB
+        // itself gives them no way to make one fail.
+        public virtual void Put(byte[] key, byte[] value)
         {
             try
             {
