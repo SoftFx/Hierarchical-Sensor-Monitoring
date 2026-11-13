@@ -635,6 +635,27 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             }, User);
             Assert.Equal(PolicyWriteOutcome.Invalid, updated.Failure.Outcome);
             Assert.Contains("must not contain curly braces", updated.Failure.Errors["notification.template"].Single());
+            // Nothing was stored by the rejected update: the seeded policy keeps
+            // its clean template.
+            Assert.Equal(DataPolicy().Notification.Template,
+                sensor.Policies.Single(p => p.Id == seeded.Value.Id).Template);
+
+            var ttlSeeded = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00"), User);
+            Assert.True(ttlSeeded.Success, ttlSeeded.Failure?.Message);
+
+            var ttlUpdated = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, ttlSeeded.Value.Id, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, ttlUpdated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", ttlUpdated.Failure.Errors["notification.template"].Single());
+
+            var productCreated = await _service.CreateProductTtlPolicyAsync(_fixture.ProductAId, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, productCreated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", productCreated.Failure.Errors["notification.template"].Single());
         }
 
         // #1501 round-2 (F2): a full-list TTL write must not RE-STAMP the
