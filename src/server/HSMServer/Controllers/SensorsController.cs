@@ -69,19 +69,19 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
-        /// The collector's pre-flight check: connectivity AND auth. A request
-        /// with a Key header is already answered 406 by the telemetry
-        /// middleware when the key is unusable (expired, blocked, #1649);
-        /// what stayed wrong was the keyless call, which answered an empty
-        /// 200 — indistinguishable from a successful authenticated check
-        /// (#1678). The send-permission filter mirrors the data endpoints:
-        /// this proves the collector can WORK with the server, not merely
-        /// reach it.
+        /// The dual-purpose pre-flight; the Key header decides which half is
+        /// being probed. A KEYLESS call is the liveness probe: the Docker
+        /// healthcheck, docker-compose and CI call this route without
+        /// credentials and must keep getting a constant 200 — answering 406
+        /// here marked every deployed container unhealthy and kept Caddy from
+        /// starting (#1678 review). A KEYED call is the auth check: the
+        /// send-permission filter answers the key's own 406 reason when the
+        /// key is unusable (expired, blocked, read-only, #1649/#1678), so a
+        /// collector can tell "server up, key bad" from "cannot reach".
         /// </summary>
         [HttpGet("testConnection")]
         [SendDataKeyPermissionFilter]
-        public ActionResult TestConnection() =>
-            HttpContext.TryGetPublicApiInfo(out _) ? Ok() : StatusCode(406, InvalidRequest);
+        public ActionResult TestConnection() => Ok();
 
 
         /// <summary>

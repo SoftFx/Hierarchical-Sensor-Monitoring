@@ -675,21 +675,20 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "legacy/registered", out _));
         }
 
-        // #1678: testConnection is the collector's CONNECTIVITY AND AUTH check —
-        // an anonymous call must not answer 200 like a successful authenticated
-        // check. A keyed request with an unusable key was already answered 406
-        // by the telemetry middleware; the keyless call answers the area's own
-        // 406 now.
+        // #1678 + review: testConnection doubles as the deployment LIVENESS
+        // probe — the Docker healthcheck, docker-compose and CI call it
+        // without credentials and must keep getting a constant 200 (a 406
+        // there marked every deployed container unhealthy and kept Caddy from
+        // starting). The AUTH half of the pre-flight is the keyed call below.
         [Fact]
-        public async Task TestConnection_WithoutCredentials_Answers406NotASilent200()
+        public async Task TestConnection_WithoutCredentials_Answers200_TheLivenessProbe()
         {
             await using var host = await StartHost();
 
             using var http = new HttpClient();
             using var response = await http.GetAsync(new Uri(host.HttpBase, "testConnection"), Deadline());
 
-            Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
-            Assert.Equal("Public API request info not found", await response.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         [Fact]

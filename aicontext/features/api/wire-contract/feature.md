@@ -128,7 +128,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `file` | `FileSensorValue` |
 | `commands` | command batch (response: error dictionary keyed by sensor path) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` |
-| `testConnection` | — ; the collector's connectivity AND auth pre-flight: a keyless call answers **406** `Public API request info not found` (#1678 — an anonymous ping must not look like a successful authenticated check), a keyed call with an unusable key (expired/blocked, or without send permission) answers the key's own 406 reason, and only a usable send key answers 200 |
+| `testConnection` | — ; the dual-purpose pre-flight, decided by the `Key` header: a KEYLESS call is the liveness probe the Docker healthcheck, docker-compose and CI rely on — a constant 200, nothing more (#1678 review: answering 406 there marked every deployed container unhealthy and kept Caddy from starting); a KEYED call is the auth check — an unusable key (expired/blocked, or without send permission) answers the key's own 406 reason (#1649/#1678), and only a usable send key answers 200 |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
 
 ## Collector session (WebSocket)
