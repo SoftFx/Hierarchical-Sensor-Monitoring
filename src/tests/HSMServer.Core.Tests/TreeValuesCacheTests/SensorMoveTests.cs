@@ -18,6 +18,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -194,8 +195,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var sourceTemplate = BuildTtlTemplate(_fixture.FolderA, $"{SensorMoveFixture.ProductAName}/{root}/src/*");
             var destinationTemplate = BuildTtlTemplate(_fixture.FolderB, $"{SensorMoveFixture.ProductBName}/{root}/dst/*");
+
+            // Templates are walked in id order: put the destination's first, so
+            // only the detach-before-apply order keeps the two from overlapping.
+            if (destinationTemplate.Id.CompareTo(sourceTemplate.Id) > 0)
+                (destinationTemplate.Id, sourceTemplate.Id) = (sourceTemplate.Id, destinationTemplate.Id);
+
             Assert.True((await _valuesCache.AddAlertTemplateAsync(sourceTemplate)).Success);
             Assert.True((await _valuesCache.AddAlertTemplateAsync(destinationTemplate)).Success);
+
+            var bothAttached = 0;
+            void OnSensorChanged(BaseSensorModel changed, ActionType _)
+            {
+                // Raised on the queue thread right after each detach/apply.
+                var ttl = changed.Policies.TTLPolicies;
+                if (ttl.Any(t => t.TemplateId == sourceTemplate.Id) && ttl.Any(t => t.TemplateId == destinationTemplate.Id))
+                    Interlocked.Increment(ref bothAttached);
+            }
 
             try
             {
@@ -204,18 +220,29 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 var ownTtl = sensor.Policies.TTLPolicies.Where(t => t.TemplateId is null).Select(t => t.Id).ToList();
 
+                _valuesCache.ChangeSensorEvent += OnSensorChanged;
+
                 Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductB, $"{root}/dst/s")).IsOk);
 
-                // Across products the templates are re-evaluated on the destination's queue.
-                await TestWait.UntilAsync(() => sensor.Policies.TTLPolicies.Any(t => t.TemplateId == destinationTemplate.Id),
-                    "the destination template was applied");
+                // Across products the templates are re-evaluated on the destination's
+                // queue. Wait for its end state: had the apply come first, its view
+                // event (counted above) would have fired before the detach, so the
+                // count below is final once the source template is gone.
+                await TestWait.UntilAsync(() =>
+                    {
+                        var ttl = sensor.Policies.TTLPolicies;
+                        return ttl.Any(t => t.TemplateId == destinationTemplate.Id) && ttl.All(t => t.TemplateId != sourceTemplate.Id);
+                    },
+                    "the templates were re-evaluated");
 
+                Assert.Equal(0, Volatile.Read(ref bothAttached));
                 Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId == sourceTemplate.Id);
                 Assert.Contains(sensor.Policies.TTLPolicies, t => t.TemplateId == destinationTemplate.Id);
                 Assert.All(ownTtl, id => Assert.Contains(sensor.Policies.TTLPolicies, t => t.Id == id));
             }
             finally
             {
+                _valuesCache.ChangeSensorEvent -= OnSensorChanged;
                 await _valuesCache.RemoveAlertTemplateAsync(sourceTemplate.Id);
                 await _valuesCache.RemoveAlertTemplateAsync(destinationTemplate.Id);
             }
