@@ -197,9 +197,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         // aggregate's character-budget pin needs controllably long errors.
         internal Func<SensorEntity, string> SensorUpdateFailureMessage { get; set; }
 
+        // Optional injection point for the failure of AddSensor alone (#1756): the
+        // constructor's predicate fails the creation and the update of a row alike.
+        internal Func<SensorEntity, bool> ShouldFailSensorAdd { get; set; }
+
         public void AddSensor(SensorEntity entity)
         {
-            if (_shouldFail(entity))
+            if (ShouldFailSensorAdd?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
 
             _inner.AddSensor(entity);

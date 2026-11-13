@@ -361,8 +361,9 @@ namespace HSMDataCollector.Tests
                 Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath));
                 Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal)));
 
-                // The first period stays (the native collector would use the last one), and
-                // the host is told that the second was not applied.
+                // The first period stays (the rule of both collectors, #1752; the native case is
+                // native_tcp_failure_rate_repeated_enable_keeps_the_first_period), and the host
+                // is told that the second was not applied.
                 var monitor = (WindowsTcpFailureRateMonitor)collector.DefaultSensors.Single(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath);
 
                 Assert.Equal(TimeSpan.FromMinutes(1), monitor.Period);
