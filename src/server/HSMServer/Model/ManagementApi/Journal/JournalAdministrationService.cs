@@ -436,9 +436,13 @@ namespace HSMServer.Model.ManagementApi.Journal
             Time = new DateTime(record.Key.Time, DateTimeKind.Utc),
             Author = record.Initiator,
             Kind = record.Kind ?? OtherKind,
-            ProductId = string.IsNullOrEmpty(record.ProductId)
-                ? ResolvedRootProductOf(record)?.ToString()
-                : record.ProductId,
+            // The same "is the stamp usable?" rule the product filter applies:
+            // an unparsable or all-zero stamp resolves through the live tree
+            // like a missing one, so the payload echoes what the filter
+            // matched for every stored row, not only today's well-formed ones.
+            ProductId = Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty
+                ? record.ProductId
+                : ResolvedRootProductOf(record)?.ToString(),
             Path = record.Path,
             Property = record.PropertyName,
             OldValue = record.OldValue,

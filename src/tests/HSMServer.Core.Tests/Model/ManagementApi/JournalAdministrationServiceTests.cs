@@ -471,6 +471,40 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             Assert.Equal("other", record.Kind);
             Assert.Equal(sensor.Root.Id.ToString(), record.ProductId);
+
+            // The details view renders through the same Render, so the record
+            // page carries the filter's answers too (#1679 review).
+            var details = _journal.GetRecord(record.Id, TokenUser);
+
+            Assert.True(details.Success, details.Failure?.Message);
+            Assert.Equal("other", details.Value.Record.Kind);
+            Assert.Equal(sensor.Root.Id.ToString(), details.Value.Record.ProductId);
+        }
+
+        [Fact]
+        public void ListRecords_LegacyRowOfAnUnknownEntity_KeepsTheProductNull()
+        {
+            // The deliberately NOT path-based half of #1679: a legacy row of a
+            // deleted (or never-known) entity resolves to no live root, so the
+            // payload keeps ProductId null — same answer the product filter
+            // gives, unlike a global/folder row only in that its kind is
+            // still "other".
+            _journalService.AddRecord(new JournalRecordModel(Guid.NewGuid(), InitiatorInfo.AsUser("legacy-ghost-writer"))
+            {
+                Enviroment = "Sensors",
+                PropertyName = "Singleton",
+                Path = "gone/product/ghost",
+                OldValue = "False",
+                NewValue = "True",
+            });
+
+            var byOtherKind = _journal.ListRecords(TokenUser,
+                new JournalFilter { Kind = "other", FromUtc = DateTime.UtcNow.AddMinutes(-5), Limit = 200 }).Value;
+
+            var record = byOtherKind.Single(r => r.Author.Contains("legacy-ghost-writer", StringComparison.Ordinal));
+
+            Assert.Equal("other", record.Kind);
+            Assert.Null(record.ProductId);
         }
 
         [Fact]
