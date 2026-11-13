@@ -332,6 +332,10 @@ namespace HSMDataCollector.DefaultSensors
                 // swallowed: the host gets a rate it did not ask for last.
                 var asked = period ?? TimeSpan.FromMinutes(1);
 
+                // Before the look at what is already there: whether a period that cannot be
+                // used throws must not depend on which call it comes in.
+                WindowsTcpFailureRateMonitor.EnsurePeriod(asked);
+
                 if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var existing))
                 {
                     if (existing is WindowsTcpFailureRateMonitor monitor && monitor.Period != asked)

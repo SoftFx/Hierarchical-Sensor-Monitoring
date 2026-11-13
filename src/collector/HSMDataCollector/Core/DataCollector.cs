@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
+using HSMDataCollector.Client.Session;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
@@ -33,6 +34,14 @@ namespace HSMDataCollector.Core
         private readonly SensorsStorage _sensorsStorage;
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
+
+        // Transport = Session was set next to a custom DataSender; said once per Start.
+        private readonly bool _transportSettingIgnored;
+
+        // The transport this collector created, and so the one it starts and stops. A session
+        // sender that came with the options belongs to the collector that created it: stopping
+        // it here would end the session under that collector.
+        private readonly ICollectorTransport _ownTransport;
         private readonly DataProcessor _dataProcessor;
         private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
         private readonly ICollectorScheduler _scheduler;
@@ -99,13 +108,27 @@ namespace HSMDataCollector.Core
             IDataSender ownSender = null;
 
             if (options.DataSender == null)
-                options.DataSender = ownSender = new HsmHttpsClient(options, _logger);
+            {
+                // The transport setting chooses the built-in sender. A collector on a session has
+                // no HTTP client at all: there is nothing to fall back to.
+                options.DataSender = ownSender = options.Transport == CollectorTransport.Session
+                    ? (IDataSender)new SessionDataSender(options, _logger)
+                    : new HsmHttpsClient(options, _logger);
+            }
+            else
+            {
+                // A custom sender is the transport of the collector that has one.
+                _transportSettingIgnored = options.Transport == CollectorTransport.Session && !(options.DataSender is ICollectorTransport);
+            }
 
             _dataSender = options.DataSender;
+            _ownTransport = ownSender as ICollectorTransport;
 
             _scheduler = new CollectorScheduler();
 
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
+
+            _dataProcessor.TransportReportsElsewhere = UsesTransportOfAnotherCollector;
 
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
@@ -133,6 +156,12 @@ namespace HSMDataCollector.Core
             })
         { }
 
+
+        // The session of the collector that was created first from the same options. It is that
+        // collector's in every respect: this one does not start it, stop it, cancel what waits
+        // on it or dispose it, or the owner, still running, would deliver nothing from then on
+        // and say nothing about it.
+        private bool UsesTransportOfAnotherCollector => _ownTransport == null && _dataSender is ICollectorTransport;
 
         public Task<ConnectionResult> TestConnection() => _dataSender.TestConnectionAsync().AsTask();
 
@@ -212,6 +241,10 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+
+                // The session starts connecting now, in the background; Start never waits for it.
+                // Until it is up the queues hold what the sensors produce.
+                StartTransport();
             }
 
             // Queues are now running. Any exit path from here must roll them back if the lifecycle
@@ -278,7 +311,59 @@ namespace HSMDataCollector.Core
                 }
             }
 
-            await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
+            try
+            {
+                await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
+            }
+            finally
+            {
+                // After the drain, which used the session if it was up. A graceful stop gives the
+                // close handshake a moment, so the server sees a normal closure.
+                await StopTransportAsync(terminal: mode != ShutdownMode.GracefulStop).ConfigureAwait(false);
+            }
+        }
+
+        private void StartTransport()
+        {
+            try
+            {
+                if (_transportSettingIgnored)
+                    _logger.Info("CollectorOptions.Transport = Session has no effect: the collector uses the custom DataSender it was given.");
+
+                if (_ownTransport == null)
+                {
+                    if (_dataSender is ICollectorTransport)
+                        _logger.Info("This collector uses the collector session of the collector that was created first from the same options: that one opens and closes it.");
+
+                    return;
+                }
+
+                // The disconnect alert of a collector is the inactivity alert of its Service alive
+                // sensor. Without that sensor nobody is told when the session, the only path, is gone.
+                if (!_sensorsStorage.Values.Any(sensor => sensor is DefaultSensors.Other.CollectorAlive))
+                    _logger.Info("The collector session is enabled and the Service alive sensor (AddCollectorAlive) is not registered at Start: without it the server has no disconnect alert for this collector.");
+
+                _ownTransport.Start();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector could not start its transport: {ex}");
+            }
+        }
+
+        private async Task StopTransportAsync(bool terminal)
+        {
+            if (_ownTransport == null)
+                return;
+
+            try
+            {
+                await _ownTransport.StopAsync(terminal).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector could not stop its transport: {ex}");
+            }
         }
 
         private async Task SafeStopProcessor()
@@ -294,6 +379,8 @@ namespace HSMDataCollector.Core
             {
                 _logger.Error($"DataCollector start-rollback stop error: {ex}");
             }
+
+            await StopTransportAsync(terminal: true).ConfigureAwait(false);
         }
 
 
@@ -413,6 +500,10 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+
+                // As in Start: this obsolete entry point runs a collector too, and one on a
+                // session delivers nothing until its transport is started.
+                StartTransport();
             }
 
             try
@@ -485,7 +576,9 @@ namespace HSMDataCollector.Core
 
             try
             {
-                if (inFlightStop != null || ownsStop)
+                // Not on a session this collector shares: the requests that wait there may be
+                // the owner's. This collector's own drain is bounded without it.
+                if ((inFlightStop != null || ownsStop) && !UsesTransportOfAnotherCollector)
                     (_dataSender as ICancelableDataSender)?.CancelPendingRequests();
 
                 if (inFlightStop != null)
@@ -530,7 +623,8 @@ namespace HSMDataCollector.Core
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
-                DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
+                if (!UsesTransportOfAnotherCollector)
+                    DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
 
                 DisposeComponent(_scheduler.Dispose, nameof(_scheduler));
             }

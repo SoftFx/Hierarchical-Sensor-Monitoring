@@ -1,0 +1,11 @@
+# MUST-FAIL: the value 1 is sent twice and 2 once; when 2 is delivered (the values keep their
+# order, so both 1s are too), the fixture demands 1 delivered exactly once.
+# Proves expect_session_ints_once fails on a duplicate, not only on a loss.
+meta_session_ints_once_duplicate|create_collector_on_session|50|20|5000
+meta_session_ints_once_duplicate|create_int_sensor|meta/session/duplicate
+meta_session_ints_once_duplicate|start
+meta_session_ints_once_duplicate|add_int|0|1|Ok|first
+meta_session_ints_once_duplicate|add_int|0|1|Ok|again
+meta_session_ints_once_duplicate|add_int|0|2|Ok|last
+meta_session_ints_once_duplicate|expect_session_ints_once|2|1|15
+meta_session_ints_once_duplicate|expect_session_ints_once|1|1|2

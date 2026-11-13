@@ -50,6 +50,14 @@ namespace HSMDataCollector.Sensors
                 if (!_dataProcessor.CanAcceptData)
                     return false;
 
+                // Refused before the file is read: there is no way to send it, and the caller
+                // is told so instead of "has been send".
+                if (_dataProcessor.RefusesFiles)
+                {
+                    _dataProcessor.ReportRefusedFile(SensorPath);
+                    return false;
+                }
+
                 var fileInfo = new FileInfo(filePath);
 
                 if (!fileInfo.Exists)

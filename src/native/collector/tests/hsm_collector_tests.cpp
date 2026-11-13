@@ -3056,6 +3056,42 @@ namespace
             return;
         }
 
+        // CONFORMANCE-UNSUPPORTED: the collector session verbs (#1668). The scripted session server
+        // and these verbs come to this driver in the PR that follows this one (#1744), on top of
+        // the native session transport (#1668); until then tests/conformance/collector/session_transport_contract.hsmtest is not
+        // registered in CMake, and a fixture that uses one of them fails here by name.
+        static const char* const kSessionVerbs[] = {
+            "create_collector_on_session",
+            "session_server_hello",
+            "session_server_refuse_upgrades",
+            "session_server_accept_upgrades",
+            "session_server_ack",
+            "session_server_stay_silent",
+            "session_server_stop_answering_pings",
+            "session_server_drop_sessions",
+            "session_server_close_sessions",
+            "session_http_request",
+            "expect_session_pings_at_least",
+            "expect_session_close_code",
+            "expect_session_count",
+            "expect_session_count_at_least",
+            "expect_refused_upgrades_at_least",
+            "expect_session_ints_once",
+            "expect_session_accepted_contains",
+            "expect_session_requests_containing",
+            "expect_session_requests_containing_at_least",
+            "expect_session_no_request_contains",
+            "expect_session_frames_fit",
+            "expect_no_http_requests",
+            "expect_session_upgrade_header",
+            "expect_session_closed_normally",
+        };
+        for (const char* verb : kSessionVerbs)
+        {
+            if (action == verb)
+                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1668)");
+        }
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 

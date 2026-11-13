@@ -17,10 +17,17 @@ namespace HSMDataCollector.SyncQueue.Data
         /// </summary>
         internal string Report { get; }
 
-        internal PackageSendFailedException(string queueName, int preserved, int dropped, bool flushing, string error)
+        /// <summary>
+        /// The package was not sent because the transport has no connection, which the transport
+        /// reports itself. The queue keeps the package; a line per cycle would only repeat it.
+        /// </summary>
+        internal bool IsTransportDown { get; }
+
+        internal PackageSendFailedException(string queueName, int preserved, int dropped, bool flushing, string error, bool isTransportDown = false)
             : base($"Failed to send package for {queueName} ({preserved} {Fate(flushing)}{(dropped > 0 ? $", {dropped} dropped" : string.Empty)}). {error}")
         {
             Report = $"Failed to send package for {queueName} (items {Fate(flushing)}{(dropped > 0 ? ", some dropped at capacity" : string.Empty)}). {error}";
+            IsTransportDown = isTransportDown;
         }
 
         // During FlushAsync the items are re-enqueued only so ClearQueue can log them as

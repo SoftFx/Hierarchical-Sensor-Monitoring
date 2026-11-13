@@ -76,8 +76,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         /// <param name="readV6">The same for IPv6.</param>
         internal WindowsTcpFailureRateMonitor(SensorsStorage storage, TimeSpan period, Func<FamilyReading> readV4 = null, Func<FamilyReading> readV6 = null)
         {
-            if (period < MinPeriod || period > MaxPeriod)
-                throw new ArgumentOutOfRangeException(nameof(period), $"The sampling period must be at least a millisecond and at most {MaxPeriod}.");
+            EnsurePeriod(period);
 
             _storage = storage;
             _period = period;
@@ -92,6 +91,13 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             _sensor = storage.CreateRateSensor(path, options);
         }
 
+
+        /// <summary>Throws for a period the monitor cannot run with; the same answer on every call.</summary>
+        internal static void EnsurePeriod(TimeSpan period)
+        {
+            if (period < MinPeriod || period > MaxPeriod)
+                throw new ArgumentOutOfRangeException(nameof(period), $"The sampling period must be at least a millisecond and at most {MaxPeriod}.");
+        }
 
         // The registration the native collector sends for this sensor (StartTcpFailureRateSampler),
         // field for field; the conformance fixture collector/windows/tcp_failure_rate_contract

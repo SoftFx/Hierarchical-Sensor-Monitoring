@@ -308,11 +308,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         private async Task RunLoopAsync(CancellationToken token)
         {
+            // True when the pause after a failure ended because the transport got its connection
+            // back: what waited for it is dispatched now, not after the next wait for work.
+            var dispatchNow = false;
+
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    await WaitForReadyAsync(token).ConfigureAwait(false);
+                    if (!dispatchNow)
+                        await WaitForReadyAsync(token).ConfigureAwait(false);
+
+                    dispatchNow = false;
+
                     await DispatchPendingAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { }
@@ -327,19 +335,59 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     // a per-package retry cap would re-introduce the old "data dropped on first
                     // server hiccup" regression. Overflow eviction is the backstop: a permanently
                     // failing item rides the queue tail until MaxQueueSize evicts it.
-                    if (_queueManager != null)
+                    //
+                    // A package that waits for the transport to come back is not an error of the
+                    // queue: the transport reports its own state, once, and the queue stays quiet.
+                    // Unless that transport belongs to another collector: it reports there, and
+                    // not at all while its owner is stopped, so here the queue is the only voice
+                    // (deduplicated like every queue error).
+                    if (ex is PackageSendFailedException failed && failed.IsTransportDown && !(_queueManager?.TransportReportsElsewhere ?? false))
+                        _logger.Debug(ex.Message);
+                    else if (_queueManager != null)
                         _queueManager.AddQueueLoopError(QueueName, ex);
                     else
                         _logger.Error(ex);
 
                     try
                     {
-                        await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                        dispatchNow = await PauseAfterFailureAsync(ex, token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { }
                 }
             }
         }
+
+        // The pause before a failed package is tried again: the collect period, or, for a
+        // package that only lacked a connection, until the transport has one, whichever comes
+        // first. Returns true in the second case.
+        private async Task<bool> PauseAfterFailureAsync(Exception failure, CancellationToken token)
+        {
+            var pause = DelayAfterFailureAsync(token);
+
+            if (!(failure is PackageSendFailedException failed) || !failed.IsTransportDown || !(_sender is ICollectorTransport transport))
+            {
+                await pause.ConfigureAwait(false);
+                return false;
+            }
+
+            // A floor, so that a connection that comes and goes cannot make this loop spin.
+            await Task.Delay(TransportRetryFloor, token).ConfigureAwait(false);
+
+            // The wait for a connection ends with this pause, whichever of the two is first:
+            // left pending, one more waiter would stay behind every cycle of an outage.
+            using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                var connected = transport.WaitForConnectionAsync(wait.Token);
+                var woken = await Task.WhenAny(pause, connected).ConfigureAwait(false) == connected && connected.Status == TaskStatus.RanToCompletion;
+
+                wait.Cancel();
+                _ = connected.ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+                return woken;
+            }
+        }
+
+        private static readonly TimeSpan TransportRetryFloor = TimeSpan.FromMilliseconds(100);
 
         private async ValueTask DispatchPendingAsync(CancellationToken token)
         {
@@ -406,6 +454,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
             }
             catch (OperationCanceledException) { }
+            catch (PackageSendFailedException ex) when (ex.IsTransportDown)
+            {
+                // No connection to flush through; the discarded items are counted by the caller.
+                _logger.Debug(ex.Message);
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex);
@@ -456,6 +509,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 throw;
             }
 
+            // Items the sender could never send (a value larger than a session frame) are lost for
+            // good; they are counted where every lost value is counted.
+            if (sendingInfo.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, sendingInfo.DroppedCount);
+
             if (sendingInfo.Error != null)
             {
                 // A refusal (4xx) on a queue whose items never succeed on repeat is final: the
@@ -467,13 +525,35 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     return;
                 }
 
-                var dropped = ReEnqueueItems(package.Items);
+                // A sender that delivers a package in parts says which items are settled; only
+                // the others go back, or what was delivered would arrive twice.
+                var unsettled = Unsettled(package, sendingInfo.Settled);
+                var dropped = ReEnqueueItems(unsettled);
                 // The drop count is the #1088 backstop (a retry refused by a queue at capacity).
-                throw new PackageSendFailedException(QueueName, package.Count - dropped, dropped, IsFlushing, sendingInfo.Error);
+                throw new PackageSendFailedException(QueueName, unsettled.Count - dropped, dropped, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+        }
+
+        private static IReadOnlyCollection<QueueItem<T>> Unsettled(DataPackage<T> package, bool[] settled)
+        {
+            if (settled == null)
+                return package.Items;
+
+            var unsettled = new List<QueueItem<T>>(package.Count);
+            var position = 0;
+
+            foreach (var item in package.Items)
+            {
+                if (position >= settled.Length || !settled[position])
+                    unsettled.Add(item);
+
+                position++;
+            }
+
+            return unsettled;
         }
 
         /// <summary>
