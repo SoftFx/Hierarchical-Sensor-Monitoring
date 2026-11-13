@@ -20,7 +20,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static BooleanValue Convert(this BoolSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value,
@@ -30,7 +30,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -40,7 +40,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static DoubleValue Convert(this DoubleSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -53,17 +53,17 @@ namespace HSMServer.Core.ApiObjectsConverters
                 // #1709: mask scheme://user:pass@ BEFORE the sanitizer — a
                 // credential-bearing connection string must never reach
                 // storage, while the scheme and host stay readable.
-                Comment = HtmlSanitizerService.Sanitize(CredentialMasker.MaskCredentials(value.Comment)),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = HtmlSanitizerService.Sanitize(CredentialMasker.MaskCredentials(value.Value))
+                Value = HtmlSanitizerService.SanitizeText(value.Value)
             };
 
 
         public static TimeSpanValue Convert(this TimeSpanSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -74,7 +74,7 @@ namespace HSMServer.Core.ApiObjectsConverters
 
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -84,7 +84,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static RateValue Convert(this RateSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -94,7 +94,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static FileValue Convert(this FileSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value?.ToArray() ?? [],
@@ -106,7 +106,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,
@@ -124,7 +124,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,
@@ -141,7 +141,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static EnumValue Convert(this EnumSensorValue value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -150,7 +150,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static IntegerBarValue Convert(this IntMonitoringBar value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,
@@ -167,7 +167,7 @@ namespace HSMServer.Core.ApiObjectsConverters
         public static DoubleBarValue Convert(this DoubleMonitoringBar value) =>
             new()
             {
-                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Comment = HtmlSanitizerService.SanitizeText(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,

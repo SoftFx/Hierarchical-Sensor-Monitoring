@@ -29,5 +29,15 @@ namespace HSMServer.Core.Services
             return _sanitizer.Sanitize(dirtyHtml);
         }
 
+        /// <summary>
+        /// The single ingestion gate for user-supplied text (#1709 review):
+        /// the credential mask first (so a masked URL never depends on the
+        /// sanitizer's transformations), then the HTML sanitizer. Every
+        /// converter — both copies, value AND comment of every sensor type —
+        /// runs its text through here, so the two cannot drift apart.
+        /// </summary>
+        public static string SanitizeText(string text) =>
+            Sanitize(CredentialMasker.MaskCredentials(text));
+
     }
 }
