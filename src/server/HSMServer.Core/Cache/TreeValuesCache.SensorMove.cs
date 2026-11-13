@@ -673,6 +673,19 @@ namespace HSMServer.Core.Cache
             return target.Root.Id == productId ? AliasResolution.Local : AliasResolution.Forwarded;
         }
 
+        // The sensor a path is an alias of, for a caller that only asks: no hit is stamped
+        // and a stale entry stays for ResolveAlias to clean up.
+        private bool TryPeekAlias(Guid productId, string path, out BaseSensorModel sensor)
+        {
+            sensor = null;
+
+            return _cache.TryGetValue(productId, out var cachedValue) &&
+                   !cachedValue.Sensors.ContainsKey(path) &&
+                   cachedValue.Aliases.TryGetValue(path, out sensor) &&
+                   TryGetSensorById(sensor.Id, out _) &&
+                   sensor.GetAlias(productId, path) is not null;
+        }
+
         private void AddAliasValue(AliasValueRequest request)
         {
             if (!TryGetSensorById(request.SensorId, out var sensor))
