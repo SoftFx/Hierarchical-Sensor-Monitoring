@@ -63,18 +63,29 @@ namespace HSMServer.SensorApi
             return result.IsOk ? null : result.Error;
         }
 
-        public Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request)
+        public async Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request)
         {
             if (info is null)
-                return Task.FromResult(_invalidRequestResult);
+                return _invalidRequestResult;
 
+            // Converted first: a registration that cannot even be converted moves nothing.
             var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, request.Path)
             {
                 Update = request.Convert(Guid.Empty, info.Key.DisplayName),
                 Type = request.SensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
+                TypeIsExplicit = request.SensorType is not null,
             };
 
-            return _cache.AddOrUpdateSensorAsync(coreRequest);
+            // Sensor move from the collector (#1724): the sensor registered under an old path
+            // moves here first, so the registration below updates it instead of a new one. It
+            // never blocks the registration (refusals are logged inside). A move it makes stands
+            // even if the queue then refuses the registration's settings.
+            if (request.PreviousPaths is { Count: > 0 })
+                await _cache.ApplyPreviousPathsAsync(info.Key.Id, info.Product.Id, request.Path, request.PreviousPaths,
+                    coreRequest.TypeIsExplicit ? coreRequest.Type : null,
+                    HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(info.Key.DisplayName, false));
+
+            return await _cache.AddOrUpdateSensorAsync(coreRequest);
         }
     }
 }

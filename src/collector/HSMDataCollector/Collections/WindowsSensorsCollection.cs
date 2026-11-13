@@ -69,8 +69,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsProcessTimeInGC(_prototype.ProcessTimeInGC.Get(options)));
         }
 
-        public IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
-            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessTimeInGC(options).AddProcessThreadPoolThreadCount(options);
+        public IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddProcessMonitoringSensors));
+
+            return AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessTimeInGC(options).AddProcessThreadPoolThreadCount(options);
+        }
 
         #endregion
 
@@ -92,8 +96,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
         }
 
-        public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
-            AddFreeRamMemory(options).AddTotalCpu(options).AddGlobalTimeInGC(options);
+        public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddSystemMonitoringSensors));
+
+            return AddFreeRamMemory(options).AddTotalCpu(options).AddGlobalTimeInGC(options);
+        }
 
         #endregion
 
@@ -165,13 +173,24 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
-            .AddDiskAverageWriteSpeed(diskBarOptions);
+        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddDiskMonitoringSensors));
+            SensorOptions.ForSeveralSensors(diskBarOptions, nameof(AddDiskMonitoringSensors));
 
-        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions)
-            .AddDisksAverageWriteSpeed(diskBarOptions);
+            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
+                .AddDiskAverageWriteSpeed(diskBarOptions);
+        }
+
+        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null)
+        {
+            // Both up front: the per-disk check runs lazily, after earlier sensors were added.
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllDisksMonitoringSensors));
+            SensorOptions.ForSeveralSensors(diskBarOptions, nameof(AddAllDisksMonitoringSensors));
+
+            return AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions)
+                .AddDisksAverageWriteSpeed(diskBarOptions);
+        }
 
         #endregion
 
@@ -198,8 +217,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsVersion(_prototype.WindowsVersion.Get(options)));
         }
 
-        public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+        public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions)
+        {
+            SensorOptions.ForSeveralSensors(infoOptions, nameof(AddWindowsInfoMonitoringSensors));
+            SensorOptions.ForSeveralSensors(logsOptions, nameof(AddWindowsInfoMonitoringSensors));
+
+            return AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+        }
 
         public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {
@@ -211,8 +235,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsSystemErrorLogs(_prototype.WindowsSystemErrorLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) =>
-            AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
+        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddErrorWindowsLogs));
+
+            return AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
+        }
 
         public IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null)
         {
@@ -224,11 +252,19 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsSystemWarningLogs(_prototype.WindowsSystemWarningLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) =>
-            AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
+        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddWarningWindowsLogs));
 
-        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) =>
-            AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
+            return AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
+        }
+
+        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllWindowsLogs));
+
+            return AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
+        }
 
         #endregion
 
@@ -256,8 +292,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
 
-        public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
-            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllQueueDiagnosticSensors));
+
+            return AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        }
 
         #endregion
 
@@ -308,7 +348,12 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();
+        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllNetworkSensors));
+
+            return AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();
+        }
 
         #endregion
 

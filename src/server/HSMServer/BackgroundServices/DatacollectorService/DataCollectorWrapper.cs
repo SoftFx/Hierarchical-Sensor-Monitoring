@@ -284,6 +284,12 @@ namespace HSMServer.BackgroundServices
                     var relatedPath = apiRequest.Path;
                     var sensorType = apiRequest.SensorType;
 
+                    // Previous paths (#1724) work for the server's own collector too: the old
+                    // sensor moves here first, so the lookup below finds it.
+                    if (apiRequest.PreviousPaths is { Count: > 0 })
+                        await _cache.ApplyPreviousPathsAsync(_key, _productModel.Id, relatedPath, apiRequest.PreviousPaths,
+                            sensorType?.Convert(), HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(SelfCollectorName, false), token);
+
                     if (!_cache.TryGetSensorByPath(_productModel.Id, relatedPath, out var sensor) && sensorType is null)
                     {
                         _logger.Error($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
@@ -294,6 +300,7 @@ namespace HSMServer.BackgroundServices
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
                         Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
+                        TypeIsExplicit = sensorType is not null,
                     };
 
                     await _cache.AddOrUpdateSensorAsync(coreRequest, token);

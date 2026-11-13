@@ -37,11 +37,14 @@ namespace HSMServer.Controllers
     {
         private readonly SensorTreeReadService _reader;
         private readonly SensorDeletionAdministrationService _deleter;
+        private readonly SensorMoveAdministrationService _mover;
 
-        public SensorsApiController(SensorTreeReadService reader, SensorDeletionAdministrationService deleter)
+        public SensorsApiController(SensorTreeReadService reader, SensorDeletionAdministrationService deleter,
+            SensorMoveAdministrationService mover)
         {
             _reader = reader;
             _deleter = deleter;
+            _mover = mover;
         }
 
 
@@ -151,6 +154,60 @@ namespace HSMServer.Controllers
 
 
             return NoContent();
+        }
+
+
+        /// <summary>
+        /// Move sensors to another path, in their product or into another root
+        /// product (#1718): each sensor keeps its id, history, settings and alerts,
+        /// and its old path becomes an alias that keeps routing values to it.
+        /// One sensor goes to a full <c>path</c>; one or more go into a
+        /// <c>node</c> keeping their names. Not atomic: the 200 body reports
+        /// every sensor's outcome (a sensor the token's owner cannot see or
+        /// write is reported there, it does not fail the others). With
+        /// <c>onConflict: "merge"</c> a sensor moving onto a path held by a
+        /// sensor of the same type absorbs it — IRREVERSIBLE. A dry run
+        /// (<c>X-HSM-Dry-Run: true</c>) answers the prediction per sensor —
+        /// conflicts, nodes to create, alert templates detached/applied,
+        /// inherited settings that change — and applies nothing.
+        /// </summary>
+        /// <remarks>The dry run shares status 200 with the real move but not its
+        /// body: with <c>X-HSM-Dry-Run: true</c> the 200 body is a
+        /// <c>SensorMovePreviewDto</c> (<c>dryRun: true</c>, one prediction per
+        /// sensor in <c>sensors</c>), not the <c>SensorMoveResponseDto</c>
+        /// declared below.</remarks>
+        [HttpPost("move")]
+        [Consumes("application/json")]
+        [ProducesResponseType(typeof(SensorMoveResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> MoveSensors([FromBody] SensorMoveRequestDto request) =>
+            (await _mover.MoveSensorsAsync(request, User, Request.WriteOptions(), HttpContext.RequestAborted))
+                .ToActionResult(Response);
+
+
+        /// <summary>
+        /// Remove one alias of a moved sensor (an entry of the sensor's
+        /// <c>aliases</c>): values sent to that old path stop landing in the
+        /// sensor — the next one creates a new sensor there.
+        /// </summary>
+        /// <param name="id">Sensor id.</param>
+        /// <param name="product">The alias's root product id.</param>
+        /// <param name="path">The alias's path relative to that product.</param>
+        [HttpDelete("{id:guid}/aliases")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
+        public async Task<IActionResult> RemoveSensorAlias(Guid id, [FromQuery] Guid product, [FromQuery] string path)
+        {
+            var result = await _mover.RemoveAliasAsync(id, product, path, User, HttpContext.RequestAborted);
+
+            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
         }
     }
 }

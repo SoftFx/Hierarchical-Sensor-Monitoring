@@ -16,11 +16,14 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
 
-        public static async Task UntilAsync(Func<bool> condition, string message, TimeSpan? timeout = null)
+        public static Task UntilAsync(Func<bool> condition, string message, TimeSpan? timeout = null) =>
+            UntilAsync(() => Task.FromResult(condition()), message, timeout);
+
+        public static async Task UntilAsync(Func<Task<bool>> condition, string message, TimeSpan? timeout = null)
         {
             var deadline = DateTime.UtcNow + (timeout ?? DefaultTimeout);
 
-            while (!condition())
+            while (!await condition())
             {
                 if (DateTime.UtcNow >= deadline)
                     Assert.Fail($"Timed out waiting for: {message}");

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.12.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.13.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -513,6 +513,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout
+    native_wire_registration_with_previous_paths_matches_net_byte_layout
     native_wire_registration_with_alerts_matches_net_byte_layout
     native_wire_registration_full_options_matches_net_byte_layout
     native_version_string_matches_net
@@ -713,6 +714,7 @@ add_conformance_test(conformance_registration_contract registration_contract.hsm
 add_conformance_test(conformance_timespan_version_contract timespan_version_contract.hsmtest)
 add_conformance_test(conformance_alert_registration_contract alert_registration_contract.hsmtest)
 add_conformance_test(conformance_options_surface_contract options_surface_contract.hsmtest)
+add_conformance_test(conformance_previous_paths_contract previous_paths_contract.hsmtest)
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)

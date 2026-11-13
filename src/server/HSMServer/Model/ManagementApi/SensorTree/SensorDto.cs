@@ -112,5 +112,34 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Registered enum options; present on Enum sensors only, null otherwise.</summary>
         [Description("Registered enum options; present on Enum sensors only, null otherwise.")]
         public List<SensorEnumOptionDto> EnumOptions { get; init; }
+
+        /// <summary>
+        /// Old paths of this sensor after a move (#1718): values and registrations
+        /// sent there still land in this sensor. Empty when the sensor was never moved.
+        /// </summary>
+        [Description("Old paths of this sensor after a move: values and registrations sent there still land in this sensor. Empty when the sensor was never moved. Remove one with DELETE /api/v1/sensors/{id}/aliases or the remove_sensor_alias tool.")]
+        public List<SensorAliasDto> Aliases { get; init; }
+    }
+
+
+    /// <summary>One old path of a moved sensor (#1718).</summary>
+    [Description("One old path of a moved sensor: values and registrations sent there land in the sensor.")]
+    public sealed record SensorAliasDto
+    {
+        /// <summary>The root product the old path belongs to.</summary>
+        [Description("Id of the root product the old path belongs to (it may differ from the sensor's product after a move across products).")]
+        public Guid ProductId { get; init; }
+
+        /// <summary>The old path relative to that product.</summary>
+        [Description("The old path relative to that product, without the product name — the form the alias removal takes.")]
+        public string Path { get; init; }
+
+        /// <summary>When the move created the alias (UTC).</summary>
+        [Description("When the move created the alias (UTC ISO 8601).")]
+        public DateTime CreationDate { get; init; }
+
+        /// <summary>When a value or registration last arrived through the alias (UTC); null when never.</summary>
+        [Description("When a value or registration last arrived through the alias (UTC ISO 8601, persisted at most hourly); null when nothing has arrived yet. An alias expires after the sensor's SelfDestroy interval without arrivals.")]
+        public DateTime? LastHit { get; init; }
     }
 }

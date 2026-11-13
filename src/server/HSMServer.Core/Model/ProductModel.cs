@@ -91,6 +91,30 @@ namespace HSMServer.Core.Model
                 sensor.Policies.Uploaded -= Policies.ReceivePolicyUpdate;
         }
 
+        // Sensor move (#1718): the inverse of AttachMovedSensor. Unlike
+        // RemoveSensor it also drops the sensor's policies from this node's
+        // policy groups — a removal deletes the policies first (and the
+        // Delete events clean the groups), a move keeps them on the sensor.
+        internal void DetachMovedSensor(BaseSensorModel sensor)
+        {
+            RemoveSensor(sensor.Id);
+
+            foreach (var policy in sensor.Policies)
+                Policies.ReceivePolicyUpdate(Cache.ActionType.Delete, policy);
+        }
+
+        // AddSensor without AddParent: the moved sensor is already re-parented
+        // by BaseNodeModel.MoveTo and keeps its policy collection as is.
+        internal void AttachMovedSensor(BaseSensorModel sensor)
+        {
+            Sensors.TryAdd(sensor.Id, sensor);
+
+            sensor.Policies.Uploaded += Policies.ReceivePolicyUpdate;
+
+            foreach (var policy in sensor.Policies)
+                Policies.AddPolicy(policy);
+        }
+
         internal ProductModel Update(ProductUpdate update)
         {
             base.Update(update);

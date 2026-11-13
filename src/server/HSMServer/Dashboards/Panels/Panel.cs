@@ -161,6 +161,17 @@ namespace HSMServer.Dashboards
                     TrySaveNewSource(source, out _);
         }
 
+        // A moved sensor (#1719) keeps its sources by id; a subscription whose
+        // template now covers its new path adds it, once.
+        public void AddMovedSensor(BaseSensorModel sensor)
+        {
+            foreach (var (_, source) in Sources)
+                if (source.Sensor?.Id == sensor.Id)
+                    return;
+
+            AddSensor(sensor);
+        }
+
         public void RemoveSensor(Guid sensorId)
         {
             foreach (var sourceId in _sensorToSourceMap[sensorId])

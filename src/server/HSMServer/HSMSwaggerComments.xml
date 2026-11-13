@@ -598,6 +598,37 @@
             </summary>
             <param name="id">Sensor id.</param>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.MoveSensors(HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto)">
+            <summary>
+            Move sensors to another path, in their product or into another root
+            product (#1718): each sensor keeps its id, history, settings and alerts,
+            and its old path becomes an alias that keeps routing values to it.
+            One sensor goes to a full <c>path</c>; one or more go into a
+            <c>node</c> keeping their names. Not atomic: the 200 body reports
+            every sensor's outcome (a sensor the token's owner cannot see or
+            write is reported there, it does not fail the others). With
+            <c>onConflict: "merge"</c> a sensor moving onto a path held by a
+            sensor of the same type absorbs it — IRREVERSIBLE. A dry run
+            (<c>X-HSM-Dry-Run: true</c>) answers the prediction per sensor —
+            conflicts, nodes to create, alert templates detached/applied,
+            inherited settings that change — and applies nothing.
+            </summary>
+            <remarks>The dry run shares status 200 with the real move but not its
+            body: with <c>X-HSM-Dry-Run: true</c> the 200 body is a
+            <c>SensorMovePreviewDto</c> (<c>dryRun: true</c>, one prediction per
+            sensor in <c>sensors</c>), not the <c>SensorMoveResponseDto</c>
+            declared below.</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.RemoveSensorAlias(System.Guid,System.Guid,System.String)">
+            <summary>
+            Remove one alias of a moved sensor (an entry of the sensor's
+            <c>aliases</c>): values sent to that old path stop landing in the
+            sensor — the next one creates a new sensor there.
+            </summary>
+            <param name="id">Sensor id.</param>
+            <param name="product">The alias's root product id.</param>
+            <param name="path">The alias's path relative to that product.</param>
+        </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
@@ -1064,6 +1095,17 @@
         <member name="P:HSMServer.Mcp.McpSensorDeleteResult.Preview">
             <summary>The dry-run preview (nothing was applied); null (absent) after an applied deletion.</summary>
         </member>
+        <member name="T:HSMServer.Mcp.McpSensorMoveResult">
+            <summary>
+            Result envelope of the move_sensors tool (#1721): exactly one arm per
+            call — <c>value</c> with every sensor's outcome after an applied move,
+            or <c>preview</c> with every sensor's prediction after a dry run. The
+            McpWriteResult twin with a TYPED preview (the #1637 pattern).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpSensorAliasRemovedResult">
+            <summary>Result of the remove_sensor_alias tool.</summary>
+        </member>
         <member name="T:HSMServer.Mcp.McpJournalRecordsResult">
             <summary>Result of the list_journal_records tool.</summary>
         </member>
@@ -1093,6 +1135,14 @@
             The sensor deletion tool of the MCP surface (#1637): delete a sensor —
             a thin delegation to <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorDeletionAdministrationService"/>,
             the same engine the REST delete endpoint runs on.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.SensorMoveMcpTools">
+            <summary>
+            The sensor-move tools of the MCP surface (#1721): move sensors, remove a
+            moved sensor's alias — thin delegations to
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService"/>, the same engine as
+            <c>POST /api/v1/sensors/move</c> and <c>DELETE /api/v1/sensors/{id}/aliases</c>.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorMuteMcpTools">
@@ -3091,6 +3141,27 @@
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.EnumOptions">
             <summary>Registered enum options; present on Enum sensors only, null otherwise.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Aliases">
+            <summary>
+            Old paths of this sensor after a move (#1718): values and registrations
+            sent there still land in this sensor. Empty when the sensor was never moved.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorAliasDto">
+            <summary>One old path of a moved sensor (#1718).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorAliasDto.ProductId">
+            <summary>The root product the old path belongs to.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorAliasDto.Path">
+            <summary>The old path relative to that product.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorAliasDto.CreationDate">
+            <summary>When the move created the alias (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorAliasDto.LastHit">
+            <summary>When a value or registration last arrived through the alias (UTC); null when never.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto">
             <summary>
             Sensor history over a time window: the NEWEST <c>maxPoints</c> values inside
@@ -3129,6 +3200,66 @@
             types; an empty points list without this flag means the window holds
             no values.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess">
+            <summary>
+            Who is moving sensors (#1722): the write decision per resource and the
+            journal initiator. One move engine, two callers — an API token (REST,
+            MCP) and a signed-in web user.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess.AuthorizeWrite(HSMServer.Authentication.ApiTokenResource)">
+            <summary>Allowed, Forbidden (in sight, not writable) or NotFound (unknown or out of sight).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService">
+            <summary>
+            The sensor-move write engine (#1721): move sensors to another path, and
+            remove a moved sensor's alias. Transport-agnostic — the REST controller
+            and the MCP tools render its results through the same envelopes every
+            other administration service uses.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService.MoveSensorsAsync(HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto,HSMServer.Model.ManagementApi.SensorTree.ISensorMoveAccess,HSMServer.Model.ManagementApi.ChangeSets.ChangeSetWriteOptions,System.Threading.CancellationToken)">
+            <summary>The same move for any caller — the web UI passes a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.CookieSensorMoveAccess"/> (#1722).</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService.RemoveAliasAsync(System.Guid,System.Guid,System.String,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+            <summary>
+            Remove one alias of a moved sensor: values sent to that old path stop
+            landing in the sensor (the next one creates a new sensor there).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto">
+            <summary>
+            Move sensors to another path (#1721): one sensor to a full new path, or
+            several sensors into a destination node keeping their names.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto.Sensors">
+            <summary>Ids of the sensors to move (1..100).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto.Product">
+            <summary>The destination root product.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto.Path">
+            <summary>Full new path of ONE sensor, relative to the product (may rename it).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto.Node">
+            <summary>Destination node path, relative to the product; every sensor keeps its name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorMoveRequestDto.OnConflict">
+            <summary>"fail" (default) or "merge".</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveResponseDto">
+            <summary>Per-sensor outcome of a move request; the batch is not atomic.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMoveItemDto">
+            <summary>The outcome for one sensor.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMovePreviewDto">
+            <summary>The dry-run preview of a move request (#1721): nothing was applied.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMovePreviewItemDto">
+            <summary>The prediction for one sensor.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorMuteAdministrationService">
             <summary>
@@ -3295,6 +3426,36 @@
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
+        </member>
+        <member name="T:HSMServer.Model.ViewModel.MoveSensorsViewModel">
+            <summary>
+            The tree's "Move" modal (#1722): the selected sensors, the root products
+            the user may move them into, and the prefilled destination.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.SensorIds">
+            <summary>The selected sensors' encoded ids, as the tree knows them.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.SensorNames">
+            <summary>Display names of the selected sensors (for the header).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Products">
+            <summary>Root products the user manages: (id, name), name-ordered.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.ProductId">
+            <summary>The first sensor's root product: the preselected destination.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Single">
+            <summary>One sensor: the destination is a full path (rename allowed); several: a node.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsViewModel.Destination">
+            <summary>Prefill: the sensor's own path (one sensor) or its parent node's path (several).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ViewModel.MoveSensorsRequestViewModel">
+            <summary>The modal's POST body (JSON).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.MoveSensorsRequestViewModel.Destination">
+            <summary>Full new path of one sensor, or the destination node of several.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.SensorGroupsRequest.DisabledGroups">
             Sensor group names that should be disabled. All others are considered enabled.

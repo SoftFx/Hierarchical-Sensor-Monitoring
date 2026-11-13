@@ -58,6 +58,19 @@ namespace HSMDataCollector.Converters
         }
 
 
+        // Null entries and entries of ASCII whitespace only are dropped — the exact rule of the
+        // native hsm_sensor_set_previous_paths, so both collectors send the same bytes — and an
+        // empty result is null: the member is then omitted from the wire (JsonRequestConverter),
+        // keeping such a registration byte-identical to a collector that predates sensor move (#1724).
+        private static readonly char[] _asciiWhitespace = { ' ', '\t', '\n', '\v', '\f', '\r' };
+
+        internal static System.Collections.Generic.List<string> PreviousPathsOf(SensorOptions options)
+        {
+            var paths = options?.PreviousPaths?.Where(p => p != null && p.Trim(_asciiWhitespace).Length > 0).ToList();
+
+            return paths?.Count > 0 ? paths : null;
+        }
+
         private static AddOrUpdateSensorRequest ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
         {
             return new AddOrUpdateSensorRequest
@@ -69,6 +82,8 @@ namespace HSMDataCollector.Converters
 
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
+
+                PreviousPaths = PreviousPathsOf(options),
 
                 TTLs = options.TtlAlerts?.Select(a => a.TtlValue?.Ticks).ToList()
                     ?? options.TTLs?.Select(t => t?.Ticks).ToList(),

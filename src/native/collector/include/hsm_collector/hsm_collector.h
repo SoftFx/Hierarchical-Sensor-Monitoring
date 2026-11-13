@@ -17,7 +17,7 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 12
+#define HSM_COLLECTOR_VERSION_MINOR 13
 #define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
@@ -827,6 +827,17 @@ hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
    and, on the HTTP transport, the sensor is re-registered at the worker's next cycle. For a host
    whose description carries live facts (the Linux probe's Docker memory limit). */
 hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description);
+
+/* Paths this sensor was registered under before a layout change (0.13.0, sensor move #1724): each a
+   FULL path relative to the product as the server tree shows it (e.g. "garage-server/System/CPU") —
+   no computer/module prefix is added. A server that supports sensor move moves the sensor found at
+   such a path to this sensor's path on registration, keeping its history, settings and alerts
+   (merging into a sensor of the same type already there; the first listed path wins). Repeating it
+   on every registration is safe; older servers ignore the member. NULL and whitespace-only entries
+   are skipped; count 0 (previous_paths may then be NULL) removes them. The strings are copied.
+   Re-emission rules as hsm_sensor_set_description: before Start the paths ride the Start
+   registration; while running the sensor is re-registered. */
+hsm_result_t hsm_sensor_set_previous_paths(hsm_sensor_t* sensor, const char* const* previous_paths, size_t count);
 
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,

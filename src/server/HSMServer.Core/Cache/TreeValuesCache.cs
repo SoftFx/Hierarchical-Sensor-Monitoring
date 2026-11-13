@@ -36,7 +36,7 @@ using SensorType = HSMCommon.Model.SensorType;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache, IUpdateHandler, IAsyncDisposable
+    public sealed partial class TreeValuesCache : ITreeValuesCache, IUpdateHandler, IAsyncDisposable
     {
         private class CachedValue
         {
@@ -45,6 +45,10 @@ namespace HSMServer.Core.Cache
             public ProductModel Product { get; }
 
             public ConcurrentDictionary<string, BaseSensorModel> Sensors { get; } = new ConcurrentDictionary<string, BaseSensorModel>(StringComparer.Ordinal);
+
+            // Old paths of moved sensors (#1718, ADR-0018): consulted only when
+            // Sensors misses. Never shares a key with Sensors.
+            public ConcurrentDictionary<string, BaseSensorModel> Aliases { get; } = new ConcurrentDictionary<string, BaseSensorModel>(StringComparer.Ordinal);
 
 
             public CachedValue(ProductModel product, IUpdateHandler updateHandler)
@@ -625,6 +629,18 @@ namespace HSMServer.Core.Cache
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
+
+            // Aliases of moved sensors expire by the same SelfDestroy interval
+            // (#1718); their pass is isolated so a failure cannot hide the
+            // sensor sweep's own report above.
+            try
+            {
+                await RunAliasMaintenanceAsync(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Sensor alias sweep failed");
+            }
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -886,8 +902,22 @@ namespace HSMServer.Core.Cache
             var update = request.Update;
 
             if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
-                if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
-                    return false;
+            {
+                // A registration of the old path updates the moved sensor
+                // (ADR-0018); only an explicit different type displaces the alias.
+                switch (ResolveAlias(request.ProductId, request.Path, request.TypeIsExplicit ? request.Type : null, out sensor))
+                {
+                    case AliasResolution.Forwarded:
+                        Dispatch(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0));
+                        error = null;
+                        return true;
+
+                    case AliasResolution.None:
+                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
+                            return false;
+                        break;
+                }
+            }
 
             update = update with { Id = sensor.Id };
             return TryUpdateSensor(update, out error);
@@ -1040,15 +1070,21 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
+        // Returns false when the sensor's entity may still be in the database
+        // (the removal threw before or inside the database step): a merge must
+        // report that, the occupant would come back on restart (#1720 review).
+        private bool RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
             List<Guid> purgeIds = null)
         {
+            var removedFromDatabase = false;
+
             try
             {
                 if (!TryGetSensorById(sensorId, out var sensor))
-                    return;
+                    return true;
 
                 RemoveSensorFromCache(sensor);
+                UnindexAliases(sensor);
 
                 RemoveSensorPolicies(sensor); // should be before removing from parent
 
@@ -1072,6 +1108,7 @@ namespace HSMServer.Core.Cache
                 _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
                 _database.RemoveSensorWithMetadata(sensorId);
+                removedFromDatabase = true;
 
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
@@ -1087,6 +1124,8 @@ namespace HSMServer.Core.Cache
             {
                 _logger.Error($"An error was occured by removing sensor {sensorId}", ex);
             }
+
+            return removedFromDatabase;
         }
 
         public async Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
@@ -3103,13 +3142,37 @@ namespace HSMServer.Core.Cache
                     UpdateProduct(request);
                     break;
                 case RemoveProductRequest request:
-                    RemoveProduct(request);
+                    // A structural change like sensor creation and move: a move
+                    // must not attach a sensor to a node being removed (ADR-0018).
+                    lock (_treeStructureLock)
+                        RemoveProduct(request);
                     break;
                 case SaveLastStateRequest request:
                     SaveLastStateToDb(request);
                     break;
                 case CheckSensorsHistoryRequest request:
                     CheckSensorHistory(request);
+                    break;
+                case SensorMoveRequest request:
+                    MoveSensor(request);
+                    break;
+                case AliasValueRequest request:
+                    AddAliasValue(request);
+                    break;
+                case SensorAliasMaintenanceRequest request:
+                    MaintainAliases(request);
+                    break;
+                case AliasRegistrationRequest request:
+                    UpdateThroughAlias(request);
+                    break;
+                case SensorTemplateReevaluationRequest request:
+                    ReevaluateMovedSensorTemplates(request);
+                    break;
+                case SensorAbsorbRequest request:
+                    AbsorbSensor(request);
+                    break;
+                case SensorMergeRefreshRequest request:
+                    RefreshMergedSensor(request);
                     break;
             }
 
@@ -3317,13 +3380,32 @@ namespace HSMServer.Core.Cache
 
             if(!TryGetSensorFromCache(request.ProductId, request.Path, out BaseSensorModel sensor))
             {
-                _logger.Info($"Creating new sensor: ProductId = {request.ProductId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
-                if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
-                    return false;
+                switch (ResolveAlias(request.ProductId, request.Path, request.BaseValue.Type, out sensor))
+                {
+                    case AliasResolution.Forwarded:
+                        // The moved sensor lives in another product: its own
+                        // queue adds the value (ADR-0018).
+                        Dispatch(sensor.Root, new AliasValueRequest(sensor.Id, sensor.Root.Id, request.BaseValue, Hops: 0));
+                        return true;
+
+                    case AliasResolution.None:
+                        if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
+                            return false;
+                        break;
+                }
             }
 
+            AddValueToSensor(sensor, request.Path, request.BaseValue);
+
+            return true;
+        }
+
+        // The add half of TryAddNewSensorValue, shared with values that reach a
+        // moved sensor through an alias of another product (AliasValueRequest).
+        private void AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
+        {
             if (sensor.State == SensorState.Blocked)
-                return true;
+                return;
 
             // The previous cached newest, captured before the add: a value that
             // lands on the SAME tick as it keeps only the last row in the
@@ -3331,9 +3413,9 @@ namespace HSMServer.Core.Cache
             // counted and logged instead of passing silently (#1441).
             var previousLastTime = sensor.LastValue?.Time;
 
-            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue, out var result))
-                PersistAddedValue(sensor, request.Path, sensor.Id, request.BaseValue, result, previousLastTime);
-            else if (!request.BaseValue.IsTimeout)
+            if (TryAddValueWithDeliveryStamp(sensor, value, out var result))
+                PersistAddedValue(sensor, path, sensor.Id, value, result, previousLastTime);
+            else if (!value.IsTimeout)
             {
                 // #1441: a value rejected here used to vanish with a clean 200 and
                 // no trace. The real rejector is the singleton gate — steady state
@@ -3350,8 +3432,6 @@ namespace HSMServer.Core.Cache
             }
 
             SensorUpdateViewAndNotify(sensor);
-
-            return true;
         }
 
 
@@ -3686,6 +3766,8 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Sensors are applied");
 
+            IndexAliasesOnStartup();
+
             MigrateDatabseV2();
 
             Task.Run(() => FillSensorsData()).Forget(_logger);
@@ -3830,7 +3912,29 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
+        // Sensor creation, sensor move and node/product removal are the
+        // writers of the tree's structure across product queues: all take
+        // _treeStructureLock (removal nests _productsByNameLock and the journal
+        // purge inside it — never take the tree lock under those). Creation
+        // re-checks the index under it so a cross-product move that just
+        // published a sensor at this path is reused, not duplicated (ADR-0018).
         private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
+        {
+            lock (_treeStructureLock)
+            {
+                if (TryGetSensorFromCache(productId, request.Path, out sensor))
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
+
+                return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error);
+            }
+        }
+
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
         {
             sensor = null;
             error = string.Empty;
@@ -4403,9 +4507,11 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorFromCache(BaseSensorModel sensor)
         {
+            // Remove only THIS sensor's entry: during a merge (#1720) the path
+            // already belongs to the moved sensor that absorbs this one.
             if (_cache.TryGetValue(sensor.Root.Id, out var value))
             {
-                value.Sensors.TryRemove(sensor.Path, out _);
+                value.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(sensor.Path, sensor));
             }
 
             _sensorsById.TryRemove(sensor.Id, out _);

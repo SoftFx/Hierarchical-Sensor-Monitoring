@@ -30,6 +30,8 @@ namespace HSMServer.Core.Cache
     {
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
+        /// <summary>A sensor moved (#1718); the Guid is its old parent node id.</summary>
+        event Action<BaseSensorModel, Guid> SensorMovedEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         event Action<string, int, int> RequestProcessed;
 
@@ -85,6 +87,34 @@ namespace HSMServer.Core.Cache
         bool TryGetSensorByPath(Guid productId, string path, out BaseSensorModel sensor);
         Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
         Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Move a sensor to <paramref name="destinationPath"/> (relative to the root
+        /// product <paramref name="destinationProductId"/>), keeping its id, history,
+        /// settings and policies; the old path becomes an alias (#1718, ADR-0018).
+        /// </summary>
+        Task<SensorMoveResult> MoveSensorAsync(Guid sensorId, Guid destinationProductId, string destinationPath,
+            SensorMoveConflict onConflict = SensorMoveConflict.Fail, InitiatorInfo initiator = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Predict a move without changing anything (#1721 dry run): outcome, the
+        /// destination nodes it would create, alert templates it would detach or
+        /// apply, effective settings that would change.
+        /// </summary>
+        SensorMovePreview PreviewMove(Guid sensorId, Guid destinationProductId, string destinationPath,
+            SensorMoveConflict onConflict = SensorMoveConflict.Fail);
+
+        /// <summary>
+        /// A collector registration's previous paths (#1724): move the sensors registered under
+        /// them (full product-relative paths) to <paramref name="path"/>, merging into a sensor
+        /// already there. The access key's product only; refusals are logged and the result is always Ok.
+        /// </summary>
+        Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path, IReadOnlyList<string> previousPaths,
+            SensorType? type, InitiatorInfo initiator, CancellationToken token = default);
+
+        /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
+        Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
+            InitiatorInfo initiator = null, CancellationToken token = default);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
         Task CheckSensorsHistoryAsync(CancellationToken token = default);

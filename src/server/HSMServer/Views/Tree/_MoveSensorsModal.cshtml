@@ -1,0 +1,62 @@
+@using HSMServer.Model.ViewModel
+
+@model MoveSensorsViewModel
+
+@{
+    var title = Model.Single ? $"Move sensor '{Model.SensorNames[0]}'" : $"Move {Model.SensorIds.Count} sensors";
+}
+
+@* Sensor move (#1722): rendered on demand by HomeController.GetMoveSensorsModal; driven by wwwroot/src/js/sensorMove.js. *@
+<div class="modal fade" id="moveSensors_modal" tabindex="-1" aria-labelledby="moveSensors_title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="moveSensors_title">@title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="moveSensors_ids" value="@string.Join(",", Model.SensorIds)" />
+
+                @if (!Model.Single)
+                {
+                    <div class="mb-2 small text-muted text-break">@string.Join(", ", Model.SensorNames)</div>
+                }
+
+                <label class="form-label mb-1" for="moveSensors_product">Product</label>
+                <select id="moveSensors_product" class="form-select form-select-sm">
+                    @foreach (var (id, name) in Model.Products)
+                    {
+                        <option value="@id" selected="@(id == Model.ProductId)">@name</option>
+                    }
+                </select>
+
+                <label class="form-label mb-1 mt-2" for="moveSensors_destination">
+                    @(Model.Single
+                        ? "New path inside the product (the last segment is the sensor's name)"
+                        : "Destination node inside the product (each sensor keeps its name; empty = directly under the product)")
+                </label>
+                <input id="moveSensors_destination" class="form-control form-control-sm" value="@Model.Destination" autocomplete="off" />
+
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="moveSensors_merge">
+                    <label class="form-check-label" for="moveSensors_merge">
+                        If a sensor of the same type already exists at the destination, merge into it: the moved sensor keeps its
+                        settings and alerts and takes over the other sensor's history, and the other sensor is removed.
+                        <span class="text-danger fw-bold">Irreversible.</span>
+                    </label>
+                </div>
+
+                <div class="small text-muted mt-2">
+                    History, settings, alerts and the journal move with the sensor. The old path becomes an alias that keeps routing
+                    values from collectors that are not updated yet; aliases are listed on the sensor page.
+                </div>
+
+                <div id="moveSensors_preview" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="moveSensors_previewBtn" class="btn btn-sm btn-outline-secondary">Preview</button>
+                <button type="button" id="moveSensors_moveBtn" class="btn btn-sm btn-primary">Move</button>
+            </div>
+        </div>
+    </div>
+</div>

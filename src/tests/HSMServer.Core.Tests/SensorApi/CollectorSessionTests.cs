@@ -260,6 +260,36 @@ namespace HSMServer.Core.Tests.SensorApi
             }
         }
 
+        // Sensor move from a collector (#1724): a registration's PreviousPaths moves the old sensor
+        // to the registered path — the same over the HTTP route and over the session, which both
+        // feed SensorIngestionService.AddOrUpdateSensorAsync.
+        [Fact]
+        public async Task PreviousPaths_MoveTheOldSensor_OverHttpAndOverTheSession()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands",
+                "[{\"Type\":0,\"Path\":\"layout/v1/http\",\"SensorType\":1},{\"Type\":0,\"Path\":\"layout/v1/session\",\"SensorType\":1}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/http", out var overHttp));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/session", out var overSession));
+
+            var http = await PostAsync(host, "commands",
+                "[{\"Type\":0,\"Path\":\"layout/v2/http\",\"SensorType\":1,\"PreviousPaths\":[\"layout/v1/http\"]}]", _key);
+            await SendAsync(socket,
+                "{\"id\":8,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"layout/v2/session\",\"SensorType\":1,\"PreviousPaths\":[\"layout/v1/session\"]}]}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, http.Status);
+            Assert.Equal(200, (int)ack["status"]);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v2/http", out var movedOverHttp));
+            Assert.Equal(overHttp.Id, movedOverHttp.Id);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v2/session", out var movedOverSession));
+            Assert.Equal(overSession.Id, movedOverSession.Id);
+            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/http", out _));
+        }
+
         [Fact]
         public async Task UnknownOp_Is400_AndUnknownEnvelopeFieldsAreIgnored()
         {

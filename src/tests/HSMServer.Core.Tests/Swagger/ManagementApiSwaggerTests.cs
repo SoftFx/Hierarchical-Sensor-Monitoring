@@ -412,6 +412,8 @@ namespace HSMServer.Core.Tests.Swagger
             // ghost 204 — the cache removal is what the post-write read
             // verifies), otherwise the delete pattern of the policy surface.
             [(typeof(SensorsApiController), nameof(SensorsApiController.DeleteSensor))] = [401, 403, 404, 409, 500],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.MoveSensors))] = [401, 403, 404, 422, 500],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.RemoveSensorAlias))] = [401, 403, 404, 422],
 
             // The alert-administration surface (#1500). Writes carry the
             // semantic-validation 422 (condition-vs-type, chat availability,
