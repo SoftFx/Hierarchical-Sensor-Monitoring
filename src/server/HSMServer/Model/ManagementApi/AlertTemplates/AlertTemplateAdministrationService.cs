@@ -666,7 +666,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, "name", "The name is required.");
             else if (dto.Name.Length > MaxNameLength)
                 Add(errors, "name", $"The name must be at most {MaxNameLength} characters.");
-            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar))
+            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar, allowLineBreaks: false))
                 // #1705: no legitimate name carries control characters or
                 // bidi overrides; they spoof every renderer.
                 Add(errors, "name",
@@ -814,7 +814,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, $"{prefix}.template",
                     $"The message template must not contain control or bidirectional-override characters (found {templateChar}).");
 
-            if (TextFieldValidator.HasForbiddenCharacter(policy.Icon, out var iconChar))
+            if (TextFieldValidator.HasForbiddenCharacter(policy.Icon, out var iconChar, allowLineBreaks: false))
                 Add(errors, $"{prefix}.icon",
                     $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
 

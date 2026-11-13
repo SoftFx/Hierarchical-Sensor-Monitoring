@@ -396,7 +396,7 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
                 errorMap.Add("name", ["The schedule name is required."]);
             else if (dto.Name.Length > MaxNameLength)
                 errorMap.Add("name", [$"The schedule name must be at most {MaxNameLength} characters."]);
-            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar))
+            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar, allowLineBreaks: false))
                 // #1705: no legitimate name carries control characters or
                 // bidi overrides; they spoof every renderer.
                 errorMap.Add("name", [$"The schedule name must not contain control or bidirectional-override characters (found {nameChar})."]);

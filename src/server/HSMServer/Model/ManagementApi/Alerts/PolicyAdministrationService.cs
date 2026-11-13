@@ -1015,7 +1015,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // message text are rejected at write time — no legitimate value
             // carries them, and they spoof every renderer. Raw HTML is a
             // renderer concern (the audit): it is escaped or sanitized there.
-            if (TextFieldValidator.HasForbiddenCharacter(icon, out var iconChar))
+            if (TextFieldValidator.HasForbiddenCharacter(icon, out var iconChar, allowLineBreaks: false))
                 AlertPolicyConditionValidator.Add(errors, "icon",
                     $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
 
