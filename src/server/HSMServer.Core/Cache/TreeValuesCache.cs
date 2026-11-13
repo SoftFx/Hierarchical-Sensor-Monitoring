@@ -698,7 +698,18 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public bool TryCheckKeyWritePermissions(Guid key, string[] parts, out string message)
+        public bool TryCheckKeyWritePermissions(Guid key, string[] parts, out string message) =>
+            TryCheckKeyWritePermissions(key, parts, aliasPath: null, valueType: null, out message);
+
+        // The check of a VALUE's key. A value sent to a moved sensor's old path (#1718)
+        // lands in that sensor through its alias: the sensor exists, so the key needs no
+        // right to add one, and a blocked sensor refuses the value as it does on its own
+        // path. A value of another type is not the moved sensor's — it displaces the alias
+        // and creates a sensor — so it is checked as a value for a missing sensor.
+        private bool TryCheckValueKeyWritePermissions(AddSensorValueRequest request, out string message) =>
+            TryCheckKeyWritePermissions(request.Key, request.PathParts, request.Path, request.BaseValue.Type, out message);
+
+        private bool TryCheckKeyWritePermissions(Guid key, string[] parts, string aliasPath, SensorType? valueType, out string message)
         {
 
             if (!TryCheckProductKey(key, out var product, out message))
@@ -710,6 +721,13 @@ namespace HSMServer.Core.Cache
                 return false;
 
             var sensorChecking = TryGetSensor(parts, product, accessKey, out var sensor, out message);
+
+            if (sensor is null && aliasPath is not null && TryPeekAlias(product.Id, aliasPath, out var moved) && moved.Type == valueType)
+            {
+                sensor = moved;
+                sensorChecking = true;
+                message = string.Empty;
+            }
 
             if (sensor?.State == SensorState.Blocked)
             {
@@ -3185,7 +3203,7 @@ namespace HSMServer.Core.Cache
             if (!request.TryCheckRequest(out var message))
                 return TaskResult.FromError(message);
 
-            if (!TryCheckKeyWritePermissions(request.Key, request.PathParts, out message))
+            if (!TryCheckValueKeyWritePermissions(request, out message))
                 return TaskResult.FromError(message);
 
             await ProcessRequestAsync(productId, request, token);
@@ -3317,7 +3335,7 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
-                if (!TryCheckKeyWritePermissions(addRequest.Key, addRequest.PathParts, out message))
+                if (!TryCheckValueKeyWritePermissions(addRequest, out message))
                 {
                     request.Response[addRequest.Path] = message;
                     continue;

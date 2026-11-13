@@ -429,12 +429,14 @@ namespace HSMServer.Controllers
             Exception firstFault = null;
             var faulted = 0;
 
+            // The callers are resolved for the whole batch first: the sensor moves its
+            // registrations ask for (#1724) are made before any command is applied.
+            var accepted = new List<(PublicApiRequestInfo Info, CommandRequestBase Command)>(sensorCommands.Count);
+
             for (var i = 0; i < sensorCommands.Count; i++)
             {
                 try
                 {
-                    var path = sensorCommands[i].Path;
-
                     // Only a registration reads the caller; any other command is refused
                     // without it, exactly as before the logic moved to the service.
                     PublicApiRequestInfo info = null;
@@ -447,7 +449,7 @@ namespace HSMServer.Controllers
                             // The rejection reason (unknown/expired/blocked key) is the
                             // per-path error the caller reads, not the generic
                             // invalid-request text (#1649).
-                            response[path] = infoRequest.Error;
+                            response[sensorCommands[i].Path] = infoRequest.Error;
 
                             continue;
                         }
@@ -455,10 +457,26 @@ namespace HSMServer.Controllers
                         info = infoRequest.Value;
                     }
 
-                    var error = await _ingestion.ApplyCommandAsync(info, sensorCommands[i]);
+                    accepted.Add((info, sensorCommands[i]));
+                }
+                catch (Exception ex)
+                {
+                    // A fault of one command, see the loop below.
+                    firstFault ??= ex;
+                    faulted++;
+                }
+            }
+
+            await _ingestion.ApplyPreviousPathsAsync(accepted);
+
+            foreach (var (info, command) in accepted)
+            {
+                try
+                {
+                    var error = await _ingestion.ApplyCommandAsync(info, command, previousPathsApplied: true);
 
                     if (error is not null)
-                        response[path] = error;
+                        response[command.Path] = error;
                 }
                 catch (Exception ex)
                 {

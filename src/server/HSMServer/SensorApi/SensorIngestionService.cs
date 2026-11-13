@@ -12,6 +12,7 @@ using HSMServer.SensorApi.Sessions;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.SensorApi
@@ -77,18 +78,93 @@ namespace HSMServer.SensorApi
             return result;
         }
 
+        // The sensor moves a /commands batch asks for (#1724), made first and as a whole: a
+        // layout that reuses names (p0 becomes p1 while p1 becomes p2) cannot be applied one
+        // registration at a time. See ITreeValuesCache.ApplyPreviousPathsAsync. Both
+        // transports call it once before they apply the commands, and then pass
+        // previousPathsApplied: true to ApplyCommandAsync.
+        //
+        // Registrations are grouped by the key that sent them. Every registration's path
+        // counts as one the batch registers; one that will be refused (it cannot be
+        // converted) moves nothing, as on the single route. Never throws and never fails a
+        // registration: a fault here is logged and the commands are applied as usual.
+        public async Task ApplyPreviousPathsAsync(IReadOnlyList<(PublicApiRequestInfo Info, CommandRequestBase Command)> batch)
+        {
+            try
+            {
+                var byKey = batch
+                    .Where(entry => entry.Info is not null && entry.Command is AddOrUpdateSensorRequest)
+                    .GroupBy(entry => (Key: entry.Info.Key.Id, Product: entry.Info.Product.Id));
+
+                foreach (var group in byKey)
+                {
+                    // Almost every batch: nothing to move, nothing to look at.
+                    if (!group.Any(entry => ((AddOrUpdateSensorRequest)entry.Command).PreviousPaths is { Count: > 0 }))
+                        continue;
+
+                    var keyName = group.First().Info.Key.DisplayName;
+                    var registrations = new List<PreviousPathsRegistration>();
+
+                    foreach (var (_, command) in group)
+                    {
+                        var request = (AddOrUpdateSensorRequest)command;
+                        var previousPaths = request.PreviousPaths;
+
+                        if (!CanConvert(request, keyName, out var type))
+                            previousPaths = null;
+
+                        registrations.Add(new PreviousPathsRegistration(request.Path, previousPaths, type));
+                    }
+
+                    await _cache.ApplyPreviousPathsAsync(group.Key.Key, group.Key.Product, registrations,
+                        HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(keyName, false));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Previous paths of a registration batch not applied");
+            }
+        }
+
+        // The registration's type and, when it carries previous paths, its settings. A
+        // registration that AddOrUpdateSensorAsync will refuse must not fail the batch here.
+        private static bool CanConvert(AddOrUpdateSensorRequest request, string keyName, out HSMCommon.Model.SensorType? type)
+        {
+            type = null;
+
+            if (FindUnconvertiblePart(request) is not null)
+                return false;
+
+            try
+            {
+                type = request.SensorType?.Convert();
+
+                if (request.PreviousPaths is { Count: > 0 })
+                    request.Convert(Guid.Empty, keyName);
+
+                return true;
+            }
+            catch (Exception)
+            {
+                type = null;
+                return false;
+            }
+        }
+
         // One command of a /commands batch. Returns its error, or null when it was applied.
-        public async Task<string> ApplyCommandAsync(PublicApiRequestInfo info, CommandRequestBase command)
+        // previousPathsApplied: the batch's sensor moves were already made by ApplyPreviousPathsAsync.
+        public async Task<string> ApplyCommandAsync(PublicApiRequestInfo info, CommandRequestBase command, bool previousPathsApplied = false)
         {
             if (command is not AddOrUpdateSensorRequest sensorUpdate)
                 return UnsupportedCommand;
 
-            var result = await AddOrUpdateSensorAsync(info, sensorUpdate);
+            var result = await AddOrUpdateSensorAsync(info, sensorUpdate, previousPathsApplied);
 
             return result.IsOk ? null : result.Error;
         }
 
-        public async Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request)
+        public async Task<TaskResult> AddOrUpdateSensorAsync(PublicApiRequestInfo info, AddOrUpdateSensorRequest request,
+            bool previousPathsApplied = false)
         {
             if (info is null)
                 return _invalidRequestResult;
@@ -151,7 +227,7 @@ namespace HSMServer.SensorApi
             // moves here first, so the registration below updates it instead of a new one. It
             // never blocks the registration (refusals are logged inside). A move it makes stands
             // even if the queue then refuses the registration's settings.
-            if (request.PreviousPaths is { Count: > 0 })
+            if (!previousPathsApplied && request.PreviousPaths is { Count: > 0 })
                 await _cache.ApplyPreviousPathsAsync(keyId, productId, request.Path, request.PreviousPaths,
                     coreRequest.TypeIsExplicit ? coreRequest.Type : null,
                     HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(keyName, false));

@@ -476,6 +476,42 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/http", out _));
         }
 
+        // A layout that reuses names (p0 becomes p1 while p1 becomes p2) arrives as one batch,
+        // listed in the order that merged the two sensors when registrations were applied one
+        // by one (#1718 review). Both transports take the batch as a whole.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PreviousPaths_OfAShiftedLayout_KeepBothSensors(bool overSession)
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var root = overSession ? "shift/session" : "shift/http";
+
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "list",
+                $"[{IntValue($"{root}/p0", 1)},{IntValue($"{root}/p1", 2)}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p0", out var first));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p1", out var second));
+
+            var batch = $"[{{\"Type\":0,\"Path\":\"{root}/p1\",\"SensorType\":1,\"PreviousPaths\":[\"{root}/p0\"]}}," +
+                        $"{{\"Type\":0,\"Path\":\"{root}/p2\",\"SensorType\":1,\"PreviousPaths\":[\"{root}/p1\"]}}]";
+
+            if (overSession)
+            {
+                await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{batch}}}");
+                Assert.Equal(200, (int)(await ReceiveAsync(socket))["status"]);
+            }
+            else
+                Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", batch, _key)).Status);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p1", out var atP1));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p2", out var atP2));
+            Assert.Equal(first.Id, atP1.Id);
+            Assert.Equal(second.Id, atP2.Id);
+            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p0", out _));
+        }
+
         [Fact]
         public async Task UnknownOp_Is400_AndUnknownEnvelopeFieldsAreIgnored()
         {
