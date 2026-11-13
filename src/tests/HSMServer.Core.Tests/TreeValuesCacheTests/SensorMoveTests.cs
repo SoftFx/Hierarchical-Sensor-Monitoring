@@ -225,9 +225,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, _fixture.ProductB, $"{root}/dst/s")).IsOk);
 
                 // Across products the templates are re-evaluated on the destination's
-                // queue; the stale template is detached before the new one is applied.
-                await TestWait.UntilAsync(() => sensor.Policies.TTLPolicies.Any(t => t.TemplateId == destinationTemplate.Id),
-                    "the destination template was applied");
+                // queue. Wait for its end state: had the apply come first, its view
+                // event (counted above) would have fired before the detach, so the
+                // count below is final once the source template is gone.
+                await TestWait.UntilAsync(() =>
+                    {
+                        var ttl = sensor.Policies.TTLPolicies;
+                        return ttl.Any(t => t.TemplateId == destinationTemplate.Id) && ttl.All(t => t.TemplateId != sourceTemplate.Id);
+                    },
+                    "the templates were re-evaluated");
 
                 Assert.Equal(0, Volatile.Read(ref bothAttached));
                 Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId == sourceTemplate.Id);
