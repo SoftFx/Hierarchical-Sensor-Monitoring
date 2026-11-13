@@ -24,7 +24,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             try
             {
-                sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
+                sendingInfo = await Sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

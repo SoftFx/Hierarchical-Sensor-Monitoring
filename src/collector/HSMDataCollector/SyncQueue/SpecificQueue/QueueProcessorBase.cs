@@ -36,6 +36,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
         protected ChannelWriter<QueueItem<T>> Writer => _channel.Writer;
         protected readonly IDataSender _sender;
+
+        // What the stop drain sends through (#1747): a built-in sender that repeats a failed
+        // request inside a send gives a view of itself that does not; any other sender, a
+        // host's own included, is used as it is.
+        private readonly IDataSender _drainSender;
+
         protected readonly CollectorOptions _options;
         protected CancellationTokenSource _cancellationTokenSource;
         protected readonly ICollectorLogger _logger;
@@ -64,6 +70,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _drainSender = (_sender as IStopDrainSender)?.StopDrain ?? _sender;
             _queueManager = queueManager;
             _logger = logger;
 
@@ -408,8 +415,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual bool ShouldContinueDispatching() => true;
 
-        public virtual async Task FlushAsync(CancellationToken token)
+        public virtual async Task<FlushResult> FlushAsync(CancellationToken token)
         {
+            // The first failed send ends the drain (#1747): every catch below leaves the loop,
+            // and the caller is told, so that the queues behind this one do not try the same
+            // server again. This is the queue's rule and holds for any sender.
+            var sendFailed = false;
+
             Volatile.Write(ref _inFlushFlag, 1);
             try
             {
@@ -443,7 +455,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         {
                             ObserveAbandonedDispatch(dispatchTask);
                             _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
-                            return;
+                            return new FlushResult(sendFailed: false);
                         }
 
                         dispatched = await dispatchTask.ConfigureAwait(false);
@@ -453,20 +465,29 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         break;
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                // The budget fired in the middle of a send: the drain is over for every queue
+                // anyway. A sender that gave the send up without being asked has failed it.
+                sendFailed = !token.IsCancellationRequested;
+            }
             catch (PackageSendFailedException ex) when (ex.IsTransportDown)
             {
                 // No connection to flush through; the discarded items are counted by the caller.
+                sendFailed = true;
                 _logger.Debug(ex.Message);
             }
             catch (Exception ex)
             {
+                sendFailed = true;
                 _logger.Error(ex);
             }
             finally
             {
                 Volatile.Write(ref _inFlushFlag, 0);
             }
+
+            return new FlushResult(sendFailed);
         }
 
         // The abandoned dispatch keeps running on the hung sender; observe its eventual fault so
@@ -482,6 +503,14 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
         // before ClearQueue discards them.
         protected bool IsFlushing => Volatile.Read(ref _inFlushFlag) == 1;
+
+        /// <summary>
+        /// The sender of the dispatch that is starting now: the single-attempt view inside the
+        /// stop drain, the sender itself in the run loop. Read it when the send starts. The run
+        /// loop of a queue has exited before its drain begins (DataProcessor flushes only a
+        /// queue whose StopAsync returned true), so the two never read it at the same time.
+        /// </summary>
+        protected IDataSender Sender => IsFlushing ? _drainSender : _sender;
 
         protected async ValueTask DispatchPackageAsync(
             DataPackage<T> package,

@@ -113,12 +113,18 @@ namespace HSMDataCollector.Client.HttpsClient
             return default;
         }
 
-        public async ValueTask<PackageSendingInfo> SendAsync(IEnumerable<T> values, CancellationToken token)
+        // The pipeline of one send. A send of the stop drain is a single attempt whatever the
+        // handler repeats otherwise (#1747): the drain has one budget, and a repeat with its
+        // pause would spend it on a server that is down.
+        private ResiliencePipeline<HttpResponseMessage> PipelineFor(bool singleAttempt) =>
+            singleAttempt ? ResiliencePipeline<HttpResponseMessage>.Empty : _pipeline;
+
+        public async ValueTask<PackageSendingInfo> SendAsync(IEnumerable<T> values, CancellationToken token, bool singleAttempt = false)
         {
             HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                using (var response = await PipelineFor(singleAttempt).ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
                     return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
@@ -135,17 +141,17 @@ namespace HSMDataCollector.Client.HttpsClient
             }
             catch (Exception ex)
             {
-                LogSendFailure(ex, request);
+                LogSendFailure(ex, request, singleAttempt);
                 return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
 
-        public async ValueTask<PackageSendingInfo> SendAsync(T value, CancellationToken token)
+        public async ValueTask<PackageSendingInfo> SendAsync(T value, CancellationToken token, bool singleAttempt = false)
         {
             HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
             try
             {
-                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                using (var response = await PipelineFor(singleAttempt).ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
                 {
                     await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
                     return await BuildSendingInfoAsync(request.Length, response).ConfigureAwait(false);
@@ -158,7 +164,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
             catch (Exception ex)
             {
-                LogSendFailure(ex, request);
+                LogSendFailure(ex, request, singleAttempt);
                 return new PackageSendingInfo(request.Length, null, exception: PackageSendingInfo.DescribeException(ex));
             }
         }
@@ -168,9 +174,11 @@ namespace HSMDataCollector.Client.HttpsClient
         // PackageSendingInfo and reports the package once per window (AddQueueLoopError). An
         // Error line here as well was a second entry for the same cause (#1659 A4), so this
         // keeps only the detail that differs from send to send, at Debug.
-        private void LogSendFailure(Exception ex, HttpRequest<T> request)
+        private void LogSendFailure(Exception ex, HttpRequest<T> request, bool singleAttempt)
         {
-            _logger.Debug($"Failed to send data after {MaxRetryAttempts + 1} attempt(s). Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+            var attempts = singleAttempt ? 1 : MaxRetryAttempts + 1;
+
+            _logger.Debug($"Failed to send data after {attempts} attempt(s). Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
         }
 
         private static string DescribeAttempt(string cause) => $"Failed to send data. {cause}";

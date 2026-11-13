@@ -19,8 +19,30 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         ValueTask<bool> StopAsync(ShutdownMode mode);
 
-        Task FlushAsync(CancellationToken token);
+        /// <summary>
+        /// The stop drain of this queue: sends what it holds, one package after another, until
+        /// the queue is empty, <paramref name="token"/> (the drain budget) fires or a send fails.
+        /// What it leaves in the queue is the caller's to clear and count.
+        /// </summary>
+        Task<FlushResult> FlushAsync(CancellationToken token);
 
         int ClearQueue();
+    }
+
+
+    /// <summary>How the stop drain of one queue ended.</summary>
+    internal readonly struct FlushResult
+    {
+        /// <summary>
+        /// A send failed (#1747): the sender returned an error or threw. The drain of a stop
+        /// ends at the first failed send, as in the native collector, so the value queues
+        /// behind this one send nothing. False when the queue was emptied or the budget fired.
+        /// </summary>
+        internal bool SendFailed { get; }
+
+        internal FlushResult(bool sendFailed)
+        {
+            SendFailed = sendFailed;
+        }
     }
 }

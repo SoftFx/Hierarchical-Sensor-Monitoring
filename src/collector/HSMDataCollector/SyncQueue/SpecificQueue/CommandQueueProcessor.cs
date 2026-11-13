@@ -50,8 +50,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             // a delivered registration went out again and one that never arrived was dropped.
             package.SortByIssue();
 
+            var sender = Sender;
+
             await DispatchPackageAsync(package,
-                                       (items, t) => _sender.SendCommandAsync(items, t),
+                                       (items, t) => sender.SendCommandAsync(items, t),
                                        token).ConfigureAwait(false);
             return true;
         }
