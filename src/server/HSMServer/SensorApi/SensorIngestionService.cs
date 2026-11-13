@@ -100,10 +100,10 @@ namespace HSMServer.SensorApi
                     var request = (AddOrUpdateSensorRequest)command;
                     var previousPaths = request.PreviousPaths;
 
-                    if (previousPaths is { Count: > 0 } && !CanConvert(request, keyName))
+                    if (!CanConvert(request, keyName, out var type))
                         previousPaths = null;
 
-                    registrations.Add(new PreviousPathsRegistration(request.Path, previousPaths, request.SensorType?.Convert()));
+                    registrations.Add(new PreviousPathsRegistration(request.Path, previousPaths, type));
                 }
 
                 await _cache.ApplyPreviousPathsAsync(group.Key.Key, group.Key.Product, registrations,
@@ -111,15 +111,25 @@ namespace HSMServer.SensorApi
             }
         }
 
-        private static bool CanConvert(AddOrUpdateSensorRequest request, string keyName)
+        // The registration's type and, when it carries previous paths, its settings. A type
+        // the server does not know must not fail the whole batch here: the registration
+        // itself is refused when applied, after the commands listed before it.
+        private static bool CanConvert(AddOrUpdateSensorRequest request, string keyName, out HSMCommon.Model.SensorType? type)
         {
+            type = null;
+
             try
             {
-                request.Convert(Guid.Empty, keyName);
+                type = request.SensorType?.Convert();
+
+                if (request.PreviousPaths is { Count: > 0 })
+                    request.Convert(Guid.Empty, keyName);
+
                 return true;
             }
             catch (Exception)
             {
+                type = null;
                 return false;
             }
         }

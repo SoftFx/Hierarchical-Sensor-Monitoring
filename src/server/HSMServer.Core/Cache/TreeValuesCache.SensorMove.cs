@@ -262,7 +262,10 @@ namespace HSMServer.Core.Cache
                     if (!target.TryCheckRequest(out _))
                         continue; // the registration itself reports the invalid path
 
-                    batch.Registered.Add(target.Path);
+                    // A path registered twice: the first registration decides. It also keeps
+                    // the order graph linear in the batch size (one move per target path).
+                    if (!batch.Registered.Add(target.Path))
+                        continue;
 
                     var previous = ListPreviousPaths(productId, target, registration.PreviousPaths);
 
@@ -452,14 +455,37 @@ namespace HSMServer.Core.Cache
             var order = new List<int>(moves.Count);
 
             // Nothing is free: every move left waits for another one left. Walking from the
-            // earliest to a move it waits for, again and again, ends on a cycle.
+            // earliest to a move it waits for, again and again, ends on a cycle. The walks of
+            // one batch share a budget, so a batch built to make them long costs linear work:
+            // past it the earliest move left is taken, which is the collector's order.
+            var budget = 64L * moves.Count + 1024;
+
             int CycleMember()
             {
                 var seen = new HashSet<int>();
                 var current = left.Min;
 
                 while (seen.Add(current))
-                    current = blockers[current].First(left.Contains);
+                {
+                    var next = -1;
+
+                    foreach (var blocker in blockers[current])
+                    {
+                        if (--budget < 0)
+                            return left.Min;
+
+                        if (left.Contains(blocker))
+                        {
+                            next = blocker;
+                            break;
+                        }
+                    }
+
+                    if (next < 0)
+                        return current;
+
+                    current = next;
+                }
 
                 return current;
             }
