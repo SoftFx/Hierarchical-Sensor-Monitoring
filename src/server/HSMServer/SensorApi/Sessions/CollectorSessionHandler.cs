@@ -273,7 +273,7 @@ namespace HSMServer.SensorApi.Sessions
             // a client that stated X-Agent-Version. After the hello, which must be the first frame.
             await using var push = session.AgentVersion is null
                 ? null
-                : new DirectivePush(session, _directives, _cache, _telemetry, _logger, _time);
+                : new DirectivePush(session, _directives, _cache, _telemetry, _logger, _time, (frame, token) => PushSend(session, frame, token));
 
             while (true)
             {
@@ -599,6 +599,11 @@ namespace HSMServer.SensorApi.Sessions
         // For the tests, which read what the handler logs without touching the process-wide
         // NLog configuration.
         internal void UseLogger(Logger logger) => _logger = logger;
+
+        // How a directive push writes its frame: the session's serialized send. For the tests,
+        // which make a push fail.
+        internal Func<CollectorSession, ReadOnlyMemory<byte>, CancellationToken, Task> PushSend { get; set; } =
+            (session, frame, token) => session.SendAsync(frame, token);
 
         private void LogOpened(CollectorSession session)
         {

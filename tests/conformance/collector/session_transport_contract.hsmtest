@@ -296,8 +296,9 @@ close_from_the_server_is_answered_and_the_session_reopened|expect_no_http_reques
 
 # Directives the server pushes on the session (#1660 step 5) reach the collector's directive
 # receiver whole and in the order they were pushed, as the headers of an HTTP answer do; a directive
-# whose body is not a string carries nothing and is ignored, and so is an unknown push op (by
-# contract); neither changes the session.
+# whose body is not a string, or is empty or whitespace only (what .NET's string.IsNullOrWhiteSpace
+# calls whitespace: here spaces, a tab, U+00A0 and U+3000), carries nothing and is ignored, and so is
+# an unknown push op (by contract); none of them changes the session.
 directives_pushed_on_the_session_reach_the_host_in_order|create_collector_on_session|50|20|5000
 directives_pushed_on_the_session_reach_the_host_in_order|create_int_sensor|contract/session/directives
 directives_pushed_on_the_session_reach_the_host_in_order|start
@@ -305,6 +306,9 @@ directives_pushed_on_the_session_reach_the_host_in_order|expect_session_accepted
 directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|sensor-disable:network
 directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"news","body":"sensor-disable:disk"}
 directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"directive","body":{"not":"a string"}}
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"directive","body":"   "}
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"directive","body":"\t 　"}
+directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_frame|{"op":"directive","body":""}
 directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|update-available:9.9.9
 directives_pushed_on_the_session_reach_the_host_in_order|session_server_push_directive|sensor-enable:network
 directives_pushed_on_the_session_reach_the_host_in_order|expect_directives_received|3|15

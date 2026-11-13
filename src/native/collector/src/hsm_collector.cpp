@@ -577,6 +577,50 @@ namespace
         return json.str();
     }
 
+#if defined(HSM_COLLECTOR_HTTP)
+    // True when `text` (UTF-8) is empty or consists only of the characters .NET's
+    // char.IsWhiteSpace accepts, so that string.IsNullOrWhiteSpace in the managed collector and this
+    // agree on the same bytes: U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000..U+200A,
+    // U+2028, U+2029, U+202F, U+205F, U+3000. Matched as their UTF-8 byte sequences; anything else,
+    // an invalid sequence included, is not whitespace.
+    bool IsWhiteSpaceOnlyUtf8(const std::string& text)
+    {
+        const auto byte = [&](size_t at) { return at < text.size() ? static_cast<unsigned char>(text[at]) : 0u; };
+
+        size_t at = 0;
+        while (at < text.size())
+        {
+            const unsigned b0 = byte(at);
+            if (b0 == 0x20 || (b0 >= 0x09 && b0 <= 0x0D))
+            {
+                at += 1;
+                continue;
+            }
+
+            const unsigned b1 = byte(at + 1);
+            if (b0 == 0xC2 && (b1 == 0x85 || b1 == 0xA0))
+            {
+                at += 2;
+                continue;
+            }
+
+            const unsigned b2 = byte(at + 2);
+            // U+1680
+            const bool ogham = b0 == 0xE1 && b1 == 0x9A && b2 == 0x80;
+            // U+2000..U+200A, U+2028, U+2029, U+202F
+            const bool general = b0 == 0xE2 && b1 == 0x80 && ((b2 >= 0x80 && b2 <= 0x8A) || b2 == 0xA8 || b2 == 0xA9 || b2 == 0xAF);
+            // U+205F
+            const bool math = b0 == 0xE2 && b1 == 0x81 && b2 == 0x9F;
+            // U+3000
+            const bool ideographic = b0 == 0xE3 && b1 == 0x80 && b2 == 0x80;
+            if (!ogham && !general && !math && !ideographic)
+                return false;
+            at += 3;
+        }
+        return true;
+    }
+#endif
+
     // .NET serializes List<byte> as a numeric JSON array ([104,105]), NOT base64 (#1096 §15).
     std::string ByteArrayJson(const std::string& content)
     {
@@ -6232,9 +6276,11 @@ namespace
         // payload: the text of one X-Hsm-Directive header line over HTTP, or the body of one
         // {"op":"directive"} push on the session (#1660 step 5). Both paths split it the same way,
         // so the host sees the same calls in the same order whichever transport carried them.
+        // A directive that is empty or whitespace only carries nothing and is not handed on, as the
+        // managed ServerDirectives.Receive skips it (string.IsNullOrWhiteSpace).
         void DispatchServerDirective(const std::string& directive)
         {
-            if (directive_callback_ == nullptr)
+            if (directive_callback_ == nullptr || IsWhiteSpaceOnlyUtf8(directive))
                 return;
 
             const auto colon = directive.find(':');

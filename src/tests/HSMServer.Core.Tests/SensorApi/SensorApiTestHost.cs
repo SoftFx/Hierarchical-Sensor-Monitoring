@@ -275,6 +275,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public CollectorSessionRegistry Registry => _app.Services.GetRequiredService<CollectorSessionRegistry>();
 
+        public CollectorSessionHandler Handler => _app.Services.GetRequiredService<CollectorSessionHandler>();
+
         public Uri HttpBase { get; }
 
         public Uri SessionUri { get; }

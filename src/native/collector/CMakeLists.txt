@@ -404,6 +404,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_posts_file_values_in_the_wire_format
         COMMAND hsm_collector_tests native_http_posts_file_values_in_the_wire_format
     )
+    add_test(NAME native_http_hands_header_directives_to_the_host
+        COMMAND hsm_collector_tests native_http_hands_header_directives_to_the_host
+    )
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start
     )

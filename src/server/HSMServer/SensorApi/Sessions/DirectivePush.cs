@@ -25,17 +25,28 @@ namespace HSMServer.SensorApi.Sessions
     // Only for a session whose upgrade stated X-Agent-Version (the handler decides). Both
     // periods run on the server's TimeProvider. A push goes through the session's serialized
     // send like an ack; once the server is closing the session, or the connection is gone,
-    // nothing more is pushed and the loop ends quietly: the handler loop reports the session.
+    // nothing more is pushed and the loop ends quietly: the handler loop reports the session. A
+    // send that fails while the session is up is logged (one line a minute at most) and the loop
+    // goes on: what was not sent is pushed again at the next check, in order.
     internal sealed class DirectivePush : IAsyncDisposable
     {
         public static readonly TimeSpan CheckPeriod = AgentDirectives.StagedVersionCacheAge;
         public static readonly TimeSpan ReannouncePeriod = TimeSpan.FromMinutes(5);
+
+        // How often at most a failing push is logged for one session.
+        private static readonly TimeSpan FailureLogPeriod = TimeSpan.FromMinutes(1);
 
         private readonly CollectorSession _session;
         private readonly AgentDirectives _directives;
         private readonly ITreeValuesCache _cache;
         private readonly ISensorApiTelemetry _telemetry;
         private readonly Logger _logger;
+        private readonly TimeProvider _time;
+        private readonly Func<ReadOnlyMemory<byte>, CancellationToken, Task> _send;
+
+        // Touched by the push loop only.
+        private long? _failureLoggedAt;
+        private long _unloggedFailures;
 
         private readonly Channel<bool> _wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
         private readonly CancellationTokenSource _stop = new();
@@ -47,13 +58,18 @@ namespace HSMServer.SensorApi.Sessions
         private int _wholeSetDue = 1;
 
 
-        public DirectivePush(CollectorSession session, AgentDirectives directives, ITreeValuesCache cache, ISensorApiTelemetry telemetry, Logger logger, TimeProvider time)
+        // `send` writes one frame to the session: the session's own serialized send, which tests
+        // replace to make a send fail.
+        public DirectivePush(CollectorSession session, AgentDirectives directives, ITreeValuesCache cache, ISensorApiTelemetry telemetry, Logger logger, TimeProvider time,
+            Func<ReadOnlyMemory<byte>, CancellationToken, Task> send)
         {
             _session = session;
             _directives = directives;
             _cache = cache;
             _telemetry = telemetry;
             _logger = logger;
+            _time = time;
+            _send = send;
 
             _check = time.CreateTimer(_ => Wake(), null, CheckPeriod, CheckPeriod);
             _reannounce = time.CreateTimer(_ =>
@@ -91,8 +107,9 @@ namespace HSMServer.SensorApi.Sessions
 
         private async Task RunAsync(CancellationToken token)
         {
-            // The set the collector was last told, by text.
-            HashSet<string> told = null;
+            // What the collector has been told and still holds, by text: only what was actually
+            // sent. A directive whose send failed stays out of it, so the next check pushes it again.
+            var told = new HashSet<string>(StringComparer.Ordinal);
             var output = new ArrayBufferWriter<byte>(128);
 
             try
@@ -101,7 +118,7 @@ namespace HSMServer.SensorApi.Sessions
                 {
                     _wake.Reader.TryRead(out _);
 
-                    if (_session.IsClosing || !_session.IsOpen)
+                    if (IsEnding(token))
                         return;
 
                     var whole = Interlocked.Exchange(ref _wholeSetDue, 0) == 1;
@@ -117,25 +134,52 @@ namespace HSMServer.SensorApi.Sessions
                         continue;
                     }
 
-                    var push = whole || told is null ? set : set.Where(directive => !told.Contains(directive)).ToList();
+                    var push = whole ? set : set.Where(directive => !told.Contains(directive)).ToList();
 
-                    told = new HashSet<string>(set, StringComparer.Ordinal);
+                    // A re-announcement tells the collector the whole set again: what of it fails
+                    // to go out is pushed at the next check. Otherwise the collector still holds
+                    // what it was told and what is still in the set.
+                    if (whole)
+                        told.Clear();
+                    else
+                        told.IntersectWith(set);
+
+                    var sent = 0;
 
                     foreach (var directive in push)
                     {
-                        if (_session.IsClosing)
+                        if (IsEnding(token))
                             return;
 
                         output.Clear();
                         SessionProtocol.WriteDirective(output, directive);
 
-                        _telemetry.AddResponse(_session.Caller.TelemetryPath, output.WrittenCount);
+                        try
+                        {
+                            await _send(output.WrittenMemory, token);
+                        }
+                        catch (Exception) when (IsEnding(token))
+                        {
+                            // The session ended, or is ending: nothing to push to. Not an error of
+                            // the server; the handler loop reports the session.
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            // The session is up and this send failed. The rest of the round waits,
+                            // so the order of the set holds; the next check pushes what is not in
+                            // `told`, this directive first.
+                            ReportFailedSend(ex);
+                            break;
+                        }
 
-                        await _session.SendAsync(output.WrittenMemory, token);
+                        _telemetry.AddResponse(_session.Caller.TelemetryPath, output.WrittenCount);
+                        told.Add(directive);
+                        sent++;
                     }
 
-                    if (push.Count > 0)
-                        _logger.Debug($"Collector session {_session.ShortId}: pushed {push.Count} directive(s){(whole ? ", the whole set" : string.Empty)}.");
+                    if (sent > 0)
+                        _logger.Debug($"Collector session {_session.ShortId}: pushed {sent} directive(s){(whole ? " of the whole set" : string.Empty)}.");
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException or WebSocketException or IOException or ObjectDisposedException)
@@ -146,6 +190,29 @@ namespace HSMServer.SensorApi.Sessions
             {
                 _logger.Error($"Directive push of collector session {_session.ShortId} failed: {ex}");
             }
+        }
+
+        private bool IsEnding(CancellationToken token) => token.IsCancellationRequested || _session.IsClosing || !_session.IsOpen;
+
+        // One line a minute at most for a session whose pushes keep failing (they are tried again
+        // every check), with the number of failures that went unlogged since the previous line.
+        private void ReportFailedSend(Exception ex)
+        {
+            var now = _time.GetTimestamp();
+
+            if (_failureLoggedAt is { } last && _time.GetElapsedTime(last, now) < FailureLogPeriod)
+            {
+                _unloggedFailures++;
+                return;
+            }
+
+            var unlogged = _unloggedFailures;
+
+            _failureLoggedAt = now;
+            _unloggedFailures = 0;
+
+            _logger.Error($"A directive push of collector session {_session.ShortId} failed; it is pushed again at the next check" +
+                          $"{(unlogged > 0 ? $" ({unlogged} more failure(s) since the previous line)" : string.Empty)}: {ex}");
         }
 
         // The directives of this session now: its key and product are looked up again, as every

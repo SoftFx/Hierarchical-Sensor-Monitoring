@@ -340,6 +340,41 @@ namespace HSMServer.Core.Tests.SensorApi
             await ExpectNoPushAsync(socket);
         }
 
+        // A push that fails while the session is up does not end the pushes: it is logged, what
+        // was not sent goes out at the next check, in order, and the re-announcements go on.
+        [Fact]
+        public async Task Directives_APushThatFails_IsSentAgainAtTheNextCheck_AndThePushesGoOn()
+        {
+            await using var host = await StartHost();
+
+            var failures = 1;
+            host.Handler.PushSend = (session, frame, token) =>
+                Interlocked.Decrement(ref failures) >= 0
+                    ? Task.FromException(new InvalidOperationException("the send failed"))
+                    : session.SendAsync(frame, token);
+
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            // The first send of the first round fails: nothing of that round goes out.
+            await TestWait.UntilAsync(() => Volatile.Read(ref failures) <= 0, "the failing push");
+            await TestWait.UntilAsync(() => host.Log.Matching("A directive push of collector session", "the send failed").Length == 1, "the failed push to be logged");
+            await ExpectNoPushAsync(socket);
+
+            // The next check pushes what the collector was not told, the whole set in order.
+            (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+            var pushed = await ReceiveDirectivesAsync(socket, 6);
+
+            Assert.Equal(new[] { "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk", "sensor-enable:network", "sensor-enable:module", "sensor-enable:process" }, pushed);
+            await ExpectNoPushAsync(socket);
+
+            // The loop is still there: the re-announcement comes.
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(pushed, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
         [Fact]
         public async Task Directives_ANewlyStagedAgent_IsPushedAtTheNextCheck()
         {

@@ -8525,6 +8525,62 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
 
+    // The X-Hsm-Directive lines of an accepted answer reach the host callback split into verb and
+    // payload, in order; a line that is empty or whitespace only carries nothing and is skipped,
+    // as the managed collector skips it (string.IsNullOrWhiteSpace) and as the session path does.
+    void NativeHttpHandsHeaderDirectivesToTheHost()
+    {
+        hsm::test::HttpCaptureServer server(200, "/api/sensors/list",
+                                            "X-Hsm-Directive: update-available:0.6.0\r\n"
+                                            "X-Hsm-Directive:    \r\n"
+                                            "X-Hsm-Directive: \t\xC2\xA0\xE3\x80\x80\r\n"
+                                            "X-Hsm-Directive: sensor-disable:network\r\n");
+
+        struct Calls
+        {
+            std::mutex mutex;
+            std::vector<std::pair<std::string, std::string>> received;
+        } calls;
+
+        hsm_collector_options_t options{};
+        options.access_key = "live-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "live-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+        Require(hsm_collector_set_server_directive_handler(
+                    collector.value,
+                    [](const char* verb, const char* payload, void* user_data) {
+                        auto* log = static_cast<Calls*>(user_data);
+                        std::lock_guard<std::mutex> guard(log->mutex);
+                        log->received.emplace_back(verb, payload);
+                    },
+                    &calls) == HSM_RESULT_OK,
+                "directive handler failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "live/directives");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        const auto received = [&] {
+            std::lock_guard<std::mutex> guard(calls.mutex);
+            return calls.received;
+        };
+        Require(WaitUntilFor([&] { return received().size() >= 2; }, 10000), "the header directives must reach the host");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            { "update-available", "0.6.0" },
+            { "sensor-disable", "network" },
+        };
+        Require(received() == expected, "the host must get the two directives, split and in order, and nothing for the blank lines");
+    }
+
     // #1165: a sensor created BEFORE Start is registered on the server — the collector POSTs a wire
     // AddOrUpdate batch to /commands at Start (the server discriminates on "Type":0 == Command
     // .AddOrUpdateSensor). Without this the server never learns the sensor exists.
@@ -10840,6 +10896,7 @@ namespace
             { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_posts_file_values_in_the_wire_format", [](const std::string&) { NativeHttpPostsFileValuesInTheWireFormat(); } },
+            { "native_http_hands_header_directives_to_the_host", [](const std::string&) { NativeHttpHandsHeaderDirectivesToTheHost(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
             { "native_http_stop_drain_delivers_to_healthy_server", [](const std::string&) { NativeHttpStopDrainDeliversToHealthyServer(); } },
