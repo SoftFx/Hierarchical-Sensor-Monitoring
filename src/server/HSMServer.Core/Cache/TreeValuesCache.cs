@@ -892,6 +892,14 @@ namespace HSMServer.Core.Cache
             return _keys.Values.Where(x => x.IsMaster).ToList();
         }
 
+        // How long AddOrUpdateSensorAsync waits for the outcome of a registration it
+        // forwarded to another product's queue (#1756). 20 s, below the 30 s a collector
+        // waits for an answer by default (RequestTimeout): the collector then gets the 500
+        // and sends the registration again, instead of giving up on a request without an
+        // answer, which on a collector session also costs it the session. A queue that
+        // needs longer than this for one registration is not working. Settable for tests.
+        internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
+
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
         // registration again, and a refusal as delivered, so only a failure that has a
@@ -912,7 +920,8 @@ namespace HSMServer.Core.Cache
         // A registration forwarded through an alias to the queue of another root product
         // is sorted by the same rule. Its handler does not wait for that queue (no handler
         // waits for another queue: two forwarding to each other would deadlock); it leaves
-        // the pending outcome on the request, and it is awaited here, outside any queue.
+        // the pending outcome on the request, and it is awaited here, outside any queue,
+        // for no longer than ForwardedRegistrationWait.
         public async Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
             var result = await ProcessRequestAsync(request.ProductId, request, token);
@@ -929,7 +938,18 @@ namespace HSMServer.Core.Cache
 
                 try
                 {
-                    fault = await forwarded.Fault.WaitAsync(token);
+                    // Bounded: the outcome is completed by the other product's queue, and
+                    // a queue that is disposed with the request still unread (its product
+                    // is removed, the server stops) never completes it. Before #1756 the
+                    // caller was answered at once, so without a bound that would be a
+                    // request that hangs where none did.
+                    fault = await forwarded.Fault.WaitAsync(ForwardedRegistrationWait, token);
+                }
+                catch (TimeoutException)
+                {
+                    // Not answered is not applied: a fault, so the collector sends the
+                    // registration again.
+                    fault = $"The registration forwarded through an alias to another product was not answered within {ForwardedRegistrationWait.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} s";
                 }
                 catch (OperationCanceledException ex)
                 {

@@ -186,7 +186,9 @@ namespace HSMServer.Core.Model.Requests
     ///
     /// Invariant: every way a forwarded registration ends completes it, exactly once in effect
     /// (later completions are ignored): applied, dropped, failed, or never taken by the queue.
-    /// A path that forgot to would leave the caller of the registration waiting.
+    /// A path that forgot to would leave the caller of the registration waiting, for as long as
+    /// TreeValuesCache.ForwardedRegistrationWait allows; a queue that is disposed with the request
+    /// unread never completes it, which is what that limit is for.
     /// </summary>
     internal sealed class ForwardedRegistration
     {

@@ -290,6 +290,75 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.StartsWith("to this product", there.Description);
         }
 
+        // The wait for a forwarded registration has a limit. The outcome is completed by the
+        // other product's queue, and a queue that does not get to the request (here its
+        // thread is held; in the field it is disposed with the request unread when its
+        // product is removed or the server stops) would otherwise leave the collector's
+        // request without an answer. It is a fault: 500, and the collector sends it again.
+        [Fact]
+        public async Task ARegistrationForwardedThroughAnAlias_ThatIsNotAnsweredInTime_Is500_NotARequestThatHangs()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var moved = await MoveToAnotherProductAsync(host, "forwarded/late/old", "moved-late");
+            var other = moved.Root.Id;
+            var blocker = await CreateInAsync(other, "late/blocker");
+
+            // The other product's queue thread is held inside a handler until the test lets go.
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var release = new ManualResetEventSlim();
+
+            void Hold(BaseSensorModel sensor, ActionType action)
+            {
+                if (sensor.Id == blocker.Id && action == ActionType.Update)
+                {
+                    held.TrySetResult();
+                    release.Wait(TimeSpan.FromSeconds(60));
+                }
+            }
+
+            _valuesCache.ChangeSensorEvent += Hold;
+
+            Task<HSMCommon.TaskResult.TaskResult> holding = null;
+            var usualWait = _valuesCache.ForwardedRegistrationWait;
+
+            try
+            {
+                holding = _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(other, "late/blocker", "holds the queue"));
+
+                await held.Task.WaitAsync(Patience);
+
+                _valuesCache.ForwardedRegistrationWait = TimeSpan.FromMilliseconds(100);
+
+                // PostAsync gives up after Patience, so a wait without a limit fails the test
+                // instead of hanging it.
+                var answer = await PostAsync(host, "commands", $"[{Registration("forwarded/late/old", "late")}]", _key);
+
+                Assert.Equal(HttpStatusCode.InternalServerError, answer.Status);
+
+                var result = await _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(TestProductsManager.ProductId, "forwarded/late/old", "late")).WaitAsync(Patience);
+
+                Assert.True(result.IsFault);
+                Assert.Equal("The registration forwarded through an alias to another product was not answered within 0.1 s", result.Error);
+            }
+            finally
+            {
+                release.Set();
+                _valuesCache.ChangeSensorEvent -= Hold;
+                _valuesCache.ForwardedRegistrationWait = usualWait;
+            }
+
+            Assert.Equal(TimeSpan.FromSeconds(20), usualWait);
+
+            await holding.WaitAsync(Patience);
+
+            // The queue works again: the resend is answered, and applied.
+            var resend = await PostAsync(host, "commands", $"[{Registration("forwarded/late/old", "from the resend")}]", _key);
+
+            Assert.Equal(HttpStatusCode.OK, resend.Status);
+            Assert.Equal("from the resend", moved.Description);
+        }
+
         [Fact]
         public async Task StoreFailsOnce_OnTheSingleRegistrationRoute_Is500_AndTheResendRegisters()
         {
