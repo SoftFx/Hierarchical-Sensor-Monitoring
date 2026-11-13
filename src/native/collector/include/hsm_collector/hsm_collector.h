@@ -1138,12 +1138,13 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
    Asked for more than once (0.13.1, #1752): THE FIRST PERIOD STAYS, for the life of the collector
    (across Stop and a later Start too). A repeated call with the same period changes nothing and
    reports nothing. A repeated call with another period does not apply it and reports that once
-   through the collector's error channel (the logger and ".module/Collector errors"); the call
+   through the collector's logger (hsm_collector_set_logger). Only there: the call comes while
+   the collector is stopped, when ".module/Collector errors" takes no values. The call
    itself still returns HSM_RESULT_OK, as a repeated call always has. This is the rule of the
    managed IWindowsCollection.AddNetworkConnectionFailuresRate. Before 0.13.1 the last period
    given before Start was the one used.
    A tick on which the TCP statistics of neither IPv4 nor IPv6 can be read is reported through the
-   same error channel, deduplicated (once per exception_deduplicator_window_ms however long it
+   collector's error channel (the logger and ".module/Collector errors"), deduplicated (once per exception_deduplicator_window_ms however long it
    lasts), because the sensor goes on posting 0 meanwhile; one unreadable family is not reported.
    Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0 (on a repeated call too).
    Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */

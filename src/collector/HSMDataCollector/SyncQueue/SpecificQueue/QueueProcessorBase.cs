@@ -523,7 +523,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             // Held items are work that is ready, and nothing writes them to the channel: a wait
             // on the channel alone would leave a failed package unsent until the next item is
-            // issued. The loop has paused after the failure that held them (PauseAfterFailureAsync).
+            // issued. After a failed send the loop has paused before it comes here
+            // (PauseAfterFailureAsync); a queue without held items behaves the same way when its
+            // channel is not empty.
             if (Volatile.Read(ref _heldCount) > 0)
                 return;
 

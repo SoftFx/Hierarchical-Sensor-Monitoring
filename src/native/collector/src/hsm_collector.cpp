@@ -4485,7 +4485,9 @@ namespace
                 ClearError();
             }
 
-            // Reported outside mutex_: LogError publishes on `.module/Collector errors`, which takes it.
+            // Reported outside mutex_, which LogError takes on its way to `.module/Collector errors`.
+            // That sensor takes no value while the collector is stopped, so here the report reaches
+            // the logger only.
             if (kept_period_ms != 0)
                 LogError("The TCP connection failure rate sensor was already enabled with a period of " +
                          std::to_string(kept_period_ms) + " ms; the period of " + std::to_string(period_ms) +

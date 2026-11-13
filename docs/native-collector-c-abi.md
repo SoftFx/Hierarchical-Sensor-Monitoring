@@ -162,12 +162,14 @@ Version history:
   Start was the one used. A repeated call with the same period changes nothing and reports nothing;
   a repeated call with another period does not apply it and reports
   `The TCP connection failure rate sensor was already enabled with a period of <first> ms; the
-  period of <asked> ms of the second request is not applied.` through the collector's error channel
-  (the logger and `.module/Collector errors`). The result codes are unchanged: such a call still
+  period of <asked> ms of the second request is not applied.` through the collector's logger (only
+  there: the call comes while the collector is stopped, when `.module/Collector errors` takes no
+  values). The result codes are unchanged: such a call still
   returns `HSM_RESULT_OK`, `period_ms <= 0` is `HSM_RESULT_INVALID_ARGUMENT`, a call after Start is
   `HSM_RESULT_INVALID_STATE`. The first period holds for the life of the collector, across a Stop
   and a later Start too. **Neither address family readable**: a sample on which
-  `GetTcpStatisticsEx` fails for both IPv4 and IPv6 is reported through the same error channel
+  `GetTcpStatisticsEx` fails for both IPv4 and IPv6 is reported through the collector's error
+  channel, the logger and `.module/Collector errors`
   (`TCP connection failure rate sampling error: the TCP statistics of neither IPv4 nor IPv6 could
   be read.`), deduplicated like every other error, so once per
   `exception_deduplicator_window_ms`; until now the sensor went on posting 0 and said nothing. One
