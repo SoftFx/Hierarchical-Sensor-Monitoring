@@ -128,6 +128,8 @@ namespace HSMDataCollector.Core
 
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
+            _dataProcessor.TransportReportsElsewhere = _ownTransport == null && _dataSender is ICollectorTransport;
+
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
             // whatever it reports to: routing it here would take it away from its owner.

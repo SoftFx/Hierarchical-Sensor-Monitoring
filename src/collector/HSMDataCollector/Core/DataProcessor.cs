@@ -302,6 +302,14 @@ namespace HSMDataCollector.Core
         }
 
         /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
+        /// <summary>
+        /// True when this collector sends over a transport another collector owns (it was
+        /// created second from the same options). That transport reports its state to its
+        /// owner, and says nothing at all while its owner is stopped or was never started, so
+        /// here a package that waits for the transport is the queue's to report.
+        /// </summary>
+        internal bool TransportReportsElsewhere { get; set; }
+
         internal bool RefusesFiles => _transport != null && !_transport.CanCarryFiles;
 
         internal void ReportRefusedFile(string path)

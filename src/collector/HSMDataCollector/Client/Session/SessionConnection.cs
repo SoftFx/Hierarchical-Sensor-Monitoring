@@ -274,7 +274,7 @@ namespace HSMDataCollector.Client.Session
                 }
                 catch (Exception ex)
                 {
-                    RequestReset($"sending a frame failed: {ex.Message}");
+                    RequestReset(socket, $"sending a frame failed: {ex.Message}");
                     return SessionAck.NoAck($"sending failed: {ex.Message}");
                 }
 
@@ -292,7 +292,7 @@ namespace HSMDataCollector.Client.Session
                 token.ThrowIfCancellationRequested();
 
                 // Worded without the op: the same cause for every queue is one deduplicated report.
-                RequestReset($"a request got no ack within {timeout.TotalSeconds:0.###} s");
+                RequestReset(socket, $"a request got no ack within {timeout.TotalSeconds:0.###} s");
 
                 return SessionAck.NoAck("no ack in time");
             }
@@ -726,7 +726,13 @@ namespace HSMDataCollector.Client.Session
 
         private static ArraySegment<byte> NewReceiveBuffer() => new ArraySegment<byte>(new byte[16 * 1024]);
 
-        private void RequestReset(string why) => _reset?.TrySetResult(why);
+        // Only the session the request was made on: a request that fails late (it waited for the
+        // send lock while its session ended and the next one came up) must not end that next one.
+        private void RequestReset(ClientWebSocket socket, string why)
+        {
+            if (ReferenceEquals(_socket, socket))
+                _reset?.TrySetResult(why);
+        }
 
         private void FailAllPending(string why)
         {
