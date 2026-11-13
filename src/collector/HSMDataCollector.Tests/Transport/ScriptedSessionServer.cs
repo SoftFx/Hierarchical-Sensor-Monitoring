@@ -33,7 +33,7 @@ namespace HSMDataCollector.Tests.Transport
     {
         public const string Subprotocol = "hsm.sensors.v1";
 
-        private readonly HttpListener _listener = new HttpListener();
+        private readonly HttpListener _listener;
         private readonly CancellationTokenSource _stop = new CancellationTokenSource();
         private readonly ConcurrentQueue<SessionRequest> _requests = new ConcurrentQueue<SessionRequest>();
         private readonly ConcurrentQueue<string> _httpRequests = new ConcurrentQueue<string>();
@@ -58,9 +58,27 @@ namespace HSMDataCollector.Tests.Transport
 
         public ScriptedSessionServer()
         {
-            Port = GetFreeTcpPort();
-            _listener.Prefixes.Add($"http://localhost:{Port}/");
-            _listener.Start();
+            // A probed port is free only until the probe stops: two servers starting at once
+            // can probe the same port, and the second listen then dies on the prefix conflict.
+            // Claim the port by listening on it and take another one when the claim is lost.
+            for (var attempt = 0; ; attempt++)
+            {
+                var listener = new HttpListener();
+                var port = GetFreeTcpPort();
+                listener.Prefixes.Add($"http://localhost:{port}/");
+                try
+                {
+                    listener.Start();
+                    _listener = listener;
+                    Port = port;
+                    break;
+                }
+                catch (HttpListenerException) when (attempt < 9)
+                {
+                    listener.Close();
+                }
+            }
+
             _loop = Task.Run(AcceptLoopAsync);
         }
 
