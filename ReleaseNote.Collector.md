@@ -1,17 +1,19 @@
-# HSM DataCollector
+# HSM DataCollector 3.10.0-preview
 
-## New default sensors (`AddAllComputerSensors`)
-* **Top-CPU sensors** — per-process CPU sensors are now part of the default computer-sensor set; each carries the executable path and a bounded list of system processes, all nested under `.computer` (#1179, #1318).
-* **Per-interface network speed sensors** — rx/tx MB/s sensors per active network interface, nested under `.computer`. Only interfaces carrying traffic are surfaced (#1189).
+Prerelease for testing. Changes since 3.5.0 (3.6-3.9 were not published).
 
-## Reliability and queue
-* Retry policy no longer drops newer telemetry when a stale retry races queue overflow; FIFO-head ordering preserved across retries (#1088, #1090).
-* Collector shutdown is bounded and crash-isolated: hung user tasks, reentrant lifecycle transitions, and dispose-during-start no longer leak queues or crash the host (#1102, #1103, lifecycle state machine refactor).
-* Accepted telemetry is preserved across post-stop flush retries; last-value sensors are flushed on stop and dispose.
+## New
+* **Collector session** (opt-in, `CollectorOptions.Transport = Session`): one WebSocket to the server on 443 instead of the HTTP routes, no fallback to HTTP. Carries values, registrations, files (up to the server's frame limit, about 1 MiB by default) and server directives.
+* **TCP connection failure rate** sensor (`AddNetworkConnectionFailuresRate`, Windows), same source as the native collector.
+* **Server directive channel**: extra request headers and `X-Hsm-Directive` answers, as in the native collector.
+* **`SensorOptions.PreviousPaths`**: history follows a sensor whose path changed (needs a server with sensor move).
 
-## Behavior and configuration
-* HTTP client timeout is now configurable; untrusted TLS certificates require explicit opt-in (`AllowUntrustedServerCertificate`).
-* Request payloads are redacted from send logs.
+## Behaviour changes
+* `Service alive` now registers its alert with a 5-minute inactivity period. Before, it carried none and never fired on default settings: expect real alerts for collectors that are off.
+* A registration the server rejects with a 4xx is reported once and not sent again; a command send is a single attempt, retried on the next cycle.
+* Commands reach the server in the order they were issued, also after failed sends.
+* Stop drains registrations first, under one budget; the first failed send ends the drain. The package in flight is kept on Dispose.
 
-## Cross-language default-sensor conformance
-* Managed and native collectors now share a conformance suite covering default-sensor registration and options parity; this release locks the managed side of that contract.
+## Reliability
+* Send failures, queue overflow and top-CPU sampling faults are reported (deduplicated) instead of hidden.
+* Lifecycle races fixed: the obsolete `Initialize`, a failed start during Stop/Dispose.
