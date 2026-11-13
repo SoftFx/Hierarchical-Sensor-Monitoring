@@ -1,13 +1,13 @@
 # Feature: HTTP Client
 
-> Owner: collector | Last reviewed: 2026-11-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-11-13 | Canonical: yes
 > Scope: Collector - HTTPS transport with Polly retry for sending sensor data
 
 ---
 
 ## Description
 
-`HsmHttpsClient` wraps `System.Net.Http.HttpClient` for sending sensor data to HSMServer. Each value type (data, priority, file, command) has its own request handler; the data, priority and file handlers repeat a failed request inside the send through a Polly retry pipeline, the command handler does not. Wire shapes and endpoint payloads: `../../api/wire-contract/feature.md`.
+`HsmHttpsClient` wraps `System.Net.Http.HttpClient` for sending sensor data to HSMServer. Each value type (data, priority, file, command) has its own request handler; the data, priority and file handlers repeat a failed request inside the send through a Polly retry pipeline (except in the stop drain, where every send is one attempt, #1747), the command handler does not. Wire shapes and endpoint payloads: `../../api/wire-contract/feature.md`.
 
 ---
 
@@ -21,7 +21,7 @@
 - **Connection reuse (both collectors).** Sends ride a kept connection, not a new TCP+TLS handshake per request. Managed: one pooled `HttpClient` connection, retired after 5 minutes (`PooledConnectionLifetime`; `ServicePoint.ConnectionLeaseTimeout` on net472) so DNS is resolved again (#1102-E4). Native: `HttpTransport` keeps one libcurl easy handle and resets it between requests (a concurrent caller gets its own handle, closed afterwards); the kept handle is retired 5 minutes after its creation, a connection idle for more than 60 s is not reused (`CURLOPT_MAXAGE_CONN`, the managed handler's idle timeout), TCP keep-alive is on, and a handle whose transfer failed is destroyed, never kept (#1653). Delivery stays at-least-once in both collectors: a batch the server stored but whose response was lost is sent again. On a kept connection the same can happen at stop: the request is on the wire almost at once, so a cancel that arrives while the collector waits for the response aborts a send the server has already taken, and the stop drain sends that batch again. There is still no application-level session: the server cannot push to a collector and learns that one went away only from TTL.
 - `HttpResponseMessage` is always disposed after use (`using` blocks).
 - `HttpContent` is disposed after sending (in `ExecutePipelineAsync`).
-- Polly retry per handler: data/priority/file — 10 retries, exponential backoff 1 s → 2 min. **Commands: none, one attempt per send (#1659 A3, 3.6.3).** Before 3.6.3 the command pipeline retried a failed connection `int.MaxValue` times with a linear pause of up to 2 minutes, all inside one send: against an unreachable server the send never returned, so the command queue could not take newer registrations into the package and retried on Polly's growing pause, not on `PackageCollectPeriod`. Now a failed command send returns, the queue re-enqueues the package and sends it again after `PackageCollectPeriod` (`../data-pipeline/feature.md`), which is what the native collector does. Pinned on both TFMs by `Transport/CommandSendAttemptTests` (one source, compiled into the unit project for net472 and into the integration project for net6.0).
+- Polly retry per handler: data/priority/file — 10 retries, exponential backoff 1 s → 2 min. **Commands: none, one attempt per send (#1659 A3, 3.6.3).** Before 3.6.3 the command pipeline retried a failed connection `int.MaxValue` times with a linear pause of up to 2 minutes, all inside one send: against an unreachable server the send never returned, so the command queue could not take newer registrations into the package and retried on Polly's growing pause, not on `PackageCollectPeriod`. Now a failed command send returns, the queue keeps the package (ahead of the commands issued after it, #1750) and sends it again after `PackageCollectPeriod` (`../data-pipeline/feature.md`), which is what the native collector does. Pinned on both TFMs by `Transport/CommandSendAttemptTests` (one source, compiled into the unit project for net472 and into the integration project for net6.0).
 - **Inside the stop drain a value send is one attempt too (#1747).** The repeats above belong to a running collector. In the drain they spent the whole stop budget on a server that is down (attempts at 0 s, 1 s and 3 s, then the 5 s budget fired) and delivered nothing. `HsmHttpsClient` implements the internal `IStopDrainSender`: its `StopDrain` is a view of the same client whose data, priority and file sends skip the pipeline (`BaseHandlers.SendAsync(..., singleAttempt: true)`), and the queues send through that view while they flush. The view holds no state, so a client shared by two collectors keeps its repeats for the collector that is still running. What ends the drain after that one failed attempt is the queues' rule, not the client's (`../data-pipeline/feature.md`). Pinned on both TFMs by `Transport/StopDrainSingleAttemptTests`: the fake server fails one request and would accept the next, so a send that repeats is seen as a second request, not as a slow stop.
 - `ShouldHandle` (`BaseHandlers.ShouldRetry`, #1096) of the data/priority/file pipelines: transport-level exceptions are always retried, and so is a returned **5xx**. **4xx** are permanent and never retried. A 5xx that exhausts the budget still falls through to queue re-enqueue, so no data is lost.
 - `CancelPendingRequests()` (`ICancelableDataSender`, called by collector Stop) cancels the shared in-flight token and installs a fresh one. It must **NOT** dispose the HttpClient — disposal during a graceful stop converted remaining flush sends into `ObjectDisposedException` data loss (PR #1080 finding #7; regression-tested in `HsmHttpsClientCancellationTests`).
@@ -64,7 +64,7 @@
 
 | File | Purpose |
 |---|---|
-| `Client/HttpsClient/HsmHttpsClient.cs` | HttpClient lifecycle, dispose, test connection |
+| `Client/HttpsClient/HsmHttpsClient.cs` | HttpClient lifecycle, dispose, test connection, the single-attempt view for the stop drain (`IStopDrainSender`) |
 | `Client/HttpsClient/Endpoints.cs` | URL construction from CollectorOptions |
 | `Client/Session/SessionDataSender.cs` | The session as `IDataSender`: frames, splitting to the frame limit, what an ack status means |
 | `Client/Session/SessionConnection.cs` | The WebSocket: open, hello, acks, heartbeat, reconnect with backoff, close |

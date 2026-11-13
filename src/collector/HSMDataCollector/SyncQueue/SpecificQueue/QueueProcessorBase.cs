@@ -64,6 +64,23 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // the misleading "preserved" wording used in the normal retry loop (#1087 A).
         private int _inFlushFlag;
 
+        // The items of a package that was not delivered, on a queue that keeps the order of
+        // issue (KeepsOrderOfIssue, #1750). They are ahead of everything in the channel: the
+        // next package starts with them. Kept in the order of issue.
+        //
+        // They are part of the queue in every respect: counted by QueueCount (so by the
+        // capacity checks, the drain loop and the wait for work), taken by GetPackage, removed
+        // and counted by ClearQueue. Nothing reads or writes the list outside _heldLock: the
+        // dispatcher (the run loop or the stop drain, never both at once) fills and empties
+        // it, and a clear can come from a stop on another thread.
+        private readonly List<QueueItem<T>> _held = new List<QueueItem<T>>();
+        private readonly object _heldLock = new object();
+
+        // _held.Count, written under _heldLock, for the readers that take no lock.
+        private int _heldCount;
+
+        private static readonly Comparison<QueueItem<T>> ByIssue = (left, right) => left.Sequence.CompareTo(right.Sequence);
+
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -253,13 +270,34 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
             {
-                if (!TryDequeue(out _))
+                if (!TryEvictOldest())
                     break;
 
                 dropped++;
             }
 
             return EnqueueResult.Accept(dropped);
+        }
+
+        // Overflow drops the oldest item. Held items are older than anything in the channel,
+        // so they go first: a package the server never takes cannot sit ahead of the queue for
+        // ever while newer items are evicted behind it.
+        private bool TryEvictOldest()
+        {
+            if (Volatile.Read(ref _heldCount) > 0)
+            {
+                lock (_heldLock)
+                {
+                    if (_held.Count > 0)
+                    {
+                        _held.RemoveAt(0);
+                        Volatile.Write(ref _heldCount, _held.Count);
+                        return true;
+                    }
+                }
+            }
+
+            return TryDequeue(out _);
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
@@ -293,6 +331,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             var estimatedCount = Math.Min(QueueCount + 16, _options.MaxValuesInPackage);
             var package = new DataPackage<T>(estimatedCount);
 
+            // What an earlier package could not deliver goes first (#1750); the channel fills
+            // the room that is left.
+            TakeHeld(package);
+
             while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
                 if (Validate(item.Value))
@@ -301,6 +343,76 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             return package;
         }
+
+        private void TakeHeld(DataPackage<T> package)
+        {
+            if (Volatile.Read(ref _heldCount) == 0)
+                return;
+
+            lock (_heldLock)
+            {
+                // All of them as a rule: they came out of one package. The bound is for a host
+                // that lowered MaxValuesInPackage in between; the rest stays held, in order.
+                var take = Math.Min(_held.Count, _options.MaxValuesInPackage - package.Count);
+
+                for (var index = 0; index < take; index++)
+                    package.AddValue(_held[index]);
+
+                if (take > 0)
+                    _held.RemoveRange(0, take);
+
+                Volatile.Write(ref _heldCount, _held.Count);
+            }
+        }
+
+        // Puts the items of a package that was not delivered ahead of the channel. Returns how
+        // many of them were dropped at capacity.
+        private int HoldItems(IEnumerable<QueueItem<T>> items)
+        {
+            var dropped = 0;
+
+            lock (_heldLock)
+            {
+                foreach (var item in items)
+                {
+                    // The #1088 backstop, as in EnqueueCore: a retry that meets a full queue is
+                    // dropped and counted. Held items count against MaxQueueSize like queued ones.
+                    if (Reader.Count + _held.Count >= _options.MaxQueueSize)
+                    {
+                        dropped++;
+                        continue;
+                    }
+
+                    _held.Add(item);
+                }
+
+                // A package comes back in the order it was sent in, so this changes something
+                // only when items were already held (see TakeHeld).
+                if (_held.Count > 1)
+                    _held.Sort(ByIssue);
+
+                Volatile.Write(ref _heldCount, _held.Count);
+            }
+
+            if (dropped > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, dropped);
+
+            return dropped;
+        }
+
+        /// <summary>
+        /// True for a queue whose items must reach the server in the order they were issued in
+        /// (#1750). The items of a package that was not delivered are then held ahead of the
+        /// queue, and the next package starts with them, so nothing issued later can be
+        /// delivered before them. Off by default: a failed package of values returns to the
+        /// tail of its queue, as it does in the native collector. The command queue turns it on.
+        /// </summary>
+        protected virtual bool KeepsOrderOfIssue => false;
+
+        // Where the items of a package that was not delivered go. Returns how many were dropped
+        // at capacity (#1088), so the failure report can say so.
+        private int ReturnItems(IReadOnlyCollection<QueueItem<T>> items) =>
+            KeepsOrderOfIssue ? HoldItems(items) : ReEnqueueItems(items);
 
         private bool Validate(T item)
         {
@@ -341,7 +453,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     // depends on preserving accepted work even under transient transport failure;
                     // a per-package retry cap would re-introduce the old "data dropped on first
                     // server hiccup" regression. Overflow eviction is the backstop: a permanently
-                    // failing item rides the queue tail until MaxQueueSize evicts it.
+                    // failing item rides the queue tail (on a queue that keeps the order of
+                    // issue: stays ahead of the queue) until MaxQueueSize evicts it.
                     //
                     // A package that waits for the transport to come back is not an error of the
                     // queue: the transport reports its own state, once, and the queue stays quiet.
@@ -408,6 +521,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual async ValueTask WaitForReadyAsync(CancellationToken token)
         {
+            // Held items are work that is ready, and nothing writes them to the channel: a wait
+            // on the channel alone would leave a failed package unsent until the next item is
+            // issued. The loop has paused after the failure that held them (PauseAfterFailureAsync).
+            if (Volatile.Read(ref _heldCount) > 0)
+                return;
+
             await Reader.WaitToReadAsync(token).ConfigureAwait(false);
         }
 
@@ -606,13 +725,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             catch (OperationCanceledException)
             {
                 if (OwnsPackage(drainSend, package.Count) && PreserveCanceledPackages)
-                    ReEnqueueItems(package.Items);
+                    ReturnItems(package.Items);
                 throw;
             }
             catch
             {
                 if (OwnsPackage(drainSend, package.Count))
-                    ReEnqueueItems(package.Items);
+                    ReturnItems(package.Items);
                 throw;
             }
 
@@ -638,7 +757,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // A sender that delivers a package in parts says which items are settled; only
                 // the others go back, or what was delivered would arrive twice.
                 var unsettled = Unsettled(package, sendingInfo.Settled);
-                var dropped = ReEnqueueItems(unsettled);
+                var dropped = ReturnItems(unsettled);
                 // The drop count is the #1088 backstop (a retry refused by a queue at capacity).
                 throw new PackageSendFailedException(QueueName, unsettled.Count - dropped, dropped, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
@@ -717,7 +836,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected bool PreserveCanceledPackages => CurrentShutdownMode.PreserveCanceledPackages();
 
-        internal int QueueCount => Reader.Count;
+        // Everything the queue holds: the channel and the held items ahead of it.
+        internal int QueueCount => Reader.Count + Volatile.Read(ref _heldCount);
 
         protected bool IsEmpty => QueueCount == 0;
 
@@ -776,7 +896,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public int ClearQueue()
         {
-            int count = 0;
+            int count;
+
+            // Held items are discarded and counted with the rest: left behind, they would be
+            // sent by the next Start without anyone having said they were kept.
+            lock (_heldLock)
+            {
+                count = _held.Count;
+                _held.Clear();
+                Volatile.Write(ref _heldCount, 0);
+            }
+
             while (TryDequeue(out _))
                 count++;
 

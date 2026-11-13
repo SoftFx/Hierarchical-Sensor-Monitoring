@@ -32,10 +32,12 @@
     <!-- The TCP connection failure rate monitor reads the OS through IPGlobalProperties, whose
          implementation differs between .NET Framework and .NET: its tests run on both builds. -->
     <Compile Include="..\HSMDataCollector.Tests\TcpFailureRateTests.cs" Link="Shared\TcpFailureRateTests.cs" />
-    <!-- The send queues at a stop (#1747, #1748): lifecycle and queue code, which runs on
-         Channels and tasks of two different runtimes, so its tests run on both builds. -->
+    <!-- The send queues at a stop and after a failed send (#1747, #1748, #1750): lifecycle and
+         queue code, which runs on Channels and tasks of two different runtimes, so its tests
+         run on both builds. -->
     <Compile Include="..\HSMDataCollector.Tests\StopDrainFailedSendTests.cs" Link="Shared\StopDrainFailedSendTests.cs" />
     <Compile Include="..\HSMDataCollector.Tests\StopDrainAbandonedSendTests.cs" Link="Shared\StopDrainAbandonedSendTests.cs" />
+    <Compile Include="..\HSMDataCollector.Tests\CommandOrderAcrossPackagesTests.cs" Link="Shared\CommandOrderAcrossPackagesTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
