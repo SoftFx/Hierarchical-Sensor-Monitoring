@@ -609,10 +609,18 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var productCreated = await _service.CreateProductTtlPolicyAsync(_fixture.ProductAId, TtlPolicy(interval), User);
             Assert.Equal(PolicyWriteOutcome.Invalid, productCreated.Failure.Outcome);
             Assert.Contains("shifted time inside the DateTime range", productCreated.Failure.Errors["interval"].Single());
+
+            var productSeeded = await _service.CreateProductTtlPolicyAsync(_fixture.ProductAId, TtlPolicy("00:30:00"), User);
+            Assert.True(productSeeded.Success, productSeeded.Failure?.Message);
+
+            var productUpdated = await _service.UpdateProductTtlPolicyAsync(_fixture.ProductAId, productSeeded.Value.Id, TtlPolicy(interval), User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, productUpdated.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", productUpdated.Failure.Errors["interval"].Single());
         }
 
-        // #1673, the confirmation-period twin of the interval bound; the negative
-        // case says "must be positive" in the TTL surface's wording (#1677).
+        // #1673, the confirmation-period twin of the interval bound, on the data
+        // create AND update paths; zero stays accepted (it disables the delay),
+        // so the negative wording says "not negative", unlike the TTL interval.
         [Fact]
         public async Task CreateSensorPolicy_RejectsAnOutOfRangeConfirmationPeriod()
         {
@@ -624,7 +632,15 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             var negative = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with { ConfirmationPeriod = "-00:05:00" }, User);
             Assert.Equal(PolicyWriteOutcome.Invalid, negative.Failure.Outcome);
-            Assert.Equal("The confirmation period must be positive.", negative.Failure.Errors["confirmationPeriod"].Single());
+            Assert.Equal("The confirmation period must not be negative.", negative.Failure.Errors["confirmationPeriod"].Single());
+
+            var zero = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with { ConfirmationPeriod = "00:00:00" }, User);
+            Assert.True(zero.Success, zero.Failure?.Message);
+
+            var updatedHuge = await _service.UpdateSensorPolicyAsync(sensor.Id, zero.Value.Id,
+                DataPolicy() with { ConfirmationPeriod = "10675199.02:48:05" }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, updatedHuge.Failure.Outcome);
+            Assert.Contains("shifted time inside the DateTime range", updatedHuge.Failure.Errors["confirmationPeriod"].Single());
         }
 
         // #1501 round-2 (F2): a full-list TTL write must not RE-STAMP the

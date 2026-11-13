@@ -1031,8 +1031,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
                     AlertPolicyConditionValidator.Add(errors, "confirmationPeriod",
                         "The confirmation period must be a TimeSpan string, e.g. \"00:05:00\".");
                 else if (confirmation < TimeSpan.Zero)
-                    // The same wording as the TTL interval, for the same case (#1677).
-                    AlertPolicyConditionValidator.Add(errors, "confirmationPeriod", "The confirmation period must be positive.");
+                    // Zero stays accepted (it disables the confirmation delay), so the
+                    // message says "not negative", unlike the TTL interval where zero
+                    // is rejected (#1677).
+                    AlertPolicyConditionValidator.Add(errors, "confirmationPeriod", "The confirmation period must not be negative.");
                 else if (confirmation.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks)
                     // #1673: the shifted time must stay representable, as with a TTL interval.
                     AlertPolicyConditionValidator.Add(errors, "confirmationPeriod",
