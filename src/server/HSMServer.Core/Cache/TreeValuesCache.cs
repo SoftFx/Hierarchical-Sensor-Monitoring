@@ -910,13 +910,38 @@ namespace HSMServer.Core.Cache
             return _keys.Values.Where(x => x.IsMaster).ToList();
         }
 
-        public Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
+        // The one place where a failed registration is sorted into a fault and a refusal
+        // (#1756). The Sensor API answers a fault 500, on which a collector sends the
+        // registration again, and a refusal as delivered, so only a failure that has a
+        // reason to pass on a repeat may be a fault:
+        //   - an error result of the queue. For a registration that is always an exception
+        //     caught on the way (by the queue, or by ProcessRequestAsync): the handler of
+        //     a registration never answers an error itself, see ProcessRequest;
+        //   - a failed write to the store, which the handler reports through request.Fault.
+        // Everything else the handler fails on (a product or a sensor that went away, an
+        // exception while the settings are applied in memory) is answered as before: logged
+        // there, Ok here. It is not known to pass, and a failure that repeats would be
+        // sent again by every collector on every cycle.
+        //
+        // Nothing but the IsFault mark of the result is new, so a caller that does not ask
+        // for it sees what it saw before, except that a failed write to the store is now
+        // an error result and no longer Ok.
+        public async Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
-            return ProcessRequestAsync(request.ProductId, request, token);
+            var result = await ProcessRequestAsync(request.ProductId, request, token);
+
+            if (!result.IsOk)
+                return TaskResult.FromFault(result.Error);
+
+            return request.Fault is null ? result : TaskResult.FromFault(request.Fault);
         }
 
-        private bool TryAddOrUpdateSensor(SensorAddOrUpdateRequest request, out string error)
+        // storeFailed (#1756): true when the registration failed in a write to the store
+        // (creating the sensor, or saving its settings), false for every other failure.
+        private bool TryAddOrUpdateSensor(SensorAddOrUpdateRequest request, out string error, out bool storeFailed)
         {
+            storeFailed = false;
+
             var update = request.Update;
 
             if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
@@ -931,14 +956,14 @@ namespace HSMServer.Core.Cache
                         return true;
 
                     case AliasResolution.None:
-                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
+                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error, out storeFailed))
                             return false;
                         break;
                 }
             }
 
             update = update with { Id = sensor.Id };
-            return TryUpdateSensor(update, out error);
+            return TryUpdateSensor(update, out error, out storeFailed);
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
@@ -955,8 +980,18 @@ namespace HSMServer.Core.Cache
         // policy collection refused (Rejected) or failed to re-evaluate
         // after applying it (EvaluationError; the policy applied and
         // persisted). Null for every other caller.
-        private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null)
+        private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null) =>
+            TryUpdateSensor(update, out error, out _, policyFailures);
+
+        // storeFailed (#1756): true when the update failed in the write to the store, the
+        // one failure here that is known to be able to pass on a repeat. Only the
+        // registration path asks; for every other caller this is the method it was.
+        private bool TryUpdateSensor(SensorUpdate update, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
         {
+            storeFailed = false;
+
+            var storing = false;
+
             try
             {
                 if (!TryGetSensorById(update.Id, out var sensor))
@@ -966,7 +1001,12 @@ namespace HSMServer.Core.Cache
                 }
 
                 sensor.TryUpdate(update, out error, policyFailures);
-                _database.UpdateSensor(sensor.ToEntity());
+
+                var entity = sensor.ToEntity();
+
+                storing = true;
+                _database.UpdateSensor(entity);
+                storing = false;
 
                 SensorUpdateView(sensor);
 
@@ -985,6 +1025,7 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 error = ex.Message;
+                storeFailed = storing;
                 return false;
             }
         }
@@ -3120,8 +3161,15 @@ namespace HSMServer.Core.Cache
                 case AddSensorValuesRequest request:
                     AddNewSensorValues(request);
                     break;
-                case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error):
+                case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error, out var storeFailed):
                     _logger.Error(error);
+
+                    // A registration that failed is answered Ok, as it always was, with
+                    // one exception (#1756): a failed write to the store goes back to
+                    // AddOrUpdateSensorAsync as a fault. The handler must not throw to
+                    // tell it: for a registration a thrown exception is a fault too.
+                    if (storeFailed)
+                        command.Fault = error;
                     break;
                 case SensorUpdate update when !TryUpdateSensor(update, out var error):
                     _logger.Error(error);
@@ -3936,8 +3984,15 @@ namespace HSMServer.Core.Cache
         // purge inside it — never take the tree lock under those). Creation
         // re-checks the index under it so a cross-product move that just
         // published a sensor at this path is reused, not duplicated (ADR-0018).
-        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error) =>
+            TryAddSensor(request, type, productId, options, out sensor, out error, out _);
+
+        // storeFailed (#1756): true when the sensor was not created because the write of
+        // its row to the store failed. Only the registration path asks.
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
+            storeFailed = false;
+
             lock (_treeStructureLock)
             {
                 if (TryGetSensorFromCache(productId, request.Path, out sensor))
@@ -3948,15 +4003,17 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
 
-                return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error);
+                return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error, out storeFailed);
             }
         }
 
-        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             sensor = null;
             error = string.Empty;
+            storeFailed = false;
             var persisted = false;
+            var storing = false;
             try
             {
 
@@ -3998,7 +4055,11 @@ namespace HSMServer.Core.Cache
                 // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
                 // UpdateProduct, journal) must roll the row back too — tracked by
                 // `persisted` in the catch below.
-                _database.AddSensor(sensor.ToEntity());
+                var row = sensor.ToEntity();
+
+                storing = true;
+                _database.AddSensor(row);
+                storing = false;
                 persisted = true;
 
                 AddSensor(sensor, product);
@@ -4017,6 +4078,10 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 _logger.Error("An error was occurred by creating sensor", ex);
+
+                // The one failure of a creation that is known to be able to pass on a
+                // repeat (#1756): the sensor is rolled back below either way.
+                storeFailed = storing;
 
                 if (sensor is not null)
                 {

@@ -683,6 +683,8 @@ namespace hsm::collector
         /// Enable the TCP connection failure rate sensor (Windows only, push-fed Rate). Call BEFORE
         /// Start(). Each `period` it reads the failed-connection-attempt counter delta (IPv4+IPv6) and
         /// posts a Rate sensor at ".computer/Network/Connection failures rate" (displayed per minute).
+        /// Asked for more than once, the first period stays: the same period again is silent, another
+        /// period is not applied and is reported through the collector's logger (no throw).
         void EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds period)
         {
             Check(

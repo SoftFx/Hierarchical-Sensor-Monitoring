@@ -15,6 +15,14 @@ namespace HSMServer.Core.Model.Requests
         // such a registration must not displace a moved sensor's alias (#1718).
         public bool TypeIsExplicit { get; init; }
 
+        // Written by the cache while it applies the request, read by
+        // TreeValuesCache.AddOrUpdateSensorAsync once the queue has answered (#1756):
+        // the text of a failure of the store, which the queue handler would otherwise only
+        // log. Null when the request was applied, and also when it was refused or failed
+        // for a reason that is not known to pass. Like AddSensorValuesRequest.Response it
+        // is the handler's way back to the caller, and is written before the queue answers.
+        public string Fault { get; internal set; }
+
 
         public SensorAddOrUpdateRequest(Guid productId, string path) : base(productId, path)
         {

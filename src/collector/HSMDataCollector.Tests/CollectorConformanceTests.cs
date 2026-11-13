@@ -852,6 +852,64 @@ namespace HSMDataCollector.Tests
                     state.Sender.ReleaseHangs();
                     break;
 
+                // ---- the stop drain (#1751): stop_drain_contract, stop_drain_registration_contract ----
+
+                // The terminal stop. Synchronous in the collector's API; the case goes on when it returns.
+                case "dispose":
+                    state.Collector.Dispose();
+                    break;
+
+                // A data send blocks until the collector cancels it; that cancellation ends the hang.
+                case "set_sender_hang_until_cancelled":
+                    state.Sender.HangSendsUntilCancelled();
+                    break;
+
+                // What the sender does with every send of every kind from now on: up, down, hung.
+                case "set_sender_mode":
+                    state.Sender.SetMode(step.Arg(0));
+                    break;
+
+                // A collector whose registrations reach the sender of the case. Here that is the
+                // recording sender: an IDataSender is sent the registrations as command sends.
+                case "create_collector_sending_registrations":
+                    state.Sender = new RecordingSender();
+                    state.Collector = CreateCollector(
+                        state.Sender,
+                        maxValuesInPackage: int.Parse(step.Arg(0)),
+                        collectPeriodMs: int.Parse(step.Arg(1)),
+                        requestTimeoutMs: int.Parse(step.Arg(2)));
+                    break;
+
+                // The sends of one kind the collector has started so far, whatever became of them.
+                case "expect_send_attempts":
+                {
+                    var kind = ParseSendKind(step.Arg(0));
+                    var expectedAttempts = int.Parse(step.Arg(1));
+
+                    if (step.TryArg(2, out var attemptsSeconds))
+                    {
+                        var attemptsBy = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(attemptsSeconds));
+                        while (state.Sender.Sends.Count(sent => sent == kind) != expectedAttempts && DateTime.UtcNow < attemptsBy)
+                            await Task.Delay(10).ConfigureAwait(false);
+                    }
+
+                    var attempts = state.Sender.Sends.Count(sent => sent == kind);
+                    Assert.True(attempts == expectedAttempts, $"Expected {expectedAttempts} {kind} send(s) started, got {attempts}.");
+                    break;
+                }
+
+                // Every send the collector has started so far, by kind, in the order of their start.
+                case "expect_sends":
+                {
+                    var expectedSends = step.Arg(0).Split(',').Select(ParseSendKind).ToArray();
+                    var sends = state.Sender.Sends;
+
+                    Assert.True(
+                        expectedSends.SequenceEqual(sends),
+                        $"Expected the sends [{string.Join(", ", expectedSends)}], got [{string.Join(", ", sends)}].");
+                    break;
+                }
+
                 // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload
                 // of each OpenTime, over the bars whose Path ends with the suffix.
                 case "expect_bar_sum":
@@ -1346,7 +1404,8 @@ namespace HSMDataCollector.Tests
             int port = 443,
             int maxQueueSize = 20000,
             int maxValuesInPackage = 50,
-            int collectPeriodMs = 20)
+            int collectPeriodMs = 20,
+            int requestTimeoutMs = 1000)
         {
             return new DataCollector(new CollectorOptions
             {
@@ -1360,10 +1419,23 @@ namespace HSMDataCollector.Tests
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = maxValuesInPackage,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
-                RequestTimeout = TimeSpan.FromSeconds(1),
+                RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
             });
+        }
+
+        // The kinds of send a fixture names (expect_send_attempts, expect_sends).
+        private static string ParseSendKind(string kind)
+        {
+            switch (kind)
+            {
+                case RecordingSender.ValueSend:
+                case RecordingSender.RegistrationSend:
+                    return kind;
+                default:
+                    throw new InvalidOperationException($"Unknown kind of send '{kind}': value or registration.");
+            }
         }
 
         private static BarSensorOptions BuildConformanceBarOptions(int barPeriodMs, int postPeriodMs, int precision = 2)
@@ -2711,15 +2783,123 @@ namespace HSMDataCollector.Tests
             // Models a dead/black-holed transport: every data send blocks until the caller's
             // cancellation token fires (like the real HTTP client against an unreachable server).
             // Nothing is recorded — the bounded stop must give up on these sends, not wait them out.
-            public void HangSends() => Volatile.Write(ref _hangSends, 1);
+            public void HangSends() => Volatile.Write(ref _hangSends, HangLatched);
+
+            // (#1751) The same hang, but the cancellation of a send parked in it ends it: the sends
+            // after it pass. A package cancelled in flight can then be seen to be sent again.
+            public void HangSendsUntilCancelled() => Volatile.Write(ref _hangSends, HangUntilCancelled);
+
+            private const int HangOff = 0;
+            private const int HangLatched = 1;
+            private const int HangUntilCancelled = 2;
 
             // (#1480) Lift the hang: every parked send continues (to the fail-token check below) and
             // later sends are not blocked. Mirrors the native hsm_collector_set_send_hang(false).
             public void ReleaseHangs()
             {
-                Volatile.Write(ref _hangSends, 0);
+                Volatile.Write(ref _hangSends, HangOff);
                 _hangRelease.TrySetResult(true);
             }
+
+            // ---- (#1751) every send of every kind: the record of the sends, and set_sender_mode ----
+
+            public const string ValueSend = "value";
+            public const string RegistrationSend = "registration";
+
+            private const int ModeUp = 0;
+            private const int ModeDown = 1;
+            private const int ModeHung = 2;
+
+            // Guarded by _lock, with the record below: a send reads the mode it starts in and
+            // enters the record in one step.
+            private int _mode = ModeUp;
+
+            // Completed when the mode leaves hung; a new one for every time it is entered.
+            private TaskCompletionSource<bool> _modeRelease =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            private readonly List<string> _sends = new List<string>();
+
+            // Every send the collector has started, by kind, in the order of their start: recorded
+            // before anything can hang or fail it.
+            public IReadOnlyList<string> Sends
+            {
+                get
+                {
+                    lock (_lock)
+                        return _sends.ToList();
+                }
+            }
+
+            // up: every send is accepted (a send parked in hung continues). down: every send fails
+            // at once, as a send with no answer does. hung: every send waits until the collector
+            // gives it up (its token is cancelled).
+            public void SetMode(string mode)
+            {
+                int next;
+
+                switch (mode)
+                {
+                    case "up": next = ModeUp; break;
+                    case "down": next = ModeDown; break;
+                    case "hung": next = ModeHung; break;
+                    default: throw new InvalidOperationException($"set_sender_mode: unknown mode '{mode}' (up, down, hung).");
+                }
+
+                TaskCompletionSource<bool> release = null;
+
+                lock (_lock)
+                {
+                    if (_mode == ModeHung && next != ModeHung)
+                    {
+                        release = _modeRelease;
+                        _modeRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    _mode = next;
+                }
+
+                release?.TrySetResult(true);
+            }
+
+            // The first step of every send: enters it in the record and applies the mode. Returns
+            // false for a send the mode fails. A send without a wait completes synchronously, as
+            // the sends of this sender always did.
+            private async Task<bool> EnterAsync(string kind, CancellationToken token)
+            {
+                int mode;
+                Task release;
+
+                lock (_lock)
+                {
+                    _sends.Add(kind);
+                    mode = _mode;
+                    release = _modeRelease.Task;
+                }
+
+                if (mode == ModeHung)
+                {
+                    Interlocked.Increment(ref _parkedSends);
+                    try
+                    {
+                        var cancelled = Task.Delay(Timeout.Infinite, token);
+                        if (await Task.WhenAny(release, cancelled).ConfigureAwait(false) != release)
+                            await cancelled.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _parkedSends);
+                    }
+
+                    lock (_lock)
+                        mode = _mode;
+                }
+
+                return mode != ModeDown;
+            }
+
+            // A send that got no answer: there is no status, so no queue takes it for a refusal.
+            private static PackageSendingInfo NoAnswer() => new PackageSendingInfo(0, null, "Conformance: the sender is down.");
 
             // Data sends currently parked in the hang — their package has already left the queue.
             public int ParkedSends => Volatile.Read(ref _parkedSends);
@@ -2733,7 +2913,12 @@ namespace HSMDataCollector.Tests
 
             public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
-                if (Volatile.Read(ref _hangSends) == 1)
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
+                var hang = Volatile.Read(ref _hangSends);
+
+                if (hang != HangOff)
                 {
                     Interlocked.Increment(ref _parkedSends);
                     try
@@ -2742,7 +2927,15 @@ namespace HSMDataCollector.Tests
                         // path giving up on a dead transport), which throws as before.
                         var cancelled = Task.Delay(Timeout.Infinite, token);
                         if (await Task.WhenAny(_hangRelease.Task, cancelled).ConfigureAwait(false) != _hangRelease.Task)
+                        {
+                            // The hang that ends with its first cancellation ends here, before the
+                            // cancellation reaches the collector: whatever the collector sends in
+                            // answer to it passes.
+                            if (hang == HangUntilCancelled)
+                                Interlocked.CompareExchange(ref _hangSends, HangOff, HangUntilCancelled);
+
                             await cancelled.ConfigureAwait(false);
+                        }
                     }
                     finally
                     {
@@ -2759,8 +2952,11 @@ namespace HSMDataCollector.Tests
                 return default;
             }
 
-            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            public async ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                     _values.AddRange(items);
 
@@ -2768,9 +2964,13 @@ namespace HSMDataCollector.Tests
             }
 
             // Sensor registrations (AddOrUpdateSensorRequest) are part of the recorded contract
-            // (registration_contract.hsmtest); they do not consume fail/hang injection.
-            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+            // (registration_contract.hsmtest); they do not consume the fail/hang injection of the
+            // data sends. set_sender_mode applies to them as to every send.
+            public async ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
             {
+                if (!await EnterAsync(RegistrationSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                 {
                     foreach (var command in commands)
@@ -2817,8 +3017,12 @@ namespace HSMDataCollector.Tests
 
             // File payloads are part of the recorded contract (file_contract.hsmtest); they do not
             // consume fail/hang injection — those fixtures target the data queue only.
-            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+            // set_sender_mode applies to them as to every send, and a file value is a value send.
+            public async ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
             {
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                     _values.Add(file);
 

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.13.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.13.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -603,6 +603,11 @@ set(NATIVE_REGRESSION_TESTS
     tcp_failure_accumulator_unreadable_family_keeps_baseline
     tcp_failure_accumulator_neither_readable_returns_nullopt
     tcp_failure_accumulator_families_seed_independently
+    # #1752: the sampler seam (family readers in, error report out). Portable, so the report of
+    # "neither address family could be read" is pinned on every lane, not only where the OS read runs.
+    tcp_failure_sampler_reports_when_neither_family_is_readable
+    tcp_failure_sampler_stays_quiet_when_one_family_is_readable
+    tcp_failure_sampler_report_collapses_in_the_collector_error_channel
     # Linux /proc parser + delta math (#1414). Portable: pure functions over sample text, run on
     # every lane; the fixture values are shared with the managed ProcParsersTests.
     proc_stat_parses_aggregate_cpu_line
@@ -655,6 +660,11 @@ if(WIN32)
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
     )
+    # #1752: a repeated enable call keeps the first period and reports another one (Windows-only for
+    # the same reason: off Windows the call is refused before it looks at the period).
+    add_test(NAME native_tcp_failure_rate_repeated_enable_keeps_the_first_period
+        COMMAND hsm_collector_tests native_tcp_failure_rate_repeated_enable_keeps_the_first_period
+    )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
         COMMAND hsm_collector_tests native_linux_metric_sources_rejected_off_linux
@@ -706,6 +716,7 @@ add_conformance_test(conformance_bar_stddev_contract native/bar_stddev_contract.
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
 add_conformance_test(conformance_flush_contract flush_contract.hsmtest)
+add_conformance_test(conformance_stop_drain_contract stop_drain_contract.hsmtest)
 add_conformance_test(conformance_rate_contract rate_contract.hsmtest)
 add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
@@ -743,6 +754,19 @@ if(HSM_COLLECTOR_HTTP)
     endforeach()
 endif()
 
+# The stop drain scenarios about registrations (#1751) need a sender that is sent the
+# registrations. For the native collector that is the HTTP transport (its in-memory sender is
+# never sent one), so they exist in the HTTP build only, with the must-fail fixture of their
+# assertion. stop_drain_contract above runs in every build.
+if(HSM_COLLECTOR_HTTP)
+    add_conformance_test(conformance_stop_drain_registration_contract stop_drain_registration_contract.hsmtest)
+    add_test(
+        NAME meta_sends_wrong_order
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_sends_wrong_order.hsmtest
+    )
+endif()
+
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
 # the folder on Windows only, too.
 if(WIN32)
@@ -774,6 +798,7 @@ add_meta_conformance_test(meta_eventually_value_above_unreachable.hsmtest)
 add_meta_conformance_test(meta_no_new_payloads_but_arriving.hsmtest)
 add_meta_conformance_test(meta_payload_contains_wrong_value.hsmtest)
 add_meta_conformance_test(meta_payload_not_contains_present.hsmtest)
+add_meta_conformance_test(meta_send_attempts_wrong_count.hsmtest)
 add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
 add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)

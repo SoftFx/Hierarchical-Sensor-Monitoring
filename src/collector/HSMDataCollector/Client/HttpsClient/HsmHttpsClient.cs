@@ -13,7 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IErrorReportingSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IErrorReportingSender, IStopDrainSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -90,6 +90,40 @@ namespace HSMDataCollector.Client
             _dataHandler     = new DataHandlers(this, _endpoints, _logger);
             _priorityDataHandler = new DataHandlers(this, _endpoints, _logger);
             _fileHandler = new DataHandlers(this, _endpoints, _logger);
+
+            StopDrain = new SingleAttemptSender(this);
+        }
+
+        /// <summary>
+        /// This client for the stop drain (#1747): the value handlers do not repeat a failed
+        /// request inside the send. Stateless, so it is safe to use while another collector
+        /// that shares this client keeps sending through the client itself.
+        /// </summary>
+        public IDataSender StopDrain { get; }
+
+        private sealed class SingleAttemptSender : IDataSender
+        {
+            private readonly HsmHttpsClient _client;
+
+            internal SingleAttemptSender(HsmHttpsClient client) => _client = client;
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() => _client.TestConnectionAsync();
+
+            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) =>
+                _client._dataHandler.SendAsync(items, token, singleAttempt: true);
+
+            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) =>
+                _client._priorityDataHandler.SendAsync(items, token, singleAttempt: true);
+
+            // A command send is one attempt already (#1659 A3).
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) =>
+                _client.SendCommandAsync(commands, token);
+
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) =>
+                _client._fileHandler.SendAsync(file, token, singleAttempt: true);
+
+            // The client is disposed by whoever owns it, never through this view.
+            public void Dispose() { }
         }
 
 

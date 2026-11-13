@@ -1,5 +1,7 @@
+using HSMCommon.TaskResult;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
@@ -183,6 +185,61 @@ namespace HSMServer.Core.Tests.SensorApi
             await gate.Task;
 
             return await (Task<Dictionary<string, string>>)store.Invoke(_inner, args);
+        }
+    }
+
+
+    // The real cache, except that the registration of the paths a test names fails with an
+    // exception, as a fault of the server would. The real cache turns what it catches itself
+    // into a result, so this stands for whatever gets past that: the Sensor API has to
+    // answer it as a fault whatever its source.
+    public class FaultingCache : DispatchProxy
+    {
+        public const string FaultText = "the store is not ready";
+
+        private ITreeValuesCache _inner;
+        private volatile string[] _faultedPaths = [];
+        private volatile bool _keyLookupFaults;
+
+
+        public ITreeValuesCache Cache { get; private set; }
+
+
+        public static FaultingCache Wrap(ITreeValuesCache inner)
+        {
+            var cache = Create<ITreeValuesCache, FaultingCache>();
+            var proxy = (FaultingCache)(object)cache;
+
+            proxy._inner = inner;
+            proxy.Cache = cache;
+
+            return proxy;
+        }
+
+        // The registrations of these paths fail from now on, and only they.
+        public void FaultOn(params string[] paths) => _faultedPaths = paths;
+
+        // Looking an access key up fails from now on: the server cannot tell who is asking.
+        public void FaultOnKeyLookup() => _keyLookupFaults = true;
+
+        // The fault has passed.
+        public void Recover()
+        {
+            _faultedPaths = [];
+            _keyLookupFaults = false;
+        }
+
+
+        protected override object Invoke(MethodInfo targetMethod, object[] args)
+        {
+            if (_keyLookupFaults && targetMethod.Name == nameof(ITreeValuesCache.TryGetKey))
+                throw new InvalidOperationException(FaultText);
+
+            if (targetMethod.Name == nameof(ITreeValuesCache.AddOrUpdateSensorAsync) &&
+                args[0] is SensorAddOrUpdateRequest registration && _faultedPaths.Contains(registration.Path))
+                return Task.FromException<TaskResult>(new InvalidOperationException($"{FaultText}: {registration.Path}"));
+
+            return targetMethod.Invoke(_inner, args);
         }
     }
 

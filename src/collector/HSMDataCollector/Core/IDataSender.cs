@@ -54,6 +54,21 @@ namespace HSMDataCollector.Core
     }
 
     /// <summary>
+    /// A built-in sender that repeats a failed request inside a send. The stop drain must not
+    /// wait for those repeats (#1747): against a server that is down they spend the whole stop
+    /// budget and deliver nothing. The queues therefore drain through <see cref="StopDrain"/>,
+    /// where a send is a single attempt, as every send of the native collector is.
+    ///
+    /// A view and not a mode of the sender: a sender can be shared by two collectors, and the
+    /// stop of one must not change the sends of the other.
+    /// </summary>
+    internal interface IStopDrainSender
+    {
+        /// <summary>The same sender with one attempt per send. Not disposed by its user.</summary>
+        IDataSender StopDrain { get; }
+    }
+
+    /// <summary>
     /// A built-in sender that reports its own faults (a failed attempt it repeats by itself, a
     /// connection it lost). The collector that created the sender passes its deduplicated error
     /// channel; until then, and for a sender used on its own, the reports go to the logger.
