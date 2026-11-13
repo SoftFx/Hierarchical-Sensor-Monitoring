@@ -100,6 +100,8 @@ Additive, portable-friendly APIs sit alongside the legacy surface (nothing remov
 
 `CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).
 
+`CanAcceptData` is read on every enqueue and takes no lock (#1061): it depends only on the internal `_status`, a `volatile` field that every transition writes under the lifecycle lock. A lock would give no more, since the caller acts on the answer after releasing it either way; a value that loses the race with a stop is rejected by the stopped queue. The other `CollectorLifecycle` reads combine `_status` with `_disposed` and stay under the lock.
+
 Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
 - `Status` reports `Disposed` immediately when `Dispose()` is entered.
 - `CanAcceptData` is computed from the *internal* (pre-dispose) status. While the stop is still in flight it returns true so sensors can flush final values. Once `CompleteStop` fires (`internal _status = Stopped`), `CanAcceptData` returns false.
@@ -107,13 +109,15 @@ Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
 
 ### Lifecycle event ordering
 
-`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls.
+`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls. A handler that waits synchronously for another lifecycle operation (`Stop().Wait()`, or a wait on a thread that calls `Start`/`Stop`/`Dispose`) deadlocks, since that operation needs `_opLock`. This contract is public XML documentation on the `IDataCollector` events and on `ILifecycleListener` (#1061).
 
 ### Dispose racing Stop
 
 If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight processor stop task (`_currentProcessorStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
 
 If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is already in flight, the stopping path waits for `_currentStartInitTask` before stopping and disposing components. It does not wait for the user-supplied pre-init `customStartingTask`; if stop/dispose happens while that task is pending, the later `Start()` continuation observes that lifecycle is no longer starting/running and exits without entering initialization.
+
+The obsolete synchronous `Initialize()` follows the same rules (#1061): it re-checks the status after `ToStarting` and before the sensor initialization, publishes that initialization as `_currentStartInitTask` under `_opLock`, and, when `CompleteStart` fails because a `Stop()`/`Dispose()` took over, returns without a start-rollback stop of its own. The processor is stopped once, by the caller that moved the lifecycle out of `Starting`. Before, a `Dispose()` racing `Initialize()` stopped and disposed sensors whose `InitAsync` was still running, and `Initialize()` then ran a second, `StartRollback` stop that cleared the queues the dispose was draining. Tests: `ObsoleteInitializeLifecycleTests` (both TFMs).
 
 ### Queue state machine
 
