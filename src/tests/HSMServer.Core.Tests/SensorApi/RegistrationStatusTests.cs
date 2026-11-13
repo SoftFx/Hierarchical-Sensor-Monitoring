@@ -1,6 +1,10 @@
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Middleware;
+using HSMServer.SensorApi;
 using HSMServer.ServerConfiguration;
 using System;
 using System.Net;
@@ -36,6 +40,8 @@ namespace HSMServer.Core.Tests.SensorApi
         private const string CannotConvert = "The registration cannot be converted";
         private const string UnknownValue = "it carries a value this server does not know";
         private const string MoreTtlsThanAlerts = "TTLs count (2) exceeds TtlAlerts count (1)";
+        private const string NullAlert = "one of its alerts is null";
+        private const string NullAlertCondition = "one of its alert conditions is null";
 
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
@@ -109,22 +115,25 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.StartsWith(CannotConvert, (string)errors["commands/partial/refused-after"]);
         }
 
-        // Two commands that fault on every repeat, whatever the server's state. The status
-        // they get is not the point here (they are the request's fault, and may one day be
-        // answered as such); the point is that neither keeps the registration next to it
-        // from being applied.
+        // A list with a null element or with a command without a path is the request's
+        // fault, the same on every repeat: the whole request is a 400 that says what is
+        // wrong, and nothing of it is applied. Not a 500, which a collector would send
+        // again every cycle; and not an error per path, as there is no path to put it under.
         [Theory]
-        [InlineData("null")]                            // no command at all
-        [InlineData("{\"Type\":0,\"SensorType\":1}")]   // a registration without a path
-        public async Task Commands_ACommandThatFaultsOnEveryRepeat_DoesNotKeepTheNextOneFromBeingApplied(string faulty)
+        [InlineData("null", "The command at index 1 is null.")]
+        [InlineData("{\"Type\":0,\"SensorType\":1}", "The command at index 1 has no path.")]
+        public async Task Commands_ANullCommandOrOneWithoutAPath_Is400_AndNothingIsApplied(string malformed, string reason)
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
 
-            var path = $"commands/poison/{(faulty == "null" ? "after-null" : "after-pathless")}";
+            var folder = $"commands/malformed/{(malformed == "null" ? "null" : "pathless")}";
 
-            await PostAsync(host, "commands", $"[{faulty},{Registration(path)}]", _key);
+            var answer = await PostAsync(host, "commands", $"[{Registration($"{folder}/before")},{malformed},{Registration($"{folder}/after")}]", _key);
 
-            Assert.True(Registered(path));
+            Assert.Equal(HttpStatusCode.BadRequest, answer.Status);
+            Assert.Contains(reason, answer.Body);
+            Assert.False(Registered($"{folder}/before"));
+            Assert.False(Registered($"{folder}/after"));
         }
 
         // A registration the server cannot convert is refused, not faulted: the same request
@@ -135,6 +144,10 @@ namespace HSMServer.Core.Tests.SensorApi
         [InlineData("\"SensorType\":99", UnknownValue)]                        // a sensor type this server does not know
         [InlineData("\"SensorType\":1,\"OriginalUnit\":123456", UnknownValue)] // a unit this server does not know
         [InlineData("\"SensorType\":1,\"TTLs\":[600000000,1200000000],\"TtlAlerts\":[{}]", MoreTtlsThanAlerts)]
+        [InlineData("\"SensorType\":1,\"Alerts\":[{\"Conditions\":[{\"Operation\":200}]}]", UnknownValue)] // an alert operation this server does not know
+        [InlineData("\"SensorType\":1,\"Alerts\":[null]", NullAlert)]
+        [InlineData("\"SensorType\":1,\"TtlAlerts\":[null]", NullAlert)]
+        [InlineData("\"SensorType\":1,\"Alerts\":[{\"Conditions\":[null]}]", NullAlertCondition)]
         public async Task Commands_ARegistrationTheServerCannotConvert_Is200_WithItsPerPathError(string unconvertible, string reason)
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
@@ -223,6 +236,10 @@ namespace HSMServer.Core.Tests.SensorApi
         [InlineData("\"SensorType\":99", UnknownValue)]
         [InlineData("\"SensorType\":1,\"OriginalUnit\":123456", UnknownValue)]
         [InlineData("\"SensorType\":1,\"TTLs\":[600000000,1200000000],\"TtlAlerts\":[{}]", MoreTtlsThanAlerts)]
+        [InlineData("\"SensorType\":1,\"Alerts\":[{\"Conditions\":[{\"Operation\":200}]}]", UnknownValue)]
+        [InlineData("\"SensorType\":1,\"Alerts\":[null]", NullAlert)]
+        [InlineData("\"SensorType\":1,\"TtlAlerts\":[null]", NullAlert)]
+        [InlineData("\"SensorType\":1,\"Alerts\":[{\"Conditions\":[null]}]", NullAlertCondition)]
         public async Task AddOrUpdate_ARegistrationTheServerCannotConvert_Is406_WithTheReason(string unconvertible, string reason)
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
@@ -232,6 +249,38 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(HttpStatusCode.NotAcceptable, answer.Status);
             Assert.StartsWith($"{CannotConvert}: {reason}", answer.Body);
             Assert.False(Registered("single/convert/refused"));
+        }
+
+        // The single route has no list to refuse as a whole: a registration without a path
+        // is refused like any other the server cannot convert.
+        [Fact]
+        public async Task AddOrUpdate_ARegistrationWithoutAPath_Is406_WithTheReason()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var answer = await PostAsync(host, "addOrUpdate", "{\"Type\":0,\"SensorType\":1}", _key);
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, answer.Status);
+            Assert.Equal($"{CannotConvert}: it has no path", answer.Body);
+        }
+
+        // The other side of the split: only what the request causes is a refusal. What the
+        // server knows about the caller is read outside the conversion's catch, so when it
+        // fails (here the product went away under the request) the service does not answer
+        // "cannot be converted", which a collector would take as final: the exception
+        // leaves it, and both transports answer an exception with a 500 (the tests above).
+        [Fact]
+        public async Task AFaultOfTheCallersState_LeavesTheServiceAsAnException_NotAsARefusal()
+        {
+            Assert.True(_valuesCache.TryGetKey(Guid.Parse(_key), out var key, out _));
+
+            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry());
+            var caller = new PublicApiRequestInfo { Product = null, Key = key, CollectorName = ClientName, RemoteIP = "127.0.0.1" };
+            var registration = new AddOrUpdateSensorRequest { Path = "service/fault/registration", SensorType = SensorType.IntSensor };
+
+            await Assert.ThrowsAsync<NullReferenceException>(() => service.AddOrUpdateSensorAsync(caller, registration));
+
+            Assert.False(Registered("service/fault/registration"));
         }
 
         [Fact]

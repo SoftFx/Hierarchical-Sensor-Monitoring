@@ -463,7 +463,11 @@ namespace HSMServer.SensorApi.Sessions
 
         private async Task HandleCommandsAsync(CollectorSession session, PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output)
         {
-            if (!TryReadBody<List<CommandRequestBase>>(request, SensorApiJson.Commands, out var commands))
+            // A list with a null element or a command without a path is a malformed body
+            // too, as on the HTTP route (#1749): refused as a whole before anything is
+            // applied.
+            if (!TryReadBody<List<CommandRequestBase>>(request, SensorApiJson.Commands, out var commands) ||
+                SensorApiJson.FindMalformedCommand(commands) is not null)
             {
                 session.CountRequestRefused();
                 SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, MalformedBody);

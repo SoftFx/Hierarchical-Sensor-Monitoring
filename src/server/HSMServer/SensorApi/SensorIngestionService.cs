@@ -4,6 +4,7 @@ using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
@@ -31,6 +32,9 @@ namespace HSMServer.SensorApi
         public const string UnsupportedCommand = "This type of command is not supported";
         public const string UnconvertibleRegistration = "The registration cannot be converted";
         public const string UnknownValue = "it carries a value this server does not know (a sensor type, a unit or an alert setting of a newer version)";
+        public const string MissingPath = "it has no path";
+        public const string NullAlert = "one of its alerts is null";
+        public const string NullAlertCondition = "one of its alert conditions is null";
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
@@ -77,48 +81,93 @@ namespace HSMServer.SensorApi
             if (info is null)
                 return _invalidRequestResult;
 
+            // What the server knows about the caller is read before the conversion and
+            // outside its catch (#1749): a failure here (a key or a product that went away
+            // under the request) is a fault of the server's state, and must leave as an
+            // exception, never as a refusal of the registration.
+            var productId = info.Product.Id;
+            var keyId = info.Key.Id;
+            var keyName = info.Key.DisplayName;
+
+            // A registration the server cannot convert is refused, not faulted (#1749).
+            // Everything below reads nothing but the request, so the same request fails
+            // the same way on every repeat; answered 500 it would make a collector send
+            // the whole package again on every cycle.
+            //
+            // First what would otherwise fail as a null reference, which is not told apart
+            // from a bug of the server by its type.
+            if (FindMissingPart(request) is { } missing)
+                return RefuseUnconvertible(request, missing, cause: null);
+
             // Converted first: a registration that cannot even be converted moves nothing.
-            SensorAddOrUpdateRequest coreRequest;
+            SensorUpdate update;
+            HSMCommon.Model.SensorType type;
 
             try
             {
-                coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, request.Path)
-                {
-                    Update = request.Convert(Guid.Empty, info.Key.DisplayName),
-                    Type = request.SensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
-                    TypeIsExplicit = request.SensorType is not null,
-                };
+                update = request.Convert(Guid.Empty, keyName);
+                type = request.SensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean;
             }
-            catch (Exception ex)
+            // Only what the converters throw for a request they cannot convert: a value of
+            // an enumeration this server does not know (NotImplementedException, whose own
+            // text says nothing to the reader of a collector log) and more TTLs than TTL
+            // alerts (ArgumentException). Anything else is not known to be the request's
+            // fault and leaves as an exception.
+            catch (Exception ex) when (ex is NotImplementedException or ArgumentException)
             {
-                // A refusal of this registration, not a fault of the server (#1749). The
-                // conversion reads nothing but the request (an enum value this server does
-                // not know, more TTLs than TTL alerts), so the same request fails the same
-                // way on every repeat. Left to the caller's catch-all it would be answered
-                // 500, and a collector would send the whole package again on every cycle.
-                //
-                // The converters answer a value of an enumeration they do not know with a
-                // NotImplementedException, whose own text says nothing to the reader of a
-                // collector log.
-                var reason = ex is NotImplementedException ? UnknownValue : ex.Message;
-
-                // A warning without a stack trace, as for a rejected key: a client mistake.
-                // The path is the client's text.
-                _logger.Warn($"A registration of \"{CollectorSession.Printable(request.Path, 200)}\" is refused, it cannot be converted ({ex.GetType().Name}): {reason}");
-
-                return TaskResult.FromError($"{UnconvertibleRegistration}: {reason}");
+                return RefuseUnconvertible(request, ex is NotImplementedException ? UnknownValue : ex.Message, ex);
             }
+
+            var coreRequest = new SensorAddOrUpdateRequest(productId, request.Path)
+            {
+                Update = update,
+                Type = type,
+                TypeIsExplicit = request.SensorType is not null,
+            };
 
             // Sensor move from the collector (#1724): the sensor registered under an old path
             // moves here first, so the registration below updates it instead of a new one. It
             // never blocks the registration (refusals are logged inside). A move it makes stands
             // even if the queue then refuses the registration's settings.
             if (request.PreviousPaths is { Count: > 0 })
-                await _cache.ApplyPreviousPathsAsync(info.Key.Id, info.Product.Id, request.Path, request.PreviousPaths,
+                await _cache.ApplyPreviousPathsAsync(keyId, productId, request.Path, request.PreviousPaths,
                     coreRequest.TypeIsExplicit ? coreRequest.Type : null,
-                    HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(info.Key.DisplayName, false));
+                    HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(keyName, false));
 
             return await _cache.AddOrUpdateSensorAsync(coreRequest);
+        }
+
+        // The parts of a registration the conversion dereferences without a check.
+        private static string FindMissingPart(AddOrUpdateSensorRequest request)
+        {
+            if (request.Path is null)
+                return MissingPath;
+
+            foreach (var alerts in new[] { request.Alerts, request.TtlAlerts })
+            {
+                if (alerts is null)
+                    continue;
+
+                foreach (var alert in alerts)
+                {
+                    if (alert is null)
+                        return NullAlert;
+
+                    if (alert.Conditions?.Contains(null) == true)
+                        return NullAlertCondition;
+                }
+            }
+
+            return null;
+        }
+
+        private static TaskResult RefuseUnconvertible(AddOrUpdateSensorRequest request, string reason, Exception cause)
+        {
+            // A warning without a stack trace, as for a rejected key: a client mistake.
+            // The path is the client's text.
+            _logger.Warn($"A registration of \"{CollectorSession.Printable(request.Path, 200)}\" is refused, it cannot be converted{(cause is null ? string.Empty : $" ({cause.GetType().Name})")}: {reason}");
+
+            return TaskResult.FromError($"{UnconvertibleRegistration}: {reason}");
         }
     }
 }

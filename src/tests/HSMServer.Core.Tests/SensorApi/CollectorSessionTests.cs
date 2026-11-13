@@ -373,6 +373,43 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("malformed body", (string)ack["error"]);
         }
 
+        // A `commands` list with a null element or with a command without a path is a
+        // malformed body on both transports (#1749): the whole request is a 400 and nothing
+        // of it is applied. Not a 500, which a collector would send again every cycle for a
+        // request that can never succeed.
+        [Theory]
+        [InlineData("null", "null")]
+        [InlineData("{\"Type\":0,\"SensorType\":1}", "pathless")]
+        public async Task Commands_ANullCommandOrOneWithoutAPath_Is400OnBothTransports_AndNothingIsApplied(string malformed, string folder)
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/before\",\"SensorType\":1}},{malformed},{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/after\",\"SensorType\":1}}]";
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":13,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal(13, (long)ack["ack"]);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
+            Assert.Null(ack["body"]);
+
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/before", out _), $"{transport}: the command before the malformed one");
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/after", out _), $"{transport}: the command after the malformed one");
+            }
+
+            // The session survives a refused request.
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+        }
+
         // Sensor move from a collector (#1724): a registration's PreviousPaths moves the old sensor
         // to the registered path — the same over the HTTP route and over the session, which both
         // feed SensorIngestionService.AddOrUpdateSensorAsync.
