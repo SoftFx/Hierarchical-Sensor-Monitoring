@@ -20,6 +20,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (!TryDequeue(out QueueItem<FileSensorValue> item))
                 return false;
 
+            // As in DispatchPackageAsync: a send the stop drain has given up settles nothing (#1748).
+            var drainSend = BeginDrainSend(items: 1);
             PackageSendingInfo sendingInfo;
 
             try
@@ -28,15 +30,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
             catch (OperationCanceledException)
             {
-                if (PreserveCanceledPackages)
+                if (OwnsPackage(drainSend, items: 1) && PreserveCanceledPackages)
                     ReEnqueueItem(item);
                 throw;
             }
             catch
             {
-                ReEnqueueItem(item);
+                if (OwnsPackage(drainSend, items: 1))
+                    ReEnqueueItem(item);
                 throw;
             }
+
+            if (!OwnsPackage(drainSend, items: 1))
+                return true;
 
             if (sendingInfo.Error != null)
             {

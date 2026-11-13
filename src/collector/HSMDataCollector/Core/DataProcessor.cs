@@ -239,10 +239,19 @@ namespace HSMDataCollector.Core
         {
             await TryStopPhase(async () =>
             {
-                if (!drainEnded)
-                    drainEnded = (await queue.FlushAsync(drainBudget).ConfigureAwait(false)).SendFailed;
+                // The items of a send the drain gave up are in no queue for the clear to find;
+                // they are lost all the same and are counted with the discarded ones (#1748).
+                var abandoned = 0;
 
-                LogDiscardedItems(queue.ClearQueue(), queue.QueueName);
+                if (!drainEnded)
+                {
+                    var result = await queue.FlushAsync(drainBudget).ConfigureAwait(false);
+
+                    drainEnded = result.SendFailed;
+                    abandoned = result.Abandoned;
+                }
+
+                LogDiscardedItems(queue.ClearQueue() + abandoned, queue.QueueName);
             }, failures).ConfigureAwait(false);
 
             return drainEnded;

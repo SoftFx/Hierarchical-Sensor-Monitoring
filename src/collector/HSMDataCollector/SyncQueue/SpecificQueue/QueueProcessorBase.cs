@@ -429,6 +429,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 while (!IsEmpty && !token.IsCancellationRequested)
                 {
+                    // Published for the dispatch that starts on the next line, which takes it
+                    // before its first await (BeginDrainSend).
+                    var drainSend = new DrainSend();
+                    Volatile.Write(ref _drainSend, drainSend);
+
                     var dispatch = TryDispatchOneAsync(token);
                     bool dispatched;
 
@@ -444,8 +449,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         // cancellation: the run-loop side is protected by StopAsync's WhenAny
                         // timeout, but a sender that hangs for the FIRST time here would block
                         // this await forever and lock the host's restart. Race each dispatch
-                        // against the flush token and abandon the in-flight send when it fires —
-                        // losing the in-flight items is preferable to an unbounded Stop.
+                        // against the flush token and give the in-flight send up when the
+                        // sender does not come back: losing its items is preferable to an
+                        // unbounded Stop.
                         var dispatchTask = dispatch.AsTask();
 
                         if (cancellationFired == null)
@@ -453,9 +459,26 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                         if (await Task.WhenAny(dispatchTask, cancellationFired).ConfigureAwait(false) != dispatchTask)
                         {
-                            ObserveAbandonedDispatch(dispatchTask);
-                            _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
-                            return new FlushResult(sendFailed: false);
+                            // The budget fired with a send in flight (#1748). The same token
+                            // cancelled the send, so a sender that honours cancellation is on
+                            // its way back: it gets a moment, and then nothing is wrong and
+                            // nothing is said. Only a sender that is still away after that
+                            // moment has ignored the cancellation.
+                            var graceOver = WaitBeforeAbandon(dispatchTask);
+
+                            if (await Task.WhenAny(dispatchTask, graceOver).ConfigureAwait(false) != dispatchTask && drainSend.TryAbandon())
+                            {
+                                // From here the package is the drain's: the send, when it
+                                // comes back, touches neither the queue nor the counts.
+                                ObserveAbandonedDispatch(dispatchTask);
+                                _logger.Error($"{QueueName} flush gave up a send that did not return after the stop budget cancelled it: IDataSender ignores cancellation. Its {drainSend.Items} item(s) are counted as discarded.");
+                                return new FlushResult(sendFailed: false, abandoned: drainSend.Items);
+                            }
+
+                            // The send came back in time, or came back first in the race with
+                            // the line above: its dispatch has the package and is settling it
+                            // (no sender code is left to wait for), so the await below is short
+                            // and the clear that follows this flush sees what it put back.
                         }
 
                         dispatched = await dispatchTask.ConfigureAwait(false);
@@ -484,6 +507,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
             finally
             {
+                Volatile.Write(ref _drainSend, null);
                 Volatile.Write(ref _inFlushFlag, 0);
             }
 
@@ -498,6 +522,58 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
+
+        // How long a send may take to come back once the stop budget has cancelled it. A send
+        // that honours its token is back in milliseconds; this is the margin for a busy thread
+        // pool, and it is what a stop can take beyond its budget, once (a spent budget starts
+        // no further send). Too short a moment would only bring back a wrong Error line: who
+        // gets the package is decided by DrainSend, not by this.
+        private static readonly TimeSpan AbandonGrace = TimeSpan.FromMilliseconds(250);
+
+        /// <summary>
+        /// The wait before the drain gives up a send that the budget has cancelled: it is given
+        /// the dispatch that is in flight and returns the task that ends the wait. A delay of
+        /// <see cref="AbandonGrace"/>; tests replace it to decide themselves which comes first,
+        /// the return of the send or the end of the wait.
+        /// </summary>
+        internal Func<Task, Task> WaitBeforeAbandon { get; set; } = _ => Task.Delay(AbandonGrace);
+
+        // The send of the drain that is in flight; null outside a drain. Written by FlushAsync,
+        // read by the dispatch it starts.
+        private DrainSend _drainSend;
+
+        /// <summary>
+        /// Called by a dispatch right before it hands <paramref name="items"/> items to the
+        /// sender, and before its first await: FlushAsync published the send for exactly this
+        /// call. Null in the run loop, whose packages nobody gives up. (The run loop of a queue
+        /// has exited before its drain begins, so it never picks up a send of the drain.)
+        /// </summary>
+        protected DrainSend BeginDrainSend(int items)
+        {
+            var drainSend = Volatile.Read(ref _drainSend);
+
+            if (drainSend != null)
+                drainSend.Items = items;
+
+            return drainSend;
+        }
+
+        /// <summary>
+        /// Called by a dispatch when its send has come back, before it settles the package in
+        /// any way. False when the stop drain has given this send up: its items are counted as
+        /// discarded and the queue may have been cleared and even started again since, so
+        /// nothing of the package goes back into the queue, the overflow count or the package
+        /// diagnostics.
+        /// </summary>
+        protected bool OwnsPackage(DrainSend drainSend, int items)
+        {
+            if (drainSend == null || drainSend.TryReturn())
+                return true;
+
+            _logger.Debug($"{QueueName}: a send the stop drain had given up has returned; its {items} item(s) were counted as discarded then and are not queued again.");
+
+            return false;
+        }
 
         // True while the bounded post-stop drain is running. Subclasses use this to reword
         // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
@@ -520,6 +596,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (package == null || package.Count == 0)
                 return;
 
+            var drainSend = BeginDrainSend(package.Count);
             PackageSendingInfo sendingInfo;
 
             try
@@ -528,15 +605,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
             catch (OperationCanceledException)
             {
-                if (PreserveCanceledPackages)
+                if (OwnsPackage(drainSend, package.Count) && PreserveCanceledPackages)
                     ReEnqueueItems(package.Items);
                 throw;
             }
             catch
             {
-                ReEnqueueItems(package.Items);
+                if (OwnsPackage(drainSend, package.Count))
+                    ReEnqueueItems(package.Items);
                 throw;
             }
+
+            if (!OwnsPackage(drainSend, package.Count))
+                return;
 
             // Items the sender could never send (a value larger than a session frame) are lost for
             // good; they are counted where every lost value is counted.
