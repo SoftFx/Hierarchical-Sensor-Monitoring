@@ -66,6 +66,72 @@ namespace HSMDataCollector.Tests
         }
 
 
+        [Fact]
+        public void Order_of_issue_does_not_depend_on_the_clock()
+        {
+            // Two commands issued within one tick of the clock carry the same timestamp (on
+            // .NET Framework a tick of DateTime.UtcNow can be milliseconds long). A failed
+            // package returns behind the newer command, and a sort by timestamp would then
+            // leave the newer one first.
+            var stamp = new DateTime(2026, 11, 12, 0, 0, 0, DateTimeKind.Utc);
+
+            var older = new QueueItem<string>("older", stamp);
+            var newer = new QueueItem<string>("newer", stamp);
+            var setBack = new QueueItem<string>("issued last, with a clock that was set back", stamp.AddHours(-1));
+
+            var package = new DataPackage<string>(3);
+
+            package.AddValue(setBack);
+            package.AddValue(newer);
+            package.AddValue(older);
+
+            package.SortByIssue();
+
+            Assert.Equal(new[] { "older", "newer", "issued last, with a clock that was set back" }, package.ToArray());
+        }
+
+        [Fact]
+        public async Task Partly_delivered_package_sends_again_the_commands_that_did_not_arrive()
+        {
+            // The second send delivers everything but "order/second" and says so by position.
+            var sender = new GatedCommandSender { UndeliveredOnSecondSend = "order/second" };
+
+            using (var collector = new DataCollector(new CollectorOptions
+            {
+                AccessKey = "order-key",
+                ClientName = "order-client",
+                ComputerName = "order-host",
+                Module = "order-module",
+                DataSender = sender,
+                MaxQueueSize = 1000,
+                MaxValuesInPackage = 50,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
+                RequestTimeout = TimeSpan.FromSeconds(1),
+            }))
+            {
+                collector.CreateIntSensor("order/first");
+                await collector.Start();
+
+                Assert.True(await Task.WhenAny(sender.FirstSendEntered.Task, Task.Delay(Timeout)) == sender.FirstSendEntered.Task, "The first registration was never sent.");
+
+                // The queue holds [second, first] when the failed package comes back; it is
+                // sent as [first, second], and the positions of the answer are of that order.
+                collector.CreateIntSensor("order/second");
+
+                sender.FailFirstSend.SetResult(true);
+
+                Assert.True(await sender.WaitForAcceptedAsync("order/second", Timeout), "The registration that did not arrive was never sent again.");
+
+                await collector.Stop();
+            }
+
+            var again = sender.Accepted.Single(p => p.Any(path => path.EndsWith("order/second", StringComparison.Ordinal)));
+
+            Assert.DoesNotContain(again, path => path.EndsWith("order/first", StringComparison.Ordinal));
+            Assert.DoesNotContain(sender.Accepted, p => p.Any(path => path.EndsWith("order/first", StringComparison.Ordinal)));
+        }
+
+
         /// <summary>
         /// Holds the first command package that carries "order/first" until the test lets it
         /// fail without an answer, and accepts every package after it.
@@ -76,6 +142,13 @@ namespace HSMDataCollector.Tests
             private readonly List<string[]> _accepted = new List<string[]>();
 
             private int _gated;
+            private int _partUsed;
+
+            /// <summary>
+            /// When set, the first package that carries a command of this path is delivered in
+            /// part: every command but that one is settled, and the send fails.
+            /// </summary>
+            internal string UndeliveredOnSecondSend { get; set; }
 
             internal TaskCompletionSource<bool> FirstSendEntered { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -119,6 +192,15 @@ namespace HSMDataCollector.Tests
                     await FailFirstSend.Task.ConfigureAwait(false);
 
                     return new PackageSendingInfo(1, null, "No connection could be made");
+                }
+
+                if (UndeliveredOnSecondSend != null
+                    && paths.Any(p => p.EndsWith(UndeliveredOnSecondSend, StringComparison.Ordinal))
+                    && Interlocked.Exchange(ref _partUsed, 1) == 0)
+                {
+                    var settled = paths.Select(p => !p.EndsWith(UndeliveredOnSecondSend, StringComparison.Ordinal)).ToArray();
+
+                    return PackageSendingInfo.Failed(1, 503, "The last frame was not acknowledged", settled, droppedCount: 0);
                 }
 
                 lock (_lock)
