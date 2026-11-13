@@ -237,7 +237,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             if (targetMethod.Name == nameof(ITreeValuesCache.AddOrUpdateSensorAsync) &&
                 args[0] is SensorAddOrUpdateRequest registration && _faultedPaths.Contains(registration.Path))
-                return Task.FromException<TaskResult>(new InvalidOperationException(FaultText));
+                return Task.FromException<TaskResult>(new InvalidOperationException($"{FaultText}: {registration.Path}"));
 
             return targetMethod.Invoke(_inner, args);
         }

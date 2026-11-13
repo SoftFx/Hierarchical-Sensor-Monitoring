@@ -39,6 +39,18 @@ namespace HSMServer.SensorApi
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
 
+        // One for the server: a collector that moves between the two transports, or uses
+        // both registration routes, repeats the same fault.
+        private readonly RepeatedFaultLog _faultLog = new();
+
+
+        // Whether the fault of a registration request is to be logged now (#1749). A fault
+        // is answered 500 and a collector sends the package again on every cycle, so the
+        // same fault of the same key gets one Error line per RepeatedFaultLog.DefaultWindow
+        // and is counted in between; `unlogged` is that count for the line being written.
+        // Both transports ask before they write their line.
+        public bool IsFaultLogDue(Guid key, Exception fault, out long unlogged) => _faultLog.IsDue(key, fault, out unlogged);
+
 
         // The /list batch. Returns the per-path errors of the values that were not stored
         // (empty when all were).

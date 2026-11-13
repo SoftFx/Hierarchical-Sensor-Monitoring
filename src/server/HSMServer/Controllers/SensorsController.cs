@@ -391,8 +391,10 @@ namespace HSMServer.Controllers
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
                 // Exception first: Error(string, Exception) takes the exception for a
-                // template argument and logs the message without it.
-                _logger.Error(ex, message);
+                // template argument and logs the message without it. Once per window for
+                // the same fault of the same key, see the commands route below.
+                if (_ingestion.IsFaultLogDue(CallerKeyId, ex, out var unlogged))
+                    _logger.Error(ex, $"{message}{RepeatedFaultLog.Unlogged(unlogged)}");
 
                 // The server's own fault, so 500 and not 400 (#1749): a collector takes a 4xx
                 // on a registration as a final refusal and never sends it again, and repeats a
@@ -476,8 +478,13 @@ namespace HSMServer.Controllers
                 return Ok(response);
 
             // One line for the request, not one per command: during a storage outage every
-            // command of a large package faults. Exception first, see addOrUpdate above.
-            _logger.Error(firstFault, $"Failed to update sensors: {faulted} of {sensorCommands.Count} command(s) faulted, the others were applied. The first fault:");
+            // command of a large package faults. And not one per cycle either: a collector
+            // sends a package answered 500 again every cycle for as long as the fault
+            // lasts, so the same fault of the same key is logged once per window, with the
+            // number of requests that went unlogged since. Exception first, see addOrUpdate
+            // above.
+            if (_ingestion.IsFaultLogDue(CallerKeyId, firstFault, out var unlogged))
+                _logger.Error(firstFault, $"Failed to update sensors: {faulted} of {sensorCommands.Count} command(s) faulted, the others were applied.{RepeatedFaultLog.Unlogged(unlogged)} The first fault:");
 
             // The server's own fault, so 500 and not 400 (#1749): a collector drops the
             // whole registration package on a 4xx and repeats it on a 5xx. A command the
@@ -627,6 +634,9 @@ namespace HSMServer.Controllers
 
             return await _ingestion.AddOrUpdateSensorAsync(infoRequest.Value, apiRequest);
         }
+
+        // The key the request came with; empty when it could not be resolved.
+        private Guid CallerKeyId => HttpContext.TryGetPublicApiInfo(out var caller) ? caller.Key.Id : Guid.Empty;
 
         private bool HasNoKey(BaseRequest request) => request.Key is null && !HttpContext.TryGetPublicApiInfo(out _);
 

@@ -511,8 +511,12 @@ namespace HSMServer.SensorApi.Sessions
             // The HTTP route answers 500 here as well (#1749): the fault is the server's
             // own, and a collector takes a 4xx on a registration as a final refusal and
             // repeats a 5xx on its next cycle. One line for the frame, not one per command:
-            // during a storage outage every command of a large package faults.
-            _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {faulted} of {commands.Count} command(s) faulted, the others were applied. The first fault: {firstFault}");
+            // during a storage outage every command of a large package faults. And not one
+            // per cycle either: the collector sends the frame again every cycle for as long
+            // as the fault lasts, so the same fault of the same key is logged once per
+            // window, with the number of requests that went unlogged since.
+            if (_ingestion.IsFaultLogDue(caller.Key.Id, firstFault, out var unlogged))
+                _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {faulted} of {commands.Count} command(s) faulted, the others were applied.{RepeatedFaultLog.Unlogged(unlogged)} The first fault: {firstFault}");
 
             // A failure ack has no body in version 1, so the refusals collected for the
             // other commands do not travel; a resend that does not fault carries them in

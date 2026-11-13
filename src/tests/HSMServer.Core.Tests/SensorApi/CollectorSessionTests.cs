@@ -353,6 +353,42 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Contains(FaultingCache.FaultText, errors[0].Message);
         }
 
+        // A fault that repeats: the collector sends the frame again on every cycle for as long
+        // as it lasts. That is one Error line for the same fault of the same key, not one per
+        // cycle (the window and the count that follows it: RepeatedFaultLogTests); another
+        // fault is another line.
+        [Fact]
+        public async Task Commands_TheSameFaultOnEveryResend_IsLoggedOnce()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("repeated/first", "repeated/another");
+
+            for (var id = 20; id < 23; id++)
+            {
+                await SendAsync(socket, $"{{\"id\":{id},\"op\":\"commands\",\"body\":[{{\"Type\":0,\"Path\":\"repeated/first\",\"SensorType\":1}}]}}");
+
+                Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+            }
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 20: 1 of 1 command(s) faulted", errors[0].Message);
+
+            await SendAsync(socket, "{\"id\":23,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"repeated/another\",\"SensorType\":1}]}");
+
+            Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+
+            errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 2, host.Log.Dump());
+            Assert.Contains("frame 23: 1 of 1 command(s) faulted", errors[1].Message);
+        }
+
         // A `commands` body the server cannot read is a 400 on both transports (#1749). The
         // HTTP route used to end as a 500 here (its model binder threw), as `list` still does.
         [Fact]
