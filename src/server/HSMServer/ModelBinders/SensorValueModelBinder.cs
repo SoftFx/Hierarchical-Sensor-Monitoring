@@ -30,8 +30,12 @@ namespace HSMServer.ModelBinders
                 // for the same body (#1672). The hand-written element converters
                 // throw ArgumentException, OverflowException and others besides
                 // JsonException — the session's TryReadBody catches the same set.
+                // System.Text.Json's own messages already end with their 0-based
+                // '| LineNumber: N | BytePositionInLine: M' suffix; append the position
+                // only for converter-thrown messages, as a 1-based line.
                 var position = ex is JsonException { LineNumber: { } line, BytePositionInLine: { } offset }
-                    ? $" (line {line}, byte {offset})."
+                               && !ex.Message.Contains("LineNumber:")
+                    ? $" (line {line + 1}, byte {offset})."
                     : ".";
                 bindingContext.ModelState.TryAddModelError(bindingContext.ModelName,
                     $"Malformed sensor values: {ex.Message}{position}");

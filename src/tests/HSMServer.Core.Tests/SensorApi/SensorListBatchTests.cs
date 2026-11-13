@@ -64,6 +64,24 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         [Fact]
+        public async Task AMalformedBody_ReportsThePositionOnceAndOneBased()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new ServerConfiguration.CollectorSessionsConfig());
+
+            // System.Text.Json's own message already carries its 0-based
+            // '| LineNumber: 0 | BytePositionInLine: N' suffix — the binder must not
+            // append a second position to it.
+            var (_, parserError) = await PostAsync(host, "list", "{}");
+            Assert.Contains("LineNumber: 0", parserError);
+            Assert.DoesNotContain("(line", parserError);
+
+            // A converter-thrown message has no position of its own; the binder
+            // appends one with a 1-based line, so a one-line body reports line 1.
+            var (_, converterError) = await PostAsync(host, "list", "[{\"Type\":99,\"Path\":\"list/bad\",\"Value\":1}]");
+            Assert.Contains("(line 1, byte", converterError);
+        }
+
+        [Fact]
         public async Task AValidBatch_IsStillAccepted()
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new ServerConfiguration.CollectorSessionsConfig());
