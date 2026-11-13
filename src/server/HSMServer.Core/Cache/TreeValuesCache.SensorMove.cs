@@ -605,6 +605,12 @@ namespace HSMServer.Core.Cache
         // ATTACHED, not by what matched at the old path, so a re-evaluation
         // that was lost (a sensor moved faster than its follow-ups) is
         // repaired by the next one.
+        //
+        // Every detach runs before any apply, so the sensor does not carry the
+        // old location's templates and the new location's at once (two sets
+        // alerting side by side), as one pass in template-id order did
+        // whenever a new template's id sorted first. A detach that fails
+        // leaves its template attached until the next re-evaluation.
         private void ReevaluateTemplates(BaseSensorModel sensor)
         {
             var attached = sensor.Policies.Select(p => p.TemplateId)
@@ -612,22 +618,37 @@ namespace HSMServer.Core.Cache
                 .OfType<Guid>()
                 .ToHashSet();
 
+            var toDetach = new List<AlertTemplateModel>();
+            var toApply = new List<AlertTemplateModel>();
+
             foreach (var template in _alertTemplates.Values.OrderBy(t => t.Id))
-            {
-                try
+                ReevaluationStep("match", sensor, template, () =>
                 {
                     var matchesNow = template.IsMatch(sensor);
                     var isAttached = attached.Contains(template.Id);
 
                     if (matchesNow && !isAttached)
-                        ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
+                        toApply.Add(template);
                     else if (!matchesNow && isAttached)
-                        RemoveTemplateFromSensor(new RemoveTemplateFromSensorRequest(sensor.Id, template.Id));
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"Template {template.Id} re-evaluation failed for moved sensor {sensor.Id}");
-                }
+                        toDetach.Add(template);
+                });
+
+            foreach (var template in toDetach)
+                ReevaluationStep("detach", sensor, template, () => RemoveTemplateFromSensor(new RemoveTemplateFromSensorRequest(sensor.Id, template.Id)));
+
+            foreach (var template in toApply)
+                ReevaluationStep("apply", sensor, template, () => ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template)));
+        }
+
+        private void ReevaluationStep(string phase, BaseSensorModel sensor, AlertTemplateModel template, Action step)
+        {
+            try
+            {
+                step();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Template {template.Id} {phase} failed while re-evaluating moved sensor {sensor.Id}");
             }
         }
 
