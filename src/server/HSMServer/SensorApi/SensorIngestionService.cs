@@ -106,10 +106,11 @@ namespace HSMServer.SensorApi
             // the same way on every repeat; answered 500 it would make a collector send
             // the whole package again on every cycle.
             //
-            // First what would otherwise fail as a null reference, which is not told apart
-            // from a bug of the server by its type.
-            if (FindMissingPart(request) is { } missing)
-                return RefuseUnconvertible(request, missing, cause: null);
+            // First what is checked here and not left to the type of an exception: a part
+            // the conversion would fail on as a null reference, and more TTLs than TTL
+            // alerts. Neither type tells the request's fault from a bug of the server.
+            if (FindUnconvertiblePart(request) is { } unconvertible)
+                return RefuseUnconvertible(request, unconvertible, cause: null);
 
             // Converted first: a registration that cannot even be converted moves nothing.
             SensorUpdate update;
@@ -120,14 +121,17 @@ namespace HSMServer.SensorApi
                 update = request.Convert(Guid.Empty, keyName);
                 type = request.SensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean;
             }
-            // Only what the converters throw for a request they cannot convert: a value of
-            // an enumeration this server does not know (NotImplementedException, whose own
-            // text says nothing to the reader of a collector log) and more TTLs than TTL
-            // alerts (ArgumentException). Anything else is not known to be the request's
-            // fault and leaves as an exception.
-            catch (Exception ex) when (ex is NotImplementedException or ArgumentException)
+            // Only what the converters throw for a request they cannot convert and nothing
+            // else throws: NotImplementedException, their answer to a value of an
+            // enumeration this server does not know (its own text says nothing to the
+            // reader of a collector log). Not ArgumentException, which they throw on
+            // purpose for one case only, more TTLs than TTL alerts, checked above: LINQ and
+            // the runtime throw it and its subclasses for a null source or a bad index, so
+            // catching it would answer a bug of a converter as a final refusal. Anything
+            // else is not known to be the request's fault and leaves as an exception.
+            catch (NotImplementedException ex)
             {
-                return RefuseUnconvertible(request, ex is NotImplementedException ? UnknownValue : ex.Message, ex);
+                return RefuseUnconvertible(request, UnknownValue, ex);
             }
 
             var coreRequest = new SensorAddOrUpdateRequest(productId, request.Path)
@@ -164,11 +168,17 @@ namespace HSMServer.SensorApi
             return result;
         }
 
-        // The parts of a registration the conversion dereferences without a check.
-        private static string FindMissingPart(AddOrUpdateSensorRequest request)
+        // What makes a registration unconvertible and is the request's fault for certain:
+        // the parts the conversion dereferences without a check, and more TTLs than TTL
+        // alerts, the one case the converters answer with an ArgumentException on purpose
+        // (ApiConverters.Convert(AddOrUpdateSensorRequest); the same condition and text).
+        private static string FindUnconvertiblePart(AddOrUpdateSensorRequest request)
         {
             if (request.Path is null)
                 return MissingPath;
+
+            if (request.TtlAlerts is { Count: > 0 } && request.TTLs is { Count: > 0 } && request.TTLs.Count > request.TtlAlerts.Count)
+                return $"TTLs count ({request.TTLs.Count}) exceeds TtlAlerts count ({request.TtlAlerts.Count}). Each TTL must have a corresponding TtlAlert.";
 
             foreach (var alerts in new[] { request.Alerts, request.TtlAlerts })
             {
