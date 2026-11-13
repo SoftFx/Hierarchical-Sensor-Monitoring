@@ -217,8 +217,16 @@ namespace HSMDataCollector.Client.Session
             try { run.Cancellation.Cancel(); }
             catch (ObjectDisposedException) { }
 
-            try { _socket?.Abort(); }
+            // The session this stop found, and one its own run opened since. Not whatever is
+            // current: after the linger that may be the session of a run started in the meantime.
+            try { socket?.Abort(); }
             catch (Exception) { }
+
+            if (IsCurrent(run))
+            {
+                try { _socket?.Abort(); }
+                catch (Exception) { }
+            }
 
             // The loop ends on the cancellation; a second is ample for it to notice.
             await Task.WhenAny(loop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);

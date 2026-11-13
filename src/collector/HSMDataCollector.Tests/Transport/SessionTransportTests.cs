@@ -756,6 +756,36 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public async Task Disposing_the_second_collector_leaves_the_session_of_the_first_up()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var first = new DataCollector(options))
+                {
+                    var sensor = first.CreateIntSensor("session/owner-outlives");
+
+                    await first.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/owner-outlives"), "The session never came up.");
+
+                    // Created from the same options, started and disposed while the first runs.
+                    using (var second = new DataCollector(options))
+                        await second.Start();
+
+                    sensor.AddValue(34);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(34)), "The first collector lost its session to the dispose of the second.");
+                    Assert.Equal(1, server.Sessions);
+                    Assert.Empty(server.Closes);
+
+                    await first.Stop();
+                }
+            }
+        }
+
+        [Fact]
         public async Task Second_collector_says_so_when_the_session_it_shares_is_not_running()
         {
             var logger = new RecordingLogger();
