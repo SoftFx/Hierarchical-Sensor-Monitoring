@@ -499,6 +499,283 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === A layout that reuses names (#1718 review) ===
+
+        // p0 becomes p1, p1 becomes p2, p2 becomes p3 — three live sensors, one value each, so
+        // nothing about their histories tells them apart. The collector lists the registrations
+        // in the order that, applied one by one, merged each sensor into the next; the batch
+        // moves the last one out of the way first. Every later start repeats the batch.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_OfAShiftedLayout_KeepEverySensor_AndRepeatingTheBatchChangesNothing()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p0", start);
+            var second = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p1", start.AddMinutes(1));
+            var third = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p2", start.AddMinutes(2));
+
+            PreviousPathsRegistration[] batch =
+            [
+                new($"{root}/p1", [$"{root}/p0"], SensorType.Integer),
+                new($"{root}/p2", [$"{root}/p1"], SensorType.Integer),
+                new($"{root}/p3", [$"{root}/p2"], SensorType.Integer),
+            ];
+
+            for (var pass = 0; pass < 3; pass++)
+            {
+                await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, batch, Collector);
+
+                Assert.Same(first, _valuesCache.GetSensor(first.Id));
+                Assert.Same(second, _valuesCache.GetSensor(second.Id));
+                Assert.Same(third, _valuesCache.GetSensor(third.Id));
+                Assert.Equal($"{root}/p1", first.Path);
+                Assert.Equal($"{root}/p2", second.Path);
+                Assert.Equal($"{root}/p3", third.Path);
+                Assert.Single(await ReadHistoryAsync(first.Id));
+                Assert.Single(await ReadHistoryAsync(second.Id));
+                Assert.Single(await ReadHistoryAsync(third.Id));
+            }
+
+            // p1 is the first sensor now, not an alias of the second.
+            var time = DateTime.UtcNow.AddSeconds(5);
+            await AddAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p1", time, 5);
+            Assert.Equal(time, first.LastValue.Time);
+            Assert.NotEqual(time, second.LastValue.Time);
+        }
+
+        // A shift interrupted half way (the far end moved, the near end did not) is finished
+        // by the next batch.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_OfAShiftedLayout_AppliedHalfWay_AreFinishedByTheNextBatch()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p0", start);
+            var second = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p1", start.AddMinutes(1));
+
+            Assert.True((await _valuesCache.MoveSensorAsync(second.Id, _fixture.ProductA, $"{root}/p2")).IsOk);
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/p1", [$"{root}/p0"], SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/p2", [$"{root}/p1"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Equal($"{root}/p1", first.Path);
+            Assert.Equal($"{root}/p2", second.Path);
+            Assert.Same(second, _valuesCache.GetSensor(second.Id));
+        }
+
+        // Two sensors that swap names cannot be told apart by previous paths: nothing moves
+        // and, above all, nothing is merged.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_OfSwappedNames_MoveAndMergeNothing()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var a = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/a", start);
+            var b = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/b", start.AddMinutes(1));
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/b", [$"{root}/a"], SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/a", [$"{root}/b"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Same(a, _valuesCache.GetSensor(a.Id));
+            Assert.Same(b, _valuesCache.GetSensor(b.Id));
+            Assert.Equal($"{root}/a", a.Path);
+            Assert.Equal($"{root}/b", b.Path);
+            Assert.Empty(a.Aliases);
+            Assert.Empty(b.Aliases);
+        }
+
+        // The collector registers `cpu` and says `cpu total` was `cpu`: the sensor at `cpu` is
+        // the one it registers there. Whether this is the first start after the change or the
+        // hundredth cannot be told, so it stays — moving it would hand the new `cpu` values to
+        // `cpu total` through the alias, and moving it again on the next start would merge
+        // the two.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_ThatTheBatchRegistersItself_IsNotMoved()
+        {
+            var root = Unique();
+            var sensor = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/cpu", DateTime.UtcNow.AddHours(-1));
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/cpu", null, SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/cpu total", [$"{root}/cpu"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Equal($"{root}/cpu", sensor.Path);
+            Assert.Empty(sensor.Aliases);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/cpu total", out _));
+        }
+
+        // Next to an unrelated registration the old path is what it always was: moved, an alias.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_ThatTheBatchDoesNotRegister_IsMoved()
+        {
+            var root = Unique();
+            var moved = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/cpu", DateTime.UtcNow.AddHours(-1));
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/ram", null, SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/cpu total", [$"{root}/cpu"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Equal($"{root}/cpu total", moved.Path);
+            Assert.Equal($"{root}/cpu", Assert.Single(moved.Aliases).Path);
+        }
+
+        // A sensor the batch itself names as a previous path of another registration is never
+        // absorbed, also when its own move was refused (here: it is blocked) and it is still
+        // in the way.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_IsNotMerged_IntoASensorTheBatchMovesElsewhere()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p0", start);
+            var second = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p1", start.AddMinutes(1));
+            var third = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p2", start.AddMinutes(2));
+
+            // The third one cannot leave p2, so the second one must not be merged into it.
+            Assert.True((await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+            {
+                Id = third.Id,
+                State = SensorState.Blocked,
+            })).IsOk);
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/p1", [$"{root}/p0"], SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/p2", [$"{root}/p1"], SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/p3", [$"{root}/p2"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Same(first, _valuesCache.GetSensor(first.Id));
+            Assert.Same(second, _valuesCache.GetSensor(second.Id));
+            Assert.Same(third, _valuesCache.GetSensor(third.Id));
+            Assert.Equal($"{root}/p2", third.Path);
+            Assert.Single(await ReadHistoryAsync(first.Id));
+            Assert.Single(await ReadHistoryAsync(second.Id));
+            Assert.Single(await ReadHistoryAsync(third.Id));
+        }
+
+        // Beyond what a batch says: one sensor under two names is fed under one name at a
+        // time. Two sensors with values in the same period are two sensors, and a collector's
+        // registration does not merge them — also when each is a single aggregated row.
+        [Theory]
+        [Trait("Category", "Sensor move from a collector")]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PreviousPath_IsNotMerged_IntoASensorThatWasLiveInTheSamePeriod(bool aggregated)
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", (start, 1));
+            var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new", (start.AddMinutes(5), 1));
+
+            if (aggregated)
+                foreach (var sensor in new[] { old, live })
+                    Assert.True((await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+                    {
+                        Id = sensor.Id,
+                        AggregateValues = true,
+                        Initiator = HSMServer.Core.TableOfChanges.InitiatorInfo.System,
+                    })).IsOk);
+
+            // The same value again: with aggregation the row stays one and only its end moves.
+            await AddAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", start.AddMinutes(10), aggregated ? 1 : 2);
+            await AddAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new", start.AddMinutes(15), aggregated ? 1 : 2);
+
+            var rows = aggregated ? 1 : 2;
+            Assert.Equal(rows, (await ReadHistoryAsync(old.Id)).Count);
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                [$"{root}/old"], SensorType.Integer, Collector);
+
+            Assert.Same(old, _valuesCache.GetSensor(old.Id));
+            Assert.Equal($"{root}/old", old.Path);
+            Assert.Empty(old.Aliases);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new", out var owner));
+            Assert.Same(live, owner);
+            Assert.Equal(rows, (await ReadHistoryAsync(live.Id)).Count);
+
+            // An operator who knows they are one sensor still can.
+            var byHand = await _valuesCache.MoveSensorAsync(old.Id, _fixture.ProductA, $"{root}/new", SensorMoveConflict.Merge);
+            Assert.Equal(SensorMoveOutcome.Merged, byHand.Outcome);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public void VacateFirstOrder_PutsAMoveAwayFromAPath_BeforeTheMoveOntoIt()
+        {
+            // 0: p1 <- p0, 1: p2 <- p1, 2: p3 <- p2, 3: unrelated. Each waits for the next.
+            var order = TreeValuesCache.VacateFirstOrder(
+            [
+                ("p1", ["p0"]),
+                ("p2", ["p1"]),
+                ("p3", ["p2"]),
+                ("x", ["y"]),
+            ]);
+
+            Assert.Equal([2, 1, 0, 3], order);
+
+            // A swap has no such order: the collector's own is kept, nothing is lost or repeated.
+            Assert.Equal([0, 1], TreeValuesCache.VacateFirstOrder([("a", ["b"]), ("b", ["a"])]));
+
+            // A swap next to a chain that hangs off it: every move comes out exactly once.
+            var mixed = TreeValuesCache.VacateFirstOrder([("a", ["b"]), ("b", ["a"]), ("c", ["a"]), ("d", ["c"])]);
+            Assert.Equal([0, 1, 2, 3], mixed.Order().ToList());
+            Assert.True(mixed.IndexOf(3) < mixed.IndexOf(2));
+
+            // 0 waits for 2, and 1 and 2 swap: the swap is broken at one of its own members,
+            // not at 0 — 0 still runs after the move that vacates its path.
+            Assert.Equal([2, 0, 1], TreeValuesCache.VacateFirstOrder([("c", ["x"]), ("a", ["b", "y"]), ("b", ["a", "c"])]));
+        }
+
+        // p1 is vacated only for a sensor that can actually come. The one at p0 is blocked and
+        // never moves: had the sensor at p1 left for p2, p1 would be an alias of it and the
+        // collector's p1 values would land in p2.
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_DoNotVacateAPath_ForASensorThatCannotCome()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var blocked = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p0", start);
+            var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/p1", start.AddMinutes(1));
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+            {
+                Id = blocked.Id,
+                State = SensorState.Blocked,
+            })).IsOk);
+
+            await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA,
+            [
+                new PreviousPathsRegistration($"{root}/p1", [$"{root}/p0"], SensorType.Integer),
+                new PreviousPathsRegistration($"{root}/p2", [$"{root}/p1"], SensorType.Integer),
+            ], Collector);
+
+            Assert.Equal($"{root}/p0", blocked.Path);
+            Assert.Equal($"{root}/p1", live.Path);
+            Assert.Empty(live.Aliases);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/p2", out _));
+        }
+
+        private static HSMServer.Core.TableOfChanges.InitiatorInfo Collector =>
+            HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false);
+
         private static string Unique() => $"m{Guid.NewGuid():N}"[..12];
 
         private Task<BaseSensorModel> CreateAsync(Guid productId, Guid key, string path, params DateTime[] times) =>

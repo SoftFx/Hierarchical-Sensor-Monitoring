@@ -232,16 +232,67 @@ namespace HSMServer.Core.Cache
         // every refusal is logged and the result is Ok — a stale or invalid old path must not
         // stop the collector from registering its new one. A blocked sensor at an old path never
         // moves: it would win the merge and block the live sensor (#1724 review).
-        public async Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path,
-            IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token = default)
+        public Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path,
+            IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token = default) =>
+            ApplyPreviousPathsAsync(key, productId, [new PreviousPathsRegistration(path, previousPaths, type)], initiator, token);
+
+        // The registrations of one batch, taken together. A layout change that REUSES names
+        // (p0 becomes p1 while p1 becomes p2) cannot be applied one registration at a time:
+        // in the listed order the sensor from p0 absorbed the live one at p1, and on every
+        // later start the sensor that had arrived at p1 was taken for p2. What the batch
+        // itself says decides, not the values the sensors happen to hold:
+        //  - A path the batch registers as a current path is a previous path of another
+        //    registration only while its own registration is receiving a sensor in this
+        //    batch (PreviousPathsBatch.Receiving). Otherwise the sensor there is the one the
+        //    collector registers there and stays.
+        //  - A move away from a path runs before the move onto it (VacateFirstOrder).
+        //  - A sensor whose path the batch lists as a previous path is never absorbed.
+        // `registrations` holds EVERY registration of the batch, with or without previous paths.
+        public async Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId,
+            IReadOnlyList<PreviousPathsRegistration> registrations, InitiatorInfo initiator, CancellationToken token = default)
         {
             try
             {
-                await ApplyPreviousPathsCoreAsync(key, productId, path, previousPaths, type, initiator, token);
+                var batch = new PreviousPathsBatch();
+
+                foreach (var registration in registrations ?? [])
+                {
+                    var target = new SensorPathCheck(productId, registration.Path ?? string.Empty);
+
+                    if (!target.TryCheckRequest(out _))
+                        continue; // the registration itself reports the invalid path
+
+                    batch.Registered.Add(target.Path);
+
+                    var previous = ListPreviousPaths(productId, target, registration.PreviousPaths);
+
+                    if (previous.Count > 0)
+                        batch.Moves.Add((target, previous, registration.Type));
+                }
+
+                if (batch.Moves.Count == 0)
+                    return TaskResult.Ok;
+
+                batch.Resolve((path, type) => TryGetSensorFromCache(productId, path, out var sensor) &&
+                                              sensor.State is not SensorState.Blocked && (type is null || sensor.Type == type));
+
+                foreach (var index in VacateFirstOrder(batch.Moves.Select(m => (m.Target.Path, m.Previous)).ToList()))
+                {
+                    var (target, previous, type) = batch.Moves[index];
+
+                    try
+                    {
+                        await ApplyPreviousPathsCoreAsync(key, productId, target, previous, type, batch, initiator, token);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, $"Previous paths of {target.Path} not applied");
+                    }
+                }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Previous paths of {path} not applied");
+                _logger.Error(ex, "Previous paths of a registration batch not applied");
             }
 
             return TaskResult.Ok;
@@ -251,16 +302,75 @@ namespace HSMServer.Core.Cache
         // and a lookup before any permission check runs.
         internal const int MaxPreviousPaths = 32;
 
-        private async Task ApplyPreviousPathsCoreAsync(Guid key, Guid productId, string path,
-            IReadOnlyList<string> previousPaths, SensorType? type, InitiatorInfo initiator, CancellationToken token)
+        // What one batch of registrations says about its paths.
+        private sealed class PreviousPathsBatch
         {
-            var target = new SensorPathCheck(productId, path ?? string.Empty);
+            // Every path the batch registers as a current path.
+            public HashSet<string> Registered { get; } = new(StringComparer.Ordinal);
 
-            if (!target.TryCheckRequest(out var error))
-                return; // the registration itself reports the invalid path
+            // The registrations that carry previous paths.
+            public List<(SensorPathCheck Target, List<string> Previous, SensorType? Type)> Moves { get; } = [];
 
-            var found = new List<(string Path, BaseSensorModel Sensor)>();
-            var seen = new HashSet<Guid>();
+            // Every path some registration lists as a previous path.
+            public HashSet<string> Previous { get; } = new(StringComparer.Ordinal);
+
+            // Registered paths whose own registration brings a sensor in from elsewhere.
+            public HashSet<string> Receiving { get; } = new(StringComparer.Ordinal);
+
+
+            // The sensor at `path` is one a registration may take: the batch does not register
+            // the path itself, or the path is being refilled, so what is there now is the OLD
+            // sensor on its way out.
+            public bool IsSource(string path) => !Registered.Contains(path) || Receiving.Contains(path);
+
+            // The least fixed point, grown from nothing: a path receives when one of its
+            // registration's previous paths holds a sensor that is a source and that the
+            // registration can move (`canMove`: there, not blocked, of its type) — a path
+            // vacated for a sensor that then does not come would be left an alias of the one
+            // that went. Two paths that only list each other (a swap) never get there, and
+            // neither does a chain whose first link has already been applied: nothing arrives
+            // at its head any more.
+            public void Resolve(Func<string, SensorType?, bool> canMove)
+            {
+                var listedBy = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+
+                for (var i = 0; i < Moves.Count; i++)
+                {
+                    foreach (var path in Moves[i].Previous)
+                    {
+                        Previous.Add(path);
+
+                        if (!listedBy.TryGetValue(path, out var indexes))
+                            listedBy[path] = indexes = [];
+
+                        indexes.Add(i);
+                    }
+                }
+
+                // A worklist: a move is looked at again only when a path it lists starts to receive.
+                var pending = new Queue<int>(Enumerable.Range(0, Moves.Count));
+
+                while (pending.TryDequeue(out var index))
+                {
+                    var (target, previous, type) = Moves[index];
+
+                    if (Receiving.Contains(target.Path) || !previous.Exists(path => IsSource(path) && canMove(path, type)))
+                        continue;
+
+                    Receiving.Add(target.Path);
+
+                    if (listedBy.TryGetValue(target.Path, out var dependants))
+                        foreach (var dependant in dependants)
+                            pending.Enqueue(dependant);
+                }
+            }
+        }
+
+        // The valid previous paths of one registration, normalized like ingestion paths, in
+        // the collector's order; the registration's own path is not one of them.
+        private List<string> ListPreviousPaths(Guid productId, SensorPathCheck target, IReadOnlyList<string> previousPaths)
+        {
+            var paths = new List<string>();
             var listed = 0;
 
             foreach (var raw in previousPaths ?? [])
@@ -276,15 +386,122 @@ namespace HSMServer.Core.Cache
 
                 var previous = new SensorPathCheck(productId, raw);
 
-                if (previous.TryCheckRequest(out _) && !string.Equals(previous.Path, target.Path, StringComparison.Ordinal) &&
-                    TryGetSensorFromCache(productId, previous.Path, out var old) && seen.Add(old.Id))
-                    found.Add((previous.Path, old));
+                if (previous.TryCheckRequest(out _) && !string.Equals(previous.Path, target.Path, StringComparison.Ordinal))
+                    paths.Add(previous.Path);
+            }
+
+            return paths;
+        }
+
+        // Indexes of `moves` in an order where a move away from a path precedes a move onto
+        // it; otherwise the collector's order. A cycle (two sensors swapping names) has no
+        // such order: it is broken at one of its own members, so a move that merely waits
+        // for the cycle still runs after the move it waits for.
+        internal static List<int> VacateFirstOrder(IReadOnlyList<(string Target, List<string> Previous)> moves)
+        {
+            var byTarget = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+
+            for (var i = 0; i < moves.Count; i++)
+            {
+                if (!byTarget.TryGetValue(moves[i].Target, out var indexes))
+                    byTarget[moves[i].Target] = indexes = [];
+
+                indexes.Add(i);
+            }
+
+            var followers = new List<int>[moves.Count];
+            var blockers = new List<int>[moves.Count];
+            var waitsFor = new int[moves.Count];
+
+            for (var i = 0; i < moves.Count; i++)
+            {
+                followers[i] = [];
+                blockers[i] = [];
+            }
+
+            for (var i = 0; i < moves.Count; i++)
+            {
+                foreach (var path in moves[i].Previous.Distinct(StringComparer.Ordinal))
+                {
+                    if (!byTarget.TryGetValue(path, out var occupiers))
+                        continue;
+
+                    foreach (var j in occupiers)
+                    {
+                        if (j == i)
+                            continue;
+
+                        followers[i].Add(j);
+                        blockers[j].Add(i);
+                        waitsFor[j]++;
+                    }
+                }
+            }
+
+            var free = new SortedSet<int>();
+            var left = new SortedSet<int>();
+
+            for (var i = 0; i < moves.Count; i++)
+            {
+                left.Add(i);
+
+                if (waitsFor[i] == 0)
+                    free.Add(i);
+            }
+
+            var order = new List<int>(moves.Count);
+
+            // Nothing is free: every move left waits for another one left. Walking from the
+            // earliest to a move it waits for, again and again, ends on a cycle.
+            int CycleMember()
+            {
+                var seen = new HashSet<int>();
+                var current = left.Min;
+
+                while (seen.Add(current))
+                    current = blockers[current].First(left.Contains);
+
+                return current;
+            }
+
+            while (left.Count > 0)
+            {
+                var next = free.Count > 0 ? free.Min : CycleMember();
+
+                free.Remove(next);
+                left.Remove(next);
+                order.Add(next);
+
+                foreach (var j in followers[next])
+                    if (--waitsFor[j] == 0 && left.Contains(j))
+                        free.Add(j);
+            }
+
+            return order;
+        }
+
+        private async Task ApplyPreviousPathsCoreAsync(Guid key, Guid productId, SensorPathCheck target,
+            List<string> previousPaths, SensorType? type, PreviousPathsBatch batch, InitiatorInfo initiator, CancellationToken token)
+        {
+            var found = new List<(string Path, BaseSensorModel Sensor)>();
+            var seen = new HashSet<Guid>();
+
+            foreach (var previous in previousPaths)
+            {
+                if (!TryGetSensorFromCache(productId, previous, out var old) || !seen.Add(old.Id))
+                    continue;
+
+                // The collector registers this path itself and nothing moves onto it: the
+                // sensor there is its current one. Every start of a collector that keeps the
+                // entry comes through here, so this is not worth a line in the log.
+                if (batch.IsSource(previous))
+                    found.Add((previous, old));
             }
 
             if (found.Count == 0)
                 return;
 
-            if (!TryCheckKeyWritePermissions(key, target.PathParts, out error) ||
+            if (!TryCheckKeyWritePermissions(key, target.PathParts, out var error) ||
                 !GetAccessKeyModel(key).IsValid(KeyPermissions.CanAddSensors, out error))
             {
                 _logger.Warn($"Previous paths of {target.Path} not applied: {error}");
@@ -296,6 +513,10 @@ namespace HSMServer.Core.Cache
             // merge, and a later entry of the right type would then hit a conflict).
             var reference = type
                 ?? (TryGetSensorFromCache(productId, target.Path, out var current) ? current.Type : found[0].Sensor.Type);
+
+            // Sensors this registration itself brought to the target: it declared them one
+            // sensor, so they merge with each other whatever their histories look like.
+            var arrived = new HashSet<Guid>();
 
             for (var i = found.Count - 1; i >= 0; i--)
             {
@@ -313,11 +534,86 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
+                if (TryGetSensorFromCache(productId, target.Path, out var occupant) && occupant.Id != old.Id && !arrived.Contains(occupant.Id))
+                {
+                    // The batch names the occupant's path as a previous path: it is another
+                    // sensor, due to move elsewhere, and it is still here (a swap, or its own
+                    // move was refused). It is never absorbed.
+                    if (batch.Previous.Contains(target.Path))
+                    {
+                        _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: the batch moves the sensor at {target.Path} elsewhere and it is still there");
+                        continue;
+                    }
+
+                    // Beyond what the batch says (a single registration, a typo, a collector
+                    // that re-created the old path): one sensor under two names is fed under
+                    // one name at a time. Two sensors with values in the same period are two
+                    // sensors, and a merge would mix them for good — a collector never causes
+                    // that one, an operator still can. A net, not a proof: sensors with few
+                    // values can slip through it.
+                    if (HaveValuesInTheSamePeriod(old, occupant))
+                    {
+                        _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: the sensor there and the one at {target.Path} " +
+                                     "both have values in the same period, so they are not one sensor under two names. Merge them by hand if they are.");
+                        continue;
+                    }
+                }
+
                 var result = await MoveSensorAsync(old.Id, productId, target.Path, SensorMoveConflict.Merge, initiator, token);
 
-                if (!result.IsOk)
+                if (result.IsOk)
+                    arrived.Add(old.Id);
+                else
                     _logger.Warn($"Previous path {previousPath} of {target.Path} not applied: {result.Outcome} {result.Error}");
             }
+        }
+
+        private bool HaveValuesInTheSamePeriod(BaseSensorModel first, BaseSensorModel second) =>
+            TryGetValueSpan(first, out var firstOldest, out var firstNewest) &&
+            TryGetValueSpan(second, out var secondOldest, out var secondNewest) &&
+            firstNewest > secondOldest && secondNewest > firstOldest;
+
+        // From the oldest real value of a sensor to the last time it was fed: its stored rows
+        // plus what only the model holds (the cached newest value, a bar in progress). An
+        // aggregated row stands for a run of equal values and ends at its LastUpdateTime. A
+        // timeout marker is not a value — the server writes it long after the sensor fell silent.
+        private bool TryGetValueSpan(BaseSensorModel sensor, out DateTime oldest, out DateTime newest)
+        {
+            var from = DateTime.MaxValue;
+            var to = DateTime.MinValue;
+
+            void Add(BaseValue value)
+            {
+                if (value is null || value.IsTimeout)
+                    return;
+
+                if (value.Time < from)
+                    from = value.Time;
+
+                if (value.LastUpdateTime > to)
+                    to = value.LastUpdateTime;
+            }
+
+            BaseValue Read(byte[] bytes) => bytes is null ? null : sensor.Convert(bytes);
+
+            Add(Read(_database.GetFirstValue(sensor.Id)));
+
+            // The newest stored value, behind the marker (or the few markers) written after it.
+            var last = Read(_database.GetLatestValue(sensor.Id, DateTime.MaxValue.Ticks));
+
+            for (var markers = 0; last is { IsTimeout: true } && markers < 4; markers++)
+                last = Read(_database.GetLatestValue(sensor.Id, last.Time.Ticks - 1));
+
+            Add(last);
+            Add(sensor.LastValue);
+
+            if (sensor is IBarSensor bar)
+                Add(bar.LocalLastValue);
+
+            oldest = from;
+            newest = to;
+
+            return to >= from;
         }
 
         private bool TryGetOccupant(Guid sensorId, Guid productId, string destinationPath, out BaseSensorModel occupant, out string path)
