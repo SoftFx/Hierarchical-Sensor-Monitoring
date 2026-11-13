@@ -45,6 +45,8 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
 extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector);
 extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector);
+// #1752: the period the TCP connection failure rate sensor will sample with (0 = not enabled).
+extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector);
 #if defined(HSM_COLLECTOR_HTTP)
 // Live-path seam (#1097): swap the recording sender for the libcurl transport before Start.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector);
@@ -9986,6 +9988,178 @@ namespace
                         "v6 posts its delta from its own late baseline (504 - 500)");
     }
 
+    // --- TcpFailureRateSampler: the portable seam between the family readers and the error report
+    // (#1752). WindowsTcpFailureSampler only binds the two GetTcpStatisticsEx reads to it, so these
+    // cases drive it with scripted readings and a recording reporter on every platform.
+
+    // Neither family readable: reported on every such tick, the seeding one included, with the text
+    // the managed monitor reports. Nothing is posted and both baselines survive the blackout.
+    void TcpFailureSamplerReportsWhenNeitherFamilyIsReadable()
+    {
+        bool readable = false;
+        std::uint64_t v4 = 100;
+        std::uint64_t v6 = 200;
+        std::vector<std::string> reports;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [&] { return readable ? TcpRead(v4) : TcpUnreadable(); },
+            [&] { return readable ? TcpRead(v6) : TcpUnreadable(); },
+            [&](const std::string& message) { reports.push_back(message); });
+
+        RequireTcpNothing(sampler.Sample(), "an unreadable seeding tick must post nothing");
+        Require(reports.size() == 1, "the seeding tick must report that neither family could be read");
+        Require(reports[0] == hsm::collector::kTcpNeitherFamilyReadableError, "the report must carry the shared message");
+        Contains(reports[0], "neither IPv4 nor IPv6");
+
+        readable = true;
+        RequireTcpNothing(sampler.Sample(), "the first readable tick seeds the baselines");
+        Require(reports.size() == 1, "a readable tick must report nothing");
+
+        readable = false;
+        RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+        RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+        Require(reports.size() == 3, "every tick on which neither family could be read must be reported");
+
+        readable = true;
+        v4 = 104;
+        v6 = 206;
+        RequireTcpDelta(sampler.Sample(), 10.0, "the baselines must survive the reported blackout (+4 and +6)");
+        Require(reports.size() == 3, "a readable tick must report nothing");
+    }
+
+    // One unreadable family is not a fault (IPv6 not installed, for one): it sits the tick out
+    // quietly while the other family's delta is still posted. Nor is a fully readable tick one.
+    void TcpFailureSamplerStaysQuietWhenOneFamilyIsReadable()
+    {
+        bool v4_readable = true;
+        bool v6_readable = true;
+        std::uint64_t v4 = 100;
+        std::uint64_t v6 = 50;
+        std::vector<std::string> reports;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [&] { return v4_readable ? TcpRead(v4) : TcpUnreadable(); },
+            [&] { return v6_readable ? TcpRead(v6) : TcpUnreadable(); },
+            [&](const std::string& message) { reports.push_back(message); });
+
+        RequireTcpNothing(sampler.Sample(), "the first tick seeds the baselines");
+
+        v4_readable = false;
+        v6 = 52;
+        RequireTcpDelta(sampler.Sample(), 2.0, "IPv6 still posts its delta while IPv4 cannot be read");
+
+        v4_readable = true;
+        v6_readable = false;
+        v4 = 105;
+        RequireTcpDelta(sampler.Sample(), 5.0, "IPv4 still posts its delta while IPv6 cannot be read");
+
+        v6_readable = true;
+        v6 = 53;
+        RequireTcpDelta(sampler.Sample(), 1.0, "both families readable posts the summed delta");
+
+        Require(reports.empty(), "a tick with at least one readable family must report nothing");
+    }
+
+    // The report goes to the collector's deduplicated error channel, the one the sampler loop hands
+    // it to: a blackout of any length is one line per window, not one per tick.
+    void TcpFailureSamplerReportCollapsesInTheCollectorErrorChannel()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        hsm_collector_t* handle = collector.value;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [] { return TcpUnreadable(); },
+            [] { return TcpUnreadable(); },
+            [handle](const std::string& message) { hsm_collector_test_log_error(handle, message.c_str()); });
+
+        for (int i = 0; i < 5; ++i)
+            RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+
+        Require(logs.size() == 1, "a run of unreadable ticks within the window must collapse to one error line");
+        Require(logs[0] == hsm::collector::kTcpNeitherFamilyReadableError, "the first occurrence is logged verbatim");
+    }
+
+#if defined(_WIN32)
+    // #1752: the sensor is asked for more than once. The first period stays, as in the managed
+    // AddNetworkConnectionFailuresRate: the same period again is silent, another period is reported
+    // once and not applied. The call keeps the result code it always had for a repeat before Start
+    // (HSM_RESULT_OK), and a call after Start is still HSM_RESULT_INVALID_STATE. The registration
+    // does not carry the period, so the period that won is read through the test seam.
+    void NativeTcpFailureRateRepeatedEnableKeepsTheFirstPeriod()
+    {
+        std::vector<std::pair<hsm_log_level_t, std::string>> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* ud) {
+                static_cast<std::vector<std::pair<hsm_log_level_t, std::string>>*>(ud)->emplace_back(level, message);
+            },
+            &logs);
+
+        const auto not_applied_reports = [&logs] {
+            std::vector<std::string> found;
+            for (const auto& [level, message] : logs)
+                if (level == HSM_LOG_LEVEL_ERROR && message.find("TCP connection failure rate sensor was already enabled") != std::string::npos)
+                    found.push_back(message);
+            return found;
+        };
+
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 0, "the sensor must start out disabled");
+
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 60000) == HSM_RESULT_OK, "the first enable failed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first request sets the period");
+
+        // The same request again changes nothing and is nothing to report.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 60000) == HSM_RESULT_OK, "repeating the same period must succeed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the period must be unchanged by the same request");
+        Require(not_applied_reports().empty(), "the same period again must be silent");
+
+        // Another period: not applied, reported once, and the call still succeeds.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 5000) == HSM_RESULT_OK, "a repeat with another period must keep succeeding");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first period must stay when another one is asked for");
+        {
+            const auto reports = not_applied_reports();
+            Require(reports.size() == 1, "a request with another period must be reported once");
+            Contains(reports[0], "already enabled with a period of 60000 ms");
+            Contains(reports[0], "the period of 5000 ms of the second request is not applied");
+        }
+        Require(std::string(hsm_collector_last_error(collector.value)).empty(), "a successful repeat must leave no last error");
+
+        // A period that cannot be used is refused on a repeated call as on the first.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 0) == HSM_RESULT_INVALID_ARGUMENT, "a zero period must be refused on a repeat too");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 5000) == HSM_RESULT_INVALID_STATE, "a call after Start must still be refused");
+
+        std::size_t registered = 0;
+        for (std::size_t i = 0; i < hsm_collector_registration_count(collector.value); ++i)
+        {
+            const char* json = nullptr;
+            Require(hsm_collector_get_registration_json(collector.value, i, &json) == HSM_RESULT_OK, "registration read failed");
+            if (std::string(json).find("Connection failures rate") != std::string::npos)
+                ++registered;
+        }
+        Require(registered == 1, "repeated requests must leave exactly one rate sensor");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        // The first period is the collector's for good, as the managed monitor stays in the
+        // storage across a stop: a request between two runs does not replace it either.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 7000) == HSM_RESULT_OK, "a repeat after Stop must succeed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first period must stay across a stop");
+        Require(not_applied_reports().size() == 2, "the request after Stop must be reported as not applied");
+    }
+#endif
+
     // ---- Linux /proc parsers (#1414) ------------------------------------------------------------
     // Algorithm-equivalence fixtures for the Linux metric sources. Rule #10 requires the native and
     // managed sensors to read the same OS truth AND run a mirrored algorithm. For the proc_stat_* and
@@ -10378,7 +10552,15 @@ namespace
             { "native_total_cpu_error_alert_attaches", [](const std::string&) { NativeTotalCpuErrorAlertAttaches(); } },
 #if defined(_WIN32)
             { "native_tcp_failure_rate_sensor_registers", [](const std::string&) { NativeTcpFailureRateSensorRegisters(); } },
+            { "native_tcp_failure_rate_repeated_enable_keeps_the_first_period",
+              [](const std::string&) { NativeTcpFailureRateRepeatedEnableKeepsTheFirstPeriod(); } },
 #endif
+            { "tcp_failure_sampler_reports_when_neither_family_is_readable",
+              [](const std::string&) { TcpFailureSamplerReportsWhenNeitherFamilyIsReadable(); } },
+            { "tcp_failure_sampler_stays_quiet_when_one_family_is_readable",
+              [](const std::string&) { TcpFailureSamplerStaysQuietWhenOneFamilyIsReadable(); } },
+            { "tcp_failure_sampler_report_collapses_in_the_collector_error_channel",
+              [](const std::string&) { TcpFailureSamplerReportCollapsesInTheCollectorErrorChannel(); } },
             { "tcp_failure_accumulator_seeds_baseline_first_tick", [](const std::string&) { TcpFailureAccumulatorSeedsBaselineFirstTick(); } },
             { "tcp_failure_accumulator_returns_delta_after_seed", [](const std::string&) { TcpFailureAccumulatorReturnsDeltaAfterSeed(); } },
             { "tcp_failure_accumulator_sums_both_families", [](const std::string&) { TcpFailureAccumulatorSumsBothFamilies(); } },

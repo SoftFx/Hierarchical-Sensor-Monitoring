@@ -4424,14 +4424,49 @@ namespace
             (void)period_ms;
             return SetError(HSM_RESULT_INVALID_STATE, "TCP connection failure rate sensor is only supported on Windows.");
 #else
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (state_ != CollectorState::Stopped)
-                return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
+            // The first period stays (#1752), the rule of the managed
+            // IWindowsCollection.AddNetworkConnectionFailuresRate: a later request with another
+            // period is not applied and is reported; the same period again is silently one sensor.
+            // The call itself still succeeds, as every repeated enable call of this ABI does.
+            int32_t kept_period_ms = 0;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ != CollectorState::Stopped)
+                    return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
 
-            tcp_fail_rate_enabled_ = true;
-            tcp_fail_rate_period_ms_ = period_ms;
-            ClearError();
+                if (!tcp_fail_rate_enabled_)
+                {
+                    tcp_fail_rate_enabled_ = true;
+                    tcp_fail_rate_period_ms_ = period_ms;
+                }
+                else if (tcp_fail_rate_period_ms_ != period_ms)
+                {
+                    kept_period_ms = tcp_fail_rate_period_ms_;
+                }
+
+                ClearError();
+            }
+
+            // Reported outside mutex_: LogError publishes on `.module/Collector errors`, which takes it.
+            if (kept_period_ms != 0)
+                LogError("The TCP connection failure rate sensor was already enabled with a period of " +
+                         std::to_string(kept_period_ms) + " ms; the period of " + std::to_string(period_ms) +
+                         " ms of the second request is not applied.");
+
             return HSM_RESULT_OK;
+#endif
+        }
+
+        // Test seam (#1752): the sampling period the TCP connection failure rate sensor will run
+        // with, or 0 when it was never enabled. The registration does not carry the period, so
+        // nothing a test can read on the wire tells which request won.
+        int32_t TestTcpFailureRatePeriodMs()
+        {
+#ifdef _WIN32
+            std::lock_guard<std::mutex> guard(mutex_);
+            return tcp_fail_rate_enabled_ ? tcp_fail_rate_period_ms_ : 0;
+#else
+            return 0; // the sensor cannot be enabled off Windows
 #endif
         }
 
@@ -5316,10 +5351,21 @@ namespace
         void RunTcpFailureRateLoop()
         {
 #ifdef _WIN32
-            hsm::collector::WindowsTcpFailureSampler sampler;
+            // A tick on which neither address family could be read goes to the deduplicated error
+            // channel (the log and `.module/Collector errors`), once per window however long it
+            // lasts: the sensor goes on posting 0, and that must not pass for a quiet network
+            // (#1752, root rule 8). This thread holds neither mutex_ nor queue_mutex_ when it samples.
+            hsm::collector::WindowsTcpFailureSampler sampler([this](const std::string& message) { LogError(message); });
             const auto period = std::chrono::milliseconds(tcp_fail_rate_period_ms_);
 
-            sampler.Sample(); // seed baseline — first call returns nullopt
+            try
+            {
+                sampler.Sample(); // seed baseline — first call returns nullopt
+            }
+            catch (...)
+            {
+                // The seeding sample can report now: nothing may leave this thread's function.
+            }
 
             while (true)
             {
@@ -7414,6 +7460,13 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
 {
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
+}
+
+// Test-only (#1752): the period the TCP connection failure rate sensor will sample with, 0 when it
+// is not enabled. Not in the public header, like the seams above.
+extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestTcpFailureRatePeriodMs() : 0;
 }
 
 // Public live transport (#1165): switch the collector from the in-memory recording sender to a real

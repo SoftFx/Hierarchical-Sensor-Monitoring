@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.13.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.13.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -603,6 +603,11 @@ set(NATIVE_REGRESSION_TESTS
     tcp_failure_accumulator_unreadable_family_keeps_baseline
     tcp_failure_accumulator_neither_readable_returns_nullopt
     tcp_failure_accumulator_families_seed_independently
+    # #1752: the sampler seam (family readers in, error report out). Portable, so the report of
+    # "neither address family could be read" is pinned on every lane, not only where the OS read runs.
+    tcp_failure_sampler_reports_when_neither_family_is_readable
+    tcp_failure_sampler_stays_quiet_when_one_family_is_readable
+    tcp_failure_sampler_report_collapses_in_the_collector_error_channel
     # Linux /proc parser + delta math (#1414). Portable: pure functions over sample text, run on
     # every lane; the fixture values are shared with the managed ProcParsersTests.
     proc_stat_parses_aggregate_cpu_line
@@ -654,6 +659,11 @@ if(WIN32)
     # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
+    )
+    # #1752: a repeated enable call keeps the first period and reports another one (Windows-only for
+    # the same reason: off Windows the call is refused before it looks at the period).
+    add_test(NAME native_tcp_failure_rate_repeated_enable_keeps_the_first_period
+        COMMAND hsm_collector_tests native_tcp_failure_rate_repeated_enable_keeps_the_first_period
     )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux

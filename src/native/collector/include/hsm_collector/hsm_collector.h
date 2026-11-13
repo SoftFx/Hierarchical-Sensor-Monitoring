@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 13
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_PATCH 1
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1135,7 +1135,17 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
    ".computer/Network/Connection failures rate" (OriginalUnit ValueInSecond, DisplayUnit per-minute).
    The rate sensor is created synchronously at Start, so it is registered the moment Start returns.
    Call BEFORE Start().
-   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Asked for more than once (0.13.1, #1752): THE FIRST PERIOD STAYS, for the life of the collector
+   (across Stop and a later Start too). A repeated call with the same period changes nothing and
+   reports nothing. A repeated call with another period does not apply it and reports that once
+   through the collector's error channel (the logger and ".module/Collector errors"); the call
+   itself still returns HSM_RESULT_OK, as a repeated call always has. This is the rule of the
+   managed IWindowsCollection.AddNetworkConnectionFailuresRate. Before 0.13.1 the last period
+   given before Start was the one used.
+   A tick on which the TCP statistics of neither IPv4 nor IPv6 can be read is reported through the
+   same error channel, deduplicated (once per exception_deduplicator_window_ms however long it
+   lasts), because the sensor goes on posting 0 meanwhile; one unreadable family is not reported.
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0 (on a repeated call too).
    Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
 hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
     hsm_collector_t* collector,
