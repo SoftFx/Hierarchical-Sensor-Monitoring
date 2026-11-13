@@ -201,6 +201,15 @@ namespace HSMServer.SensorApi
 
     // The cache or the store failed while a registration was applied (#1756). The cause
     // is in the server's log, where the cache wrote it; this carries its text.
+    //
+    // Both parts are made one line of a bounded length: the message goes into the Error
+    // line of the route or the session handler and into the key RepeatedFaultLog remembers
+    // the fault by, and the cause of a queue fault is the request as text, with whatever the
+    // client put into its description, line breaks included.
     public sealed class RegistrationFaultException(string path, string cause)
-        : Exception($"The registration of \"{CollectorSession.Printable(path, 200)}\" was not applied: {cause}");
+        : Exception($"The registration of \"{CollectorSession.Printable(path, MaxPathLength)}\" was not applied: {CollectorSession.Printable(cause, MaxCauseLength)}")
+    {
+        public const int MaxPathLength = 200;
+        public const int MaxCauseLength = 300;
+    }
 }

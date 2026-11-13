@@ -653,6 +653,11 @@ namespace HSMServer.Controllers
             if (HasNoKey(request))
                 return TaskResult<PublicApiRequestInfo>.FromError(KeyRequired);
 
+            // The mark belongs to one lookup, and a batch makes one per command: cleared
+            // first, so that a lookup that failed for an earlier command does not turn the
+            // refusal of this one into a fault.
+            HttpContext.ClearPublicApiFault();
+
             var infoRequest = await IsValidPublicApiRequest(request);
 
             if (!infoRequest.IsOk && HttpContext.HasPublicApiFault())

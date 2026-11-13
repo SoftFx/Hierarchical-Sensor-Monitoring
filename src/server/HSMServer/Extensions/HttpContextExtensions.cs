@@ -40,6 +40,10 @@ namespace HSMServer.Extensions
 
         public static bool HasPublicApiFault(this HttpContext context) => context.Items.ContainsKey(RequestFaultKey);
 
+        // The mark is of one lookup: a caller that makes several in one request (a command
+        // batch with keys in the bodies) clears it before each.
+        public static void ClearPublicApiFault(this HttpContext context) => context.Items.Remove(RequestFaultKey);
+
         public static Task SetAccessError(this HttpContext context, string error)
         {
             context.Response.StatusCode = 406;

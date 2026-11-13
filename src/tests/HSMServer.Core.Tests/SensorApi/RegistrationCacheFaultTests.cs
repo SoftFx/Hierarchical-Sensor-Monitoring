@@ -7,6 +7,7 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.SensorApi;
 using HSMServer.ServerConfiguration;
 using System;
 using System.Buffers;
@@ -348,6 +349,51 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "addOrUpdate", Registration("lookup/single"), _key)).Status);
             Assert.True(Registered("lookup/batch"));
             Assert.True(Registered("lookup/single"));
+        }
+
+        // The mark of a failed key lookup belongs to that one lookup. In a batch with keys in
+        // the bodies (no Key header) the lookup of the first command's key fails; the second
+        // command is merely refused (only the first key of a request is looked up). It is a
+        // refusal under its path in the body of the 500, not one more fault.
+        [Fact]
+        public async Task KeyLookupFails_ForOneCommand_ACommandRefusedAfterIt_IsStillARefusalUnderItsPath()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+
+            faulting.FaultOnKeyLookup();
+
+            var answer = await PostAsync(host, "commands",
+                $"[{{\"Type\":0,\"Path\":\"lookup-mark/faulted\",\"SensorType\":1,\"Key\":\"{_key}\"}}," +
+                $"{{\"Type\":0,\"Path\":\"lookup-mark/refused\",\"SensorType\":1,\"Key\":\"{Guid.NewGuid()}\"}}]", key: null);
+
+            Assert.Equal(HttpStatusCode.InternalServerError, answer.Status);
+
+            var errors = JsonNode.Parse(answer.Body).AsObject();
+
+            Assert.Single(errors);
+            Assert.Equal("Cannot process a access key in the body", (string)errors["lookup-mark/refused"]);
+        }
+
+        // The text of a fault goes into the server's log line and into the key the log
+        // limiter remembers the fault by, and for a fault of the queue it carries the
+        // request as text, the client's description included. So it is one line of a bounded
+        // length, whatever the client sent.
+        [Fact]
+        public void TheCauseOfARegistrationFault_IsOneBoundedLine()
+        {
+            var cause = "An error was occurred while processing request: SensorAddOrUpdateRequest { Description = first line\r\nsecond line " +
+                        new string('x', 5000) + " }";
+
+            var fault = new RegistrationFaultException("fault/path", cause);
+
+            Assert.StartsWith("The registration of \"fault/path\" was not applied: An error was occurred while processing request: SensorAddOrUpdateRequest { Description = first line??second line xxx", fault.Message);
+            Assert.DoesNotContain('\r', fault.Message);
+            Assert.DoesNotContain('\n', fault.Message);
+
+            // The fixed words, the path, 300 characters of the cause and the mark of the cut.
+            Assert.Equal("The registration of \"fault/path\" was not applied: ".Length + 300 + "...".Length, fault.Message.Length);
         }
 
 
