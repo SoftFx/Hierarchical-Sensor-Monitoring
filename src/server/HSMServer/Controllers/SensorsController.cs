@@ -416,9 +416,12 @@ namespace HSMServer.Controllers
         {
             var response = new Dictionary<string, string>(sensorCommands.Count);
 
-            try
+            Exception firstFault = null;
+            var faulted = 0;
+
+            for (var i = 0; i < sensorCommands.Count; i++)
             {
-                for (var i = 0; i < sensorCommands.Count; i++)
+                try
                 {
                     var path = sensorCommands[i].Path;
 
@@ -447,21 +450,33 @@ namespace HSMServer.Controllers
                     if (error is not null)
                         response[path] = error;
                 }
+                catch (Exception ex)
+                {
+                    // A fault on one command does not end the batch (#1749). The answer
+                    // will be a 500, on which a collector sends the whole package again
+                    // every cycle, ahead of everything it issues later: were the loop to
+                    // stop here, a command that faults on every repeat would keep all the
+                    // commands after it from ever being applied. The rest is applied now,
+                    // and applied once more on the resend, which is safe: a registration
+                    // applied again is what every collector restart does.
+                    firstFault ??= ex;
+                    faulted++;
+                }
+            }
 
+            if (firstFault is null)
                 return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                // Exception first, see addOrUpdate above.
-                _logger.Error(ex, "Failed to update sensors!");
 
-                // The server's own fault, so 500 and not 400 (#1749): a collector drops the
-                // whole registration package on a 4xx and repeats it on a 5xx. A command the
-                // server refuses is not an exception: it is an entry of the dictionary in a
-                // 200. The body is the one the 400 carried, the per-path errors collected
-                // before the fault; the commands after the faulted one were not applied.
-                return StatusCode(StatusCodes.Status500InternalServerError, response);
-            }
+            // One line for the request, not one per command: during a storage outage every
+            // command of a large package faults. Exception first, see addOrUpdate above.
+            _logger.Error(firstFault, $"Failed to update sensors: {faulted} of {sensorCommands.Count} command(s) faulted, the others were applied. The first fault:");
+
+            // The server's own fault, so 500 and not 400 (#1749): a collector drops the
+            // whole registration package on a 4xx and repeats it on a 5xx. A command the
+            // server refuses is not an exception: it is an entry of the dictionary in a
+            // 200. The body is the one the 400 carried: the per-path errors of the commands
+            // the server refused. A faulted command has no entry in it.
+            return StatusCode(StatusCodes.Status500InternalServerError, response);
         }
 
 

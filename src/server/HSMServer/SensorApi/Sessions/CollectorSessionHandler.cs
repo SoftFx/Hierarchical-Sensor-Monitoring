@@ -470,31 +470,51 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            try
-            {
-                var errors = new Dictionary<string, string>(commands.Count);
+            var errors = new Dictionary<string, string>(commands.Count);
 
-                foreach (var command in commands)
+            Exception firstFault = null;
+            var faulted = 0;
+
+            foreach (var command in commands)
+            {
+                try
                 {
                     var error = await _ingestion.ApplyCommandAsync(caller, command);
 
                     if (error is not null)
                         errors[command.Path] = error;
                 }
-
-                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
+                catch (Exception ex)
+                {
+                    // As on the HTTP route (#1749): a fault on one command does not end the
+                    // batch. The ack will be a 500, on which a collector sends the whole
+                    // package again every cycle, ahead of everything it issues later, so a
+                    // command that faults on every repeat must not keep the commands after
+                    // it from being applied. They are applied now and once more on the
+                    // resend, which is safe: a registration applied again is what every
+                    // collector restart does.
+                    firstFault ??= ex;
+                    faulted++;
+                }
             }
-            catch (Exception ex)
+
+            if (firstFault is null)
             {
-                // The HTTP route answers 500 here as well (#1749): the fault is the server's
-                // own, and a collector takes a 4xx on a registration as a final refusal and
-                // repeats a 5xx on its next cycle.
-                _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {ex}");
-
-                session.CountRequestRefused();
-                output.Clear();
-                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusInternalError, CommandsFailed);
+                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusOk, errors);
+                return;
             }
+
+            // The HTTP route answers 500 here as well (#1749): the fault is the server's
+            // own, and a collector takes a 4xx on a registration as a final refusal and
+            // repeats a 5xx on its next cycle. One line for the frame, not one per command:
+            // during a storage outage every command of a large package faults.
+            _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {faulted} of {commands.Count} command(s) faulted, the others were applied. The first fault: {firstFault}");
+
+            // A failure ack has no body in version 1, so the refusals collected for the
+            // other commands do not travel; a resend that does not fault carries them in
+            // its 200.
+            session.CountRequestRefused();
+            SessionProtocol.WriteAck(output, id, SessionProtocol.StatusInternalError, CommandsFailed);
         }
 
         // The body is read with the options of the HTTP model binder for the same route.

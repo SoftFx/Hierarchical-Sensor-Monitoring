@@ -265,22 +265,30 @@ namespace HSMServer.Core.Tests.SensorApi
         // A fault of the server while it applies registrations is a 500 on both transports
         // (#1749): a collector takes a 4xx on a registration as a final refusal and drops the
         // package, and repeats a 5xx on its next cycle. It used to be a 400 on both.
+        //
+        // The 500 means "some commands faulted, the others were applied; send the package
+        // again": the command after the faulted one is applied too. A collector sends such a
+        // package again every cycle, ahead of what it issues later, so a server that stopped
+        // at the fault would let one command that faults on every repeat keep every later
+        // registration of that collector from being applied.
         [Fact]
-        public async Task Commands_FaultWhileApplying_Is500OnBothTransports_AndTheRepeatIsApplied()
+        public async Task Commands_FaultOnOneCommand_Is500OnBothTransports_TheOthersAreApplied_AndTheResendAppliesTheFaultedOne()
         {
             var faulting = FaultingCache.Wrap(_valuesCache);
 
             await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
             using var socket = await OpenAsync(host);
 
-            const string overHttp = "[{\"Type\":0,\"Path\":\"faulted/http\",\"SensorType\":1}]";
-            const string overSession = "[{\"Type\":0,\"Path\":\"faulted/session\",\"SensorType\":1}]";
+            static string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"faulted/{transport}/before\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/faulted\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/after\",\"SensorType\":1}}]";
 
-            faulting.FaultOn("faulted/http");
-            var http = await PostAsync(host, "commands", overHttp, _key);
+            bool Registered(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out _);
 
-            faulting.FaultOn("faulted/session");
-            await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{overSession}}}");
+            faulting.FaultOn("faulted/http/faulted", "faulted/session/faulted");
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{Package("session")}}}");
             var ack = await ReceiveTextAsync(socket);
 
             Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
@@ -294,17 +302,55 @@ namespace HSMServer.Core.Tests.SensorApi
 
             // The ack says nothing about the fault itself: its text stays in the server's log.
             Assert.DoesNotContain(FaultingCache.FaultText, ack);
-            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "faulted/session", out _));
 
-            // The session survives the fault, and the repeat a collector sends is applied.
-            faulting.FaultOn(null);
+            // On both transports everything but the faulted command is applied.
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.True(Registered($"faulted/{transport}/before"), $"{transport}: the command before the faulted one");
+                Assert.False(Registered($"faulted/{transport}/faulted"), $"{transport}: the faulted command");
+                Assert.True(Registered($"faulted/{transport}/after"), $"{transport}: the command after the faulted one");
+            }
 
-            await SendAsync(socket, $"{{\"id\":10,\"op\":\"commands\",\"body\":{overSession}}}");
-            var repeated = await ReceiveAsync(socket);
+            // The session survives the fault, and the resend a collector sends is applied.
+            faulting.Recover();
 
-            Assert.Equal(10, (long)repeated["ack"]);
-            Assert.Equal(200, (int)repeated["status"]);
-            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "faulted/session", out _));
+            var httpResend = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":10,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var resent = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, httpResend.Status);
+            Assert.Equal(10, (long)resent["ack"]);
+            Assert.Equal(200, (int)resent["status"]);
+            Assert.True(Registered("faulted/http/faulted"));
+            Assert.True(Registered("faulted/session/faulted"));
+        }
+
+        // During a storage outage every command of a package faults. That is one Error line
+        // for the frame, with the number of commands that faulted and the first fault, not a
+        // line per command.
+        [Fact]
+        public async Task Commands_SeveralFaultsInOneFrame_AreLoggedOnce_WithTheirNumber()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("outage/first", "outage/third");
+
+            await SendAsync(socket, "{\"id\":12,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"outage/first\",\"SensorType\":1}," +
+                                    "{\"Type\":0,\"Path\":\"outage/second\",\"SensorType\":1},{\"Type\":0,\"Path\":\"outage/third\",\"SensorType\":1}]}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(500, (int)ack["status"]);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "outage/second", out _));
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 12: 2 of 3 command(s) faulted", errors[0].Message);
+            Assert.Contains(FaultingCache.FaultText, errors[0].Message);
         }
 
         // A `commands` body the server cannot read is a 400 on both transports (#1749). The

@@ -189,7 +189,7 @@ namespace HSMServer.Core.Tests.SensorApi
     }
 
 
-    // The real cache, except that the registration of one path a test names fails with an
+    // The real cache, except that the registration of the paths a test names fails with an
     // exception, as a fault of the server would. The real cache turns what it catches itself
     // into a result, so this stands for whatever gets past that: the Sensor API has to
     // answer it as a fault whatever its source.
@@ -198,7 +198,7 @@ namespace HSMServer.Core.Tests.SensorApi
         public const string FaultText = "the store is not ready";
 
         private ITreeValuesCache _inner;
-        private volatile string _faultedPath;
+        private volatile string[] _faultedPaths = [];
 
 
         public ITreeValuesCache Cache { get; private set; }
@@ -215,14 +215,17 @@ namespace HSMServer.Core.Tests.SensorApi
             return proxy;
         }
 
-        // The registration of this path fails from now on; null ends the fault.
-        public void FaultOn(string path) => _faultedPath = path;
+        // The registrations of these paths fail from now on, and only they.
+        public void FaultOn(params string[] paths) => _faultedPaths = paths;
+
+        // The fault has passed.
+        public void Recover() => _faultedPaths = [];
 
 
         protected override object Invoke(MethodInfo targetMethod, object[] args)
         {
             if (targetMethod.Name == nameof(ITreeValuesCache.AddOrUpdateSensorAsync) &&
-                args[0] is SensorAddOrUpdateRequest registration && registration.Path == _faultedPath)
+                args[0] is SensorAddOrUpdateRequest registration && _faultedPaths.Contains(registration.Path))
                 return Task.FromException<TaskResult>(new InvalidOperationException(FaultText));
 
             return targetMethod.Invoke(_inner, args);

@@ -46,8 +46,13 @@ namespace HSMServer.Core.Tests.SensorApi
             : base(fixture, registerFixture) { }
 
 
+        // A 500 means "some commands faulted, the others were applied; send the package
+        // again". The commands after the faulted one must be applied too: a collector sends
+        // a package answered 5xx again every cycle, ahead of what it issues later, so if the
+        // server stopped at the fault, a command that faults on every repeat would keep
+        // every later registration of that collector from ever being applied.
         [Fact]
-        public async Task Commands_FaultWhileApplying_Is500_AndTheRepeatIsApplied()
+        public async Task Commands_FaultOnOneCommand_Is500_TheOthersAreApplied_AndTheResendAppliesTheFaultedOne()
         {
             var faulting = FaultingCache.Wrap(_valuesCache);
 
@@ -61,30 +66,30 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.Equal(HttpStatusCode.InternalServerError, answer.Status);
 
-            // The body the 400 used to carry: the per-path errors collected before the fault.
-            // Here there were none.
+            // The body the 400 used to carry: the per-path errors of the refused commands.
+            // Here there were none, and a faulted command has no entry of its own.
             Assert.Empty(JsonNode.Parse(answer.Body).AsObject());
 
-            // The package is applied up to the fault and not past it.
+            // Everything but the faulted command is applied, the one after it included.
             Assert.True(Registered("commands/fault/before"));
             Assert.False(Registered("commands/fault/faulted"));
-            Assert.False(Registered("commands/fault/after"));
+            Assert.True(Registered("commands/fault/after"));
 
             // What a collector does with a 500: the same package again on its next cycle.
             // The fault has passed, and nothing of the package is lost.
-            faulting.FaultOn(null);
+            faulting.Recover();
 
-            var repeat = await PostAsync(host, "commands", package, _key);
+            var resend = await PostAsync(host, "commands", package, _key);
 
-            Assert.Equal(HttpStatusCode.OK, repeat.Status);
-            Assert.Empty(JsonNode.Parse(repeat.Body).AsObject());
+            Assert.Equal(HttpStatusCode.OK, resend.Status);
+            Assert.Empty(JsonNode.Parse(resend.Body).AsObject());
             Assert.True(Registered("commands/fault/before"));
             Assert.True(Registered("commands/fault/faulted"));
             Assert.True(Registered("commands/fault/after"));
         }
 
         [Fact]
-        public async Task Commands_FaultAfterARefusedCommand_Is500_WithThePerPathErrorCollectedBeforeIt()
+        public async Task Commands_FaultAmongRefusedCommands_Is500_WithThePerPathErrorsOfTheRefusedOnes()
         {
             var faulting = FaultingCache.Wrap(_valuesCache);
 
@@ -93,14 +98,33 @@ namespace HSMServer.Core.Tests.SensorApi
             faulting.FaultOn("commands/partial/faulted");
 
             var answer = await PostAsync(host, "commands",
-                $"[{Registration("commands/partial/refused", "\"SensorType\":99")},{Registration("commands/partial/faulted")}]", _key);
+                $"[{Registration("commands/partial/refused-before", "\"SensorType\":99")},{Registration("commands/partial/faulted")},{Registration("commands/partial/refused-after", "\"SensorType\":99")}]", _key);
 
             Assert.Equal(HttpStatusCode.InternalServerError, answer.Status);
 
             var errors = JsonNode.Parse(answer.Body).AsObject();
 
-            Assert.Single(errors);
-            Assert.StartsWith(CannotConvert, (string)errors["commands/partial/refused"]);
+            Assert.Equal(2, errors.Count);
+            Assert.StartsWith(CannotConvert, (string)errors["commands/partial/refused-before"]);
+            Assert.StartsWith(CannotConvert, (string)errors["commands/partial/refused-after"]);
+        }
+
+        // Two commands that fault on every repeat, whatever the server's state. The status
+        // they get is not the point here (they are the request's fault, and may one day be
+        // answered as such); the point is that neither keeps the registration next to it
+        // from being applied.
+        [Theory]
+        [InlineData("null")]                            // no command at all
+        [InlineData("{\"Type\":0,\"SensorType\":1}")]   // a registration without a path
+        public async Task Commands_ACommandThatFaultsOnEveryRepeat_DoesNotKeepTheNextOneFromBeingApplied(string faulty)
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var path = $"commands/poison/{(faulty == "null" ? "after-null" : "after-pathless")}";
+
+            await PostAsync(host, "commands", $"[{faulty},{Registration(path)}]", _key);
+
+            Assert.True(Registered(path));
         }
 
         // A registration the server cannot convert is refused, not faulted: the same request
@@ -187,7 +211,7 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.False(Registered("single/fault/faulted"));
 
             // The repeat, once the fault has passed.
-            faulting.FaultOn(null);
+            faulting.Recover();
 
             Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "addOrUpdate", Registration("single/fault/faulted"), _key)).Status);
             Assert.True(Registered("single/fault/faulted"));
