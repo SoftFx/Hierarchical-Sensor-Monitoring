@@ -879,7 +879,11 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
             public bool CanWriteNode(NodePolicyImage image) =>
                 _authorization.AuthorizeWrite(_user, image.NodeKind == ChangeSetNodeKind.Product
-                    ? new ApiTokenResource(ApiTokenResourceKind.Product, image.NodeId)
+                    // A Product-kind fan-out node is usually a FOLDER, and a
+                    // folder id is not addressable by the evaluator — authorize
+                    // at the recorded root, the same boundary the original
+                    // product-policy write passed (#1680).
+                    ? new ApiTokenResource(ApiTokenResourceKind.Product, image.RootProductId)
                     : new ApiTokenResource(ApiTokenResourceKind.Sensor, image.NodeId)) ==
                 ApiTokenAuthorization.Allowed;
 
@@ -892,6 +896,14 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             {
                 ChangeSetEntryKind.SensorDataPolicies or ChangeSetEntryKind.SensorTtlPolicies =>
                     new ApiTokenResource(ApiTokenResourceKind.Sensor, entry.EntityId),
+                // A ProductTtlPolicies entry's entity is often a FOLDER id; a
+                // scoped owner's role sits on the root, and the evaluator
+                // answers NotFound for a folder id — resolve at the recorded
+                // root like the cookie implementation, or the owner could
+                // write a folder TTL policy they can never roll back (#1680
+                // review).
+                ChangeSetEntryKind.ProductTtlPolicies when entry.ParentId is { } root =>
+                    new ApiTokenResource(ApiTokenResourceKind.Product, root),
                 ChangeSetEntryKind.ProductTtlPolicies =>
                     new ApiTokenResource(ApiTokenResourceKind.Product, entry.EntityId),
                 ChangeSetEntryKind.AlertTemplate when entry.ParentId is { } folder =>
