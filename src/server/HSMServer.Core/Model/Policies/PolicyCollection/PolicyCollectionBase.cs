@@ -102,8 +102,24 @@ namespace HSMServer.Core.Model.Policies
             // only a content-identical re-creation matches).
             var unpairedDropSignatures = new HashSet<string>();
 
+            // A collector re-registration (non-force) lists only the collector's own TTL alerts,
+            // all with empty ids, so every non-template TTL alert of the node reads as dropped and
+            // is re-created from the collector's. When an operator edited one of them (a User
+            // owner in the change table: an interval, a template, a disable), the re-registration
+            // leaves the node's TTL alerts alone — it neither drops the edited alert nor adds the
+            // collector's next to it (#1666). The TTL counterpart of the regular-alert rule in
+            // SensorPolicyCollection.TryUpdate, except that the unedited alerts are kept too
+            // instead of dropped with nothing added. Template-owned TTL alerts keep their own
+            // protection below; a forced registration still replaces everything; an alert owned by
+            // System, the collector or a server migration takes the collector's content, which is
+            // how a changed collector default reaches the sensors that already exist.
+            var isCollectorReregistration = initiator is { Type: InitiatorType.DataCollector, IsForceUpdate: false };
+
             lock (_ttlLock)
             {
+                if (isCollectorReregistration && _ttlPolicies.Any(p => p.TemplateId == null && IsOperatorOwned(p)))
+                    return;
+
                 var newList = new List<TTLPolicy>(_ttlPolicies.Count + newPolicyUpdates.Count);
 
                 foreach (var policy in _ttlPolicies)
@@ -180,6 +196,12 @@ namespace HSMServer.Core.Model.Policies
                 if (unpairedDropSignatures.Contains(dropped.ToString()))
                     CallJournal(dropped.Id, dropped.ToString(), string.Empty, initiator);
         }
+
+
+        // TryGetValue, not the indexer: reading must not create a change-table entry.
+        private bool IsOperatorOwned(TTLPolicy policy) =>
+            _model.ChangeTable.TtlPolicies.TryGetValue(policy.Id.ToString(), out var info) &&
+            info.Initiator?.Type == InitiatorType.User;
 
 
         internal void AddTTLPolicy(PolicyUpdate update)

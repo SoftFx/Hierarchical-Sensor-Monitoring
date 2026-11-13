@@ -485,14 +485,14 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"Path\":\".computer/Windows OS info/Install date\"}",
                 WireReg(new WindowsInstallDatePrototype().Get(null), ".computer/Windows OS info/Install date", "Time since the OS install date."));
 
-            // Service alive: TTL alert IfInactivityPeriodIs() -> InstantHourly + Clock + SensorError. The
+            // Service alive: TTL alert IfInactivityPeriodIs(5 min) -> InstantHourly + Clock + SensorError. The
             // SpecialAlertAction carries a NULL conditions list (Conditions:null, not []); it lands in
-            // TtlAlerts and drives TTLs=[null]; KeepHistory 180 d; AggregateData true; Alerts:[].
+            // TtlAlerts and drives TTLs=[5 min] (#1666); KeepHistory 180 d; AggregateData true; Alerts:[].
             Assert.Equal(
                 "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":[{\"Conditions\":null,\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product]$path\",\"Icon\":\"\\uD83D\\uDD50\",\"IsDisabled\":false,"
                 + "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
                 + "\"TtlAlert\":null,\"SensorType\":0,\"Description\":\"DataCollector heartbeat.\",\"DefaultChats\":null,\"KeepHistory\":155520000000000,\"SelfDestroy\":null,"
-                + "\"TTLs\":[null],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                + "\"TTLs\":[3000000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
                 + "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
                 + "\"Path\":\".module/Service alive\"}",
                 WireReg(new ServiceAlivePrototype().Get(null), ".module/Service alive", "DataCollector heartbeat."));

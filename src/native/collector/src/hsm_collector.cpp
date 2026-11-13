@@ -1284,13 +1284,17 @@ namespace
     // new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc), AlertRepeatMode.Hourly, instantSend = true.
     constexpr const char* kDefaultScheduledTimeIso = "0001-01-01T12:00:00Z";
 
+    // The inactivity period of the ".module/Service alive" TTL alert (#1666): 5 minutes, the
+    // managed ServiceAlivePrototype.InactivityPeriod.
+    constexpr int64_t kServiceAliveInactivityMs = 300000;
+
     enum class DefaultAlertKind : int32_t
     {
         None = 0,
         EmaScheduledWarning,      // IfEmaMean/IfEmaValue <op> target -> InstantHourly (+Warning icon)
         FreeDiskScheduled,        // IfEmaValue <= target -> InstantHourly + ArrowDown + SensorError ({name} in template)
         ValueNotificationWarning, // IfValue <op> target -> ThenSendNotification + Warning
-        ServiceAliveTtl,          // IfInactivityPeriodIs() -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
+        ServiceAliveTtl,          // IfInactivityPeriodIs(5 min) -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
         ServiceStatus             // IfValue != target + AndConfirmationPeriod(5m) -> InstantHourly
     };
 
@@ -1509,8 +1513,13 @@ namespace
 
         if (spec.kind == DefaultAlertKind::ServiceAliveTtl)
         {
-            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(): TtlValue unset
+            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(5 min)
             alert.conditions_is_null = true; // SpecialAlertAction has a null conditions list
+            // The alert's own inactivity period (#1666), managed ServiceAlivePrototype.InactivityPeriod:
+            // the collector-off alert fires only after 5 minutes of silence. It becomes the
+            // registration's TTLs entry ([3000000000] ticks), byte-identical with the managed one.
+            alert.has_inactivity = true;
+            alert.inactivity_ms = kServiceAliveInactivityMs;
         }
         else
         {
@@ -1607,7 +1616,7 @@ namespace
         {
             AlertData alert = BuildDefaultAlert(def.alert, resolved_name);
             if (alert.kind == HSM_ALERT_KIND_TTL)
-                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (here [null])
+                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (Service alive: [5 min])
             else
                 reg.alerts.push_back(std::move(alert));
         }
