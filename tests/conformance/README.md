@@ -95,7 +95,11 @@ fixture. A case moves back into the shared fixtures when the managed collector g
 
 **Windows-only fixtures.** `collector/windows/*.hsmtest` holds scenarios for sensors that exist only
 on Windows and whose registration can therefore be asserted only there (today
-`tcp_failure_rate_contract.hsmtest`, #1659 B2). Both drivers run the folder on Windows and nowhere
+`tcp_failure_rate_contract.hsmtest`, #1659 B2). That fixture pins the registration only. The two rules of
+#1752 around the sensor (asked for twice, the first period stays; a tick on which neither address
+family can be read is reported) have no scenario: the period is not on the wire, and the report needs
+an OS read failure no driver can cause. Their per-language tests are named in
+`aicontext/features/collector/default-sensors/feature.md`. Both drivers run the folder on Windows and nowhere
 else: the managed driver adds it to its discovery when the host is Windows, the native driver
 registers its fixtures in CMake under `if(WIN32)`. A scenario that can be written so that it passes
 on every platform belongs in the shared folder, not here.
@@ -201,7 +205,7 @@ Build an alert incrementally, then `alert_stage` it; a following `create_*_with_
 | `wait_sender_parked\|timeout_s` | (#1480) polls until a data send is parked in the hang — its package has already left the queue, so what is added next queues behind it; fails on timeout. C#: the recording sender counts parked sends; native: `hsm_collector_test_hung_send_count` |
 | `release_sender_hang` | (#1480) lifts the hang: a parked send continues (and consumes a charged `set_sender_fail_next` token), later sends are no longer blocked. C#: completes the recording sender's release task; native: `hsm_collector_set_send_hang(false)` |
 | `set_sender_hang_until_cancelled` | (#1751) the hang of `set_sender_hang`, but the cancellation of a send parked in it ends it: the sends after it pass. With it a package that was in flight when a stop cancelled it can be seen to be sent again by the drain. Wait for the park (`wait_sender_parked`) before the stop: a hang nobody is parked in is not ended the same way by the two collectors. C#: the recording sender clears the hang when the token of a parked send fires; native: the test-only seam `hsm_collector_test_set_send_hang_until_cancelled` |
-| `set_sender_mode\|mode` | (#1751) what the sender does with **every send of every kind** from now on (`set_sender_fail_next` and the hang verbs above touch data sends only in the managed driver). `down`: the send fails at once, as a send that got no answer; `hung`: the send is never answered and ends when the collector gives it up; `up`: the send is accepted, and a send parked in `hung` continues. C#: the recording sender, for data, priority, file and command sends alike; native: the test-only seam `hsm_collector_test_set_send_mode` on the in-memory sender, and the answer of the recording server (503 / none / 200) in a `create_collector_sending_registrations` case |
+| `set_sender_mode\|mode` | (#1751) what the sender does with **every send of every kind** from now on (`set_sender_fail_next` and the hang verbs above touch data sends only in the managed driver). `down`: the send fails at once, as a send that got no answer; `hung`: the send is never answered and ends when the collector gives it up; `up`: the send is accepted. A send parked in `hung` ends with the mode that ends the hang (#1750): accepted when it is `up`, failed when it is `down`, whatever is set by the time the send gets going again; so `down` then `up` fails a parked send and accepts the sends after it. C#: the recording sender, for data, priority, file and command sends alike; native: the test-only seam `hsm_collector_test_set_send_mode` on the in-memory sender, and the answer of the recording server (503 / none / 200) in a `create_collector_sending_registrations` case, decided when a request arrives (a request it does not answer is given up by the collector at its request timeout) |
 
 ### Sends by kind (the stop drain)
 
@@ -229,8 +233,14 @@ Which sends a driver's sender is sent depends on the collector:
   HTTP build only** (`HSM_COLLECTOR_HTTP`); the fixture and the must-fail fixture of `expect_sends`
   are registered in CMake under that option and run in the CI HTTP lane. In a build without the
   HTTP transport the verb fails by name. Such a case is driven with `set_sender_mode` and read
-  with `expect_send_attempts` and `expect_sends`; the payload assertions and the other fault
+  with `expect_send_attempts`, `expect_sends` and `expect_last_delivered_registration`; the payload assertions and the other fault
   injection belong to the in-memory sender and are not for it (as in a session case).
+
+The order of a sensor's registrations across failed sends (#1750) is `registration_order_contract.hsmtest`,
+on the same sender: it reads what the sender delivered (`expect_last_delivered_registration`), not
+only which sends were started. Its cases put every command in a package of its own
+(`max_values_in_package=1`), because inside one package the managed collector sends commands in the
+order they were issued anyway; only across packages could an older registration overtake a newer one.
 
 Making a registration pending without a race: set the sender `down` before `start`, so the
 registration of the start fails, and wait for that send (`expect_send_attempts|registration|1|10`).
@@ -340,6 +350,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
 | `expect_send_attempts\|kind\|count[\|timeout_s]` | (#1751) the sends of `kind` (`value`, `registration`) the collector has **started** so far, whatever became of them: delivered, failed, hung or cancelled. With a timeout it polls until the count **equals**, then asserts equality; without one it checks once. See **Sends by kind** for which kinds a case can count |
+| `expect_last_delivered_registration\|path_suffix\|description` | (#1750) of the registrations the sender of the case **delivered** (a send it accepted), the last one of the sensor whose path ends with `path_suffix` carries this description (exact text); fails when none was delivered. What a server holds of that sensor: it keeps the registration that came last. For a `create_collector_sending_registrations` case: C# reads the AddOrUpdate commands of the command sends the recording sender accepted; native reads the bodies of the `POST /commands` its recording server answered 200, with a JSON library (`registration_order_contract`) |
 | `expect_sends\|kind[,kind...]` | (#1751) every send the collector has started so far, by kind, in the order the sends were started: `expect_sends\|registration,registration,value`. Exact: one send more, one less or two in the other order fail it |
 | `expect_default_connection_address\|expected_address` | (#1593) the connection address built from PACKAGE-default options — everything except the port configured. Managed feeds the `CollectorOptions` default (the `DefaultPort` const) through the HTTPS client's `Endpoints` builder; native feeds the `hsm::collector::CollectorOptions` wrapper default (the C ABI demands an explicit port, so the wrapper default IS the package default) through `MakeEndpoints`. Pins the 44330 → 443 default (#1590) in both packages; the scheme-default port is omitted from the rendered address (`https://localhost/api/sensors`) — the managed `Uri` drops it and the native builder mirrors that (#1593 parity fix) |
 
@@ -369,8 +380,9 @@ in **all** drivers in the same PR (or an explicit unsupported marker, below).
   native in unix ms; they agree only there.
 - Cross-language doubles: assert via `expect_bar_field` (tolerant) or pin
   binary-exact decimals (0.5/1.5/2.5); never assert long decimal tails as text.
-- Multi-package retry order is not preserved (re-enqueue at tail) — use
-  `expect_each_value_once`, not sequences. Inter-sensor flush order is
+- Multi-package retry order of **values** is not preserved (re-enqueue at tail) — use
+  `expect_each_value_once`, not sequences. (Registrations keep their order across packages,
+  #1750: `registration_order_contract`.) Inter-sensor flush order is
   unspecified — no cross-sensor index assertions.
 
 **Versioning.** Fixtures carry a `v1` header comment. Evolution is additive:

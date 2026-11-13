@@ -910,6 +910,24 @@ namespace HSMDataCollector.Tests
                     break;
                 }
 
+                // (#1750) Of the registrations the sender delivered (a send it accepted), the last
+                // one of the sensor whose path ends with the suffix: what the server holds of it.
+                // The recording sender keeps the registrations of accepted command sends only.
+                case "expect_last_delivered_registration":
+                {
+                    var delivered = state.Sender.Registrations
+                        .Where(registration => registration.Path != null && registration.Path.EndsWith(step.Arg(0), StringComparison.Ordinal))
+                        .ToList();
+
+                    Assert.True(delivered.Count > 0, $"No registration of a path ending with '{step.Arg(0)}' was delivered.");
+
+                    var description = delivered[delivered.Count - 1].Description;
+                    Assert.True(
+                        description == step.Arg(1),
+                        $"The last delivered registration of '{step.Arg(0)}' has the description '{description ?? "null"}', expected '{step.Arg(1)}'.");
+                    break;
+                }
+
                 // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload
                 // of each OpenTime, over the bars whose Path ends with the suffix.
                 case "expect_bar_sum":
@@ -2814,9 +2832,10 @@ namespace HSMDataCollector.Tests
             // enters the record in one step.
             private int _mode = ModeUp;
 
-            // Completed when the mode leaves hung; a new one for every time it is entered.
-            private TaskCompletionSource<bool> _modeRelease =
-                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Completed when the mode leaves hung, with the mode that ended it; a new one for every
+            // time it is entered.
+            private TaskCompletionSource<int> _modeRelease =
+                new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             private readonly List<string> _sends = new List<string>();
 
@@ -2831,9 +2850,12 @@ namespace HSMDataCollector.Tests
                 }
             }
 
-            // up: every send is accepted (a send parked in hung continues). down: every send fails
-            // at once, as a send with no answer does. hung: every send waits until the collector
-            // gives it up (its token is cancelled).
+            // up: every send is accepted (a send parked in hung continues and is accepted). down:
+            // every send fails at once, as a send with no answer does (a send parked in hung fails).
+            // hung: every send waits until the collector gives it up (its token is cancelled).
+            // A parked send ends with the mode that ended the hang, not with whatever mode is set
+            // by the time its continuation runs (#1750): a case that sets down and then up fails
+            // the parked send, whatever the thread pool does in between.
             public void SetMode(string mode)
             {
                 int next;
@@ -2846,20 +2868,20 @@ namespace HSMDataCollector.Tests
                     default: throw new InvalidOperationException($"set_sender_mode: unknown mode '{mode}' (up, down, hung).");
                 }
 
-                TaskCompletionSource<bool> release = null;
+                TaskCompletionSource<int> release = null;
 
                 lock (_lock)
                 {
                     if (_mode == ModeHung && next != ModeHung)
                     {
                         release = _modeRelease;
-                        _modeRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        _modeRelease = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                     }
 
                     _mode = next;
                 }
 
-                release?.TrySetResult(true);
+                release?.TrySetResult(next);
             }
 
             // The first step of every send: enters it in the record and applies the mode. Returns
@@ -2868,7 +2890,7 @@ namespace HSMDataCollector.Tests
             private async Task<bool> EnterAsync(string kind, CancellationToken token)
             {
                 int mode;
-                Task release;
+                Task<int> release;
 
                 lock (_lock)
                 {
@@ -2891,8 +2913,7 @@ namespace HSMDataCollector.Tests
                         Interlocked.Decrement(ref _parkedSends);
                     }
 
-                    lock (_lock)
-                        mode = _mode;
+                    mode = release.Result;
                 }
 
                 return mode != ModeDown;

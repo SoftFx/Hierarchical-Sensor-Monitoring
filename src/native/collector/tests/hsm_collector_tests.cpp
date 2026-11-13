@@ -36,6 +36,7 @@
 #include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
+#include <nlohmann/json.hpp>
 #endif
 
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
@@ -2811,6 +2812,50 @@ namespace
 
             const auto actual = StartedSends(state);
             Require(actual == expected, ("expected the sends " + JoinSends(expected) + ", got " + JoinSends(actual)).c_str());
+            return;
+        }
+
+        // (#1750) Of the registrations the recording server delivered (a POST to /commands it
+        // answered 200), the last one of the sensor whose path ends with the suffix: what a server
+        // holds of that sensor. The bodies are read with a JSON library, not by hand.
+        if (action == "expect_last_delivered_registration")
+        {
+            Require(step.size() >= 3, "expect_last_delivered_registration requires a path suffix and a description");
+            Require(SendsToRecordingServer(state),
+                    "expect_last_delivered_registration reads what the server was sent: a case that uses it is created with "
+                    "create_collector_sending_registrations");
+#if defined(HSM_COLLECTOR_HTTP)
+            const auto& suffix = step[1];
+            bool found = false;
+            std::string description;
+            for (const auto& request : state.send_record_server->Requests())
+            {
+                if (request.path != "/api/sensors/commands" || request.status != 200)
+                    continue;
+
+                const auto commands = nlohmann::json::parse(request.body, nullptr, /*allow_exceptions=*/false);
+                Require(commands.is_array(), ("a registration request is not a JSON array: " + request.body).c_str());
+                for (const auto& command : commands)
+                {
+                    const auto path = command.find("Path");
+                    if (path == command.end() || !path->is_string())
+                        continue;
+                    const auto& text = path->get_ref<const std::string&>();
+                    if (text.size() < suffix.size() || text.compare(text.size() - suffix.size(), suffix.size(), suffix) != 0)
+                        continue;
+
+                    found = true;
+                    const auto field = command.find("Description");
+                    description = field != command.end() && field->is_string() ? field->get<std::string>() : "null";
+                }
+            }
+
+            Require(found, ("no registration of a path ending with '" + suffix + "' was delivered").c_str());
+            Require(description == step[2],
+                    ("the last delivered registration of '" + suffix + "' has the description '" + description + "', expected '" +
+                     step[2] + "'")
+                        .c_str());
+#endif
             return;
         }
 
@@ -10861,6 +10906,8 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             // (#1751) Needs the HTTP transport, not WebSocket: it runs wherever this build does.
             { "conformance_stop_drain_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            // (#1750) The same sender as above.
+            { "conformance_registration_order_contract", [](const std::string& path) { RunConformanceContract(path); } },
             // The session scenarios need a libcurl with WebSocket: without one they skip and say
             // so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
             { "conformance_session_transport_contract",

@@ -255,6 +255,9 @@ namespace hsm::test
         {
             std::string path;
             std::string body;
+            // The status the request was answered with; 0 while it has none (a request held open
+            // by a hang is never answered). Set by HttpRecordingServer only.
+            int status = 0;
         };
 
         // `reject_path_prefix`: requests to it are recorded and answered 400 Bad Request.
@@ -410,6 +413,11 @@ namespace hsm::test
                         fail = true;
                     }
                     answer = answer_;
+                    // The answer is decided here, so it is recorded with the request: a reader that
+                    // sees the request sees the status it gets (0: none, the request hangs).
+                    recorded.status = (hang || answer == Answer::Never)
+                                          ? 0
+                                          : (fail ? 502 : (reject ? 400 : (answer == Answer::Unavailable ? 503 : 200)));
                     requests_.push_back(std::move(recorded));
                 }
 
