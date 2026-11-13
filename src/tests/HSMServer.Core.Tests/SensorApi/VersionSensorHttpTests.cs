@@ -46,10 +46,12 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(HttpStatusCode.OK, status);
 
             // The echo is a JSON object with the version as a string, not the whole
-            // object folded into a JSON string.
+            // object folded into a JSON string. Property names follow the camelCase
+            // naming policy of every other typed route, and Type comes along.
             var echoed = JsonNode.Parse(body);
-            Assert.Equal(version, (string)echoed["Value"]);
-            Assert.Equal("version/string", (string)echoed["Path"]);
+            Assert.Equal(version, (string)echoed["value"]);
+            Assert.Equal("version/string", (string)echoed["path"]);
+            Assert.NotNull(echoed["type"]); // the typed routes echo the Type field too
 
             await SensorStored("version/string");
         }
@@ -63,7 +65,7 @@ namespace HSMServer.Core.Tests.SensorApi
                 "{\"Path\":\"version/no-status\",\"Value\":\"1.2.3\"}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
-            Assert.Equal(1, (int)JsonNode.Parse(body)["Status"]);
+            Assert.Equal(1, (int)JsonNode.Parse(body)["status"]);
 
             await SensorStored("version/no-status");
         }
@@ -77,7 +79,7 @@ namespace HSMServer.Core.Tests.SensorApi
                 "{\"Path\":\"version/object\",\"Value\":{\"Major\":1,\"Minor\":2,\"Build\":3,\"Revision\":4},\"Status\":1}", _key, ClientName);
 
             Assert.Equal(HttpStatusCode.OK, status);
-            Assert.Equal("1.2.3.4", (string)JsonNode.Parse(body)["Value"]);
+            Assert.Equal("1.2.3.4", (string)JsonNode.Parse(body)["value"]);
 
             await SensorStored("version/object");
         }
@@ -86,6 +88,7 @@ namespace HSMServer.Core.Tests.SensorApi
         [InlineData("\"abc\"", "is not a valid version string")]
         [InlineData("null", "must be a version string")]
         [InlineData("\"1.2.3.4.5\"", "is not a valid version string")]
+        [InlineData("\"1.99999999999\"", "is not a valid version string")] // overflow: Version ctor throws OverflowException
         public async Task VersionRoute_RejectsAMalformedValueWith400(string rawValue, string expectedError)
         {
             await using var host = await StartHost();

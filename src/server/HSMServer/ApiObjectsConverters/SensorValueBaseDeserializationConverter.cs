@@ -19,19 +19,11 @@ namespace HSMServer.ApiObjectsConverters
 
         public override void Write(Utf8JsonWriter writer, VersionSensor value, JsonSerializerOptions options)
         {
-            // POST /api/sensors/version echoes the bound DTO back. Serializing the base
-            // VersionSensorValue is not an option here: its Value is System.Version, and
-            // the previous implementation folded the whole object into a JSON string.
-            // Write the properties by hand instead, Value as a version string — the same
-            // shape the collector sends (#1671).
-            writer.WriteStartObject();
-            writer.WriteString(nameof(SensorValueBase.Key), value.Key);
-            writer.WriteString(nameof(SensorValueBase.Path), value.Path);
-            writer.WriteString(nameof(SensorValueBase.Comment), value.Comment);
-            writer.WriteString(nameof(SensorValueBase.Time), value.Time);
-            writer.WriteNumber(nameof(SensorValueBase.Status), (int)value.Status);
-            writer.WriteString(nameof(VersionSensorValue.Value), value.Value?.ToString());
-            writer.WriteEndObject();
+            // POST /api/sensors/version echoes the bound DTO back. Serialize the base
+            // VersionSensorValue with the pipeline options: System.Text.Json has a built-in
+            // System.Version converter (writes "1.2.3.4"), and the options carry the same
+            // camelCase naming policy every other typed route answers with (#1671).
+            JsonSerializer.Serialize<VersionSensorValue>(writer, value, options);
         }
     }
 
@@ -144,14 +136,14 @@ namespace HSMServer.ApiObjectsConverters
                 if (string.IsNullOrEmpty(raw))
                     throw new JsonException("The value of a version sensor must be a version string, e.g. \"1.2.3\"");
 
-                try
-                {
-                    return new Version(raw);
-                }
-                catch (Exception ex) when (ex is FormatException or ArgumentException or ArgumentOutOfRangeException)
-                {
-                    throw new JsonException($"'{raw}' is not a valid version string", ex);
-                }
+                // TryParse covers format, argument, range and overflow failures with one
+                // path: new Version(string) throws OverflowException (an ArithmeticException,
+                // not an ArgumentException) for a component above int.MaxValue, which an
+                // exception filter on the constructor would miss and 500 the request.
+                if (!Version.TryParse(raw, out var version))
+                    throw new JsonException($"'{raw}' is not a valid version string");
+
+                return version;
             }
 
 
