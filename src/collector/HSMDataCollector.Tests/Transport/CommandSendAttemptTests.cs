@@ -103,9 +103,13 @@ namespace HSMDataCollector.Tests.Transport
                     await collector.Stop();
                 }
 
+                // The first request the server accepted with the second registration in it. Not
+                // "the only one": the stop above may cancel that very send while its answer is on
+                // the way, and a cancelled package is sent again by the drain (at least once),
+                // which on a slow machine made this a test of that race.
                 var accepted = server.CommandRequests.Where(r => r.Answer != 0 && r.Body.Contains("attempt/second")).ToList();
 
-                Assert.Single(accepted);
+                Assert.NotEmpty(accepted);
                 Assert.Contains("attempt/first", accepted[0].Body);
             }
         }
