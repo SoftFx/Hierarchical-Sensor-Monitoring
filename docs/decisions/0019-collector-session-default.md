@@ -14,7 +14,7 @@ On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 serv
 
 ## Decision
 
-1. **`session` is the default transport** of the managed collector (`CollectorOptions.Transport`, from 4.0.0), the HSM Agent (`server.transport`, from 0.6.0) and the Linux probe (`hsm.transport`, from 0.12.0). The native collector library has no default of its own (a host calls `UseHttpTransport` or `UseSessionTransport`); its hosts above carry the default.
+1. **`session` is the default transport** of the managed collector (`CollectorOptions.Transport`, from 4.0.0), the HSM Agent (`server.transport`, from 0.6.0) and the Linux probe (`hsm.transport`, from 0.13.0). The native collector library has no default of its own (a host calls `UseHttpTransport` or `UseSessionTransport`); its hosts above carry the default.
 2. **`http` stays selectable** and the HTTP Sensor API stays on the server (ADR-0017 point 4). The no-fallback rule stands: a collector on a session does not switch to HTTP by itself.
 3. **The flip is a breaking change** and ships as one: a major version of the managed collector (4.0.0), a minor version of the agent (0.6.0), and a notice in the release notes.
 4. **The managed collector's default is HTTP on a host where no session can exist** (owner decision, 2026-11-13): .NET Framework with `AllowUntrustedServerCertificate = true` (ClientWebSocket has no per-connection certificate callback there) or an OS without a WebSocket client (Windows 7). The collector picks this once, when it is created, and says why at every Start. It is the choice of a default, not a fallback: a collector whose caller set `Session` stays on a session and reports why it cannot run, and a collector on a session never switches to HTTP.

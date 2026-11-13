@@ -1156,7 +1156,7 @@ Placeholders only — **no secrets**:
   named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the
   group bits) although no group can read it. That case passes; a genuinely group- or
   world-readable key, or one readable by another named user or group, still warns.
-* `hsm.transport` (optional, `"session"` by default; probe 0.12.0): `"session"` keeps one
+* `hsm.transport` (optional, probe 0.12.0; `"session"` by default since 0.13.0, `"http"` before): `"session"` keeps one
   WebSocket (`wss://`, same host, port and certificate rules) to the server's collector session
   endpoint and sends nothing over the HTTP routes; `"http"` sends a request per batch, for a server
   before HSMServer 3.43.0 or a proxy that does not pass WebSockets. There is no fallback from one
