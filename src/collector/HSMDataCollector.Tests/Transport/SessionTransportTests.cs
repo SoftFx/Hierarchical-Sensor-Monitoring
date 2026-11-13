@@ -756,6 +756,38 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public async Task Second_collector_says_so_when_the_session_it_shares_is_not_running()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                // The first collector owns the session and is never started: there is no session,
+                // and the transport, which reports to its owner, has nothing to say.
+                using (var first = new DataCollector(options))
+                using (var second = new DataCollector(options))
+                {
+                    second.AddCustomLogger(logger);
+
+                    var sensor = second.CreateIntSensor("session/not-the-owner");
+
+                    await second.Start();
+
+                    sensor.AddValue(5);
+
+                    Assert.True(await WaitForAsync(() => logger.Errors.Any(e => e.Contains("Queue: Data") && e.Contains("Failed to send"))),
+                                "A collector whose values go nowhere said nothing: " + string.Join(" | ", logger.Errors));
+
+                    await second.Stop();
+                }
+
+                Assert.Equal(0, server.Sessions);
+            }
+        }
+
+        [Fact]
         public async Task Send_file_on_a_session_says_that_the_file_was_not_sent()
         {
             var logger = new RecordingLogger();

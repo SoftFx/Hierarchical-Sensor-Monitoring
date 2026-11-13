@@ -338,7 +338,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     //
                     // A package that waits for the transport to come back is not an error of the
                     // queue: the transport reports its own state, once, and the queue stays quiet.
-                    if (ex is PackageSendFailedException failed && failed.IsTransportDown)
+                    // Unless that transport belongs to another collector: it reports there, and
+                    // not at all while its owner is stopped, so here the queue is the only voice
+                    // (deduplicated like every queue error).
+                    if (ex is PackageSendFailedException failed && failed.IsTransportDown && !(_queueManager?.TransportReportsElsewhere ?? false))
                         _logger.Debug(ex.Message);
                     else if (_queueManager != null)
                         _queueManager.AddQueueLoopError(QueueName, ex);
