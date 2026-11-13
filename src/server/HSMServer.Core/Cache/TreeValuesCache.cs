@@ -908,6 +908,11 @@ namespace HSMServer.Core.Cache
         // Nothing but the IsFault mark of the result is new, so a caller that does not ask
         // for it sees what it saw before, except that a failed write to the store is now
         // an error result and no longer Ok.
+        //
+        // A registration forwarded through an alias to the queue of another root product
+        // is sorted by the same rule. Its handler does not wait for that queue (no handler
+        // waits for another queue: two forwarding to each other would deadlock); it leaves
+        // the pending outcome on the request, and it is awaited here, outside any queue.
         public async Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
             var result = await ProcessRequestAsync(request.ProductId, request, token);
@@ -915,7 +920,29 @@ namespace HSMServer.Core.Cache
             if (!result.IsOk)
                 return TaskResult.FromFault(result.Error);
 
-            return request.Fault is null ? result : TaskResult.FromFault(request.Fault);
+            if (request.Fault is not null)
+                return TaskResult.FromFault(request.Fault);
+
+            if (request.Forwarded is { } forwarded)
+            {
+                string fault;
+
+                try
+                {
+                    fault = await forwarded.Fault.WaitAsync(token);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    // As the wait for the own queue answers a cancellation: an error
+                    // result, not an exception.
+                    fault = ex.Message;
+                }
+
+                if (fault is not null)
+                    return TaskResult.FromFault(fault);
+            }
+
+            return result;
         }
 
         // storeFailed (#1756): true when the registration failed in a write to the store
@@ -933,7 +960,12 @@ namespace HSMServer.Core.Cache
                 switch (ResolveAlias(request.ProductId, request.Path, request.TypeIsExplicit ? request.Type : null, out sensor))
                 {
                     case AliasResolution.Forwarded:
-                        Dispatch(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0));
+                        // Not applied here: handed to the queue that owns the sensor. This
+                        // handler returns at once and does not wait for that queue; what
+                        // comes of the registration there is left on the request for
+                        // AddOrUpdateSensorAsync (#1756).
+                        request.Forwarded = new ForwardedRegistration();
+                        DispatchForwarded(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0) { Outcome = request.Forwarded });
                         error = null;
                         return true;
 

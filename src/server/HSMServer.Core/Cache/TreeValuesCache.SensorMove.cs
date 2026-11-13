@@ -826,13 +826,46 @@ namespace HSMServer.Core.Cache
                 ReevaluateTemplates(sensor);
         }
 
+        // A registration forwarded through an alias, on the queue it was forwarded to.
+        // Every way out of here either ends the registration and says so to its outcome,
+        // or sends it on to the queue that owns the sensor now (#1756): the caller of the
+        // registration is waiting for that outcome in AddOrUpdateSensorAsync. An exception
+        // thrown from here is reported by DispatchForwarded, as an error of this queue.
         private void UpdateThroughAlias(AliasRegistrationRequest request)
         {
-            if (TryGetSensorById(request.Update.Id, out var sensor) &&
-                OnOwningQueue(sensor, request.ExpectedRootId, request.Hops,
-                    (root, hops) => request with { ExpectedRootId = root, Hops = hops }, "registration through an alias") &&
-                !TryUpdateSensor(request.Update, out var error))
+            if (!TryGetSensorById(request.Update.Id, out var sensor))
+            {
+                // The sensor went away: nothing to apply, answered as applied, as before.
+                request.Outcome?.Complete();
+                return;
+            }
+
+            // As OnOwningQueue, which the other requests of a moved sensor go through, with
+            // the two differences this request needs: a dropped registration is reported,
+            // and one that is sent on is still watched (DispatchForwarded).
+            if (sensor.Root.Id != request.ExpectedRootId)
+            {
+                if (request.Hops >= MaxAliasHops)
+                {
+                    _logger.Warn($"Dropped registration through an alias for sensor {sensor.Id}: it kept moving between products");
+                    request.Outcome?.Complete();
+                }
+                else
+                    DispatchForwarded(sensor.Root, request with { ExpectedRootId = sensor.Root.Id, Hops = request.Hops + 1 });
+
+                return;
+            }
+
+            // The registration path: the store is asked whether it wrote the row, and a
+            // failed write is a fault, as for a registration applied on its own queue.
+            // Any other failure is logged and answered as applied, as before.
+            if (TryUpdateSensor(request.Update, checkStore: true, out var error, out var storeFailed))
+                request.Outcome?.Complete();
+            else
+            {
                 _logger.Error($"Registration through an alias failed for sensor {sensor.Id}: {error}");
+                request.Outcome?.Complete(storeFailed ? error : null);
+            }
         }
 
         // A request routed by a sensor's root at enqueue time runs only on the
@@ -1029,6 +1062,36 @@ namespace HSMServer.Core.Cache
             }
 
             _ = GetOrAddCachedValue(root).Queue.AddItemAsync(request);
+        }
+
+        // Dispatch for a registration forwarded through an alias (#1756). The request goes
+        // to the same queue and is handled there as before; the difference is that its end
+        // is always reported to request.Outcome, also when it never reaches a handler.
+        // Called from a queue handler: it must not wait for the target queue, so the watch
+        // is started and left to run.
+        private void DispatchForwarded(ProductModel root, AliasRegistrationRequest request)
+        {
+            // A product removed meanwhile must not get its queue back.
+            if (!TryGetProduct(root.Id, out _))
+            {
+                _logger.Warn($"Dropped {request.GetType().Name} for removed product {root.Id}");
+                request.Outcome?.Complete();
+                return;
+            }
+
+            _ = WatchForwardedAsync(GetOrAddCachedValue(root).Queue, request);
+        }
+
+        // An error result of the target queue is a fault of the registration, by the rule
+        // of AddOrUpdateSensorAsync: the queue did not take the request (it is closed) or
+        // its handler threw. With an Ok result the handler has reported the outcome itself,
+        // or has sent the request on to another queue, which is watched in its turn.
+        private static async Task WatchForwardedAsync(IUpdatesQueue queue, AliasRegistrationRequest request)
+        {
+            var result = await queue.ProcessRequestAsync(request);
+
+            if (!result.IsOk)
+                request.Outcome?.Complete(result.Error);
         }
 
         private CachedValue GetOrAddCachedValue(ProductModel root) =>

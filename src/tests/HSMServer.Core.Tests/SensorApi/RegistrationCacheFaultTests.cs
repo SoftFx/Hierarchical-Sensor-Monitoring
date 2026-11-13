@@ -194,6 +194,102 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("from the UI", sensor.Description);
         }
 
+        // A registration of a path that is an alias of a sensor moved to another root product
+        // is not applied on the queue of the product it came for: it is forwarded to the queue
+        // that owns the sensor. The collector is answered when it has ended there, and by the
+        // same rule: a write of the row the store fails on is a fault, and the resend saves.
+        // It used to be answered as applied at once, before that queue had stored anything.
+        [Theory]
+        [InlineData(Throws)]
+        [InlineData(Reports)]
+        public async Task StoreFailsOnce_ForARegistrationForwardedThroughAnAlias_Is500OnBothTransports_AndTheResendSavesIt(string how)
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+            using var socket = await OpenSessionAsync(host);
+
+            var overHttp = await MoveToAnotherProductAsync(host, $"forwarded/{how}/http/old", $"moved-http-{how}");
+            var overSession = await MoveToAnotherProductAsync(host, $"forwarded/{how}/session/old", $"moved-session-{how}");
+
+            FailSaveOnce(how, $"moved-http-{how}");
+            FailSaveOnce(how, $"moved-session-{how}");
+
+            var http = await PostAsync(host, "commands", $"[{Registration($"forwarded/{how}/http/old", "through the alias")}]", _key);
+            var ack = await SendAsync(socket, 1, "commands", $"[{Registration($"forwarded/{how}/session/old", "through the alias")}]");
+
+            Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
+            Assert.Equal(500, (int)ack["status"]);
+            Assert.NotEqual("through the alias", StoredDescription($"moved-http-{how}"));
+            Assert.NotEqual("through the alias", StoredDescription($"moved-session-{how}"));
+
+            var httpResend = await PostAsync(host, "commands", $"[{Registration($"forwarded/{how}/http/old", "through the alias")}]", _key);
+            var resent = await SendAsync(socket, 2, "commands", $"[{Registration($"forwarded/{how}/session/old", "through the alias")}]");
+
+            Assert.Equal(HttpStatusCode.OK, httpResend.Status);
+            Assert.Equal(200, (int)resent["status"]);
+            Assert.Equal("through the alias", StoredDescription($"moved-http-{how}"));
+            Assert.Equal("through the alias", StoredDescription($"moved-session-{how}"));
+
+            // The registrations went to the moved sensors: nothing was created at the old paths.
+            Assert.Equal("through the alias", overHttp.Description);
+            Assert.Equal("through the alias", overSession.Description);
+            Assert.False(Registered($"forwarded/{how}/http/old"));
+            Assert.False(Registered($"forwarded/{how}/session/old"));
+        }
+
+        // A forwarded registration that succeeds is answered as it always was, and is now
+        // applied and stored by the time of the answer.
+        [Fact]
+        public async Task ARegistrationForwardedThroughAnAlias_ThatSucceeds_IsAnsweredAsBefore()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var moved = await MoveToAnotherProductAsync(host, "forwarded/fine/old", "moved-fine");
+
+            var batch = await PostAsync(host, "commands", $"[{Registration("forwarded/fine/old", "first")}]", _key);
+
+            Assert.Equal(HttpStatusCode.OK, batch.Status);
+            Assert.Empty(JsonNode.Parse(batch.Body).AsObject());
+            Assert.Equal("first", moved.Description);
+            Assert.Equal("first", StoredDescription("moved-fine"));
+
+            var single = await PostAsync(host, "addOrUpdate", Registration("forwarded/fine/old", "second"), _key);
+
+            Assert.Equal(HttpStatusCode.OK, single.Status);
+            Assert.Equal(string.Empty, single.Body);
+            Assert.Equal("second", StoredDescription("moved-fine"));
+            Assert.False(Registered("forwarded/fine/old"));
+        }
+
+        // No handler of a queue waits for another queue: the one that forwards returns at
+        // once, and the wait for the outcome is the caller's, outside any queue. So two root
+        // products that forward registrations to each other at the same time cannot wait for
+        // each other. Many at once in both directions, all answered.
+        [Fact]
+        public async Task TwoProductsForwardingRegistrationsToEachOther_AtTheSameTime_AllAnswer()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var other = await _valuesCache.AddProductAsync($"mutual-{Guid.NewGuid():N}", Guid.Empty);
+
+            // One sensor of each product moved to the other: each product now has an alias
+            // that forwards to the other's queue.
+            var here = await CreateAsync(host, "mutual/here-old");
+            var there = await CreateInAsync(other.Id, "mutual/there-old");
+
+            Assert.True((await _valuesCache.MoveSensorAsync(here.Id, other.Id, "mutual/here-new")).IsOk);
+            Assert.True((await _valuesCache.MoveSensorAsync(there.Id, TestProductsManager.ProductId, "mutual/there-new")).IsOk);
+
+            var registrations = Enumerable.Range(0, 100).Select(i => i % 2 == 0
+                ? _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(TestProductsManager.ProductId, "mutual/here-old", $"to the other product {i}"))
+                : _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(other.Id, "mutual/there-old", $"to this product {i}"))).ToArray();
+
+            var results = await Task.WhenAll(registrations).WaitAsync(Patience);
+
+            Assert.All(results, result => Assert.True(result.IsOk, result.Error));
+            Assert.StartsWith("to the other product", here.Description);
+            Assert.StartsWith("to this product", there.Description);
+        }
+
         [Fact]
         public async Task StoreFailsOnce_OnTheSingleRegistrationRoute_Is500_AndTheResendRegisters()
         {
@@ -452,6 +548,46 @@ namespace HSMServer.Core.Tests.SensorApi
 
 
         private bool Registered(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out _);
+
+        // Registers a sensor of the test product over HTTP.
+        private async Task<BaseSensorModel> CreateAsync(SensorApiTestHost host, string path)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", $"[{Registration(path)}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor));
+
+            return sensor;
+        }
+
+        // Registers a sensor of another root product, straight in the cache.
+        private async Task<BaseSensorModel> CreateInAsync(Guid productId, string path)
+        {
+            Assert.True((await _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(productId, path, description: null))).IsOk);
+            Assert.True(_valuesCache.TryGetSensorByPath(productId, path, out var sensor));
+
+            return sensor;
+        }
+
+        private static SensorAddOrUpdateRequest RegistrationRequest(Guid productId, string path, string description) =>
+            new(productId, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty, Description = description },
+                Type = SensorType.Integer,
+                TypeIsExplicit = true,
+            };
+
+        // A sensor of the test product, registered at `oldPath` and then moved to a new root
+        // product under the name `movedName`: `oldPath` is from then on an alias that forwards
+        // to the other product's queue.
+        private async Task<BaseSensorModel> MoveToAnotherProductAsync(SensorApiTestHost host, string oldPath, string movedName)
+        {
+            var sensor = await CreateAsync(host, oldPath);
+            var other = await _valuesCache.AddProductAsync($"alias-target-{Guid.NewGuid():N}", Guid.Empty);
+
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, other.Id, $"moved/{movedName}")).IsOk);
+            Assert.False(Registered(oldPath));
+
+            return sensor;
+        }
 
         // What the store holds for the sensor with this name: what a restart would load.
         private string StoredDescription(string sensorName) =>
