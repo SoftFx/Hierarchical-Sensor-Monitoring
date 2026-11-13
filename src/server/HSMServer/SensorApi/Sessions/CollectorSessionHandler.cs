@@ -479,11 +479,14 @@ namespace HSMServer.SensorApi.Sessions
             Exception firstFault = null;
             var faulted = 0;
 
+            // The sensor moves of the whole frame first (#1724), as on the HTTP route.
+            await _ingestion.ApplyPreviousPathsAsync(commands.Select(command => (caller, command)).ToList());
+
             foreach (var command in commands)
             {
                 try
                 {
-                    var error = await _ingestion.ApplyCommandAsync(caller, command);
+                    var error = await _ingestion.ApplyCommandAsync(caller, command, previousPathsApplied: true);
 
                     if (error is not null)
                         errors[command.Path] = error;

@@ -112,6 +112,15 @@ namespace HSMServer.Core.Cache
         Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path, IReadOnlyList<string> previousPaths,
             SensorType? type, InitiatorInfo initiator, CancellationToken token = default);
 
+        /// <summary>
+        /// The previous paths of every registration of one batch, applied together: a move away
+        /// from a path runs before a move onto it, and a path the batch registers again does not
+        /// stay an alias of the sensor that left it. Pass ALL registrations of the batch, also
+        /// those without previous paths. Refusals are logged and the result is always Ok.
+        /// </summary>
+        Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, IReadOnlyList<PreviousPathsRegistration> registrations,
+            InitiatorInfo initiator, CancellationToken token = default);
+
         /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
         Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default);
