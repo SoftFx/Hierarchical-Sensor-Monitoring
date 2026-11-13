@@ -495,6 +495,111 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public async Task Request_that_fails_after_its_session_ended_does_not_end_the_next_session()
+        {
+            using (var server = new ScriptedSessionServer())
+            using (var sender = new SessionDataSender(OptionsFor(server), new RecordingLogger()))
+            {
+                var connection = sender.Connection;
+
+                sender.Start();
+
+                Assert.True(await WaitForAsync(() => connection.SessionsOpened == 1), "The session never came up.");
+
+                // The write lock of the connection. While the test holds it, a request has taken
+                // its session and waits to write its frame: the place where a request can
+                // outlive its session.
+                var sendLock = (SemaphoreSlim)typeof(SessionConnection)
+                    .GetField("_sendLock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .GetValue(connection);
+
+                await sendLock.WaitAsync();
+
+                Task<SessionAck> late;
+                Task resetOfSecond;
+
+                try
+                {
+                    // Runs up to its wait for the lock before it returns: the request is on session 1.
+                    late = connection.RequestAsync(SessionProtocol.OpList, "[]", Timeout, CancellationToken.None);
+
+                    Assert.False(late.IsCompleted, "The request did not wait for the write lock.");
+
+                    // Session 1 ends and session 2 comes up, with the request still waiting. The
+                    // collector ends it itself, by a stop that does not linger and a start: that
+                    // aborts the socket of session 1 on this side and writes nothing, so it does
+                    // not need the lock the test holds and does not depend on how the platform
+                    // tells a client that its server is gone. (A session cut by the scripted
+                    // server would not do: where its connection stays open underneath, as it
+                    // does on Linux, the collector learns of the cut only from a write, and no
+                    // write gets past the lock.)
+                    await sender.StopAsync(terminal: true);
+                    sender.Start();
+
+                    Assert.True(await WaitForAsync(() => connection.SessionsOpened == 2), "The second session never came up.");
+
+                    // Taken while the request still waits: it says whether session 2 was asked
+                    // to end, whatever the loop has made of that by the time it is read.
+                    resetOfSecond = connection.ResetOfCurrentSession;
+
+                    Assert.NotNull(resetOfSecond);
+                }
+                finally
+                {
+                    sendLock.Release();
+                }
+
+                Assert.Same(late, await Task.WhenAny(late, Task.Delay(Timeout)));
+
+                var answer = await late;
+
+                // The request went the way of a failed write, on the socket of the session that
+                // is gone: the one way a request asks for a reset long after its session ended.
+                Assert.False(answer.Acked);
+                Assert.StartsWith("sending failed", answer.Error);
+
+                Assert.False(resetOfSecond.IsCompleted, "A request of the first session asked for the second session to be ended.");
+
+                // And the second session serves the next request.
+                var next = connection.RequestAsync(SessionProtocol.OpList, "[]", Timeout, CancellationToken.None);
+
+                Assert.Same(next, await Task.WhenAny(next, Task.Delay(Timeout)));
+                Assert.True((await next).IsSuccess, "The second session did not serve a request.");
+                Assert.Equal(2, server.Sessions);
+            }
+        }
+
+        [Fact]
+        public async Task Sender_the_host_disposed_is_not_started_and_start_says_so()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+
+                    // The sender the collector created is public as the DataSender of its
+                    // options, and it is disposable: the one way a sender is disposed before
+                    // the collector that owns it starts.
+                    options.DataSender.Dispose();
+
+                    await collector.Start();
+
+                    Assert.Single(logger.Errors.Where(e => e.Contains("was disposed and cannot be started again")));
+                    Assert.False(((SessionDataSender)options.DataSender).Connection.IsUp);
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(0, server.Sessions);
+            }
+        }
+
+        [Fact]
         public async Task Dropped_session_is_reopened_and_what_was_queued_meanwhile_arrives()
         {
             using (var server = new ScriptedSessionServer())
@@ -1080,6 +1185,55 @@ namespace HSMDataCollector.Tests.Transport
             }
 
             Assert.Single(logger.Errors.Where(e => e.Contains("collector session transport is unavailable")));
+        }
+
+        [Fact]
+        public async Task Unavailable_session_is_reported_on_every_start()
+        {
+            var logger = new RecordingLogger();
+            var secondLogger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.AllowUntrustedServerCertificate = true;
+                options.ServerAddress = "https://localhost";
+                options.AllowPlaintextTransport = false;
+                // No window: every report is written, so the lines are the reports of the sender.
+                options.ExceptionDeduplicatorWindow = TimeSpan.Zero;
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+
+                    await collector.Start();
+                    await collector.Stop();
+
+                    Assert.Single(logger.Errors.Where(e => e.Contains("collector session transport is unavailable")));
+
+                    // A host that starts its collector again is told again why nothing is delivered.
+                    await collector.Start();
+
+                    Assert.Equal(2, logger.Errors.Count(e => e.Contains("collector session transport is unavailable")));
+
+                    // A second collector from the same options shares the sender and does not
+                    // start it: it adds no report, to its own log or to the owner's.
+                    using (var second = new DataCollector(options))
+                    {
+                        second.AddCustomLogger(secondLogger);
+
+                        await second.Start();
+                        await second.Stop();
+                    }
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(0, server.Sessions);
+            }
+
+            Assert.Equal(2, logger.Errors.Count(e => e.Contains("collector session transport is unavailable")));
+            Assert.DoesNotContain(secondLogger.Errors, e => e.Contains("collector session transport is unavailable"));
         }
 #endif
 

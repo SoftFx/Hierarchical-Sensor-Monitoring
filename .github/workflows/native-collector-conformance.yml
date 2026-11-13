@@ -231,12 +231,14 @@ jobs:
       # step 3), which exist only in this build.
       # The stop drain scenarios about registrations and the must-fail fixture of their assertion
       # (conformance_stop_drain_registration_contract, meta_sends_wrong_order, #1751) exist only in
-      # this build too: the native collector sends a registration over the HTTP transport only.
+      # this build too: the native collector sends a registration over the HTTP transport only. So do
+      # the order of a sensor's registrations and the must-fail fixture of its assertion
+      # (conformance_registration_order_contract, meta_last_delivered_registration_*, #1750).
       - name: Test (HTTP lane)
         if: steps.changes.outputs.run == 'true'
         env:
           HSM_REQUIRE_WEBSOCKET: '1'
-        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws|native_session|conformance_session|meta_session|conformance_stop_drain_registration|meta_sends_wrong_order"
+        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws|native_session|conformance_session|meta_session|conformance_stop_drain_registration|meta_sends_wrong_order|conformance_registration_order|meta_last_delivered_registration"
 
       - name: Upload HTTP transport logs on failure
         if: failure()

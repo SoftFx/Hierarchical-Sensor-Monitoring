@@ -36,6 +36,7 @@
 #include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
+#include <nlohmann/json.hpp>
 #endif
 
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
@@ -716,6 +717,17 @@ namespace
         // transport. In every build: a build without the HTTP transport has no such verb and the
         // flag stays false.
         bool on_session = false;
+
+        // The error lines the collector of a session case logged (create_collector_on_session
+        // installs the logger). add_file_value reads them to tell the refusal of a file value by
+        // the session from another INVALID_STATE. Declared before the collector, which calls the
+        // logger until it is destroyed.
+        struct ErrorLog
+        {
+            std::mutex mutex;
+            std::vector<std::string> lines;
+        };
+        std::unique_ptr<ErrorLog> error_log;
 
         CollectorHandle collector;
     };
@@ -2814,6 +2826,50 @@ namespace
             return;
         }
 
+        // (#1750) Of the registrations the recording server delivered (a POST to /commands it
+        // answered 200), the last one of the sensor whose path ends with the suffix: what a server
+        // holds of that sensor. The bodies are read with a JSON library, not by hand.
+        if (action == "expect_last_delivered_registration")
+        {
+            Require(step.size() >= 3, "expect_last_delivered_registration requires a path suffix and a description");
+            Require(SendsToRecordingServer(state),
+                    "expect_last_delivered_registration reads what the server was sent: a case that uses it is created with "
+                    "create_collector_sending_registrations");
+#if defined(HSM_COLLECTOR_HTTP)
+            const auto& suffix = step[1];
+            bool found = false;
+            std::string description;
+            for (const auto& request : state.send_record_server->Requests())
+            {
+                if (request.path != "/api/sensors/commands" || request.status != 200)
+                    continue;
+
+                const auto commands = nlohmann::json::parse(request.body, nullptr, /*allow_exceptions=*/false);
+                Require(commands.is_array(), ("a registration request is not a JSON array: " + request.body).c_str());
+                for (const auto& command : commands)
+                {
+                    const auto path = command.find("Path");
+                    if (path == command.end() || !path->is_string())
+                        continue;
+                    const auto& text = path->get_ref<const std::string&>();
+                    if (text.size() < suffix.size() || text.compare(text.size() - suffix.size(), suffix.size(), suffix) != 0)
+                        continue;
+
+                    found = true;
+                    const auto field = command.find("Description");
+                    description = field != command.end() && field->is_string() ? field->get<std::string>() : "null";
+                }
+            }
+
+            Require(found, ("no registration of a path ending with '" + suffix + "' was delivered").c_str());
+            Require(description == step[2],
+                    ("the last delivered registration of '" + suffix + "' has the description '" + description + "', expected '" +
+                     step[2] + "'")
+                        .c_str());
+#endif
+            return;
+        }
+
         if (action == "stop_expect_under_ms")
         {
             Require(step.size() >= 2, "stop_expect_under_ms requires a bound in milliseconds");
@@ -3215,10 +3271,27 @@ namespace
             const char* content_ptr = step[2] == "token:null" ? nullptr : content.c_str();
             const auto comment = ExpandTextToken(step[4]);
             const hsm_result_t added = hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str());
+            if (added == HSM_RESULT_OK)
+                return;
+
             // A collector on a session refuses a file value at the call (the session has no op
             // for it yet): that refusal is what a session case adds the value to see. The managed
             // collector refuses it at the same place and its AddValue returns nothing either way.
-            Require(added == HSM_RESULT_OK || (state.on_session && added == HSM_RESULT_INVALID_STATE), "add_file_value failed");
+            // The result alone does not name the cause (INVALID_STATE is also a sensor whose
+            // collector is gone), so the refusal is accepted only with the line the collector logs
+            // for it. That line goes through the deduplicated error channel: a second refusal in
+            // the window logs nothing new, so what is checked is that the session refusal was
+            // logged in this case, at this call or an earlier one.
+            Require(state.on_session && added == HSM_RESULT_INVALID_STATE, "add_file_value failed");
+            bool refused_by_session = false;
+            {
+                std::lock_guard<std::mutex> guard(state.error_log->mutex);
+                for (const auto& line : state.error_log->lines)
+                    if (line.find("the collector session transport cannot carry file values") != std::string::npos)
+                        refused_by_session = true;
+            }
+            Require(refused_by_session,
+                    "add_file_value failed: INVALID_STATE on a session collector, but not the refusal of a file value by the session");
             return;
         }
 
@@ -3349,6 +3422,18 @@ namespace
                 state.collector = CreateCollector(options);
                 Require(hsm_collector_use_session_transport(state.collector.value) == HSM_RESULT_OK, "the session transport must install");
                 state.on_session = true;
+                state.error_log = std::make_unique<ConformanceState::ErrorLog>();
+                Require(hsm_collector_set_logger(
+                            state.collector.value,
+                            [](hsm_log_level_t level, const char* message, void* user_data) {
+                                if (level != HSM_LOG_LEVEL_ERROR || message == nullptr)
+                                    return;
+                                auto* log = static_cast<ConformanceState::ErrorLog*>(user_data);
+                                std::lock_guard<std::mutex> guard(log->mutex);
+                                log->lines.emplace_back(message);
+                            },
+                            state.error_log.get()) == HSM_RESULT_OK,
+                        "the logger of a session case must install");
                 return;
             }
 
@@ -3412,7 +3497,10 @@ namespace
             {
                 // The driver's own request, not the collector's: it puts on the server's record
                 // what expect_no_http_requests looks for.
-                Require(server.SendPlainHttpRequest(), "session_http_request: the scripted server did not take the request");
+                Require(server.SendPlainHttpRequest(),
+                        "session_http_request: the scripted server did not answer the request within 10 s. It serves one connection "
+                        "at a time and reads a request made during a session only when that session has ended: place the verb "
+                        "after stop or while no session is open");
                 return;
             }
 
@@ -10861,6 +10949,8 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             // (#1751) Needs the HTTP transport, not WebSocket: it runs wherever this build does.
             { "conformance_stop_drain_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            // (#1750) The same sender as above.
+            { "conformance_registration_order_contract", [](const std::string& path) { RunConformanceContract(path); } },
             // The session scenarios need a libcurl with WebSocket: without one they skip and say
             // so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
             { "conformance_session_transport_contract",

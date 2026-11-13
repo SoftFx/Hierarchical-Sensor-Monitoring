@@ -122,6 +122,18 @@ namespace HSMServer.Core.DataLayer
 
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
+
+        /// <summary>
+        /// <see cref="AddSensor"/> and <see cref="UpdateSensor"/> with the outcome of the write (#1756):
+        /// null when the row was written, otherwise the failure. The void methods do not report a
+        /// write the storage engine failed on (it is logged there and the caller is not told), and
+        /// every caller but one relies on that. The one is the registration of a sensor by a
+        /// collector, which must tell a row that was not written from one that was. A failed write is
+        /// reported, not thrown; null is the answer of success, so a store that does not implement
+        /// the report (a loose test double) reads as "written", as with the void methods.
+        /// </summary>
+        Exception AddSensorChecked(SensorEntity entity);
+        Exception UpdateSensorChecked(SensorEntity entity);
         void RemoveSensorWithMetadata(Guid sensorId);
 
         void AddSensorValue(Guid sensorId, BaseValue value);

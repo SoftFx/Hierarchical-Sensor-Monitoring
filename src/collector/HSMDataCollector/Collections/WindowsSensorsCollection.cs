@@ -344,7 +344,25 @@ namespace HSMDataCollector.DefaultSensors
                     return this;
                 }
 
-                return ToWindows(new WindowsTcpFailureRateMonitor(_storage, asked));
+                var added = new WindowsTcpFailureRateMonitor(_storage, asked);
+
+                try
+                {
+                    return ToWindows(added);
+                }
+                finally
+                {
+                    // INVARIANT: the storage holds the monitor and its rate sensor together or
+                    // neither of them. The two are registered one after the other, and the
+                    // storage can take the first and refuse the second: the collector began to
+                    // stop in between (the monitor comes back disposed), or the sensor limit was
+                    // reached (the registration throws). The rate sensor then leaves again, or
+                    // the next Start would register it and it would post 0 with no monitor
+                    // behind it. Checked under the gate of this method, so no other request for
+                    // this sensor sees the pair half built.
+                    if (!_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var stored) || !ReferenceEquals(stored, added))
+                        added.WithdrawSensor();
+                }
             }
         }
 

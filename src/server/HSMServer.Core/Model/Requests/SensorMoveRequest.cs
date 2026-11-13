@@ -175,7 +175,44 @@ namespace HSMServer.Core.Model.Requests
 
 
     /// <summary>A registration that reached a sensor through an alias of another root product.</summary>
-    internal sealed record AliasRegistrationRequest(Cache.UpdateEntities.SensorUpdate Update, Guid ExpectedRootId, int Hops) : IUpdateRequest;
+    internal sealed record AliasRegistrationRequest(Cache.UpdateEntities.SensorUpdate Update, Guid ExpectedRootId, int Hops) : IUpdateRequest
+    {
+        /// <summary>
+        /// Where the end of this registration is reported (#1756). One object for the request and
+        /// for every copy made of it when it follows a sensor that moved again.
+        /// </summary>
+        public ForwardedRegistration Outcome { get; init; }
+    }
+
+
+    /// <summary>
+    /// The outcome of a registration that was forwarded through an alias to the queue of another
+    /// root product (#1756). The handler that forwards does not wait for that queue (a handler
+    /// that waited for another queue could deadlock with one forwarding the other way); it leaves
+    /// this object on the registration, and TreeValuesCache.AddOrUpdateSensorAsync, which runs
+    /// outside any queue, awaits it after its own queue has answered.
+    ///
+    /// Invariant: every way a forwarded registration ends completes it, exactly once in effect
+    /// (later completions are ignored): applied, dropped, failed, or never taken by the queue.
+    /// A path that forgot to would leave the caller of the registration waiting, for as long as
+    /// TreeValuesCache.ForwardedRegistrationWait allows; a queue that is disposed with the request
+    /// unread never completes it, which is what that limit is for.
+    /// </summary>
+    internal sealed class ForwardedRegistration
+    {
+        private readonly System.Threading.Tasks.TaskCompletionSource<string> _fault =
+            new(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+
+
+        /// <summary>
+        /// Completes when the forwarded registration has ended. The text of a fault (an error of
+        /// the target queue, a failed write to the store), or null when it was applied or ended in
+        /// a way that is answered as applied, as a direct registration is.
+        /// </summary>
+        public System.Threading.Tasks.Task<string> Fault => _fault.Task;
+
+        public void Complete(string fault = null) => _fault.TrySetResult(fault);
+    }
 
 
     /// <summary>

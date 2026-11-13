@@ -1,0 +1,54 @@
+# HSM collector conformance v1 — the order of a sensor's registrations across failed sends (#1750).
+# Format: case|action|arg1|arg2|...
+#
+# The server keeps the registration of a sensor (description, TTL, unit, alerts) that came LAST.
+# So after registration sends have failed and the sensor was registered again with other settings
+# meanwhile, the last registration the server receives for it is the newest one: an older
+# registration never arrives after a newer one. The two collectors get there differently. The
+# managed collector queues commands; a command package whose send failed is held ahead of the
+# commands issued after it, and the next package starts with it. The native collector queues the
+# sensor, not the command, and posts the sensor's state as it is at the time of the post. The
+# scenario pins the outcome both owe the server, not either mechanism.
+#
+# New verb:
+#   expect_last_delivered_registration|path_suffix|description
+#       of the registrations the sender of the case DELIVERED (a send it accepted), the last one of
+#       the sensor whose path ends with path_suffix carries this description. Fails when none was
+#       delivered. For a create_collector_sending_registrations case (in the native driver: its
+#       HTTP build, the recording server).
+#
+# Timeline, without a race. max_values_in_package=1 makes every command a package of its own, so
+# the failed registration and the newer one are in different packages: inside one package the
+# managed collector sends commands in the order they were issued anyway. collect_period_ms=60000
+# keeps the retry cycle out of the case; what is delivered, the stop's drain delivers, with the
+# sender up.
+
+# The newer registration is issued while the send of the older one is in flight, and that send
+# then fails. Managed: the send of the start parks in the hang (the case waits for it), the newer
+# registration queues behind it, the hang ends with the failure (down; a send parked in the hang
+# ends with the mode that ended it). The failed package must not go behind the newer registration:
+# before #1750 it went to the tail, the drain delivered "second" and then "first", and the server
+# kept "first". Native: the post of the start hangs until its request timeout and is queued for a
+# retry; the drain posts the sensor as it is then.
+newer_registration_issued_during_a_failed_send_arrives_last|create_collector_sending_registrations|1|60000|1000
+newer_registration_issued_during_a_failed_send_arrives_last|create_int_sensor_with_options|contract/order/in-flight|0|-1|first
+newer_registration_issued_during_a_failed_send_arrives_last|set_sender_mode|hung
+newer_registration_issued_during_a_failed_send_arrives_last|start
+newer_registration_issued_during_a_failed_send_arrives_last|expect_send_attempts|registration|1|10
+newer_registration_issued_during_a_failed_send_arrives_last|set_sensor_description|0|second
+newer_registration_issued_during_a_failed_send_arrives_last|set_sender_mode|down
+newer_registration_issued_during_a_failed_send_arrives_last|set_sender_mode|up
+newer_registration_issued_during_a_failed_send_arrives_last|stop
+newer_registration_issued_during_a_failed_send_arrives_last|expect_last_delivered_registration|contract/order/in-flight|second
+
+# The newer registration is issued after the send of the older one has failed: registration fails,
+# sensor registered again, sender back up, the newest one arrives last.
+newer_registration_issued_after_a_failed_send_arrives_last|create_collector_sending_registrations|1|60000|1000
+newer_registration_issued_after_a_failed_send_arrives_last|create_int_sensor_with_options|contract/order/after|0|-1|first
+newer_registration_issued_after_a_failed_send_arrives_last|set_sender_mode|down
+newer_registration_issued_after_a_failed_send_arrives_last|start
+newer_registration_issued_after_a_failed_send_arrives_last|expect_send_attempts|registration|1|10
+newer_registration_issued_after_a_failed_send_arrives_last|set_sensor_description|0|second
+newer_registration_issued_after_a_failed_send_arrives_last|set_sender_mode|up
+newer_registration_issued_after_a_failed_send_arrives_last|stop
+newer_registration_issued_after_a_failed_send_arrives_last|expect_last_delivered_registration|contract/order/after|second

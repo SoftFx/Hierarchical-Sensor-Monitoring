@@ -14,6 +14,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -442,8 +443,12 @@ namespace hsm::test
         uint64_t IdleAcceptPolls() const { return idle_accept_polls_.load(std::memory_order_acquire); }
 
         // One request that is no upgrade, made by the test itself: what PlainHttpRequests counts.
-        // Returns when the server has answered and closed, so the request is counted by then.
-        bool SendPlainHttpRequest() const
+        // Returns true when the server has answered and closed, so the request is counted by then.
+        // The server serves one connection at a time, so a request made while a session is open
+        // is read only when that session has ended: the wait for the answer is bounded by
+        // `answer_timeout_ms`, and a request that gets no answer by then returns false instead
+        // of hanging the test. No passing case comes near the bound.
+        bool SendPlainHttpRequest(int answer_timeout_ms = 10000) const
         {
             const socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
             if (sock == INVALID_SOCKET)
@@ -457,13 +462,47 @@ namespace hsm::test
             const bool sent = connect(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
                               WriteAll(sock, "GET /api/sensors/list HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
 
+            bool answered = false;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(answer_timeout_ms);
             char buffer[256];
-            while (sent && recv(sock, buffer, static_cast<int>(sizeof(buffer)), 0) > 0)
+            while (sent)
             {
+                const auto left = std::chrono::duration_cast<std::chrono::microseconds>(deadline - std::chrono::steady_clock::now()).count();
+                if (left <= 0)
+                    break;
+
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(sock, &readfds);
+                timeval tv{};
+                tv.tv_sec = static_cast<decltype(tv.tv_sec)>(left / 1000000);
+                tv.tv_usec = static_cast<decltype(tv.tv_usec)>(left % 1000000);
+#if defined(_WIN32)
+                const int nfds = 0;
+#else
+                const int nfds = sock + 1;
+#endif
+                const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
+                if (ready < 0)
+                {
+#if !defined(_WIN32)
+                    if (errno == EINTR)
+                        continue;
+#endif
+                    break;
+                }
+                if (ready == 0)
+                    continue; // the deadline is checked at the top
+
+                if (recv(sock, buffer, static_cast<int>(sizeof(buffer)), 0) <= 0)
+                {
+                    answered = true; // the server answered and closed
+                    break;
+                }
             }
 
             closesocket(sock);
-            return sent;
+            return sent && answered;
         }
 
     private:

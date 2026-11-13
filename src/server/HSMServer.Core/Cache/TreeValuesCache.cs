@@ -910,6 +910,14 @@ namespace HSMServer.Core.Cache
             return _keys.Values.Where(x => x.IsMaster).ToList();
         }
 
+        // How long AddOrUpdateSensorAsync waits for the outcome of a registration it
+        // forwarded to another product's queue (#1756). 20 s, below the 30 s a collector
+        // waits for an answer by default (RequestTimeout): the collector then gets the 500
+        // and sends the registration again, instead of giving up on a request without an
+        // answer, which on a collector session also costs it the session. A queue that
+        // needs longer than this for one registration is not working. Settable for tests.
+        internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
+
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
         // registration again, and a refusal as delivered, so only a failure that has a
@@ -926,6 +934,12 @@ namespace HSMServer.Core.Cache
         // Nothing but the IsFault mark of the result is new, so a caller that does not ask
         // for it sees what it saw before, except that a failed write to the store is now
         // an error result and no longer Ok.
+        //
+        // A registration forwarded through an alias to the queue of another root product
+        // is sorted by the same rule. Its handler does not wait for that queue (no handler
+        // waits for another queue: two forwarding to each other would deadlock); it leaves
+        // the pending outcome on the request, and it is awaited here, outside any queue,
+        // for no longer than ForwardedRegistrationWait.
         public async Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
             var result = await ProcessRequestAsync(request.ProductId, request, token);
@@ -933,7 +947,40 @@ namespace HSMServer.Core.Cache
             if (!result.IsOk)
                 return TaskResult.FromFault(result.Error);
 
-            return request.Fault is null ? result : TaskResult.FromFault(request.Fault);
+            if (request.Fault is not null)
+                return TaskResult.FromFault(request.Fault);
+
+            if (request.Forwarded is { } forwarded)
+            {
+                string fault;
+
+                try
+                {
+                    // Bounded: the outcome is completed by the other product's queue, and
+                    // a queue that is disposed with the request still unread (its product
+                    // is removed, the server stops) never completes it. Before #1756 the
+                    // caller was answered at once, so without a bound that would be a
+                    // request that hangs where none did.
+                    fault = await forwarded.Fault.WaitAsync(ForwardedRegistrationWait, token);
+                }
+                catch (TimeoutException)
+                {
+                    // Not answered is not applied: a fault, so the collector sends the
+                    // registration again.
+                    fault = $"The registration forwarded through an alias to another product was not answered within {ForwardedRegistrationWait.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} s";
+                }
+                catch (OperationCanceledException ex)
+                {
+                    // As the wait for the own queue answers a cancellation: an error
+                    // result, not an exception.
+                    fault = ex.Message;
+                }
+
+                if (fault is not null)
+                    return TaskResult.FromFault(fault);
+            }
+
+            return result;
         }
 
         // storeFailed (#1756): true when the registration failed in a write to the store
@@ -951,19 +998,35 @@ namespace HSMServer.Core.Cache
                 switch (ResolveAlias(request.ProductId, request.Path, request.TypeIsExplicit ? request.Type : null, out sensor))
                 {
                     case AliasResolution.Forwarded:
-                        Dispatch(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0));
+                        // Not applied here: handed to the queue that owns the sensor. This
+                        // handler returns at once and does not wait for that queue; what
+                        // comes of the registration there is left on the request for
+                        // AddOrUpdateSensorAsync (#1756).
+                        request.Forwarded = new ForwardedRegistration();
+                        DispatchForwarded(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0) { Outcome = request.Forwarded });
                         error = null;
                         return true;
 
                     case AliasResolution.None:
-                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error, out storeFailed))
+                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, checkStore: true, out sensor, out error, out storeFailed))
                             return false;
                         break;
                 }
             }
 
             update = update with { Id = sensor.Id };
-            return TryUpdateSensor(update, out error, out storeFailed);
+            return TryUpdateSensor(update, checkStore: true, out error, out storeFailed);
+        }
+
+        // The write of a sensor's row on the registration path (#1756). The store's void
+        // methods do not tell a write the storage engine failed on (it logs it and
+        // returns), which is what every other caller of them relies on; a registration
+        // must know, so it asks for the outcome and turns a reported failure into the
+        // exception a throwing store would have raised at the same place.
+        private static void ThrowIfNotWritten(Exception failure)
+        {
+            if (failure is not null)
+                throw new InvalidOperationException($"The store did not write the sensor: {failure.Message}", failure);
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
@@ -981,12 +1044,17 @@ namespace HSMServer.Core.Cache
         // after applying it (EvaluationError; the policy applied and
         // persisted). Null for every other caller.
         private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null) =>
-            TryUpdateSensor(update, out error, out _, policyFailures);
+            TryUpdateSensor(update, checkStore: false, out error, out _, policyFailures);
 
         // storeFailed (#1756): true when the update failed in the write to the store, the
         // one failure here that is known to be able to pass on a repeat. Only the
         // registration path asks; for every other caller this is the method it was.
-        private bool TryUpdateSensor(SensorUpdate update, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
+        //
+        // checkStore: true on the registration path only. The write then asks the store
+        // for its outcome (UpdateSensorChecked), so a write the storage engine failed on
+        // without throwing is seen too. False for every other caller: the void write, with
+        // which such a failure is logged by the store and not seen here, as always.
+        private bool TryUpdateSensor(SensorUpdate update, bool checkStore, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
         {
             storeFailed = false;
 
@@ -1005,7 +1073,12 @@ namespace HSMServer.Core.Cache
                 var entity = sensor.ToEntity();
 
                 storing = true;
-                _database.UpdateSensor(entity);
+
+                if (checkStore)
+                    ThrowIfNotWritten(_database.UpdateSensorChecked(entity));
+                else
+                    _database.UpdateSensor(entity);
+
                 storing = false;
 
                 SensorUpdateView(sensor);
@@ -3985,11 +4058,16 @@ namespace HSMServer.Core.Cache
         // re-checks the index under it so a cross-product move that just
         // published a sensor at this path is reused, not duplicated (ADR-0018).
         private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error) =>
-            TryAddSensor(request, type, productId, options, out sensor, out error, out _);
+            TryAddSensor(request, type, productId, options, checkStore: false, out sensor, out error, out _);
 
         // storeFailed (#1756): true when the sensor was not created because the write of
         // its row to the store failed. Only the registration path asks.
-        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        //
+        // checkStore: true on the registration path only, see TryUpdateSensor. False for
+        // the sensor a first value creates: its row is written with the void method, so a
+        // write the storage engine fails on without throwing leaves the sensor in memory,
+        // as it always did.
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             storeFailed = false;
 
@@ -4003,11 +4081,11 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
 
-                return TryAddSensorUnderLock(request, type, productId, options, out sensor, out error, out storeFailed);
+                return TryAddSensorUnderLock(request, type, productId, options, checkStore, out sensor, out error, out storeFailed);
             }
         }
 
-        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             sensor = null;
             error = string.Empty;
@@ -4058,7 +4136,14 @@ namespace HSMServer.Core.Cache
                 var row = sensor.ToEntity();
 
                 storing = true;
-                _database.AddSensor(row);
+
+                // A reported failure is thrown here, so that the sensor is rolled back
+                // below exactly as when the store itself throws.
+                if (checkStore)
+                    ThrowIfNotWritten(_database.AddSensorChecked(row));
+                else
+                    _database.AddSensor(row);
+
                 storing = false;
                 persisted = true;
 

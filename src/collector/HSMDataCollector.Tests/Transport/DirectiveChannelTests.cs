@@ -163,6 +163,67 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        [Fact]
+        public void Noted_directive_names_are_bounded()
+        {
+            const int extra = 8;
+
+            var logger = new RecordingLogger();
+            var directives = new ServerDirectives(logger);
+
+            // Twice: a name that was noted is not noted again, and a name that found no room
+            // the first time finds none the second.
+            for (var pass = 0; pass < 2; pass++)
+                for (var i = 0; i < ServerDirectives.MaxNotedNames + extra; i++)
+                    directives.Receive($"name-{i}:argument");
+
+            var notes = logger.Debugs.Where(d => d.Contains("is not handled")).ToList();
+
+            Assert.Equal(2 * (ServerDirectives.MaxNotedNames + extra), directives.ReceivedCount);
+            Assert.Equal(ServerDirectives.MaxNotedNames, directives.NotedNamesCount);
+            Assert.Equal(ServerDirectives.MaxNotedNames, notes.Count);
+
+            // The first names to arrive are the ones that were noted, each once.
+            for (var i = 0; i < ServerDirectives.MaxNotedNames; i++)
+                Assert.Single(notes.Where(n => n.Contains($"'name-{i}'")));
+
+            Assert.Empty(logger.Errors);
+        }
+
+        [Fact]
+        public void Noted_directive_names_are_bounded_when_they_arrive_on_many_threads()
+        {
+            const int threads = 8;
+            const int namesPerThread = 2 * ServerDirectives.MaxNotedNames;
+
+            // Many rounds: the bound has to hold for every interleaving, and a round is cheap.
+            for (var round = 0; round < 200; round++)
+            {
+                var logger = new RecordingLogger();
+                var directives = new ServerDirectives(logger);
+
+                using (var together = new Barrier(threads))
+                {
+                    var senders = Enumerable.Range(0, threads).Select(thread => Task.Run(() =>
+                    {
+                        together.SignalAndWait();
+
+                        // Names of this thread alone: more new names arrive at once than there is room for.
+                        for (var i = 0; i < namesPerThread; i++)
+                            directives.Receive($"name-{thread}-{i}");
+                    })).ToArray();
+
+                    Task.WaitAll(senders);
+                }
+
+                // Every name is different, so every slot that was taken holds a name: the table
+                // is full, and not by one name more.
+                Assert.Equal(ServerDirectives.MaxNotedNames, directives.NotedNamesCount);
+                Assert.Equal(ServerDirectives.MaxNotedNames, logger.Debugs.Count(d => d.Contains("is not handled")));
+                Assert.Equal(threads * namesPerThread, directives.ReceivedCount);
+            }
+        }
+
         [Theory]
         [InlineData("Key", "other-key")]
         [InlineData("clientname", "other-client")]

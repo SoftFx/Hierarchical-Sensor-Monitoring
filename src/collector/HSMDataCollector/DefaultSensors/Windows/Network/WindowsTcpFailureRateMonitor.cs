@@ -8,6 +8,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Sensors;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using FamilyReading = HSMDataCollector.DefaultSensors.Windows.Network.TcpFailureRateAccumulator.FamilyReading;
@@ -51,7 +52,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private double _pushedTotal;
         private readonly Func<FamilyReading> _readV4;
         private readonly Func<FamilyReading> _readV6;
-        private readonly IMonitoringRateSensor _sensor;
+        private readonly MonitoringRateSensor _sensor;
         private readonly SensorsStorage _storage;
         private readonly TimeSpan _period;
 
@@ -88,7 +89,28 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             var options = BuildOptions(period);
             var path = DefaultPrototype.RevealDefaultPath(options, "Network", SensorName);
 
-            _sensor = storage.CreateRateSensor(path, options);
+            _sensor = storage.CreateRateSensor(path, options, out _addedSensor);
+        }
+
+        // True when this constructor put the rate sensor into the storage. False for a sensor
+        // that was at the path before, which is not this monitor's to take out again, and for
+        // one the storage refused.
+        private readonly bool _addedSensor;
+
+        /// <summary>
+        /// Takes the rate sensor this monitor put into the storage out of it again. For a monitor
+        /// the storage did not take (the collector began to stop between the two registrations,
+        /// or the sensor limit was reached): a rate sensor without its monitor would be
+        /// registered by the next Start and post a rate of 0 with nothing behind it.
+        /// </summary>
+        internal void WithdrawSensor()
+        {
+            if (!_addedSensor)
+                return;
+
+            // Only the very instance: whatever else may be at the path by now is not ours.
+            if (_storage.TryGetValue(_sensor.SensorPath, out var stored) && ReferenceEquals(stored, _sensor) && _storage.TryRemove(_sensor.SensorPath, out var removed))
+                removed.Dispose();
         }
 
 
@@ -217,6 +239,14 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             catch (Exception) { }
         }
 
+        // Does not wait for a sample that is in flight, on purpose. Through the collector there
+        // is none: its Dispose stops the sensors first, and StopAsync has waited for the loop
+        // and for the initializations it tracks. A monitor disposed without a stop may still
+        // finish one sample after this returns; that sample adds to the sum of a rate sensor
+        // nobody posts from any more, or reports through the error channel, and the loop ends
+        // with it. Taking the sample lock here would make a Dispose wait for an OS read and for
+        // whatever the host's logger does with a reported error, and the storage calls Dispose
+        // under the collector's lifecycle gate when it refuses a monitor.
         public void Dispose()
         {
             lock (_lifecycleLock)

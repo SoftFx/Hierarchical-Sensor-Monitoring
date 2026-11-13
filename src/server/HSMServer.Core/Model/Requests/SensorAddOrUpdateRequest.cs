@@ -23,6 +23,11 @@ namespace HSMServer.Core.Model.Requests
         // is the handler's way back to the caller, and is written before the queue answers.
         public string Fault { get; internal set; }
 
+        // Set by the cache when the registration was not applied on its own queue but
+        // forwarded, through an alias, to the queue of another root product (#1756): the
+        // outcome of it there, which AddOrUpdateSensorAsync awaits. Null otherwise.
+        internal ForwardedRegistration Forwarded { get; set; }
+
 
         public SensorAddOrUpdateRequest(Guid productId, string path) : base(productId, path)
         {

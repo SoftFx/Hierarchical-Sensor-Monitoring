@@ -46,9 +46,18 @@ namespace HSMServer.Core.Tests.SensorApi
 
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-        // Names of sensors whose row the store refuses to write, once each.
+        // The two ways a store fails on the row of a sensor. "throws": the write raises an
+        // exception. "reports": the way the real store fails, where the LevelDB layer catches
+        // the failed write, logs it and returns; only the checked write of the registration
+        // path is told.
+        public const string Throws = "throws";
+        public const string Reports = "reports";
+
+        // Names of sensors whose row the store fails to write, once each.
         private readonly ConcurrentDictionary<string, byte> _failCreationOnce = new();
         private readonly ConcurrentDictionary<string, byte> _failSaveOnce = new();
+        private readonly ConcurrentDictionary<string, byte> _loseCreationOnce = new();
+        private readonly ConcurrentDictionary<string, byte> _loseSaveOnce = new();
 
         private readonly string _key = TestProductsManager.TestProductKey.Id;
 
@@ -64,20 +73,28 @@ namespace HSMServer.Core.Tests.SensorApi
             {
                 ShouldFailSensorAdd = entity => _failCreationOnce.TryRemove(entity.DisplayName, out _),
                 ShouldFailSensorUpdate = entity => _failSaveOnce.TryRemove(entity.DisplayName, out _),
+                ShouldLoseSensorAdd = entity => _loseCreationOnce.TryRemove(entity.DisplayName, out _),
+                ShouldLoseSensorUpdate = entity => _loseSaveOnce.TryRemove(entity.DisplayName, out _),
             };
 
+        private void FailCreationOnce(string how, string sensorName) => (how == Throws ? _failCreationOnce : _loseCreationOnce)[sensorName] = 0;
 
-        [Fact]
-        public async Task StoreFailsOnce_WhileASensorIsCreated_Is500OnBothTransports_AndTheResendRegistersIt()
+        private void FailSaveOnce(string how, string sensorName) => (how == Throws ? _failSaveOnce : _loseSaveOnce)[sensorName] = 0;
+
+
+        [Theory]
+        [InlineData(Throws)]
+        [InlineData(Reports)]
+        public async Task StoreFailsOnce_WhileASensorIsCreated_Is500OnBothTransports_AndTheResendRegistersIt(string how)
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
             using var socket = await OpenSessionAsync(host);
 
-            static string Package(string transport) =>
-                $"[{Registration($"created/{transport}/before")},{Registration($"created/{transport}/failed-{transport}", "from the resend")},{Registration($"created/{transport}/after")}]";
+            string Package(string transport) =>
+                $"[{Registration($"created/{how}/{transport}/before")},{Registration($"created/{how}/{transport}/failed-{transport}-{how}", "from the resend")},{Registration($"created/{how}/{transport}/after")}]";
 
-            _failCreationOnce["failed-http"] = 0;
-            _failCreationOnce["failed-session"] = 0;
+            FailCreationOnce(how, $"failed-http-{how}");
+            FailCreationOnce(how, $"failed-session-{how}");
 
             var http = await PostAsync(host, "commands", Package("http"), _key);
             var ack = await SendAsync(socket, 1, "commands", Package("session"));
@@ -88,10 +105,12 @@ namespace HSMServer.Core.Tests.SensorApi
 
             foreach (var transport in new[] { "http", "session" })
             {
-                // The rest of the package is applied, as for any fault of one command.
-                Assert.True(Registered($"created/{transport}/before"), $"{transport}: the command before the failed one");
-                Assert.False(Registered($"created/{transport}/failed-{transport}"), $"{transport}: the command the store failed on");
-                Assert.True(Registered($"created/{transport}/after"), $"{transport}: the command after the failed one");
+                // The rest of the package is applied, as for any fault of one command. The
+                // sensor whose row was not written is rolled back: it is not left in memory
+                // without a row.
+                Assert.True(Registered($"created/{how}/{transport}/before"), $"{transport}: the command before the failed one");
+                Assert.False(Registered($"created/{how}/{transport}/failed-{transport}-{how}"), $"{transport}: the command the store failed on");
+                Assert.True(Registered($"created/{how}/{transport}/after"), $"{transport}: the command after the failed one");
             }
 
             // The store works again (it failed once), and the collector sends the package again.
@@ -103,41 +122,241 @@ namespace HSMServer.Core.Tests.SensorApi
 
             foreach (var transport in new[] { "http", "session" })
             {
-                Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"created/{transport}/failed-{transport}", out var sensor), $"{transport}: the resend");
+                Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"created/{how}/{transport}/failed-{transport}-{how}", out var sensor), $"{transport}: the resend");
                 Assert.Equal("from the resend", sensor.Description);
-                Assert.Equal("from the resend", StoredDescription($"failed-{transport}"));
+                Assert.Equal("from the resend", StoredDescription($"failed-{transport}-{how}"));
             }
         }
 
-        [Fact]
-        public async Task StoreFailsOnce_WhileTheSettingsAreSaved_Is500OnBothTransports_AndTheResendSavesThem()
+        [Theory]
+        [InlineData(Throws)]
+        [InlineData(Reports)]
+        public async Task StoreFailsOnce_WhileTheSettingsAreSaved_Is500OnBothTransports_AndTheResendSavesThem(string how)
         {
             await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
             using var socket = await OpenSessionAsync(host);
 
+            var overHttp = $"saved/{how}/http/kept-http-{how}";
+            var overSession = $"saved/{how}/session/kept-session-{how}";
+
             // The sensors exist, registered without a description.
-            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", $"[{Registration("saved/http/kept-http")},{Registration("saved/session/kept-session")}]", _key)).Status);
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", $"[{Registration(overHttp)},{Registration(overSession)}]", _key)).Status);
 
-            _failSaveOnce["kept-http"] = 0;
-            _failSaveOnce["kept-session"] = 0;
+            FailSaveOnce(how, $"kept-http-{how}");
+            FailSaveOnce(how, $"kept-session-{how}");
 
-            var http = await PostAsync(host, "commands", $"[{Registration("saved/http/kept-http", "a new description")}]", _key);
-            var ack = await SendAsync(socket, 1, "commands", $"[{Registration("saved/session/kept-session", "a new description")}]");
+            var http = await PostAsync(host, "commands", $"[{Registration(overHttp, "a new description")}]", _key);
+            var ack = await SendAsync(socket, 1, "commands", $"[{Registration(overSession, "a new description")}]");
 
             Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
             Assert.Equal(500, (int)ack["status"]);
 
             // Nothing of it reached the store: after a restart the description would be gone.
-            Assert.NotEqual("a new description", StoredDescription("kept-http"));
-            Assert.NotEqual("a new description", StoredDescription("kept-session"));
+            Assert.NotEqual("a new description", StoredDescription($"kept-http-{how}"));
+            Assert.NotEqual("a new description", StoredDescription($"kept-session-{how}"));
 
-            var httpResend = await PostAsync(host, "commands", $"[{Registration("saved/http/kept-http", "a new description")}]", _key);
-            var resent = await SendAsync(socket, 2, "commands", $"[{Registration("saved/session/kept-session", "a new description")}]");
+            var httpResend = await PostAsync(host, "commands", $"[{Registration(overHttp, "a new description")}]", _key);
+            var resent = await SendAsync(socket, 2, "commands", $"[{Registration(overSession, "a new description")}]");
 
             Assert.Equal(HttpStatusCode.OK, httpResend.Status);
             Assert.Equal(200, (int)resent["status"]);
-            Assert.Equal("a new description", StoredDescription("kept-http"));
-            Assert.Equal("a new description", StoredDescription("kept-session"));
+            Assert.Equal("a new description", StoredDescription($"kept-http-{how}"));
+            Assert.Equal("a new description", StoredDescription($"kept-session-{how}"));
+        }
+
+        // The same failure of the real store, seen by the callers that are not the
+        // registration of a sensor: the store logs it and they are told nothing, as always.
+        // A sensor a first value creates stays in memory without its row (a later save of the
+        // sensor writes it), and a settings update from the web UI is answered Ok.
+        [Fact]
+        public async Task AWriteTheStoreReportsButDoesNotThrow_OnTheOtherCallersOfTheCache_IsNotSeen_AsBefore()
+        {
+            _loseCreationOnce["value-created-lost"] = 0;
+
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, "others/value-created-lost", DateTime.UtcNow);
+            var stored = await _valuesCache.AddSensorValueAsync(Guid.Parse(_key), TestProductsManager.ProductId, value);
+
+            Assert.True(stored.IsOk);
+            Assert.False(stored.IsFault);
+            Assert.True(Registered("others/value-created-lost"));
+            Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.GetAllSensors(), row => row.DisplayName == "value-created-lost");
+            Assert.Empty(_loseCreationOnce);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "others/value-created-lost", out var sensor));
+
+            _loseSaveOnce["value-created-lost"] = 0;
+
+            var updated = await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, Description = "from the UI" });
+
+            Assert.True(updated.IsOk);
+            Assert.False(updated.IsFault);
+            Assert.Empty(_loseSaveOnce);
+            Assert.Equal("from the UI", sensor.Description);
+        }
+
+        // A registration of a path that is an alias of a sensor moved to another root product
+        // is not applied on the queue of the product it came for: it is forwarded to the queue
+        // that owns the sensor. The collector is answered when it has ended there, and by the
+        // same rule: a write of the row the store fails on is a fault, and the resend saves.
+        // It used to be answered as applied at once, before that queue had stored anything.
+        [Theory]
+        [InlineData(Throws)]
+        [InlineData(Reports)]
+        public async Task StoreFailsOnce_ForARegistrationForwardedThroughAnAlias_Is500OnBothTransports_AndTheResendSavesIt(string how)
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+            using var socket = await OpenSessionAsync(host);
+
+            var overHttp = await MoveToAnotherProductAsync(host, $"forwarded/{how}/http/old", $"moved-http-{how}");
+            var overSession = await MoveToAnotherProductAsync(host, $"forwarded/{how}/session/old", $"moved-session-{how}");
+
+            FailSaveOnce(how, $"moved-http-{how}");
+            FailSaveOnce(how, $"moved-session-{how}");
+
+            var http = await PostAsync(host, "commands", $"[{Registration($"forwarded/{how}/http/old", "through the alias")}]", _key);
+            var ack = await SendAsync(socket, 1, "commands", $"[{Registration($"forwarded/{how}/session/old", "through the alias")}]");
+
+            Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
+            Assert.Equal(500, (int)ack["status"]);
+            Assert.NotEqual("through the alias", StoredDescription($"moved-http-{how}"));
+            Assert.NotEqual("through the alias", StoredDescription($"moved-session-{how}"));
+
+            var httpResend = await PostAsync(host, "commands", $"[{Registration($"forwarded/{how}/http/old", "through the alias")}]", _key);
+            var resent = await SendAsync(socket, 2, "commands", $"[{Registration($"forwarded/{how}/session/old", "through the alias")}]");
+
+            Assert.Equal(HttpStatusCode.OK, httpResend.Status);
+            Assert.Equal(200, (int)resent["status"]);
+            Assert.Equal("through the alias", StoredDescription($"moved-http-{how}"));
+            Assert.Equal("through the alias", StoredDescription($"moved-session-{how}"));
+
+            // The registrations went to the moved sensors: nothing was created at the old paths.
+            Assert.Equal("through the alias", overHttp.Description);
+            Assert.Equal("through the alias", overSession.Description);
+            Assert.False(Registered($"forwarded/{how}/http/old"));
+            Assert.False(Registered($"forwarded/{how}/session/old"));
+        }
+
+        // A forwarded registration that succeeds is answered as it always was, and is now
+        // applied and stored by the time of the answer.
+        [Fact]
+        public async Task ARegistrationForwardedThroughAnAlias_ThatSucceeds_IsAnsweredAsBefore()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var moved = await MoveToAnotherProductAsync(host, "forwarded/fine/old", "moved-fine");
+
+            var batch = await PostAsync(host, "commands", $"[{Registration("forwarded/fine/old", "first")}]", _key);
+
+            Assert.Equal(HttpStatusCode.OK, batch.Status);
+            Assert.Empty(JsonNode.Parse(batch.Body).AsObject());
+            Assert.Equal("first", moved.Description);
+            Assert.Equal("first", StoredDescription("moved-fine"));
+
+            var single = await PostAsync(host, "addOrUpdate", Registration("forwarded/fine/old", "second"), _key);
+
+            Assert.Equal(HttpStatusCode.OK, single.Status);
+            Assert.Equal(string.Empty, single.Body);
+            Assert.Equal("second", StoredDescription("moved-fine"));
+            Assert.False(Registered("forwarded/fine/old"));
+        }
+
+        // No handler of a queue waits for another queue: the one that forwards returns at
+        // once, and the wait for the outcome is the caller's, outside any queue. So two root
+        // products that forward registrations to each other at the same time cannot wait for
+        // each other. Many at once in both directions, all answered.
+        [Fact]
+        public async Task TwoProductsForwardingRegistrationsToEachOther_AtTheSameTime_AllAnswer()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var other = await _valuesCache.AddProductAsync($"mutual-{Guid.NewGuid():N}", Guid.Empty);
+
+            // One sensor of each product moved to the other: each product now has an alias
+            // that forwards to the other's queue.
+            var here = await CreateAsync(host, "mutual/here-old");
+            var there = await CreateInAsync(other.Id, "mutual/there-old");
+
+            Assert.True((await _valuesCache.MoveSensorAsync(here.Id, other.Id, "mutual/here-new")).IsOk);
+            Assert.True((await _valuesCache.MoveSensorAsync(there.Id, TestProductsManager.ProductId, "mutual/there-new")).IsOk);
+
+            var registrations = Enumerable.Range(0, 100).Select(i => i % 2 == 0
+                ? _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(TestProductsManager.ProductId, "mutual/here-old", $"to the other product {i}"))
+                : _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(other.Id, "mutual/there-old", $"to this product {i}"))).ToArray();
+
+            var results = await Task.WhenAll(registrations).WaitAsync(Patience);
+
+            Assert.All(results, result => Assert.True(result.IsOk, result.Error));
+            Assert.StartsWith("to the other product", here.Description);
+            Assert.StartsWith("to this product", there.Description);
+        }
+
+        // The wait for a forwarded registration has a limit. The outcome is completed by the
+        // other product's queue, and a queue that does not get to the request (here its
+        // thread is held; in the field it is disposed with the request unread when its
+        // product is removed or the server stops) would otherwise leave the collector's
+        // request without an answer. It is a fault: 500, and the collector sends it again.
+        [Fact]
+        public async Task ARegistrationForwardedThroughAnAlias_ThatIsNotAnsweredInTime_Is500_NotARequestThatHangs()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var moved = await MoveToAnotherProductAsync(host, "forwarded/late/old", "moved-late");
+            var other = moved.Root.Id;
+            var blocker = await CreateInAsync(other, "late/blocker");
+
+            // The other product's queue thread is held inside a handler until the test lets go.
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var release = new ManualResetEventSlim();
+
+            void Hold(BaseSensorModel sensor, ActionType action)
+            {
+                if (sensor.Id == blocker.Id && action == ActionType.Update)
+                {
+                    held.TrySetResult();
+                    release.Wait(TimeSpan.FromSeconds(60));
+                }
+            }
+
+            _valuesCache.ChangeSensorEvent += Hold;
+
+            Task<HSMCommon.TaskResult.TaskResult> holding = null;
+            var usualWait = _valuesCache.ForwardedRegistrationWait;
+
+            try
+            {
+                holding = _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(other, "late/blocker", "holds the queue"));
+
+                await held.Task.WaitAsync(Patience);
+
+                _valuesCache.ForwardedRegistrationWait = TimeSpan.FromMilliseconds(100);
+
+                // PostAsync gives up after Patience, so a wait without a limit fails the test
+                // instead of hanging it.
+                var answer = await PostAsync(host, "commands", $"[{Registration("forwarded/late/old", "late")}]", _key);
+
+                Assert.Equal(HttpStatusCode.InternalServerError, answer.Status);
+
+                var result = await _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(TestProductsManager.ProductId, "forwarded/late/old", "late")).WaitAsync(Patience);
+
+                Assert.True(result.IsFault);
+                Assert.Equal("The registration forwarded through an alias to another product was not answered within 0.1 s", result.Error);
+            }
+            finally
+            {
+                release.Set();
+                _valuesCache.ChangeSensorEvent -= Hold;
+                _valuesCache.ForwardedRegistrationWait = usualWait;
+            }
+
+            Assert.Equal(TimeSpan.FromSeconds(20), usualWait);
+
+            await holding.WaitAsync(Patience);
+
+            // The queue works again: the resend is answered, and applied.
+            var resend = await PostAsync(host, "commands", $"[{Registration("forwarded/late/old", "from the resend")}]", _key);
+
+            Assert.Equal(HttpStatusCode.OK, resend.Status);
+            Assert.Equal("from the resend", moved.Description);
         }
 
         [Fact]
@@ -398,6 +617,46 @@ namespace HSMServer.Core.Tests.SensorApi
 
 
         private bool Registered(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out _);
+
+        // Registers a sensor of the test product over HTTP.
+        private async Task<BaseSensorModel> CreateAsync(SensorApiTestHost host, string path)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", $"[{Registration(path)}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor));
+
+            return sensor;
+        }
+
+        // Registers a sensor of another root product, straight in the cache.
+        private async Task<BaseSensorModel> CreateInAsync(Guid productId, string path)
+        {
+            Assert.True((await _valuesCache.AddOrUpdateSensorAsync(RegistrationRequest(productId, path, description: null))).IsOk);
+            Assert.True(_valuesCache.TryGetSensorByPath(productId, path, out var sensor));
+
+            return sensor;
+        }
+
+        private static SensorAddOrUpdateRequest RegistrationRequest(Guid productId, string path, string description) =>
+            new(productId, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty, Description = description },
+                Type = SensorType.Integer,
+                TypeIsExplicit = true,
+            };
+
+        // A sensor of the test product, registered at `oldPath` and then moved to a new root
+        // product under the name `movedName`: `oldPath` is from then on an alias that forwards
+        // to the other product's queue.
+        private async Task<BaseSensorModel> MoveToAnotherProductAsync(SensorApiTestHost host, string oldPath, string movedName)
+        {
+            var sensor = await CreateAsync(host, oldPath);
+            var other = await _valuesCache.AddProductAsync($"alias-target-{Guid.NewGuid():N}", Guid.Empty);
+
+            Assert.True((await _valuesCache.MoveSensorAsync(sensor.Id, other.Id, $"moved/{movedName}")).IsOk);
+            Assert.False(Registered(oldPath));
+
+            return sensor;
+        }
 
         // What the store holds for the sensor with this name: what a restart would load.
         private string StoredDescription(string sensorName) =>

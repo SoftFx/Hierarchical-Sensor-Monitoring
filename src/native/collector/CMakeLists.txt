@@ -278,6 +278,8 @@ hsm_collector_apply_sanitizer(hsm_collector_tests)
 # in-proc capture server). The define gates the #ifdef'd test code; ws2_32 auto-links on MSVC.
 if(HSM_COLLECTOR_HTTP)
     target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_HTTP=1)
+    # The conformance driver reads the registration bodies the recording server got (#1750).
+    target_include_directories(hsm_collector_tests SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
 endif()
 
 enable_testing()
@@ -764,6 +766,13 @@ if(HSM_COLLECTOR_HTTP)
         NAME meta_sends_wrong_order
         COMMAND hsm_collector_tests meta_must_fail
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_sends_wrong_order.hsmtest
+    )
+    # The order of a sensor's registrations across failed sends (#1750): same sender, same build.
+    add_conformance_test(conformance_registration_order_contract registration_order_contract.hsmtest)
+    add_test(
+        NAME meta_last_delivered_registration_wrong_description
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_last_delivered_registration_wrong_description.hsmtest
     )
 endif()
 

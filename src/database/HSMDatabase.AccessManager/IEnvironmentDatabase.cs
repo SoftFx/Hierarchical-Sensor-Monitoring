@@ -94,6 +94,12 @@ namespace HSMDatabase.AccessManager
 
         void AddSensorIdToList(string sensorId);
         void AddSensor(SensorEntity info);
+
+        // The same two writes with their outcome (#1756): null when written, otherwise the
+        // exception of the failed write. A failed write is logged and never thrown, as in
+        // the void methods above, which do not report it at all.
+        Exception WriteSensorIdToList(string sensorId);
+        Exception WriteSensor(SensorEntity info);
         void RemoveSensorIdFromList(string sensorId);
         void RemoveSensor(string sensorId);
         SensorEntity GetSensorEntity(string sensorId);

@@ -39,7 +39,6 @@ namespace HSMDataCollector.Client.Session
         private readonly string _unavailable;
 
         private Action<string> _errorSink;
-        private int _unavailableReported;
         private int _disposed;
 
         internal SessionDataSender(CollectorOptions options, ICollectorLogger logger)
@@ -116,14 +115,19 @@ namespace HSMDataCollector.Client.Session
 
         /// <summary>
         /// Starts connecting in the background; never waits for the session and never throws.
-        /// When a session cannot exist on this host, one error says why and nothing is started:
-        /// the collector does not switch to HTTP by itself.
+        /// When a session cannot exist on this host, every Start says why and nothing is
+        /// started: the collector does not switch to HTTP by itself.
         /// </summary>
         public void Start()
         {
             if (Volatile.Read(ref _disposed) == 1)
             {
-                // A collector built from options whose sender another collector has disposed.
+                // Only the collector that created this sender starts it, and a collector that
+                // was disposed is never started again, so the one way here is a host that
+                // disposed the sender itself (it is public as CollectorOptions.DataSender) and
+                // then started its collector. A collector built from the same options after
+                // the owner was disposed does not come here: it never starts a sender it does
+                // not own, and its queues report the missing session (TransportReportsElsewhere).
                 // Said out loud: a disposed HTTP client fails every send, this would send nothing.
                 _logger?.Error("The collector session transport was disposed and cannot be started again: nothing is delivered. Create the collector from new CollectorOptions.");
                 return;
@@ -131,8 +135,11 @@ namespace HSMDataCollector.Client.Session
 
             if (_unavailable != null)
             {
-                if (Interlocked.Exchange(ref _unavailableReported, 1) == 0)
-                    ReportError($"The collector session transport is unavailable: {_unavailable}. Nothing is delivered until the transport setting or that setting is changed.");
+                // On every Start, not once per sender: a host that stops and starts its
+                // collector again must be told again why nothing is delivered. The channel is
+                // the collector's deduplicated one: a repeat inside its window is counted and
+                // written when the window ends, so restarts in a loop do not flood the log.
+                ReportError($"The collector session transport is unavailable: {_unavailable}. Nothing is delivered until the transport setting or that setting is changed.");
 
                 return;
             }

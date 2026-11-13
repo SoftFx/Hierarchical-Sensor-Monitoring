@@ -22,13 +22,21 @@ namespace HSMDataCollector.Client
 
         // The names come from the network, so what is remembered of them is bounded: this many
         // different names, each cut to this length.
-        private const int MaxNotedNames = 32;
+        internal const int MaxNotedNames = 32;
         private const int MaxNameLength = 64;
 
         private readonly ConcurrentDictionary<string, bool> _notedNames = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
         private readonly ICollectorLogger _logger;
 
         private long _received;
+
+        // The slots of _notedNames that are taken. Kept beside the table because
+        // ConcurrentDictionary.Count takes every lock of the table, and once the table is full
+        // a name that is not in it would pay that on every answer of the server.
+        // INVARIANT: a name is added only by a thread that holds a slot, and a slot is taken
+        // only while fewer than MaxNotedNames are taken (compare-and-swap), so the table never
+        // holds more than MaxNotedNames names, from however many threads directives arrive.
+        private int _notedCount;
 
         internal ServerDirectives(ICollectorLogger logger)
         {
@@ -37,6 +45,23 @@ namespace HSMDataCollector.Client
 
         /// <summary>How many directives arrived, handled or not.</summary>
         internal long ReceivedCount => Interlocked.Read(ref _received);
+
+        /// <summary>How many different directive names are remembered. For tests.</summary>
+        internal int NotedNamesCount => _notedNames.Count;
+
+        private bool TryTakeNoteSlot()
+        {
+            while (true)
+            {
+                var taken = Volatile.Read(ref _notedCount);
+
+                if (taken >= MaxNotedNames)
+                    return false;
+
+                if (Interlocked.CompareExchange(ref _notedCount, taken + 1, taken) == taken)
+                    return true;
+            }
+        }
 
         /// <summary>
         /// Takes one directive as the server wrote it: <c>name:argument</c>, or a bare name.
@@ -59,13 +84,18 @@ namespace HSMDataCollector.Client
                 if (name.Length > MaxNameLength)
                     name = name.Substring(0, MaxNameLength);
 
-                // The same few names arrive with every answer: look first, and count the table
-                // only for a name that is new.
+                // The same few names arrive with every answer: a lock-free look first.
                 if (_notedNames.ContainsKey(name))
                     return;
 
-                if (_notedNames.Count < MaxNotedNames && _notedNames.TryAdd(name, true))
+                if (!TryTakeNoteSlot())
+                    return;
+
+                if (_notedNames.TryAdd(name, true))
                     _logger?.Debug($"Server directive '{name}' is not handled by this collector and is ignored.");
+                else
+                    // Another thread noted the same name in between: the slot is free again.
+                    Interlocked.Decrement(ref _notedCount);
             }
             catch (Exception ex)
             {
