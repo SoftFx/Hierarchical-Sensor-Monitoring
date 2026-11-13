@@ -7,7 +7,7 @@
     "port": 443,
     "accessKey": "<paste-the-product-access-key>",
     "allowUntrustedCertificate": false,
-    "transport": "http"
+    "transport": "session"
   },
 
   "identity": {

@@ -35,8 +35,11 @@ namespace HSMDataCollector.Core
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
 
-        // Transport = Session was set next to a custom DataSender; said once per Start.
+        // Transport = Session was set explicitly next to a custom DataSender; said once per Start.
         private readonly bool _transportSettingIgnored;
+
+        // Why the default transport is HTTP on this host instead of a session; said once per Start.
+        private readonly string _httpByDefaultReason;
 
         // The transport this collector created, and so the one it starts and stops. A session
         // sender that came with the options belongs to the collector that created it: stopping
@@ -120,16 +123,32 @@ namespace HSMDataCollector.Core
 
             if (options.DataSender == null)
             {
-                // The transport setting chooses the built-in sender. A collector on a session has
-                // no HTTP client at all: there is nothing to fall back to.
-                options.DataSender = ownSender = options.Transport == CollectorTransport.Session
+                var transport = options.Transport;
+
+                // The default is a session (ADR-0019), except on a host where none can exist
+                // (.NET Framework with AllowUntrustedServerCertificate, an OS without a WebSocket
+                // client): there the default is HTTP. This picks the default once, here; it is not
+                // a fallback. A Session the caller set stays a session and says why it cannot run.
+                if (!options.TransportWasSet && transport == CollectorTransport.Session)
+                {
+                    _httpByDefaultReason = SessionDataSender.FindWhySessionCannotExist(options);
+
+                    if (_httpByDefaultReason != null)
+                        transport = CollectorTransport.Http;
+                }
+
+                // The transport chooses the built-in sender. A collector on a session has no HTTP
+                // client at all: there is nothing to fall back to.
+                options.DataSender = ownSender = transport == CollectorTransport.Session
                     ? (IDataSender)new SessionDataSender(options, _logger)
                     : new HsmHttpsClient(options, _logger);
             }
             else
             {
                 // A custom sender is the transport of the collector that has one.
-                _transportSettingIgnored = options.Transport == CollectorTransport.Session && !(options.DataSender is ICollectorTransport);
+                // Session is the default: only a caller who asked for it is told it has no effect.
+                _transportSettingIgnored = options.TransportWasSet && options.Transport == CollectorTransport.Session
+                    && !(options.DataSender is ICollectorTransport);
             }
 
             _dataSender = options.DataSender;
@@ -340,6 +359,9 @@ namespace HSMDataCollector.Core
             {
                 if (_transportSettingIgnored)
                     _logger.Info("CollectorOptions.Transport = Session has no effect: the collector uses the custom DataSender it was given.");
+
+                if (_httpByDefaultReason != null)
+                    _logger.Info($"The collector sends over HTTP: the default transport is a collector session, but {_httpByDefaultReason}. Set CollectorOptions.Transport to choose explicitly.");
 
                 if (_ownTransport == null)
                 {

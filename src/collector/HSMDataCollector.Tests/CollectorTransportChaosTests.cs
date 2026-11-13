@@ -872,6 +872,8 @@ namespace HSMDataCollector.Tests
                 Module = module,
                 ServerAddress = "http://127.0.0.1",
                 AllowPlaintextTransport = true,
+                // These tests are about the HTTP transport; the default is a session (ADR-0019).
+                Transport = CollectorTransport.Http,
                 Port = port,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = valuesPerPackage,

@@ -39,6 +39,8 @@ namespace HSMDataCollector.Tests.Transport
                 AccessKey = "command-attempt-key",
                 ClientName = "command-attempt-client",
                 AllowPlaintextTransport = true,
+                // These tests are about the HTTP transport; the default is a session (ADR-0019).
+                Transport = CollectorTransport.Http,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(200),
             };
         }

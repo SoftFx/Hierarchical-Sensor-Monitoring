@@ -69,7 +69,7 @@ are required; everything else has a default.
 | `server.port` | `443` | HSM server port (one port for everything since #1590; see "Retired ports" below for 44330/44333) |
 | `server.accessKey` | — (required) | per-product access key (GUID) |
 | `server.allowUntrustedCertificate` | `false` | accept a self-signed server certificate |
-| `server.transport` | `"http"` | `"http"`: a request per batch. `"session"`: one WebSocket to the server's collector session endpoint; nothing over the HTTP routes, no fallback. Any other value refuses to start. On `session` server directives do not arrive yet (they ride on HTTP responses); the periodic update check still runs |
+| `server.transport` | `"session"` | `"session"` (the default since 0.6.0): one WebSocket to the server's collector session endpoint, nothing over the HTTP routes and no fallback to them; values, files and server directives all travel on it. Needs HSMServer 3.43.0 or later. `"http"`: a request per batch, for an older server or a proxy that does not pass WebSockets. Any other value refuses to start. The periodic update check runs either way |
 | `identity.computerName` | `"auto"` | `"auto"`/blank → the machine host name |
 | `identity.module` | `"HSM Agent"` | module segment for module sensors |
 | `sensors.computer` | `true` | umbrella host bundle (CPU/RAM/disks/network/OS info) |

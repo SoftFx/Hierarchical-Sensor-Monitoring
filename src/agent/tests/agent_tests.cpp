@@ -105,8 +105,8 @@ namespace
         Check(!config.sensors_process, "process sensors default off");
         CheckEq(config.collect_period_ms, 0, "default collect period (collector default)");
         Check(!config.allow_untrusted_certificate, "untrusted cert defaults off");
-        CheckEq(config.transport, std::string{ "http" }, "transport defaults to http");
-        Check(!config.UsesSession(), "the session is opt-in");
+        CheckEq(config.transport, std::string{ "session" }, "transport defaults to session");
+        Check(config.UsesSession(), "the session is the default");
     }
 
     void FullConfigMapsEveryField()

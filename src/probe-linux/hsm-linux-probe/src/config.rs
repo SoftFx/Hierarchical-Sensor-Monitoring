@@ -425,10 +425,11 @@ pub struct HsmConfig {
     pub package_collect_period_sec: u64,
     #[serde(default = "default_request_timeout_sec")]
     pub request_timeout_sec: u64,
-    /// How the probe talks to the server. `http` (the default) sends a request per batch;
-    /// `session` keeps one WebSocket to the collector session endpoint and sends nothing over the
-    /// HTTP routes. There is no fallback from one to the other, and any other value is a config
-    /// error rather than a silent default.
+    /// How the probe talks to the server. `session` (the default) keeps one WebSocket to the
+    /// collector session endpoint and sends nothing over the HTTP routes; `http` sends a request
+    /// per batch, for a server without sessions or a proxy that does not pass WebSockets. There is
+    /// no fallback from one to the other, and any other value is a config error rather than a
+    /// silent default.
     #[serde(default)]
     pub transport: Transport,
 }
@@ -437,8 +438,8 @@ pub struct HsmConfig {
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Transport {
-    #[default]
     Http,
+    #[default]
     Session,
 }
 
@@ -1001,11 +1002,11 @@ mod tests {
     }
 
     #[test]
-    fn transport_defaults_to_http_and_session_is_opt_in() {
+    fn transport_defaults_to_session_and_http_is_opt_in() {
         let default = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" } }"#;
         assert_eq!(
             Config::parse(default).expect("parse").hsm.transport,
-            Transport::Http
+            Transport::Session
         );
 
         for (value, expected) in [("http", Transport::Http), ("session", Transport::Session)] {
