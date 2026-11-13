@@ -22,7 +22,6 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using System.Text.Json.Serialization;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 
@@ -85,11 +84,7 @@ builder.Services.AddHsts(options =>
     options.IncludeSubDomains = true;
 });
 
-builder.Services.AddMvc(options => options.Filters.Add<HSMServer.Filters.DryRunHeaderFilter>())
-                .AddJsonOptions(options =>
-                {
-                    options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
-                });
+builder.Services.AddHsmMvc();
 
 // #1353 (epic #1347): binding failures of the /api/v1 management controllers answer
 // with the area's uniform JSON error contract instead of ValidationProblemDetails.

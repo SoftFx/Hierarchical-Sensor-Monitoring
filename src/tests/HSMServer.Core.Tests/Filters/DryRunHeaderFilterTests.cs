@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using HSMServer.Filters;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Filters
@@ -78,6 +81,26 @@ namespace HSMServer.Core.Tests.Filters
             Assert.False(DryRunOf("false"));
             Assert.False(DryRunOf(null));
             Assert.False(DryRunOf(""));
+        }
+
+        // The unit tests above call the filter directly; the 400 only happens
+        // on a real request if the filter is REGISTERED. This pins the server's
+        // own MVC registration (ApplicationServiceExtensions.AddHsmMvc — the
+        // method Program.cs calls) so dropping or moving it fails a test
+        // instead of quietly re-enabling the irreversible delete (#1675).
+        [Fact]
+        public void TheServerMvcRegistration_InstallsTheFilterOnThePipeline()
+        {
+            var services = new ServiceCollection();
+
+            services.AddHsmMvc();
+
+            var filters = services.BuildServiceProvider()
+                .GetRequiredService<IOptions<MvcOptions>>()
+                .Value.Filters;
+
+            Assert.Contains(filters, filter =>
+                filter is TypeFilterAttribute typeFilter && typeFilter.ImplementationType == typeof(DryRunHeaderFilter));
         }
 
 
