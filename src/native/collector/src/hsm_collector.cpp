@@ -1175,6 +1175,10 @@ namespace
         SensorLocation sensor_location = SensorLocation::Module;
         // DefaultAlertsOptions bitmask (managed [Flags]: DisableTtl=1, DisableStatusChange=2); 0 => None.
         int64_t default_alert_options = 0;
+        // AddOrUpdate.PreviousPaths (#1724): full product-relative paths the sensor was registered
+        // under before. Empty => the member is omitted (wire and canonical text), exactly as the
+        // managed collector omits a null list.
+        std::vector<std::string> previous_paths;
     };
 
     // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
@@ -1736,6 +1740,24 @@ namespace
 
     // Canonical cross-language registration text — must stay byte-identical to the C#
     // harness RegistrationText (fixed field order; TTL in .NET ticks = ms * 10000).
+    // ',"PreviousPaths":["a","b"]' — or nothing for an empty list (#1724): a registration without
+    // previous paths stays byte-identical to the pre-0.13 wire and canonical text.
+    template <typename Escape>
+    std::string BuildPreviousPathsMember(const std::vector<std::string>& paths, Escape escape)
+    {
+        if (paths.empty())
+            return {};
+
+        std::string member = ",\"PreviousPaths\":[";
+        for (size_t i = 0; i < paths.size(); ++i)
+        {
+            if (i > 0)
+                member += ",";
+            member += "\"" + escape(paths[i]) + "\"";
+        }
+        return member + "]";
+    }
+
     std::string BuildRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
     {
         const std::string ttl_text = BuildTtlsText(options);
@@ -1772,7 +1794,8 @@ namespace
                ",\"IsSingletonSensor\":" + SingletonWireText(options) +
                ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
                ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) +
-               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) + "}";
+               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) +
+               BuildPreviousPathsMember(options.previous_paths, EscapeJson) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -1822,6 +1845,7 @@ namespace
              << ",\"DefaultAlertsOptions\":" << options.default_alert_options
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
+             << BuildPreviousPathsMember(options.previous_paths, EscapeJsonWire)
              << ",\"Key\":null"
              << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
@@ -2320,6 +2344,29 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        // Replace the registration's previous paths (#1724) and rebuild the payload. Null entries
+        // and entries of ASCII whitespace only are skipped — the managed collector's exact rule
+        // (PreviousPathsOf) — and an empty result removes the member. Same re-emission rules as
+        // AttachAlert.
+        hsm_result_t SetPreviousPaths(const char* const* paths, size_t count)
+        {
+            std::vector<std::string> kept;
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (paths[i] == nullptr)
+                    continue;
+                const std::string path = paths[i];
+                if (path.find_first_not_of(" \t\n\v\f\r") != std::string::npos)
+                    kept.push_back(path);
+            }
+
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            registration_options_.previous_paths = std::move(kept);
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
+            return HSM_RESULT_OK;
+        }
+
         // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
         std::string WireRegistrationJson() const
         {
@@ -2645,6 +2692,7 @@ namespace
         {
             AlertAttached,
             DescriptionChanged,
+            PreviousPathsChanged,
         };
 
         // A sensor's registration was rebuilt (an alert attached). Before Start nothing is needed —
@@ -2671,9 +2719,9 @@ namespace
         // hsm_collector_get_registration_json hands out pointers into registrations_, so a replaced
         // text is kept rather than freed under a caller. An alert attach keeps it until the
         // collector is destroyed (the 0.9.1 contract; attaches are bounded by the host's alerts). A
-        // description change (0.10.0, a new API with its own documented rule) keeps the latest
-        // kRetiredDescriptionTexts only: a host re-describing a sensor on every replica change must
-        // not grow memory without limit.
+        // description change (0.10.0, a new API with its own documented rule) — and a previous-paths
+        // change (0.13.0) — keeps the latest kRetiredDescriptionTexts only: a host re-describing a
+        // sensor on every replica change must not grow memory without limit.
         void RetireRegistrationLocked(std::string text, RegistrationChange change)
         {
             if (change == RegistrationChange::AlertAttached)
@@ -8630,6 +8678,20 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
     data->has_inactivity = true;
     data->inactivity_ms = period_ms;
     return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_sensor_set_previous_paths(hsm_sensor_t* sensor, const char* const* previous_paths, size_t count)
+{
+    if (sensor == nullptr || (previous_paths == nullptr && count > 0))
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = sensor->impl->SetPreviousPaths(previous_paths, count);
+    if (result == HSM_RESULT_OK)
+    {
+        if (const auto collector = sensor->impl->OwningCollector())
+            collector->OnRegistrationChanged(sensor->impl, NativeCollector::RegistrationChange::PreviousPathsChanged);
+    }
+    return result;
 }
 
 hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description)

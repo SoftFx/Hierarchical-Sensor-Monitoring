@@ -60,6 +60,8 @@ namespace HSMDataCollector.Prototypes
 
         internal IEnumerable<DiskBarSensorOptions> GetAllDisksOptions(DiskBarSensorOptions userOptions)
         {
+            SensorOptions.ForSeveralSensors(userOptions, "An all-disks helper");
+
             var prototype = Get(userOptions);
 
             foreach (var drive in DriveInfo.GetDrives())
@@ -116,6 +118,8 @@ namespace HSMDataCollector.Prototypes
 
         internal IEnumerable<DiskSensorOptions> GetAllDisksOptions(DiskSensorOptions userOptions)
         {
+            SensorOptions.ForSeveralSensors(userOptions, "An all-disks helper");
+
             var prototype = Get(userOptions);
 
             foreach (var drive in DriveInfo.GetDrives())

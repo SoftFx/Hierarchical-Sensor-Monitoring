@@ -104,6 +104,14 @@ namespace HSMServer.Core.Cache
         SensorMovePreview PreviewMove(Guid sensorId, Guid destinationProductId, string destinationPath,
             SensorMoveConflict onConflict = SensorMoveConflict.Fail);
 
+        /// <summary>
+        /// A collector registration's previous paths (#1724): move the sensors registered under
+        /// them (full product-relative paths) to <paramref name="path"/>, merging into a sensor
+        /// already there. The access key's product only; refusals are logged and the result is always Ok.
+        /// </summary>
+        Task<TaskResult> ApplyPreviousPathsAsync(Guid key, Guid productId, string path, IReadOnlyList<string> previousPaths,
+            SensorType? type, InitiatorInfo initiator, CancellationToken token = default);
+
         /// <summary>Remove one alias of a moved sensor; false when the sensor or the alias does not exist.</summary>
         Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default);

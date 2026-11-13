@@ -28,7 +28,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     // - one sensor goes to a full `path`, several (or one) into a `node`
     //   keeping their names — exactly one of the two.
     // The core journals every move with the owner as initiator. A plain move
-    // journals no undo entry yet (rollback is #1723); a merge is irreversible.
+    // journals no undo entry: a plain move is undone by a move back (#1723
+    // closed as not planned); a merge is irreversible.
     // Stateless over singletons -> Scoped registration.
     public sealed class SensorMoveAdministrationService
     {

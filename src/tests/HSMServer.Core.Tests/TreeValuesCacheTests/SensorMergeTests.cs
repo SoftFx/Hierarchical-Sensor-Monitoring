@@ -293,6 +293,212 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         protected override HSMServer.Core.DataLayer.IDatabaseCore WrapDatabase(HSMServer.Core.DataLayer.IDatabaseCore inner) =>
             _failing = new FailingDatabaseCore(inner, _ => false);
 
+        // === Collector PreviousPaths (#1724): ApplyPreviousPathsAsync ===
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_MovesTheOldSensor_WhenTheNewPathIsFree_AndIsANoOpAfterwards()
+        {
+            var root = Unique();
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/cpu", DateTime.UtcNow.AddMinutes(-5));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk, result.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new/cpu", out var moved));
+            Assert.Same(old, moved);
+            Assert.Contains(old.Aliases, a => a.Path == $"{root}/old/cpu");
+
+            // Every later registration repeats the list: the old path is an alias now, nothing moves.
+            var again = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+            Assert.True(again.IsOk);
+            Assert.Equal($"{root}/new/cpu", old.Path);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_MergesIntoASensorTheNewLayoutAlreadyCreated_TheOldOneSurvives()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/garage-server/cpu", start, start.AddMinutes(1));
+            var fresh = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/garage/cpu", start.AddHours(1));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/garage/cpu",
+                [$"{root}/garage-server/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk, result.Error);
+            Assert.Null(_valuesCache.GetSensor(fresh.Id));
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/garage/cpu", out var survivor));
+            Assert.Same(old, survivor);
+            Assert.Equal(3, (await ReadHistoryAsync(old.Id)).Count);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_TheFirstListedPathSurvives()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/v1/cpu", start);
+            var second = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/v2/cpu", start.AddMinutes(1));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/v3/cpu",
+                [$"{root}/v1/cpu", $"{root}/v2/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk, result.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/v3/cpu", out var survivor));
+            Assert.Same(first, survivor);
+            Assert.Null(_valuesCache.GetSensor(second.Id));
+            Assert.Equal(2, (await ReadHistoryAsync(first.Id)).Count);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_OfAnotherType_IsSkipped()
+        {
+            var root = Unique();
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", DateTime.UtcNow.AddMinutes(-1));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                [$"{root}/old"], SensorType.Double, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/old", old.Path);
+            Assert.False(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new", out _));
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_WithoutARegistrationType_MoveOnlyTheFirstListedType()
+        {
+            var root = Unique();
+            var first = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/int", DateTime.UtcNow.AddMinutes(-2));
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Double, $"{root}/double", DateTime.UtcNow.AddMinutes(-1));
+            Assert.True((await _valuesCache.AddSensorValueAsync(_fixture.KeyA, _fixture.ProductA, value)).IsOk);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/double", out var other));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                [$"{root}/int", $"{root}/double"], null, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/new", first.Path);
+            Assert.Equal($"{root}/double", other.Path);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_OfAnotherProduct_IsNotReachable()
+        {
+            var root = Unique();
+            var other = await CreateAsync(_fixture.ProductB, _fixture.KeyB, $"{root}/old", DateTime.UtcNow.AddMinutes(-1));
+
+            // Key A, product A: the path is looked up in product A only.
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                [$"{root}/old"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal(_fixture.ProductB, other.Root.Id);
+            Assert.Equal($"{root}/old", other.Path);
+        }
+
+
+        // The key gate is the only authorization of a collector-driven move: a key that may not
+        // send data or add sensors moves (and merges) nothing.
+        [Theory]
+        [Trait("Category", "Sensor move from a collector")]
+        [InlineData(KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanReadSensorData)]
+        [InlineData(KeyPermissions.CanAddSensors | KeyPermissions.CanAddNodes | KeyPermissions.CanReadSensorData)]
+        public async Task PreviousPath_IsNotApplied_ForAKeyWithoutTheRights(KeyPermissions permissions)
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/cpu", start);
+            var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new/cpu", start.AddHours(1));
+
+            var limited = _valuesCache.AddAccessKey(new AccessKeyModel(
+                EntitiesFactory.BuildAccessKeyEntity(productId: _fixture.ProductA.ToString(), permissions: permissions)));
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(limited.Id, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/old/cpu", old.Path);
+            Assert.Empty(old.Aliases);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new/cpu", out var owner));
+            Assert.Same(live, owner);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_IsNotApplied_OntoABlockedTarget()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/cpu", start);
+            var target = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new/cpu", start.AddHours(1));
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+            {
+                Id = target.Id,
+                State = SensorState.Blocked,
+            })).IsOk);
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/old/cpu", old.Path);
+            Assert.Same(target, _valuesCache.GetSensor(target.Id));
+            Assert.Single(await ReadHistoryAsync(target.Id));
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPath_OfABlockedSensor_IsSkipped_AndTheLiveSensorStays()
+        {
+            var root = Unique();
+            var start = DateTime.UtcNow.AddHours(-2);
+            var retired = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old/cpu", start);
+            var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new/cpu", start.AddHours(1));
+
+            var blocked = await _valuesCache.UpdateSensorAsync(new HSMServer.Core.Cache.UpdateEntities.SensorUpdate
+            {
+                Id = retired.Id,
+                State = SensorState.Blocked,
+            });
+            Assert.True(blocked.IsOk, blocked.Error);
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new/cpu",
+                [$"{root}/old/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/old/cpu", retired.Path);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/new/cpu", out var owner));
+            Assert.Same(live, owner);
+            Assert.NotEqual(SensorState.Blocked, live.State);
+        }
+
+        [Fact]
+        [Trait("Category", "Sensor move from a collector")]
+        public async Task PreviousPaths_BeyondTheLimit_AreNotLookedAt()
+        {
+            var root = Unique();
+            var late = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/late", DateTime.UtcNow.AddMinutes(-1));
+
+            var list = Enumerable.Range(0, HSMServer.Core.Cache.TreeValuesCache.MaxPreviousPaths).Select(i => $"{root}/missing{i}").ToList();
+            list.Add($"{root}/late");
+
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/new",
+                list, SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+
+            Assert.True(result.IsOk);
+            Assert.Equal($"{root}/late", late.Path);
+        }
+
+
         private static string Unique() => $"m{Guid.NewGuid():N}"[..12];
 
         private Task<BaseSensorModel> CreateAsync(Guid productId, Guid key, string path, params DateTime[] times) =>
