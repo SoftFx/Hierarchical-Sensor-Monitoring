@@ -180,8 +180,9 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
 
         // The fan-out page every details render carries: a non-positive or
         // oversized limit falls back to the bounded default / the ceiling, so
-        // no caller can ask for an unbounded render (#1688).
-        private static (int Offset, int Limit) NormalizeFanoutPage(int offset, int limit) =>
+        // no caller can ask for an unbounded render (#1688). Internal for the
+        // paging-contract pin in the tests.
+        internal static (int Offset, int Limit) NormalizeFanoutPage(int offset, int limit) =>
             (Math.Max(offset, 0), limit <= 0 ? DefaultFanoutLimit : Math.Min(limit, MaxFanoutLimit));
 
 

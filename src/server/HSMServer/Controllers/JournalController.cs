@@ -114,15 +114,23 @@ public class JournalController : BaseController
     /// <summary>
     /// The details view: the record plus its undo group's before/after
     /// images. The fan-out page rides the area's list ceiling (#1688): the
-    /// modal renders up to 200 images, the count header names the total.
+    /// modal renders up to 200 images per request, with prev/next paging
+    /// over <paramref name="fanoutOffset"/> when the fan-out is longer —
+    /// the rollback the modal guards acts on every node, so none of them
+    /// may become unreachable in the UI.
     /// </summary>
     [HttpGet]
-    public IActionResult Details(string id)
+    public IActionResult Details(string id, int fanoutOffset = 0)
     {
         var result = _journal.GetRecord(id, User, new CookieJournalRecordAccess(CurrentUser, _cache),
-            fanoutLimit: ChangeSetAdministrationService.MaxFanoutLimit);
+            fanoutOffset: fanoutOffset, fanoutLimit: ChangeSetAdministrationService.MaxFanoutLimit);
 
-        return result.Success ? PartialView("_JournalDetails", result.Value) : NotFound();
+        if (!result.Success)
+            return NotFound();
+
+        ViewData["FanoutOffset"] = fanoutOffset;
+
+        return PartialView("_JournalDetails", result.Value);
     }
 
     /// <summary>Rollback by journal record (the record's undo group); dry-run feeds the confirmation dialog.</summary>
