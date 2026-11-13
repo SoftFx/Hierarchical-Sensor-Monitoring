@@ -43,6 +43,8 @@ namespace HSMDataCollector.Tests.Transport
                 AccessKey = "failure-report-key",
                 ClientName = "failure-report-client",
                 AllowPlaintextTransport = true,
+                // These tests are about the HTTP transport; the default is a session (ADR-0019).
+                Transport = CollectorTransport.Http,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(100),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMinutes(10),
             };

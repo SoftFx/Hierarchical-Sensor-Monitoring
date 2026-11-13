@@ -87,6 +87,12 @@ namespace HSMDataCollector.Client.Session
             return builder.Uri;
         }
 
+        /// <summary>
+        /// Why a session cannot exist for these options on this host, or null when it can. The
+        /// default transport (ADR-0019) is HTTP where this is not null.
+        /// </summary>
+        internal static string FindWhySessionCannotExist(CollectorOptions options) => FindWhySessionCannotExist(options, BuildUrl(options));
+
         // A setting the session cannot honour, or a host it cannot exist on. Null when it can.
         private static string FindWhySessionCannotExist(CollectorOptions options, Uri url)
         {

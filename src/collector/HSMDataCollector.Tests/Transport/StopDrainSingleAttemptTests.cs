@@ -43,6 +43,8 @@ namespace HSMDataCollector.Tests.Transport
                 AccessKey = "drain-attempt-key",
                 ClientName = "drain-attempt-client",
                 AllowPlaintextTransport = true,
+                // These tests are about the HTTP transport; the default is a session (ADR-0019).
+                Transport = CollectorTransport.Http,
                 // The value stays in its queue until the stop: the drain is what sends it.
                 PackageCollectPeriod = TimeSpan.FromHours(1),
             };

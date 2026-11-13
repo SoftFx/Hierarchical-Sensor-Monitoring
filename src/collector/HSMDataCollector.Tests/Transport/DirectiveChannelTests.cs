@@ -45,6 +45,8 @@ namespace HSMDataCollector.Tests.Transport
                 AccessKey = "directive-key",
                 ClientName = "directive-client",
                 AllowPlaintextTransport = true,
+                // These tests are about the HTTP transport; the default is a session (ADR-0019).
+                Transport = CollectorTransport.Http,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(100),
             };
         }

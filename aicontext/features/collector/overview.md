@@ -281,7 +281,7 @@ C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inve
 - `AllowUntrustedServerCertificate` (false) — opt-in for self-signed certs
 - `ExceptionDeduplicatorWindow` (1h) — deduplication window for error messages
 - `MaxDeduplicatedMessages` (1000) — max unique messages in deduplicator cache
-- `Transport` (`Http`) — `Http` or `Session` (a collector session over one WebSocket, opt-in, no fallback to HTTP); see `http-client/feature.md`
+- `Transport` (`Session` since 4.0.0, ADR-0019) — `Session` (a collector session over one WebSocket, no fallback to HTTP) or `Http`; see `http-client/feature.md`
 - `ExtraRequestHeaders` (empty) — headers added to value requests (e.g. `X-Agent-Version`); see `http-client/feature.md`, directive channel
 
 ## Known Issues

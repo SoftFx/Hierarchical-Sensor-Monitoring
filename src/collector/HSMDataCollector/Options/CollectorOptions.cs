@@ -34,13 +34,29 @@ namespace HSMDataCollector.Core
         public IDataSender DataSender { get; set; }
 
         /// <summary>
-        /// How the built-in sender talks to the server: over the HTTP routes (the default), or
-        /// over a collector session, one WebSocket on the same address and port. A collector on
-        /// a session never uses the HTTP routes: while no session can be opened its values wait
-        /// in the queues. The setting belongs to the built-in sender; with a custom
-        /// <see cref="DataSender"/> it has no effect, and Start says so.
+        /// How the built-in sender talks to the server: over a collector session, one WebSocket
+        /// on the same address and port (the default since 4.0.0), or over the HTTP routes. A
+        /// collector on a session never uses the HTTP routes: while no session can be opened its
+        /// values wait in the queues. Set <see cref="CollectorTransport.Http"/> for a server
+        /// without sessions (before 3.43.0, or with sessions turned off) or a proxy that does not
+        /// pass WebSockets. The setting belongs to the built-in sender; with a custom
+        /// <see cref="DataSender"/> it has no effect, and Start says so when it was set to Session.
         /// </summary>
-        public CollectorTransport Transport { get; set; } = CollectorTransport.Http;
+        public CollectorTransport Transport
+        {
+            get => _transport;
+            set
+            {
+                _transport = value;
+                TransportWasSet = true;
+            }
+        }
+
+        private CollectorTransport _transport = CollectorTransport.Session;
+
+        // True once a caller assigned Transport: only an explicit Session next to a custom
+        // DataSender is worth the note that it has no effect, not the default.
+        internal bool TransportWasSet { get; private set; }
 
         /// <summary>The session's waits; a seam for tests. Null takes the protocol's defaults.</summary>
         internal Client.Session.SessionTimings SessionTimings { get; set; }

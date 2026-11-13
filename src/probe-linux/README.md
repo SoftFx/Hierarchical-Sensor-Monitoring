@@ -1156,12 +1156,12 @@ Placeholders only — **no secrets**:
   named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the
   group bits) although no group can read it. That case passes; a genuinely group- or
   world-readable key, or one readable by another named user or group, still warns.
-* `hsm.transport` (optional, `"http"` by default; probe 0.12.0): `"http"` sends a request per
-  batch, `"session"` keeps one WebSocket (`wss://`, same host, port and certificate rules) to the
-  server's collector session endpoint and sends nothing over the HTTP routes. There is no fallback
-  from one to the other: while no session is up, values wait in the collector's queue. Any other
-  value is a config error. The session needs libcurl 8.14.0 or newer with WebSocket, which Debian
-  13 ships.
+* `hsm.transport` (optional, `"session"` by default; probe 0.12.0): `"session"` keeps one
+  WebSocket (`wss://`, same host, port and certificate rules) to the server's collector session
+  endpoint and sends nothing over the HTTP routes; `"http"` sends a request per batch, for a server
+  before HSMServer 3.43.0 or a proxy that does not pass WebSockets. There is no fallback from one
+  to the other: while no session is up, values wait in the collector's queue. Any other value is a
+  config error. The session needs libcurl 8.14.0 or newer with WebSocket, which Debian 13 ships.
 * `hsm.address` must be `https://<host>` (case-insensitive) or a bare host name, which the
   collector defaults to HTTPS. Validation is an allow-list, so `http://`, `ftp://`, `ws://` and a
   typo'd scheme are all rejected rather than passed through to libcurl; the wrapper

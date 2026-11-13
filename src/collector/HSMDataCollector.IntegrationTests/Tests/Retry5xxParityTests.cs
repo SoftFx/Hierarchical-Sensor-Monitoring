@@ -33,6 +33,8 @@ namespace HSMDataCollector.IntegrationTests.Tests
             AccessKey = "retry-parity-key",
             ClientName = "retry-parity-client",
             AllowPlaintextTransport = true,
+            // These tests are about the HTTP transport; the default is a session (ADR-0019).
+            Transport = CollectorTransport.Http,
         };
 
         [Fact]

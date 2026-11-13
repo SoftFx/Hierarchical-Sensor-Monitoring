@@ -5,7 +5,7 @@
     "accessKeyFile": "access-key",
     "packageCollectPeriodSec": 15,
     "requestTimeoutSec": 30,
-    "transport": "http"
+    "transport": "session"
   },
   "logging": {
     "directory": "/var/log/hsm-linux-probe",

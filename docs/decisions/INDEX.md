@@ -33,4 +33,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0016 | Accepted | [Expected MCP tool failures are not operator errors](0016-expected-mcp-tool-failures-not-operator-errors.md) | 2026-11-04 |
 | 0017 | Accepted | [Collectors hold a persistent session with the server over WebSocket on 443](0017-collector-session-websocket.md) | 2026-11-10 |
 | 0018 | Accepted | [A moved sensor keeps its id; its old path becomes an alias](0018-sensor-move-keeps-id.md) | 2026-11-12 |
+| 0019 | Accepted | [The collector session is the collectors' default transport](0019-collector-session-default.md) | 2026-11-13 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

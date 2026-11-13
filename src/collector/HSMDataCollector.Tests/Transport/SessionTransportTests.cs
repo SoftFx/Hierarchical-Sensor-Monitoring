@@ -1210,10 +1210,108 @@ namespace HSMDataCollector.Tests.Transport
         // --- the setting ---
 
         [Fact]
-        public void Http_is_the_default_transport()
+        public void Session_is_the_default_transport()
         {
-            Assert.Equal(CollectorTransport.Http, new CollectorOptions().Transport);
+            var options = new CollectorOptions();
+
+            Assert.Equal(CollectorTransport.Session, options.Transport);
+            Assert.False(options.TransportWasSet);
+
+            options.Transport = CollectorTransport.Http;
+            Assert.True(options.TransportWasSet);
         }
+
+        // ADR-0019: a collector that names no transport opens a session.
+        [Fact]
+        public async Task A_collector_with_the_default_transport_sends_on_a_session()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = new CollectorOptions
+                {
+                    ServerAddress = server.ServerAddress,
+                    Port = server.Port,
+                    AccessKey = "session-key",
+                    ClientName = "session-client",
+                    AllowPlaintextTransport = true,
+                    PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
+                    RequestTimeout = TimeSpan.FromSeconds(10),
+                };
+
+                using (var collector = new DataCollector(options))
+                {
+                    Assert.IsType<SessionDataSender>(options.DataSender);
+
+                    var sensor = collector.CreateIntSensor("session/default");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+
+                    Assert.True(await WaitForAsync(() => server.Sessions >= 1), "The default transport opened no session.");
+
+                    await collector.Stop();
+                }
+            }
+        }
+
+        // A collector that names no transport next to a custom sender is not told the setting
+        // has no effect: it set nothing.
+        [Fact]
+        public async Task The_default_transport_next_to_a_custom_sender_is_not_reported()
+        {
+            var logger = new RecordingLogger();
+            var options = new CollectorOptions { AccessKey = "session-key", DataSender = new AcceptingSender() };
+
+            using (var collector = new DataCollector(options))
+            {
+                collector.AddCustomLogger(logger);
+                await collector.Start();
+                await collector.Stop();
+            }
+
+            Assert.DoesNotContain(logger.Infos, i => i.Contains("has no effect"));
+        }
+
+#if !NET6_0_OR_GREATER
+        // On .NET Framework a session cannot honour AllowUntrustedServerCertificate. The default
+        // is then HTTP, and Start says why; a Session the caller set stays a session (ADR-0019).
+        [Fact]
+        public async Task The_default_is_http_where_no_session_can_exist_and_start_says_why()
+        {
+            var logger = new RecordingLogger();
+            var options = new CollectorOptions
+            {
+                ServerAddress = "127.0.0.1",
+                AccessKey = "session-key",
+                Port = 1,
+                AllowUntrustedServerCertificate = true,
+                RequestTimeout = TimeSpan.FromSeconds(1),
+            };
+
+            using (var collector = new DataCollector(options))
+            {
+                Assert.IsType<HSMDataCollector.Client.HsmHttpsClient>(options.DataSender);
+
+                collector.AddCustomLogger(logger);
+                await collector.Start();
+                await collector.Stop();
+            }
+
+            Assert.Single(logger.Infos.Where(i => i.Contains("The collector sends over HTTP") && i.Contains("AllowUntrustedServerCertificate")));
+
+            var explicitSession = new CollectorOptions
+            {
+                ServerAddress = "127.0.0.1",
+                AccessKey = "session-key",
+                Port = 1,
+                AllowUntrustedServerCertificate = true,
+                Transport = CollectorTransport.Session,
+            };
+
+            using (new DataCollector(explicitSession))
+                Assert.IsType<SessionDataSender>(explicitSession.DataSender);
+        }
+#endif
 
         [Fact]
         public async Task Session_setting_next_to_a_custom_sender_has_no_effect_and_start_says_so()
