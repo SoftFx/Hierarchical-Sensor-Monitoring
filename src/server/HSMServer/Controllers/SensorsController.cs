@@ -375,6 +375,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [TypeFilter<SendDataKeyPermissionFilter>]
         public async Task<ActionResult<AddOrUpdateSensorRequest>> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
@@ -388,9 +389,14 @@ namespace HSMServer.Controllers
             {
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
-                _logger.Error(message, ex);
+                // Exception first: Error(string, Exception) takes the exception for a
+                // template argument and logs the message without it.
+                _logger.Error(ex, message);
 
-                return BadRequest(message);
+                // The server's own fault, so 500 and not 400 (#1749): a collector takes a 4xx
+                // on a registration as a final refusal and never sends it again, and repeats a
+                // 5xx on its next cycle. The body is the one the 400 carried.
+                return StatusCode(StatusCodes.Status500InternalServerError, message);
             }
         }
 
@@ -404,6 +410,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [TypeFilter<SendDataKeyPermissionFilter>]
         public async Task<ActionResult<Dictionary<string, string>>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
@@ -445,8 +452,15 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex)
             {
-                _logger.Error("Failed to update sensors!", ex);
-                return BadRequest(response);
+                // Exception first, see addOrUpdate above.
+                _logger.Error(ex, "Failed to update sensors!");
+
+                // The server's own fault, so 500 and not 400 (#1749): a collector drops the
+                // whole registration package on a 4xx and repeats it on a 5xx. A command the
+                // server refuses is not an exception: it is an entry of the dictionary in a
+                // 200. The body is the one the 400 carried, the per-path errors collected
+                // before the fault; the commands after the faulted one were not applied.
+                return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
         }
 

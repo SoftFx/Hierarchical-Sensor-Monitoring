@@ -128,10 +128,36 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `intBar` `doubleBar` | single bar value |
 | `list` | polymorphic batch |
 | `file` | `FileSensorValue` |
-| `commands` | command batch (response: error dictionary keyed by sensor path) |
-| `addOrUpdate` | `AddOrUpdateSensorRequest` |
+| `commands` | command batch (response: error dictionary keyed by sensor path; statuses below) |
+| `addOrUpdate` | `AddOrUpdateSensorRequest` (statuses below) |
 | `testConnection` | — (response: 200 with header `X-Hsm-Server: 1`, which identifies an HSM server; the HSM Agent's retired-port check relies on it, #1655) |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
+
+### Statuses of the registration routes (#1749)
+
+Sensor registrations travel on `commands` (a batch; what both collectors send) and `addOrUpdate` (a single registration; the managed collector when it does not batch). A collector decides by the status alone what to do with the package it sent:
+
+- **2xx**: delivered. Errors in the body are logged per path; nothing is sent again.
+- **4xx**: a final refusal. The package is reported once and **not sent again** (native since 0.10.3, managed since 3.6.2): the same request and key would be refused on every repeat. The sensors of that package stay without description, unit, TTL and alerts until the host starts again.
+- **5xx, or no answer**: the same package is sent again on the next cycle, with no limit on the number of repeats.
+
+So the server answers 5xx only for a failure of its own that may pass, and never for a request that fails the same way on every repeat.
+
+| What happened | `commands` | `addOrUpdate` | What a collector does |
+|---|---|---|---|
+| Applied | `200`, `{}` | `200`, no body | delivered |
+| The server refuses a registration: the key it carries in its body (no `Key` header) is unknown, expired or blocked, or the server cannot convert it (an enum value this server does not know, such as a newer sensor type, unit or alert operation; more TTLs than TTL alerts) | `200`, the reason under the registration's path; the other commands of the batch are applied | `406`, the reason as text | `commands`: delivered, the reason is logged for that path. `addOrUpdate`: final |
+| The key in the `Key` header is rejected or may not send data | `406`, the reason as text | `406`, the reason as text | final |
+| The body cannot be read: not JSON, not a list, a command `Type` the server does not know, a member of the wrong kind, no body | `400` (`application/problem+json`), nothing is applied | `400` (`application/problem+json`), nothing is applied | final |
+| An exception while the server applies the request: the server's own fault | `500`; the body is the dictionary of per-path errors collected before the fault. The commands before the faulted one are applied, the faulted one and those after it are not | `500`; the body is the text `Failed to update sensor! Update request: {…}` | sent again on the next cycle |
+
+- **A fault changed its status, not its body.** Before #1749 a fault was a `400` with the same body, so a fault that would have passed cost a collector the whole package. The body of the `500` is the body that `400` carried, so nothing a client read is gone.
+- **A repeated package is ordinary**: a collector registers all its sensors again at every start, and the server applies a package from its first command each time.
+- Two more things changed with #1749, both to keep `500` for the server's own faults. A registration the server cannot convert used to throw, which ended the whole batch with a `400`; it is now refused on its own (the row above), since it fails the same way on every repeat. A `commands` body the server cannot read used to end as a `500` (the model binder threw); it is now a `400`, as on the collector session.
+- **Not covered: what the sensor cache catches itself never reaches the route as an exception.** A registration the cache refuses (a path that is too long, a sensor that exists with another type) or fails to store is logged by the server and answered as applied: `200` with no entry for the path, or with the exception's text under the path when the failure escaped the cache's own handling into its update queue. A collector takes both as delivered.
+- **Not covered: three requests no collector sends** still throw inside the route and are therefore answered `500`, although the request is at fault: no key at all (neither the header nor the body), a `null` element in a `commands` list, and a `commands` registration without a `Path`.
+
+Server tests: `src/tests/HSMServer.Core.Tests/SensorApi/RegistrationStatusTests.cs`.
 
 ## Collector session (WebSocket)
 
@@ -168,9 +194,10 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 
 - **`hello`** is the first frame the server sends. `maxFrameBytes` is the largest frame it accepts; `heartbeatSeconds` is the heartbeat interval.
 - **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **`file` has no op yet.** A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that use the session; both collectors split `list` and `commands` batches), and an element that cannot fit on its own has no way through: the managed collector drops such a value, reports it and counts it as lost, and refuses a file value before it is queued. Files, such elements and directive push (directives still travel only as headers on HTTP answers) have to be solved before a collector can do everything on a session.
-- **`status` is the HTTP status the same request would have got** on that route, with one exception: a body the server cannot parse is `400` (`"malformed body"`), where the HTTP route ends as a `500`.
+- **`status` is the HTTP status the same request would have got** on that route, with one exception: a `list` body the server cannot parse is `400` (`"malformed body"`), where the HTTP route ends as a `500`. A `commands` body the server cannot parse is `400` on both (#1749).
 - **A success ack** carries the route's success body in `body`: the dictionary of per-path errors, empty when everything was accepted. Its keys are sensor paths exactly as sent.
-- **A failure ack** carries a short `error` text and no `body`. It never echoes the request, unlike the HTTP `400` of `list`. Texts in version 1: `empty batch`, `malformed body`, `unknown op`, `failed to store the batch`, `failed to apply the commands`. They are for logs; a collector decides by `status`.
+- **A failure ack** carries a short `error` text and no `body`. It never echoes the request, unlike the HTTP `400` of `list`, and it does not carry the per-path errors the HTTP `500` of `commands` does. Texts in version 1: `empty batch`, `malformed body`, `unknown op`, `failed to store the batch`, `failed to apply the commands`. They are for logs; a collector decides by `status`.
+- **A fault of the server while it applies a `commands` request is a `500` ack** (`"failed to apply the commands"`), as on the HTTP route (#1749; a `400` before): a collector takes a 4xx on a registration as final and sends a 5xx again. See "Statuses of the registration routes" above; the rows of that table hold for the `commands` op too. A fault while storing a `list` batch stays a `400` (`"failed to store the batch"`) on both transports: a collector sends a value batch again whatever the failure.
 - **Heartbeat.** A collector that has sent nothing for `heartbeatSeconds` sends `{"op":"ping"}`; the server answers `{"op":"pong"}`. The server drops a session after three intervals without any inbound frame. WebSocket ping/pong frames are not the heartbeat. A heartbeat is recognised by its `op`; one that carries an `id` is answered the same way, with a plain `pong` and no ack. A ping is also where the server notices that the access key can no longer send (`1008`).
 - **Shutdown.** The server closes with `1001`. A request it was still handling is acknowledged before the close, if handling it takes no more than a few seconds; a request that arrives after the close went out is not stored and gets no ack, so the collector sends it again on its next session.
 - **Growth without a new version.** Unknown envelope fields are ignored by both sides. An unknown request `op` is answered with a `400` ack (`"unknown op"`); an unknown push `op` is ignored by the collector.

@@ -486,12 +486,14 @@ namespace HSMServer.SensorApi.Sessions
             }
             catch (Exception ex)
             {
-                // The HTTP route answers 400 here as well.
+                // The HTTP route answers 500 here as well (#1749): the fault is the server's
+                // own, and a collector takes a 4xx on a registration as a final refusal and
+                // repeats a 5xx on its next cycle.
                 _logger.Error($"Failed to update sensors of collector session {session.ShortId} frame {id}: {ex}");
 
                 session.CountRequestRefused();
                 output.Clear();
-                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, CommandsFailed);
+                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusInternalError, CommandsFailed);
             }
         }
 

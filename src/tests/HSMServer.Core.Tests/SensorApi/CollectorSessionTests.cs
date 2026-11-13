@@ -247,8 +247,10 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(overHttp.Type, overSession.Type);
 
             // The same batch again over both transports, now for a sensor that exists with
-            // another type, plus an empty batch: whatever the route answers, the ack answers.
-            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]" })
+            // another type, plus an empty batch, plus a registration the server refuses
+            // because it cannot convert it (a sensor type it does not know, #1749):
+            // whatever the route answers, the ack answers.
+            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]", "[{\"Type\":0,\"Path\":\"commands/unknown-type\",\"SensorType\":99}]" })
             {
                 var again = await PostAsync(host, "commands", body, _key);
 
@@ -258,6 +260,71 @@ namespace HSMServer.Core.Tests.SensorApi
                 Assert.Equal((int)again.Status, (int)againAck["status"]);
                 Assert.True(JsonNode.DeepEquals(JsonNode.Parse(again.Body), againAck["body"]), $"HTTP answered {again.Body}, the session {againAck["body"]?.ToJsonString()}");
             }
+        }
+
+        // A fault of the server while it applies registrations is a 500 on both transports
+        // (#1749): a collector takes a 4xx on a registration as a final refusal and drops the
+        // package, and repeats a 5xx on its next cycle. It used to be a 400 on both.
+        [Fact]
+        public async Task Commands_FaultWhileApplying_Is500OnBothTransports_AndTheRepeatIsApplied()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            const string overHttp = "[{\"Type\":0,\"Path\":\"faulted/http\",\"SensorType\":1}]";
+            const string overSession = "[{\"Type\":0,\"Path\":\"faulted/session\",\"SensorType\":1}]";
+
+            faulting.FaultOn("faulted/http");
+            var http = await PostAsync(host, "commands", overHttp, _key);
+
+            faulting.FaultOn("faulted/session");
+            await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{overSession}}}");
+            var ack = await ReceiveTextAsync(socket);
+
+            Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
+
+            var failed = JsonNode.Parse(ack);
+
+            Assert.Equal(9, (long)failed["ack"]);
+            Assert.Equal((int)http.Status, (int)failed["status"]);
+            Assert.Equal("failed to apply the commands", (string)failed["error"]);
+            Assert.Null(failed["body"]);
+
+            // The ack says nothing about the fault itself: its text stays in the server's log.
+            Assert.DoesNotContain(FaultingCache.FaultText, ack);
+            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "faulted/session", out _));
+
+            // The session survives the fault, and the repeat a collector sends is applied.
+            faulting.FaultOn(null);
+
+            await SendAsync(socket, $"{{\"id\":10,\"op\":\"commands\",\"body\":{overSession}}}");
+            var repeated = await ReceiveAsync(socket);
+
+            Assert.Equal(10, (long)repeated["ack"]);
+            Assert.Equal(200, (int)repeated["status"]);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "faulted/session", out _));
+        }
+
+        // A `commands` body the server cannot read is a 400 on both transports (#1749). The
+        // HTTP route used to end as a 500 here (its model binder threw), as `list` still does.
+        [Fact]
+        public async Task Commands_UnreadableBody_Is400OnBothTransports()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            const string unreadable = "[{\"Type\":0,\"Path\":\"unreadable/commands\",\"SensorType\":\"not-a-type\"}]";
+
+            var http = await PostAsync(host, "commands", unreadable, _key);
+
+            await SendAsync(socket, $"{{\"id\":11,\"op\":\"commands\",\"body\":{unreadable}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
         }
 
         // Sensor move from a collector (#1724): a registration's PreviousPaths moves the old sensor

@@ -48,8 +48,21 @@ All accept POST with JSON body.
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/sensors/testConnection` | GET | Check connectivity + auth |
-| `/api/sensors/addOrUpdate` | POST | Register or update sensor metadata |
-| `/api/sensors/commands` | POST | Retrieve pending commands from server |
+| `/api/sensors/addOrUpdate` | POST | Register one sensor or update its metadata |
+| `/api/sensors/commands` | POST | A batch of commands from the collector; today every command is a sensor registration. Answers a dictionary of errors keyed by sensor path |
+
+### Statuses of the two registration routes (#1749)
+
+A collector takes a **4xx** on a registration as a final refusal and never sends that package again; it sends a **5xx** (or a request with no answer) again on its next cycle. The routes answer accordingly:
+
+| Status | `commands` | `addOrUpdate` |
+|---|---|---|
+| `200` | applied; a registration the server refuses has its reason under its path, the rest of the batch is applied | applied |
+| `400` | the body cannot be read | the body cannot be read |
+| `406` | the key in the `Key` header is rejected | the key is rejected, or the server refuses the registration |
+| `500` | an exception while the server applied the batch (its own fault); the body holds the per-path errors collected before it | an exception while the server applied the registration (its own fault) |
+
+The full table, what a collector does with each row, and what is not covered: [`wire-contract/feature.md`](./wire-contract/feature.md#statuses-of-the-registration-routes-1749).
 
 ## Shared DTOs
 
