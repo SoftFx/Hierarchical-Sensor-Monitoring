@@ -30,6 +30,8 @@ assertions `expect_session_ints_once` (a loss and a duplicate),
 `expect_session_accepted_contains`, `expect_session_frames_fit`,
 `expect_session_no_request_contains` and `expect_no_http_requests`
 (they read the scripted session server's record, not the recording sender),
+the assertions on the sends a collector started, `expect_send_attempts` (a wrong
+count) and `expect_sends` (the right sends in the wrong order),
 and the unknown-action guard (a typo'd verb must fail loudly, never skip silently).
 
 The `meta_session_*` fixtures use the collector session verbs. The native
@@ -39,3 +41,9 @@ the `meta_session_must_fail` entry point (which skips where libcurl has no
 WebSocket, unless `HSM_REQUIRE_WEBSOCKET=1`). Each of them
 first sees a value or a registration delivered on the session, so that a
 session that never came up is not what makes it fail.
+
+`meta_sends_wrong_order` uses `create_collector_sending_registrations`, which
+the native driver has in its HTTP build only (it needs the HTTP transport, not
+WebSocket): it is registered in the native CMake under `HSM_COLLECTOR_HTTP` and
+runs through the ordinary `meta_must_fail` entry point. It first sees both of
+its sends recorded, for the same reason as above.

@@ -4265,10 +4265,48 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(hang_mutex_);
                 send_hang_ = hang;
+                hang_ends_with_cancel_ = false;
             }
 
             hang_cv_.notify_all();
         }
+
+        // Test seams (#1751), for the conformance scenarios of the stop drain. All of them are off
+        // in a collector that does not call them.
+        //
+        // What the injected sender does with every send from now on: accept it (up), fail it at
+        // once (down), or hold it until the stop path cancels it (hung, the same hang as
+        // SetSendHang).
+        enum class TestSendMode
+        {
+            Up = 0,
+            Down = 1,
+            Hung = 2,
+        };
+
+        void TestSetSendMode(TestSendMode mode)
+        {
+            {
+                std::lock_guard<std::mutex> guard(hang_mutex_);
+                send_hang_ = mode == TestSendMode::Hung;
+                send_fail_all_ = mode == TestSendMode::Down;
+                hang_ends_with_cancel_ = false;
+            }
+
+            hang_cv_.notify_all();
+        }
+
+        // The injected hang, but the cancellation of a send parked in it ends it: the sends after
+        // it pass, so a batch cancelled in flight can be seen to be sent again by the stop drain.
+        void TestSetSendHangUntilCancelled()
+        {
+            std::lock_guard<std::mutex> guard(hang_mutex_);
+            send_hang_ = true;
+            hang_ends_with_cancel_ = true;
+        }
+
+        // Sends the dispatcher has started since creation, whatever became of them.
+        int64_t TestSendAttemptCount() const { return send_attempts_.load(std::memory_order_relaxed); }
 
         void AddExtraRequestHeader(std::string name, std::string value)
         {
@@ -4424,14 +4462,51 @@ namespace
             (void)period_ms;
             return SetError(HSM_RESULT_INVALID_STATE, "TCP connection failure rate sensor is only supported on Windows.");
 #else
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (state_ != CollectorState::Stopped)
-                return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
+            // The first period stays (#1752), the rule of the managed
+            // IWindowsCollection.AddNetworkConnectionFailuresRate: a later request with another
+            // period is not applied and is reported; the same period again is silently one sensor.
+            // The call itself still succeeds, as every repeated enable call of this ABI does.
+            int32_t kept_period_ms = 0;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ != CollectorState::Stopped)
+                    return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
 
-            tcp_fail_rate_enabled_ = true;
-            tcp_fail_rate_period_ms_ = period_ms;
-            ClearError();
+                if (!tcp_fail_rate_enabled_)
+                {
+                    tcp_fail_rate_enabled_ = true;
+                    tcp_fail_rate_period_ms_ = period_ms;
+                }
+                else if (tcp_fail_rate_period_ms_ != period_ms)
+                {
+                    kept_period_ms = tcp_fail_rate_period_ms_;
+                }
+
+                ClearError();
+            }
+
+            // Reported outside mutex_, which LogError takes on its way to `.module/Collector errors`.
+            // That sensor takes no value while the collector is stopped, so here the report reaches
+            // the logger only.
+            if (kept_period_ms != 0)
+                LogError("The TCP connection failure rate sensor was already enabled with a period of " +
+                         std::to_string(kept_period_ms) + " ms; the period of " + std::to_string(period_ms) +
+                         " ms of the second request is not applied.");
+
             return HSM_RESULT_OK;
+#endif
+        }
+
+        // Test seam (#1752): the sampling period the TCP connection failure rate sensor will run
+        // with, or 0 when it was never enabled. The registration does not carry the period, so
+        // nothing a test can read on the wire tells which request won.
+        int32_t TestTcpFailureRatePeriodMs()
+        {
+#ifdef _WIN32
+            std::lock_guard<std::mutex> guard(mutex_);
+            return tcp_fail_rate_enabled_ ? tcp_fail_rate_period_ms_ : 0;
+#else
+            return 0; // the sensor cannot be enabled off Windows
 #endif
         }
 
@@ -5316,10 +5391,21 @@ namespace
         void RunTcpFailureRateLoop()
         {
 #ifdef _WIN32
-            hsm::collector::WindowsTcpFailureSampler sampler;
+            // A tick on which neither address family could be read goes to the deduplicated error
+            // channel (the log and `.module/Collector errors`), once per window however long it
+            // lasts: the sensor goes on posting 0, and that must not pass for a quiet network
+            // (#1752, root rule 8). This thread holds neither mutex_ nor queue_mutex_ when it samples.
+            hsm::collector::WindowsTcpFailureSampler sampler([this](const std::string& message) { LogError(message); });
             const auto period = std::chrono::milliseconds(tcp_fail_rate_period_ms_);
 
-            sampler.Sample(); // seed baseline — first call returns nullopt
+            try
+            {
+                sampler.Sample(); // seed baseline — first call returns nullopt
+            }
+            catch (...)
+            {
+                // The seeding sample can report now: nothing may leave this thread's function.
+            }
 
             while (true)
             {
@@ -5971,6 +6057,9 @@ namespace
 
         bool TrySendBatch(std::vector<std::string>& batch)
         {
+            // Counted before anything can hang or fail the send (test seam, #1751).
+            send_attempts_.fetch_add(1, std::memory_order_relaxed);
+
             // Injected transport hang: block until the hang is lifted or the stop path cancels
             // in-flight sends. A cancelled hung send is a failed send — the worker re-enqueues
             // the batch and the stop drain drops it, keeping shutdown bounded.
@@ -5985,8 +6074,21 @@ namespace
                     --hung_sends_;
 
                     if (send_hang_)
+                    {
+                        // Test seam (#1751): the hang that ends with this cancellation.
+                        if (hang_ends_with_cancel_)
+                        {
+                            hang_ends_with_cancel_ = false;
+                            send_hang_ = false;
+                        }
+
                         return false;
+                    }
                 }
+
+                // Test seam (#1751): a sender that is down fails every send at once.
+                if (send_fail_all_)
+                    return false;
             }
 
             // The injected failure fires BEFORE anything is recorded — mirrors the C# harness's
@@ -6308,6 +6410,11 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
         int hung_sends_ = 0; // sends parked in the injected hang (test seam), guarded by hang_mutex_
+        // Test seams (#1751), guarded by hang_mutex_: every send fails at once; the hang ends with
+        // the cancellation of a send parked in it.
+        bool send_fail_all_ = false;
+        bool hang_ends_with_cancel_ = false;
+        std::atomic<std::int64_t> send_attempts_{ 0 }; // sends started since creation (test seam)
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
@@ -7410,10 +7517,39 @@ extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* col
     return collector != nullptr ? collector->impl->TestRequeueDroppedTotal() : 0;
 }
 
+// Test-only (#1751), for the conformance scenarios of the stop drain; not in the public header.
+// What the injected sender does with every send from now on: 0 accepts it, 1 fails it at once,
+// 2 holds it until the stop path cancels it. Any other value is ignored.
+extern "C" void hsm_collector_test_set_send_mode(hsm_collector_t* collector, int32_t mode)
+{
+    if (collector != nullptr && mode >= 0 && mode <= 2)
+        collector->impl->TestSetSendMode(static_cast<NativeCollector::TestSendMode>(mode));
+}
+
+// The injected hang that ends with the cancellation of a send parked in it.
+extern "C" void hsm_collector_test_set_send_hang_until_cancelled(hsm_collector_t* collector)
+{
+    if (collector != nullptr)
+        collector->impl->TestSetSendHangUntilCancelled();
+}
+
+// Sends the dispatcher has started since the collector was created, whatever became of them.
+extern "C" int64_t hsm_collector_test_send_attempt_count(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestSendAttemptCount() : 0;
+}
+
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)
 {
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
+}
+
+// Test-only (#1752): the period the TCP connection failure rate sensor will sample with, 0 when it
+// is not enabled. Not in the public header, like the seams above.
+extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestTcpFailureRatePeriodMs() : 0;
 }
 
 // Public live transport (#1165): switch the collector from the in-memory recording sender to a real

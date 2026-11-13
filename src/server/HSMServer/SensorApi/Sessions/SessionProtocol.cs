@@ -37,6 +37,7 @@ namespace HSMServer.SensorApi.Sessions
         // The status of an ack is the HTTP status the same request would have got.
         public const int StatusOk = 200;
         public const int StatusBadRequest = 400;
+        public const int StatusInternalError = 500;
 
         public const WebSocketCloseStatus ClosePolicyViolation = WebSocketCloseStatus.PolicyViolation;      // 1008
         public const WebSocketCloseStatus CloseMessageTooBig = WebSocketCloseStatus.MessageTooBig;          // 1009

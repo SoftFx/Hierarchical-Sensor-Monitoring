@@ -42,6 +42,7 @@ namespace HSMServer.Controllers
     public class SensorsController : ControllerBase
     {
         private const string InvalidRequest = SensorIngestionService.InvalidRequest;
+        private const string KeyRequired = "An access key is required";
 
         private const string DirectiveHeader = "X-Hsm-Directive";
         private const string AgentVersionHeader = "X-Agent-Version";
@@ -375,6 +376,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [TypeFilter<SendDataKeyPermissionFilter>]
         public async Task<ActionResult<AddOrUpdateSensorRequest>> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
@@ -388,9 +390,16 @@ namespace HSMServer.Controllers
             {
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
-                _logger.Error(message, ex);
+                // Exception first: Error(string, Exception) takes the exception for a
+                // template argument and logs the message without it. Once per window for
+                // the same fault of the same key, see the commands route below.
+                if (_ingestion.IsFaultLogDue(CallerKeyId, ex, out var unlogged))
+                    _logger.Error(ex, $"{message}{RepeatedFaultLog.Unlogged(unlogged)}");
 
-                return BadRequest(message);
+                // The server's own fault, so 500 and not 400 (#1749): a collector takes a 4xx
+                // on a registration as a final refusal and never sends it again, and repeats a
+                // 5xx on its next cycle. The body is the one the 400 carried.
+                return StatusCode(StatusCodes.Status500InternalServerError, message);
             }
         }
 
@@ -404,23 +413,36 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [TypeFilter<SendDataKeyPermissionFilter>]
         public async Task<ActionResult<Dictionary<string, string>>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
+            // A request with no key at all, neither the Key header nor a key in any command,
+            // is the request's fault: the access error every other key problem gets, and
+            // nothing is applied (#1756). It used to end as a null reference inside the
+            // loop, which is a 500 since #1749.
+            if (sensorCommands.Count > 0 && sensorCommands.TrueForAll(HasNoKey))
+                return StatusCode(StatusCodes.Status406NotAcceptable, KeyRequired);
+
             var response = new Dictionary<string, string>(sensorCommands.Count);
 
-            try
-            {
-                var accepted = new List<(PublicApiRequestInfo Info, CommandRequestBase Command)>(sensorCommands.Count);
+            Exception firstFault = null;
+            var faulted = 0;
 
-                for (var i = 0; i < sensorCommands.Count; i++)
+            // The callers are resolved for the whole batch first: the sensor moves its
+            // registrations ask for (#1724) are made before any command is applied.
+            var accepted = new List<(PublicApiRequestInfo Info, CommandRequestBase Command)>(sensorCommands.Count);
+
+            for (var i = 0; i < sensorCommands.Count; i++)
+            {
+                try
                 {
                     // Only a registration reads the caller; any other command is refused
                     // without it, exactly as before the logic moved to the service.
                     PublicApiRequestInfo info = null;
                     if (sensorCommands[i] is AddOrUpdateSensorRequest)
                     {
-                        var infoRequest = await IsValidPublicApiRequest(sensorCommands[i]);
+                        var infoRequest = await IsValidRegistrationRequest(sensorCommands[i]);
 
                         if (!infoRequest.IsOk)
                         {
@@ -437,17 +459,57 @@ namespace HSMServer.Controllers
 
                     accepted.Add((info, sensorCommands[i]));
                 }
-
-                foreach (var (path, error) in await _ingestion.ApplyCommandsAsync(accepted))
-                    response[path] = error;
-
-                return Ok(response);
+                catch (Exception ex)
+                {
+                    // A fault of one command, see the loop below.
+                    firstFault ??= ex;
+                    faulted++;
+                }
             }
-            catch (Exception ex)
+
+            await _ingestion.ApplyPreviousPathsAsync(accepted);
+
+            foreach (var (info, command) in accepted)
             {
-                _logger.Error("Failed to update sensors!", ex);
-                return BadRequest(response);
+                try
+                {
+                    var error = await _ingestion.ApplyCommandAsync(info, command, previousPathsApplied: true);
+
+                    if (error is not null)
+                        response[command.Path] = error;
+                }
+                catch (Exception ex)
+                {
+                    // A fault on one command does not end the batch (#1749). The answer
+                    // will be a 500, on which a collector sends the whole package again
+                    // every cycle, ahead of everything it issues later: were the loop to
+                    // stop here, a command that faults on every repeat would keep all the
+                    // commands after it from ever being applied. The rest is applied now,
+                    // and applied once more on the resend, which is safe: a registration
+                    // applied again is what every collector restart does.
+                    firstFault ??= ex;
+                    faulted++;
+                }
             }
+
+            if (firstFault is null)
+                return Ok(response);
+
+            // One line for the request, not one per command: during a storage outage every
+            // command of a large package faults. And not one per cycle either: a collector
+            // sends a package answered 500 again every cycle for as long as the fault
+            // lasts, so the same fault of the same key is logged once per window, with the
+            // number of requests that went unlogged since. Exception first, see addOrUpdate
+            // above.
+            if (_ingestion.IsFaultLogDue(CallerKeyId, firstFault, out var unlogged))
+                _logger.Error(firstFault, $"Failed to update sensors: {faulted} of {sensorCommands.Count} command(s) faulted, the others were applied.{RepeatedFaultLog.Unlogged(unlogged)} The first fault:");
+
+            // The server's own fault, so 500 and not 400 (#1749): a collector drops the
+            // whole registration package on a 4xx and repeats it on a 5xx. A command the
+            // server refuses is not an exception: it is an entry of the dictionary in a
+            // 200. The body is the one the 400 carried: the per-path errors of the commands
+            // the server refused. A faulted command has no entry in it.
+            return StatusCode(StatusCodes.Status500InternalServerError, response);
         }
 
 
@@ -583,12 +645,43 @@ namespace HSMServer.Controllers
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
         {
-            var infoRequest = await IsValidPublicApiRequest(apiRequest);
+            var infoRequest = await IsValidRegistrationRequest(apiRequest);
 
             if (!infoRequest.IsOk)
                 return TaskResult.FromError(infoRequest.Error);
 
             return await _ingestion.AddOrUpdateSensorAsync(infoRequest.Value, apiRequest);
+        }
+
+        // The key the request came with; empty when it could not be resolved.
+        private Guid CallerKeyId => HttpContext.TryGetPublicApiInfo(out var caller) ? caller.Key.Id : Guid.Empty;
+
+        private bool HasNoKey(BaseRequest request) => request.Key is null && !HttpContext.TryGetPublicApiInfo(out _);
+
+        // Who sends a registration. The value routes resolve their caller with
+        // IsValidPublicApiRequest alone and are not touched by the two cases handled here
+        // (#1756), both of which matter for a registration only: a collector takes a 4xx on
+        // it as final and sends a 5xx again.
+        //   - No key at all is the request's fault: the access error, where the lookup
+        //     below would fail on the missing key with a null reference, a 500.
+        //   - A key that could not be looked up because the server itself failed is not a
+        //     refused key: it leaves as an exception, which both routes answer 500.
+        private async Task<TaskResult<PublicApiRequestInfo>> IsValidRegistrationRequest(BaseRequest request)
+        {
+            if (HasNoKey(request))
+                return TaskResult<PublicApiRequestInfo>.FromError(KeyRequired);
+
+            // The mark belongs to one lookup, and a batch makes one per command: cleared
+            // first, so that a lookup that failed for an earlier command does not turn the
+            // refusal of this one into a fault.
+            HttpContext.ClearPublicApiFault();
+
+            var infoRequest = await IsValidPublicApiRequest(request);
+
+            if (!infoRequest.IsOk && HttpContext.HasPublicApiFault())
+                throw new InvalidOperationException(infoRequest.Error);
+
+            return infoRequest;
         }
 
         private Task<TaskResult<PublicApiRequestInfo>> IsValidPublicApiRequest(BaseRequest request)

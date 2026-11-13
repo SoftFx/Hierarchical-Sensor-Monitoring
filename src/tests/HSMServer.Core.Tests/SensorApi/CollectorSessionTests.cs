@@ -247,8 +247,10 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(overHttp.Type, overSession.Type);
 
             // The same batch again over both transports, now for a sensor that exists with
-            // another type, plus an empty batch: whatever the route answers, the ack answers.
-            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]" })
+            // another type, plus an empty batch, plus a registration the server refuses
+            // because it cannot convert it (a sensor type it does not know, #1749):
+            // whatever the route answers, the ack answers.
+            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]", "[{\"Type\":0,\"Path\":\"commands/unknown-type\",\"SensorType\":99}]" })
             {
                 var again = await PostAsync(host, "commands", body, _key);
 
@@ -258,6 +260,190 @@ namespace HSMServer.Core.Tests.SensorApi
                 Assert.Equal((int)again.Status, (int)againAck["status"]);
                 Assert.True(JsonNode.DeepEquals(JsonNode.Parse(again.Body), againAck["body"]), $"HTTP answered {again.Body}, the session {againAck["body"]?.ToJsonString()}");
             }
+        }
+
+        // A fault of the server while it applies registrations is a 500 on both transports
+        // (#1749): a collector takes a 4xx on a registration as a final refusal and drops the
+        // package, and repeats a 5xx on its next cycle. It used to be a 400 on both.
+        //
+        // The 500 means "some commands faulted, the others were applied; send the package
+        // again": the command after the faulted one is applied too. A collector sends such a
+        // package again every cycle, ahead of what it issues later, so a server that stopped
+        // at the fault would let one command that faults on every repeat keep every later
+        // registration of that collector from being applied.
+        [Fact]
+        public async Task Commands_FaultOnOneCommand_Is500OnBothTransports_TheOthersAreApplied_AndTheResendAppliesTheFaultedOne()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            static string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"faulted/{transport}/before\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/faulted\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/after\",\"SensorType\":1}}]";
+
+            bool Registered(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out _);
+
+            faulting.FaultOn("faulted/http/faulted", "faulted/session/faulted");
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var ack = await ReceiveTextAsync(socket);
+
+            Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
+
+            var failed = JsonNode.Parse(ack);
+
+            Assert.Equal(9, (long)failed["ack"]);
+            Assert.Equal((int)http.Status, (int)failed["status"]);
+            Assert.Equal("failed to apply the commands", (string)failed["error"]);
+            Assert.Null(failed["body"]);
+
+            // The ack says nothing about the fault itself: its text stays in the server's log.
+            Assert.DoesNotContain(FaultingCache.FaultText, ack);
+
+            // On both transports everything but the faulted command is applied.
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.True(Registered($"faulted/{transport}/before"), $"{transport}: the command before the faulted one");
+                Assert.False(Registered($"faulted/{transport}/faulted"), $"{transport}: the faulted command");
+                Assert.True(Registered($"faulted/{transport}/after"), $"{transport}: the command after the faulted one");
+            }
+
+            // The session survives the fault, and the resend a collector sends is applied.
+            faulting.Recover();
+
+            var httpResend = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":10,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var resent = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, httpResend.Status);
+            Assert.Equal(10, (long)resent["ack"]);
+            Assert.Equal(200, (int)resent["status"]);
+            Assert.True(Registered("faulted/http/faulted"));
+            Assert.True(Registered("faulted/session/faulted"));
+        }
+
+        // During a storage outage every command of a package faults. That is one Error line
+        // for the frame, with the number of commands that faulted and the first fault, not a
+        // line per command.
+        [Fact]
+        public async Task Commands_SeveralFaultsInOneFrame_AreLoggedOnce_WithTheirNumber()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("outage/first", "outage/third");
+
+            await SendAsync(socket, "{\"id\":12,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"outage/first\",\"SensorType\":1}," +
+                                    "{\"Type\":0,\"Path\":\"outage/second\",\"SensorType\":1},{\"Type\":0,\"Path\":\"outage/third\",\"SensorType\":1}]}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(500, (int)ack["status"]);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "outage/second", out _));
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 12: 2 of 3 command(s) faulted", errors[0].Message);
+            Assert.Contains(FaultingCache.FaultText, errors[0].Message);
+        }
+
+        // A fault that repeats: the collector sends the frame again on every cycle for as long
+        // as it lasts. That is one Error line for the same fault of the same key, not one per
+        // cycle (the window and the count that follows it: RepeatedFaultLogTests); another
+        // fault is another line.
+        [Fact]
+        public async Task Commands_TheSameFaultOnEveryResend_IsLoggedOnce()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("repeated/first", "repeated/another");
+
+            for (var id = 20; id < 23; id++)
+            {
+                await SendAsync(socket, $"{{\"id\":{id},\"op\":\"commands\",\"body\":[{{\"Type\":0,\"Path\":\"repeated/first\",\"SensorType\":1}}]}}");
+
+                Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+            }
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 20: 1 of 1 command(s) faulted", errors[0].Message);
+
+            await SendAsync(socket, "{\"id\":23,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"repeated/another\",\"SensorType\":1}]}");
+
+            Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+
+            errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 2, host.Log.Dump());
+            Assert.Contains("frame 23: 1 of 1 command(s) faulted", errors[1].Message);
+        }
+
+        // A `commands` body the server cannot read is a 400 on both transports (#1749). The
+        // HTTP route used to end as a 500 here (its model binder threw), as `list` still does.
+        [Fact]
+        public async Task Commands_UnreadableBody_Is400OnBothTransports()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            const string unreadable = "[{\"Type\":0,\"Path\":\"unreadable/commands\",\"SensorType\":\"not-a-type\"}]";
+
+            var http = await PostAsync(host, "commands", unreadable, _key);
+
+            await SendAsync(socket, $"{{\"id\":11,\"op\":\"commands\",\"body\":{unreadable}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
+        }
+
+        // A `commands` list with a null element or with a command without a path is a
+        // malformed body on both transports (#1749): the whole request is a 400 and nothing
+        // of it is applied. Not a 500, which a collector would send again every cycle for a
+        // request that can never succeed.
+        [Theory]
+        [InlineData("null", "null")]
+        [InlineData("{\"Type\":0,\"SensorType\":1}", "pathless")]
+        public async Task Commands_ANullCommandOrOneWithoutAPath_Is400OnBothTransports_AndNothingIsApplied(string malformed, string folder)
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/before\",\"SensorType\":1}},{malformed},{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/after\",\"SensorType\":1}}]";
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":13,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal(13, (long)ack["ack"]);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
+            Assert.Null(ack["body"]);
+
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/before", out _), $"{transport}: the command before the malformed one");
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/after", out _), $"{transport}: the command after the malformed one");
+            }
+
+            // The session survives a refused request.
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
         }
 
         // Sensor move from a collector (#1724): a registration's PreviousPaths moves the old sensor
