@@ -38,6 +38,9 @@
     <Compile Include="..\HSMDataCollector.Tests\StopDrainFailedSendTests.cs" Link="Shared\StopDrainFailedSendTests.cs" />
     <Compile Include="..\HSMDataCollector.Tests\StopDrainAbandonedSendTests.cs" Link="Shared\StopDrainAbandonedSendTests.cs" />
     <Compile Include="..\HSMDataCollector.Tests\CommandOrderAcrossPackagesTests.cs" Link="Shared\CommandOrderAcrossPackagesTests.cs" />
+    <!-- Sensor schedules on Dispose (#1066): the scheduler and the sensor stops run on two
+         runtimes. -->
+    <Compile Include="..\HSMDataCollector.Tests\SensorScheduleDisposeTests.cs" Link="Shared\SensorScheduleDisposeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

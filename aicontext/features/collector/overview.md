@@ -210,7 +210,7 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 - `BarMonitoringSensorBase` composes a second handle for the bar-collect loop, on top of the inherited send handle.
 - `FreeDiskSpacePredictionBase` composes a handle for its disk-speed sampling loop.
 
-`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
+`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. A sensor stops its handles on `Dispose()` as well as on `StopAsync()` (`DisposeAsyncCore`), so disposing the sensor storage without a prior stop leaves no task in the timer wheel (#1066, [`scheduling/`](./scheduling/feature.md)). `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
 
 Disk free-space read failures are sensor errors, not lifecycle failures. The regular free-space sensor emits an `Error` value with the exception message, while disk prediction startup and sampling report the exception through the normal collector error path, keep the sensor started, and allow later scheduled samples to recover if the OS metric becomes readable again.
 
