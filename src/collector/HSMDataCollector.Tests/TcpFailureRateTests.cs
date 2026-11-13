@@ -1,3 +1,7 @@
+#if NET5_0_OR_GREATER
+#nullable disable
+#endif
+
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Windows.Network;
 using HSMDataCollector.SyncQueue.Data;
@@ -375,9 +379,92 @@ namespace HSMDataCollector.Tests
         }
 
 
-        private static DataCollector CreateCollector(IDataSender sender)
+        // The monitor and its rate sensor are registered one after the other, and the storage can
+        // take the first and refuse the second. The two cases below are the two ways it does.
+
+        [Fact]
+        public async Task Monitor_refused_because_the_collector_began_to_stop_leaves_no_rate_sensor_behind()
         {
-            return new DataCollector(new CollectorOptions
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            var stopHeld = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var logger = new ErrorRecordingLogger();
+            DataCollector collector = null;
+            Task stop = null;
+
+            // The storage says so when it has taken the rate sensor, and the monitor is not
+            // registered yet: the stop begins exactly between the two registrations, on the
+            // registering thread, and is held in Stopping until the test lets it go on.
+            logger.OnInfo = message =>
+            {
+                if (stop == null && message.StartsWith("New sensor has been added", StringComparison.Ordinal)
+                                 && message.EndsWith("/Connection failures rate", StringComparison.Ordinal))
+                    stop = collector.Stop(stopHeld.Task);
+            };
+
+            using (collector = CreateCollector(new RateRecordingSender()))
+            {
+                collector.AddCustomLogger(logger);
+
+                await collector.Start();
+
+                collector.Windows.AddNetworkConnectionFailuresRate();
+
+                Assert.True(stop != null, "The stop did not begin between the two registrations.");
+                Assert.Equal(CollectorStatus.Stopping, collector.Status);
+                Assert.Contains(logger.Errors, e => e.Contains("Cannot register sensor") && e.Contains(WindowsTcpFailureRateMonitor.MonitorPath));
+
+                // The monitor was refused, and the rate sensor it had put into the storage left
+                // with it: the next Start has no sensor to register that nothing would feed.
+                Assert.DoesNotContain(collector.DefaultSensors, s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath);
+                Assert.DoesNotContain(collector.DefaultSensors, s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal));
+
+                stopHeld.SetResult(true);
+                await stop;
+
+                // The next request, to a collector that takes registrations again, builds the pair.
+                collector.Windows.AddNetworkConnectionFailuresRate();
+
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath));
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal)));
+            }
+        }
+
+        [Fact]
+        public void Monitor_refused_at_the_sensor_limit_leaves_no_rate_sensor_behind()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            var options = CreateOptions(new RateRecordingSender());
+
+            using (var collector = new DataCollector(options))
+            {
+                // Room for the rate sensor and none for its monitor.
+                options.MaxSensors = collector.DefaultSensors.Count() + 1;
+
+                Assert.Throws<InvalidOperationException>(() => collector.Windows.AddNetworkConnectionFailuresRate());
+
+                Assert.DoesNotContain(collector.DefaultSensors, s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath);
+                Assert.DoesNotContain(collector.DefaultSensors, s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal));
+
+                // With room for both, the next request builds the pair.
+                options.MaxSensors += 1;
+
+                collector.Windows.AddNetworkConnectionFailuresRate();
+
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath == WindowsTcpFailureRateMonitor.MonitorPath));
+                Assert.Single(collector.DefaultSensors.Where(s => s.SensorPath.EndsWith("/Connection failures rate", StringComparison.Ordinal)));
+            }
+        }
+
+
+        private static DataCollector CreateCollector(IDataSender sender) => new DataCollector(CreateOptions(sender));
+
+        private static CollectorOptions CreateOptions(IDataSender sender)
+        {
+            return new CollectorOptions
             {
                 AccessKey = "tcp-rate-key",
                 ClientName = "tcp-rate-client",
@@ -386,13 +473,16 @@ namespace HSMDataCollector.Tests
                 DataSender = sender,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(20),
                 RequestTimeout = TimeSpan.FromSeconds(1),
-            });
+            };
         }
 
         private sealed class ErrorRecordingLogger : HSMDataCollector.Logging.ICollectorLogger
         {
             private readonly object _lock = new object();
             private readonly List<string> _errors = new List<string>();
+
+            /// <summary>Called with every Info line, on the thread that wrote it.</summary>
+            internal Action<string> OnInfo { get; set; }
 
             internal List<string> Errors
             {
@@ -405,7 +495,7 @@ namespace HSMDataCollector.Tests
 
             public void Debug(string message) { }
 
-            public void Info(string message) { }
+            public void Info(string message) => OnInfo?.Invoke(message);
 
             public void Error(string message)
             {

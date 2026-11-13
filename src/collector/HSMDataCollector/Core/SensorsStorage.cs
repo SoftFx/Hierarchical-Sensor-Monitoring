@@ -123,11 +123,24 @@ namespace HSMDataCollector.Core
         public bool TryGetValue(string key, out ISensor value) => _sensors.TryGetValue(key, out value);
 
 
-        internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
+        internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options) => CreateRateSensor(path, options, out _);
+
+        /// <param name="added">
+        /// True when this call put the sensor it returns into the storage; false when it returns
+        /// a sensor that was at the path before, or one the storage refused. For a built-in
+        /// source that must take out again only what it put in itself.
+        /// </param>
+        internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options, out bool added)
         {
             options = FillOptions<RateSensorOptions, RateDisplayUnit>(path, SensorType.RateSensor, options);
 
-            return (MonitoringRateSensor)Register(new MonitoringRateSensor(options));
+            var created = new MonitoringRateSensor(options);
+            var registered = (MonitoringRateSensor)Register(created);
+
+            // The instance built here is new, so the storage can hold it only through this call.
+            added = ReferenceEquals(registered, created) && _sensors.TryGetValue(created.SensorPath, out var stored) && ReferenceEquals(stored, created);
+
+            return registered;
         }
 
         internal FileSensorInstant CreateFileSensor(string path, FileSensorOptions options)

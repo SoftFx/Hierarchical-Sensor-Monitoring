@@ -75,12 +75,45 @@ namespace HSMDataCollector.Client.Session
 
         private Run _current;
 
-        // The session being served, and what its hello stated. Written by the loop, read by senders.
-        private volatile ClientWebSocket _socket;
-        private volatile TaskCompletionSource<string> _reset;
+        // One session: its socket, the signal that ends it, and whether it was ended for a
+        // missing ack. The three are one object so that a request takes them in one read when
+        // it starts, and later signals the session it was made on, whatever is current by then.
+        // INVARIANT: nothing here is shared between sessions, so a request that fails late (it
+        // waited for the send lock while its session ended and the next one came up) can
+        // neither end nor mark the session that came after its own. A signal to a session that
+        // is over is harmless: nobody waits for it any more.
+        private sealed class Session
+        {
+            private readonly TaskCompletionSource<string> _reset =
+                new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private int _endedForNoAck;
 
-        // True when the current session was ended because a request got no ack in time.
-        private volatile bool _endedForNoAck;
+            internal Session(ClientWebSocket socket)
+            {
+                Socket = socket;
+            }
+
+            internal ClientWebSocket Socket { get; }
+
+            /// <summary>Completes, with the reason, when a request asks for this session to be ended.</summary>
+            internal Task<string> Reset => _reset.Task;
+
+            /// <summary>True when a request of this session got no ack in time.</summary>
+            internal bool EndedForNoAck => Volatile.Read(ref _endedForNoAck) == 1;
+
+            // The mark before the signal: a loop that the signal has woken finds the mark set.
+            internal void RequestReset(string why, bool noAck)
+            {
+                if (noAck)
+                    Volatile.Write(ref _endedForNoAck, 1);
+
+                _reset.TrySetResult(why);
+            }
+        }
+
+        // The session being served; null while there is none. Written by the loop, read by
+        // senders. What its hello stated is in the fields below.
+        private volatile Session _session;
         private volatile TaskCompletionSource<bool> _upSignal = NewSignal();
         private volatile string _downReason = NoSession;
         private int _maxFrameBytes;
@@ -109,7 +142,7 @@ namespace HSMDataCollector.Client.Session
         }
 
         /// <summary>True while a session is up: the hello arrived and nothing has ended it.</summary>
-        internal bool IsUp => _socket != null;
+        internal bool IsUp => _session != null;
 
         /// <summary>
         /// The largest body a request may carry on the current session: the server's frame limit
@@ -122,6 +155,13 @@ namespace HSMDataCollector.Client.Session
 
         /// <summary>How many sessions were opened since the collector started this connection.</summary>
         internal long SessionsOpened => Interlocked.Read(ref _sessionsOpened);
+
+        /// <summary>
+        /// The task that completes when the session that is up now is asked to end; null while
+        /// no session is up. For tests: taken while a session is up, it says later whether that
+        /// very session was asked to end, however far the loop has got since.
+        /// </summary>
+        internal Task ResetOfCurrentSession => _session?.Reset;
 
 
         /// <summary>Completes when a session is up; at once when one is up now.</summary>
@@ -186,7 +226,7 @@ namespace HSMDataCollector.Client.Session
 
             var loop = run.Loop;
 
-            var socket = _socket;
+            var socket = _session?.Socket;
 
             if (socket != null && linger > TimeSpan.Zero)
             {
@@ -227,7 +267,7 @@ namespace HSMDataCollector.Client.Session
 
             if (IsCurrent(run))
             {
-                try { _socket?.Abort(); }
+                try { _session?.Socket.Abort(); }
                 catch (Exception) { }
             }
 
@@ -258,9 +298,10 @@ namespace HSMDataCollector.Client.Session
         {
             token.ThrowIfCancellationRequested();
 
-            var socket = _socket;
+            // One read: the socket and the reset signal of one and the same session.
+            var session = _session;
 
-            if (socket == null)
+            if (session == null)
                 return SessionAck.NoAck(_downReason);
 
             var id = Interlocked.Increment(ref _nextId);
@@ -272,12 +313,12 @@ namespace HSMDataCollector.Client.Session
             {
                 // The session may have ended between the read above and the registration: the
                 // loop fails only the requests it finds, so look again.
-                if (!ReferenceEquals(_socket, socket))
+                if (!ReferenceEquals(_session, session))
                     return SessionAck.NoAck(_downReason);
 
                 try
                 {
-                    await SendAsync(socket, SessionProtocol.BuildRequest(id, op, body), token).ConfigureAwait(false);
+                    await SendAsync(session.Socket, SessionProtocol.BuildRequest(id, op, body), token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -285,7 +326,9 @@ namespace HSMDataCollector.Client.Session
                 }
                 catch (Exception ex)
                 {
-                    RequestReset(socket, $"sending a frame failed: {ex.Message}");
+                    // The session this request was made on, not the one that is up now: the
+                    // write may fail long after its own session has ended (see Session).
+                    session.RequestReset($"sending a frame failed: {ex.Message}", noAck: false);
                     return SessionAck.NoAck($"sending failed: {ex.Message}");
                 }
 
@@ -303,7 +346,7 @@ namespace HSMDataCollector.Client.Session
                 token.ThrowIfCancellationRequested();
 
                 // Worded without the op: the same cause for every queue is one deduplicated report.
-                RequestReset(socket, $"a request got no ack within {timeout.TotalSeconds:0.###} s", noAck: true);
+                session.RequestReset($"a request got no ack within {timeout.TotalSeconds:0.###} s", noAck: true);
 
                 return SessionAck.NoAck("no ack in time");
             }
@@ -322,7 +365,7 @@ namespace HSMDataCollector.Client.Session
             while (!token.IsCancellationRequested)
             {
                 var lived = Stopwatch.StartNew();
-                var wasUp = false;
+                Session session = null;
                 string why;
 
                 var socket = new ClientWebSocket();
@@ -353,11 +396,10 @@ namespace HSMDataCollector.Client.Session
                         }
                     }
 
-                    wasUp = true;
                     lived.Restart();
-                    MarkUp(socket);
+                    session = MarkUp(socket);
 
-                    why = await ServeAsync(socket, token).ConfigureAwait(false);
+                    why = await ServeAsync(session, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -383,6 +425,8 @@ namespace HSMDataCollector.Client.Session
                     break;
                 }
 
+                var wasUp = session != null;
+
                 _downReason = wasUp ? $"the session ended: {why}" : $"the session cannot be opened: {why}";
                 FailAllPending(_downReason);
 
@@ -399,7 +443,7 @@ namespace HSMDataCollector.Client.Session
                         // timeout of a minute or more every such session is a long one, and a
                         // server that holds a package without an ack would otherwise be retried
                         // for ever with nothing above Info. Deduplicated: the words repeat.
-                        if (_endedForNoAck)
+                        if (session.EndedForNoAck)
                             _reportError?.Invoke($"The collector session to {_url} was reset: {why}. Values stay queued; reconnecting.");
                     }
                     else
@@ -502,28 +546,30 @@ namespace HSMDataCollector.Client.Session
             return hello;
         }
 
-        private void MarkUp(ClientWebSocket socket)
+        private Session MarkUp(ClientWebSocket socket)
         {
             var now = Stopwatch.GetTimestamp();
 
             Volatile.Write(ref _lastSentTicks, now);
             Volatile.Write(ref _lastReceivedTicks, now);
 
-            _endedForNoAck = false;
-            _reset = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _socket = socket;
+            var session = new Session(socket);
+
+            _session = session;
 
             Interlocked.Increment(ref _sessionsOpened);
             _upSignal.TrySetResult(true);
 
             _logger?.Info($"The collector session is up: {_url}, frame limit {Volatile.Read(ref _maxFrameBytes)} bytes, heartbeat {TimeSpan.FromTicks(Volatile.Read(ref _heartbeatTicks)).TotalSeconds:0} s.");
+
+            return session;
         }
 
         private void MarkDown(ClientWebSocket socket)
         {
-            if (ReferenceEquals(_socket, socket))
+            if (ReferenceEquals(_session?.Socket, socket))
             {
-                _socket = null;
+                _session = null;
 
                 // The next waiter waits for the next session.
                 if (_upSignal.Task.IsCompleted)
@@ -537,17 +583,16 @@ namespace HSMDataCollector.Client.Session
         }
 
         // Serves one open session until it ends, and says why.
-        private async Task<string> ServeAsync(ClientWebSocket socket, CancellationToken token)
+        private async Task<string> ServeAsync(Session session, CancellationToken token)
         {
-            using (var session = CancellationTokenSource.CreateLinkedTokenSource(token))
+            using (var serving = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
-                var receive = ReceiveLoopAsync(socket, session.Token);
-                var heartbeat = HeartbeatLoopAsync(socket, session.Token);
-                var reset = _reset.Task;
+                var receive = ReceiveLoopAsync(session.Socket, serving.Token);
+                var heartbeat = HeartbeatLoopAsync(session.Socket, serving.Token);
 
-                var first = await Task.WhenAny(receive, heartbeat, reset).ConfigureAwait(false);
+                var first = await Task.WhenAny(receive, heartbeat, session.Reset).ConfigureAwait(false);
 
-                session.Cancel();
+                serving.Cancel();
 
                 // The other loop ends on the cancellation; what it throws on the way is not news.
                 // Observed before anything below can throw: a stop leaves through the catch.
@@ -745,19 +790,6 @@ namespace HSMDataCollector.Client.Session
         }
 
         private static ArraySegment<byte> NewReceiveBuffer() => new ArraySegment<byte>(new byte[16 * 1024]);
-
-        // Only the session the request was made on: a request that fails late (it waited for the
-        // send lock while its session ended and the next one came up) must not end that next one.
-        private void RequestReset(ClientWebSocket socket, string why, bool noAck = false)
-        {
-            if (!ReferenceEquals(_socket, socket))
-                return;
-
-            if (noAck)
-                _endedForNoAck = true;
-
-            _reset?.TrySetResult(why);
-        }
 
         private void FailAllPending(string why)
         {
