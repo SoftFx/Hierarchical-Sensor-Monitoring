@@ -4265,10 +4265,48 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(hang_mutex_);
                 send_hang_ = hang;
+                hang_ends_with_cancel_ = false;
             }
 
             hang_cv_.notify_all();
         }
+
+        // Test seams (#1751), for the conformance scenarios of the stop drain. All of them are off
+        // in a collector that does not call them.
+        //
+        // What the injected sender does with every send from now on: accept it (up), fail it at
+        // once (down), or hold it until the stop path cancels it (hung, the same hang as
+        // SetSendHang).
+        enum class TestSendMode
+        {
+            Up = 0,
+            Down = 1,
+            Hung = 2,
+        };
+
+        void TestSetSendMode(TestSendMode mode)
+        {
+            {
+                std::lock_guard<std::mutex> guard(hang_mutex_);
+                send_hang_ = mode == TestSendMode::Hung;
+                send_fail_all_ = mode == TestSendMode::Down;
+                hang_ends_with_cancel_ = false;
+            }
+
+            hang_cv_.notify_all();
+        }
+
+        // The injected hang, but the cancellation of a send parked in it ends it: the sends after
+        // it pass, so a batch cancelled in flight can be seen to be sent again by the stop drain.
+        void TestSetSendHangUntilCancelled()
+        {
+            std::lock_guard<std::mutex> guard(hang_mutex_);
+            send_hang_ = true;
+            hang_ends_with_cancel_ = true;
+        }
+
+        // Sends the dispatcher has started since creation, whatever became of them.
+        int64_t TestSendAttemptCount() const { return send_attempts_.load(std::memory_order_relaxed); }
 
         void AddExtraRequestHeader(std::string name, std::string value)
         {
@@ -6017,6 +6055,9 @@ namespace
 
         bool TrySendBatch(std::vector<std::string>& batch)
         {
+            // Counted before anything can hang or fail the send (test seam, #1751).
+            send_attempts_.fetch_add(1, std::memory_order_relaxed);
+
             // Injected transport hang: block until the hang is lifted or the stop path cancels
             // in-flight sends. A cancelled hung send is a failed send — the worker re-enqueues
             // the batch and the stop drain drops it, keeping shutdown bounded.
@@ -6031,8 +6072,21 @@ namespace
                     --hung_sends_;
 
                     if (send_hang_)
+                    {
+                        // Test seam (#1751): the hang that ends with this cancellation.
+                        if (hang_ends_with_cancel_)
+                        {
+                            hang_ends_with_cancel_ = false;
+                            send_hang_ = false;
+                        }
+
                         return false;
+                    }
                 }
+
+                // Test seam (#1751): a sender that is down fails every send at once.
+                if (send_fail_all_)
+                    return false;
             }
 
             // The injected failure fires BEFORE anything is recorded — mirrors the C# harness's
@@ -6354,6 +6408,11 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
         int hung_sends_ = 0; // sends parked in the injected hang (test seam), guarded by hang_mutex_
+        // Test seams (#1751), guarded by hang_mutex_: every send fails at once; the hang ends with
+        // the cancellation of a send parked in it.
+        bool send_fail_all_ = false;
+        bool hang_ends_with_cancel_ = false;
+        std::atomic<std::int64_t> send_attempts_{ 0 }; // sends started since creation (test seam)
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
@@ -7454,6 +7513,28 @@ extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector
 extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector)
 {
     return collector != nullptr ? collector->impl->TestRequeueDroppedTotal() : 0;
+}
+
+// Test-only (#1751), for the conformance scenarios of the stop drain; not in the public header.
+// What the injected sender does with every send from now on: 0 accepts it, 1 fails it at once,
+// 2 holds it until the stop path cancels it. Any other value is ignored.
+extern "C" void hsm_collector_test_set_send_mode(hsm_collector_t* collector, int32_t mode)
+{
+    if (collector != nullptr && mode >= 0 && mode <= 2)
+        collector->impl->TestSetSendMode(static_cast<NativeCollector::TestSendMode>(mode));
+}
+
+// The injected hang that ends with the cancellation of a send parked in it.
+extern "C" void hsm_collector_test_set_send_hang_until_cancelled(hsm_collector_t* collector)
+{
+    if (collector != nullptr)
+        collector->impl->TestSetSendHangUntilCancelled();
+}
+
+// Sends the dispatcher has started since the collector was created, whatever became of them.
+extern "C" int64_t hsm_collector_test_send_attempt_count(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestSendAttemptCount() : 0;
 }
 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)

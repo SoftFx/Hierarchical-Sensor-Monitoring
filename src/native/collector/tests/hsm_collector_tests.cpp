@@ -45,6 +45,11 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
 extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector);
 extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector);
+// #1751, the stop drain scenarios: what the injected sender does with every send (0 up, 1 down,
+// 2 hung), the hang that ends with the cancellation of a parked send, and the sends started so far.
+extern "C" void hsm_collector_test_set_send_mode(hsm_collector_t* collector, int32_t mode);
+extern "C" void hsm_collector_test_set_send_hang_until_cancelled(hsm_collector_t* collector);
+extern "C" int64_t hsm_collector_test_send_attempt_count(hsm_collector_t* collector);
 // #1752: the period the TCP connection failure rate sensor will sample with (0 = not enabled).
 extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector);
 #if defined(HSM_COLLECTOR_HTTP)
@@ -700,6 +705,11 @@ namespace
         // session_server_* verbs). Declared before the collector, so it is destroyed after it:
         // the collector's stop closes the session against a server that is still there.
         std::unique_ptr<hsm::test::WebSocketTestServer> session_server;
+
+        // The recording server of a create_collector_sending_registrations case (#1751): the
+        // collector of such a case sends over the HTTP transport, and this server is its sender.
+        // Declared before the collector for the same reason as the session server.
+        std::unique_ptr<hsm::test::HttpRecordingServer> send_record_server;
 #endif
 
         // True once create_collector_on_session made the collector of this case use the session
@@ -709,6 +719,60 @@ namespace
 
         CollectorHandle collector;
     };
+
+    // (#1751) The kinds of send a fixture names (expect_send_attempts, expect_sends).
+    const std::string& ParseSendKind(const std::string& kind)
+    {
+        if (kind != "value" && kind != "registration")
+            throw std::runtime_error("unknown kind of send '" + kind + "': value or registration");
+        return kind;
+    }
+
+    // (#1751) True when the sender of the case is the recording server of
+    // create_collector_sending_registrations, not the in-memory sender of the collector.
+    bool SendsToRecordingServer(const ConformanceState& state)
+    {
+#if defined(HSM_COLLECTOR_HTTP)
+        return state.send_record_server != nullptr;
+#else
+        (void)state;
+        return false;
+#endif
+    }
+
+    // (#1751) Every send the collector of the case has started so far, by kind, in the order of
+    // their start. The in-memory sender is sent batches of values only (files ride in them), so its
+    // record is that many "value" entries. The recording server sees every request: a POST to
+    // /commands is a registration send, one to /list or /file a value send; any other request is
+    // listed by its path, so that it fails the comparison instead of passing for one of the two.
+    std::vector<std::string> StartedSends(const ConformanceState& state)
+    {
+#if defined(HSM_COLLECTOR_HTTP)
+        if (state.send_record_server)
+        {
+            std::vector<std::string> sends;
+            for (const auto& request : state.send_record_server->Requests())
+            {
+                if (request.path == "/api/sensors/commands")
+                    sends.emplace_back("registration");
+                else if (request.path == "/api/sensors/list" || request.path == "/api/sensors/file")
+                    sends.emplace_back("value");
+                else
+                    sends.push_back(request.path);
+            }
+            return sends;
+        }
+#endif
+        return std::vector<std::string>(static_cast<size_t>(hsm_collector_test_send_attempt_count(state.collector.value)), "value");
+    }
+
+    std::string JoinSends(const std::vector<std::string>& sends)
+    {
+        std::string text;
+        for (const auto& send : sends)
+            text += (text.empty() ? "" : ", ") + send;
+        return "[" + text + "]";
+    }
 
 #if defined(HSM_COLLECTOR_HTTP)
     // The scripted session server of a case, created by the first verb that needs it.
@@ -2639,6 +2703,114 @@ namespace
         if (action == "release_sender_hang")
         {
             hsm_collector_set_send_hang(state.collector.value, false);
+            return;
+        }
+
+        // ---- the stop drain (#1751): stop_drain_contract, stop_drain_registration_contract ----
+
+        // The terminal stop; the handle stays readable until the case ends.
+        if (action == "dispose")
+        {
+            hsm_collector_dispose(state.collector.value);
+            return;
+        }
+
+        // A send blocks until the stop path cancels it; that cancellation ends the hang.
+        if (action == "set_sender_hang_until_cancelled")
+        {
+            Require(!SendsToRecordingServer(state),
+                    "set_sender_hang_until_cancelled is a verb of the in-memory sender; a create_collector_sending_registrations case uses set_sender_mode");
+            hsm_collector_test_set_send_hang_until_cancelled(state.collector.value);
+            return;
+        }
+
+        // What the sender does with every send of every kind from now on: up, down, hung.
+        if (action == "set_sender_mode")
+        {
+            Require(step.size() >= 2, "set_sender_mode requires a mode");
+            const auto& mode = step[1];
+            Require(mode == "up" || mode == "down" || mode == "hung", ("set_sender_mode: unknown mode '" + mode + "' (up, down, hung)").c_str());
+#if defined(HSM_COLLECTOR_HTTP)
+            if (state.send_record_server)
+            {
+                // The sender of the case is a server: down answers 503, hung never answers.
+                using Answer = hsm::test::HttpRecordingServer::Answer;
+                state.send_record_server->SetAnswer(mode == "up" ? Answer::Ok : (mode == "down" ? Answer::Unavailable : Answer::Never));
+                return;
+            }
+#endif
+            hsm_collector_test_set_send_mode(state.collector.value, mode == "up" ? 0 : (mode == "down" ? 1 : 2));
+            return;
+        }
+
+        // A collector whose registrations reach the sender of the case. The in-memory sender of
+        // the native collector is never sent one (a registration is a request of the wire), so
+        // the case runs on the HTTP transport against a recording server, in the HTTP build only.
+        if (action == "create_collector_sending_registrations")
+        {
+            Require(step.size() >= 4, "create_collector_sending_registrations requires max values in package, collect period and request timeout");
+#if defined(HSM_COLLECTOR_HTTP)
+            state.send_record_server = std::make_unique<hsm::test::HttpRecordingServer>();
+            Require(state.send_record_server->Port() != 0, "the recording server of the case did not start");
+
+            auto options = TestOptions();
+            options.access_key = "conformance-key";
+            options.client_name = "conformance-client";
+            options.server_address = "http://127.0.0.1";
+            options.port = state.send_record_server->Port();
+            options.allow_plaintext_transport = true;
+            options.max_values_in_package = ToInt(step[1]);
+            options.package_collect_period_ms = ToInt(step[2]);
+            options.request_timeout_ms = ToInt(step[3]);
+            state.collector = CreateCollector(options);
+            Require(hsm_collector_use_http_transport(state.collector.value) == HSM_RESULT_OK, "the HTTP transport must install");
+            return;
+#else
+            throw std::runtime_error(
+                "create_collector_sending_registrations needs the HTTP build (HSM_COLLECTOR_HTTP): the in-memory sender of the native "
+                "collector is never sent a registration");
+#endif
+        }
+
+        // The sends of one kind the collector has started so far, whatever became of them.
+        if (action == "expect_send_attempts")
+        {
+            Require(step.size() >= 3, "expect_send_attempts requires a kind and a count");
+            const auto& kind = ParseSendKind(step[1]);
+            Require(kind != "registration" || SendsToRecordingServer(state),
+                    "expect_send_attempts|registration: the in-memory sender of the native collector is never sent a registration; "
+                    "a case that counts them is created with create_collector_sending_registrations");
+
+            const auto expected = static_cast<std::ptrdiff_t>(ToInt(step[2]));
+            const auto started = [&] {
+                const auto sends = StartedSends(state);
+                return std::count(sends.begin(), sends.end(), kind);
+            };
+
+            if (step.size() >= 4)
+            {
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[3]));
+                while (started() != expected && std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            const auto actual = started();
+            Require(actual == expected,
+                    ("expected " + step[2] + " " + kind + " send(s) started, got " + std::to_string(actual)).c_str());
+            return;
+        }
+
+        // Every send the collector has started so far, by kind, in the order of their start.
+        if (action == "expect_sends")
+        {
+            Require(step.size() >= 2, "expect_sends requires the kinds, separated by commas");
+            std::vector<std::string> expected;
+            std::stringstream kinds(step[1]);
+            for (std::string kind; std::getline(kinds, kind, ',');)
+                expected.push_back(ParseSendKind(kind));
+
+            const auto actual = StartedSends(state);
+            Require(actual == expected, ("expected the sends " + JoinSends(expected) + ", got " + JoinSends(actual)).c_str());
             return;
         }
 
@@ -10667,6 +10839,7 @@ namespace
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_stop_drain_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
@@ -10686,6 +10859,8 @@ namespace
             { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_tcp_failure_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
 #if defined(HSM_COLLECTOR_HTTP)
+            // (#1751) Needs the HTTP transport, not WebSocket: it runs wherever this build does.
+            { "conformance_stop_drain_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             // The session scenarios need a libcurl with WebSocket: without one they skip and say
             // so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
             { "conformance_session_transport_contract",

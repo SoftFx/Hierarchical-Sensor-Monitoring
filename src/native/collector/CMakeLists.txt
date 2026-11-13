@@ -716,6 +716,7 @@ add_conformance_test(conformance_bar_stddev_contract native/bar_stddev_contract.
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
 add_conformance_test(conformance_flush_contract flush_contract.hsmtest)
+add_conformance_test(conformance_stop_drain_contract stop_drain_contract.hsmtest)
 add_conformance_test(conformance_rate_contract rate_contract.hsmtest)
 add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
@@ -753,6 +754,19 @@ if(HSM_COLLECTOR_HTTP)
     endforeach()
 endif()
 
+# The stop drain scenarios about registrations (#1751) need a sender that is sent the
+# registrations. For the native collector that is the HTTP transport (its in-memory sender is
+# never sent one), so they exist in the HTTP build only, with the must-fail fixture of their
+# assertion. stop_drain_contract above runs in every build.
+if(HSM_COLLECTOR_HTTP)
+    add_conformance_test(conformance_stop_drain_registration_contract stop_drain_registration_contract.hsmtest)
+    add_test(
+        NAME meta_sends_wrong_order
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_sends_wrong_order.hsmtest
+    )
+endif()
+
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
 # the folder on Windows only, too.
 if(WIN32)
@@ -784,6 +798,7 @@ add_meta_conformance_test(meta_eventually_value_above_unreachable.hsmtest)
 add_meta_conformance_test(meta_no_new_payloads_but_arriving.hsmtest)
 add_meta_conformance_test(meta_payload_contains_wrong_value.hsmtest)
 add_meta_conformance_test(meta_payload_not_contains_present.hsmtest)
+add_meta_conformance_test(meta_send_attempts_wrong_count.hsmtest)
 add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
 add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)
