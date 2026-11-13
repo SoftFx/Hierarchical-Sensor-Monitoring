@@ -128,7 +128,7 @@ namespace HSMDataCollector.Core
 
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
-            _dataProcessor.TransportReportsElsewhere = _ownTransport == null && _dataSender is ICollectorTransport;
+            _dataProcessor.TransportReportsElsewhere = UsesTransportOfAnotherCollector;
 
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
@@ -156,6 +156,12 @@ namespace HSMDataCollector.Core
             })
         { }
 
+
+        // The session of the collector that was created first from the same options. It is that
+        // collector's in every respect: this one does not start it, stop it, cancel what waits
+        // on it or dispose it, or the owner, still running, would deliver nothing from then on
+        // and say nothing about it.
+        private bool UsesTransportOfAnotherCollector => _ownTransport == null && _dataSender is ICollectorTransport;
 
         public Task<ConnectionResult> TestConnection() => _dataSender.TestConnectionAsync().AsTask();
 
@@ -570,7 +576,9 @@ namespace HSMDataCollector.Core
 
             try
             {
-                if (inFlightStop != null || ownsStop)
+                // Not on a session this collector shares: the requests that wait there may be
+                // the owner's. This collector's own drain is bounded without it.
+                if ((inFlightStop != null || ownsStop) && !UsesTransportOfAnotherCollector)
                     (_dataSender as ICancelableDataSender)?.CancelPendingRequests();
 
                 if (inFlightStop != null)
@@ -615,7 +623,8 @@ namespace HSMDataCollector.Core
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
-                DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
+                if (!UsesTransportOfAnotherCollector)
+                    DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
 
                 DisposeComponent(_scheduler.Dispose, nameof(_scheduler));
             }

@@ -301,7 +301,6 @@ namespace HSMDataCollector.Core
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
         }
 
-        /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
         /// <summary>
         /// True when this collector sends over a transport another collector owns (it was
         /// created second from the same options). That transport reports its state to its
@@ -310,6 +309,7 @@ namespace HSMDataCollector.Core
         /// </summary>
         internal bool TransportReportsElsewhere { get; set; }
 
+        /// <summary>True when the transport of this collector has no way to carry a file value.</summary>
         internal bool RefusesFiles => _transport != null && !_transport.CanCarryFiles;
 
         internal void ReportRefusedFile(string path)

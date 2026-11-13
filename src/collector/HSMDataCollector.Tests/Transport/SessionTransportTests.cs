@@ -416,6 +416,40 @@ namespace HSMDataCollector.Tests.Transport
             Assert.Single(logger.Errors.Where(e => e.Contains("ended early") && e.Contains("no ack")));
         }
 
+        [Fact]
+        public async Task Request_without_an_ack_is_an_error_on_a_session_of_any_age()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+                options.RequestTimeout = TimeSpan.FromMilliseconds(200);
+
+                // Every session counts as one that had lived long: what a request timeout of a
+                // minute or more makes of each session that ends for a missing ack.
+                options.SessionTimings.StableSession = TimeSpan.Zero;
+
+                server.StaySilentFor(int.MaxValue);
+
+                using (var collector = new DataCollector(options))
+                {
+                    collector.AddCustomLogger(logger);
+                    var sensor = collector.CreateIntSensor("session/never-acked-late");
+                    await collector.Start();
+
+                    sensor.AddValue(1);
+
+                    Assert.True(await WaitForAsync(() => server.Sessions >= 3), "The session was not reopened.");
+
+                    await collector.Stop();
+                }
+            }
+
+            Assert.DoesNotContain(logger.Errors, e => e.Contains("ended early"));
+            Assert.Single(logger.Errors.Where(e => e.Contains("was reset") && e.Contains("no ack")));
+        }
+
         // --- a request without an ack ---
 
         [Fact]
@@ -747,6 +781,36 @@ namespace HSMDataCollector.Tests.Transport
                     sensor.AddValue(21);
 
                     Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(21)), "The first collector lost its session to the stop of the second.");
+                    Assert.Equal(1, server.Sessions);
+                    Assert.Empty(server.Closes);
+
+                    await first.Stop();
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Disposing_the_second_collector_leaves_the_session_of_the_first_up()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var first = new DataCollector(options))
+                {
+                    var sensor = first.CreateIntSensor("session/owner-outlives");
+
+                    await first.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/owner-outlives"), "The session never came up.");
+
+                    // Created from the same options, started and disposed while the first runs.
+                    using (var second = new DataCollector(options))
+                        await second.Start();
+
+                    sensor.AddValue(34);
+
+                    Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(34)), "The first collector lost its session to the dispose of the second.");
                     Assert.Equal(1, server.Sessions);
                     Assert.Empty(server.Closes);
 

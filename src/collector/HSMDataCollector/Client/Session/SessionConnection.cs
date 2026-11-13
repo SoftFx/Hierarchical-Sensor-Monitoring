@@ -78,6 +78,9 @@ namespace HSMDataCollector.Client.Session
         // The session being served, and what its hello stated. Written by the loop, read by senders.
         private volatile ClientWebSocket _socket;
         private volatile TaskCompletionSource<string> _reset;
+
+        // True when the current session was ended because a request got no ack in time.
+        private volatile bool _endedForNoAck;
         private volatile TaskCompletionSource<bool> _upSignal = NewSignal();
         private volatile string _downReason = NoSession;
         private int _maxFrameBytes;
@@ -217,8 +220,16 @@ namespace HSMDataCollector.Client.Session
             try { run.Cancellation.Cancel(); }
             catch (ObjectDisposedException) { }
 
-            try { _socket?.Abort(); }
+            // The session this stop found, and one its own run opened since. Not whatever is
+            // current: after the linger that may be the session of a run started in the meantime.
+            try { socket?.Abort(); }
             catch (Exception) { }
+
+            if (IsCurrent(run))
+            {
+                try { _socket?.Abort(); }
+                catch (Exception) { }
+            }
 
             // The loop ends on the cancellation; a second is ample for it to notice.
             await Task.WhenAny(loop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
@@ -292,7 +303,7 @@ namespace HSMDataCollector.Client.Session
                 token.ThrowIfCancellationRequested();
 
                 // Worded without the op: the same cause for every queue is one deduplicated report.
-                RequestReset(socket, $"a request got no ack within {timeout.TotalSeconds:0.###} s");
+                RequestReset(socket, $"a request got no ack within {timeout.TotalSeconds:0.###} s", noAck: true);
 
                 return SessionAck.NoAck("no ack in time");
             }
@@ -382,6 +393,14 @@ namespace HSMDataCollector.Client.Session
                     if (lived.Elapsed >= _timings.StableSession)
                     {
                         attempt = 0;
+
+                        // A session that had lived long is not "ended early", but a request the
+                        // server never acknowledged is a failed send at any age. With a request
+                        // timeout of a minute or more every such session is a long one, and a
+                        // server that holds a package without an ack would otherwise be retried
+                        // for ever with nothing above Info. Deduplicated: the words repeat.
+                        if (_endedForNoAck)
+                            _reportError?.Invoke($"The collector session to {_url} was reset: {why}. Values stay queued; reconnecting.");
                     }
                     else
                     {
@@ -490,6 +509,7 @@ namespace HSMDataCollector.Client.Session
             Volatile.Write(ref _lastSentTicks, now);
             Volatile.Write(ref _lastReceivedTicks, now);
 
+            _endedForNoAck = false;
             _reset = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _socket = socket;
 
@@ -728,10 +748,15 @@ namespace HSMDataCollector.Client.Session
 
         // Only the session the request was made on: a request that fails late (it waited for the
         // send lock while its session ended and the next one came up) must not end that next one.
-        private void RequestReset(ClientWebSocket socket, string why)
+        private void RequestReset(ClientWebSocket socket, string why, bool noAck = false)
         {
-            if (ReferenceEquals(_socket, socket))
-                _reset?.TrySetResult(why);
+            if (!ReferenceEquals(_socket, socket))
+                return;
+
+            if (noAck)
+                _endedForNoAck = true;
+
+            _reset?.TrySetResult(why);
         }
 
         private void FailAllPending(string why)
