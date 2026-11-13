@@ -525,10 +525,18 @@ namespace HSMDataCollector.Tests.Transport
 
                     Assert.False(late.IsCompleted, "The request did not wait for the write lock.");
 
-                    // Session 1 ends and session 2 comes up, with the request still waiting.
-                    server.DropSessions();
+                    // Session 1 ends and session 2 comes up, with the request still waiting. The
+                    // collector ends it itself, by a stop that does not linger and a start: that
+                    // aborts the socket of session 1 on this side and writes nothing, so it does
+                    // not need the lock the test holds and does not depend on how the platform
+                    // tells a client that its server is gone. (A session cut by the scripted
+                    // server would not do: where its connection stays open underneath, as it
+                    // does on Linux, the collector learns of the cut only from a write, and no
+                    // write gets past the lock.)
+                    await sender.StopAsync(terminal: true);
+                    sender.Start();
 
-                    Assert.True(await WaitForAsync(() => connection.SessionsOpened == 2), "The session was not reopened.");
+                    Assert.True(await WaitForAsync(() => connection.SessionsOpened == 2), "The second session never came up.");
 
                     // Taken while the request still waits: it says whether session 2 was asked
                     // to end, whatever the loop has made of that by the time it is read.
