@@ -231,10 +231,23 @@ namespace HSMServer.Core.Tests.Infrastructure
         // failed write inside it does.
         internal Func<Guid, bool> FailMergeFrom { get; set; }
 
-        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId) =>
-            FailMergeFrom?.Invoke(fromSensorId) == true
-                ? throw new System.IO.IOException("injected merge write failure")
-                : _inner.MergeSensorValues(fromSensorId, intoSensorId);
+        // Set to make the history copy throw AFTER every row was copied: the
+        // state a crash or a late write failure leaves behind — the rows are
+        // under the target's id, the source sensor is still in place.
+        internal Func<Guid, bool> FailMergeAfterCopyFrom { get; set; }
+
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
+        {
+            if (FailMergeFrom?.Invoke(fromSensorId) == true)
+                throw new System.IO.IOException("injected merge write failure");
+
+            var result = _inner.MergeSensorValues(fromSensorId, intoSensorId);
+
+            if (FailMergeAfterCopyFrom?.Invoke(fromSensorId) == true)
+                throw new System.IO.IOException("injected merge failure after the copy");
+
+            return result;
+        }
         public byte[] GetLatestValue(Guid sensorId, long to) => _inner.GetLatestValue(sensorId, to);
         public byte[] GetFirstValue(Guid sensorId) => _inner.GetFirstValue(sensorId);
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);
