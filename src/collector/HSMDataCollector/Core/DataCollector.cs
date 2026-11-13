@@ -298,6 +298,17 @@ namespace HSMDataCollector.Core
             {
                 _logger.Error($"DataCollector starting error: {ex}");
 
+                // The rollback is this start's only while the lifecycle is still Starting. A Stop or
+                // Dispose that moved it on owns the processor stop and has waited for the failed
+                // initialization; a start-rollback stop here would run beside it and clear the
+                // queues it is draining.
+                bool ownsRollback;
+                lock (_opLock)
+                    ownsRollback = Status == CollectorStatus.Starting;
+
+                if (!ownsRollback)
+                    return;
+
                 await SafeStopProcessor().ConfigureAwait(false);
 
                 lock (_opLock)
@@ -565,6 +576,17 @@ namespace HSMDataCollector.Core
             catch (Exception ex)
             {
                 _logger.Error($"DataCollector initialization error: {ex}");
+
+                // The rollback is this start's only while the lifecycle is still Starting. A Stop or
+                // Dispose that moved it on owns the processor stop and has waited for the failed
+                // initialization; a start-rollback stop here would run beside it and clear the
+                // queues it is draining.
+                bool ownsRollback;
+                lock (_opLock)
+                    ownsRollback = Status == CollectorStatus.Starting;
+
+                if (!ownsRollback)
+                    return;
 
                 SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
 
