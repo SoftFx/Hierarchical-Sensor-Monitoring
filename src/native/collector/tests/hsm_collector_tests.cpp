@@ -713,22 +713,6 @@ namespace
         std::unique_ptr<hsm::test::HttpRecordingServer> send_record_server;
 #endif
 
-        // True once create_collector_on_session made the collector of this case use the session
-        // transport. In every build: a build without the HTTP transport has no such verb and the
-        // flag stays false.
-        bool on_session = false;
-
-        // The error lines the collector of a session case logged (create_collector_on_session
-        // installs the logger). add_file_value reads them to tell the refusal of a file value by
-        // the session from another INVALID_STATE. Declared before the collector, which calls the
-        // logger until it is destroyed.
-        struct ErrorLog
-        {
-            std::mutex mutex;
-            std::vector<std::string> lines;
-        };
-        std::unique_ptr<ErrorLog> error_log;
-
         CollectorHandle collector;
     };
 
@@ -3270,28 +3254,9 @@ namespace
             const auto content = ExpandTextToken(step[2]);
             const char* content_ptr = step[2] == "token:null" ? nullptr : content.c_str();
             const auto comment = ExpandTextToken(step[4]);
-            const hsm_result_t added = hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str());
-            if (added == HSM_RESULT_OK)
-                return;
-
-            // A collector on a session refuses a file value at the call (the session has no op
-            // for it yet): that refusal is what a session case adds the value to see. The managed
-            // collector refuses it at the same place and its AddValue returns nothing either way.
-            // The result alone does not name the cause (INVALID_STATE is also a sensor whose
-            // collector is gone), so the refusal is accepted only with the line the collector logs
-            // for it. That line goes through the deduplicated error channel: a second refusal in
-            // the window logs nothing new, so what is checked is that the session refusal was
-            // logged in this case, at this call or an earlier one.
-            Require(state.on_session && added == HSM_RESULT_INVALID_STATE, "add_file_value failed");
-            bool refused_by_session = false;
-            {
-                std::lock_guard<std::mutex> guard(state.error_log->mutex);
-                for (const auto& line : state.error_log->lines)
-                    if (line.find("the collector session transport cannot carry file values") != std::string::npos)
-                        refused_by_session = true;
-            }
-            Require(refused_by_session,
-                    "add_file_value failed: INVALID_STATE on a session collector, but not the refusal of a file value by the session");
+            // On a session too since #1660 step 2b: a file value travels in a `list` frame.
+            Require(hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                    "add_file_value failed");
             return;
         }
 
@@ -3421,19 +3386,6 @@ namespace
                 options.request_timeout_ms = ToInt(step[3]);
                 state.collector = CreateCollector(options);
                 Require(hsm_collector_use_session_transport(state.collector.value) == HSM_RESULT_OK, "the session transport must install");
-                state.on_session = true;
-                state.error_log = std::make_unique<ConformanceState::ErrorLog>();
-                Require(hsm_collector_set_logger(
-                            state.collector.value,
-                            [](hsm_log_level_t level, const char* message, void* user_data) {
-                                if (level != HSM_LOG_LEVEL_ERROR || message == nullptr)
-                                    return;
-                                auto* log = static_cast<ConformanceState::ErrorLog*>(user_data);
-                                std::lock_guard<std::mutex> guard(log->mutex);
-                                log->lines.emplace_back(message);
-                            },
-                            state.error_log.get()) == HSM_RESULT_OK,
-                        "the logger of a session case must install");
                 return;
             }
 
@@ -8120,11 +8072,11 @@ namespace
             Require(frames_with(marker) <= 2, ("an accepted part must not be posted again: " + marker).c_str());
     }
 
-    // The session has no op for a file value: the call says so instead of reporting success for a
-    // value that was discarded, and nothing is sent for it.
-    void NativeSessionRefusesFileValues()
+    // #1660 step 2b: a file value travels on the session as an element of a `list` frame, in the
+    // FileSensorValue wire format, next to the values around it; both file calls report success.
+    void NativeSessionDeliversFileValues()
     {
-        if (!WsAvailable("native_session_refuses_file_values"))
+        if (!WsAvailable("native_session_delivers_file_values"))
             return;
 
         hsm::test::WebSocketTestServer server(SessionServerOptions());
@@ -8140,14 +8092,38 @@ namespace
         Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/file/number" }) >= 1; }, 15000),
                 "the session must be up before the values are added");
 
-        Require(hsm_sensor_add_file(file.value, "file-content-marker", HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_INVALID_STATE,
-                "a file value on a session must be refused, not reported as accepted");
+        Require(hsm_sensor_add_file(file.value, "hi", HSM_SENSOR_STATUS_OK, "note") == HSM_RESULT_OK, "a file value on a session must be taken");
         Require(hsm_sensor_add_int(number.value, 6161, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        const std::string path = "hsm_session_file_from_path.log";
+        {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            Require(static_cast<bool>(out), "could not create temp file");
+            out << "ok";
+        }
+        Require(hsm_sensor_add_file_from_path(file.value, path.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK,
+                "a file read from a path must be taken on a session");
+        std::remove(path.c_str());
+
         Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":6161" }) >= 1; }, 20000),
-                "a value behind the refused file must be delivered");
+                "the value next to the file must be delivered");
+        Require(WaitUntilFor(
+                    [&] {
+                        return SessionFrames(server, { "\"op\":\"list\"", "{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"report\",\"Value\":[104,105],"
+                                                                          "\"Comment\":\"note\",\"Time\":\"" }) >= 1;
+                    },
+                    20000),
+                "the file value must arrive in a list frame in the wire format");
+        Require(WaitUntilFor(
+                    [&] {
+                        return SessionFrames(server, { "\"op\":\"list\"", "\"Extension\":\"log\",\"Name\":\"hsm_session_file_from_path\",\"Value\":[111,107],"
+                                                                          "\"Comment\":\"\"" }) >= 1;
+                    },
+                    20000),
+                "the file read from a path must arrive with its own name and extension");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
-        Require(SessionFrames(server, { "file-content-marker" }) == 0, "a file value must not be sent on a session");
+        Require(SessionFrames(server, { "UnixTimeMs" }) == 0, "a session frame must carry the wire format, not the canonical one");
     }
 
     // A value that cannot fit a frame is dropped and reported once, even when the frame built
@@ -8377,6 +8353,45 @@ namespace
         // canonical/behavior-corpus "UnixTimeMs") so a real HSM server accepts the value.
         Contains(request.body, "\"Time\":\"");
         Require(request.body.find("UnixTimeMs") == std::string::npos, "live wire value must NOT carry the canonical UnixTimeMs field");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // #1660 step 2b: a file value on the HTTP transport goes to /list in the FileSensorValue wire
+    // format. Before, it went out in the canonical corpus format ("Value":"text", "UnixTimeMs"),
+    // which the server cannot read: the whole batch was refused and sent again on every cycle.
+    void NativeHttpPostsFileValuesInTheWireFormat()
+    {
+        hsm::test::HttpCaptureServer server(200, "/api/sensors/list");
+
+        hsm_collector_options_t options{};
+        options.access_key = "live-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "live-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle file;
+        Require(hsm_collector_create_file_sensor(collector.value, "live/file", "report", "txt", &file.value) == HSM_RESULT_OK,
+                "file sensor create failed");
+        Require(hsm_sensor_add_file(file.value, "hi", HSM_SENSOR_STATUS_OK, "note") == HSM_RESULT_OK, "add file value failed");
+
+        for (int i = 0; i < 400 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the file value");
+        Require(request.path == "/api/sensors/list", "a file value must route to /list with the other values");
+        Contains(request.body, "[{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"report\",\"Value\":[104,105],\"Comment\":\"note\",\"Time\":\"");
+        Contains(request.body, "\"Status\":1,\"Key\":null,\"Path\":\"live/file\"}]");
+        Require(request.body.find("UnixTimeMs") == std::string::npos, "a file value must NOT carry the canonical UnixTimeMs field");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
@@ -10688,12 +10703,13 @@ namespace
             { "native_session_splits_a_registration_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsARegistrationBatchToTheFrameLimit(); } },
             { "native_session_split_registration_retries_only_the_failed_part",
               [](const std::string&) { NativeSessionSplitRegistrationRetriesOnlyTheFailedPart(); } },
-            { "native_session_refuses_file_values", [](const std::string&) { NativeSessionRefusesFileValues(); } },
+            { "native_session_delivers_file_values", [](const std::string&) { NativeSessionDeliversFileValues(); } },
             { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
             { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
               [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },
             { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
+            { "native_http_posts_file_values_in_the_wire_format", [](const std::string&) { NativeHttpPostsFileValuesInTheWireFormat(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
             { "native_http_stop_drain_delivers_to_healthy_server", [](const std::string&) { NativeHttpStopDrainDeliversToHealthyServer(); } },

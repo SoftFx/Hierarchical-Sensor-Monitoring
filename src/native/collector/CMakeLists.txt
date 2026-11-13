@@ -381,8 +381,8 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_session_split_registration_retries_only_the_failed_part
         COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
     )
-    add_test(NAME native_session_refuses_file_values
-        COMMAND hsm_collector_tests native_session_refuses_file_values
+    add_test(NAME native_session_delivers_file_values
+        COMMAND hsm_collector_tests native_session_delivers_file_values
     )
     add_test(NAME native_session_oversized_value_is_dropped_once
         COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
@@ -397,6 +397,9 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
+    )
+    add_test(NAME native_http_posts_file_values_in_the_wire_format
+        COMMAND hsm_collector_tests native_http_posts_file_values_in_the_wire_format
     )
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start

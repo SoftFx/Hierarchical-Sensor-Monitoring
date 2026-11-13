@@ -44,11 +44,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (!OwnsPackage(drainSend, items: 1))
                 return true;
 
+            // A file the sender could never send (larger than a collector session frame) is lost
+            // for good, and counted where every lost value is counted.
+            if (sendingInfo.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, sendingInfo.DroppedCount);
+
             if (sendingInfo.Error != null)
             {
                 var retryResult = ReEnqueueItem(item);
                 var preserved = retryResult.IsAccepted ? 1 - retryResult.DroppedCount : 0;
-                throw new PackageSendFailedException(QueueName, preserved, retryResult.DroppedCount, IsFlushing, sendingInfo.Error);
+                // A file that only lacked a connection is not an error of the queue: the queue waits
+                // for the transport and the transport reports its own state, as for the other queues.
+                throw new PackageSendFailedException(QueueName, preserved, retryResult.DroppedCount, IsFlushing, sendingInfo.Error, sendingInfo.IsTransportDown);
             }
 
             return true;

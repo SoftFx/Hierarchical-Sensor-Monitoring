@@ -731,51 +731,133 @@ namespace HSMDataCollector.Tests.Transport
 
         // --- files ---
 
+        // #1660 step 2b: a file value is one element of a list frame, the bytes the HTTP /list
+        // route would take for it.
         [Fact]
-        public async Task File_value_is_refused_before_the_queue_and_said_so()
+        public async Task File_value_is_one_element_of_a_list_frame_and_the_http_list_body_byte_for_byte()
         {
-            var logger = new RecordingLogger();
+            var file = new FileSensorValue
+            {
+                Path = "wire/file",
+                Value = new List<byte> { 104, 105, 0, 255 },
+                Name = "report",
+                Extension = "txt",
+                Comment = "first",
+                Time = new DateTime(2026, 11, 13, 10, 0, 0, DateTimeKind.Utc),
+            };
 
+            using (var server = new ScriptedSessionServer())
+            using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
+            {
+                sender.Start();
+
+                Assert.True(await WaitForAsync(() => sender.Connection.IsUp), "The session never came up.");
+
+                var sent = await sender.SendFileAsync(file, CancellationToken.None);
+
+                await sender.StopAsync(terminal: false);
+
+                Assert.True(sent.IsSuccess, sent.Error);
+
+                var request = server.Requests.Single();
+
+                Assert.Equal("list", request.Op);
+                Assert.Equal(new HttpRequest<SensorValueBase>(new SensorValueBase[] { file }, "unused").Content, request.Body);
+                Assert.Contains("\"Type\":6,\"Extension\":\"txt\",\"Name\":\"report\",\"Value\":[104,105,0,255]", request.Body);
+            }
+        }
+
+        [Fact]
+        public async Task File_value_is_delivered_on_the_session_with_the_values_around_it()
+        {
             using (var server = new ScriptedSessionServer())
             {
                 using (var collector = new DataCollector(OptionsFor(server)))
                 {
-                    collector.AddCustomLogger(logger);
                     var file = collector.CreateFileSensor("session/file", "report");
                     var number = collector.CreateIntSensor("session/after-file");
                     await collector.Start();
 
-                    file.AddValue("content");
+                    file.AddValue("content", SensorStatus.Ok, "note");
                     number.AddValue(5);
 
                     Assert.True(await WaitForAsync(() => DeliveredInts(server).Contains(5)), "The value after the file never arrived.");
+                    Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[99,111,110,116,101,110,116],\"Comment\":\"note\""))),
+                                "The file value never arrived in a list frame.");
 
                     await collector.Stop();
                 }
 
-                Assert.DoesNotContain(server.Requests, r => r.Frame.Contains("\"Type\":6"));
                 Assert.Empty(server.HttpRequests);
             }
-
-            Assert.Single(logger.Errors.Where(e => e.Contains("session/file") && e.Contains("cannot carry file values")));
         }
 
         [Fact]
-        public void File_value_sent_to_a_collector_that_is_not_running_is_not_reported()
+        public async Task File_larger_than_a_frame_is_dropped_reported_and_counted()
+        {
+            var logger = new RecordingLogger();
+
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 2048 })
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var file = collector.CreateFileSensor("session/huge-file", "report");
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, "session/huge-file"), "The session never came up.");
+
+                    // 1000 bytes of 'x' are 4000 bytes of JSON: no frame of 2048 bytes holds them.
+                    file.AddValue(new string('x', 1000));
+                    file.AddValue("after");
+
+                    Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[97,102,116,101,114]"))),
+                                "The file after the dropped one never arrived.");
+
+                    await collector.Stop();
+                }
+
+                Assert.DoesNotContain(server.Requests, r => r.Frame.Contains("120,120,120,120"));
+                Assert.DoesNotContain(server.Requests, r => r.Frame.Length > 2048);
+            }
+
+            Assert.Contains(logger.Errors, e => e.Contains("session/huge-file") && e.Contains("larger than a collector session frame"));
+            Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
+        }
+
+        [Fact]
+        public async Task File_value_waits_for_the_session_and_arrives_when_it_is_up()
         {
             var logger = new RecordingLogger();
 
             using (var server = new ScriptedSessionServer())
-            using (var collector = new DataCollector(OptionsFor(server)))
             {
-                collector.AddCustomLogger(logger);
-                var file = collector.CreateFileSensor("session/file-before-start", "report");
+                server.RefuseUpgrades(503);
 
-                // Not started: the value is not accepted, on any transport, and that is not a loss.
-                file.AddValue("content");
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    collector.AddCustomLogger(logger);
+                    var file = collector.CreateFileSensor("session/file-waits", "report");
+                    await collector.Start();
+
+                    file.AddValue("queued");
+
+                    Assert.True(await WaitForAsync(() => server.RefusedUpgrades >= 2), "The collector did not try to open a session.");
+                    Assert.Empty(server.Requests);
+
+                    server.AcceptUpgrades();
+
+                    Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[113,117,101,117,101,100]"))),
+                                "The file value never arrived once the session was up.");
+
+                    await collector.Stop();
+                }
+
+                Assert.Empty(server.HttpRequests);
             }
 
-            Assert.DoesNotContain(logger.Errors, e => e.Contains("cannot carry file values"));
+            // Waiting for a session is not an error of the file queue: the session reports itself.
+            Assert.DoesNotContain(logger.Errors, e => e.Contains("Queue: File"));
         }
 
         // --- stop ---
@@ -957,9 +1039,8 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
-        public async Task Send_file_on_a_session_says_that_the_file_was_not_sent()
+        public async Task Send_file_on_a_session_delivers_the_file()
         {
-            var logger = new RecordingLogger();
             var path = System.IO.Path.GetTempFileName();
 
             try
@@ -967,23 +1048,27 @@ namespace HSMDataCollector.Tests.Transport
                 System.IO.File.WriteAllText(path, "content");
 
                 using (var server = new ScriptedSessionServer())
-                using (var collector = new DataCollector(OptionsFor(server)))
                 {
-                    collector.AddCustomLogger(logger);
-                    var file = collector.CreateFileSensor("session/send-file", "report");
-                    await collector.Start();
+                    using (var collector = new DataCollector(OptionsFor(server)))
+                    {
+                        var file = collector.CreateFileSensor("session/send-file", "report");
+                        await collector.Start();
 
-                    Assert.False(await file.SendFile(path), "SendFile reported a file as sent on a transport that cannot carry one.");
+                        Assert.True(await file.SendFile(path), "SendFile did not take the file.");
 
-                    await collector.Stop();
+                        Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[99,111,110,116,101,110,116]"))),
+                                    "The file never arrived in a list frame.");
+
+                        await collector.Stop();
+                    }
+
+                    Assert.Empty(server.HttpRequests);
                 }
             }
             finally
             {
                 System.IO.File.Delete(path);
             }
-
-            Assert.Single(logger.Errors.Where(e => e.Contains("session/send-file") && e.Contains("cannot carry file values")));
         }
 
         [Fact]

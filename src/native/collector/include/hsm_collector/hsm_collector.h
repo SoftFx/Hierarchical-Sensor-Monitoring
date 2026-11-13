@@ -281,8 +281,8 @@ hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
    confirmed by the server. Call instead of hsm_collector_use_http_transport, before Start.
    A collector on a session sends nothing over the HTTP routes and never falls back to them: while
    no session is up, values wait in the queue as they do when the server is unreachable.
-   File values cannot travel on a session yet and are refused: hsm_sensor_add_file and
-   hsm_sensor_add_file_from_path return HSM_RESULT_INVALID_STATE. Needs a libcurl of at least 8.14.0
+   File values travel in `list` frames like the other values (since #1660 step 2b; before, they were
+   refused with HSM_RESULT_INVALID_STATE). Needs a libcurl of at least 8.14.0
    built with WebSocket support; without it Start still completes, one error is logged and nothing
    is delivered. Returns HSM_RESULT_INVALID_STATE unless the collector is stopped, or when the
    library was built without the HTTP transport. Since 0.12.0. */
@@ -1001,9 +1001,11 @@ hsm_result_t hsm_sensor_add_rate(
 /* Values-function buffer append (works before Start as well). */
 hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
 
-/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). Returns
-   HSM_RESULT_INVALID_STATE on a running collector that uses the session transport, which cannot
-   carry a file value (hsm_collector_use_session_transport). */
+/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). On every
+   transport the value travels with the other values: in a /list batch over HTTP, in a `list` frame
+   on the collector session (since #1660 step 2b; before, the session refused it with
+   HSM_RESULT_INVALID_STATE). A file whose value does not fit a session frame is dropped, logged and
+   counted in Queue overflow, like any value larger than a frame. */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,
@@ -1018,8 +1020,8 @@ hsm_result_t hsm_sensor_add_file(
    FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
    an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
    HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
-   BEFORE the file is read, so a no-op never performs the disk read — or uses the session
-   transport, which cannot carry a file value. */
+   BEFORE the file is read, so a no-op never performs the disk read. On the session transport the
+   file travels as hsm_sensor_add_file says. */
 hsm_result_t hsm_sensor_add_file_from_path(
     hsm_sensor_t* sensor,
     const char* file_path,

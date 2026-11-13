@@ -3093,6 +3093,37 @@ namespace
             return MonitoringBarJson(bar, path);
         }
 
+        // A file value in the outgoing format, as OutgoingValueJson does for the other values. On a
+        // live transport it is the FileSensorValue wire (`List<byte>` as a numeric array); before
+        // #1660 step 2b it went out in the canonical form below on every transport, which the
+        // server cannot read, so over HTTP the whole /list batch around it was refused and sent
+        // again on every cycle. The comment is always a string, as the managed file sensor sends
+        // it (its AddValue and SendFile pass "" when no comment is given).
+        std::string OutgoingFileJson(
+            const std::string& path,
+            const std::string& content,
+            const std::string& name,
+            const std::string& extension,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            if (send_wire_)
+                return BuildWireFileJson(extension, name, content, comment, /*comment_is_null=*/false, status, UnixTimeMilliseconds(), path);
+
+            // Canonical cross-language file payload (string content asserted as UTF-8 text).
+            std::ostringstream json;
+            json << "{"
+                 << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
+                 << "\"Path\":\"" << EscapeJson(path) << "\","
+                 << "\"Value\":\"" << EscapeJson(content) << "\","
+                 << "\"Name\":\"" << EscapeJson(name) << "\","
+                 << "\"Extension\":\"" << EscapeJson(extension) << "\","
+                 << "\"Status\":" << static_cast<int>(status) << ","
+                 << "\"Comment\":\"" << EscapeJson(comment) << "\","
+                 << "\"UnixTimeMs\":" << UnixTimeMilliseconds() << "}";
+            return json.str();
+        }
+
         // Surface a metric-source read failure through the deduplicated error log so a wedged live
         // reader is visible instead of degrading silently (the PeriodicTask silent-death lesson).
         // recreated=true: the source was rebuilt and the sensor keeps trying; false: the factory
@@ -4210,29 +4241,16 @@ namespace
         }
 
         // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
-        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
-        // False = refused: the transport cannot carry a file value, and the caller's result says
-        // so. A collector that is not running is the usual silent no-op (true).
-        bool EnqueueFileIfRunning(std::string json)
+        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly. A collector that
+        // is not running is the usual silent no-op.
+        void EnqueueFileIfRunning(std::string json)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
                 if (!CanAcceptDataLocked())
-                    return true;
+                    return;
             }
-
-#if defined(HSM_COLLECTOR_HTTP)
-            // The session cannot carry a file value yet (it needs an op of its own), and there is
-            // no HTTP to send it over instead. Refused here, before the queue: queued, it would be
-            // sent, refused and re-queued for ever. It never was in the queue, so it is not a
-            // queue overflow: the caller gets the refusal and the log says why.
-            if (use_session_)
-            {
-                LogError("A file value was not sent: the collector session transport cannot carry file values yet.");
-                return false;
-            }
-#endif
 
             Enqueue(std::move(json), /*is_file=*/true);
 
@@ -4242,7 +4260,6 @@ namespace
             }
 
             queue_cv_.notify_all();
-            return true;
         }
 
         // Public liveness/running check for sensors that want to avoid expensive work (e.g. a disk
@@ -6786,23 +6803,11 @@ namespace
 
         const auto normalized_comment = TrimComment(CopyString(comment));
 
-        // Canonical cross-language file payload (string content asserted as UTF-8 text).
-        std::ostringstream json;
-        json << "{"
-             << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
-             << "\"Path\":\"" << EscapeJson(path_) << "\","
-             << "\"Value\":\"" << EscapeJson(content) << "\","
-             << "\"Name\":\"" << EscapeJson(name) << "\","
-             << "\"Extension\":\"" << EscapeJson(extension) << "\","
-             << "\"Status\":" << static_cast<int>(status) << ","
-             << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
-             << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
-             << "}";
-
         // Instant gating: dropped unless the collector is running (values before Start are
-        // lost). File payloads dispatch promptly — not gated by the package collect period.
-        // The one refusal: a collector on the session transport cannot send a file value.
-        return collector->EnqueueFileIfRunning(json.str()) ? HSM_RESULT_OK : HSM_RESULT_INVALID_STATE;
+        // lost). File payloads dispatch promptly — not gated by the package collect period. On a
+        // session a file value travels in a `list` frame like every other value (#1660 step 2b).
+        collector->EnqueueFileIfRunning(collector->OutgoingFileJson(path_, content, name, extension, status, normalized_comment));
+        return HSM_RESULT_OK;
     }
 
     hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)

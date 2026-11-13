@@ -163,6 +163,85 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Single(rejectedAck["body"].AsObject());
         }
 
+        // #1660 step 2b: a collector sends a file value on the session as an element of a list
+        // frame. It is stored exactly as the same value posted to the HTTP /file route, and as the
+        // same element posted to /list (where the native collector has always sent its files).
+        [Fact]
+        public async Task FileValue_InAListFrame_IsStoredAsOverTheFileRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var content = Enumerable.Range(0, 300).Select(i => (byte)(i % 256)).ToArray();
+            var time = DateTime.UtcNow.AddMinutes(-1);
+
+            string FileValue(string path) =>
+                $"{{\"Type\":6,\"Extension\":\"csv\",\"Name\":\"report\",\"Value\":[{string.Join(",", content)}],\"Comment\":\"note\"," +
+                $"\"Time\":\"{time:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overFile = await PostAsync(host, "file", FileValue("file/http-file"), _key);
+            var overList = await PostAsync(host, "list", $"[{FileValue("file/http-list")}]", _key);
+
+            await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{FileValue("file/session")}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, overFile.Status);
+            Assert.Equal(HttpStatusCode.OK, overList.Status);
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+
+            HSMCommon.Model.FileValue Stored(string path)
+            {
+                Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor), $"no sensor at {path}");
+
+                return HSMServer.Core.Extensions.SensorValueExtensions.DecompressContent(Assert.IsType<HSMCommon.Model.FileValue>(sensor.LastValue));
+            }
+
+            await TestWait.UntilAsync(() => new[] { "file/http-file", "file/http-list", "file/session" }
+                                                .All(path => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor) && sensor.LastValue is not null),
+                "the three file values to reach their sensors");
+
+            var expected = Stored("file/http-file");
+
+            Assert.Equal(content, expected.Value);
+            Assert.Equal(("report", "csv", "note"), (expected.Name, expected.Extension, expected.Comment));
+
+            foreach (var path in new[] { "file/http-list", "file/session" })
+            {
+                var stored = Stored(path);
+
+                Assert.Equal(expected.Value, stored.Value);
+                Assert.Equal((expected.Name, expected.Extension, expected.Comment, expected.Status, expected.Time, expected.OriginalSize),
+                             (stored.Name, stored.Extension, stored.Comment, stored.Status, stored.Time, stored.OriginalSize));
+            }
+        }
+
+        // A file the server refuses is an entry of the ack's dictionary, as on /list (the /file
+        // route answers it 406, which a collector would send again on every cycle).
+        [Fact]
+        public async Task FileValue_TheServerRefuses_IsAnEntryOfTheAck_AsOnTheListRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            // A path deeper than a sensor path may be: the value is refused.
+            const string path = "file/a/b/c/d/e/f/g/h/i/j";
+            var file = $"{{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"n\",\"Value\":[104,105],\"Comment\":null,\"Time\":\"{DateTime.UtcNow:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overList = await PostAsync(host, "list", $"[{file}]", _key);
+            var overFile = await PostAsync(host, "file", file, _key);
+
+            await SendAsync(socket, $"{{\"id\":2,\"op\":\"list\",\"body\":[{file}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP /list answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+            Assert.Equal("Path for the sensor is too long.", (string)ack["body"][path]);
+
+            // The /file route refuses the same value with a 406.
+            Assert.Equal(HttpStatusCode.NotAcceptable, overFile.Status);
+        }
+
         [Fact]
         public async Task EmptyBatch_Is400OnBothTransports_AndTheSessionDoesNotEchoIt()
         {
