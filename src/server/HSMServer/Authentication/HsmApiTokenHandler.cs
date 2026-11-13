@@ -154,16 +154,32 @@ namespace HSMServer.Authentication
                     : "The token is not permitted to use the management API.");
 
         // The same fact the policy's backstop judged
-        // (HsmApiTokenOnlyAuthorizationHandler): an unsafe HTTP method
-        // carrying a read-only credential.
+        // (HsmApiTokenOnlyAuthorizationHandler), decided the same way: the
+        // shared unsafe-method list, and the TokenId claim read only from a
+        // principal that passes the backstop's structural invariant — exactly
+        // one authenticated identity of our scheme with both claims. On the
+        // structural-failure arm (multiple identities, a foreign-scheme
+        // identity carrying a TokenId claim) this stays false, so the generic
+        // text keeps answering there.
         private bool IsReadOnlyWriteAttempt()
         {
-            var method = Context.Request?.Method;
-
-            if (method is null || method is "GET" or "HEAD" or "OPTIONS")
+            if (!HsmApiTokenOnlyAuthorizationHandler.IsUnsafeMethod(Context.Request?.Method))
                 return false;
 
-            var tokenId = Context.User.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
+            using var identities = Context.User.Identities.GetEnumerator();
+
+            if (!identities.MoveNext())
+                return false;
+
+            var identity = identities.Current;
+
+            if (identities.MoveNext() ||
+                identity is not { IsAuthenticated: true } ||
+                identity.AuthenticationType != HsmApiTokenDefaults.AuthenticationScheme ||
+                identity.FindFirst(HsmApiTokenClaims.OwnerUserId) is null)
+                return false;
+
+            var tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
 
             return tokenId is not null && _tokens.GetToken(tokenId)?.ReadOnly == true;
         }
