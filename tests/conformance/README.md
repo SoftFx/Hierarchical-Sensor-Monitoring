@@ -287,7 +287,7 @@ polls until the expectation holds; `0` checks once.
 | `session_server_stop_answering_pings` | heartbeats are recorded and not answered: to the collector the server has gone quiet |
 | `session_server_drop_sessions` | every open session is cut without a close handshake |
 | `session_server_close_sessions\|code` | every open session is closed by the server with this close code (a server that shuts down says `1001`); the answer is left to the collector |
-| `session_http_request` | the **driver** makes one plain HTTP request to the scripted server: what `expect_no_http_requests` must see, for its must-fail fixture |
+| `session_http_request` | the **driver** makes one plain HTTP request to the scripted server: what `expect_no_http_requests` must see, for its must-fail fixture. The native driver waits at most 10 s for the answer and fails the case after that: its scripted server reads a request made during a session only when that session has ended, so place the verb after `stop` or while no session is open |
 | `expect_session_pings_at_least\|count\|timeout_s` | heartbeats (`op` `ping`) received from the collector so far |
 | `expect_session_count\|count\|timeout_s`, `expect_session_count_at_least\|count\|timeout_s` | upgrades accepted so far |
 | `expect_refused_upgrades_at_least\|count\|timeout_s` | upgrades refused so far: the collector keeps trying |
