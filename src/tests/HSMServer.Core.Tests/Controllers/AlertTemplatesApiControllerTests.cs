@@ -682,6 +682,34 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Create_TtlTicksUnderAMinute_Is400()
+        {
+            // #1707: the sensor surface's 1-minute floor applies to template
+            // writes too — a template mints TTL policies onto EVERY matched
+            // sensor, so a sub-minute interval here would bypass the floor at
+            // a much wider scope than one sensor.
+            var under = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromSeconds(30).Ticks }],
+            };
+
+            var result = await CreateController().CreateTemplate(under);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Contains("at least 1 minute", Assert.IsType<string[]>(Assert.IsType<Dictionary<string, object>>(body.Details)["ttls[0]"]).Single());
+            Assert.Empty(_store);
+
+            // The bound is inclusive: exactly one minute stays accepted.
+            var atTheBound = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromMinutes(1).Ticks }],
+            };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(atTheBound)));
+        }
+
+        [Fact]
         public async Task Create_DuplicatePolicyIds_Are400()
         {
             // The id becomes the per-sensor policy's TemplateAlertId — the matching key:

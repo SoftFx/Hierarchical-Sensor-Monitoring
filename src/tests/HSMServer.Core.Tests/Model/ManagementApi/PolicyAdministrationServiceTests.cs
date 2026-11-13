@@ -570,10 +570,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal(TimeSpan.FromMinutes(45).Ticks, survivor.TTLInterval.Ticks);
         }
 
-        // #1707: two write-path decisions. A retention interval under a
-        // minute is retention thrash (history clears on nearly every value
-        // arrival), and a Status-watching policy with the Error status effect
-        // reacts to its own effect — the effect re-arms the trigger.
+        // #1707: two write-path decisions. An INACTIVITY interval under a
+        // minute fires the inactivity alert on nearly every gap between
+        // values (alert thrash), and a Status-watching policy with the Error
+        // status effect reacts to its own effect — the effect re-arms the
+        // trigger.
         [Fact]
         public async Task TtlPolicies_RejectAnIntervalUnderAMinute()
         {

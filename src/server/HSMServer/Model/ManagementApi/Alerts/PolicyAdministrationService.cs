@@ -981,8 +981,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
             }
             else if (parsed < TimeSpan.FromMinutes(1))
             {
-                // #1707: a retention interval under a minute clears history on
-                // nearly every value arrival — retention thrash, not a window.
+                // #1707: an INACTIVITY interval under a minute expires on
+                // nearly every gap between value arrivals — the inactivity
+                // alert (and its notification) fires over and over: alert
+                // thrash, not a window.
                 AlertPolicyConditionValidator.Add(errorMap, "interval",
                     "The interval must be at least 1 minute.");
             }

@@ -778,8 +778,14 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     Add(errors, $"ttls[{index}]", $"Unknown interval {interval.Interval}.");
 
                 if ((CoreTimeInterval)interval.Interval is CoreTimeInterval.Ticks or CoreTimeInterval.FromFolder &&
-                    (interval.Ticks <= 0 || interval.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
-                    Add(errors, $"ttls[{index}]", "Interval ticks must be positive and keep the shifted time inside the DateTime range.");
+                    (interval.Ticks < TimeSpan.FromMinutes(1).Ticks ||
+                     interval.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
+                    // The sensor surface's twin wording (#1707): a template
+                    // write mints policies onto every matched sensor, so the
+                    // 1-minute floor applies here exactly as it does on the
+                    // sensor and product endpoints.
+                    Add(errors, $"ttls[{index}]",
+                        "Interval ticks must be at least 1 minute and keep the shifted time inside the DateTime range.");
             }
         }
 
