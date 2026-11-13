@@ -58,12 +58,15 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
         // #1706: a working-time schedule is a small document, not an
         // arbitrary YAML file. The size bound keeps the stored row and every
-        // re-parse cheap; the date bounds mirror what the UI editor could
-        // reasonably produce (a leap year of disabled days, a baker's
-        // fifty-two weeks of one-off overrides).
+        // re-parse cheap (a stored schedule is re-parsed on every evaluation
+        // and on every server start); the date bounds mirror what the UI
+        // editor could reasonably produce — one list of at most a leap year
+        // of dates (disabled AND enabled overrides share the bound), and at
+        // most 50 one-off custom-schedule dates (roughly a weekly override
+        // for a year).
         public const int MaxScheduleYamlLength = 10_000;
 
-        public const int MaxDisabledDates = 366;
+        public const int MaxDatesPerList = 366;
 
         public const int MaxCustomDates = 50;
 
@@ -429,66 +432,23 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             schedule = null;
 
-            // #1706: collected (not Dictionary.Add'ed) — several schedule
-            // errors can coexist and every one of them belongs under the
-            // single "schedule" key.
-            var scheduleErrors = new List<string>();
-
-            if ((dto.Schedule?.Length ?? 0) > MaxScheduleYamlLength)
-            {
-                scheduleErrors.Add($"The schedule YAML must be at most {MaxScheduleYamlLength} characters.");
-            }
-            else if (_parser.UsesAnchorsOrAliases(dto.Schedule))
-            {
-                // #1706: a working-time window never needs YAML anchors or
-                // aliases (&name / *name), and the expansion can hide
-                // repeated content from the date bounds below.
-                scheduleErrors.Add("The schedule YAML must not use anchors or aliases (&name / *name) — write every entry out.");
-            }
+            // #1706: the shared write bounds (see TryValidateScheduleYaml) —
+            // collected (not Dictionary.Add'ed) since several schedule errors
+            // can coexist and every one of them belongs under the single
+            // "schedule" key.
+            if (!TryValidateScheduleYaml(dto.Schedule, out var parsed, out var scheduleErrors))
+                errorMap.Add("schedule", [.. scheduleErrors]);
             else
             {
-                try
-                {
-                    schedule = _parser.Parse(dto.Schedule ?? string.Empty);
+                schedule = parsed;
 
-                    // #1598: the parser's model initializes DaySchedules to an
-                    // empty list, so a YAML whose root has no daySchedules key
-                    // parses into exactly the schedule `daySchedules: []` produces
-                    // — a silent no-working-time schedule on a key typo. The
-                    // documented contract requires the key (an explicit empty
-                    // list stays valid), so the write path checks presence on the
-                    // raw YAML; stored rows may omit the key and keep loading
-                    // (Parse(AlertScheduleEntity) is untouched).
-                    if (!_parser.HasDaySchedulesKey(dto.Schedule))
-                        scheduleErrors.Add("The 'daySchedules' key is required (an explicit empty list — daySchedules: [] — is valid, but the key must be present).");
-
-                    if (schedule.DisabledDates.Count > MaxDisabledDates)
-                        scheduleErrors.Add($"At most {MaxDisabledDates} disabled dates are allowed.");
-
-                    if (schedule.Overrides.EnabledDates.Count > MaxDisabledDates)
-                        scheduleErrors.Add($"At most {MaxDisabledDates} enabled-date overrides are allowed.");
-
-                    if (schedule.Overrides.CustomScheduleDates.Count > MaxCustomDates)
-                        scheduleErrors.Add($"At most {MaxCustomDates} custom schedule dates are allowed.");
-
-                    // The id is server-owned: generated on create, the route id on
-                    // update — never a client-chosen value. Assigned only on the
-                    // success path below.
-                    if (scheduleErrors.Count == 0)
-                    {
-                        schedule.Id = id ?? Guid.NewGuid();
-                        schedule.Name = dto.Name;
-                        schedule.Timezone = dto.Timezone;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    scheduleErrors.Add(ex.Message);
-                }
+                // The id is server-owned: generated on create, the route id on
+                // update — never a client-chosen value. Assigned only on the
+                // success path.
+                schedule.Id = id ?? Guid.NewGuid();
+                schedule.Name = dto.Name;
+                schedule.Timezone = dto.Timezone;
             }
-
-            if (scheduleErrors.Count > 0)
-                errorMap.Add("schedule", [.. scheduleErrors]);
 
             errors = null;
 
@@ -497,6 +457,71 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
             errors = errorMap.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
             return false;
+        }
+
+        /// <summary>
+        /// The #1706 write bounds every schedule save passes — the REST/MCP
+        /// DTO path (TryBuildValidatedSchedule) and the web editor's
+        /// SavePartial alike: a working-time schedule is a small, bounded,
+        /// anchor-free YAML document. One helper, so the two write paths
+        /// cannot drift apart.
+        /// </summary>
+        public bool TryValidateScheduleYaml(string yaml, out ScheduleModel schedule, out List<string> errors)
+        {
+            schedule = null;
+            errors = [];
+
+            if ((yaml?.Length ?? 0) > MaxScheduleYamlLength)
+            {
+                errors.Add($"The schedule YAML must be at most {MaxScheduleYamlLength} characters.");
+                return false;
+            }
+
+            // #1706: a working-time window never needs YAML anchors or
+            // aliases (&name / *name), and the expansion can hide repeated
+            // content from the date bounds below.
+            if (_parser.UsesAnchorsOrAliases(yaml))
+            {
+                errors.Add("The schedule YAML must not use anchors or aliases (&name / *name) — write every entry out.");
+                return false;
+            }
+
+            try
+            {
+                schedule = _parser.Parse(yaml ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex.Message);
+                return false;
+            }
+
+            // #1598: the parser's model initializes DaySchedules to an empty
+            // list, so a YAML whose root has no daySchedules key parses into
+            // exactly the schedule `daySchedules: []` produces — a silent
+            // no-working-time schedule on a key typo. The documented contract
+            // requires the key (an explicit empty list stays valid), so the
+            // write path checks presence on the raw YAML; stored rows may omit
+            // the key and keep loading (Parse(AlertScheduleEntity) is untouched).
+            if (!_parser.HasDaySchedulesKey(yaml))
+                errors.Add("The 'daySchedules' key is required (an explicit empty list — daySchedules: [] — is valid, but the key must be present).");
+
+            if (schedule.DisabledDates.Count > MaxDatesPerList)
+                errors.Add($"At most {MaxDatesPerList} disabled dates are allowed.");
+
+            if (schedule.Overrides.EnabledDates.Count > MaxDatesPerList)
+                errors.Add($"At most {MaxDatesPerList} enabled-date overrides are allowed.");
+
+            if (schedule.Overrides.CustomScheduleDates.Count > MaxCustomDates)
+                errors.Add($"At most {MaxCustomDates} custom schedule dates are allowed.");
+
+            if (errors.Count > 0)
+            {
+                schedule = null;
+                return false;
+            }
+
+            return true;
         }
 
 

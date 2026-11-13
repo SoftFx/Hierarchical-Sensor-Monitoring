@@ -357,6 +357,23 @@ disabledDates: [""26-12-2026""]
         }
 
 
+        // #1706: the anchor/alias probe rides the YAML event stream. Null,
+        // empty and malformed input are not anchor-bearing (the write path
+        // reports its own errors for them); an anchor on a scalar, on a
+        // sequence or on a mapping IS, alias or no alias.
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("daySchedules: [not: valid: yaml", false)]
+        [InlineData("daySchedules:\n  - days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"18:00\" }\n", false)]
+        [InlineData("anchored scalar: &name value\ndaySchedules: []\n", true)]
+        [InlineData("list: &items\n  - a\ndaySchedules: []\n", true)]
+        [InlineData("daySchedules: &week\n  - days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"17:00\" }\nextra: *week\n", true)]
+        public void UsesAnchorsOrAliasesProbesTheEventStream(string yaml, bool expected)
+        {
+            Assert.Equal(expected, _parser.UsesAnchorsOrAliases(yaml));
+        }
+
         // The load path keeps accepting a missing daySchedules key: rows
         // stored before the write-path rule must keep parsing (#1598).
         [Fact]

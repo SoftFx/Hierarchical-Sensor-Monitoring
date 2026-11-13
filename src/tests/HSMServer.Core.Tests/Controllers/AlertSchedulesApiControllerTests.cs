@@ -481,7 +481,7 @@ namespace HSMServer.Core.Tests.Controllers
             var start = new DateTime(2027, 1, 1);
 
             var dates = string.Join(", ",
-                Enumerable.Range(0, AlertScheduleAdministrationService.MaxDisabledDates + 1)
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxDatesPerList + 1)
                     .Select(i => $"\"{start.AddDays(i):yyyy-MM-dd}\""));
 
             var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
@@ -497,6 +497,105 @@ namespace HSMServer.Core.Tests.Controllers
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
             Assert.Contains("disabled dates", Assert.IsType<string[]>(details["schedule"]).Single());
             Assert.Empty(_store);
+        }
+
+        // #1706 review: an anchor WITHOUT any alias is rejected on its own —
+        // the probe is the anchor event itself, not alias usage.
+        [Fact]
+        public async Task CreateSchedule_YamlWithAnAnchorButNoAlias_Is422()
+        {
+            var yaml = """
+                daySchedules:
+                  - days: &weekdays [Mon]
+                    windows:
+                      - { start: "09:00", end: "17:00" }
+                """;
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "anchored-only", Timezone = "UTC", Schedule = yaml,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task CreateSchedule_TooManyEnabledDates_Is422()
+        {
+            var start = new DateTime(2027, 1, 1);
+
+            var dates = string.Join(", ",
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxDatesPerList + 1)
+                    .Select(i => $"\"{start.AddDays(i):yyyy-MM-dd}\""));
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "many-enabled", Timezone = "UTC",
+                Schedule = "daySchedules: []\ndisabledDates: [\"2027-06-01\"]\noverrides:\n  enabledDates: [" + dates + "]",
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("enabled-date overrides", Assert.IsType<string[]>(details["schedule"]).Single());
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task CreateSchedule_TooManyCustomScheduleDates_Is422()
+        {
+            var start = new DateTime(2027, 1, 1);
+
+            var entries = string.Join("\n  ",
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxCustomDates + 1)
+                    .Select(i => $"- date: \"{start.AddDays(i):yyyy-MM-dd}\"\n    scheduleType: workdays"));
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "many-custom", Timezone = "UTC",
+                Schedule = "daySchedules:\n  - id: workdays\n    days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"17:00\" }\noverrides:\n  customScheduleDates:\n  " + entries,
+            });
+
+            Assert.Equal(422, StatusCodeOf(result));
+
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("custom schedule dates", Assert.IsType<string[]>(details["schedule"]).Single());
+            Assert.Empty(_store);
+        }
+
+        // #1706 review: the bounds are inclusive — an exactly-at-the-limit
+        // YAML (10,000 characters, 366 dates, 50 custom entries) is accepted,
+        // so an off-by-one (`>=` instead of `>`) fails here.
+        [Fact]
+        public async Task CreateSchedule_ExactlyAtTheBounds_IsAccepted()
+        {
+            var start = new DateTime(2028, 1, 1); // 2028 is a leap year: 366 distinct dates exist
+
+            var disabled = string.Join(", ",
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxDatesPerList)
+                    .Select(i => $"\"{start.AddDays(i):yyyy-MM-dd}\""));
+
+            var customs = string.Join("\n  ",
+                Enumerable.Range(0, AlertScheduleAdministrationService.MaxCustomDates)
+                    .Select(i => $"- date: \"{start.AddDays(i):yyyy-MM-dd}\"\n    scheduleType: workdays"));
+
+            var yaml = "daySchedules:\n  - id: workdays\n    days: [Mon]\n    windows:\n      - { start: \"09:00\", end: \"17:00\" }\n"
+                       + "disabledDates: [" + disabled + "]\n"
+                       + "overrides:\n  customScheduleDates:\n  " + customs;
+
+            var padded = yaml + "\n#" + new string('x', AlertScheduleAdministrationService.MaxScheduleYamlLength - yaml.Length - 2);
+
+            Assert.Equal(AlertScheduleAdministrationService.MaxScheduleYamlLength, padded.Length);
+
+            var result = await CreateController().CreateSchedule(new AlertScheduleUpsertDto
+            {
+                Name = "at-the-bounds", Timezone = "UTC", Schedule = padded,
+            });
+
+            Assert.Equal(201, StatusCodeOf(result));
         }
 
 
