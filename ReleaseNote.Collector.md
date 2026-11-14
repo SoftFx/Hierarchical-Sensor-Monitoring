@@ -1,6 +1,6 @@
 # HSM DataCollector 4.0.0-preview
 
-Prerelease for testing. Changes since 3.5.0 (3.6-3.9 were not published).
+Prerelease for testing. Changes since 3.5.0 (3.6-3.9 were not published). Since 3.10.0-preview only the Breaking section is new.
 
 ## Breaking
 * **The collector session is the default transport** (ADR-0019): one WebSocket to the server on 443, no fallback to HTTP. Needs **HSMServer 3.43.0** or later and a proxy that passes WebSockets; otherwise set `CollectorOptions.Transport = Http`. A file larger than about 1 MiB is dropped and reported on a session (over HTTP it went up to 10 MiB): raise the server's `CollectorSessions.MaxFrameBytes` or use `Http`. Where no session can exist (.NET Framework with `AllowUntrustedServerCertificate`, an OS without WebSockets) the default stays HTTP and Start says why.
