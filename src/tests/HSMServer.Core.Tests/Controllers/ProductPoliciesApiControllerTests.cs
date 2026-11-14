@@ -361,6 +361,75 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(404, StatusCodeOf(result));
         }
 
+        // #1680: the route id may be ANY visible node — a nested folder.
+        // ProductsRoles holds ROOT ids only, so authorizing the raw folder id
+        // 404ed a scoped owner whose role covers the folder through its root,
+        // while an admin saw the same request. The authorization must resolve
+        // the node's root product, as the nodes/sensors read surface does.
+        [Fact]
+        public void GetPolicies_ScopedOwnerWithARootRole_NestedFolderIdIsAuthorizedThroughTheRoot()
+        {
+            ScopeAuthorizationToTheRootProduct();
+
+            var result = CreateController().GetPolicies(_subProduct.Id);
+
+            Assert.Equal(200, StatusCodeOf(result));
+
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _product.Id)), Times.Once);
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _subProduct.Id)), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateTtlPolicy_ScopedOwnerWithARootRole_NestedFolderIdIsAuthorizedNot404()
+        {
+            ScopeAuthorizationToTheRootProduct();
+
+            // The suite's cache mock applies every product update to the root
+            // node; this test writes on the nested folder, so dispatch the
+            // update to the node it names.
+            _cache.Setup(c => c.UpdateProductAsync(It.IsAny<ProductUpdate>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync((ProductUpdate update, System.Threading.CancellationToken _) =>
+                {
+                    (update.Id == _subProduct.Id ? _subProduct : _product).Update(update);
+
+                    return TaskResult.Ok;
+                });
+
+            // TTL CRUD on a folder node is a supported write (the node IS a
+            // ProductModel); the scoped owner is authorized through the root
+            // and the write applies.
+            var created = Assert.IsType<CreatedAtActionResult>(
+                await CreateController().CreateTtlPolicy(_subProduct.Id, TtlDto()));
+
+            Assert.NotEmpty(_subProduct.Policies.TTLPolicies);
+
+            _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _product.Id)), Times.AtLeastOnce);
+            _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _subProduct.Id)), Times.Never);
+        }
+
+        // The evaluator answers as the owner-mirror would for an owner whose
+        // role names the ROOT product only: the root is Allowed, the nested
+        // folder id itself is NotFound (ProductsRoles holds root ids).
+        private void ScopeAuthorizationToTheRootProduct()
+        {
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Id == _product.Id)))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Id == _subProduct.Id)))
+                .Returns(ApiTokenAuthorization.NotFound);
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Id == _product.Id)))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
+                    It.Is<ApiTokenResource>(r => r.Id == _subProduct.Id)))
+                .Returns(ApiTokenAuthorization.NotFound);
+        }
+
         [Fact]
         public async Task UpdateTtlPolicy_UnknownPolicy_Is404()
         {

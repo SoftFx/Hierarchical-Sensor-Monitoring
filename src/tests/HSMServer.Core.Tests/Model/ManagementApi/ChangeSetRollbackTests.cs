@@ -503,6 +503,47 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
         [Fact]
+        public async Task Rollback_FolderTtlChangeSet_OfAScopedRootOwner_AuthorizesAtTheRecordedRoot()
+        {
+            // #1680 review: the product-policy write endpoints authorize a
+            // folder through its root, so a scoped owner (admin, product role
+            // on the ROOT only) can WRITE a folder TTL policy. The entry
+            // records the FOLDER as its entity and the root as ParentId, and
+            // the token evaluator answers NotFound for the folder id — so the
+            // TokenAccess twin must authorize product entries at the recorded
+            // root like the cookie twin above, or the owner could not undo
+            // the write they just made.
+            var changeSetId = Guid.NewGuid();
+            var created = await _policies.CreateProductTtlPolicyAsync(_fixture.SubProductAId, TtlPolicy(), User,
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            // The scoped evaluator: the ROOT product is readable and writable;
+            // every other resource (the folder id included) is the
+            // anti-enumeration NotFound.
+            var scoped = new Mock<IApiTokenAuthorizationService>();
+            scoped.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource r) => ScopeDecision(r));
+            scoped.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource r) => ScopeDecision(r));
+
+            ApiTokenAuthorization ScopeDecision(ApiTokenResource r) =>
+                r is { Kind: ApiTokenResourceKind.Product, Id: var id } && id == _fixture.ProductAId
+                    ? ApiTokenAuthorization.Allowed
+                    : ApiTokenAuthorization.NotFound;
+
+            var changeSets = new ChangeSetAdministrationService(_journal, _valuesCache, _alertScheduleProvider,
+                scoped.Object, _users.Object, _policies, _templates, _schedules,
+                ChangeSetTestHelpers.Recorder(_databaseCoreManager.DatabaseCore));
+
+            var rolledBack = await changeSets.RollbackAsync(changeSetId, User);
+
+            Assert.True(rolledBack.Success, rolledBack.Failure?.Message);
+            Assert.Equal("completed", rolledBack.Value.Status);
+            Assert.Empty(_valuesCache.GetProduct(_fixture.SubProductAId).Policies.TTLPolicies);
+        }
+
+        [Fact]
         public async Task Rollback_FromACookiePrincipal_RestoresEntries_AndJournalsTheWebUser()
         {
             // The web UI rolls back with a cookie principal — no HsmApiToken
