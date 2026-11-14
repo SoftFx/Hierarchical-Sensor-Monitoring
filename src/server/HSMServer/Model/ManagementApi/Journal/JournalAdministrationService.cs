@@ -78,9 +78,10 @@ namespace HSMServer.Model.ManagementApi.Journal
 
         public string Author { get; init; }
 
-        /// <summary>Entity kind; null on legacy and non-configuration records.</summary>
+        /// <summary>Entity kind; "other" on legacy and non-configuration records — the same rows the kind=other filter returns (#1679).</summary>
         public string Kind { get; init; }
 
+        /// <summary>Root product id; null on folder- and global-scoped records (schedules, templates) and on legacy rows whose root product is no longer derivable (#1679). Pre-#1610 template rows render their stamped folder id as stored.</summary>
         public string ProductId { get; init; }
 
         public string Path { get; init; }
@@ -421,13 +422,27 @@ namespace HSMServer.Model.ManagementApi.Journal
             _folders.TryGetValue(stamped, out _) ||
             _cache.GetAlertTemplate(record.Key.Id)?.FolderId == stamped;
 
-        private static JournalRecordDto Render(JournalRecordModel record) => new()
+        // #1679: legacy rows come back with kind=null and productId=null
+        // although the filters MATCH them (kind=other, the resolved root
+        // product), so a client grouping or checking the payload by those
+        // fields loses every legacy row. Render the filter's own answers:
+        // the null kind becomes "other", and a missing product id is
+        // backfilled from the live-tree resolution the product filter
+        // already uses (null when the row's root product is not derivable —
+        // global and folder-scoped records, legacy rows of deleted entities).
+        private JournalRecordDto Render(JournalRecordModel record) => new()
         {
             Id = JournalRecordId.Of(record),
             Time = new DateTime(record.Key.Time, DateTimeKind.Utc),
             Author = record.Initiator,
-            Kind = record.Kind,
-            ProductId = record.ProductId,
+            Kind = record.Kind ?? OtherKind,
+            // The same "is the stamp usable?" rule the product filter applies:
+            // an unparsable or all-zero stamp resolves through the live tree
+            // like a missing one, so the payload echoes what the filter
+            // matched for every stored row, not only today's well-formed ones.
+            ProductId = Guid.TryParse(record.ProductId, out var stamped) && stamped != Guid.Empty
+                ? record.ProductId
+                : ResolvedRootProductOf(record)?.ToString(),
             Path = record.Path,
             Property = record.PropertyName,
             OldValue = record.OldValue,
