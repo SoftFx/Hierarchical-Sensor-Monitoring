@@ -883,6 +883,34 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return sensors;
         }
 
+        [Fact]
+        public async Task UpdateSensorValue_MasksCredentialsInTheUiPathTextFields()
+        {
+            // #1709 review: the manual value/comment edit from the web UI's
+            // status modal rides UpdateSensorValueAsync, outside the API
+            // converters — the cache masks the two text fields at its entry,
+            // so a pasted connection string stores the same ***@ as
+            // collector ingestion.
+            Guid accessKey = Guid.Parse(TestProductsManager.TestProductKey.Id);
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.String, "uiMask/string", DateTime.UtcNow);
+
+            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, value);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "uiMask/string", out var sensor));
+
+            await _valuesCache.UpdateSensorValueAsync(new UpdateSensorValueRequestModel(sensor.Id, sensor.Path)
+            {
+                Id = sensor.Id,
+                Status = HSMCommon.Model.SensorStatus.Ok,
+                Comment = "manual edit",
+                Value = "mongodb://backup:secret@mongo:27017/db",
+                ChangeLast = false,
+            });
+
+            await TestWait.UntilAsync(() => sensor.LastValue is { }, "the UI-added value to land");
+
+            Assert.Equal("mongodb://***@mongo:27017/db", sensor.LastValue.RawValue?.ToString());
+        }
+
         private static AddSensorValueRequest BuildSensorStoreInfo(Guid key, string path, SensorType type, ProductModel product) =>
             new(key, product.Id, path, SensorValuesFactory.BuildValue(type));
     }

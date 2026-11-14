@@ -17,9 +17,12 @@ namespace HSMServer.Core.Model.Requests
         public SensorStatus Status { get; init; }
 
 
-        public string Comment { get; init; }
+        // Set (not init): the cache's update entry masks them at ingestion
+        // (#1709 review) — the manual UI edit rides this path outside the
+        // API converters.
+        public string Comment { get; set; }
 
-        public string Value { get; init; }
+        public string Value { get; set; }
 
         public bool ChangeLast { get; init; }
 
