@@ -21,3 +21,5 @@
 
 ## Dependencies
 * Bundled HsmAgent 0.6.0 (was 0.5.28): session by default, moves itself off a retired 44330/44333 (#1655).
+* Bundled Linux probe 0.13.0 (was 0.10.0): session by default.
+* The server's own self-monitoring still uses HSMDataCollector 3.5.0 over HTTP.
