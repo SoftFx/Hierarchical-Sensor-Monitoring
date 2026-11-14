@@ -3,6 +3,7 @@ using HSMServer.Authentication;
 using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Journal;
+using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -110,13 +111,26 @@ public class JournalController : BaseController
             result.Success ? result.Value : new List<JournalRecordDto>());
     }
 
-    /// <summary>The details view: the record plus its undo group's before/after images.</summary>
+    /// <summary>
+    /// The details view: the record plus its undo group's before/after
+    /// images. The fan-out page rides the area's list ceiling (#1688): the
+    /// modal renders up to 200 images per request, with prev/next paging
+    /// over <paramref name="fanoutOffset"/> when the fan-out is longer —
+    /// the rollback the modal guards acts on every node, so none of them
+    /// may become unreachable in the UI.
+    /// </summary>
     [HttpGet]
-    public IActionResult Details(string id)
+    public IActionResult Details(string id, int fanoutOffset = 0)
     {
-        var result = _journal.GetRecord(id, User, new CookieJournalRecordAccess(CurrentUser, _cache));
+        var result = _journal.GetRecord(id, User, new CookieJournalRecordAccess(CurrentUser, _cache),
+            fanoutOffset: fanoutOffset, fanoutLimit: ChangeSetAdministrationService.MaxFanoutLimit);
 
-        return result.Success ? PartialView("_JournalDetails", result.Value) : NotFound();
+        if (!result.Success)
+            return NotFound();
+
+        ViewData["FanoutOffset"] = fanoutOffset;
+
+        return PartialView("_JournalDetails", result.Value);
     }
 
     /// <summary>Rollback by journal record (the record's undo group); dry-run feeds the confirmation dialog.</summary>

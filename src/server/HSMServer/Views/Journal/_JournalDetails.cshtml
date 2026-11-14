@@ -94,9 +94,25 @@
                             </div>
                         </div>
                     }
-                    @if (entry.Fanout is { Count: > 0 })
+                    @if (entry.Fanout is { Count: > 0 } || entry.FanoutTotal > 0)
                     {
-                        <div class="fw-bold mt-1">Fan-out (@entry.Fanout.Count nodes)</div>
+                        var fanoutOffset = (int)(ViewData["FanoutOffset"] ?? 0);
+                        @* #1688: the rendered list is a page over the fan-out; the header
+                           names the total, and prev/next walk it — the rollback this modal
+                           guards acts on every node, so none may be unreachable here. *@
+                        <div class="fw-bold mt-1">
+                            Fan-out (@entry.Fanout.Count of @entry.FanoutTotal nodes)
+                            @if (fanoutOffset > 0)
+                            {
+                                <a href="#" class="journal-fanout-page ms-2 small" data-record-id="@Model.Record.Id"
+                                   data-fanout-offset="@Math.Max(0, fanoutOffset - Math.Max(entry.Fanout.Count, 1))">← previous</a>
+                            }
+                            @if (fanoutOffset + entry.Fanout.Count < entry.FanoutTotal)
+                            {
+                                <a href="#" class="journal-fanout-page ms-2 small" data-record-id="@Model.Record.Id"
+                                   data-fanout-offset="@(fanoutOffset + entry.Fanout.Count)">next →</a>
+                            }
+                        </div>
                         @foreach (var image in entry.Fanout)
                         {
                             <details class="mb-1">

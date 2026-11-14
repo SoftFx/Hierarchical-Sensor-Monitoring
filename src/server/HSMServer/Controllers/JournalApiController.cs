@@ -73,16 +73,22 @@ namespace HSMServer.Controllers
         /// <summary>
         /// One journal record's details: the record plus its undo group's
         /// per-entity before/after images (visible entries only). An unknown
-        /// or invisible record id answers 404.
+        /// or invisible record id answers 404. Each entry's fan-out (the
+        /// per-sensor images of a template write) is a PAGE bounded by
+        /// default (#1688): fanoutOffset/fanoutLimit select it, fanoutTotal
+        /// says how much there is, the limit is capped at 200.
         /// </summary>
         /// <param name="recordId">Journal record id ("{entityId}:{ticks}:{type}" as returned by the list).</param>
+        /// <param name="fanoutOffset">Skip this many fan-out images per entry (default 0).</param>
+        /// <param name="fanoutLimit">Fan-out images per entry (default 10, max 200; a non-positive value means the default).</param>
         [HttpGet("{recordId}")]
         [ProducesResponseType(typeof(JournalRecordDetailsDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetRecord(string recordId) =>
-            _journal.GetRecord(recordId, User).ToActionResult();
+        public IActionResult GetRecord(string recordId, int fanoutOffset = 0,
+            int fanoutLimit = ChangeSetAdministrationService.DefaultFanoutLimit) =>
+            _journal.GetRecord(recordId, User, fanoutOffset: fanoutOffset, fanoutLimit: fanoutLimit).ToActionResult();
 
         /// <summary>
         /// Roll back a journal record's request (its undo group): compensating

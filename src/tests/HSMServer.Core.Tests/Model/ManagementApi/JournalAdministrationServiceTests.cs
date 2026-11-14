@@ -445,6 +445,114 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.False(record.RolledBack);
         }
 
+        [Fact]
+        public async Task GetRecord_TemplateFanout_IsABoundedPageByDefault()
+        {
+            // #1688: the per-entry fan-out images grow linearly with the
+            // number of sensors a template touched (about 1.2 KB each), so an
+            // unbounded render made the record unreadable through MCP past a
+            // few dozen sensors. The default page is bounded, fanoutTotal
+            // carries the honest count, and the caller pages with
+            // fanoutOffset/fanoutLimit.
+            const int sensors = 45;
+
+            for (var i = 0; i < sensors; i++)
+                await CreateSensorAsync($"jrnFanout/s{i}");
+
+            var changeSetId = Guid.NewGuid();
+            var created = await _templates.CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnFanout/*"]),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var record = RecordOf(changeSetId);
+
+            var defaultDetails = _journal.GetRecord(record.Id, TokenUser).Value;
+            var defaultEntry = Assert.Single(defaultDetails.ChangeSet.Entries);
+
+            Assert.Equal(sensors, defaultEntry.FanoutTotal);
+            Assert.Equal(ChangeSetAdministrationService.DefaultFanoutLimit, defaultEntry.Fanout.Count);
+
+            var next = _journal.GetRecord(record.Id, TokenUser,
+                fanoutOffset: ChangeSetAdministrationService.DefaultFanoutLimit).Value;
+
+            // The offset pages; the limit stays the bounded default.
+            Assert.Equal(ChangeSetAdministrationService.DefaultFanoutLimit, Assert.Single(next.ChangeSet.Entries).Fanout.Count);
+
+            var lastFive = _journal.GetRecord(record.Id, TokenUser, fanoutOffset: sensors - 5, fanoutLimit: 5).Value;
+
+            Assert.Equal(5, Assert.Single(lastFive.ChangeSet.Entries).Fanout.Count);
+
+            // An oversized limit never buys an unbounded render: it falls to
+            // the ceiling, and the page is still bounded by what exists.
+            var capped = _journal.GetRecord(record.Id, TokenUser, fanoutLimit: int.MaxValue).Value;
+
+            Assert.Equal(sensors, Assert.Single(capped.ChangeSet.Entries).Fanout.Count);
+
+            // Non-positive limits fall back to the default, and a negative
+            // offset is clamped to the first page — the documented contract
+            // of the Swagger/MCP parameters (#1688 review).
+            var fallback = _journal.GetRecord(record.Id, TokenUser, fanoutOffset: -5, fanoutLimit: 0).Value;
+
+            Assert.Equal(ChangeSetAdministrationService.DefaultFanoutLimit,
+                Assert.Single(fallback.ChangeSet.Entries).Fanout.Count);
+
+            // The clamp itself, pinned directly: no input pair — negative,
+            // zero or int.MaxValue — escapes the [0, MaxFanoutLimit] window.
+            Assert.Equal((0, ChangeSetAdministrationService.MaxFanoutLimit),
+                ChangeSetAdministrationService.NormalizeFanoutPage(-5, int.MaxValue));
+            Assert.Equal((0, ChangeSetAdministrationService.DefaultFanoutLimit),
+                ChangeSetAdministrationService.NormalizeFanoutPage(-1, 0));
+            Assert.Equal((200, 1),
+                ChangeSetAdministrationService.NormalizeFanoutPage(200, 1));
+        }
+
+        [Fact]
+        public async Task GetRecord_Fanout_CountsOnlyNodesTheCallerCanSee()
+        {
+            // #1688 review: fanoutTotal is the count AFTER the CanReadNode
+            // filter — a partially sighted caller must not learn a hidden
+            // root's node count through the total. Two roots, the same
+            // relative sensor paths under both, one template matching both;
+            // an owner scoped to ONE root sees only its sensors.
+            foreach (var (keyId, productId) in new[]
+                     {
+                         (_fixture.AccessKeyAId, _fixture.ProductAId),
+                         (_fixture.AccessKeyBId, _fixture.ProductBId),
+                     })
+                for (var i = 0; i < 3; i++)
+                {
+                    var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, $"jrnVis/s{i}", DateTime.UtcNow);
+                    var added = await _valuesCache.AddSensorValueAsync(keyId, productId, value);
+                    Assert.True(added.IsOk, added.Error);
+                }
+
+            var changeSetId = Guid.NewGuid();
+            var created = await _templates.CreateTemplateAsync(TokenUser, TemplateDto(["*/jrnVis/*"]),
+                new ChangeSetWriteOptions { ChangeSetId = changeSetId });
+            Assert.True(created.Success, created.Failure?.Message);
+
+            var record = RecordOf(changeSetId);
+
+            // The always-allow mock sees both roots: 6 images.
+            Assert.Equal(6, Assert.Single(_journal.GetRecord(record.Id, TokenUser).Value.ChangeSet.Entries).FanoutTotal);
+
+            // A viewer scoped to ProductA through the REAL evaluator (folder
+            // sight included, so the alertTemplate entry itself stays
+            // readable): the page and the total carry ProductA's three
+            // sensors only.
+            var scopedViewer = new User(new HSMDatabase.AccessManager.DatabaseEntities.UserEntity
+            {
+                UserName = "jrn-viewer",
+                ProductsRoles = [new(_fixture.ProductAId.ToString(), (byte)ProductRoleEnum.ProductViewer)],
+                FolderRoles = new Dictionary<string, byte> { [_fixture.FolderId.ToString()] = (byte)ProductRoleEnum.ProductViewer },
+            });
+
+            var entry = Assert.Single(RealSightJournal(scopedViewer).GetRecord(record.Id, TokenUser).Value.ChangeSet.Entries);
+
+            Assert.Equal(3, entry.FanoutTotal);
+            Assert.Equal(3, entry.Fanout.Count);
+        }
+
 
         [Fact]
         public async Task Rollback_ByRecord_NonAdminTokenOwner_IsForbidden()
@@ -698,8 +806,17 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var authorization = new ApiTokenAuthorizationService(users.Object, tokens.Object, folders.Object,
                 _valuesCache, new Mock<IApiTokenSecurityEventSink>().Object);
 
+            // The engine rides the SAME evaluator: a token principal's change-set
+            // access is resolved inside the engine (TokenJournalRecordAccess hands
+            // over null), so building it on the suite's always-allow mock would
+            // undo the scoping this helper exists to exercise (#1688 review).
+            var recorder = new ChangeSetRecorder(_changeSetJournal, _journalService,
+                NullLogger<ChangeSetRecorder>.Instance);
+            var engine = new ChangeSetAdministrationService(_changeSetJournal, _valuesCache, _alertScheduleProvider,
+                authorization, users.Object, _policies, _templates, _schedules, recorder);
+
             return new JournalAdministrationService(_journalService, _valuesCache, folders.Object,
-                authorization, users.Object, _engine, _changeSetJournal);
+                authorization, users.Object, engine, _changeSetJournal);
         }
 
         // The raw storage rows of one entity under a kind tag (#1610): the

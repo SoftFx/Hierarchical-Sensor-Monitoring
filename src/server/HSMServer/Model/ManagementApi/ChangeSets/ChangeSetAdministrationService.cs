@@ -72,7 +72,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             IChangeSetAccess access = null);
 
         PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user,
-            IChangeSetAccess access = null);
+            IChangeSetAccess access = null, int fanoutOffset = 0, int fanoutLimit = ChangeSetAdministrationService.DefaultFanoutLimit);
 
         Task<PolicyWriteResult<RollbackResultDto>> RollbackAsync(Guid id, ClaimsPrincipal user,
             bool force = false, bool dryRun = false, IChangeSetAccess access = null);
@@ -82,6 +82,19 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
     public sealed class ChangeSetAdministrationService : IChangeSetAdministrationService
     {
         private const int MaxLimit = 200;
+
+        // #1688: the per-entry fan-out images grow linearly with the number
+        // of sensors a template touched (about 1.2 KB each), so an unbounded
+        // render made get_journal_record unreadable for an MCP client past a
+        // few dozen sensors. The fan-out is a PAGE of every details response:
+        // this bounded default, this ceiling on an explicit page, and
+        // FanoutTotal for the caller to page with. The default is
+        // deliberately small: an MCP answer carries its JSON twice (the
+        // structured content and the text fallback), so twenty images would
+        // already sit at the strictest clients' output limit.
+        public const int DefaultFanoutLimit = 10;
+
+        public const int MaxFanoutLimit = 200;
 
         private static readonly JsonSerializerOptions ImageJson = new()
         {
@@ -150,7 +163,7 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
         }
 
         public PolicyWriteResult<ChangeSetDetailsDto> GetChangeSet(Guid id, ClaimsPrincipal user,
-            IChangeSetAccess access = null)
+            IChangeSetAccess access = null, int fanoutOffset = 0, int fanoutLimit = DefaultFanoutLimit)
         {
             access = AccessOf(user, access);
             var set = _journal.Get(id);
@@ -160,8 +173,17 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             if (set is null || set.Entries.All(e => !access.CanRead(e) && !HasVisibleNode(e, access)))
                 return PolicyWriteResult<ChangeSetDetailsDto>.Fail(PolicyWriteOutcome.NotFound);
 
-            return PolicyWriteResult<ChangeSetDetailsDto>.Ok(RenderDetails(set, access));
+            (fanoutOffset, fanoutLimit) = NormalizeFanoutPage(fanoutOffset, fanoutLimit);
+
+            return PolicyWriteResult<ChangeSetDetailsDto>.Ok(RenderDetails(set, access, fanoutOffset, fanoutLimit));
         }
+
+        // The fan-out page every details render carries: a non-positive or
+        // oversized limit falls back to the bounded default / the ceiling, so
+        // no caller can ask for an unbounded render (#1688). Internal for the
+        // paging-contract pin in the tests.
+        internal static (int Offset, int Limit) NormalizeFanoutPage(int offset, int limit) =>
+            (Math.Max(offset, 0), limit <= 0 ? DefaultFanoutLimit : Math.Min(limit, MaxFanoutLimit));
 
 
         // === Rollback ===
@@ -935,39 +957,57 @@ namespace HSMServer.Model.ManagementApi.ChangeSets
             };
         }
 
-        private ChangeSetDetailsDto RenderDetails(ChangeSetModel set, IChangeSetAccess access) =>
+        private ChangeSetDetailsDto RenderDetails(ChangeSetModel set, IChangeSetAccess access,
+            int fanoutOffset, int fanoutLimit) =>
             new()
             {
                 Summary = RenderSummary(set, access),
                 Entries = set.Entries
                     .Where(e => access.CanRead(e))
-                    .Select(e => new ChangeSetEntryDto
+                    .Select(e => RenderEntry(e, access, fanoutOffset, fanoutLimit))
+                    .ToList(),
+            };
+
+        private static ChangeSetEntryDto RenderEntry(ChangeSetEntry entry, IChangeSetAccess access,
+            int fanoutOffset, int fanoutLimit)
+        {
+            // #1688: the fan-out is the page the caller asked for over the
+            // VISIBLE images, never the whole fan-out — a template write over
+            // hundreds of sensors renders bounded, and FanoutTotal says how
+            // much there is to page.
+            var visibleFanout = (entry.Fanout ?? []).Where(access.CanReadNode).ToList();
+
+            return new ChangeSetEntryDto
+            {
+                Sequence = entry.Sequence,
+                Kind = KindOf(entry),
+                Operation = OperationOf(entry),
+                EntityId = entry.EntityId.ToString(),
+                Path = entry.Path,
+                Restored = entry.RestoredBy is not null,
+                RestoredBy = entry.RestoredBy?.ToString(),
+                Before = RenderPolicies(entry.Before),
+                After = RenderPolicies(entry.After),
+                BeforeTemplate = RenderJson(entry.BeforeTemplate),
+                AfterTemplate = RenderJson(entry.AfterTemplate),
+                BeforeSchedule = RenderJson(entry.BeforeSchedule),
+                AfterSchedule = RenderJson(entry.AfterSchedule),
+                FanoutTotal = visibleFanout.Count,
+                Fanout = visibleFanout
+                    .Skip(fanoutOffset)
+                    .Take(fanoutLimit)
+                    .Select(i => new NodeImageDto
                     {
-                        Sequence = e.Sequence,
-                        Kind = KindOf(e),
-                        Operation = OperationOf(e),
-                        EntityId = e.EntityId.ToString(),
-                        Path = e.Path,
-                        Restored = e.RestoredBy is not null,
-                        RestoredBy = e.RestoredBy?.ToString(),
-                        Before = RenderPolicies(e.Before),
-                        After = RenderPolicies(e.After),
-                        BeforeTemplate = RenderJson(e.BeforeTemplate),
-                        AfterTemplate = RenderJson(e.AfterTemplate),
-                        BeforeSchedule = RenderJson(e.BeforeSchedule),
-                        AfterSchedule = RenderJson(e.AfterSchedule),
-                        Fanout = (e.Fanout ?? []).Where(i => access.CanReadNode(i)).Select(i => new NodeImageDto
-                        {
-                            NodeKind = i.NodeKind.ToString(),
-                            Id = i.NodeId.ToString(),
-                            Path = i.Path,
-                            BeforePolicies = RenderPolicies(i.BeforePolicies),
-                            AfterPolicies = RenderPolicies(i.AfterPolicies),
-                            BeforeTtlPolicies = RenderPolicies(i.BeforeTtlPolicies),
-                            AfterTtlPolicies = RenderPolicies(i.AfterTtlPolicies),
-                        }).ToList(),
+                        NodeKind = i.NodeKind.ToString(),
+                        Id = i.NodeId.ToString(),
+                        Path = i.Path,
+                        BeforePolicies = RenderPolicies(i.BeforePolicies),
+                        AfterPolicies = RenderPolicies(i.AfterPolicies),
+                        BeforeTtlPolicies = RenderPolicies(i.BeforeTtlPolicies),
+                        AfterTtlPolicies = RenderPolicies(i.AfterTtlPolicies),
                     }).ToList(),
             };
+        }
 
         private static List<string> RenderPolicies(List<PolicyEntity> policies) =>
             (policies ?? []).Select(p => JsonSerializer.Serialize(p, ImageJson)).ToList();

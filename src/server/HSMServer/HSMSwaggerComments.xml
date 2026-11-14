@@ -249,13 +249,18 @@
             <param name="limit">Page size, 1..200 (default 100).</param>
             <param name="offset">Skip count (default 0).</param>
         </member>
-        <member name="M:HSMServer.Controllers.JournalApiController.GetRecord(System.String)">
+        <member name="M:HSMServer.Controllers.JournalApiController.GetRecord(System.String,System.Int32,System.Int32)">
             <summary>
             One journal record's details: the record plus its undo group's
             per-entity before/after images (visible entries only). An unknown
-            or invisible record id answers 404.
+            or invisible record id answers 404. Each entry's fan-out (the
+            per-sensor images of a template write) is a PAGE bounded by
+            default (#1688): fanoutOffset/fanoutLimit select it, fanoutTotal
+            says how much there is, the limit is capped at 200.
             </summary>
             <param name="recordId">Journal record id ("{entityId}:{ticks}:{type}" as returned by the list).</param>
+            <param name="fanoutOffset">Skip this many fan-out images per entry (default 0).</param>
+            <param name="fanoutLimit">Fan-out images per entry (default 10, max 200; a non-positive value means the default).</param>
         </member>
         <member name="M:HSMServer.Controllers.JournalApiController.Rollback(System.String,System.Boolean,System.Boolean)">
             <summary>
@@ -283,7 +288,11 @@
             <summary>The table page: newest configuration records visible to the caller.</summary>
         </member>
         <member name="M:HSMServer.Controllers.JournalController.Details(System.String)">
-            <summary>The details view: the record plus its undo group's before/after images.</summary>
+            <summary>
+            The details view: the record plus its undo group's before/after
+            images. The fan-out page rides the area's list ceiling (#1688): the
+            modal renders up to 200 images, the count header names the total.
+            </summary>
         </member>
         <member name="M:HSMServer.Controllers.JournalController.Rollback(System.String,System.Boolean,System.Boolean)">
             <summary>Rollback by journal record (the record's undo group); dry-run feeds the confirmation dialog.</summary>
@@ -2424,6 +2433,12 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetSummaryDto.Entities">
             <summary>Display paths of the touched entities, visible to the caller.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetEntryDto.FanoutTotal">
+            <summary>How many visible fan-out images the entry holds in total; page Fanout with offset/limit (#1688).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetEntryDto.Fanout">
+            <summary>The fan-out PAGE (offset/limit of the details request, default the first 10) — every image grows the response linearly, so an unbounded render would be unreadable past a few dozen sensors (#1688).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ChangeSets.ChangeSetFilter.Status">
             <summary>applied | rolledBack | partial (case-insensitive).</summary>
