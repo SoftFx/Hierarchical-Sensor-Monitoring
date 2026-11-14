@@ -141,9 +141,48 @@ namespace HSMServer.Authentication
         // Challenge — answers when an authenticated principal fails them. The base
         // implementation would return a bare 403 with an empty body, the one shape the
         // error contract promises never happens.
+        //
+        // #1708: the denial almost always means the read-only backstop - an
+        // unsafe method with a read-only token. Say THAT: reads work fine for
+        // the token, so the caller's remedy is a read-write token for writes,
+        // not a different scope for everything. The structural-failure arm
+        // (an assembled-any-other-way principal) keeps the generic text.
         protected override Task HandleForbiddenAsync(AuthenticationProperties properties) =>
             ManagementApiErrorResponses.WriteForbidden(Context,
-                "The token is not permitted to use the management API.");
+                IsReadOnlyWriteAttempt()
+                    ? "The token is read-only: management reads (REST) are allowed, but writes require a read-write token."
+                    : "The token is not permitted to use the management API.");
+
+        // The same fact the policy's backstop judged
+        // (HsmApiTokenOnlyAuthorizationHandler), decided the same way: the
+        // shared unsafe-method list, and the TokenId claim read only from a
+        // principal that passes the backstop's structural invariant — exactly
+        // one authenticated identity of our scheme with both claims. On the
+        // structural-failure arm (multiple identities, a foreign-scheme
+        // identity carrying a TokenId claim) this stays false, so the generic
+        // text keeps answering there.
+        private bool IsReadOnlyWriteAttempt()
+        {
+            if (!HsmApiTokenOnlyAuthorizationHandler.IsUnsafeMethod(Context.Request?.Method))
+                return false;
+
+            using var identities = Context.User.Identities.GetEnumerator();
+
+            if (!identities.MoveNext())
+                return false;
+
+            var identity = identities.Current;
+
+            if (identities.MoveNext() ||
+                identity is not { IsAuthenticated: true } ||
+                identity.AuthenticationType != HsmApiTokenDefaults.AuthenticationScheme ||
+                identity.FindFirst(HsmApiTokenClaims.OwnerUserId) is null)
+                return false;
+
+            var tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
+
+            return tokenId is not null && _tokens.GetToken(tokenId)?.ReadOnly == true;
+        }
 
 
         private void RecordFailure(string tokenId, Guid? ownerId)
