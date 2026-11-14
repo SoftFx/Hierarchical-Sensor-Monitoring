@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using HSMServer.Extensions;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 
@@ -26,12 +27,15 @@ namespace HSMServer.Model.ManagementApi.Chats
             // gated caller gets are the id-discovery half the write endpoints
             // validate against.
             Description = includeDetail ? chat.Description : null,
-            CreationDate = includeDetail ? chat.CreationDate : null,
+            // The entity rebuilds its dates from ticks with an Unspecified
+            // Kind; pin them to UTC like the sensor-tree mapper does, so the
+            // wire form is always a valid ISO-8601 instant with Z (#1676).
+            CreationDate = includeDetail ? chat.CreationDate.ToUtcInstant() : null,
             Author = includeDetail ? chat.Author : null,
             SendMessages = includeDetail ? chat.SendMessages : null,
             MessagesAggregationTimeSec = includeDetail ? chat.MessagesAggregationTimeSec : null,
             TelegramChatId = includeDetail ? chat.TelegramChatId?.Identifier : null,
-            TelegramAuthorizationTime = includeDetail ? chat.AuthorizationTime : null,
+            TelegramAuthorizationTime = includeDetail ? chat.AuthorizationTime?.ToUtcInstant() : null,
             TelegramChatTitle = includeDetail ? chat.TelegramChatTitle : null,
             TelegramChatDescription = includeDetail ? chat.TelegramChatDescription : null,
         };
