@@ -39,7 +39,7 @@ await collector.Stop();
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ServerAddress` | string | `"localhost"` | HSM server address — include `https://` |
-| `Port` | int | `443` | HSM server port (443 since #1590; a pre-#1590 server used `44330`) |
+| `Port` | int | `443` | HSM server port (443 since #1590). `44330` of the old two-port scheme is no longer served (#1696): a collector still configured with it must be set to 443 |
 | `AccessKey` | string | — | **Required.** Access key from the product settings |
 | `ClientName` | string | — | Identifier for this collector instance (shown in server logs) |
 | `ComputerName` | string | — | Host name used in built-in sensor paths. Defaults to `Environment.MachineName` if not set |

@@ -197,10 +197,27 @@ namespace HSMServer.Core.Tests.Infrastructure
         // aggregate's character-budget pin needs controllably long errors.
         internal Func<SensorEntity, string> SensorUpdateFailureMessage { get; set; }
 
+        // Optional injection point for the failure of AddSensor alone (#1756): the
+        // constructor's predicate fails the creation and the update of a row alike.
+        internal Func<SensorEntity, bool> ShouldFailSensorAdd { get; set; }
+
+        // The way the real store fails (#1756): the LevelDB layer catches a failed write of
+        // a sensor row, logs it and does not throw. Set to lose the write of a row like
+        // that: the void methods return as if it were written, the checked ones report it.
+        // The hooks above make the store throw instead, which the real one does not do for
+        // a failed write.
+        internal Func<SensorEntity, bool> ShouldLoseSensorAdd { get; set; }
+        internal Func<SensorEntity, bool> ShouldLoseSensorUpdate { get; set; }
+
+        public const string LostWrite = "Simulated write the storage engine failed on";
+
         public void AddSensor(SensorEntity entity)
         {
-            if (_shouldFail(entity))
+            if (ShouldFailSensorAdd?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+
+            if (ShouldLoseSensorAdd?.Invoke(entity) == true)
+                return;
 
             _inner.AddSensor(entity);
         }
@@ -210,12 +227,67 @@ namespace HSMServer.Core.Tests.Infrastructure
             if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
 
+            if (ShouldLoseSensorUpdate?.Invoke(entity) == true)
+                return;
+
             _inner.UpdateSensor(entity);
         }
 
-        public void RemoveSensorWithMetadata(Guid sensorId) => _inner.RemoveSensorWithMetadata(sensorId);
+        public Exception AddSensorChecked(SensorEntity entity)
+        {
+            if (ShouldFailSensorAdd?.Invoke(entity) == true || _shouldFail(entity))
+                throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+
+            return ShouldLoseSensorAdd?.Invoke(entity) == true
+                ? new System.IO.IOException(LostWrite)
+                : _inner.AddSensorChecked(entity);
+        }
+
+        public Exception UpdateSensorChecked(SensorEntity entity)
+        {
+            if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
+                throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
+
+            return ShouldLoseSensorUpdate?.Invoke(entity) == true
+                ? new System.IO.IOException(LostWrite)
+                : _inner.UpdateSensorChecked(entity);
+        }
+
+        // Sensor-move merge (#1720 review): set to make removing a sensor's
+        // entity throw, as a failed database write does.
+        internal Func<Guid, bool> FailRemoveSensor { get; set; }
+
+        public void RemoveSensorWithMetadata(Guid sensorId)
+        {
+            if (FailRemoveSensor?.Invoke(sensorId) == true)
+                throw new System.IO.IOException("injected remove failure");
+
+            _inner.RemoveSensorWithMetadata(sensorId);
+        }
         public void AddSensorValue(Guid sensorId, BaseValue value) => _inner.AddSensorValue(sensorId, value);
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
+
+        // Sensor-move merge (#1720): set to make the history copy throw, as a
+        // failed write inside it does.
+        internal Func<Guid, bool> FailMergeFrom { get; set; }
+
+        // Set to make the history copy throw AFTER every row was copied: the
+        // state a crash or a late write failure leaves behind — the rows are
+        // under the target's id, the source sensor is still in place.
+        internal Func<Guid, bool> FailMergeAfterCopyFrom { get; set; }
+
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
+        {
+            if (FailMergeFrom?.Invoke(fromSensorId) == true)
+                throw new System.IO.IOException("injected merge write failure");
+
+            var result = _inner.MergeSensorValues(fromSensorId, intoSensorId);
+
+            if (FailMergeAfterCopyFrom?.Invoke(fromSensorId) == true)
+                throw new System.IO.IOException("injected merge failure after the copy");
+
+            return result;
+        }
         public byte[] GetLatestValue(Guid sensorId, long to) => _inner.GetLatestValue(sensorId, to);
         public byte[] GetFirstValue(Guid sensorId) => _inner.GetFirstValue(sensorId);
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);

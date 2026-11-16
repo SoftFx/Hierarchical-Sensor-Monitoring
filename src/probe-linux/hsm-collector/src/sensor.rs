@@ -209,19 +209,31 @@ macro_rules! typed_sensor {
 
 typed_sensor!(
     /// Instant `Double` sensor.
-    DoubleSensor, f64, hsm_sensor_add_double, "add double value"
+    DoubleSensor,
+    f64,
+    hsm_sensor_add_double,
+    "add double value"
 );
 typed_sensor!(
     /// Instant `Int` sensor.
-    IntSensor, i32, hsm_sensor_add_int, "add int value"
+    IntSensor,
+    i32,
+    hsm_sensor_add_int,
+    "add int value"
 );
 typed_sensor!(
     /// Instant `Boolean` sensor.
-    BoolSensor, bool, hsm_sensor_add_bool, "add bool value"
+    BoolSensor,
+    bool,
+    hsm_sensor_add_bool,
+    "add bool value"
 );
 typed_sensor!(
     /// Instant `Enum` sensor. The posted value is an option key registered at creation.
-    EnumSensor, i32, hsm_sensor_add_enum, "add enum value"
+    EnumSensor,
+    i32,
+    hsm_sensor_add_enum,
+    "add enum value"
 );
 
 /// Instant `String` sensor.

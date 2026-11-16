@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using HSMServer.Extensions;
 using HSMServer.Model.Controls;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -44,7 +45,10 @@ namespace HSMServer.Model.ManagementApi.Folders
                 // the template writes validate against.
                 Description = includeDetail ? folder.Description : null,
                 Color = includeDetail ? folder.Color.ToArgb() : null,
-                CreationDate = includeDetail ? folder.CreationDate : null,
+                // The entity rebuilds its dates from ticks with an Unspecified
+                // Kind; pin to UTC like the sensor-tree mapper does, so the
+                // wire form is always a valid ISO-8601 instant with Z (#1676).
+                CreationDate = includeDetail ? folder.CreationDate.ToUtcInstant() : null,
                 Author = includeDetail ? folder.Author : null,
                 Chats = includeDetail ? StableCopy.Of(() => folder.Chats) : null,
                 DefaultChats = includeDetail ? new FolderDefaultChatsDto

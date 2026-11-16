@@ -44,7 +44,6 @@ namespace HSMServer.Controllers
         };
 
         private readonly IAlertScheduleProvider _scheduleProvider;
-        private readonly AlertScheduleParser _parser = new();
         private readonly ITreeValuesCache _cache;
         private readonly AlertScheduleAdministrationService _writer;
 
@@ -148,11 +147,22 @@ namespace HSMServer.Controllers
             {
                 try
                 {
+                    // #1706: the editor's save rides the SAME write bounds as
+                    // the REST/MCP DTO path (size, anchor/alias ban, date
+                    // counts) — one helper, so the two write paths cannot
+                    // drift apart — before the parsed model reaches the
+                    // single write path below.
+                    if (!_writer.TryValidateScheduleYaml(model.Schedule, out var schedule, out var yamlErrors))
+                    {
+                        foreach (var error in yamlErrors)
+                            ModelState.AddModelError(nameof(model.Schedule), error);
+
+                        return PartialView("_AlertSchedule", model);
+                    }
+
                     // #1588 single write path: the parsed form rides the
                     // schedule administration service — the same uniqueness
                     // gate, id ownership and undo journaling as REST/MCP.
-                    var schedule = _parser.Parse(model.Schedule);
-
                     schedule.Name = model.Name;
                     schedule.Timezone = model.Timezone;
 

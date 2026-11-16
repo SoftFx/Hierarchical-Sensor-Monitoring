@@ -310,6 +310,30 @@ namespace HSMServer.Core.Model
         private static TimeSpan NextRetryDelay(int retryCount) =>
             TimeSpan.FromTicks(Math.Min(HistoryLoadFirstRetryDelay.Ticks * (1L << retryCount), HistoryLoadMaxRetryInterval.Ticks));
 
+        // Runs on the queue that owns the sensor (the cache's merge step), the
+        // single writer of Storage, and only once history is loaded: before
+        // that, the lazy load reads the merged rows itself. No policy
+        // evaluation — the copied rows are history, not new deliveries, so
+        // the status is recomputed by the next real value. A bar sensor keeps
+        // its cache: a bar storage's AddValue closes the in-progress bar and
+        // adopts the added one as the new partial, which a stored bar is not.
+        internal override void RefreshAfterMerge()
+        {
+            if (!IsHistoryLoaded)
+                return;
+
+            var lastBytes = this is IBarSensor ? null : _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
+
+            if (lastBytes is not null && Convert(lastBytes) is T last && !last.IsTimeout &&
+                (Storage.LastValue is null || last.Time > Storage.LastValue.Time))
+                Storage.AddValue(last);
+
+            var firstBytes = _database.GetFirstValue(Id);
+
+            if (firstBytes is not null)
+                Storage.WidenFrom(Convert(firstBytes).Time);
+        }
+
         // Must be called with _lock held. Publishes the latch (on success OR failure) via its
         // finally block, so a caller below can never observe an unlatched sensor. utcNow is the
         // single clock source for the retry gates: it stamps the attempt clock below and

@@ -1,0 +1,11 @@
+# MUST-FAIL: the collector delivers one registration of its sensor, with the description "first",
+# and the fixture expects "second". Proves expect_last_delivered_registration compares the
+# description of the delivered registration, and does not pass on any text. The right description
+# is seen first, so a registration that was never delivered is not what makes the case fail.
+meta_last_delivered_registration_wrong_description|create_collector_sending_registrations|50|60000|1000
+meta_last_delivered_registration_wrong_description|create_int_sensor_with_options|meta/last-registration/description|0|-1|first
+meta_last_delivered_registration_wrong_description|start
+meta_last_delivered_registration_wrong_description|expect_send_attempts|registration|1|10
+meta_last_delivered_registration_wrong_description|stop
+meta_last_delivered_registration_wrong_description|expect_last_delivered_registration|meta/last-registration/description|first
+meta_last_delivered_registration_wrong_description|expect_last_delivered_registration|meta/last-registration/description|second

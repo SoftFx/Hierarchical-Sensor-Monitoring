@@ -356,6 +356,38 @@ namespace HSMServer.Mcp
     }
 
 
+    /// <summary>
+    /// Result envelope of the move_sensors tool (#1721): exactly one arm per
+    /// call — <c>value</c> with every sensor's outcome after an applied move,
+    /// or <c>preview</c> with every sensor's prediction after a dry run. The
+    /// McpWriteResult twin with a TYPED preview (the #1637 pattern).
+    /// </summary>
+    [Description("Result of the move_sensors tool: `value` carries every sensor's outcome after an applied move, `preview` every sensor's prediction after a dry run — exactly one of the two per call.")]
+    public sealed record McpSensorMoveResult
+    {
+        [Description("Every requested sensor's outcome, in request order (the move is not atomic). Absent after a dry run.")]
+        public SensorMoveResponseDto Value { get; init; }
+
+        [Description("The dry-run prediction per sensor: outcome, nodes to create, alert templates detached/applied, inherited settings that change. Nothing was applied. Absent after an applied move.")]
+        public SensorMovePreviewDto Preview { get; init; }
+    }
+
+
+    /// <summary>Result of the remove_sensor_alias tool.</summary>
+    [Description("Result of the remove_sensor_alias tool: the alias that was removed.")]
+    public sealed record McpSensorAliasRemovedResult
+    {
+        [Description("The sensor that owned the alias.")]
+        public Guid SensorId { get; init; }
+
+        [Description("The alias's root product id.")]
+        public Guid ProductId { get; init; }
+
+        [Description("The alias's path relative to that product.")]
+        public string Path { get; init; }
+    }
+
+
     /// <summary>Result of the list_journal_records tool.</summary>
     [Description("Result of the list_journal_records tool: one page of visible journal records plus the effective paging echo.")]
     public sealed record McpJournalRecordsResult

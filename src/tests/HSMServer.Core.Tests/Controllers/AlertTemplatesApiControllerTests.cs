@@ -573,6 +573,36 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Empty(_store);
         }
 
+        [Fact]
+        public async Task Create_StatusConditionWithErrorStatusEffect_Is400()
+        {
+            // #1707: the sensor-policy surface rejects a policy that reacts
+            // to Status while setting it — a template must not be able to
+            // mint self-triggering policies either.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                SensorStatus = (byte)SensorStatus.Error,
+                Conditions =
+                [
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.LastValue },
+                        Operation = (byte)PolicyOperation.IsError,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].sensorStatus", details.Keys);
+            Assert.Empty(_store);
+        }
+
         [Theory]
         [InlineData("policies")]
         [InlineData("ttlPolicies")]
@@ -682,6 +712,34 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(negative)));
 
             Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_TtlTicksUnderAMinute_Is400()
+        {
+            // #1707: the sensor surface's 1-minute floor applies to template
+            // writes too — a template mints TTL policies onto EVERY matched
+            // sensor, so a sub-minute interval here would bypass the floor at
+            // a much wider scope than one sensor.
+            var under = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromSeconds(30).Ticks }],
+            };
+
+            var result = await CreateController().CreateTemplate(under);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Contains("at least 1 minute", Assert.IsType<string[]>(Assert.IsType<Dictionary<string, object>>(body.Details)["ttls[0]"]).Single());
+            Assert.Empty(_store);
+
+            // The bound is inclusive: exactly one minute stays accepted.
+            var atTheBound = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromMinutes(1).Ticks }],
+            };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(atTheBound)));
         }
 
         [Fact]

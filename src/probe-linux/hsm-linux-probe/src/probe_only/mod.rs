@@ -27,6 +27,9 @@
 //!   per-day `Written per day by process/<name>` / `Read per day by process/<name>` (#1547), from
 //!   `/proc/<pid>/io`; off unless the top-level `topDiskIo` block enables it, registered like
 //!   [`top_cpu`], with which it shares the process table and the name rule.
+//! * [`network`] — the Windows hosts' `.computer/Network/…` sensors (#1711): the three TCP
+//!   counters (catalog rows, registered before Start) from `/proc/net/snmp`, and per-interface
+//!   `Received`/`Sent MB,sec` bars from `/proc/net/dev`, registered at runtime.
 //!
 //! # Failure isolation (root rules #6 and #8)
 //!
@@ -39,6 +42,7 @@
 pub mod disks;
 pub mod docker;
 pub mod host;
+pub mod network;
 pub mod top_cpu;
 pub mod top_disk_io;
 
@@ -81,6 +85,9 @@ pub struct HostEnvironment {
     pub disk_written: Option<PathBuf>,
     /// This boot's id (`/proc/sys/kernel/random/boot_id`): the diskstats counters restart at boot.
     pub boot_id: PathBuf,
+    /// The kernel's network counters (`/proc/net`: `snmp`, `dev`), for this process's network
+    /// namespace — the host's, the unit has no `PrivateNetwork`.
+    pub proc_net: PathBuf,
 }
 
 impl HostEnvironment {
@@ -105,6 +112,7 @@ impl HostEnvironment {
                     .with_file_name(disks::written::FILE_NAME),
             ),
             boot_id: PathBuf::from("/proc/sys/kernel/random/boot_id"),
+            proc_net: PathBuf::from("/proc/net"),
         }
     }
 }
@@ -151,6 +159,12 @@ pub fn register<'c>(
         (environment.docker_engine)(&config.docker),
         environment.docker_state.clone(),
         environment.sys_root.clone(),
+        logger,
+    ));
+    sources.extend(network::register(
+        collector,
+        &config.network,
+        environment,
         logger,
     ));
     sources

@@ -784,8 +784,14 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                     Add(errors, $"ttls[{index}]", $"Unknown interval {interval.Interval}.");
 
                 if ((CoreTimeInterval)interval.Interval is CoreTimeInterval.Ticks or CoreTimeInterval.FromFolder &&
-                    (interval.Ticks <= 0 || interval.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
-                    Add(errors, $"ttls[{index}]", "Interval ticks must be positive and keep the shifted time inside the DateTime range.");
+                    (interval.Ticks < TimeSpan.FromMinutes(1).Ticks ||
+                     interval.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
+                    // The sensor surface's twin wording (#1707): a template
+                    // write mints policies onto every matched sensor, so the
+                    // 1-minute floor applies here exactly as it does on the
+                    // sensor and product endpoints.
+                    Add(errors, $"ttls[{index}]",
+                        "Interval ticks must be at least 1 minute and keep the shifted time inside the DateTime range.");
             }
         }
 
@@ -817,6 +823,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (TextFieldValidator.HasForbiddenCharacter(policy.Icon, out var iconChar, allowLineBreaks: false))
                 Add(errors, $"{prefix}.icon",
                     $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
+
+            // #1707: a policy that watches Status while carrying the Error
+            // status effect reacts to its own effect — the same rule the
+            // sensor-policy surface applies, so a template cannot mint
+            // self-triggering policies.
+            if ((SensorStatus)policy.SensorStatus == SensorStatus.Error &&
+                (policy.Conditions ?? []).Any(c => c is { } ok && (PolicyProperty)ok.Property == PolicyProperty.Status))
+                Add(errors, $"{prefix}.sensorStatus",
+                    "A policy that reacts to Status must not carry the Error status effect - it would re-trigger itself; drop the effect or watch another property.");
 
             foreach (var (condition, conditionIndex) in (policy.Conditions ?? []).Select((c, i) => (c, i)))
             {

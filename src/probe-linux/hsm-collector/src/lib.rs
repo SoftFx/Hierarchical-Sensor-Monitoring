@@ -26,7 +26,7 @@ pub use alert::{
     instant_hourly_schedule_anchor, Alert, AlertBuilder, AlertCombination, AlertDestination,
     AlertIcon, AlertKind, AlertOperation, AlertProperty, AlertRepeat, AlertTarget,
 };
-pub use collector::{Collector, DefaultSensor, LINUX_METRIC_SOURCES_AVAILABLE};
+pub use collector::{Collector, DefaultSensor, NetworkCounter, LINUX_METRIC_SOURCES_AVAILABLE};
 pub use error::{Error, Result};
 pub use options::{
     CollectorOptions, CollectorStatus, EnumOption, LogLevel, SensorOptions, SensorStatus,
@@ -65,6 +65,48 @@ mod tests {
         options.allow_plaintext_transport = true;
         options.module = Some("UnitTest".into());
         options
+    }
+
+    /// The catalog's network rows are metric candidates. On Linux no metric source binds them, also
+    /// with the Linux factory installed (as the probe's release build does), so what the host adds
+    /// is sent, and nothing else is (#1711).
+    #[test]
+    fn a_network_counter_sensor_sends_what_the_host_adds_and_nothing_else() {
+        let collector = Collector::new(&test_options()).expect("create");
+        if LINUX_METRIC_SOURCES_AVAILABLE {
+            collector
+                .install_linux_metric_sources()
+                .expect("install the Linux metric sources");
+        }
+        let failures = collector
+            .network_counter_sensor(NetworkCounter::ConnectionFailures)
+            .expect("register");
+        let established = collector
+            .network_counter_sensor(NetworkCounter::ConnectionsEstablished)
+            .expect("register");
+        let resets = collector
+            .network_counter_sensor(NetworkCounter::ConnectionsReset)
+            .expect("register");
+        collector.start().expect("start");
+        // A bound source would post at once and then every period; give it time to show up.
+        std::thread::sleep(Duration::from_millis(200));
+        failures.add(4).expect("add");
+        established.add(17).expect("add");
+        collector.stop().expect("stop");
+        drop(resets);
+        let sent = collector.sent_payloads();
+        for (leaf, values) in [
+            ("Connection Failures Count", 1),
+            ("Connections Established Count", 1),
+            ("Connections Reset Count", 0),
+        ] {
+            let path = format!("/{leaf}\"");
+            let posted: usize = sent.iter().map(|json| json.matches(&path).count()).sum();
+            assert_eq!(posted, values, "{leaf} in {sent:#?}");
+        }
+        for value in ["\"Value\":4", "\"Value\":17"] {
+            assert!(sent.iter().any(|json| json.contains(value)), "{sent:#?}");
+        }
     }
 
     #[test]

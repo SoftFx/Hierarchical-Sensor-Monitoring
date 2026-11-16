@@ -24,6 +24,12 @@ namespace hsm::agent
         int port = 443;              ///< HSM server port
         std::string access_key;     ///< required, non-blank
         bool allow_untrusted_certificate = false;
+        /// How the collector talks to the server: "session" (one WebSocket to the collector session
+        /// endpoint, the default since 0.6.0; nothing is sent over the HTTP routes) or "http"
+        /// (a request per batch, for a server without sessions or a proxy without WebSockets).
+        std::string transport = "session";
+
+        bool UsesSession() const { return transport == "session"; }
 
         // identity.*
         std::string computer_name = "auto"; ///< "auto"/empty → resolved to the machine name at runtime
