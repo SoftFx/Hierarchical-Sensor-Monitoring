@@ -169,6 +169,41 @@ namespace HSMDataCollector.IntegrationTests
                 WireCommand(registration));
         }
 
+        // Sensor move (#1724): a registration WITH previous paths carries the member right after
+        // EnumOptions (the DTO declaration order); one without them omits it (the golden above,
+        // which predates the member, keeps passing byte for byte). The native
+        // NativeWireRegistrationWithPreviousPathsMatchesNetByteLayout test pins the same bytes.
+        [Fact]
+        public void Registration_with_previous_paths_matches_the_native_golden_bytes()
+        {
+            var registration = new AddOrUpdateSensorRequest
+            {
+                Path = "p/move",
+                SensorType = SensorType.IntSensor,
+                Description = "d",
+                TTLs = new List<long?> { 600000000 },
+                OriginalUnit = Unit.MB,
+                Statistics = StatisticsOptions.None,
+                DisplayUnit = 0,
+                PreviousPaths = new List<string> { "garage-server/System/CPU", "old/move" },
+            };
+
+            Assert.Equal("{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"garage-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}", WireCommand(registration));
+        }
+
+        [Fact]
+        public void Registration_without_previous_paths_omits_the_member()
+        {
+            var registration = new AddOrUpdateSensorRequest { Path = "p/plain", SensorType = SensorType.IntSensor };
+
+            Assert.DoesNotContain("PreviousPaths", WireCommand(registration));
+
+            // A list is the caller's to normalize (the collector maps empty to null); an explicit
+            // empty list still serializes, as System.Text.Json would.
+            registration.PreviousPaths = new List<string>();
+            Assert.Contains("\"PreviousPaths\":[]", WireCommand(registration));
+        }
+
         // Registration carrying a data alert (Alerts) and a TTL alert (TtlAlerts + TTLs). The same
         // bytes are pinned by the native NativeWireRegistrationWithAlertsMatchesNetByteLayout unit
         // test, which builds this exact alert through the C ABI. Locks: AlertUpdateRequest field
@@ -450,14 +485,14 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"Path\":\".computer/Windows OS info/Install date\"}",
                 WireReg(new WindowsInstallDatePrototype().Get(null), ".computer/Windows OS info/Install date", "Time since the OS install date."));
 
-            // Service alive: TTL alert IfInactivityPeriodIs() -> InstantHourly + Clock + SensorError. The
+            // Service alive: TTL alert IfInactivityPeriodIs(5 min) -> InstantHourly + Clock + SensorError. The
             // SpecialAlertAction carries a NULL conditions list (Conditions:null, not []); it lands in
-            // TtlAlerts and drives TTLs=[null]; KeepHistory 180 d; AggregateData true; Alerts:[].
+            // TtlAlerts and drives TTLs=[5 min] (#1666); KeepHistory 180 d; AggregateData true; Alerts:[].
             Assert.Equal(
                 "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":[{\"Conditions\":null,\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product]$path\",\"Icon\":\"\\uD83D\\uDD50\",\"IsDisabled\":false,"
                 + "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
                 + "\"TtlAlert\":null,\"SensorType\":0,\"Description\":\"DataCollector heartbeat.\",\"DefaultChats\":null,\"KeepHistory\":155520000000000,\"SelfDestroy\":null,"
-                + "\"TTLs\":[null],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                + "\"TTLs\":[3000000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
                 + "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
                 + "\"Path\":\".module/Service alive\"}",
                 WireReg(new ServiceAlivePrototype().Get(null), ".module/Service alive", "DataCollector heartbeat."));

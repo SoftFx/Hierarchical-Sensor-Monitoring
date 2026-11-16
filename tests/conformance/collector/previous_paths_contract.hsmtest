@@ -1,0 +1,54 @@
+# HSM collector conformance v1 — previous paths on registration (sensor move, #1724).
+# New verb:
+# create_int_sensor_with_previous_paths|path|previous[;previous...]   (each entry token-expanded; "" entries are not expressible)
+# Canonical registration text gains a trailing ,"PreviousPaths":["...",...] member ONLY when the sensor has
+# previous paths; without them the text ends with "DefaultAlertsOptions":N} exactly as before (the wire omits
+# the member the same way, pinned by the paired wire unit tests).
+# Contract notes:
+# - Previous paths are FULL product-relative paths: the collector identity prefix (computer/module) is NOT added,
+#   unlike the sensor's own Path.
+# - Null and whitespace-only entries are dropped; a list left empty omits the member.
+# - Order is kept (the server lets the first listed path win a merge).
+
+previous_paths_register_unprefixed_in_order|create_collector_with_identity|conformance-computer|conformance-module
+previous_paths_register_unprefixed_in_order|create_int_sensor_with_previous_paths|contract/move/cpu|garage-server/System/CPU;old/cpu
+previous_paths_register_unprefixed_in_order|start
+previous_paths_register_unprefixed_in_order|stop
+previous_paths_register_unprefixed_in_order|expect_registration_count|1
+previous_paths_register_unprefixed_in_order|expect_registration_contains|0|conformance-computer/conformance-module/contract/move/cpu"
+previous_paths_register_unprefixed_in_order|expect_registration_contains|0|"DefaultAlertsOptions":0,"PreviousPaths":["garage-server/System/CPU","old/cpu"]}
+
+blank_previous_paths_are_dropped|create_collector
+blank_previous_paths_are_dropped|create_int_sensor_with_previous_paths|contract/move/blank|token:blank;kept/path
+blank_previous_paths_are_dropped|start
+blank_previous_paths_are_dropped|stop
+blank_previous_paths_are_dropped|expect_registration_count|1
+blank_previous_paths_are_dropped|expect_registration_contains|0|"PreviousPaths":["kept/path"]}
+
+only_blank_previous_paths_omit_the_member|create_collector
+only_blank_previous_paths_omit_the_member|create_int_sensor_with_previous_paths|contract/move/only-blank|token:blank
+only_blank_previous_paths_omit_the_member|start
+only_blank_previous_paths_omit_the_member|stop
+only_blank_previous_paths_omit_the_member|expect_registration_count|1
+only_blank_previous_paths_omit_the_member|expect_registration_contains|0|"DefaultAlertsOptions":0}
+
+sensor_without_previous_paths_omits_the_member|create_collector
+sensor_without_previous_paths_omits_the_member|create_int_sensor|contract/move/plain
+sensor_without_previous_paths_omits_the_member|start
+sensor_without_previous_paths_omits_the_member|stop
+sensor_without_previous_paths_omits_the_member|expect_registration_count|1
+sensor_without_previous_paths_omits_the_member|expect_registration_contains|0|"DefaultAlertsOptions":0}
+
+previous_paths_are_json_escaped|create_collector
+previous_paths_are_json_escaped|create_int_sensor_with_previous_paths|contract/move/escaped|token:json-special
+previous_paths_are_json_escaped|start
+previous_paths_are_json_escaped|stop
+previous_paths_are_json_escaped|expect_registration_count|1
+previous_paths_are_json_escaped|expect_registration_contains|0|"PreviousPaths":["quote\"slash\\tab\tnewline\n"]}
+
+previous_paths_ride_a_runtime_registration|create_collector
+previous_paths_ride_a_runtime_registration|start
+previous_paths_ride_a_runtime_registration|create_int_sensor_with_previous_paths|contract/move/runtime|old/runtime
+previous_paths_ride_a_runtime_registration|expect_registration_count|1|5
+previous_paths_ride_a_runtime_registration|stop
+previous_paths_ride_a_runtime_registration|expect_registration_contains|-1|"PreviousPaths":["old/runtime"]}

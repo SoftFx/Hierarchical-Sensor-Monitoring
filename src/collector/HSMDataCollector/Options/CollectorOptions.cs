@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Core
 {
@@ -32,6 +33,34 @@ namespace HSMDataCollector.Core
 
         public IDataSender DataSender { get; set; }
 
+        /// <summary>
+        /// How the built-in sender talks to the server: over a collector session, one WebSocket
+        /// on the same address and port (the default since 4.0.0), or over the HTTP routes. A
+        /// collector on a session never uses the HTTP routes: while no session can be opened its
+        /// values wait in the queues. Set <see cref="CollectorTransport.Http"/> for a server
+        /// without sessions (before 3.43.0, or with sessions turned off) or a proxy that does not
+        /// pass WebSockets. The setting belongs to the built-in sender; with a custom
+        /// <see cref="DataSender"/> it has no effect, and Start says so when it was set to Session.
+        /// </summary>
+        public CollectorTransport Transport
+        {
+            get => _transport;
+            set
+            {
+                _transport = value;
+                TransportWasSet = true;
+            }
+        }
+
+        private CollectorTransport _transport = CollectorTransport.Session;
+
+        // True once a caller assigned Transport: only an explicit Session next to a custom
+        // DataSender is worth the note that it has no effect, not the default.
+        internal bool TransportWasSet { get; private set; }
+
+        /// <summary>The session's waits; a seam for tests. Null takes the protocol's defaults.</summary>
+        internal Client.Session.SessionTimings SessionTimings { get; set; }
+
         internal string ServerUrl => ServerAddress.TrimEnd('/');
 
         public bool AllowUntrustedServerCertificate { get; set; }
@@ -43,6 +72,64 @@ namespace HSMDataCollector.Core
         public int MaxDeduplicatedMessages { get; set; } = 1000;
 
         public int MaxSensors { get; set; } = 100000;
+
+        /// <summary>
+        /// Headers the collector adds to every request that carries sensor values, next to its
+        /// own <c>Key</c> and <c>ClientName</c>. They state facts about the host for the server
+        /// (an agent sends <c>X-Agent-Version</c>, which is what makes the server answer with
+        /// directives). Read once, when the collector creates its sender; registrations do not
+        /// carry them. They belong to the built-in sender: with a custom <see cref="DataSender"/>
+        /// they are validated and otherwise unused. A name the collector sets itself
+        /// (<c>Key</c>, <c>ClientName</c>), a header of the request body or of the connection,
+        /// a name that is not a plain token and a value that is not printable ASCII are refused
+        /// at construction.
+        /// </summary>
+        public IDictionary<string, string> ExtraRequestHeaders { get; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Headers a host may not set: the collector's own, those that describe the request
+        // body or the connection, which the HTTP stack owns, and the cookie headers, which the
+        // .NET Framework handler rebuilds from its own cookie container (a hand-set Cookie is
+        // sent by the net6.0 build and silently lost by the net472 one).
+        private static readonly HashSet<string> ReservedRequestHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Key", "ClientName",
+            "Host", "Connection", "Upgrade", "Transfer-Encoding", "Expect", "Proxy-Connection", "Keep-Alive", "TE", "Trailer",
+            "Content-Type", "Content-Length", "Content-Encoding",
+            "Cookie", "Cookie2",
+        };
+
+        private const string HeaderNameSeparators = "\"(),/:;<=>?@[\\]{}";
+
+        private static void ValidateExtraRequestHeader(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("An extra request header needs a name.", nameof(ExtraRequestHeaders));
+
+            foreach (var ch in name)
+                if (ch <= ' ' || ch >= 127 || HeaderNameSeparators.IndexOf(ch) >= 0)
+                    throw new ArgumentException($"'{name}' is not a valid request header name.", nameof(ExtraRequestHeaders));
+
+            if (ReservedRequestHeaders.Contains(name)
+                || name.StartsWith("Content-", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("Sec-WebSocket-", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"The request header '{name}' is set by the collector and cannot be replaced.", nameof(ExtraRequestHeaders));
+
+            if (value == null)
+                throw new ArgumentException($"The request header '{name}' has no value.", nameof(ExtraRequestHeaders));
+
+            // Printable ASCII and tab only. A line break would be a second header; anything
+            // outside ASCII is refused by one HTTP stack at send time and mangled by the other.
+            foreach (var ch in value)
+                if ((ch < ' ' && ch != '\t') || ch >= 127)
+                    throw new ArgumentException($"The value of the request header '{name}' is not printable ASCII.", nameof(ExtraRequestHeaders));
+
+            // The HTTP stack has the last word: a name it files under the content or response
+            // headers would be dropped from the request without a sound.
+            using (var probe = new System.Net.Http.HttpRequestMessage())
+                if (!probe.Headers.TryAddWithoutValidation(name, value))
+                    throw new ArgumentException($"'{name}' cannot be sent as a request header.", nameof(ExtraRequestHeaders));
+        }
 
         internal void Validate()
         {
@@ -75,6 +162,12 @@ namespace HSMDataCollector.Core
 
             if (MaxSensors <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxSensors), "Max sensors must be greater than zero.");
+
+            if (Transport != CollectorTransport.Http && Transport != CollectorTransport.Session)
+                throw new ArgumentOutOfRangeException(nameof(Transport), "The transport is either Http or Session.");
+
+            foreach (var header in ExtraRequestHeaders)
+                ValidateExtraRequestHeader(header.Key, header.Value);
         }
     }
 }

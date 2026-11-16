@@ -558,6 +558,36 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Empty(_store);
         }
 
+        [Fact]
+        public async Task Create_StatusConditionWithErrorStatusEffect_Is400()
+        {
+            // #1707: the sensor-policy surface rejects a policy that reacts
+            // to Status while setting it — a template must not be able to
+            // mint self-triggering policies either.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with
+            {
+                SensorStatus = (byte)SensorStatus.Error,
+                Conditions =
+                [
+                    new PolicyConditionDto
+                    {
+                        Target = new PolicyTargetDto { Type = (byte)TargetType.LastValue },
+                        Operation = (byte)PolicyOperation.IsError,
+                        Property = (byte)PolicyProperty.Status,
+                    },
+                ],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("policies[0].sensorStatus", details.Keys);
+            Assert.Empty(_store);
+        }
+
         [Theory]
         [InlineData("policies")]
         [InlineData("ttlPolicies")]
@@ -670,6 +700,34 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Create_TtlTicksUnderAMinute_Is400()
+        {
+            // #1707: the sensor surface's 1-minute floor applies to template
+            // writes too — a template mints TTL policies onto EVERY matched
+            // sensor, so a sub-minute interval here would bypass the floor at
+            // a much wider scope than one sensor.
+            var under = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromSeconds(30).Ticks }],
+            };
+
+            var result = await CreateController().CreateTemplate(under);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Contains("at least 1 minute", Assert.IsType<string[]>(Assert.IsType<Dictionary<string, object>>(body.Details)["ttls[0]"]).Single());
+            Assert.Empty(_store);
+
+            // The bound is inclusive: exactly one minute stays accepted.
+            var atTheBound = BuildDto() with
+            {
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromMinutes(1).Ticks }],
+            };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(atTheBound)));
+        }
+
+        [Fact]
         public async Task Create_DuplicatePolicyIds_Are400()
         {
             // The id becomes the per-sensor policy's TemplateAlertId — the matching key:
@@ -773,11 +831,19 @@ namespace HSMServer.Core.Tests.Controllers
         [InlineData(999)]
         [InlineData(-1)]
         [InlineData(256)]
+        [InlineData(50)] // in-range but undefined in the enum: suppressed the same way (#1677 review)
         public async Task Create_UnknownSensorType_OutsideTheByteRange_Is400WithFieldKey(int sensorType)
         {
             // #1607: the enum-coded fields bind as int, so out-of-range values
             // REACH the validator instead of failing JSON binding first — the
             // error names the field and the value like the in-range unknowns.
+            // #1677: the sensorType error must also be the ONLY one — the
+            // per-condition pass used to judge the conditions against the
+            // byte-truncated cast ((SensorType)999 = 231) and add a
+            // "Property 'Value' is not supported by 231 templates." error
+            // naming a type the caller never sent. In-range undefined values
+            // (50) are skipped the same way: their condition messages would
+            // name a defined neighbour type the caller never sent either.
             var dto = BuildDto(sensorType: sensorType);
 
             var result = await CreateController().CreateTemplate(dto);
@@ -787,6 +853,7 @@ namespace HSMServer.Core.Tests.Controllers
             var details = Assert.IsType<Dictionary<string, object>>(body.Details);
             Assert.Equal($"Unknown sensor type {sensorType}.",
                 Assert.IsType<string[]>(details["sensorType"]).Single());
+            Assert.DoesNotContain(details.Keys, key => key.StartsWith("policies["));
             Assert.Empty(_store);
         }
 

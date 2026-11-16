@@ -1,5 +1,7 @@
 #include "tcp_connection_stats.hpp"
 
+#include <utility>
+
 namespace hsm::collector
 {
     // --- Portable accumulator (no OS dependency; unit-tested directly) ---------------------------
@@ -47,6 +49,28 @@ namespace hsm::collector
 
         return static_cast<double>(total_delta);
     }
+
+    // --- Portable sampler seam (family readers in, error report out; unit-tested directly) -------
+
+    TcpFailureRateSampler::TcpFailureRateSampler(FamilyReader read_v4, FamilyReader read_v6, ErrorReporter report_error)
+        : read_v4_(std::move(read_v4)),
+          read_v6_(std::move(read_v6)),
+          report_error_(std::move(report_error))
+    {
+    }
+
+    std::optional<double> TcpFailureRateSampler::Sample()
+    {
+        const FamilyReading v4 = read_v4_();
+        const FamilyReading v6 = read_v6_();
+
+        // The managed condition (WindowsTcpFailureRateMonitor.SampleLocked): neither family, never
+        // just one. The accumulator below returns nullopt for such a tick and keeps both baselines.
+        if (!v4.readable && !v6.readable && report_error_)
+            report_error_(kTcpNeitherFamilyReadableError);
+
+        return accumulator_.Accumulate(v4, v6);
+    }
 } // namespace hsm::collector
 
 #ifdef _WIN32
@@ -65,19 +89,30 @@ namespace hsm::collector
 
 namespace hsm::collector
 {
-    std::optional<double> WindowsTcpFailureSampler::Sample()
+    namespace
     {
-        // Read each family's cumulative dwAttemptFails; an unreadable family is reported as not-readable
-        // so the accumulator keeps its baseline. All baseline/delta/wrap/quiet math lives in the
-        // portable TcpFailureRateAccumulator (unit-tested), keeping this a thin OS wrapper.
-        const auto read_family = [](int address_family) -> TcpFailureRateAccumulator::FamilyReading {
+        // Read one family's cumulative dwAttemptFails; an unreadable family is returned as
+        // not-readable so the accumulator keeps its baseline.
+        TcpFailureRateAccumulator::FamilyReading ReadTcpFamily(ULONG address_family)
+        {
             MIB_TCPSTATS stats{};
             if (GetTcpStatisticsEx(&stats, address_family) != NO_ERROR)
                 return { false, 0 };
             return { true, stats.dwAttemptFails };
-        };
+        }
+    } // namespace
 
-        return accumulator_.Accumulate(read_family(AF_INET), read_family(AF_INET6));
+    // All baseline/delta/wrap/quiet math lives in the portable TcpFailureRateAccumulator and the
+    // neither-family report in the portable TcpFailureRateSampler (both unit-tested), keeping this a
+    // thin OS wrapper: it only binds the two GetTcpStatisticsEx reads.
+    WindowsTcpFailureSampler::WindowsTcpFailureSampler(TcpFailureRateSampler::ErrorReporter report_error)
+        : sampler_([] { return ReadTcpFamily(AF_INET); }, [] { return ReadTcpFamily(AF_INET6); }, std::move(report_error))
+    {
+    }
+
+    std::optional<double> WindowsTcpFailureSampler::Sample()
+    {
+        return sampler_.Sample();
     }
 } // namespace hsm::collector
 

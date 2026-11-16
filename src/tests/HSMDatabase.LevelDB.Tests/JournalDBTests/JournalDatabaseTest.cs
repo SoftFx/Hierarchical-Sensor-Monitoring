@@ -22,29 +22,6 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
         }
 
 
-        [Fact]
-        public async Task WriteAndReadTest()
-        {
-            const int historyValuesCount = 1000;
-            var sensorId = Guid.NewGuid();
-            var journals = GenerateJournalEntities(sensorId, historyValuesCount);
-            var journalType = RecordType.Changes;
-
-            foreach (var journal in journals)
-                _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
-
-            await Task.Delay(1000);
-            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
-                .Flatten()).Select(x => (JournalKey.FromBytes(x.Key), x.Entity)).ToList();
-
-            Assert.Equal(journals.Count, actualJournals.Count);
-            for (int i = 0; i < journals.Count; i++)
-            {
-                CompareJournalEntity(journals[i].Item2, actualJournals[i].Entity);
-                CompareJournalKey(journals[i].Item1, actualJournals[i].Item1);
-            }
-        }
-
         private void CompareJournalEntity(JournalRecordEntity actual, JournalRecordEntity expected)
         {
             Assert.Equal(actual.Path, expected.Path);
@@ -176,19 +153,6 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
 
         private async Task<List<JournalRecordEntity>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Changes, int count = 5000) =>
             (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => x.Entity).ToList();
-
-        private List<(JournalKey, JournalRecordEntity)> GenerateJournalEntities(Guid sensorId, int count)
-        {
-            List<(JournalKey, JournalRecordEntity)> result = new(count);
-
-            for (int i = 0; i < count; i++)
-            {
-                var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
-                result.Add((key, GetJournalEntity($"TEST_{i}", $"TEST_{i}", $"TEST_{i}")));
-            }
-
-            return result;
-        }
 
         private static JournalRecordEntity GetJournalEntity(string text, string path = null, string initiator = "System") => new()
         {

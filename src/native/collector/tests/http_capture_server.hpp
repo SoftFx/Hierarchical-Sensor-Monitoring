@@ -56,9 +56,10 @@ namespace hsm::test
     public:
         // `only_path`: capture the first request to this path; answer every other request with
         // `response_status` and keep listening (e.g. skip a runtime /commands registration to
-        // capture the /list value batch that follows it).
-        explicit HttpCaptureServer(int response_status = 200, std::string only_path = {})
-            : response_status_(response_status), only_path_(std::move(only_path))
+        // capture the /list value batch that follows it). `extra_response_headers`: header lines,
+        // each ending in CRLF, added to every answer (e.g. X-Hsm-Directive lines).
+        explicit HttpCaptureServer(int response_status = 200, std::string only_path = {}, std::string extra_response_headers = {})
+            : response_status_(response_status), only_path_(std::move(only_path)), extra_response_headers_(std::move(extra_response_headers))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -212,7 +213,7 @@ namespace hsm::test
             }
 
             const std::string response =
-                "HTTP/1.1 " + std::to_string(response_status_) + " X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                "HTTP/1.1 " + std::to_string(response_status_) + " X\r\n" + extra_response_headers_ + "Content-Length: 0\r\nConnection: close\r\n\r\n";
             send(conn, response.c_str(), static_cast<int>(response.size()), 0);
             closesocket(conn);
             return captured || only_path_.empty();
@@ -239,6 +240,7 @@ namespace hsm::test
         int port_ = 0;
         int response_status_;
         std::string only_path_;
+        std::string extra_response_headers_;
         std::atomic<bool> stop_{ false };
         std::thread worker_;
         CapturedRequest request_;
@@ -255,6 +257,9 @@ namespace hsm::test
         {
             std::string path;
             std::string body;
+            // The status the request was answered with; 0 while it has none (a request held open
+            // by a hang is never answered). Set by HttpRecordingServer only.
+            int status = 0;
         };
 
         // `reject_path_prefix`: requests to it are recorded and answered 400 Bad Request.
@@ -336,6 +341,23 @@ namespace hsm::test
             fail_remaining_ = count;
         }
 
+        // How EVERY request is answered from now on, whatever its path (the conformance driver's
+        // set_sender_mode, #1751): with 200, with 503 Service Unavailable (a server that is down
+        // behind its proxy), or not at all (recorded and held open like a hang_path_prefix
+        // request). Read when a request has arrived, so set it while no request is on its way.
+        enum class Answer
+        {
+            Ok,
+            Unavailable,
+            Never,
+        };
+
+        void SetAnswer(Answer answer)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            answer_ = answer;
+        }
+
     private:
         friend class HttpKeepAliveServer; // reuses ReadRequest
 
@@ -384,6 +406,7 @@ namespace hsm::test
                 const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
                 const bool reject = !reject_path_prefix_.empty() && recorded.path.rfind(reject_path_prefix_, 0) == 0;
                 bool fail = false;
+                Answer answer = Answer::Ok;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
                     if (fail_remaining_ > 0 && recorded.path.rfind(fail_path_prefix_, 0) == 0)
@@ -391,10 +414,16 @@ namespace hsm::test
                         --fail_remaining_;
                         fail = true;
                     }
+                    answer = answer_;
+                    // The answer is decided here, so it is recorded with the request: a reader that
+                    // sees the request sees the status it gets (0: none, the request hangs).
+                    recorded.status = (hang || answer == Answer::Never)
+                                          ? 0
+                                          : (fail ? 502 : (reject ? 400 : (answer == Answer::Unavailable ? 503 : 200)));
                     requests_.push_back(std::move(recorded));
                 }
 
-                if (hang)
+                if (hang || answer == Answer::Never)
                 {
                     hung_.push_back(conn); // never answered; closed by the destructor
                     continue;
@@ -403,7 +432,9 @@ namespace hsm::test
                 static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 static const std::string gateway = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                const std::string& response = fail ? gateway : (reject ? bad : ok);
+                static const std::string unavailable =
+                    "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                const std::string& response = fail ? gateway : (reject ? bad : (answer == Answer::Unavailable ? unavailable : ok));
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
@@ -475,6 +506,7 @@ namespace hsm::test
         std::vector<Recorded> requests_;
         std::string fail_path_prefix_; // guarded by mutex_
         int fail_remaining_ = 0;       // guarded by mutex_
+        Answer answer_ = Answer::Ok;   // guarded by mutex_
     };
 
     // Keep-alive variant for the connection-reuse tests (#1653). Every request is answered 200

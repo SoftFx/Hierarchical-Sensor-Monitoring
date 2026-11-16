@@ -11,7 +11,7 @@ Current drivers:
 
 | Driver | Runner | Fixture discovery |
 |---|---|---|
-| .NET (canonical) | `src/collector/HSMDataCollector.Tests/CollectorConformanceTests.cs` | auto: globs `collector/*.hsmtest` (non-recursive) |
+| .NET (canonical) | `src/collector/HSMDataCollector.Tests/CollectorConformanceTests.cs` | auto: globs `collector/*.hsmtest` (non-recursive), plus `collector/windows/*.hsmtest` on Windows |
 | native C++ | `src/native/collector/tests/hsm_collector_tests.cpp` | explicit: `add_conformance_test` in the native `CMakeLists.txt` |
 
 CI: `collector-unit-tests` runs the corpus through the .NET driver;
@@ -93,6 +93,17 @@ satisfies by an owner decision — today `bar_stddev_contract.hsmtest` (#1529). 
 discovery is non-recursive, so it never reads them; the native driver registers them in CMake like any
 fixture. A case moves back into the shared fixtures when the managed collector gains the behavior.
 
+**Windows-only fixtures.** `collector/windows/*.hsmtest` holds scenarios for sensors that exist only
+on Windows and whose registration can therefore be asserted only there (today
+`tcp_failure_rate_contract.hsmtest`, #1659 B2). That fixture pins the registration only. The two rules of
+#1752 around the sensor (asked for twice, the first period stays; a tick on which neither address
+family can be read is reported) have no scenario: the period is not on the wire, and the report needs
+an OS read failure no driver can cause. Their per-language tests are named in
+`aicontext/features/collector/default-sensors/feature.md`. Both drivers run the folder on Windows and nowhere
+else: the managed driver adds it to its discovery when the host is Windows, the native driver
+registers its fixtures in CMake under `if(WIN32)`. A scenario that can be written so that it passes
+on every platform belongs in the shared folder, not here.
+
 ## Verb catalog
 
 Status args accept `Ok|Warning|Error`; `sensor_index`/`bar_index`/`idx` index
@@ -106,7 +117,9 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_collector_with_identity\|computer_name\|module` | identity affects payload path prefix |
 | `create_collector_with_limits\|max_queue_size\|max_values_in_package\|collect_period_ms` | queue/batching limits |
 | `expect_create_collector_rejected\|access_key\|server_address[\|port]` | options validation throws |
+| `create_collector_sending_registrations\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | (#1751) a collector whose registrations reach the sender of the case, so that one record holds its registration sends and its value sends; see **Sends by kind** below. `request_timeout_ms` is the collector's request timeout, and so its stop budget (clamped to 1..5 s) |
 | `start` / `stop` | lifecycle transitions (graceful stop flushes the data queue) |
+| `dispose` | (#1751) dispose the collector: the terminal stop, whose drain has the short budget (1 s at most). What the sender recorded stays readable for the assertions that follow |
 | `repeat_start_stop_add\|cycles\|sensor_index\|status\|comment_prefix` | restart cycling with one add per cycle |
 | `stop_expect_under_ms\|bound_ms` | stop must return within the bound (shutdown boundedness) |
 | `sleep_ms\|milliseconds` | wall-clock wait — rollover and sampled-bar partial-post cases only, keep rare |
@@ -134,10 +147,12 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_int_sensor_full_options\|path\|ttl_ms\|unit\|keep_history_ms\|self_destroy_ms\|statistics\|is_singleton\|aggregate\|grafana\|is_computer\|sensor_location\|description` | full SensorOptions surface + path model; tri-state (is_singleton/aggregate/grafana) -1=null/0/1; statistics -1=null else flags (EMA=1); is_computer anchors at the computer node + forces singleton; sensor_location 0=Module/1=Product |
 | `create_enum_sensor_full_options\|path\|ttl_ms\|keep_history_ms\|aggregate\|grafana\|is_computer\|description\|key:value:color:desc[;...]` | enum sensor carrying its `EnumOptions` AND the SensorOptions surface (the `ServiceStatusPrototype` shape); tri-states -1=null/0/1; consumes the staged alert builders. C#: `CreateEnumSensor(path, new EnumSensorOptions { … })`; native: `hsm_collector_create_enum_sensor_with_sensor_options` (0.9.0) + `hsm_sensor_attach_alert` |
 | `create_service_commands_sensor` | service-commands sensor (string, fixed `.module/Service commands`, implicit received-new-value alert) |
+| `enable_tcp_connection_failure_rate_sensor\|period_ms` | (#1659 B2) opt in to the TCP connection failure rate sensor (Windows only; see **Windows-only fixtures** above): a Rate sensor at `.computer/Network/Connection failures rate`, registered by Start. Native `hsm_collector_enable_tcp_connection_failure_rate_sensor`; C# `IWindowsCollection.AddNetworkConnectionFailuresRate`. Values are the host's own failed connection attempts, so a fixture pins the registration only |
 | `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET), except for the four `.module/Collector queue stats` rows (#1480), whose text is composed only from the collector options and is pinned byte-exact (both harnesses create the collector with the same options); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
 | `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start (the one exception, `module_markers_contract:service_alive_keeps_beating_with_a_long_collect_period`, waits a beat period out on purpose to pin the cadence, #1443) |
 | `add_queue_diagnostic_sensors` | (#1480) register the `.module/Collector queue stats` group — Queue overflow, Items count in package, Package process time, Package content size (priority sensors). C# calls `AddAllQueueDiagnosticSensors` on the host's collection; native calls `hsm_collector_add_all_queue_diagnostic_sensors`. Their bars post a partial every 15 s, so keep a case well inside that or assert after `stop` (which flushes them) |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
+| `create_int_sensor_with_previous_paths\|path\|previous[;previous...]` | (#1724) int sensor declaring the paths it was registered under before (sensor move). Each entry is token-expanded; blank entries are dropped and a list left empty omits the member. C#: `CreateIntSensor(path, new InstantSensorOptions { PreviousPaths })`; native: create + `hsm_sensor_set_previous_paths` (0.13.0). The canonical registration text gains a trailing `,"PreviousPaths":["..."]` member only when present (`previous_paths_contract`) |
 | `set_sensor_description\|sensor_index\|description` | (#1482) replace a created sensor's registration description; `sensor_index` is the flat creation order (like `dispose_sensor`), `token:null` passes a null text. Native `hsm_sensor_set_description`; C# `IDescribableSensor.SetDescription`. Before Start the text is what Start registers; while stopped nothing is sent until the next Start; while running the sensor is re-registered — native replaces the run's recorded registration in place, C# records the re-sent AddOrUpdate as a new entry, so after a change made while running address the latest registration with index `-1` and do not pin the count (`registration_contract:set_description_*`) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
@@ -189,6 +204,118 @@ Build an alert incrementally, then `alert_stage` it; a following `create_*_with_
 | `set_sender_hang` | every data send blocks until the stop path cancels it (dead transport) |
 | `wait_sender_parked\|timeout_s` | (#1480) polls until a data send is parked in the hang — its package has already left the queue, so what is added next queues behind it; fails on timeout. C#: the recording sender counts parked sends; native: `hsm_collector_test_hung_send_count` |
 | `release_sender_hang` | (#1480) lifts the hang: a parked send continues (and consumes a charged `set_sender_fail_next` token), later sends are no longer blocked. C#: completes the recording sender's release task; native: `hsm_collector_set_send_hang(false)` |
+| `set_sender_hang_until_cancelled` | (#1751) the hang of `set_sender_hang`, but the cancellation of a send parked in it ends it: the sends after it pass. With it a package that was in flight when a stop cancelled it can be seen to be sent again by the drain. Wait for the park (`wait_sender_parked`) before the stop: a hang nobody is parked in is not ended the same way by the two collectors. C#: the recording sender clears the hang when the token of a parked send fires; native: the test-only seam `hsm_collector_test_set_send_hang_until_cancelled` |
+| `set_sender_mode\|mode` | (#1751) what the sender does with **every send of every kind** from now on (`set_sender_fail_next` and the hang verbs above touch data sends only in the managed driver). `down`: the send fails at once, as a send that got no answer; `hung`: the send is never answered and ends when the collector gives it up; `up`: the send is accepted. A send parked in `hung` ends with the mode that ends the hang (#1750): accepted when it is `up`, failed when it is `down`, whatever is set by the time the send gets going again; so `down` then `up` fails a parked send and accepts the sends after it. C#: the recording sender, for data, priority, file and command sends alike; native: the test-only seam `hsm_collector_test_set_send_mode` on the in-memory sender, and the answer of the recording server (503 / none / 200) in a `create_collector_sending_registrations` case, decided when a request arrives (a request it does not answer is given up by the collector at its request timeout) |
+
+### Sends by kind (the stop drain)
+
+`stop_drain_contract.hsmtest` and `stop_drain_registration_contract.hsmtest` (#1751) assert on the
+**sends the collector started**: each driver's sender enters a send in a record the moment the
+collector hands it over, before anything can hang or fail it. So a send that must not happen is
+seen as a send that was not started, and no scenario has to measure how long a stop took.
+
+There are two kinds. `value`: a package of values (in the managed collector a data send, a priority
+send or a file send; in the native one a batch of its one queue). `registration`: a package of
+commands, which is how a collector tells the server what its sensors are.
+
+Which sends a driver's sender is sent depends on the collector:
+
+- **`create_collector*`, the in-memory sender.** The managed recording sender is an `IDataSender`
+  and gets registrations as command sends. The native in-memory sender is sent value batches only:
+  the native collector has no registration to *send* until a transport is installed (it records
+  them for `expect_registration_*` when they are made). So these cases count `value` sends only
+  (`expect_send_attempts|value|…`); the native driver refuses to count `registration` here.
+- **`create_collector_sending_registrations`.** Both drivers have one record of registration and
+  value sends. The managed driver uses the same recording sender. The native driver points the
+  collector's HTTP transport at a recording server it owns, and a request is a send (`POST
+  /commands` a registration, `POST /list` or `/file` a value): the real path of a native
+  registration, with nothing added to the collector. So **the native driver has this verb in the
+  HTTP build only** (`HSM_COLLECTOR_HTTP`); the fixture and the must-fail fixture of `expect_sends`
+  are registered in CMake under that option and run in the CI HTTP lane. In a build without the
+  HTTP transport the verb fails by name. Such a case is driven with `set_sender_mode` and read
+  with `expect_send_attempts`, `expect_sends` and `expect_last_delivered_registration`; the payload assertions and the other fault
+  injection belong to the in-memory sender and are not for it (as in a session case).
+
+The order of a sensor's registrations across failed sends (#1750) is `registration_order_contract.hsmtest`,
+on the same sender: it reads what the sender delivered (`expect_last_delivered_registration`), not
+only which sends were started. Its cases put every command in a package of its own
+(`max_values_in_package=1`), because inside one package the managed collector sends commands in the
+order they were issued anyway; only across packages could an older registration overtake a newer one.
+
+Making a registration pending without a race: set the sender `down` before `start`, so the
+registration of the start fails, and wait for that send (`expect_send_attempts|registration|1|10`).
+It then waits for a next cycle that `collect_period_ms=60000` never reaches, in both collectors.
+
+Where the stop budget is real: a send of the drain that hangs is given up when the budget is
+spent, by the managed collector on either sender and by the native collector on the recording
+server (the request times out with what is left of the budget). On the native **in-memory**
+sender a hung send of the drain is given up at once, because the cancellation of the stop is
+still in effect there. So a scenario about the budget is a `create_collector_sending_registrations`
+case; on the in-memory sender a hang says "this send is not delivered", in both drivers.
+
+Not expressible, and pinned per language instead:
+
+- **A priority sensor.** The managed collector sends a priority value the moment it is added; the
+  native collector has no priority routing (one queue), so a native case has no send to wait for
+  where a managed case must wait for one. That a failed *priority* send ends the drain for the data
+  and file queues is `StopDrainFailedSendTests` (managed); the scenario here pins the same rule
+  between a data value and a file value.
+- **A sender that ignores cancellation.** The managed drain gives such a send up and counts its
+  items (`StopDrainAbandonedSendTests`); the native drain runs on the stopping thread and has no
+  send to give up. The scenario here uses a sender that honours cancellation and pins what both
+  collectors must show: nothing in flight or queued at such a stop is sent by the next start.
+
+### Collector session (the transport)
+
+Scenarios of `session_transport_contract.hsmtest` (epic #1660 step 3, ADR-0017). The driver owns a
+**scripted session server**: the server side of `GET /api/sensors/session` over a real WebSocket,
+which accepts or refuses the upgrade, says hello, acknowledges request frames with a chosen status
+or not at all, and records every frame and every plain HTTP request. The collector under test is
+created with its transport set to the session and pointed at that server, so these cases have no
+recording sender and none of the payload assertions above apply to them: what a session case
+asserts on is the **wire text of the frames** (the same bytes in both collectors) and the server's
+record. "Delivered" means: in a request the server acknowledged with a 2xx status. `timeout_s`
+polls until the expectation holds; `0` checks once.
+
+| Verb | Semantics |
+|---|---|
+| `create_collector_on_session\|max_values_in_package\|collect_period_ms\|request_timeout_ms` | a collector whose transport is the collector session to the scripted server (computer `conformance-host`, module `conformance-module`, access key `conformance-key`); `request_timeout_ms` is also how long a request waits for its ack. C#: `CollectorOptions.Transport = Session`; native: `hsm_collector_use_session_transport`. A driver may shorten the pause between attempts to open a session; no scenario depends on it |
+| `session_server_hello\|max_frame_bytes\|heartbeat_seconds` | what the hello of the sessions accepted from now on states (default `4194304` and `30`) |
+| `session_server_refuse_upgrades\|status` / `session_server_accept_upgrades` | every upgrade is refused with this HTTP status / upgrades are accepted again (the default) |
+| `session_server_ack\|op\|status` | requests of `op` (`list`, `commands`) are acknowledged with this status from now on (default 200); a status outside 2xx is a failure ack with an `error` text. `0` is no status and is refused: `session_server_stay_silent` leaves a request without an ack |
+| `session_server_stay_silent\|count` | the next `count` requests are recorded and get no ack |
+| `session_server_stop_answering_pings` | heartbeats are recorded and not answered: to the collector the server has gone quiet |
+| `session_server_drop_sessions` | every open session is cut without a close handshake |
+| `session_server_close_sessions\|code` | every open session is closed by the server with this close code (a server that shuts down says `1001`); the answer is left to the collector |
+| `session_http_request` | the **driver** makes one plain HTTP request to the scripted server: what `expect_no_http_requests` must see, for its must-fail fixture. The native driver waits at most 10 s for the answer and fails the case after that: its scripted server reads a request made during a session only when that session has ended, so place the verb after `stop` or while no session is open |
+| `expect_session_pings_at_least\|count\|timeout_s` | heartbeats (`op` `ping`) received from the collector so far |
+| `expect_session_count\|count\|timeout_s`, `expect_session_count_at_least\|count\|timeout_s` | upgrades accepted so far |
+| `expect_refused_upgrades_at_least\|count\|timeout_s` | upgrades refused so far: the collector keeps trying |
+| `expect_session_ints_once\|start\|count\|timeout_s` | every int value in `[start, start+count)` is in a delivered `list` frame exactly once (read from the wire: `"Type":1`, `"Value":N`) |
+| `expect_session_accepted_contains\|op\|substring\|timeout_s` | some delivered request of `op` contains the text |
+| `expect_session_requests_containing\|op\|substring\|count\|timeout_s`, `expect_session_requests_containing_at_least\|…` | how many requests of `op`, acknowledged or not, contain the text; with it a case counts sends ("sent once", "sent again") |
+| `expect_session_no_request_contains\|substring` | no request frame of any op contains the text |
+| `expect_session_frames_fit\|max_bytes` | every request frame is at most `max_bytes` (UTF-8, envelope included) |
+| `expect_no_http_requests` | the scripted server received nothing but upgrades: a collector on a session never makes an HTTP request. Place it after `stop` or while no session is open: the native scripted server serves one connection at a time and reads a request made during a session only when that session has ended |
+| `expect_session_upgrade_header\|name\|value` | a request header of the last accepted upgrade |
+| `expect_session_close_code\|code\|timeout_s` | the last close frame the collector sent carries this code. A collector answers a server's close with the code it received. A session that was cut sends no close frame, so pair it with `expect_session_count` where the number of sessions matters |
+| `expect_session_closed_normally` | `expect_session_close_code\|1000\|5`: how a collector ends a session at stop |
+| `session_server_push_directive\|directive` | (#1660 step 5) every open session that has had its hello gets the push `{"op":"directive","body":"<directive>"}`; the case fails when no session is open |
+| `session_server_push_frame\|frame` | every open session that has had its hello gets this frame as it is: an unknown push op, a `directive` whose body is not a string |
+| `expect_directives_received\|count\|timeout_s` | the collector handed exactly `count` server directives to its receiver: polled until there are at least `count`, then equality. Managed: the internal `ServerDirectives` (read through its test-only `Observer`), where the HTTP header path hands them too; native: the host callback of `hsm_collector_set_server_directive_handler`, which `create_collector_on_session` installs |
+| `expect_directive_received\|index\|directive` | the `index`-th of them (0 = the first) is `directive`, written `name:argument` as the server sent it (native: `verb:payload`, or `verb` when the payload is empty) |
+
+Driver notes. The managed scripted server is `HSMDataCollector.Tests/Transport/ScriptedSessionServer.cs`
+(the WebSocket itself is `HttpListener`'s); the native one is the session mode of
+`src/native/collector/tests/ws_test_server.hpp`. **The native driver has these verbs in the HTTP
+build only** (`HSM_COLLECTOR_HTTP`), the build that has a session transport: the session fixture
+and its `meta_session_*` fixtures are registered in CMake under that option and run in the CI HTTP lane,
+where `HSM_REQUIRE_WEBSOCKET=1` makes a libcurl without WebSocket a failure, not a skip. In a
+build without the HTTP transport a session verb fails by name. Sensor indexes: a session case uses
+**one kind of sensor**, because the drivers do not agree on what an index counts across kinds (per
+kind in the managed driver, creation order in the native one). Wall clock: the heartbeat case runs
+on a 1-second heartbeat (2.5 s of silence), and a native collector reopens a session on a backoff
+that starts at a second, so the timeouts of these cases are generous on purpose.
 
 ### Tooling
 
@@ -223,9 +350,12 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_bar_posts_sharing_open_time_at_least\|min` / `expect_distinct_bar_open_times_at_least\|min` | the largest same-OpenTime group / the number of distinct OpenTimes reaches `min` |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
 | `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
-| `expect_registration_contains\|index\|substring` | a NEGATIVE index counts back from the end (−1 = last), as for payloads; substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
+| `expect_registration_contains\|index\|substring` | a NEGATIVE index counts back from the end (−1 = last), as for payloads; substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped); a sensor with previous paths (#1724) ends with `,"PreviousPaths":[...]` after `DefaultAlertsOptions` — previous paths are NOT prefixed with the collector identity |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
+| `expect_send_attempts\|kind\|count[\|timeout_s]` | (#1751) the sends of `kind` (`value`, `registration`) the collector has **started** so far, whatever became of them: delivered, failed, hung or cancelled. With a timeout it polls until the count **equals**, then asserts equality; without one it checks once. See **Sends by kind** for which kinds a case can count |
+| `expect_last_delivered_registration\|path_suffix\|description` | (#1750) of the registrations the sender of the case **delivered** (a send it accepted), the last one of the sensor whose path ends with `path_suffix` carries this description (exact text); fails when none was delivered. What a server holds of that sensor: it keeps the registration that came last. For a `create_collector_sending_registrations` case: C# reads the AddOrUpdate commands of the command sends the recording sender accepted; native reads the bodies of the `POST /commands` its recording server answered 200, with a JSON library (`registration_order_contract`) |
+| `expect_sends\|kind[,kind...]` | (#1751) every send the collector has started so far, by kind, in the order the sends were started: `expect_sends\|registration,registration,value`. Exact: one send more, one less or two in the other order fail it |
 | `expect_default_connection_address\|expected_address` | (#1593) the connection address built from PACKAGE-default options — everything except the port configured. Managed feeds the `CollectorOptions` default (the `DefaultPort` const) through the HTTPS client's `Endpoints` builder; native feeds the `hsm::collector::CollectorOptions` wrapper default (the C ABI demands an explicit port, so the wrapper default IS the package default) through `MakeEndpoints`. Pins the 44330 → 443 default (#1590) in both packages; the scheme-default port is omitted from the rendered address (`https://localhost/api/sensors`) — the managed `Uri` drops it and the native builder mirrors that (#1593 parity fix) |
 
 ## Authoring rules
@@ -246,13 +376,17 @@ in **all** drivers in the same PR (or an explicit unsupported marker, below).
 - `sleep_ms` is reserved for explicitly wall-clock cases (bar rollover, sampled-bar partial posts);
   pair it with timing-immune invariants (`expect_bar_count_total`,
   alignment/monotonicity) rather than exact payload layouts where possible.
+- "This send must not happen" is asserted on the record of started sends
+  (`expect_send_attempts`, `expect_sends`), never on a duration: a bound on how long a stop took
+  tells one budget from two only with a margin that depends on the machine (#1751).
 - Bar-alignment assertions only with periods that divide the 0001→1970 epoch
   offset (100/200/500/1000/2000/60000/3600000/86400000 ms) — .NET aligns in ticks,
   native in unix ms; they agree only there.
 - Cross-language doubles: assert via `expect_bar_field` (tolerant) or pin
   binary-exact decimals (0.5/1.5/2.5); never assert long decimal tails as text.
-- Multi-package retry order is not preserved (re-enqueue at tail) — use
-  `expect_each_value_once`, not sequences. Inter-sensor flush order is
+- Multi-package retry order of **values** is not preserved (re-enqueue at tail) — use
+  `expect_each_value_once`, not sequences. (Registrations keep their order across packages,
+  #1750: `registration_order_contract`.) Inter-sensor flush order is
   unspecified — no cross-sensor index assertions.
 
 **Versioning.** Fixtures carry a `v1` header comment. Evolution is additive:
