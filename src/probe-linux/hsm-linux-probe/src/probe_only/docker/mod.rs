@@ -2372,8 +2372,8 @@ pub(crate) mod tests {
             .1
             .clone();
         source.engine.inspects.insert(new_id.clone(), inspect);
-        for round in 0..2 {
-            let mut stats = source.engine.rounds[round]
+        for (round, entries) in source.engine.rounds.iter_mut().enumerate().take(2) {
+            let mut stats = entries
                 .iter()
                 .find(|(id, _)| id.starts_with(GITEA_DB))
                 .unwrap()
@@ -2388,7 +2388,7 @@ pub(crate) mod tests {
                 .find(|e| e.op == "write")
                 .unwrap();
             write.value = 4_096 + 500 * round as u64;
-            source.engine.rounds[round].insert(new_id.clone(), stats);
+            entries.insert(new_id.clone(), stats);
         }
         two_rounds(&mut source, H13 + 20 * 60_000, 5_000);
         set_clock(H13 + 60 * 60_000 + 1_000);

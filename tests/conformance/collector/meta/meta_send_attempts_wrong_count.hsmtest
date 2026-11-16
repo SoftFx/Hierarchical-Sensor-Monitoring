@@ -1,0 +1,10 @@
+# MUST-FAIL: the stop drain starts ONE value send (the value is delivered, which the case checks
+# first) but the fixture expects two. Proves expect_send_attempts counts the sends the collector
+# started, and does not pass on any count.
+meta_send_attempts_wrong_count|create_collector_with_limits|20000|50|60000
+meta_send_attempts_wrong_count|create_int_sensor|meta/send-attempts/count
+meta_send_attempts_wrong_count|start
+meta_send_attempts_wrong_count|add_int|0|1|Ok|sent
+meta_send_attempts_wrong_count|stop
+meta_send_attempts_wrong_count|expect_sent_count|1
+meta_send_attempts_wrong_count|expect_send_attempts|value|2

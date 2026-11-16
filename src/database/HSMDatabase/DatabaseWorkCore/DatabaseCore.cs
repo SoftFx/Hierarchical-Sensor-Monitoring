@@ -214,6 +214,26 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
+        // The same writes as the two methods above, with their outcome (#1756): null when
+        // written, otherwise the failure. A sensor whose id was listed and whose row was
+        // then not written is taken off the list again: its caller treats it as not
+        // created, and an id without a row is only skipped when the sensors are loaded.
+        public Exception AddSensorChecked(SensorEntity entity)
+        {
+            if (_environmentDatabase.WriteSensorIdToList(entity.Id) is { } listFailure)
+                return listFailure;
+
+            var rowFailure = _environmentDatabase.WriteSensor(entity);
+
+            if (rowFailure is not null)
+                _environmentDatabase.RemoveSensorIdFromList(entity.Id);
+
+            return rowFailure;
+        }
+
+        public Exception UpdateSensorChecked(SensorEntity entity) =>
+            _environmentDatabase.WriteSensor(entity);
+
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to)
         {
             var fromTicks = from.ToUniversalTime().Ticks;
@@ -229,6 +249,68 @@ namespace HSMDatabase.DatabaseWorkCore
                 else if (db.To < fromTicks)
                     break;
             }
+        }
+
+        // Sensor-move merge (#1720): the one place a history row changes its
+        // sensor id. A row's partition is chosen by its tick, so the copy of a
+        // row lands in the same partition as the row itself. Existing rows of
+        // the target win (ADR-0018: the moved sensor's row wins a same-tick
+        // collision). Both key ranges are walked in step (both descending), so
+        // memory stays constant whatever the history size; the iterators see
+        // the partition as it was when they opened, so the copies written
+        // meanwhile are never read back. Not atomic: a re-run after a crash
+        // counts the rows the first run copied as collisions. A failed write
+        // throws: the merge then keeps the source sensor.
+        public (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId)
+        {
+            var fromStart = new DbKey(fromSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var fromEnd = new DbKey(fromSensorId, DateTime.MaxValue.Ticks).ToBytes();
+            var intoStart = new DbKey(intoSensorId, DateTime.MinValue.Ticks).ToBytes();
+            var intoEnd = new DbKey(intoSensorId, DateTime.MaxValue.Ticks).ToBytes();
+
+            long copied = 0, collisions = 0;
+
+            foreach (var db in _sensorValuesDatabases)
+            {
+                IEnumerator<long> into = null;
+                var hasInto = false;
+
+                try
+                {
+                    foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromStart, fromEnd))
+                    {
+                        // Opened on the first source row: most partitions hold none.
+                        if (into is null)
+                        {
+                            into = db.GetKeysValuesTo(intoStart, intoEnd)
+                                .Select(kv => DbKey.FromBytes(kv.key).Timestamp)
+                                .GetEnumerator();
+                            hasInto = into.MoveNext();
+                        }
+
+                        var tick = DbKey.FromBytes(keyBytes).Timestamp;
+
+                        while (hasInto && into.Current > tick)
+                            hasInto = into.MoveNext();
+
+                        if (hasInto && into.Current == tick)
+                        {
+                            collisions++;
+                            continue;
+                        }
+
+                        // Throws on failure: the caller deletes the source next.
+                        db.PutSensorValueOrThrow(new DbKey(intoSensorId, tick).ToBytes(), valueBytes);
+                        copied++;
+                    }
+                }
+                finally
+                {
+                    into?.Dispose();
+                }
+            }
+
+            return (copied, collisions);
         }
 
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
@@ -736,29 +818,95 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
+            var newestFirst = count < 0;
+
+            // Inside a shard every record type is its own key range
+            // (sensorId|type|ticks), so the per-type streams are merged by time:
+            // a count-limited page must keep the records nearest its starting
+            // edge whatever their type.
+            IEnumerable<(byte[], byte[])> GetValuesEnumerator(Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
             {
+                var streams = new List<IEnumerable<(byte[], byte[])>>(2);
+
+                // Actions is 0, so HasFlag(Actions) is always true: every read
+                // includes Actions records (pinned by JournalBorderTests).
                 foreach (var recordType in Enum.GetValues<RecordType>())
                     if (types.HasFlag(recordType))
                     {
                         var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
                         var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
 
-                        foreach (var t in requestDb(fromBytes, toBytes))
-                            yield return t;
+                        streams.Add(requestDb(fromBytes, toBytes));
                     }
+
+                return MergeJournalStreamsByTime(streams, newestFirst);
             }
 
-            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).Reverse();
-            GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
+            // The shard dictionary enumerates newest week first.
+            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
+            GetJournalValuesFunc getValues;
 
-            if (count < 0)
+            if (newestFirst)
+                getValues = (db) => GetValuesEnumerator(db.GetValuesTo);
+            else
             {
-                databases.Reverse();
-                getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
+                databases = databases.Reverse();
+                getValues = (db) => GetValuesEnumerator(db.GetValuesFrom);
             }
 
             return GetJournalValuesPage(databases, count, getValues);
+        }
+
+        private static IEnumerable<(byte[], byte[])> MergeJournalStreamsByTime(List<IEnumerable<(byte[], byte[])>> streams, bool newestFirst)
+        {
+            var enumerators = new List<IEnumerator<(byte[], byte[])>>(streams.Count);
+            var heads = new List<long>(streams.Count); // ticks of each enumerator's Current
+
+            try
+            {
+                foreach (var stream in streams)
+                {
+                    // Listed before MoveNext so the finally disposes it if MoveNext throws.
+                    var enumerator = stream.GetEnumerator();
+                    enumerators.Add(enumerator);
+
+                    if (enumerator.MoveNext())
+                        heads.Add(JournalKey.GetTime(enumerator.Current.Item1));
+                    else
+                    {
+                        enumerator.Dispose();
+                        enumerators.RemoveAt(enumerators.Count - 1);
+                    }
+                }
+
+                while (enumerators.Count > 0)
+                {
+                    var next = 0;
+
+                    // Equal ticks: the earlier stream wins oldest first and
+                    // the later one newest first, so the two directions
+                    // are exact mirrors of each other.
+                    for (var i = 1; i < enumerators.Count; i++)
+                        if (newestFirst ? heads[i] >= heads[next] : heads[i] < heads[next])
+                            next = i;
+
+                    yield return enumerators[next].Current;
+
+                    if (enumerators[next].MoveNext())
+                        heads[next] = JournalKey.GetTime(enumerators[next].Current.Item1);
+                    else
+                    {
+                        enumerators[next].Dispose();
+                        enumerators.RemoveAt(next);
+                        heads.RemoveAt(next);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var enumerator in enumerators)
+                    enumerator.Dispose();
+            }
         }
 
 

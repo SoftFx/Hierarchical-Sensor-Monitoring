@@ -1,6 +1,6 @@
 # Tests: Journal (unified configuration journal with rollback)
 
-> Owner: server | Last reviewed: 2026-10-27 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-12 | Canonical: yes
 
 The primary seam is the service layer on the real cache and the real test LevelDB (`MonitoringCoreTestsBase` fixtures), exactly like the policy-administration suites; transport layers get contract tests; the web UI gets Playwright.
 
@@ -12,6 +12,8 @@ The primary seam is the service layer on the real cache and the real test LevelD
 - `src/tests/HSMServer.Core.Tests/Model/ManagementApi/JournalAdministrationServiceTests.cs` — the unified-journal contract (#1588): kind-stamped records linked to the request group (policy, template and web-editor full-list writes), rollback by record (undo + the redo record in the journal), the admin gate (a non-admin token owner is Forbidden with the admin message), non-rollbackable records answer Conflict, list filters by kind/product (a product filter keeps global and folder-scoped records visible and hides other products' records — live or deleted, #1601), details carry the undo group, `RequestGroupId` minted once per HttpContext. Since #1610: template records resolve sight through the REAL evaluator (via their folder, no product stamp), the fan-out policy records of a template write share its request group, and a pre-fix folder-id-as-product stamp stays visible.
 - `src/tests/HSMServer.Core.Tests/Controllers/SensorPoliciesApiControllerTests.cs` — the dry-run transport header (`X-HSM-Dry-Run` answers the preview without applying; no grouping header exists anymore).
 - `HsmMcpServerRegistrationTests` / `HsmMcpWireTests` — the journal tools in the spec-tool pins; write tools carry no `changeSetId` argument anymore.
+- `src/tests/HSMDatabase.LevelDB.Tests/JournalDBTests/JournalPageOrderTests.cs` — the storage page read on the real LevelDB with fixed ticks in three weekly shards and both record types in one shard: a negative count returns the newest records across weeks, a count limit inside one shard merges Actions and Changes by time in both directions, a positive count still returns the oldest, a full read is in time order both ways, and equal-tick records of the two types mirror between directions.
+- `src/tests/HSMServer.Core.Tests/Journal/SelectedJournalViewModelTests.cs` — the per-node tab's queue: with 100 loaded records, a live record evicts the oldest one, not the newest.
 - `src/tests/Autotests/journal/journal.spec.ts` — Playwright: menu link, page render, table shell, the kind/product filters, and the admin-only rollback gating (the seeded viewer sees no Rollback controls). The full rollback-dialog flow needs a journaled write, which the cookie session cannot produce through the management API — that flow is covered at the service seam.
 
 ## Conventions to keep

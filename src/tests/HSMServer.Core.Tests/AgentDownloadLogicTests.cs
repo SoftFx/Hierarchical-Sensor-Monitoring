@@ -170,8 +170,8 @@ namespace HSMServer.Core.Tests
         [Theory]
         [InlineData(null)]   // https://host — the standard address since #1590
         [InlineData(443)]    // explicit default port: same address
-        [InlineData(44330)]  // deprecated sensor alias: must not be baked into NEW bundles
-        [InlineData(44333)]  // deprecated site alias: same
+        [InlineData(44330)]  // retired sensor port: must not be baked into a bundle
+        [InlineData(44333)]  // retired site port: same
         public void FallbackPortFromHost_IsTheDefault443_ForStandardOrLegacyHosts(int? hostPort)
         {
             Assert.Equal(443, AgentConnectionResolver.FallbackPortFromHost(hostPort, listenerPort: 443));
@@ -191,8 +191,8 @@ namespace HSMServer.Core.Tests
         public void FallbackPortFromHost_KeepsALegacyPortThatIsTheOwnListener(int legacyPort)
         {
             // A proxy-less deployment pinned Kestrel.Port to the old address (#1590): the legacy
-            // port in the Host header is the server's own listener, not an alias that dies with
-            // the window — the bundle must point where something actually answers.
+            // port in the Host header is the server's own listener — the bundle must point
+            // where something actually answers.
             Assert.Equal(legacyPort, AgentConnectionResolver.FallbackPortFromHost(legacyPort, listenerPort: legacyPort));
         }
     }

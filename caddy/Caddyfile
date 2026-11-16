@@ -82,32 +82,9 @@
 	}
 }
 
-# Deprecated legacy ports (#1590): kept answering through the deprecation window so
-# clients still pointed at the old two-port scheme keep working. Both forward to the SAME
-# single upstream as the primary address — the app has no second listener anymore. A
-# request through them carries its legacy port in the Host header, which the app logs as
-# a rate-limited deprecation warning. These blocks (and their ports: entries in
-# docker-compose.yml) are removed in the follow-up release that closes the window.
-{$HSM_DOMAIN}:44333 {
-	import {$HSM_TLS_SNIPPET}
-	handle {
-		reverse_proxy https://app:443 {
-			import hsm_upstream
-		}
-	}
-}
-{$HSM_DOMAIN}:44330 {
-	import {$HSM_TLS_SNIPPET}
-	handle {
-		reverse_proxy https://app:443 {
-			import hsm_upstream
-		}
-	}
-}
-
 # Preserve connections made by IP, short name, or an old CNAME. These clients receive the
 # HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
-https://:443, https://:44333, https://:44330 {
+https://:443 {
 	handle {
 		reverse_proxy https://app:443 {
 			import hsm_upstream

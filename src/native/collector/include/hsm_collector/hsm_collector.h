@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 11
-#define HSM_COLLECTOR_VERSION_PATCH 4
+#define HSM_COLLECTOR_VERSION_MINOR 14
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -275,6 +275,18 @@ hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
    HSM_RESULT_INVALID_STATE when the library was built without the HTTP transport
    (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
 hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
+
+/* Make the collector session the transport: one persistent WebSocket to the server
+   (GET /api/sensors/session) that carries value batches and sensor registrations as frames, each
+   confirmed by the server. Call instead of hsm_collector_use_http_transport, before Start.
+   A collector on a session sends nothing over the HTTP routes and never falls back to them: while
+   no session is up, values wait in the queue as they do when the server is unreachable.
+   File values travel in `list` frames like the other values (since #1660 step 2b; before, they were
+   refused with HSM_RESULT_INVALID_STATE). Needs a libcurl of at least 8.14.0
+   built with WebSocket support; without it Start still completes, one error is logged and nothing
+   is delivered. Returns HSM_RESULT_INVALID_STATE unless the collector is stopped, or when the
+   library was built without the HTTP transport. Since 0.12.0. */
+hsm_result_t hsm_collector_use_session_transport(hsm_collector_t* collector);
 
 /* Install the ready-made Windows PDH / Win32 metric-source factory (#1164): the value-typed default
    sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections) read live
@@ -816,6 +828,17 @@ hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
    whose description carries live facts (the Linux probe's Docker memory limit). */
 hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description);
 
+/* Paths this sensor was registered under before a layout change (0.13.0, sensor move #1724): each a
+   FULL path relative to the product as the server tree shows it (e.g. "garage-server/System/CPU") —
+   no computer/module prefix is added. A server that supports sensor move moves the sensor found at
+   such a path to this sensor's path on registration, keeping its history, settings and alerts
+   (merging into a sensor of the same type already there; the first listed path wins). Repeating it
+   on every registration is safe; older servers ignore the member. NULL and whitespace-only entries
+   are skipped; count 0 (previous_paths may then be NULL) removes them. The strings are copied.
+   Re-emission rules as hsm_sensor_set_description: before Start the paths ride the Start
+   registration; while running the sensor is re-registered. */
+hsm_result_t hsm_sensor_set_previous_paths(hsm_sensor_t* sensor, const char* const* previous_paths, size_t count);
+
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -978,7 +1001,11 @@ hsm_result_t hsm_sensor_add_rate(
 /* Values-function buffer append (works before Start as well). */
 hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
 
-/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). */
+/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). On every
+   transport the value travels with the other values: in a /list batch over HTTP, in a `list` frame
+   on the collector session (since #1660 step 2b; before, the session refused it with
+   HSM_RESULT_INVALID_STATE). A file whose value does not fit a session frame is dropped, logged and
+   counted in Queue overflow, like any value larger than a frame. */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,
@@ -993,7 +1020,8 @@ hsm_result_t hsm_sensor_add_file(
    FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
    an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
    HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
-   BEFORE the file is read, so a no-op never performs the disk read. */
+   BEFORE the file is read, so a no-op never performs the disk read. On the session transport the
+   file travels as hsm_sensor_add_file says. */
 hsm_result_t hsm_sensor_add_file_from_path(
     hsm_sensor_t* sensor,
     const char* file_path,
@@ -1048,10 +1076,16 @@ hsm_result_t hsm_collector_set_collector_version_override(
     hsm_collector_t* collector,
     const char* version);
 
-/* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
-   a successful data-POST response. `verb` is the directive name (e.g. "update-available");
-   `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.
-   `user_data` must outlive the collector. NULL callback clears the handler. */
+/* Server-directive callback. Over HTTP: called on the worker thread for every X-Hsm-Directive
+   header in a successful data-POST response. On the collector session
+   (hsm_collector_use_session_transport): called on the session thread for every directive the
+   server pushes ({"op":"directive"}, #1660 step 5), in the order they arrive, never while the
+   collector holds a lock of its own and not once Stop has begun; the server pushes the whole set
+   when the session opens, a directive when it changes, and the whole set again every 5 minutes.
+   Either way `verb` is the directive name (e.g. "update-available"); `payload` is the
+   colon-separated argument (e.g. "0.5.2") or an empty string when absent. The server sends
+   directives only to a client that states X-Agent-Version (hsm_collector_set_extra_request_header).
+   `user_data` must outlive the collector. NULL callback clears the handler. Set before Start. */
 typedef void (*hsm_server_directive_callback_t)(
     const char* verb,
     const char* payload,
@@ -1109,7 +1143,18 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
    ".computer/Network/Connection failures rate" (OriginalUnit ValueInSecond, DisplayUnit per-minute).
    The rate sensor is created synchronously at Start, so it is registered the moment Start returns.
    Call BEFORE Start().
-   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Asked for more than once (0.13.1, #1752): THE FIRST PERIOD STAYS, for the life of the collector
+   (across Stop and a later Start too). A repeated call with the same period changes nothing and
+   reports nothing. A repeated call with another period does not apply it and reports that once
+   through the collector's logger (hsm_collector_set_logger). Only there: the call comes while
+   the collector is stopped, when ".module/Collector errors" takes no values. The call
+   itself still returns HSM_RESULT_OK, as a repeated call always has. This is the rule of the
+   managed IWindowsCollection.AddNetworkConnectionFailuresRate. Before 0.13.1 the last period
+   given before Start was the one used.
+   A tick on which the TCP statistics of neither IPv4 nor IPv6 can be read is reported through the
+   collector's error channel (the logger and ".module/Collector errors"), deduplicated (once per exception_deduplicator_window_ms however long it
+   lasts), because the sensor goes on posting 0 meanwhile; one unreadable family is not reported.
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0 (on a repeated call too).
    Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
 hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
     hsm_collector_t* collector,

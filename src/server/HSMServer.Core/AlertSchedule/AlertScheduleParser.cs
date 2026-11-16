@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
@@ -150,6 +151,37 @@ namespace HSMServer.Core.Schedule
         // key matching therefore behave exactly like the real parse).
         // Parse(AlertScheduleEntity) deliberately does NOT consult it: rows
         // stored before this rule may omit the key and must keep loading.
+        // #1706: anchors and aliases are a YAML expansion feature a
+        // working-time window never needs — and the expansion can hide
+        // repeated content from every count-based bound. Detected on the
+        // event stream (no text heuristics a legitimate 'R&D' id would
+        // trip): an alias is its own event, an anchor rides a node event as
+        // a non-empty Anchor.
+        public bool UsesAnchorsOrAliases(string yaml)
+        {
+            try
+            {
+                var parser = new Parser(new StringReader(yaml ?? string.Empty));
+
+                while (parser.MoveNext())
+                {
+                    switch (parser.Current)
+                    {
+                        case AnchorAlias:
+                        case NodeEvent { Anchor.IsEmpty: false }:
+                            return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Malformed YAML is rejected by Parse with the parser's own
+                // descriptive message; here a parse failure decides nothing.
+            }
+
+            return false;
+        }
+
         public bool HasDaySchedulesKey(string yaml)
         {
             try

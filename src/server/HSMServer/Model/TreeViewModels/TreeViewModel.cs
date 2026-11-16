@@ -16,6 +16,8 @@ namespace HSMServer.Model.TreeViewModel
 {
     public sealed class TreeViewModel
     {
+        private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
+
         private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
@@ -37,6 +39,7 @@ namespace HSMServer.Model.TreeViewModel
 
             _cache.ChangeProductEvent += ChangeProductHandler;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.SensorMovedEvent += SensorMovedHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
             foreach (var user in _userManager.GetUsers())
@@ -303,6 +306,28 @@ namespace HSMServer.Model.TreeViewModel
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
                     break;
             }
+        }
+
+        // Sensor move (#1718): the same view model (same id, same dashboards'
+        // references) is relocated under the new parent node.
+        private void SensorMovedHandler(BaseSensorModel model, Guid oldParentId)
+        {
+            // The new parent is looked up first: without it the node would be
+            // detached from the visible tree and never re-added.
+            if (!Sensors.TryGetValue(model.Id, out var sensor))
+                return;
+
+            if (!Nodes.TryGetValue(model.Parent.Id, out var newParent))
+            {
+                _logger.Warn($"Moved sensor {model.Id} kept under its old node: new parent {model.Parent.Id} has no view model");
+                return;
+            }
+
+            if (Nodes.TryGetValue(oldParentId, out var oldParent))
+                oldParent.Sensors.TryRemove(model.Id, out _);
+
+            newParent.AddSensor(sensor);
+            sensor.Update(model);
         }
 
         private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType action)

@@ -38,14 +38,25 @@ namespace hsm::agent
         /// Signal the blocked `Run()` to begin shutdown. Thread-safe; idempotent.
         void RequestStop();
 
+        /// Call before `Run()` when the host is the Windows service: the config.json this run was
+        /// loaded from. It lets the retired-port check (#1655) rewrite that file and bounce the
+        /// service. Without it (a `--console` run) the check only reports what to change: a
+        /// foreground run must not rewrite a file it may not own, nor restart a service it is not.
+        void SetServiceConfigPath(std::wstring path);
+
     private:
         hsm::collector::CollectorOptions BuildOptions() const;
         std::string ResolveComputerName() const;
         void Log(hsm::collector::LogLevel level, const std::string& message) const;
         void WaitForStop();
+        /// WaitForStop for a config that names a retired server port (#1655): while waiting, checks
+        /// periodically whether that port still answers and moves the agent to 443 when it does not.
+        void WaitForStopWatchingRetiredPort();
+        bool StopRequested();
 
         AgentConfig config_;
         LogFn log_;
+        std::wstring service_config_path_;
 
         std::mutex mutex_;
         std::condition_variable cv_;

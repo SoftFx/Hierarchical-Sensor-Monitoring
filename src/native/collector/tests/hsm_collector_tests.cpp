@@ -9,7 +9,9 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -30,9 +32,11 @@
 
 #if defined(HSM_COLLECTOR_HTTP)
 #include "../src/hsm_http_transport.hpp"
+#include "../src/hsm_session_transport.hpp"
 #include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
+#include <nlohmann/json.hpp>
 #endif
 
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
@@ -42,6 +46,13 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
 extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector);
 extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector);
+// #1751, the stop drain scenarios: what the injected sender does with every send (0 up, 1 down,
+// 2 hung), the hang that ends with the cancellation of a parked send, and the sends started so far.
+extern "C" void hsm_collector_test_set_send_mode(hsm_collector_t* collector, int32_t mode);
+extern "C" void hsm_collector_test_set_send_hang_until_cancelled(hsm_collector_t* collector);
+extern "C" int64_t hsm_collector_test_send_attempt_count(hsm_collector_t* collector);
+// #1752: the period the TCP connection failure rate sensor will sample with (0 = not enabled).
+extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector);
 #if defined(HSM_COLLECTOR_HTTP)
 // Live-path seam (#1097): swap the recording sender for the libcurl transport before Start.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector);
@@ -690,8 +701,161 @@ namespace
         // is posted. Same lifetime rule as sampled_counters.
         std::vector<std::pair<std::string, std::unique_ptr<ScriptedDiskPrediction>>> prediction_sources;
 
+#if defined(HSM_COLLECTOR_HTTP)
+        // The scripted session server of a session case (create_collector_on_session and the
+        // session_server_* verbs). Declared before the collector, so it is destroyed after it:
+        // the collector's stop closes the session against a server that is still there.
+        std::unique_ptr<hsm::test::WebSocketTestServer> session_server;
+
+        // The recording server of a create_collector_sending_registrations case (#1751): the
+        // collector of such a case sends over the HTTP transport, and this server is its sender.
+        // Declared before the collector for the same reason as the session server.
+        std::unique_ptr<hsm::test::HttpRecordingServer> send_record_server;
+
+        // The server directives the collector of a session case handed to its host callback
+        // (#1660 step 5), in order, written "verb:payload" ("verb" when the payload is empty).
+        // Declared before the collector, which may call the callback until it is destroyed.
+        struct DirectiveLog
+        {
+            std::mutex mutex;
+            std::vector<std::string> received;
+        };
+        std::unique_ptr<DirectiveLog> directives;
+#endif
+
         CollectorHandle collector;
     };
+
+    // (#1751) The kinds of send a fixture names (expect_send_attempts, expect_sends).
+    const std::string& ParseSendKind(const std::string& kind)
+    {
+        if (kind != "value" && kind != "registration")
+            throw std::runtime_error("unknown kind of send '" + kind + "': value or registration");
+        return kind;
+    }
+
+    // (#1751) True when the sender of the case is the recording server of
+    // create_collector_sending_registrations, not the in-memory sender of the collector.
+    bool SendsToRecordingServer(const ConformanceState& state)
+    {
+#if defined(HSM_COLLECTOR_HTTP)
+        return state.send_record_server != nullptr;
+#else
+        (void)state;
+        return false;
+#endif
+    }
+
+    // (#1751) Every send the collector of the case has started so far, by kind, in the order of
+    // their start. The in-memory sender is sent batches of values only (files ride in them), so its
+    // record is that many "value" entries. The recording server sees every request: a POST to
+    // /commands is a registration send, one to /list or /file a value send; any other request is
+    // listed by its path, so that it fails the comparison instead of passing for one of the two.
+    std::vector<std::string> StartedSends(const ConformanceState& state)
+    {
+#if defined(HSM_COLLECTOR_HTTP)
+        if (state.send_record_server)
+        {
+            std::vector<std::string> sends;
+            for (const auto& request : state.send_record_server->Requests())
+            {
+                if (request.path == "/api/sensors/commands")
+                    sends.emplace_back("registration");
+                else if (request.path == "/api/sensors/list" || request.path == "/api/sensors/file")
+                    sends.emplace_back("value");
+                else
+                    sends.push_back(request.path);
+            }
+            return sends;
+        }
+#endif
+        return std::vector<std::string>(static_cast<size_t>(hsm_collector_test_send_attempt_count(state.collector.value)), "value");
+    }
+
+    std::string JoinSends(const std::vector<std::string>& sends)
+    {
+        std::string text;
+        for (const auto& send : sends)
+            text += (text.empty() ? "" : ", ") + send;
+        return "[" + text + "]";
+    }
+
+#if defined(HSM_COLLECTOR_HTTP)
+    // The scripted session server of a case, created by the first verb that needs it.
+    hsm::test::WebSocketTestServer& SessionServer(ConformanceState& state)
+    {
+        if (!state.session_server)
+        {
+            hsm::test::WebSocketTestServer::Options options;
+            options.session = true;
+            state.session_server = std::make_unique<hsm::test::WebSocketTestServer>(options);
+        }
+        return *state.session_server;
+    }
+
+    // Re-checks until the condition holds or the timeout (seconds, as written in the fixture) runs
+    // out; a timeout of 0 checks once.
+    template <typename Condition>
+    bool PollSession(Condition condition, const std::string& timeout_seconds)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoi(timeout_seconds));
+        while (!condition())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return true;
+    }
+
+    bool SessionFrameIsOp(const std::string& frame, const std::string& op)
+    {
+        return frame.find("\"op\":\"" + op + "\"") != std::string::npos;
+    }
+
+    bool SessionRequestAccepted(const hsm::test::WebSocketTestServer::SessionRequest& request)
+    {
+        return request.status >= 200 && request.status < 300;
+    }
+
+    size_t SessionRequestsContaining(hsm::test::WebSocketTestServer& server, const std::string& op, const std::string& text, bool accepted_only)
+    {
+        size_t count = 0;
+        for (const auto& request : server.SessionRequests())
+        {
+            if (accepted_only && !SessionRequestAccepted(request))
+                continue;
+            if (SessionFrameIsOp(request.frame, op) && request.frame.find(text) != std::string::npos)
+                ++count;
+        }
+        return count;
+    }
+
+    // The int values of the delivered list frames, read from the wire: an int value is written
+    // {"Type":1,"Value":N,...} by both collectors.
+    std::vector<long long> SessionDeliveredInts(hsm::test::WebSocketTestServer& server)
+    {
+        static const std::string kIntValue = "{\"Type\":1,\"Value\":";
+        std::vector<long long> values;
+        for (const auto& request : server.SessionRequests())
+        {
+            if (!SessionRequestAccepted(request) || !SessionFrameIsOp(request.frame, "list"))
+                continue;
+            for (size_t at = request.frame.find(kIntValue); at != std::string::npos; at = request.frame.find(kIntValue, at + 1))
+            {
+                size_t end = at + kIntValue.size();
+                const size_t start = end;
+                if (end < request.frame.size() && request.frame[end] == '-')
+                    ++end;
+                while (end < request.frame.size() && request.frame[end] >= '0' && request.frame[end] <= '9')
+                    ++end;
+                if (end > start)
+                    values.push_back(std::stoll(request.frame.substr(start, end - start)));
+            }
+        }
+        return values;
+    }
+#endif
 
     // A fixture payload index, where a NEGATIVE index counts back from the end (−1 = last) as the
     // DSL spec documents. A fixture whose tail length depends on scheduler timing can only address
@@ -1062,6 +1226,29 @@ namespace
             Require(step.size() >= 2, "create_enum_sensor requires path");
             const auto path = ExpandTextToken(step[1]);
             state.sensors.push_back(CreateEnumSensor(state.collector.value, path.c_str()));
+            return;
+        }
+
+        // Sensor move (#1724): hsm_sensor_set_previous_paths (0.13.0) before Start, or right after a
+        // runtime create — the managed counterpart is the InstantSensorOptions.PreviousPaths property.
+        if (action == "create_int_sensor_with_previous_paths")
+        {
+            Require(step.size() >= 3, "create_int_sensor_with_previous_paths requires path and previous paths");
+            const auto path = ExpandTextToken(step[1]);
+
+            std::vector<std::string> previous;
+            for (const auto& entry : SplitBy(step[2], ';'))
+                previous.push_back(ExpandTextToken(entry));
+
+            std::vector<const char*> raw;
+            for (const auto& entry : previous)
+                raw.push_back(entry.c_str());
+
+            auto sensor = CreateIntSensor(state.collector.value, path.c_str());
+            Require(hsm_sensor_set_previous_paths(sensor.value, raw.data(), raw.size()) == HSM_RESULT_OK,
+                    "hsm_sensor_set_previous_paths failed");
+
+            state.sensors.push_back(std::move(sensor));
             return;
         }
 
@@ -2525,6 +2712,158 @@ namespace
             return;
         }
 
+        // ---- the stop drain (#1751): stop_drain_contract, stop_drain_registration_contract ----
+
+        // The terminal stop; the handle stays readable until the case ends.
+        if (action == "dispose")
+        {
+            hsm_collector_dispose(state.collector.value);
+            return;
+        }
+
+        // A send blocks until the stop path cancels it; that cancellation ends the hang.
+        if (action == "set_sender_hang_until_cancelled")
+        {
+            Require(!SendsToRecordingServer(state),
+                    "set_sender_hang_until_cancelled is a verb of the in-memory sender; a create_collector_sending_registrations case uses set_sender_mode");
+            hsm_collector_test_set_send_hang_until_cancelled(state.collector.value);
+            return;
+        }
+
+        // What the sender does with every send of every kind from now on: up, down, hung.
+        if (action == "set_sender_mode")
+        {
+            Require(step.size() >= 2, "set_sender_mode requires a mode");
+            const auto& mode = step[1];
+            Require(mode == "up" || mode == "down" || mode == "hung", ("set_sender_mode: unknown mode '" + mode + "' (up, down, hung)").c_str());
+#if defined(HSM_COLLECTOR_HTTP)
+            if (state.send_record_server)
+            {
+                // The sender of the case is a server: down answers 503, hung never answers.
+                using Answer = hsm::test::HttpRecordingServer::Answer;
+                state.send_record_server->SetAnswer(mode == "up" ? Answer::Ok : (mode == "down" ? Answer::Unavailable : Answer::Never));
+                return;
+            }
+#endif
+            hsm_collector_test_set_send_mode(state.collector.value, mode == "up" ? 0 : (mode == "down" ? 1 : 2));
+            return;
+        }
+
+        // A collector whose registrations reach the sender of the case. The in-memory sender of
+        // the native collector is never sent one (a registration is a request of the wire), so
+        // the case runs on the HTTP transport against a recording server, in the HTTP build only.
+        if (action == "create_collector_sending_registrations")
+        {
+            Require(step.size() >= 4, "create_collector_sending_registrations requires max values in package, collect period and request timeout");
+#if defined(HSM_COLLECTOR_HTTP)
+            state.send_record_server = std::make_unique<hsm::test::HttpRecordingServer>();
+            Require(state.send_record_server->Port() != 0, "the recording server of the case did not start");
+
+            auto options = TestOptions();
+            options.access_key = "conformance-key";
+            options.client_name = "conformance-client";
+            options.server_address = "http://127.0.0.1";
+            options.port = state.send_record_server->Port();
+            options.allow_plaintext_transport = true;
+            options.max_values_in_package = ToInt(step[1]);
+            options.package_collect_period_ms = ToInt(step[2]);
+            options.request_timeout_ms = ToInt(step[3]);
+            state.collector = CreateCollector(options);
+            Require(hsm_collector_use_http_transport(state.collector.value) == HSM_RESULT_OK, "the HTTP transport must install");
+            return;
+#else
+            throw std::runtime_error(
+                "create_collector_sending_registrations needs the HTTP build (HSM_COLLECTOR_HTTP): the in-memory sender of the native "
+                "collector is never sent a registration");
+#endif
+        }
+
+        // The sends of one kind the collector has started so far, whatever became of them.
+        if (action == "expect_send_attempts")
+        {
+            Require(step.size() >= 3, "expect_send_attempts requires a kind and a count");
+            const auto& kind = ParseSendKind(step[1]);
+            Require(kind != "registration" || SendsToRecordingServer(state),
+                    "expect_send_attempts|registration: the in-memory sender of the native collector is never sent a registration; "
+                    "a case that counts them is created with create_collector_sending_registrations");
+
+            const auto expected = static_cast<std::ptrdiff_t>(ToInt(step[2]));
+            const auto started = [&] {
+                const auto sends = StartedSends(state);
+                return std::count(sends.begin(), sends.end(), kind);
+            };
+
+            if (step.size() >= 4)
+            {
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[3]));
+                while (started() != expected && std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            const auto actual = started();
+            Require(actual == expected,
+                    ("expected " + step[2] + " " + kind + " send(s) started, got " + std::to_string(actual)).c_str());
+            return;
+        }
+
+        // Every send the collector has started so far, by kind, in the order of their start.
+        if (action == "expect_sends")
+        {
+            Require(step.size() >= 2, "expect_sends requires the kinds, separated by commas");
+            std::vector<std::string> expected;
+            std::stringstream kinds(step[1]);
+            for (std::string kind; std::getline(kinds, kind, ',');)
+                expected.push_back(ParseSendKind(kind));
+
+            const auto actual = StartedSends(state);
+            Require(actual == expected, ("expected the sends " + JoinSends(expected) + ", got " + JoinSends(actual)).c_str());
+            return;
+        }
+
+        // (#1750) Of the registrations the recording server delivered (a POST to /commands it
+        // answered 200), the last one of the sensor whose path ends with the suffix: what a server
+        // holds of that sensor. The bodies are read with a JSON library, not by hand.
+        if (action == "expect_last_delivered_registration")
+        {
+            Require(step.size() >= 3, "expect_last_delivered_registration requires a path suffix and a description");
+            Require(SendsToRecordingServer(state),
+                    "expect_last_delivered_registration reads what the server was sent: a case that uses it is created with "
+                    "create_collector_sending_registrations");
+#if defined(HSM_COLLECTOR_HTTP)
+            const auto& suffix = step[1];
+            bool found = false;
+            std::string description;
+            for (const auto& request : state.send_record_server->Requests())
+            {
+                if (request.path != "/api/sensors/commands" || request.status != 200)
+                    continue;
+
+                const auto commands = nlohmann::json::parse(request.body, nullptr, /*allow_exceptions=*/false);
+                Require(commands.is_array(), ("a registration request is not a JSON array: " + request.body).c_str());
+                for (const auto& command : commands)
+                {
+                    const auto path = command.find("Path");
+                    if (path == command.end() || !path->is_string())
+                        continue;
+                    const auto& text = path->get_ref<const std::string&>();
+                    if (text.size() < suffix.size() || text.compare(text.size() - suffix.size(), suffix.size(), suffix) != 0)
+                        continue;
+
+                    found = true;
+                    const auto field = command.find("Description");
+                    description = field != command.end() && field->is_string() ? field->get<std::string>() : "null";
+                }
+            }
+
+            Require(found, ("no registration of a path ending with '" + suffix + "' was delivered").c_str());
+            Require(description == step[2],
+                    ("the last delivered registration of '" + suffix + "' has the description '" + description + "', expected '" +
+                     step[2] + "'")
+                        .c_str());
+#endif
+            return;
+        }
+
         if (action == "stop_expect_under_ms")
         {
             Require(step.size() >= 2, "stop_expect_under_ms requires a bound in milliseconds");
@@ -2925,9 +3264,9 @@ namespace
             const auto content = ExpandTextToken(step[2]);
             const char* content_ptr = step[2] == "token:null" ? nullptr : content.c_str();
             const auto comment = ExpandTextToken(step[4]);
-            Require(
-                hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
-                "add_file_value failed");
+            // On a session too since #1660 step 2b: a file value travels in a `list` frame.
+            Require(hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                    "add_file_value failed");
             return;
         }
 
@@ -3015,6 +3354,333 @@ namespace
                 "enable_network_interface_speed_sensors failed");
 #endif
             return;
+        }
+
+        if (action == "enable_tcp_connection_failure_rate_sensor")
+        {
+            // (#1659 B2) period_ms. Used only by collector/windows/, which runs on Windows.
+            Require(step.size() >= 2, "enable_tcp_connection_failure_rate_sensor requires period_ms");
+#ifdef _WIN32
+            Require(
+                hsm_collector_enable_tcp_connection_failure_rate_sensor(
+                    state.collector.value,
+                    ToInt(step[1])) == HSM_RESULT_OK,
+                "enable_tcp_connection_failure_rate_sensor failed");
+#endif
+            return;
+        }
+
+        // ---- the collector session as the transport (#1660 step 3) ----
+        // tests/conformance/README.md, "Collector session". The scripted server is the session
+        // mode of tests/ws_test_server.hpp; these verbs exist in the HTTP build only, which is
+        // the build that has a session transport.
+        if (action.rfind("session_server_", 0) == 0 || action.rfind("expect_session_", 0) == 0 || action == "create_collector_on_session" ||
+            action == "expect_refused_upgrades_at_least" || action == "expect_no_http_requests" || action == "session_http_request" ||
+            action == "expect_directives_received" || action == "expect_directive_received")
+        {
+#if defined(HSM_COLLECTOR_HTTP)
+            auto& server = SessionServer(state);
+
+            if (action == "create_collector_on_session")
+            {
+                Require(step.size() >= 4, "create_collector_on_session requires max values in package, collect period and request timeout");
+                auto options = TestOptions();
+                options.access_key = "conformance-key";
+                options.client_name = "conformance-client";
+                // The plaintext rule of the HTTP transport: an explicit http:// address plus
+                // AllowPlaintextTransport; the session then uses ws://.
+                options.server_address = "http://127.0.0.1";
+                options.port = server.Port();
+                options.allow_plaintext_transport = true;
+                options.max_values_in_package = ToInt(step[1]);
+                options.package_collect_period_ms = ToInt(step[2]);
+                options.request_timeout_ms = ToInt(step[3]);
+                state.collector = CreateCollector(options);
+                Require(hsm_collector_use_session_transport(state.collector.value) == HSM_RESULT_OK, "the session transport must install");
+                state.directives = std::make_unique<ConformanceState::DirectiveLog>();
+                Require(hsm_collector_set_server_directive_handler(
+                            state.collector.value,
+                            [](const char* verb, const char* payload, void* user_data) {
+                                auto* log = static_cast<ConformanceState::DirectiveLog*>(user_data);
+                                std::string directive = verb != nullptr ? verb : "";
+                                if (payload != nullptr && *payload != '\0')
+                                    directive += std::string(":") + payload;
+                                std::lock_guard<std::mutex> guard(log->mutex);
+                                log->received.push_back(std::move(directive));
+                            },
+                            state.directives.get()) == HSM_RESULT_OK,
+                        "the directive handler of a session case must install");
+                return;
+            }
+
+            if (action == "session_server_push_directive" || action == "session_server_push_frame")
+            {
+                Require(step.size() >= 2, (action + " requires a text").c_str());
+                const std::string frame =
+                    action == "session_server_push_frame" ? step[1] : nlohmann::json{ { "op", "directive" }, { "body", step[1] } }.dump();
+                Require(server.SendText(frame), (action + ": no session is open").c_str());
+                return;
+            }
+
+            if (action == "expect_directives_received")
+            {
+                Require(step.size() >= 3, "expect_directives_received requires a count and a timeout");
+                Require(state.directives != nullptr, "expect_directives_received: no collector on a session");
+                const size_t expected = static_cast<size_t>(ToInt(step[1]));
+                const auto received = [&] {
+                    std::lock_guard<std::mutex> guard(state.directives->mutex);
+                    return state.directives->received;
+                };
+                PollSession([&] { return received().size() >= expected; }, step[2]);
+                const auto got = received();
+                std::string joined;
+                for (const auto& directive : got)
+                    joined += (joined.empty() ? "" : " | ") + directive;
+                Require(got.size() == expected, ("expected " + step[1] + " directive(s) at the host, got " + std::to_string(got.size()) + ": " + joined).c_str());
+                return;
+            }
+
+            if (action == "expect_directive_received")
+            {
+                Require(step.size() >= 3, "expect_directive_received requires an index and a directive");
+                Require(state.directives != nullptr, "expect_directive_received: no collector on a session");
+                const size_t index = static_cast<size_t>(ToInt(step[1]));
+                std::vector<std::string> got;
+                {
+                    std::lock_guard<std::mutex> guard(state.directives->mutex);
+                    got = state.directives->received;
+                }
+                Require(index < got.size(), ("expect_directive_received: only " + std::to_string(got.size()) + " directive(s) arrived").c_str());
+                Require(got[index] == step[2], ("directive #" + step[1] + " is '" + got[index] + "', expected '" + step[2] + "'").c_str());
+                return;
+            }
+
+            if (action == "session_server_hello")
+            {
+                Require(step.size() >= 3, "session_server_hello requires max frame bytes and heartbeat seconds");
+                server.SetHello(ToInt(step[1]), ToInt(step[2]));
+                return;
+            }
+
+            if (action == "session_server_refuse_upgrades")
+            {
+                Require(step.size() >= 2, "session_server_refuse_upgrades requires a status");
+                server.RefuseUpgradesWith(ToInt(step[1]));
+                return;
+            }
+
+            if (action == "session_server_accept_upgrades")
+            {
+                server.RefuseUpgradesWith(0);
+                return;
+            }
+
+            if (action == "session_server_ack")
+            {
+                Require(step.size() >= 3, "session_server_ack requires an op and a status");
+                Require(step[1] == "list" || step[1] == "commands", ("session_server_ack: unknown op '" + step[1] + "'").c_str());
+                Require(ToInt(step[2]) > 0, "session_server_ack: 0 is no status; session_server_stay_silent leaves a request without an ack");
+                server.AckOpWith(step[1], ToInt(step[2]));
+                return;
+            }
+
+            if (action == "session_server_stay_silent")
+            {
+                Require(step.size() >= 2, "session_server_stay_silent requires a count");
+                server.StaySilentFor(ToInt(step[1]));
+                return;
+            }
+
+            if (action == "session_server_stop_answering_pings")
+            {
+                server.AnswerSessionPings(false);
+                return;
+            }
+
+            if (action == "session_server_drop_sessions")
+            {
+                server.Drop();
+                return;
+            }
+
+            if (action == "session_server_close_sessions")
+            {
+                Require(step.size() >= 2, "session_server_close_sessions requires a close code");
+                // False when no session is open: there is then nothing to close.
+                (void)server.SendClose(static_cast<uint16_t>(ToInt(step[1])));
+                return;
+            }
+
+            if (action == "session_http_request")
+            {
+                // The driver's own request, not the collector's: it puts on the server's record
+                // what expect_no_http_requests looks for.
+                Require(server.SendPlainHttpRequest(),
+                        "session_http_request: the scripted server did not answer the request within 10 s. It serves one connection "
+                        "at a time and reads a request made during a session only when that session has ended: place the verb "
+                        "after stop or while no session is open");
+                return;
+            }
+
+            if (action == "expect_session_pings_at_least")
+            {
+                Require(step.size() >= 3, "expect_session_pings_at_least requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession([&] { return server.SessionPings() >= expected; }, step[2]),
+                        ("expected at least " + step[1] + " heartbeat(s) from the collector, got " + std::to_string(server.SessionPings())).c_str());
+                return;
+            }
+
+            if (action == "expect_session_close_code")
+            {
+                Require(step.size() >= 3, "expect_session_close_code requires a code and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession(
+                            [&] {
+                                const auto codes = server.CloseCodes();
+                                return !codes.empty() && codes.back() == expected;
+                            },
+                            step[2]),
+                        ("the last close frame of the collector does not carry " + step[1]).c_str());
+                return;
+            }
+
+            if (action == "expect_session_count" || action == "expect_session_count_at_least")
+            {
+                Require(step.size() >= 3, "expect_session_count requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                const bool exact = action == "expect_session_count";
+                const auto holds = [&] { return exact ? server.Upgrades() == expected : server.Upgrades() >= expected; };
+                PollSession(holds, step[2]);
+                Require(holds(),
+                        ("expected " + std::string(exact ? "" : "at least ") + step[1] + " session(s), got " + std::to_string(server.Upgrades())).c_str());
+                return;
+            }
+
+            if (action == "expect_refused_upgrades_at_least")
+            {
+                Require(step.size() >= 3, "expect_refused_upgrades_at_least requires a count and a timeout");
+                const int expected = ToInt(step[1]);
+                Require(PollSession([&] { return server.RefusedUpgrades() >= expected; }, step[2]),
+                        ("expected at least " + step[1] + " refused upgrade(s), got " + std::to_string(server.RefusedUpgrades())).c_str());
+                return;
+            }
+
+            if (action == "expect_session_ints_once")
+            {
+                Require(step.size() >= 4, "expect_session_ints_once requires start, count and a timeout");
+                const long long first = std::stoll(step[1]);
+                const long long count = std::stoll(step[2]);
+                const auto all_there = [&] {
+                    const auto delivered = SessionDeliveredInts(server);
+                    for (long long value = first; value < first + count; ++value)
+                        if (std::find(delivered.begin(), delivered.end(), value) == delivered.end())
+                            return false;
+                    return true;
+                };
+                // Polled until every value is there; exactly-once is then read off one snapshot.
+                PollSession(all_there, step[3]);
+                const auto delivered = SessionDeliveredInts(server);
+                for (long long value = first; value < first + count; ++value)
+                {
+                    const auto times = std::count(delivered.begin(), delivered.end(), value);
+                    Require(times == 1, ("expected int value " + std::to_string(value) + " delivered once on the session, got " +
+                                         std::to_string(times) + " time(s)")
+                                            .c_str());
+                }
+                return;
+            }
+
+            if (action == "expect_session_accepted_contains")
+            {
+                Require(step.size() >= 4, "expect_session_accepted_contains requires an op, a text and a timeout");
+                const auto text = ExpandTextToken(step[2]);
+                Require(PollSession([&] { return SessionRequestsContaining(server, step[1], text, /*accepted_only=*/true) >= 1; }, step[3]),
+                        ("no accepted " + step[1] + " request contains: " + text).c_str());
+                return;
+            }
+
+            if (action == "expect_session_requests_containing" || action == "expect_session_requests_containing_at_least")
+            {
+                Require(step.size() >= 5, "expect_session_requests_containing requires an op, a text, a count and a timeout");
+                const auto text = ExpandTextToken(step[2]);
+                const size_t expected = static_cast<size_t>(ToInt(step[3]));
+                const bool exact = action == "expect_session_requests_containing";
+                const auto holds = [&] {
+                    const size_t count = SessionRequestsContaining(server, step[1], text, /*accepted_only=*/false);
+                    return exact ? count == expected : count >= expected;
+                };
+                PollSession(holds, step[4]);
+                Require(holds(), ("expected " + std::string(exact ? "" : "at least ") + step[3] + " " + step[1] + " request(s) containing '" + text +
+                                  "', got " + std::to_string(SessionRequestsContaining(server, step[1], text, /*accepted_only=*/false)))
+                                     .c_str());
+                return;
+            }
+
+            if (action == "expect_session_no_request_contains")
+            {
+                Require(step.size() >= 2, "expect_session_no_request_contains requires a text");
+                const auto text = ExpandTextToken(step[1]);
+                for (const auto& request : server.SessionRequests())
+                    Require(request.frame.find(text) == std::string::npos, ("a request frame contains: " + text).c_str());
+                return;
+            }
+
+            if (action == "expect_session_frames_fit")
+            {
+                Require(step.size() >= 2, "expect_session_frames_fit requires a size");
+                const size_t limit = static_cast<size_t>(ToInt(step[1]));
+                for (const auto& request : server.SessionRequests())
+                    Require(request.frame.size() <= limit,
+                            ("a frame of " + std::to_string(request.frame.size()) + " bytes is over the limit of " + step[1]).c_str());
+                return;
+            }
+
+            if (action == "expect_no_http_requests")
+            {
+                // The fixture serves one connection at a time: a request made while a session is
+                // open waits in the listen backlog and is read when the session has ended. So the
+                // check waits until no session is open, and then until the accept loop has twice
+                // found nothing waiting: by then whatever was in the backlog has been read and
+                // counted. No fixed pause decides what is seen.
+                Require(PollSession([&] { return !server.Connected(); }, "10"),
+                        "expect_no_http_requests: a session is still open; place it after stop or while no session is open");
+                const auto idle = server.IdleAcceptPolls();
+                Require(PollSession([&] { return server.IdleAcceptPolls() >= idle + 2; }, "10"),
+                        "expect_no_http_requests: the scripted server did not come to rest");
+                Require(server.PlainHttpRequests() == 0,
+                        ("the collector made " + std::to_string(server.PlainHttpRequests()) + " HTTP request(s) beside its upgrades").c_str());
+                return;
+            }
+
+            if (action == "expect_session_upgrade_header")
+            {
+                Require(step.size() >= 3, "expect_session_upgrade_header requires a name and a value");
+                std::string name = step[1];
+                for (auto& c : name)
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                Require(server.Upgrades() > 0, "expect_session_upgrade_header: no upgrade has been accepted yet");
+                const auto actual = hsm::test::ws_detail::HeaderValue(server.AcceptedHandshakeHead(), name);
+                Require(actual == step[2], ("the upgrade header " + step[1] + " is '" + actual + "', expected '" + step[2] + "'").c_str());
+                return;
+            }
+
+            if (action == "expect_session_closed_normally")
+            {
+                // The last close, not any close: an earlier session of the case may have been ended
+                // by the collector for a reason of its own.
+                Require(PollSession(
+                            [&] {
+                                const auto codes = server.CloseCodes();
+                                return !codes.empty() && codes.back() == 1000;
+                            },
+                            "5"),
+                        "the collector did not close its last session with 1000");
+                return;
+            }
+#else
+            throw std::runtime_error("The collector session verbs need the HTTP build (HSM_COLLECTOR_HTTP): " + action);
+#endif
         }
 
         throw std::runtime_error("Unknown conformance action: " + action);
@@ -6617,6 +7283,49 @@ namespace
         Require(server.Upgrades() == 2, "both connections must have been upgraded");
     }
 
+    // Both ends of a session report as Closed, but the connection says which one it was: a close
+    // frame carries its code and reason, a TCP close carries neither. And an Open says where it
+    // connected to.
+    void NativeWsTellsACloseFrameFromATcpClose()
+    {
+        if (!WsAvailable("native_ws_tells_a_close_frame_from_a_tcp_close"))
+            return;
+
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+
+        std::string error;
+        std::string text;
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            const auto opened = connection.Open(WsUrl(server), {}, "", 5000);
+            Require(opened.ok, "the first upgrade must succeed");
+            Require(opened.peer == "127.0.0.1:" + std::to_string(server.Port()), ("the open must name the peer, got '" + opened.peer + "'").c_str());
+            Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the first connection");
+
+            Require(server.SendClose(4001, "going away for a test"), "the server must be able to start a close");
+            Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a close frame must be reported as Closed");
+            const auto& closure = connection.LastClosure();
+            Require(closure.close_frame, "a close frame must be reported as one");
+            Require(closure.code == 4001, ("the close frame's code must be kept, got " + std::to_string(closure.code)).c_str());
+            Require(closure.reason == "going away for a test", ("the close frame's reason must be kept, got '" + closure.reason + "'").c_str());
+        }
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
+
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+        Require(!connection.LastClosure().close_frame, "an Open must forget how the previous connection ended");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the second connection");
+
+        // The fixture has read everything the client sent, so its close is an orderly FIN that
+        // libcurl reads as the end of the stream (CURLE_GOT_NOTHING), not a reset.
+        server.Drop();
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a TCP close must be reported as Closed");
+        Require(!connection.LastClosure().close_frame, "a TCP close must not be reported as a close frame");
+        Require(connection.LastClosure().code == 0 && connection.LastClosure().reason.empty(), "a TCP close carries no code and no reason");
+    }
+
     // A refused upgrade is a failed Open that reports the server's HTTP status, and a server that
     // does not select the offered subprotocol is not a session either.
     void NativeWsRefusedUpgradeReportsStatus()
@@ -6856,6 +7565,874 @@ namespace
         Contains(error, "cancelled");
     }
 
+    // ---- #1668: the collector session as the native collector's transport (ADR-0017, step 4) ----
+
+    // Bounded wait for a condition polled every 10 ms.
+    template <typename Condition>
+    bool WaitUntilFor(Condition condition, int milliseconds)
+    {
+        for (int waited = 0; waited < milliseconds && !condition(); waited += 10)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return condition();
+    }
+
+    // Frames the session server received that contain every one of `parts`.
+    size_t SessionFrames(const hsm::test::WebSocketTestServer& server, std::initializer_list<const char*> parts)
+    {
+        size_t count = 0;
+        for (const auto& frame : server.Received())
+        {
+            bool all = true;
+            for (const char* part : parts)
+                all = all && frame.find(part) != std::string::npos;
+            count += all ? 1 : 0;
+        }
+        return count;
+    }
+
+    hsm_collector_options_t SessionCollectorOptions(const hsm::test::WebSocketTestServer& server)
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "session-key";
+        // The same plaintext rule as the HTTP transport: an explicit http:// address plus
+        // AllowPlaintextTransport; the session then uses ws://.
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "session-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 1000;
+        options.package_collect_period_ms = 20;
+        options.request_timeout_ms = 5000;
+        return options;
+    }
+
+    hsm::test::WebSocketTestServer::Options SessionServerOptions()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.session = true;
+        return options;
+    }
+
+    // The whole path on a session: the upgrade says who the collector is, the registration of a
+    // sensor that existed before Start arrives as a `commands` frame once the session is up, a
+    // value arrives as a `list` frame in the wire format, and a graceful stop closes normally.
+    void NativeSessionDeliversRegistrationsAndValues()
+    {
+        if (!WsAvailable("native_session_delivers_registrations_and_values"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install on a stopped collector");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/int");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        // Start does not wait for the session: the registration is retried until it is up.
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "\"Path\":\"session/int\"" }) >= 1; }, 15000),
+                "the sensor registered before Start must arrive as a commands frame");
+
+        Require(hsm_sensor_add_int(sensor.value, 42, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":42", "\"Path\":\"session/int\"" }) >= 1; }, 10000),
+                "the value must arrive as a list frame");
+        // The wire format of the server, as over HTTP: ISO time, not the corpus format.
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"Time\":\"" }) >= 1, "a list frame must carry wire values");
+        Require(SessionFrames(server, { "UnixTimeMs" }) == 0, "no frame may carry the canonical corpus format");
+
+        const std::string head = server.HandshakeHead();
+        Contains(head, "GET /api/sensors/session HTTP/1.1");
+        Contains(head, "Key: session-key");
+        Contains(head, "ClientName: session-client");
+        Contains(head, "X-Collector-Kind: native");
+        Contains(head, std::string("X-Collector-Version: ") + HSM_COLLECTOR_VERSION_STRING);
+        Contains(head, "Sec-WebSocket-Protocol: hsm.sensors.v1");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+        Require(WaitUntilFor([&] { return server.CloseCodes().size() == 1; }, 5000), "a graceful stop must close the session");
+        Require(server.CloseCodes()[0] == 1000, "a graceful stop must be a normal closure");
+        Require(server.Upgrades() == 1, "one session must have carried everything");
+    }
+
+    // While the server refuses the upgrade nothing is delivered and nothing is lost: the values
+    // wait in the queue and arrive once a session opens.
+    void NativeSessionQueuesWhileRefusedAndDeliversAfterConnect()
+    {
+        if (!WsAvailable("native_session_queues_while_refused_and_delivers_after_connect"))
+            return;
+
+        auto server_options = SessionServerOptions();
+        server_options.refuse_with_status = 503;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "Start must not wait for a session, nor fail without one");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/queued");
+        for (int value = 7001; value <= 7005; ++value)
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        Require(server.Upgrades() == 0 && server.Received().empty(), "nothing may be delivered while the upgrade is refused");
+
+        server.RefuseUpgradesWith(0);
+
+        for (int value = 7001; value <= 7005; ++value)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(value);
+            Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", marker.c_str() }) >= 1; }, 20000),
+                    ("a value queued while there was no session must arrive after it opens: " + marker).c_str());
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A session that drops is reopened by the collector, and what is sent afterwards arrives.
+    void NativeSessionReconnectsAfterADrop()
+    {
+        if (!WsAvailable("native_session_reconnects_after_a_drop"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/reconnect");
+        Require(hsm_sensor_add_int(sensor.value, 8001, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":8001" }) >= 1; }, 15000),
+                "the first value must arrive on the first session");
+
+        server.Drop();
+        Require(WaitUntilFor([&] { return server.Upgrades() == 2; }, 15000), "the collector must open a new session after a drop");
+
+        Require(hsm_sensor_add_int(sensor.value, 8002, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":8002" }) >= 1; }, 15000),
+                "a value sent after the reconnect must arrive on the new session");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // What a SessionTransport logs, for the tests that pin it.
+    struct SessionLogRecorder
+    {
+        struct Line
+        {
+            hsm::http::SessionLogLevel level = hsm::http::SessionLogLevel::Debug;
+            std::string text;
+        };
+
+        mutable std::mutex mutex;
+        std::vector<Line> lines;
+
+        std::function<void(hsm::http::SessionLogLevel, const std::string&)> Callback()
+        {
+            return [this](hsm::http::SessionLogLevel level, const std::string& text) {
+                std::lock_guard<std::mutex> guard(mutex);
+                lines.push_back({ level, text });
+            };
+        }
+
+        // Lines that contain every one of `parts`; the first of them goes to `found`.
+        size_t Count(std::initializer_list<const char*> parts, Line* found = nullptr) const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            size_t count = 0;
+            for (const auto& line : lines)
+            {
+                bool all = true;
+                for (const char* part : parts)
+                    all = all && line.text.find(part) != std::string::npos;
+                if (all && found != nullptr && count == 0)
+                    *found = line;
+                count += all ? 1 : 0;
+            }
+            return count;
+        }
+
+        size_t Errors() const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            return static_cast<size_t>(
+                std::count_if(lines.begin(), lines.end(), [](const Line& line) { return line.level == hsm::http::SessionLogLevel::Error; }));
+        }
+
+        std::string Dump() const
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            std::string all;
+            for (const auto& line : lines)
+                all += "\n  " + line.text;
+            return all;
+        }
+    };
+
+    hsm::http::SessionOptions SessionTransportOptions(const hsm::test::WebSocketTestServer& server, SessionLogRecorder& log)
+    {
+        hsm::http::SessionOptions options;
+        options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+        options.verify_peer = false;
+        options.headers = { { "Key", "secret-session-key" } };
+        options.log = log.Callback();
+        return options;
+    }
+
+    // What the transport logs about a session's life: where it connected and how long the open
+    // took, and when it ends, how (a close frame with its code and reason, or a TCP close), after
+    // how long, with what in flight. Sessions that keep ending early do not fill the log: a repeat
+    // of the same end is suppressed, and the next line that is logged says how many were.
+    void NativeSessionLogsHowASessionEnded()
+    {
+        if (!WsAvailable("native_session_logs_how_a_session_ended"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+        SessionLogRecorder log;
+        hsm::http::SessionTransport transport(SessionTransportOptions(server, log));
+        transport.Start();
+
+        const std::string peer = "connected to 127.0.0.1:" + std::to_string(server.Port());
+        SessionLogRecorder::Line up{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session is up: ", peer.c_str(), " in " }, &up) == 1; }, 10000),
+                ("the up line must name the peer and the open time:" + log.Dump()).c_str());
+        Require(up.level == hsm::http::SessionLogLevel::Info, "a session coming up is INFO");
+        Require(transport.Request("list", "[]", 5000).IsSuccess(), "a request must be acknowledged");
+
+        // A close frame from the server, with its code and a reason that tries to forge a line.
+        Require(server.SendClose(4002, "closed by\nthe test"), "the server must be able to start a close");
+        SessionLogRecorder::Line ended{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session ended after ", "close frame (code 4002, reason \"closed by?the test\")" }, &ended) == 1; },
+                             10000),
+                ("the end line must carry the close frame's code and its reason, made printable:" + log.Dump()).c_str());
+        Contains(ended.text, "Peer 127.0.0.1:" + std::to_string(server.Port()));
+        Contains(ended.text, "requests sent 1, acks received 1, still waiting for an ack 0; pings sent 0, pongs received 0");
+        Contains(ended.text, "last frame from the server ");
+        Contains(ended.text, "Reconnecting with backoff: it lasted less than 1m 00s");
+        Require(ended.level == hsm::http::SessionLogLevel::Info, "a session that ended and is reopened is not an ERROR");
+
+        // The reconnect after a session that ended early is not logged: the next line says so.
+        Require(WaitUntilFor([&] { return server.Upgrades() == 2 && transport.IsUp(); }, 15000), "the collector must reopen the session");
+        server.Drop();
+        SessionLogRecorder::Line dropped{};
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session ended after ", "the connection ended without a close frame" }, &dropped) == 1; },
+                             10000),
+                ("a TCP close must be logged as one:" + log.Dump()).c_str());
+        Contains(dropped.text, "(1 line(s) about earlier short-lived sessions suppressed)");
+
+        // The same end again: nothing new is logged.
+        Require(WaitUntilFor([&] { return server.Upgrades() == 3 && transport.IsUp(); }, 15000), "the collector must reopen the session again");
+        server.Drop();
+        Require(WaitUntilFor([&] { return server.Upgrades() == 4; }, 20000), "the collector must reopen the session after the second drop");
+
+        transport.Stop(1000);
+        std::cout << "native_session_logs_how_a_session_ended: the lines logged:" << log.Dump() << std::endl;
+        Require(log.Count({ "the connection ended without a close frame" }) == 1, "a repeated early end must be suppressed");
+        Require(log.Count({ "The collector session is up" }) == 1, "the up lines of a flapping session must be suppressed");
+        Require(log.Count({ "close frame (code 4002" }) == 1, "a TCP close must not be taken for a close frame");
+        Require(log.Errors() == 0, ("nothing here is an ERROR:" + log.Dump()).c_str());
+        Require(log.Count({ "secret-session-key" }) == 0, "no line may carry the access key");
+        Require(log.lines.size() == 3, ("a stop logs nothing, and nothing else was logged:" + log.Dump()).c_str());
+    }
+
+    // An upgrade refused for a reason that may pass (503) is INFO; one that a retry will not
+    // change (401) is an ERROR; and the session that finally opens says how long it took.
+    void NativeSessionLogsOpenFailuresByKind()
+    {
+        if (!WsAvailable("native_session_logs_open_failures_by_kind"))
+            return;
+
+        auto server_options = SessionServerOptions();
+        server_options.refuse_with_status = 503;
+        hsm::test::WebSocketTestServer server(server_options);
+        SessionLogRecorder log;
+        hsm::http::SessionTransport transport(SessionTransportOptions(server, log));
+        transport.Start();
+
+        SessionLogRecorder::Line busy{};
+        Require(WaitUntilFor([&] { return log.Count({ "Cannot open a collector session (attempt 1, ", "with HTTP 503" }, &busy) == 1; }, 10000),
+                ("a refused upgrade must be logged with its status:" + log.Dump()).c_str());
+        Require(busy.level == hsm::http::SessionLogLevel::Info, "a 503 may pass by itself: INFO");
+
+        server.RefuseUpgradesWith(401);
+        SessionLogRecorder::Line unauthorized{};
+        Require(WaitUntilFor([&] { return log.Count({ "Cannot open a collector session (attempt ", "with HTTP 401" }, &unauthorized) == 1; }, 15000),
+                ("a new reason must be logged:" + log.Dump()).c_str());
+        Require(unauthorized.level == hsm::http::SessionLogLevel::Error, "a 401 will not pass by itself: ERROR");
+
+        server.RefuseUpgradesWith(0);
+        Require(WaitUntilFor([&] { return log.Count({ "The collector session is up after ", "failed attempt(s) and ", "without a session" }) == 1; }, 20000),
+                ("the up line must say how long the outage lasted:" + log.Dump()).c_str());
+
+        transport.Stop(1000);
+        Require(log.Count({ "with HTTP 503" }) == 1 && log.Count({ "with HTTP 401" }) == 1, "each reason must be logged once");
+        Require(log.Count({ "secret-session-key" }) == 0, "no line may carry the access key");
+    }
+
+    // A request that gets no ack in time is a failed send, and it ends the session: a late ack must
+    // not be taken for another request. The batch goes back to the queue and arrives on the next
+    // session.
+    void NativeSessionAckTimeoutReopensAndResends()
+    {
+        if (!WsAvailable("native_session_ack_timeout_reopens_and_resends"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        auto options = SessionCollectorOptions(server);
+        options.request_timeout_ms = 400;
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/timeout");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "\"Path\":\"session/timeout\"" }) >= 1; }, 15000),
+                "the registration must arrive before the server goes silent");
+
+        server.StaySilent(true);
+        Require(hsm_sensor_add_int(sensor.value, 9001, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) >= 1; }, 10000),
+                "the value must have been sent to the silent server");
+        Require(WaitUntilFor([&] { return server.Upgrades() >= 2; }, 15000), "a request without an ack must end the session, and the collector must reconnect");
+
+        const size_t sent_while_silent = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" });
+        server.StaySilent(false);
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) > sent_while_silent; }, 15000),
+                "the unacknowledged batch must be sent again once the server answers");
+
+        // Acknowledged now: it is not sent a third time.
+        const size_t after_ack = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" });
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"Value\":9001" }) == after_ack, "an acknowledged batch must not be sent again");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A batch larger than the frame the server allows is split, every frame fits the limit, and
+    // every value arrives.
+    void NativeSessionSplitsABatchToTheFrameLimit()
+    {
+        if (!WsAvailable("native_session_splits_a_batch_to_the_frame_limit"))
+            return;
+
+        constexpr int kFrameBytes = 4096;
+        constexpr int kValues = 200;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 300; // long enough for all the values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/split");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"" }) >= 1; }, 15000), "the session must be up before the batch is built");
+
+        for (int i = 0; i < kValues; ++i)
+            Require(hsm_sensor_add_int(sensor.value, 500000 + i, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":500199" }) >= 1; }, 20000), "the last value of the batch must arrive");
+
+        size_t list_frames = 0;
+        for (const auto& frame : server.Received())
+        {
+            Require(frame.size() <= static_cast<size_t>(kFrameBytes), "no frame may exceed the limit the server announced");
+            list_frames += frame.find("\"op\":\"list\"") != std::string::npos ? 1 : 0;
+        }
+        Require(list_frames >= 2, "a batch that does not fit one frame must travel in several");
+        for (int i = 0; i < kValues; ++i)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(500000 + i) + ",";
+            Require(SessionFrames(server, { "\"op\":\"list\"", marker.c_str() }) >= 1, ("every value of a split batch must arrive: " + marker).c_str());
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A batch that travels in several frames and fails part of the way: what the server already
+    // acknowledged is not sent again, and the rest still arrives.
+    void NativeSessionPartlyDeliveredBatchIsNotSentTwice()
+    {
+        if (!WsAvailable("native_session_partly_delivered_batch_is_not_sent_twice"))
+            return;
+
+        constexpr int kFrameBytes = 4096;
+        constexpr int kValues = 200;
+        constexpr int kFirst = 600000;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 300; // long enough for all the values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "session/partial");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"" }) >= 1; }, 15000), "the session must be up before the batch is built");
+
+        server.AcceptListFrames(1);
+        for (int i = 0; i < kValues; ++i)
+            Require(hsm_sensor_add_int(sensor.value, kFirst + i, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        // The first frame is acknowledged, the second refused.
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"" }) >= 2; }, 20000), "the batch must have been sent in more than one frame");
+        server.AcceptListFrames(-1);
+
+        const std::string last = "\"Value\":" + std::to_string(kFirst + kValues - 1) + ",";
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", last.c_str() }) >= 1; }, 20000), "the rest of the batch must arrive once the server accepts again");
+
+        std::string first_frame;
+        for (const auto& frame : server.Received())
+        {
+            if (frame.find("\"op\":\"list\"") != std::string::npos)
+            {
+                first_frame = frame;
+                break;
+            }
+        }
+
+        int in_first_frame = 0;
+        for (int i = 0; i < kValues; ++i)
+        {
+            const std::string marker = "\"Value\":" + std::to_string(kFirst + i) + ",";
+            const size_t frames = SessionFrames(server, { "\"op\":\"list\"", marker.c_str() });
+            Require(frames >= 1, ("every value must arrive: " + marker).c_str());
+            if (first_frame.find(marker) != std::string::npos)
+            {
+                ++in_first_frame;
+                Require(frames == 1, ("a value the server acknowledged must not be sent again: " + marker).c_str());
+            }
+        }
+        Require(in_first_frame > 0 && in_first_frame < kValues, "the first frame must have carried a part of the batch");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // A registration batch larger than the frame the server allows is posted in several frames,
+    // every one within the limit, and every sensor is registered.
+    void NativeSessionSplitsARegistrationBatchToTheFrameLimit()
+    {
+        if (!WsAvailable("native_session_splits_a_registration_batch_to_the_frame_limit"))
+            return;
+
+        constexpr int kFrameBytes = 2048;
+        constexpr int kSensors = 24;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = kFrameBytes;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+
+        std::vector<SensorHandle> sensors;
+        std::vector<std::string> paths;
+        for (int i = 0; i < kSensors; ++i)
+        {
+            paths.push_back("session/registration/a-sensor-with-a-long-enough-path/number-" + std::to_string(100 + i));
+            sensors.push_back(CreateIntSensor(collector.value, paths.back().c_str()));
+        }
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        for (const auto& path : paths)
+        {
+            const std::string marker = "\"Path\":\"" + path + "\"";
+            Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", marker.c_str() }) >= 1; }, 20000),
+                    ("every sensor of a split registration batch must be registered: " + path).c_str());
+        }
+
+        size_t command_frames = 0;
+        for (const auto& frame : server.Received())
+        {
+            Require(frame.size() <= static_cast<size_t>(kFrameBytes), "no frame may exceed the limit the server announced");
+            command_frames += frame.find("\"op\":\"commands\"") != std::string::npos ? 1 : 0;
+        }
+        Require(command_frames >= 2, "a registration batch that does not fit one frame must travel in several");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // The parts of a split registration batch are settled one by one: a part the server refused
+    // with a 4xx is final, a part that got a 5xx is posted again, and neither drags the other
+    // along. One outcome for the whole batch used to post the refused part again on every cycle.
+    void NativeSessionSplitRegistrationRetriesOnlyTheFailedPart()
+    {
+        if (!WsAvailable("native_session_split_registration_retries_only_the_failed_part"))
+            return;
+
+        constexpr int kSensors = 24;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 2048;
+        hsm::test::WebSocketTestServer server(server_options);
+        // The first part is refused for good, the second for now, the rest is accepted.
+        server.AckNextCommandFramesWith({ 400, 503 });
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+
+        std::vector<SensorHandle> sensors;
+        std::vector<std::string> markers;
+        for (int i = 0; i < kSensors; ++i)
+        {
+            const std::string path = "session/split-retry/a-sensor-with-a-long-enough-path/number-" + std::to_string(100 + i);
+            markers.push_back("\"Path\":\"" + path + "\"");
+            sensors.push_back(CreateIntSensor(collector.value, path.c_str()));
+        }
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        const auto command_frames = [&] {
+            std::vector<std::string> frames;
+            for (const auto& frame : server.Received())
+                if (frame.find("\"op\":\"commands\"") != std::string::npos && frame.find("session/split-retry/") != std::string::npos)
+                    frames.push_back(frame);
+            return frames;
+        };
+        const auto frames_with = [&](const std::string& marker) {
+            size_t count = 0;
+            for (const auto& frame : command_frames())
+                count += frame.find(marker) != std::string::npos ? 1 : 0;
+            return count;
+        };
+
+        Require(WaitUntilFor([&] { return command_frames().size() >= 2; }, 20000), "the registration batch must be split");
+        const auto first_frames = command_frames();
+        std::vector<std::string> refused; // in the frame answered 400
+        std::vector<std::string> failed;  // in the frame answered 503
+        for (const auto& marker : markers)
+        {
+            if (first_frames[0].find(marker) != std::string::npos)
+                refused.push_back(marker);
+            else if (first_frames[1].find(marker) != std::string::npos)
+                failed.push_back(marker);
+        }
+        Require(!refused.empty() && !failed.empty(), "the first two frames must each carry sensors of the batch");
+
+        for (const auto& marker : failed)
+            Require(WaitUntilFor([&] { return frames_with(marker) >= 2; }, 20000),
+                    ("a part answered 503 must be posted again: " + marker).c_str());
+
+        // Two more registration cycles: a sensor created now is posted on the next one.
+        for (int round = 0; round < 2; ++round)
+        {
+            const std::string path = "session/split-retry/late-" + std::to_string(round);
+            sensors.push_back(CreateIntSensor(collector.value, path.c_str()));
+            const std::string marker = "\"Path\":\"" + path + "\"";
+            Require(WaitUntilFor([&] { return frames_with(marker) >= 1; }, 20000), "a sensor created while running must be registered");
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        for (const auto& marker : refused)
+            Require(frames_with(marker) == 1, ("a part refused with a 4xx must not be posted again: " + marker + ", posted " +
+                                               std::to_string(frames_with(marker)) + " time(s)")
+                                                  .c_str());
+        for (const auto& marker : markers)
+            Require(frames_with(marker) <= 2, ("an accepted part must not be posted again: " + marker).c_str());
+    }
+
+    // #1660 step 2b: a file value travels on the session as an element of a `list` frame, in the
+    // FileSensorValue wire format, next to the values around it; both file calls report success.
+    void NativeSessionDeliversFileValues()
+    {
+        if (!WsAvailable("native_session_delivers_file_values"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle file;
+        Require(hsm_collector_create_file_sensor(collector.value, "session/file/report", "report", "txt", &file.value) == HSM_RESULT_OK,
+                "file sensor create failed");
+        SensorHandle number = CreateIntSensor(collector.value, "session/file/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/file/number" }) >= 1; }, 15000),
+                "the session must be up before the values are added");
+
+        Require(hsm_sensor_add_file(file.value, "hi", HSM_SENSOR_STATUS_OK, "note") == HSM_RESULT_OK, "a file value on a session must be taken");
+        Require(hsm_sensor_add_int(number.value, 6161, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        const std::string path = "hsm_session_file_from_path.log";
+        {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            Require(static_cast<bool>(out), "could not create temp file");
+            out << "ok";
+        }
+        Require(hsm_sensor_add_file_from_path(file.value, path.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK,
+                "a file read from a path must be taken on a session");
+        std::remove(path.c_str());
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":6161" }) >= 1; }, 20000),
+                "the value next to the file must be delivered");
+        Require(WaitUntilFor(
+                    [&] {
+                        return SessionFrames(server, { "\"op\":\"list\"", "{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"report\",\"Value\":[104,105],"
+                                                                          "\"Comment\":\"note\",\"Time\":\"" }) >= 1;
+                    },
+                    20000),
+                "the file value must arrive in a list frame in the wire format");
+        Require(WaitUntilFor(
+                    [&] {
+                        return SessionFrames(server, { "\"op\":\"list\"", "\"Extension\":\"log\",\"Name\":\"hsm_session_file_from_path\",\"Value\":[111,107],"
+                                                                          "\"Comment\":\"\"" }) >= 1;
+                    },
+                    20000),
+                "the file read from a path must arrive with its own name and extension");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+        Require(SessionFrames(server, { "UnixTimeMs" }) == 0, "a session frame must carry the wire format, not the canonical one");
+    }
+
+    // #1660 step 5: a directive the server pushes reaches the host callback as a header line does,
+    // split at the first colon into verb and payload, in the order of the pushes; a push with a
+    // body that is not a string and an unknown push op are ignored; the session carries on.
+    void NativeSessionHandsPushedDirectivesToTheHost()
+    {
+        if (!WsAvailable("native_session_hands_pushed_directives_to_the_host"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        struct Calls
+        {
+            std::mutex mutex;
+            std::vector<std::pair<std::string, std::string>> received;
+        } calls;
+
+        CollectorHandle collector = CreateCollector(SessionCollectorOptions(server));
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_set_extra_request_header(collector.value, "X-Agent-Version", "0.5.1") == HSM_RESULT_OK, "extra header failed");
+        Require(hsm_collector_set_server_directive_handler(
+                    collector.value,
+                    [](const char* verb, const char* payload, void* user_data) {
+                        auto* log = static_cast<Calls*>(user_data);
+                        std::lock_guard<std::mutex> guard(log->mutex);
+                        log->received.emplace_back(verb, payload);
+                    },
+                    &calls) == HSM_RESULT_OK,
+                "directive handler failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle number = CreateIntSensor(collector.value, "session/directives/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/directives/number" }) >= 1; }, 15000),
+                "the session must be up before the server pushes");
+        Contains(server.AcceptedHandshakeHead(), "X-Agent-Version: 0.5.1");
+
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"update-available:0.6.0\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":{\"not\":\"a string\"}}"), "push failed");
+        Require(server.SendText("{\"op\":\"news\",\"body\":\"sensor-disable:disk\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"sensor-disable:network\"}"), "push failed");
+        Require(server.SendText("{\"op\":\"directive\",\"body\":\"bare-name\"}"), "push failed");
+
+        const auto received = [&] {
+            std::lock_guard<std::mutex> guard(calls.mutex);
+            return calls.received;
+        };
+        Require(WaitUntilFor([&] { return received().size() >= 3; }, 10000), "the pushed directives must reach the host");
+
+        // The session goes on: a value is still delivered and acknowledged.
+        Require(hsm_sensor_add_int(number.value, 5151, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":5151" }) >= 1; }, 20000),
+                "a value after the pushes must be delivered");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            { "update-available", "0.6.0" },
+            { "sensor-disable", "network" },
+            { "bare-name", "" },
+        };
+        Require(received() == expected, "the host must get exactly the three directives, split and in order");
+        Require(server.Upgrades() == 1, "the pushes must not end the session");
+    }
+
+    // A value that cannot fit a frame is dropped and reported once, even when the frame built
+    // around it fails and the rest of the batch goes back to the queue.
+    void NativeSessionOversizedValueIsDroppedOnce()
+    {
+        if (!WsAvailable("native_session_oversized_value_is_dropped_once"))
+            return;
+
+        struct Drops
+        {
+            std::mutex mutex;
+            int count = 0;
+        } drops;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 1024;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 200; // long enough for both values to form one batch
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* user_data) {
+                if (std::string(message).find("larger than a collector session frame") != std::string::npos)
+                {
+                    auto* seen = static_cast<Drops*>(user_data);
+                    std::lock_guard<std::mutex> guard(seen->mutex);
+                    ++seen->count;
+                }
+            },
+            &drops);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle text = CreateStringSensor(collector.value, "session/oversized/text");
+        SensorHandle number = CreateIntSensor(collector.value, "session/oversized/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/oversized/number" }) >= 1; }, 15000),
+                "the session must be up before the batch is built");
+
+        // Every list frame is refused for now, so the frame around the oversized value fails.
+        server.AcceptListFrames(0);
+        const std::string large(3000, 'x');
+        Require(hsm_sensor_add_string(text.value, large.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string value failed");
+        Require(hsm_sensor_add_int(number.value, 4242, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" }) >= 3; }, 20000),
+                "the refused frame must have been retried");
+        server.AcceptListFrames(-1);
+
+        const size_t refused = SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" });
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":4242" }) > refused; }, 20000),
+                "the value behind the oversized one must be delivered once the server accepts again");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        Require(SessionFrames(server, { "xxxxxxxxxx" }) == 0, "a value larger than a frame must never be sent");
+        std::lock_guard<std::mutex> guard(drops.mutex);
+        Require(drops.count == 1, ("an oversized value must be dropped and reported exactly once, got " + std::to_string(drops.count)).c_str());
+    }
+
+    // Values of every size around the frame limit: each one is either sent or dropped, and the
+    // sender goes on. A value that exactly fills a frame on its own used to pass the "too large"
+    // check and fail the "fits this frame" check, so the sender retried it forever.
+    void NativeSessionValueAtTheFrameLimitDoesNotStallTheSender()
+    {
+        if (!WsAvailable("native_session_value_at_the_frame_limit_does_not_stall_the_sender"))
+            return;
+
+        struct Drops
+        {
+            std::mutex mutex;
+            int count = 0;
+        } drops;
+
+        auto server_options = SessionServerOptions();
+        server_options.max_frame_bytes = 1024;
+        hsm::test::WebSocketTestServer server(server_options);
+
+        auto options = SessionCollectorOptions(server);
+        options.package_collect_period_ms = 50;
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* user_data) {
+                if (std::string(message).find("larger than a collector session frame") != std::string::npos)
+                {
+                    auto* seen = static_cast<Drops*>(user_data);
+                    std::lock_guard<std::mutex> guard(seen->mutex);
+                    ++seen->count;
+                }
+            },
+            &drops);
+        Require(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport must install");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle text = CreateStringSensor(collector.value, "session/boundary/text");
+        SensorHandle number = CreateIntSensor(collector.value, "session/boundary/number");
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"commands\"", "session/boundary/number" }) >= 1; }, 15000),
+                "the session must be up before the values are added");
+
+        // One byte apart, from well under the limit to over it: whatever the value's envelope
+        // costs, one of them serializes to exactly the room of a frame.
+        constexpr size_t kShortest = 500;
+        constexpr size_t kLongest = 1000;
+        for (size_t length = kShortest; length <= kLongest; ++length)
+        {
+            const std::string value(length, 'y');
+            Require(hsm_sensor_add_string(text.value, value.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string value failed");
+        }
+        Require(hsm_sensor_add_int(number.value, 5151, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(WaitUntilFor([&] { return SessionFrames(server, { "\"op\":\"list\"", "\"Value\":5151" }) >= 1; }, 30000),
+                "the value behind the ones at the frame limit must be delivered");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const size_t sent = SessionFrames(server, { "\"op\":\"list\"", "yyyyyyyyyy" });
+        int dropped = 0;
+        {
+            std::lock_guard<std::mutex> guard(drops.mutex);
+            dropped = drops.count;
+        }
+        const size_t total = kLongest - kShortest + 1;
+        // The sizes straddle the limit only if some went out and some were dropped.
+        Require(sent >= 1 && dropped >= 1, ("the values must straddle the frame limit: " + std::to_string(sent) + " frame(s) sent, " +
+                                            std::to_string(dropped) + " dropped")
+                                               .c_str());
+        Require(static_cast<size_t>(dropped) < total, "values under the frame limit must not be dropped");
+    }
+
+    // The transport on its own: no session means a request fails at once (the caller keeps its
+    // data), an ack carries the server's status, and a cancel ends a wait.
+    void NativeSessionTransportRequestContract()
+    {
+        if (!WsAvailable("native_session_transport_request_contract"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+
+        hsm::http::SessionOptions options;
+        options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+        options.verify_peer = false;
+        hsm::http::SessionTransport transport(options);
+
+        const auto before = transport.Request("list", "[]", 5000);
+        Require(!before.acked && !before.IsSuccess(), "a request without a session must fail");
+        Contains(before.error, "no session");
+        Require(transport.MaxBodyBytes() == 0, "without a session there is no room for a body");
+
+        transport.Start();
+        Require(WaitUntilFor([&] { return transport.IsUp(); }, 10000), "the session must come up");
+        Require(transport.MaxBodyBytes() == static_cast<size_t>(4 * 1024 * 1024) - hsm::http::SessionTransport::kEnvelopeRoom,
+                "the room for a body is the frame limit of the hello less the envelope");
+
+        const auto accepted = transport.Request("list", "[1,2,3]", 5000);
+        Require(accepted.acked && accepted.status == 200 && accepted.IsSuccess(), "an ack with 200 is a delivered request");
+        Require(SessionFrames(server, { "\"op\":\"list\"", "\"body\":[1,2,3]}" }) == 1, "the body must be embedded in the frame as it is");
+
+        server.AckWith(400);
+        const auto refused = transport.Request("commands", "[]", 5000);
+        Require(refused.acked && refused.status == 400 && !refused.IsSuccess(), "an ack with 400 is an answered, refused request");
+        Contains(refused.error, "refused by the test");
+        Require(transport.IsUp(), "a refused request must not end the session");
+
+        transport.Cancel();
+        const auto cancelled = transport.Request("list", "[]", 5000);
+        Require(!cancelled.acked, "a request on a cancelled transport must fail");
+        Contains(cancelled.error, "cancelled");
+        transport.ResetCancel();
+
+        server.AckWith(200);
+        Require(transport.Request("list", "[]", 5000).IsSuccess(), "the transport must work again after the cancel is reset");
+
+        transport.Stop(1000);
+        Require(!transport.IsUp(), "a stopped transport has no session");
+        Require(WaitUntilFor([&] { return server.CloseCodes().size() == 1 && server.CloseCodes()[0] == 1000; }, 5000), "Stop with a linger must close normally");
+    }
+
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
     // with the libcurl transport installed, and assert the capture server saw the live POST. This
     // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
@@ -6907,6 +8484,101 @@ namespace
         Require(request.body.find("UnixTimeMs") == std::string::npos, "live wire value must NOT carry the canonical UnixTimeMs field");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // #1660 step 2b: a file value on the HTTP transport goes to /list in the FileSensorValue wire
+    // format. Before, it went out in the canonical corpus format ("Value":"text", "UnixTimeMs"),
+    // which the server cannot read: the whole batch was refused and sent again on every cycle.
+    void NativeHttpPostsFileValuesInTheWireFormat()
+    {
+        hsm::test::HttpCaptureServer server(200, "/api/sensors/list");
+
+        hsm_collector_options_t options{};
+        options.access_key = "live-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "live-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle file;
+        Require(hsm_collector_create_file_sensor(collector.value, "live/file", "report", "txt", &file.value) == HSM_RESULT_OK,
+                "file sensor create failed");
+        Require(hsm_sensor_add_file(file.value, "hi", HSM_SENSOR_STATUS_OK, "note") == HSM_RESULT_OK, "add file value failed");
+
+        for (int i = 0; i < 400 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the file value");
+        Require(request.path == "/api/sensors/list", "a file value must route to /list with the other values");
+        Contains(request.body, "[{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"report\",\"Value\":[104,105],\"Comment\":\"note\",\"Time\":\"");
+        Contains(request.body, "\"Status\":1,\"Key\":null,\"Path\":\"live/file\"}]");
+        Require(request.body.find("UnixTimeMs") == std::string::npos, "a file value must NOT carry the canonical UnixTimeMs field");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // The X-Hsm-Directive lines of an accepted answer reach the host callback split into verb and
+    // payload, in order; a line that is empty or whitespace only carries nothing and is skipped,
+    // as the managed collector skips it (string.IsNullOrWhiteSpace) and as the session path does.
+    void NativeHttpHandsHeaderDirectivesToTheHost()
+    {
+        hsm::test::HttpCaptureServer server(200, "/api/sensors/list",
+                                            "X-Hsm-Directive: update-available:0.6.0\r\n"
+                                            "X-Hsm-Directive:    \r\n"
+                                            "X-Hsm-Directive: \t\xC2\xA0\xE3\x80\x80\r\n"
+                                            "X-Hsm-Directive: sensor-disable:network\r\n");
+
+        struct Calls
+        {
+            std::mutex mutex;
+            std::vector<std::pair<std::string, std::string>> received;
+        } calls;
+
+        hsm_collector_options_t options{};
+        options.access_key = "live-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "live-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+        Require(hsm_collector_set_server_directive_handler(
+                    collector.value,
+                    [](const char* verb, const char* payload, void* user_data) {
+                        auto* log = static_cast<Calls*>(user_data);
+                        std::lock_guard<std::mutex> guard(log->mutex);
+                        log->received.emplace_back(verb, payload);
+                    },
+                    &calls) == HSM_RESULT_OK,
+                "directive handler failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "live/directives");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        const auto received = [&] {
+            std::lock_guard<std::mutex> guard(calls.mutex);
+            return calls.received;
+        };
+        Require(WaitUntilFor([&] { return received().size() >= 2; }, 10000), "the header directives must reach the host");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            { "update-available", "0.6.0" },
+            { "sensor-disable", "network" },
+        };
+        Require(received() == expected, "the host must get the two directives, split and in order, and nothing for the blank lines");
     }
 
     // #1165: a sensor created BEFORE Start is registered on the server — the collector POSTs a wire
@@ -7571,14 +9243,14 @@ namespace
                 "\"Path\":\".computer/Windows OS info/Install date\"}",
             "default install date wire");
 
-        // Service alive (id 60): TTL alert IfInactivityPeriodIs() InstantHourly + Clock + SensorError;
-        // Conditions:null (SpecialAlertAction), TTLs=[null], KeepHistory 180d, Alerts:[].
+        // Service alive (id 60): TTL alert IfInactivityPeriodIs(5 min) InstantHourly + Clock + SensorError;
+        // Conditions:null (SpecialAlertAction), TTLs=[5 min] (#1666), KeepHistory 180d, Alerts:[].
         Require(
             wire(60) ==
                 "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":[{\"Conditions\":null,\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product]$path\",\"Icon\":\"\\uD83D\\uDD50\",\"IsDisabled\":false,"
                 "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
                 "\"TtlAlert\":null,\"SensorType\":0,\"Description\":\"DataCollector heartbeat.\",\"DefaultChats\":null,\"KeepHistory\":155520000000000,\"SelfDestroy\":null,"
-                "\"TTLs\":[null],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"TTLs\":[3000000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
                 "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
                 "\"Path\":\".module/Service alive\"}",
             "default service alive wire");
@@ -7816,6 +9488,38 @@ namespace
                                                                               "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
                                                                               "\"Key\":null,\"Path\":\"p/int\"}",
             "AddOrUpdateSensorRequest wire layout");
+    }
+
+    // Sensor move (#1724): hsm_sensor_set_previous_paths puts the member right after EnumOptions —
+    // byte-identical to WireFormatGoldenLockTests.Registration_with_previous_paths_matches_the_native_golden_bytes —
+    // drops blank entries, and clearing the list removes the member again.
+    void NativeWireRegistrationWithPreviousPathsMatchesNetByteLayout()
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        auto collector = CreateCollector(options);
+
+        SensorHandle sensor;
+        Require(
+            hsm_collector_create_int_sensor_with_options(collector.value, "p/move", 60000, 3, "d", &sensor.value) == HSM_RESULT_OK,
+            "previous-paths sensor create");
+
+        const char* paths[] = { "garage-server/System/CPU", nullptr, " \t ", "old/move" };
+        Require(hsm_sensor_set_previous_paths(sensor.value, paths, 4) == HSM_RESULT_OK, "set previous paths");
+
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"garage-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}",
+            "AddOrUpdateSensorRequest wire layout with PreviousPaths");
+
+        Require(hsm_sensor_set_previous_paths(sensor.value, nullptr, 0) == HSM_RESULT_OK, "clear previous paths");
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)).find("PreviousPaths") == std::string::npos,
+            "a cleared list omits the member");
+
+        Require(hsm_sensor_set_previous_paths(sensor.value, nullptr, 1) == HSM_RESULT_INVALID_ARGUMENT, "null array with a count");
+        Require(hsm_sensor_set_previous_paths(nullptr, paths, 1) == HSM_RESULT_INVALID_ARGUMENT, "null sensor");
     }
 
     // Build the canonical alert scenario through the C ABI and assert the sensor's wire
@@ -8744,6 +10448,178 @@ namespace
                         "v6 posts its delta from its own late baseline (504 - 500)");
     }
 
+    // --- TcpFailureRateSampler: the portable seam between the family readers and the error report
+    // (#1752). WindowsTcpFailureSampler only binds the two GetTcpStatisticsEx reads to it, so these
+    // cases drive it with scripted readings and a recording reporter on every platform.
+
+    // Neither family readable: reported on every such tick, the seeding one included, with the text
+    // the managed monitor reports. Nothing is posted and both baselines survive the blackout.
+    void TcpFailureSamplerReportsWhenNeitherFamilyIsReadable()
+    {
+        bool readable = false;
+        std::uint64_t v4 = 100;
+        std::uint64_t v6 = 200;
+        std::vector<std::string> reports;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [&] { return readable ? TcpRead(v4) : TcpUnreadable(); },
+            [&] { return readable ? TcpRead(v6) : TcpUnreadable(); },
+            [&](const std::string& message) { reports.push_back(message); });
+
+        RequireTcpNothing(sampler.Sample(), "an unreadable seeding tick must post nothing");
+        Require(reports.size() == 1, "the seeding tick must report that neither family could be read");
+        Require(reports[0] == hsm::collector::kTcpNeitherFamilyReadableError, "the report must carry the shared message");
+        Contains(reports[0], "neither IPv4 nor IPv6");
+
+        readable = true;
+        RequireTcpNothing(sampler.Sample(), "the first readable tick seeds the baselines");
+        Require(reports.size() == 1, "a readable tick must report nothing");
+
+        readable = false;
+        RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+        RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+        Require(reports.size() == 3, "every tick on which neither family could be read must be reported");
+
+        readable = true;
+        v4 = 104;
+        v6 = 206;
+        RequireTcpDelta(sampler.Sample(), 10.0, "the baselines must survive the reported blackout (+4 and +6)");
+        Require(reports.size() == 3, "a readable tick must report nothing");
+    }
+
+    // One unreadable family is not a fault (IPv6 not installed, for one): it sits the tick out
+    // quietly while the other family's delta is still posted. Nor is a fully readable tick one.
+    void TcpFailureSamplerStaysQuietWhenOneFamilyIsReadable()
+    {
+        bool v4_readable = true;
+        bool v6_readable = true;
+        std::uint64_t v4 = 100;
+        std::uint64_t v6 = 50;
+        std::vector<std::string> reports;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [&] { return v4_readable ? TcpRead(v4) : TcpUnreadable(); },
+            [&] { return v6_readable ? TcpRead(v6) : TcpUnreadable(); },
+            [&](const std::string& message) { reports.push_back(message); });
+
+        RequireTcpNothing(sampler.Sample(), "the first tick seeds the baselines");
+
+        v4_readable = false;
+        v6 = 52;
+        RequireTcpDelta(sampler.Sample(), 2.0, "IPv6 still posts its delta while IPv4 cannot be read");
+
+        v4_readable = true;
+        v6_readable = false;
+        v4 = 105;
+        RequireTcpDelta(sampler.Sample(), 5.0, "IPv4 still posts its delta while IPv6 cannot be read");
+
+        v6_readable = true;
+        v6 = 53;
+        RequireTcpDelta(sampler.Sample(), 1.0, "both families readable posts the summed delta");
+
+        Require(reports.empty(), "a tick with at least one readable family must report nothing");
+    }
+
+    // The report goes to the collector's deduplicated error channel, the one the sampler loop hands
+    // it to: a blackout of any length is one line per window, not one per tick.
+    void TcpFailureSamplerReportCollapsesInTheCollectorErrorChannel()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        hsm_collector_t* handle = collector.value;
+        hsm::collector::TcpFailureRateSampler sampler(
+            [] { return TcpUnreadable(); },
+            [] { return TcpUnreadable(); },
+            [handle](const std::string& message) { hsm_collector_test_log_error(handle, message.c_str()); });
+
+        for (int i = 0; i < 5; ++i)
+            RequireTcpNothing(sampler.Sample(), "neither family readable must post nothing");
+
+        Require(logs.size() == 1, "a run of unreadable ticks within the window must collapse to one error line");
+        Require(logs[0] == hsm::collector::kTcpNeitherFamilyReadableError, "the first occurrence is logged verbatim");
+    }
+
+#if defined(_WIN32)
+    // #1752: the sensor is asked for more than once. The first period stays, as in the managed
+    // AddNetworkConnectionFailuresRate: the same period again is silent, another period is reported
+    // once and not applied. The call keeps the result code it always had for a repeat before Start
+    // (HSM_RESULT_OK), and a call after Start is still HSM_RESULT_INVALID_STATE. The registration
+    // does not carry the period, so the period that won is read through the test seam.
+    void NativeTcpFailureRateRepeatedEnableKeepsTheFirstPeriod()
+    {
+        std::vector<std::pair<hsm_log_level_t, std::string>> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* ud) {
+                static_cast<std::vector<std::pair<hsm_log_level_t, std::string>>*>(ud)->emplace_back(level, message);
+            },
+            &logs);
+
+        const auto not_applied_reports = [&logs] {
+            std::vector<std::string> found;
+            for (const auto& [level, message] : logs)
+                if (level == HSM_LOG_LEVEL_ERROR && message.find("TCP connection failure rate sensor was already enabled") != std::string::npos)
+                    found.push_back(message);
+            return found;
+        };
+
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 0, "the sensor must start out disabled");
+
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 60000) == HSM_RESULT_OK, "the first enable failed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first request sets the period");
+
+        // The same request again changes nothing and is nothing to report.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 60000) == HSM_RESULT_OK, "repeating the same period must succeed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the period must be unchanged by the same request");
+        Require(not_applied_reports().empty(), "the same period again must be silent");
+
+        // Another period: not applied, reported once, and the call still succeeds.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 5000) == HSM_RESULT_OK, "a repeat with another period must keep succeeding");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first period must stay when another one is asked for");
+        {
+            const auto reports = not_applied_reports();
+            Require(reports.size() == 1, "a request with another period must be reported once");
+            Contains(reports[0], "already enabled with a period of 60000 ms");
+            Contains(reports[0], "the period of 5000 ms of the second request is not applied");
+        }
+        Require(std::string(hsm_collector_last_error(collector.value)).empty(), "a successful repeat must leave no last error");
+
+        // A period that cannot be used is refused on a repeated call as on the first.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 0) == HSM_RESULT_INVALID_ARGUMENT, "a zero period must be refused on a repeat too");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 5000) == HSM_RESULT_INVALID_STATE, "a call after Start must still be refused");
+
+        std::size_t registered = 0;
+        for (std::size_t i = 0; i < hsm_collector_registration_count(collector.value); ++i)
+        {
+            const char* json = nullptr;
+            Require(hsm_collector_get_registration_json(collector.value, i, &json) == HSM_RESULT_OK, "registration read failed");
+            if (std::string(json).find("Connection failures rate") != std::string::npos)
+                ++registered;
+        }
+        Require(registered == 1, "repeated requests must leave exactly one rate sensor");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        // The first period is the collector's for good, as the managed monitor stays in the
+        // storage across a stop: a request between two runs does not replace it either.
+        Require(hsm_collector_enable_tcp_connection_failure_rate_sensor(collector.value, 7000) == HSM_RESULT_OK, "a repeat after Stop must succeed");
+        Require(hsm_collector_test_tcp_failure_rate_period_ms(collector.value) == 60000, "the first period must stay across a stop");
+        Require(not_applied_reports().size() == 2, "the request after Stop must be reported as not applied");
+    }
+#endif
+
     // ---- Linux /proc parsers (#1414) ------------------------------------------------------------
     // Algorithm-equivalence fixtures for the Linux metric sources. Rule #10 requires the native and
     // managed sensors to read the same OS truth AND run a mirrored algorithm. For the proc_stat_* and
@@ -8996,11 +10872,31 @@ namespace
             { "native_ws_receives_server_push_while_idle", [](const std::string&) { NativeWsReceivesServerPushWhileIdle(); } },
             { "native_ws_detects_server_close_and_drop", [](const std::string&) { NativeWsDetectsServerCloseAndDrop(); } },
             { "native_ws_refused_upgrade_reports_status", [](const std::string&) { NativeWsRefusedUpgradeReportsStatus(); } },
+            { "native_ws_tells_a_close_frame_from_a_tcp_close", [](const std::string&) { NativeWsTellsACloseFrameFromATcpClose(); } },
             { "native_ws_assembles_fragmented_messages", [](const std::string&) { NativeWsAssemblesFragmentedMessages(); } },
             { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
             { "native_ws_refuses_binary_and_oversized_messages", [](const std::string&) { NativeWsRefusesBinaryAndOversizedMessages(); } },
             { "native_ws_live_probe", [](const std::string&) { NativeWsLiveProbe(); } },
+            { "native_session_delivers_registrations_and_values", [](const std::string&) { NativeSessionDeliversRegistrationsAndValues(); } },
+            { "native_session_queues_while_refused_and_delivers_after_connect", [](const std::string&) { NativeSessionQueuesWhileRefusedAndDeliversAfterConnect(); } },
+            { "native_session_reconnects_after_a_drop", [](const std::string&) { NativeSessionReconnectsAfterADrop(); } },
+            { "native_session_logs_how_a_session_ended", [](const std::string&) { NativeSessionLogsHowASessionEnded(); } },
+            { "native_session_logs_open_failures_by_kind", [](const std::string&) { NativeSessionLogsOpenFailuresByKind(); } },
+            { "native_session_ack_timeout_reopens_and_resends", [](const std::string&) { NativeSessionAckTimeoutReopensAndResends(); } },
+            { "native_session_splits_a_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsABatchToTheFrameLimit(); } },
+            { "native_session_partly_delivered_batch_is_not_sent_twice", [](const std::string&) { NativeSessionPartlyDeliveredBatchIsNotSentTwice(); } },
+            { "native_session_splits_a_registration_batch_to_the_frame_limit", [](const std::string&) { NativeSessionSplitsARegistrationBatchToTheFrameLimit(); } },
+            { "native_session_split_registration_retries_only_the_failed_part",
+              [](const std::string&) { NativeSessionSplitRegistrationRetriesOnlyTheFailedPart(); } },
+            { "native_session_delivers_file_values", [](const std::string&) { NativeSessionDeliversFileValues(); } },
+            { "native_session_hands_pushed_directives_to_the_host", [](const std::string&) { NativeSessionHandsPushedDirectivesToTheHost(); } },
+            { "native_session_oversized_value_is_dropped_once", [](const std::string&) { NativeSessionOversizedValueIsDroppedOnce(); } },
+            { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
+              [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },
+            { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
+            { "native_http_posts_file_values_in_the_wire_format", [](const std::string&) { NativeHttpPostsFileValuesInTheWireFormat(); } },
+            { "native_http_hands_header_directives_to_the_host", [](const std::string&) { NativeHttpHandsHeaderDirectivesToTheHost(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
             { "native_http_stop_drain_delivers_to_healthy_server", [](const std::string&) { NativeHttpStopDrainDeliversToHealthyServer(); } },
@@ -9018,6 +10914,7 @@ namespace
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_wire_registration_with_previous_paths_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithPreviousPathsMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
             { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
             { "native_module_version_sensors_emit_start_value", [](const std::string&) { NativeModuleVersionSensorsEmitStartValueOnStart(); } },
@@ -9118,7 +11015,15 @@ namespace
             { "native_total_cpu_error_alert_attaches", [](const std::string&) { NativeTotalCpuErrorAlertAttaches(); } },
 #if defined(_WIN32)
             { "native_tcp_failure_rate_sensor_registers", [](const std::string&) { NativeTcpFailureRateSensorRegisters(); } },
+            { "native_tcp_failure_rate_repeated_enable_keeps_the_first_period",
+              [](const std::string&) { NativeTcpFailureRateRepeatedEnableKeepsTheFirstPeriod(); } },
 #endif
+            { "tcp_failure_sampler_reports_when_neither_family_is_readable",
+              [](const std::string&) { TcpFailureSamplerReportsWhenNeitherFamilyIsReadable(); } },
+            { "tcp_failure_sampler_stays_quiet_when_one_family_is_readable",
+              [](const std::string&) { TcpFailureSamplerStaysQuietWhenOneFamilyIsReadable(); } },
+            { "tcp_failure_sampler_report_collapses_in_the_collector_error_channel",
+              [](const std::string&) { TcpFailureSamplerReportCollapsesInTheCollectorErrorChannel(); } },
             { "tcp_failure_accumulator_seeds_baseline_first_tick", [](const std::string&) { TcpFailureAccumulatorSeedsBaselineFirstTick(); } },
             { "tcp_failure_accumulator_returns_delta_after_seed", [](const std::string&) { TcpFailureAccumulatorReturnsDeltaAfterSeed(); } },
             { "tcp_failure_accumulator_sums_both_families", [](const std::string&) { TcpFailureAccumulatorSumsBothFamilies(); } },
@@ -9225,6 +11130,7 @@ namespace
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_stop_drain_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
@@ -9233,6 +11139,7 @@ namespace
             { "conformance_timespan_version_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_previous_paths_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
@@ -9241,6 +11148,25 @@ namespace
             { "conformance_module_markers_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_tcp_failure_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
+#if defined(HSM_COLLECTOR_HTTP)
+            // (#1751) Needs the HTTP transport, not WebSocket: it runs wherever this build does.
+            { "conformance_stop_drain_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            // (#1750) The same sender as above.
+            { "conformance_registration_order_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            // The session scenarios need a libcurl with WebSocket: without one they skip and say
+            // so, unless HSM_REQUIRE_WEBSOCKET=1 makes that a failure (the CI HTTP lane).
+            { "conformance_session_transport_contract",
+              [](const std::string& path) {
+                  if (WsAvailable("conformance_session_transport_contract"))
+                      RunConformanceContract(path);
+              } },
+            { "meta_session_must_fail",
+              [](const std::string& path) {
+                  if (WsAvailable("meta_session_must_fail"))
+                      RunConformanceContractExpectFailure(path);
+              } },
+#endif
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

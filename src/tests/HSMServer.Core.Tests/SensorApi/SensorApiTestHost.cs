@@ -1,5 +1,7 @@
+using HSMCommon.TaskResult;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
@@ -12,6 +14,9 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -46,11 +51,52 @@ namespace HSMServer.Core.Tests.SensorApi
     }
 
 
+    // What the session handler logged, in order. Its own LogFactory, so the process-wide NLog
+    // configuration is neither read nor changed and the tests can run in parallel.
+    internal sealed class RecordingLog : Target
+    {
+        public ConcurrentQueue<(NLog.LogLevel Level, string Message)> Lines { get; } = new();
+
+
+        public static Logger CreateLogger(RecordingLog target)
+        {
+            var factory = new LogFactory();
+            var config = new LoggingConfiguration(factory);
+
+            config.AddRuleForAllLevels(target);
+            factory.Configuration = config;
+
+            return factory.GetLogger(nameof(CollectorSessionHandler));
+        }
+
+        public (NLog.LogLevel Level, string Message)[] Matching(params string[] parts) =>
+            Lines.Where(line => parts.All(part => line.Message.Contains(part, StringComparison.Ordinal))).ToArray();
+
+        public string Dump() => string.Join(Environment.NewLine, Lines.Select(line => $"{line.Level}|{line.Message}"));
+
+
+        protected override void Write(LogEventInfo logEvent) => Lines.Enqueue((logEvent.Level, logEvent.FormattedMessage));
+    }
+
+
     // A clock whose timers fire only when a test says so. The session's silence limit runs
     // on it, so no test waits for real seconds and none can be cut off by a slow machine.
     internal sealed class ManualTimeProvider : TimeProvider
     {
+        private long _offsetTicks;
+
+
         public ConcurrentQueue<ManualTimer> Timers { get; } = new();
+
+
+        // Moves the clock's readings (GetUtcNow, GetTimestamp) forward. Timers are not touched:
+        // they fire only when a test fires them.
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
+
+        public override long GetTimestamp() =>
+            base.GetTimestamp() + (long)(Interlocked.Read(ref _offsetTicks) * (double)TimestampFrequency / TimeSpan.TicksPerSecond);
 
 
         public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
@@ -156,6 +202,61 @@ namespace HSMServer.Core.Tests.SensorApi
     }
 
 
+    // The real cache, except that the registration of the paths a test names fails with an
+    // exception, as a fault of the server would. The real cache turns what it catches itself
+    // into a result, so this stands for whatever gets past that: the Sensor API has to
+    // answer it as a fault whatever its source.
+    public class FaultingCache : DispatchProxy
+    {
+        public const string FaultText = "the store is not ready";
+
+        private ITreeValuesCache _inner;
+        private volatile string[] _faultedPaths = [];
+        private volatile bool _keyLookupFaults;
+
+
+        public ITreeValuesCache Cache { get; private set; }
+
+
+        public static FaultingCache Wrap(ITreeValuesCache inner)
+        {
+            var cache = Create<ITreeValuesCache, FaultingCache>();
+            var proxy = (FaultingCache)(object)cache;
+
+            proxy._inner = inner;
+            proxy.Cache = cache;
+
+            return proxy;
+        }
+
+        // The registrations of these paths fail from now on, and only they.
+        public void FaultOn(params string[] paths) => _faultedPaths = paths;
+
+        // Looking an access key up fails from now on: the server cannot tell who is asking.
+        public void FaultOnKeyLookup() => _keyLookupFaults = true;
+
+        // The fault has passed.
+        public void Recover()
+        {
+            _faultedPaths = [];
+            _keyLookupFaults = false;
+        }
+
+
+        protected override object Invoke(MethodInfo targetMethod, object[] args)
+        {
+            if (_keyLookupFaults && targetMethod.Name == nameof(ITreeValuesCache.TryGetKey))
+                throw new InvalidOperationException(FaultText);
+
+            if (targetMethod.Name == nameof(ITreeValuesCache.AddOrUpdateSensorAsync) &&
+                args[0] is SensorAddOrUpdateRequest registration && _faultedPaths.Contains(registration.Path))
+                return Task.FromException<TaskResult>(new InvalidOperationException($"{FaultText}: {registration.Path}"));
+
+            return targetMethod.Invoke(_inner, args);
+        }
+    }
+
+
     // The real Sensor API on a real Kestrel listener (loopback, ephemeral port): the real
     // TelemetryMiddleware, SensorsController, ingestion service and session handler over
     // the cache the test hands in. Only the server's self-monitoring collector and its
@@ -168,19 +269,24 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public RecordingTelemetry Telemetry { get; }
 
+        public RecordingLog Log { get; }
+
         public ManualTimeProvider Time => (ManualTimeProvider)_app.Services.GetRequiredService<TimeProvider>();
 
         public CollectorSessionRegistry Registry => _app.Services.GetRequiredService<CollectorSessionRegistry>();
+
+        public CollectorSessionHandler Handler => _app.Services.GetRequiredService<CollectorSessionHandler>();
 
         public Uri HttpBase { get; }
 
         public Uri SessionUri { get; }
 
 
-        private SensorApiTestHost(WebApplication app, RecordingTelemetry telemetry)
+        private SensorApiTestHost(WebApplication app, RecordingTelemetry telemetry, RecordingLog log)
         {
             _app = app;
             Telemetry = telemetry;
+            Log = log;
 
             var address = new Uri(app.Urls.First());
 
@@ -189,15 +295,17 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions)
+        // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
+        // setting and the folder whose agent/version.txt names the staged agent.
+        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null)
         {
             var telemetry = new RecordingTelemetry();
 
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.CollectorSessions).Returns(sessions);
-            config.SetupGet(c => c.Agent).Returns(new AgentConfig());
+            config.SetupGet(c => c.Agent).Returns(agent ?? new AgentConfig());
 
-            var builder = WebApplication.CreateBuilder();
+            var builder = webRoot is null ? WebApplication.CreateBuilder() : WebApplication.CreateBuilder(new WebApplicationOptions { WebRootPath = webRoot });
 
             builder.Logging.ClearProviders();
             builder.WebHost.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -207,6 +315,7 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton(config.Object);
             builder.Services.AddSingleton<TelemetryCollector>();
             builder.Services.AddSingleton<SensorIngestionService>();
+            builder.Services.AddSingleton<AgentDirectives>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
             builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());
@@ -227,6 +336,9 @@ namespace HSMServer.Core.Tests.SensorApi
                     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals);
 
             var app = builder.Build();
+            var log = new RecordingLog();
+
+            app.Services.GetRequiredService<CollectorSessionHandler>().UseLogger(RecordingLog.CreateLogger(log));
 
             // The part of the server pipeline the Sensor API runs through, in its order.
             app.UseRouting();
@@ -236,7 +348,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             await app.StartAsync();
 
-            return new SensorApiTestHost(app, telemetry);
+            return new SensorApiTestHost(app, telemetry, log);
         }
 
         public Task StopAsync() => _app.StopAsync();

@@ -72,6 +72,11 @@ namespace HSMServer.Middleware.Telemetry
                 _logger.Error(ex);
                 error = "Cannot register the request";
 
+                // Not a rejected key: the server failed while resolving it (#1756). The
+                // answer here is what it was; the mark lets the registration routes
+                // answer it as a fault instead of the access error.
+                context.SetPublicApiFault();
+
                 return false;
             }
         }
