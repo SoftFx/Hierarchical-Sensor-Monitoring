@@ -946,14 +946,22 @@ namespace HSMServer.Core.Cache
             // #1709: the manual value/comment edit from the web UI's status
             // modal rides this path, bypassing the API converters' ingestion
             // gate — mask the two text fields here so a pasted connection
-            // string stores the same ***@ as collector ingestion.
-            request.Comment = Services.CredentialMasker.MaskCredentials(request.Comment);
-            request.Value = Services.CredentialMasker.MaskCredentials(request.Value);
+            // string stores the same ***@ as collector ingestion. A COPY, not
+            // a mutation: the caller's request keeps its original text.
+            var masked = new UpdateSensorValueRequestModel(request.Id, string.Empty)
+            {
+                Id = request.Id,
+                Initiator = request.Initiator,
+                Status = request.Status,
+                Comment = Services.CredentialMasker.MaskCredentials(request.Comment),
+                Value = Services.CredentialMasker.MaskCredentials(request.Value),
+                ChangeLast = request.ChangeLast,
+            };
 
-            if (!TryGetSensorById(request.Id, out var sensor))
-                return TaskResult.FromError($"Sensor {sensor.Id} was not found");
+            if (!TryGetSensorById(masked.Id, out var sensor))
+                return TaskResult.FromError($"Sensor {masked.Id} was not found");
 
-            return await ProcessRequestAsync(sensor.Root.Id, request, token);
+            return await ProcessRequestAsync(sensor.Root.Id, masked, token);
         }
 
         private void UpdateSensorValue(UpdateSensorValueRequestModel request)

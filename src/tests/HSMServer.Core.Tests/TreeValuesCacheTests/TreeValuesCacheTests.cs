@@ -901,7 +901,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 Id = sensor.Id,
                 Status = HSMCommon.Model.SensorStatus.Ok,
-                Comment = "manual edit",
+                Comment = "conn: mongodb://backup:secret@mongo:27017/db",
                 Value = "mongodb://backup:secret@mongo:27017/db",
                 ChangeLast = false,
             });
@@ -909,6 +909,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await TestWait.UntilAsync(() => sensor.LastValue is { }, "the UI-added value to land");
 
             Assert.Equal("mongodb://***@mongo:27017/db", sensor.LastValue.RawValue?.ToString());
+            // #1709 review: the comment of the manual edit masks too — the
+            // modal is where a pasted exception message lands.
+            Assert.Equal("conn: mongodb://***@mongo:27017/db", sensor.LastValue.Comment);
         }
 
         private static AddSensorValueRequest BuildSensorStoreInfo(Guid key, string path, SensorType type, ProductModel product) =>

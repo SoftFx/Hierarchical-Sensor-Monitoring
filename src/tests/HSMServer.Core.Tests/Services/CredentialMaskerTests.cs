@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics;
+using System.Linq;
 using HSMServer.Core.ApiObjectsConverters;
 using HSMServer.Core.Services;
 using Xunit;
@@ -25,6 +28,17 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("mongodb://backup:pa/ss@mongo/db", "mongodb://***@mongo/db")]
         [InlineData("mongodb://backup:pa?ss@mongo/db", "mongodb://***@mongo/db")]
         [InlineData("mongodb://backup:pa#ss@mongo/db", "mongodb://***@mongo/db")]
+        // #1709 review: the host after the credential is NOT parsed, so
+        // replica-set host lists, bracketed IPv6 literals and URLs embedded
+        // in JSON, parentheses or trailing punctuation (exception text in a
+        // comment) all mask.
+        [InlineData("mongodb://u:p@h1:27017,h2:27017/db", "mongodb://***@h1:27017,h2:27017/db")]
+        [InlineData("postgres://u:p@[::1]:5432/db", "postgres://***@[::1]:5432/db")]
+        [InlineData("Failed to connect mongodb://u:p@mongo:27017.", "Failed to connect mongodb://***@mongo:27017.")]
+        [InlineData("{\"c\":\"mongodb://u:p@mongo:27017\"}", "{\"c\":\"mongodb://***@mongo:27017\"}")]
+        [InlineData("(mongodb://u:p@mongo:27017)", "(mongodb://***@mongo:27017)")]
+        // two credentials in ONE word, separated by a path delimiter
+        [InlineData("a://u:p@h/x://y:z@w", "a://***@h/x://***@w")]
         public void MasksTheCredentialPart(string input, string expected)
         {
             Assert.Equal(expected, CredentialMasker.MaskCredentials(input));
@@ -34,12 +48,47 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("https://host/path")]
         [InlineData("mongodb://mongo:27017/db")]
         [InlineData("mongodb://user@mongo/db")]
+        [InlineData("mongodb://user:@mongo/db")] // empty password — nothing to leak
         [InlineData("http://host:8080/path?email=a@b")] // host:port is not a credential — an '@' in the path/query never masks
         [InlineData("http://host:8080/a@b/c")]
+        // #1709 review: the raw-password fallback only fires for a
+        // userinfo-shaped authority — empty, bracketed and host:port
+        // authorities keep their later '@'s, which live in the path.
+        [InlineData("http://[::1]/a:b@c")]
+        [InlineData("file:///C:/x@y")]
         [InlineData("plain text, no url at all")]
         public void LeavesCredentialFreeTextAlone(string input)
         {
             Assert.Equal(input, CredentialMasker.MaskCredentials(input));
+        }
+
+        // #1709 review: every value and comment rides the masker on the
+        // request thread — the scan must stay linear. Before the rewrite a
+        // 200 KB battery of "a://" took 32 s in ONE MaskCredentials call;
+        // the bound below is generous (linear is milliseconds here, a
+        // quadratic scan is minutes at these sizes).
+        [Fact]
+        public void AdversarialLongInput_StaysLinear()
+        {
+            const string filler = "x://h:80/"; // port-shaped authority: full work per "://", never masks
+            const string fallbackFiller = "a://q:x/"; // userinfo-shaped: the raw-password fallback fires per "://"
+            var noAtBattery = string.Concat(Enumerable.Repeat("a://", 250_000)); // 1 MB word without '@'
+            var portBattery = string.Concat(Enumerable.Repeat(filler, 60_000)) + "@z mongodb://u:p@mongo:27017/db";
+            // the ONLY '@' sits before the first "://": every fallback scan
+            // runs to the end of the word and finds nothing — without the
+            // break it is one full-tail rescan per "://" (quadratic).
+            var atFrontBattery = "@" + string.Concat(Enumerable.Repeat(fallbackFiller, 60_000));
+
+            var stopwatch = Stopwatch.StartNew();
+            var noAtResult = CredentialMasker.MaskCredentials(noAtBattery);
+            var portResult = CredentialMasker.MaskCredentials(portBattery);
+            var atFrontResult = CredentialMasker.MaskCredentials(atFrontBattery);
+            stopwatch.Stop();
+
+            Assert.Equal(noAtBattery, noAtResult);
+            Assert.Equal(string.Concat(Enumerable.Repeat(filler, 60_000)) + "@z mongodb://***@mongo:27017/db", portResult);
+            Assert.Equal(atFrontBattery, atFrontResult);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"masking the batteries took {stopwatch.Elapsed}");
         }
 
         [Fact]

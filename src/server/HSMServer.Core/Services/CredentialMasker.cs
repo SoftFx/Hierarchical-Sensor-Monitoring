@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace HSMServer.Core.Services
 {
@@ -6,13 +7,19 @@ namespace HSMServer.Core.Services
     /// #1709: string sensor values have carried full connection strings with
     /// embedded credentials (mongodb://user:pass@host), readable by every
     /// role with read access. Mask the credential part at INGESTION: the
-    /// scheme and host stay readable for monitoring, the secret never
+    /// scheme and the host stay readable for monitoring, the secret never
     /// reaches storage. Already-stored values keep their secret — rotate the
     /// exposed credential (the issue tracks the ops action).
+    /// A credential is user:password@ INSIDE the authority; the host after
+    /// it is never parsed, so replica-set host lists, bracketed IPv6 hosts
+    /// and URLs embedded in JSON, parentheses or trailing punctuation still
+    /// mask (#1709 review). The scan is word-by-word and linear in the input
+    /// length — every character is examined a bounded number of times, so an
+    /// adversarial megabyte value cannot pin a request thread.
     /// </summary>
     public static class CredentialMasker
     {
-        public const string Mask = "://***@";
+        private const string SchemeSeparator = "://";
 
         private const string MaskTail = "***@";
 
@@ -21,105 +28,133 @@ namespace HSMServer.Core.Services
             if (string.IsNullOrEmpty(value))
                 return value;
 
-            var result = value;
-            var searchFrom = 0;
+            // Masking needs both markers; most values and comments carry
+            // neither — two scans, no allocation.
+            if (value.IndexOf(SchemeSeparator, StringComparison.Ordinal) < 0 || value.IndexOf('@') < 0)
+                return value;
 
-            while (searchFrom < result.Length)
+            var builder = new StringBuilder(value.Length);
+            var masked = false;
+            var position = 0;
+
+            while (position < value.Length)
             {
-                var schemeAt = result.IndexOf("://", searchFrom, StringComparison.Ordinal);
+                if (char.IsWhiteSpace(value[position]))
+                {
+                    builder.Append(value[position]);
+                    position++;
+                    continue;
+                }
+
+                var wordEnd = position;
+
+                while (wordEnd < value.Length && !char.IsWhiteSpace(value[wordEnd]))
+                    wordEnd++;
+
+                masked |= AppendMaskedWord(value, position, wordEnd, builder);
+                position = wordEnd;
+            }
+
+            return masked ? builder.ToString() : value;
+        }
+
+        // Appends the word [wordStart, wordEnd) with every scheme://user:password@
+        // inside it masked; tells whether anything was masked. The word is read
+        // through its ORIGINAL indices — masking only changes what is appended,
+        // never the scanned input — and words without both markers copy through
+        // untouched (an '@'-free battery of "://", the cheapest adversarial
+        // shape, costs one scan and no loop).
+        private static bool AppendMaskedWord(string value, int wordStart, int wordEnd, StringBuilder builder)
+        {
+            if (value.IndexOf(SchemeSeparator, wordStart, wordEnd - wordStart, StringComparison.Ordinal) < 0 ||
+                IndexInRange(value, '@', wordStart, wordEnd) < 0)
+            {
+                builder.Append(value, wordStart, wordEnd - wordStart);
+                return false;
+            }
+
+            var masked = false;
+            var copyFrom = wordStart;     // start of the pending verbatim run
+            var searchFrom = wordStart;   // where the next "://" search starts
+            var authorityEnd = wordStart; // shared pointer: first path delimiter of the current authority
+
+            while (searchFrom < wordEnd)
+            {
+                var schemeAt = value.IndexOf(SchemeSeparator, searchFrom, wordEnd - searchFrom, StringComparison.Ordinal);
 
                 if (schemeAt < 0)
                     break;
 
-                var authorityAt = schemeAt + 3;
-                var wordEnd = WordEnd(result, authorityAt);
-                var separator = SeparatorOf(result, authorityAt, wordEnd);
+                var authorityAt = schemeAt + SchemeSeparator.Length;
 
-                if (separator < 0)
+                // The authority ends at the first '/', '?' or '#'; the shared
+                // pointer never rescans what an earlier "://" already covered.
+                if (authorityEnd < authorityAt)
+                    authorityEnd = authorityAt;
+
+                while (authorityEnd < wordEnd && !IsPathDelimiter(value[authorityEnd]))
+                    authorityEnd++;
+
+                // 1) The common shape: the authority contains '@' — the LAST
+                //    one separates the credential (a raw '@' in
+                //    mongodb://u:p@ss@host belongs to the password, not the host).
+                var separator = LastIndexInRange(value, '@', authorityAt, authorityEnd);
+
+                // 2) No '@' in the authority. When the authority cannot be
+                //    host[:port] (mongodb://backup:pa/ss@host/db — a raw '/',
+                //    '?' or '#' in the password ends the authority scan early),
+                //    the password runs past the delimiter and the separator is
+                //    the last '@' of the whole word. That scan reaches the END
+                //    of the word: when it too finds no '@', no later "://"
+                //    searches far enough right to see one, so the word is done.
+                //    Without the break, a word whose only '@' sits BEFORE the
+                //    first "://" (@a://q:x/@a://q:x/...) makes every hit
+                //    rescan the whole tail — quadratic on the request thread.
+                if (separator < 0 && PasswordMayRunPastDelimiters(value, authorityAt, authorityEnd))
                 {
-                    searchFrom = authorityAt;
+                    separator = LastIndexInRange(value, '@', authorityAt, wordEnd);
+
+                    if (separator < 0)
+                        break;
+                }
+
+                // The credential must carry the password marker ':' with a
+                // non-empty tail: redis://:pass@host has an EMPTY user (mask),
+                // while scheme://user:@host and scheme://user@host carry no
+                // password — nothing to leak, leave them.
+                var passwordColon = separator >= 0
+                    ? IndexInRange(value, ':', authorityAt, separator)
+                    : -1;
+
+                if (passwordColon < 0 || passwordColon == separator - 1)
+                {
+                    searchFrom = schemeAt + 1;
                     continue;
                 }
 
-                result = string.Concat(result.AsSpan(0, authorityAt), MaskTail, result.AsSpan(separator + 1));
-                searchFrom = authorityAt + MaskTail.Length;
+                builder.Append(value, copyFrom, authorityAt - copyFrom);
+                builder.Append(MaskTail);
+                copyFrom = separator + 1;
+                masked = true;
+                searchFrom = separator + 1;
             }
 
-            return result;
+            builder.Append(value, copyFrom, wordEnd - copyFrom);
+
+            return masked;
         }
 
-        private static int WordEnd(string value, int from)
+        // The fallback of the raw-password case — only a userinfo-shaped
+        // authority may take it: an EMPTY authority, a bracketed IPv6 host
+        // ([::1]) and a host:port authority are hosts, and their later '@'s
+        // live in the path (http://[::1]/a:b@c, file:///C:/x@y) — masking
+        // there would destroy credential-free values.
+        private static bool PasswordMayRunPastDelimiters(string value, int from, int end)
         {
-            var end = from;
+            if (from >= end || value[from] == '[')
+                return false;
 
-            while (end < value.Length && !char.IsWhiteSpace(value[end]))
-                end++;
-
-            return end;
-        }
-
-        // The index of the credential-separating '@' within [from, wordEnd),
-        // or -1 when the word carries no credential. Producers that build
-        // connection strings by plain concatenation do not percent-encode the
-        // password, so '@', '/', '?' and '#' may appear raw in it (#1709
-        // review); the discriminator against a plain host:port URL (whose
-        // colon tail is digits) is the port rule in LooksLikeHostPort.
-        private static int SeparatorOf(string value, int from, int wordEnd)
-        {
-            var authorityEnd = wordEnd;
-
-            for (var i = from; i < wordEnd; i++)
-            {
-                if (value[i] is '/' or '?' or '#')
-                {
-                    authorityEnd = i;
-                    break;
-                }
-            }
-
-            // 1) The common shape: the authority (up to the first path
-            //    delimiter) contains '@' — the LAST one separates the
-            //    credential (a raw '@' in mongodb://u:p@ss@host belongs to
-            //    the password, not the host).
-            var separator = LastIndexInRange(value, '@', from, authorityEnd);
-
-            // 2) No '@' in the authority. When the authority cannot be
-            //    host[:port] (mongodb://backup:pa/ss@host/db — the colon tail
-            //    is not digits), the password runs past the delimiter and the
-            //    separator is the last '@' of the whole word. A port-shaped
-            //    authority (http://host:8080/path?email=a@b) never takes this
-            //    branch, so an '@' in the path or query stays untouched.
-            if (separator < 0 && !LooksLikeHostPort(value, from, authorityEnd))
-                separator = LastIndexInRange(value, '@', from, wordEnd);
-
-            if (separator < 0)
-                return -1;
-
-            // The credential must carry the password marker ':' with a
-            // non-empty tail (redis://:pass@host has an empty user); a bare
-            // scheme://user@host is not a secret.
-            var userinfoColon = IndexInRange(value, ':', from, separator);
-
-            if (userinfoColon < 0 || userinfoColon == separator - 1)
-                return -1;
-
-            // The host segment must be host-shaped: no '@' inside, and a
-            // port, if present, is the digits-only tail.
-            var hostEnd = wordEnd;
-
-            for (var i = separator + 1; i < wordEnd; i++)
-            {
-                if (value[i] is '/' or '?' or '#')
-                {
-                    hostEnd = i;
-                    break;
-                }
-            }
-
-            return LooksLikeHostPort(value, separator + 1, hostEnd) &&
-                   !ContainsInRange(value, '@', separator + 1, hostEnd)
-                ? separator
-                : -1;
+            return !LooksLikeHostPort(value, from, end);
         }
 
         // host, or host:port with an all-digit port and a non-empty host.
@@ -157,6 +192,9 @@ namespace HSMServer.Core.Services
             return true;
         }
 
+        private static bool IsPathDelimiter(char ch) =>
+            ch is '/' or '?' or '#';
+
         private static int IndexInRange(string value, char of, int from, int end)
         {
             for (var i = from; i < end; i++)
@@ -174,8 +212,5 @@ namespace HSMServer.Core.Services
 
             return -1;
         }
-
-        private static bool ContainsInRange(string value, char of, int from, int end) =>
-            IndexInRange(value, of, from, end) >= 0;
     }
 }
