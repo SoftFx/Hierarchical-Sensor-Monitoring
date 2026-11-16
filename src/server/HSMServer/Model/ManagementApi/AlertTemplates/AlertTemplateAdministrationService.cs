@@ -824,6 +824,15 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, $"{prefix}.icon",
                     $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
 
+            // #1673: the raw-ticks confirmation period rides the same shifted-time
+            // arithmetic as the TTL intervals, so it carries the same upper bound.
+            // Zero stays accepted (it disables the confirmation delay), so the wording
+            // says "not negative" rather than "positive".
+            if (policy.ConfirmationPeriod is { } confirmation &&
+                (confirmation < 0L || confirmation > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
+                Add(errors, $"{prefix}.confirmationPeriod",
+                    "The confirmation period must not be negative and keep the shifted time inside the DateTime range.");
+
             // #1707: a policy that watches Status while carrying the Error
             // status effect reacts to its own effect — the same rule the
             // sensor-policy surface applies, so a template cannot mint

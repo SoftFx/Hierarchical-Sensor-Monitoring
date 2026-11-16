@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -220,6 +221,7 @@ namespace HSMServer.ServiceExtensions
                 o.UseInlineDefinitionsForEnums();
                 o.OperationFilter<DataRequestHeaderSwaggerFilter>();
                 o.OperationFilter<ManagementApiSecuritySwaggerFilter>();
+                o.OperationFilter<DryRunHeaderSwaggerFilter>();
                 o.SchemaFilter<SensorValueUnionSchemaFilter>();
                 o.SchemaFilter<ManagementApiErrorDetailsSchemaFilter>();
                 o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
@@ -280,6 +282,21 @@ namespace HSMServer.ServiceExtensions
 
                 o.DocInclusionPredicate((name, api) => true); //for controllers groupping
             });
+
+            return services;
+        }
+
+        // The MVC registration in one place (#1675 review): the global action
+        // filter that fails a malformed X-HSM-Dry-Run header closed with 400
+        // belongs to the real pipeline, so the registration is a named method a
+        // test can pin, not an anonymous lambda in Program.cs.
+        public static IServiceCollection AddHsmMvc(this IServiceCollection services)
+        {
+            services.AddMvc(options => options.Filters.Add<DryRunHeaderFilter>())
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
+                });
 
             return services;
         }
