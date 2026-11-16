@@ -804,24 +804,33 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private (ProductModel Product, PolicyWriteFailure Failure) ResolveWritableProduct(Guid productId,
             ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, ProductResource(productId), access);
+            // Unknown id: the plain area 404, before the evaluator call.
+            if (!_cache.TryGetProduct(productId, out var product) || product is null)
+                return (null, NotFound());
 
-            if (failure is not null)
-                return (null, failure);
+            // #1680: the route id may be ANY visible node — a nested folder,
+            // and product TTL CRUD on a folder node is a supported case. Sight
+            // is keyed on the node's ROOT product, so authorize the root the
+            // same way the read surface does; the write still targets the
+            // node the route named.
+            var failure = Authorize(user, ProductResource(product.Root.Id), access);
 
-            return !_cache.TryGetProduct(productId, out var product) || product is null
-                ? (null, NotFound())
-                : (product, null);
+            return failure is not null ? (null, failure) : (product, null);
         }
 
         // The product data-policy surface resolves the OWNING sensor (the
         // subtree aggregate), authorizes the write at the product boundary and
         // then at the sensor's own boundary (the honest write target), and hands
-        // the change to the sensor-level engine.
+        // the change to the sensor-level engine. The product boundary is the
+        // node's ROOT (#1680) — the route id may be any visible node, and
+        // ProductsRoles holds root ids only.
         private (BaseSensorModel Sensor, PolicyWriteFailure Failure) ResolveProductPolicyWrite(
             Guid productId, Guid policyId, ClaimsPrincipal user)
         {
-            var productFailure = Authorize(user, ProductResource(productId));
+            if (!_cache.TryGetProduct(productId, out var node) || node is null)
+                return (null, NotFound());
+
+            var productFailure = Authorize(user, ProductResource(node.Root.Id));
 
             if (productFailure is not null)
                 return (null, productFailure);
@@ -1022,6 +1031,17 @@ namespace HSMServer.Model.ManagementApi.Alerts
                         "The notification template is required when a notification is present.");
 
                 ValidateDestination(destination, availableChats, errors);
+
+                // #1674: the sensor-policy surface rides the template write's rule
+                // (#1608) — the message renders with string.Format over the
+                // substituted $variables, so braces in the user text either throw
+                // at evaluation time or silently substitute another variable's
+                // value. Reject them at write time on both policy kinds. The
+                // template may still be null here — the required check above only
+                // records its error.
+                if (notification.Template is { } message && (message.Contains('{') || message.Contains('}')))
+                    AlertPolicyConditionValidator.Add(errors, "notification.template",
+                        "The notification template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
 
                 if (!string.IsNullOrEmpty(notification.Repeat) &&
                     (!Enum.TryParse<AlertRepeatMode>(notification.Repeat, ignoreCase: true, out var repeat) ||

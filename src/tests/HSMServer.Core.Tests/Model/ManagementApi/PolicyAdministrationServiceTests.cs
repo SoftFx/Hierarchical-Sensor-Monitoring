@@ -654,6 +654,83 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Empty(sensor.Policies.TTLPolicies);
         }
 
+        // A notification without a template stays the "required" 422, never an
+        // NRE 500 — the brace check runs after the required check without an
+        // early return.
+        [Fact]
+        public async Task CreateSensorPolicy_NullNotificationTemplate_AnswersRequiredNot500()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcNullTemplate");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = null },
+            }, User);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("required", created.Failure.Errors["notification.template"].Single());
+        }
+
+        // #1674: the message renders with string.Format over the substituted
+        // $variables, so braces in the user text either throw at evaluation time
+        // or silently substitute another variable's value. The template write
+        // already rejects them (#1608); both sensor-policy kinds must too, on
+        // create and update.
+        [Theory]
+        [InlineData("bad {0} brace")]
+        [InlineData("closing } alone")]
+        public async Task SensorPolicies_RejectCurlyBracesInTheNotificationTemplate(string template)
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTemplateBraces");
+
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", created.Failure.Errors["notification.template"].Single());
+            Assert.Empty(sensor.Policies);
+
+            var ttlCreated = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, ttlCreated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", ttlCreated.Failure.Errors["notification.template"].Single());
+            Assert.Empty(sensor.Policies.TTLPolicies);
+
+            var seeded = await _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(), User);
+            Assert.True(seeded.Success, seeded.Failure?.Message);
+
+            var updated = await _service.UpdateSensorPolicyAsync(sensor.Id, seeded.Value.Id, DataPolicy() with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, updated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", updated.Failure.Errors["notification.template"].Single());
+            // Nothing was stored by the rejected update: the seeded policy keeps
+            // its clean template.
+            Assert.Equal(DataPolicy().Notification.Template,
+                sensor.Policies.Single(p => p.Id == seeded.Value.Id).Template);
+
+            var ttlSeeded = await _service.CreateSensorTtlPolicyAsync(sensor.Id, TtlPolicy("00:30:00"), User);
+            Assert.True(ttlSeeded.Success, ttlSeeded.Failure?.Message);
+
+            var ttlUpdated = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, ttlSeeded.Value.Id, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, ttlUpdated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", ttlUpdated.Failure.Errors["notification.template"].Single());
+
+            var productCreated = await _service.CreateProductTtlPolicyAsync(_fixture.ProductAId, TtlPolicy("00:30:00") with
+            {
+                Notification = new AlertNotificationDto { Template = template },
+            }, User);
+            Assert.Equal(PolicyWriteOutcome.Invalid, productCreated.Failure.Outcome);
+            Assert.Contains("must not contain curly braces", productCreated.Failure.Errors["notification.template"].Single());
+        }
+
         // #1673: an interval near TimeSpan.MaxValue parses fine but now + ticks
         // leaves the DateTime range, where AddTicks throws in the retention
         // scan. The template write already rejects such ticks; the TimeSpan
