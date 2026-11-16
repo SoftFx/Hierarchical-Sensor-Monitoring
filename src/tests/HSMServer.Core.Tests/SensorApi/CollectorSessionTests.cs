@@ -451,16 +451,21 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(400, (int)missing["status"]);
             Assert.Equal("malformed body", (string)missing["error"]);
 
-            // A value the hand-written version converter cannot read throws something other
-            // than a JSON error. It is a malformed body all the same, not the end of the session.
-            foreach (var version in new[] { "{\"Type\":8,\"Value\":\"abc\",\"Time\":\"2026-11-10T10:00:00Z\",\"Status\":1,\"Path\":\"failure/version\"}", "{\"Type\":8,\"Value\":\"1.2.3\",\"Path\":\"failure/version\"}" })
-            {
-                await SendAsync(socket, $"{{\"id\":6,\"op\":\"list\",\"body\":[{version}]}}");
-                var refused = await ReceiveAsync(socket);
+            // A value the hand-written version converter cannot read is reported as a
+            // malformed body — including a non-JSON parse failure such as an unparseable
+            // version string — and never ends the session.
+            await SendAsync(socket, $"{{\"id\":6,\"op\":\"list\",\"body\":[{{\"Type\":8,\"Value\":\"abc\",\"Time\":\"2026-11-10T10:00:00Z\",\"Status\":1,\"Path\":\"failure/version\"}}]}}");
+            var refused = await ReceiveAsync(socket);
 
-                Assert.Equal(400, (int)refused["status"]);
-                Assert.Equal("malformed body", (string)refused["error"]);
-            }
+            Assert.Equal(400, (int)refused["status"]);
+            Assert.Equal("malformed body", (string)refused["error"]);
+
+            // A version element without a Status field is valid since #1671 (Status
+            // defaults to Ok), on both transports.
+            await SendAsync(socket, "{\"id\":7,\"op\":\"list\",\"body\":[{\"Type\":8,\"Value\":\"1.2.3\",\"Path\":\"failure/version\"}]}");
+            var accepted = await ReceiveAsync(socket);
+
+            Assert.Equal(200, (int)accepted["status"]);
 
             // The session survives a refused request.
             await SendAsync(socket, "{\"op\":\"ping\"}");
