@@ -803,24 +803,33 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private (ProductModel Product, PolicyWriteFailure Failure) ResolveWritableProduct(Guid productId,
             ClaimsPrincipal user, ChangeSets.IChangeSetAccess access = null)
         {
-            var failure = Authorize(user, ProductResource(productId), access);
+            // Unknown id: the plain area 404, before the evaluator call.
+            if (!_cache.TryGetProduct(productId, out var product) || product is null)
+                return (null, NotFound());
 
-            if (failure is not null)
-                return (null, failure);
+            // #1680: the route id may be ANY visible node — a nested folder,
+            // and product TTL CRUD on a folder node is a supported case. Sight
+            // is keyed on the node's ROOT product, so authorize the root the
+            // same way the read surface does; the write still targets the
+            // node the route named.
+            var failure = Authorize(user, ProductResource(product.Root.Id), access);
 
-            return !_cache.TryGetProduct(productId, out var product) || product is null
-                ? (null, NotFound())
-                : (product, null);
+            return failure is not null ? (null, failure) : (product, null);
         }
 
         // The product data-policy surface resolves the OWNING sensor (the
         // subtree aggregate), authorizes the write at the product boundary and
         // then at the sensor's own boundary (the honest write target), and hands
-        // the change to the sensor-level engine.
+        // the change to the sensor-level engine. The product boundary is the
+        // node's ROOT (#1680) — the route id may be any visible node, and
+        // ProductsRoles holds root ids only.
         private (BaseSensorModel Sensor, PolicyWriteFailure Failure) ResolveProductPolicyWrite(
             Guid productId, Guid policyId, ClaimsPrincipal user)
         {
-            var productFailure = Authorize(user, ProductResource(productId));
+            if (!_cache.TryGetProduct(productId, out var node) || node is null)
+                return (null, NotFound());
+
+            var productFailure = Authorize(user, ProductResource(node.Root.Id));
 
             if (productFailure is not null)
                 return (null, productFailure);

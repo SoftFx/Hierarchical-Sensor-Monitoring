@@ -379,14 +379,21 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private (ProductModel Product, ManagementReadFailure Failure) ResolveProduct(
             ClaimsPrincipal user, Guid productId)
         {
-            var failure = AuthorizeProductRead(user, productId);
+            // Unknown id: the plain area 404, before the evaluator call — the
+            // rule that keeps unknown and invisible indistinguishable.
+            if (!_cache.TryGetProduct(productId, out var product) || product is null)
+                return (null, new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound });
 
-            if (failure is not null)
-                return (null, failure);
+            // #1680: the route id may be ANY visible node — a nested folder.
+            // Sight is keyed on the node's ROOT product (ProductsRoles holds
+            // root ids; folder roles materialize per root), so authorizing
+            // the raw id 404s a scoped owner whose role covers the node
+            // through its root. Authorize the root, exactly as the
+            // nodes/sensors read surface does; the aggregate still scans the
+            // subtree of the node the route named.
+            var failure = AuthorizeProductRead(user, product.Root.Id);
 
-            return _cache.TryGetProduct(productId, out var product) && product is not null
-                ? (product, null)
-                : (null, new ManagementReadFailure { Outcome = ManagementReadOutcome.NotFound });
+            return failure is not null ? (null, failure) : (product, null);
         }
 
         private ManagementReadFailure AuthorizeSensorRead(ClaimsPrincipal user, Guid sensorId) =>
