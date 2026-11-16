@@ -997,6 +997,15 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 AlertPolicyConditionValidator.Add(errorMap, "interval",
                     "The interval must be at least 1 minute.");
             }
+            else if (parsed.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks)
+            {
+                // #1673: the template write already bounds its ticks — now + ticks
+                // must stay inside the DateTime range, or AddTicks throws in the
+                // retention scan. The TimeSpan surface of sensor and product TTL
+                // policies needs the same bound (TimeSpan.MaxValue parses fine).
+                AlertPolicyConditionValidator.Add(errorMap, "interval",
+                    "The interval must keep the shifted time inside the DateTime range.");
+            }
             else
             {
                 ttlTicks = parsed.Ticks;
@@ -1045,11 +1054,21 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (scheduleId is { } schedule && _schedules.GetSchedule(schedule) is null)
                 AlertPolicyConditionValidator.Add(errors, "scheduleId", $"Unknown schedule '{schedule}'.");
 
-            if (confirmationPeriod is not null &&
-                (!TimeSpan.TryParse(confirmationPeriod, CultureInfo.InvariantCulture, out var confirmation) ||
-                 confirmation < TimeSpan.Zero))
-                AlertPolicyConditionValidator.Add(errors, "confirmationPeriod",
-                    "The confirmation period must be a TimeSpan string, e.g. \"00:05:00\".");
+            if (confirmationPeriod is not null)
+            {
+                if (!TimeSpan.TryParse(confirmationPeriod, CultureInfo.InvariantCulture, out var confirmation))
+                    AlertPolicyConditionValidator.Add(errors, "confirmationPeriod",
+                        "The confirmation period must be a TimeSpan string, e.g. \"00:05:00\".");
+                else if (confirmation < TimeSpan.Zero)
+                    // Zero stays accepted (it disables the confirmation delay), so the
+                    // message says "not negative", unlike the TTL interval where zero
+                    // is rejected (#1677).
+                    AlertPolicyConditionValidator.Add(errors, "confirmationPeriod", "The confirmation period must not be negative.");
+                else if (confirmation.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks)
+                    // #1673: the shifted time must stay representable, as with a TTL interval.
+                    AlertPolicyConditionValidator.Add(errors, "confirmationPeriod",
+                        "The confirmation period must keep the shifted time inside the DateTime range.");
+            }
 
             // A policy with no effect at all would evaluate and never act — the
             // web editor cannot produce one (every row starts with a default

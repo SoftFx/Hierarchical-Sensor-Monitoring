@@ -73,7 +73,20 @@ namespace HSMServer.Controllers
         /// </summary>
         public const string ServerMarkerHeader = "X-Hsm-Server";
 
+        /// <summary>
+        /// The dual-purpose pre-flight; the Key header decides which half is
+        /// being probed. A KEYLESS call is the liveness probe: the Docker
+        /// healthcheck, docker-compose and CI call this route without
+        /// credentials and must keep getting a constant 200 — answering 406
+        /// here marked every deployed container unhealthy and kept Caddy from
+        /// starting (#1678 review); it still carries the server marker, which
+        /// is not authentication. A KEYED call is the auth check: the
+        /// send-permission filter answers the key's own 406 reason when the
+        /// key is unusable (expired, blocked, read-only, #1649/#1678), so a
+        /// collector can tell "server up, key bad" from "cannot reach".
+        /// </summary>
         [HttpGet("testConnection")]
+        [SendDataKeyPermissionFilter]
         public ActionResult TestConnection()
         {
             Response.Headers[ServerMarkerHeader] = "1";
