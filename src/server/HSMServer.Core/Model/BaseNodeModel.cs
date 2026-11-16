@@ -103,6 +103,19 @@ namespace HSMServer.Core.Model
             return this;
         }
 
+        // Sensor move (#1718): re-parent and rename WITHOUT AddParent's policy
+        // rebuild — AddParent rebuilds the TTL policies from the entity the
+        // node was loaded with, which would discard every policy change made
+        // since. Settings re-point at the new parent's, so "From parent"
+        // values resolve there from now on.
+        internal void MoveTo(ProductModel newParent, string newName)
+        {
+            Parent = newParent;
+            DisplayName = newName;
+
+            Settings.SetParentSettings(newParent.Settings);
+        }
+
         protected void Update(BaseNodeUpdate update)
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);

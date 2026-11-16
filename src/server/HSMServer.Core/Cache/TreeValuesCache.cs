@@ -36,7 +36,7 @@ using SensorType = HSMCommon.Model.SensorType;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache, IUpdateHandler, IAsyncDisposable
+    public sealed partial class TreeValuesCache : ITreeValuesCache, IUpdateHandler, IAsyncDisposable
     {
         private class CachedValue
         {
@@ -45,6 +45,10 @@ namespace HSMServer.Core.Cache
             public ProductModel Product { get; }
 
             public ConcurrentDictionary<string, BaseSensorModel> Sensors { get; } = new ConcurrentDictionary<string, BaseSensorModel>(StringComparer.Ordinal);
+
+            // Old paths of moved sensors (#1718, ADR-0018): consulted only when
+            // Sensors misses. Never shares a key with Sensors.
+            public ConcurrentDictionary<string, BaseSensorModel> Aliases { get; } = new ConcurrentDictionary<string, BaseSensorModel>(StringComparer.Ordinal);
 
 
             public CachedValue(ProductModel product, IUpdateHandler updateHandler)
@@ -625,6 +629,18 @@ namespace HSMServer.Core.Cache
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
+
+            // Aliases of moved sensors expire by the same SelfDestroy interval
+            // (#1718); their pass is isolated so a failure cannot hide the
+            // sensor sweep's own report above.
+            try
+            {
+                await RunAliasMaintenanceAsync(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Sensor alias sweep failed");
+            }
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -682,7 +698,18 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public bool TryCheckKeyWritePermissions(Guid key, string[] parts, out string message)
+        public bool TryCheckKeyWritePermissions(Guid key, string[] parts, out string message) =>
+            TryCheckKeyWritePermissions(key, parts, aliasPath: null, valueType: null, out message);
+
+        // The check of a VALUE's key. A value sent to a moved sensor's old path (#1718)
+        // lands in that sensor through its alias: the sensor exists, so the key needs no
+        // right to add one, and a blocked sensor refuses the value as it does on its own
+        // path. A value of another type is not the moved sensor's — it displaces the alias
+        // and creates a sensor — so it is checked as a value for a missing sensor.
+        private bool TryCheckValueKeyWritePermissions(AddSensorValueRequest request, out string message) =>
+            TryCheckKeyWritePermissions(request.Key, request.PathParts, request.Path, request.BaseValue.Type, out message);
+
+        private bool TryCheckKeyWritePermissions(Guid key, string[] parts, string aliasPath, SensorType? valueType, out string message)
         {
 
             if (!TryCheckProductKey(key, out var product, out message))
@@ -694,6 +721,13 @@ namespace HSMServer.Core.Cache
                 return false;
 
             var sensorChecking = TryGetSensor(parts, product, accessKey, out var sensor, out message);
+
+            if (sensor is null && aliasPath is not null && TryPeekAlias(product.Id, aliasPath, out var moved) && moved.Type == valueType)
+            {
+                sensor = moved;
+                sensorChecking = true;
+                message = string.Empty;
+            }
 
             if (sensor?.State == SensorState.Blocked)
             {
@@ -876,21 +910,123 @@ namespace HSMServer.Core.Cache
             return _keys.Values.Where(x => x.IsMaster).ToList();
         }
 
-        public Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
+        // How long AddOrUpdateSensorAsync waits for the outcome of a registration it
+        // forwarded to another product's queue (#1756). 20 s, below the 30 s a collector
+        // waits for an answer by default (RequestTimeout): the collector then gets the 500
+        // and sends the registration again, instead of giving up on a request without an
+        // answer, which on a collector session also costs it the session. A queue that
+        // needs longer than this for one registration is not working. Settable for tests.
+        internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
+
+        // The one place where a failed registration is sorted into a fault and a refusal
+        // (#1756). The Sensor API answers a fault 500, on which a collector sends the
+        // registration again, and a refusal as delivered, so only a failure that has a
+        // reason to pass on a repeat may be a fault:
+        //   - an error result of the queue. For a registration that is always an exception
+        //     caught on the way (by the queue, or by ProcessRequestAsync): the handler of
+        //     a registration never answers an error itself, see ProcessRequest;
+        //   - a failed write to the store, which the handler reports through request.Fault.
+        // Everything else the handler fails on (a product or a sensor that went away, an
+        // exception while the settings are applied in memory) is answered as before: logged
+        // there, Ok here. It is not known to pass, and a failure that repeats would be
+        // sent again by every collector on every cycle.
+        //
+        // Nothing but the IsFault mark of the result is new, so a caller that does not ask
+        // for it sees what it saw before, except that a failed write to the store is now
+        // an error result and no longer Ok.
+        //
+        // A registration forwarded through an alias to the queue of another root product
+        // is sorted by the same rule. Its handler does not wait for that queue (no handler
+        // waits for another queue: two forwarding to each other would deadlock); it leaves
+        // the pending outcome on the request, and it is awaited here, outside any queue,
+        // for no longer than ForwardedRegistrationWait.
+        public async Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
-            return ProcessRequestAsync(request.ProductId, request, token);
+            var result = await ProcessRequestAsync(request.ProductId, request, token);
+
+            if (!result.IsOk)
+                return TaskResult.FromFault(result.Error);
+
+            if (request.Fault is not null)
+                return TaskResult.FromFault(request.Fault);
+
+            if (request.Forwarded is { } forwarded)
+            {
+                string fault;
+
+                try
+                {
+                    // Bounded: the outcome is completed by the other product's queue, and
+                    // a queue that is disposed with the request still unread (its product
+                    // is removed, the server stops) never completes it. Before #1756 the
+                    // caller was answered at once, so without a bound that would be a
+                    // request that hangs where none did.
+                    fault = await forwarded.Fault.WaitAsync(ForwardedRegistrationWait, token);
+                }
+                catch (TimeoutException)
+                {
+                    // Not answered is not applied: a fault, so the collector sends the
+                    // registration again.
+                    fault = $"The registration forwarded through an alias to another product was not answered within {ForwardedRegistrationWait.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} s";
+                }
+                catch (OperationCanceledException ex)
+                {
+                    // As the wait for the own queue answers a cancellation: an error
+                    // result, not an exception.
+                    fault = ex.Message;
+                }
+
+                if (fault is not null)
+                    return TaskResult.FromFault(fault);
+            }
+
+            return result;
         }
 
-        private bool TryAddOrUpdateSensor(SensorAddOrUpdateRequest request, out string error)
+        // storeFailed (#1756): true when the registration failed in a write to the store
+        // (creating the sensor, or saving its settings), false for every other failure.
+        private bool TryAddOrUpdateSensor(SensorAddOrUpdateRequest request, out string error, out bool storeFailed)
         {
+            storeFailed = false;
+
             var update = request.Update;
 
             if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
-                if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
-                    return false;
+            {
+                // A registration of the old path updates the moved sensor
+                // (ADR-0018); only an explicit different type displaces the alias.
+                switch (ResolveAlias(request.ProductId, request.Path, request.TypeIsExplicit ? request.Type : null, out sensor))
+                {
+                    case AliasResolution.Forwarded:
+                        // Not applied here: handed to the queue that owns the sensor. This
+                        // handler returns at once and does not wait for that queue; what
+                        // comes of the registration there is left on the request for
+                        // AddOrUpdateSensorAsync (#1756).
+                        request.Forwarded = new ForwardedRegistration();
+                        DispatchForwarded(sensor.Root, new AliasRegistrationRequest(update with { Id = sensor.Id }, sensor.Root.Id, Hops: 0) { Outcome = request.Forwarded });
+                        error = null;
+                        return true;
+
+                    case AliasResolution.None:
+                        if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, checkStore: true, out sensor, out error, out storeFailed))
+                            return false;
+                        break;
+                }
+            }
 
             update = update with { Id = sensor.Id };
-            return TryUpdateSensor(update, out error);
+            return TryUpdateSensor(update, checkStore: true, out error, out storeFailed);
+        }
+
+        // The write of a sensor's row on the registration path (#1756). The store's void
+        // methods do not tell a write the storage engine failed on (it logs it and
+        // returns), which is what every other caller of them relies on; a registration
+        // must know, so it asks for the outcome and turns a reported failure into the
+        // exception a throwing store would have raised at the same place.
+        private static void ThrowIfNotWritten(Exception failure)
+        {
+            if (failure is not null)
+                throw new InvalidOperationException($"The store did not write the sensor: {failure.Message}", failure);
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
@@ -907,8 +1043,23 @@ namespace HSMServer.Core.Cache
         // policy collection refused (Rejected) or failed to re-evaluate
         // after applying it (EvaluationError; the policy applied and
         // persisted). Null for every other caller.
-        private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null)
+        private bool TryUpdateSensor(SensorUpdate update, out string error, List<PolicyUpdateFailure> policyFailures = null) =>
+            TryUpdateSensor(update, checkStore: false, out error, out _, policyFailures);
+
+        // storeFailed (#1756): true when the update failed in the write to the store, the
+        // one failure here that is known to be able to pass on a repeat. Only the
+        // registration path asks; for every other caller this is the method it was.
+        //
+        // checkStore: true on the registration path only. The write then asks the store
+        // for its outcome (UpdateSensorChecked), so a write the storage engine failed on
+        // without throwing is seen too. False for every other caller: the void write, with
+        // which such a failure is logged by the store and not seen here, as always.
+        private bool TryUpdateSensor(SensorUpdate update, bool checkStore, out string error, out bool storeFailed, List<PolicyUpdateFailure> policyFailures = null)
         {
+            storeFailed = false;
+
+            var storing = false;
+
             try
             {
                 if (!TryGetSensorById(update.Id, out var sensor))
@@ -918,7 +1069,17 @@ namespace HSMServer.Core.Cache
                 }
 
                 sensor.TryUpdate(update, out error, policyFailures);
-                _database.UpdateSensor(sensor.ToEntity());
+
+                var entity = sensor.ToEntity();
+
+                storing = true;
+
+                if (checkStore)
+                    ThrowIfNotWritten(_database.UpdateSensorChecked(entity));
+                else
+                    _database.UpdateSensor(entity);
+
+                storing = false;
 
                 SensorUpdateView(sensor);
 
@@ -937,6 +1098,7 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 error = ex.Message;
+                storeFailed = storing;
                 return false;
             }
         }
@@ -1040,15 +1202,21 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
+        // Returns false when the sensor's entity may still be in the database
+        // (the removal threw before or inside the database step): a merge must
+        // report that, the occupant would come back on restart (#1720 review).
+        private bool RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
             List<Guid> purgeIds = null)
         {
+            var removedFromDatabase = false;
+
             try
             {
                 if (!TryGetSensorById(sensorId, out var sensor))
-                    return;
+                    return true;
 
                 RemoveSensorFromCache(sensor);
+                UnindexAliases(sensor);
 
                 RemoveSensorPolicies(sensor); // should be before removing from parent
 
@@ -1072,6 +1240,7 @@ namespace HSMServer.Core.Cache
                 _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
                 _database.RemoveSensorWithMetadata(sensorId);
+                removedFromDatabase = true;
 
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
@@ -1087,6 +1256,8 @@ namespace HSMServer.Core.Cache
             {
                 _logger.Error($"An error was occured by removing sensor {sensorId}", ex);
             }
+
+            return removedFromDatabase;
         }
 
         public async Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
@@ -3032,7 +3203,7 @@ namespace HSMServer.Core.Cache
             if (!request.TryCheckRequest(out var message))
                 return TaskResult.FromError(message);
 
-            if (!TryCheckKeyWritePermissions(request.Key, request.PathParts, out message))
+            if (!TryCheckValueKeyWritePermissions(request, out message))
                 return TaskResult.FromError(message);
 
             await ProcessRequestAsync(productId, request, token);
@@ -3063,8 +3234,15 @@ namespace HSMServer.Core.Cache
                 case AddSensorValuesRequest request:
                     AddNewSensorValues(request);
                     break;
-                case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error):
+                case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error, out var storeFailed):
                     _logger.Error(error);
+
+                    // A registration that failed is answered Ok, as it always was, with
+                    // one exception (#1756): a failed write to the store goes back to
+                    // AddOrUpdateSensorAsync as a fault. The handler must not throw to
+                    // tell it: for a registration a thrown exception is a fault too.
+                    if (storeFailed)
+                        command.Fault = error;
                     break;
                 case SensorUpdate update when !TryUpdateSensor(update, out var error):
                     _logger.Error(error);
@@ -3103,13 +3281,37 @@ namespace HSMServer.Core.Cache
                     UpdateProduct(request);
                     break;
                 case RemoveProductRequest request:
-                    RemoveProduct(request);
+                    // A structural change like sensor creation and move: a move
+                    // must not attach a sensor to a node being removed (ADR-0018).
+                    lock (_treeStructureLock)
+                        RemoveProduct(request);
                     break;
                 case SaveLastStateRequest request:
                     SaveLastStateToDb(request);
                     break;
                 case CheckSensorsHistoryRequest request:
                     CheckSensorHistory(request);
+                    break;
+                case SensorMoveRequest request:
+                    MoveSensor(request);
+                    break;
+                case AliasValueRequest request:
+                    AddAliasValue(request);
+                    break;
+                case SensorAliasMaintenanceRequest request:
+                    MaintainAliases(request);
+                    break;
+                case AliasRegistrationRequest request:
+                    UpdateThroughAlias(request);
+                    break;
+                case SensorTemplateReevaluationRequest request:
+                    ReevaluateMovedSensorTemplates(request);
+                    break;
+                case SensorAbsorbRequest request:
+                    AbsorbSensor(request);
+                    break;
+                case SensorMergeRefreshRequest request:
+                    RefreshMergedSensor(request);
                     break;
             }
 
@@ -3133,7 +3335,7 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
-                if (!TryCheckKeyWritePermissions(addRequest.Key, addRequest.PathParts, out message))
+                if (!TryCheckValueKeyWritePermissions(addRequest, out message))
                 {
                     request.Response[addRequest.Path] = message;
                     continue;
@@ -3317,13 +3519,32 @@ namespace HSMServer.Core.Cache
 
             if(!TryGetSensorFromCache(request.ProductId, request.Path, out BaseSensorModel sensor))
             {
-                _logger.Info($"Creating new sensor: ProductId = {request.ProductId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
-                if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
-                    return false;
+                switch (ResolveAlias(request.ProductId, request.Path, request.BaseValue.Type, out sensor))
+                {
+                    case AliasResolution.Forwarded:
+                        // The moved sensor lives in another product: its own
+                        // queue adds the value (ADR-0018).
+                        Dispatch(sensor.Root, new AliasValueRequest(sensor.Id, sensor.Root.Id, request.BaseValue, Hops: 0));
+                        return true;
+
+                    case AliasResolution.None:
+                        if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
+                            return false;
+                        break;
+                }
             }
 
+            AddValueToSensor(sensor, request.Path, request.BaseValue);
+
+            return true;
+        }
+
+        // The add half of TryAddNewSensorValue, shared with values that reach a
+        // moved sensor through an alias of another product (AliasValueRequest).
+        private void AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
+        {
             if (sensor.State == SensorState.Blocked)
-                return true;
+                return;
 
             // The previous cached newest, captured before the add: a value that
             // lands on the SAME tick as it keeps only the last row in the
@@ -3331,9 +3552,9 @@ namespace HSMServer.Core.Cache
             // counted and logged instead of passing silently (#1441).
             var previousLastTime = sensor.LastValue?.Time;
 
-            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue, out var result))
-                PersistAddedValue(sensor, request.Path, sensor.Id, request.BaseValue, result, previousLastTime);
-            else if (!request.BaseValue.IsTimeout)
+            if (TryAddValueWithDeliveryStamp(sensor, value, out var result))
+                PersistAddedValue(sensor, path, sensor.Id, value, result, previousLastTime);
+            else if (!value.IsTimeout)
             {
                 // #1441: a value rejected here used to vanish with a clean 200 and
                 // no trace. The real rejector is the singleton gate — steady state
@@ -3350,8 +3571,6 @@ namespace HSMServer.Core.Cache
             }
 
             SensorUpdateViewAndNotify(sensor);
-
-            return true;
         }
 
 
@@ -3686,6 +3905,8 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Sensors are applied");
 
+            IndexAliasesOnStartup();
+
             MigrateDatabseV2();
 
             Task.Run(() => FillSensorsData()).Forget(_logger);
@@ -3830,11 +4051,47 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
-        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error)
+        // Sensor creation, sensor move and node/product removal are the
+        // writers of the tree's structure across product queues: all take
+        // _treeStructureLock (removal nests _productsByNameLock and the journal
+        // purge inside it — never take the tree lock under those). Creation
+        // re-checks the index under it so a cross-product move that just
+        // published a sensor at this path is reused, not duplicated (ADR-0018).
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, out BaseSensorModel sensor, out string error) =>
+            TryAddSensor(request, type, productId, options, checkStore: false, out sensor, out error, out _);
+
+        // storeFailed (#1756): true when the sensor was not created because the write of
+        // its row to the store failed. Only the registration path asks.
+        //
+        // checkStore: true on the registration path only, see TryUpdateSensor. False for
+        // the sensor a first value creates: its row is written with the void method, so a
+        // write the storage engine fails on without throwing leaves the sensor in memory,
+        // as it always did.
+        private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        {
+            storeFailed = false;
+
+            lock (_treeStructureLock)
+            {
+                if (TryGetSensorFromCache(productId, request.Path, out sensor))
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                _logger.Info($"Creating new sensor: ProductId = {productId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
+
+                return TryAddSensorUnderLock(request, type, productId, options, checkStore, out sensor, out error, out storeFailed);
+            }
+        }
+
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             sensor = null;
             error = string.Empty;
+            storeFailed = false;
             var persisted = false;
+            var storing = false;
             try
             {
 
@@ -3876,7 +4133,18 @@ namespace HSMServer.Core.Cache
                 // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
                 // UpdateProduct, journal) must roll the row back too — tracked by
                 // `persisted` in the catch below.
-                _database.AddSensor(sensor.ToEntity());
+                var row = sensor.ToEntity();
+
+                storing = true;
+
+                // A reported failure is thrown here, so that the sensor is rolled back
+                // below exactly as when the store itself throws.
+                if (checkStore)
+                    ThrowIfNotWritten(_database.AddSensorChecked(row));
+                else
+                    _database.AddSensor(row);
+
+                storing = false;
                 persisted = true;
 
                 AddSensor(sensor, product);
@@ -3895,6 +4163,10 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 _logger.Error("An error was occurred by creating sensor", ex);
+
+                // The one failure of a creation that is known to be able to pass on a
+                // repeat (#1756): the sensor is rolled back below either way.
+                storeFailed = storing;
 
                 if (sensor is not null)
                 {
@@ -4403,9 +4675,11 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorFromCache(BaseSensorModel sensor)
         {
+            // Remove only THIS sensor's entry: during a merge (#1720) the path
+            // already belongs to the moved sensor that absorbs this one.
             if (_cache.TryGetValue(sensor.Root.Id, out var value))
             {
-                value.Sensors.TryRemove(sensor.Path, out _);
+                value.Sensors.TryRemove(new KeyValuePair<string, BaseSensorModel>(sensor.Path, sensor));
             }
 
             _sensorsById.TryRemove(sensor.Id, out _);

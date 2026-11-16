@@ -201,10 +201,11 @@ namespace hsm::agent
         HINTERNET connect = nullptr;
         bool allow_untrusted = false; // forwarded to each request handle (session-level has no effect)
 
-        explicit WinHttpSession(const std::string& host, int port, bool /*https*/, bool allow_untr)
+        explicit WinHttpSession(const std::string& host, int port, bool /*https*/, bool allow_untr,
+                                DWORD access_type = WINHTTP_ACCESS_TYPE_DEFAULT_PROXY)
             : allow_untrusted(allow_untr)
         {
-            session = WinHttpOpen(L"HSMAgent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+            session = WinHttpOpen(L"HSMAgent/1.0", access_type, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
             if (!session)
                 return;
 
@@ -223,10 +224,12 @@ namespace hsm::agent
     };
 
     // Do a GET request; return the body in `body_out` and optionally read a named response header.
-    // Returns the HTTP status code, or 0 on transport failure.
+    // Returns the HTTP status code, or 0 on transport failure. A positive `timeout_ms` replaces
+    // WinHTTP's default timeouts (resolve, connect, send, receive) for this request.
     static int HttpGet(const WinHttpSession& sess, const std::wstring& path, bool https,
                        const std::wstring& extra_headers, std::vector<char>& body_out,
-                       std::wstring* resp_header_name = nullptr, std::string* resp_header_out = nullptr)
+                       std::wstring* resp_header_name = nullptr, std::string* resp_header_out = nullptr,
+                       int timeout_ms = 0)
     {
         if (!sess.Valid())
             return 0;
@@ -238,6 +241,11 @@ namespace hsm::agent
 
         if (!extra_headers.empty())
             WinHttpAddRequestHeaders(req, extra_headers.c_str(), static_cast<DWORD>(-1L), WINHTTP_ADDREQ_FLAG_ADD);
+
+        // Set on the request handle itself: it is the handle WinHttpSendRequest/ReceiveResponse use,
+        // so the values apply regardless of what the session or connect handle carries.
+        if (timeout_ms > 0)
+            WinHttpSetTimeouts(req, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
 
         // WINHTTP_OPTION_SECURITY_FLAGS must be set on the request handle, not the session.
         if (https && sess.allow_untrusted)
@@ -353,6 +361,50 @@ namespace hsm::agent
         u.host = addr;
         u.ok = !u.host.empty();
         return u;
+    }
+
+    // ---- Retired-port reachability probe (#1655) -------------------------------------------------
+
+    // Short timeouts: the probe runs on the runtime's main thread between two waits for the stop
+    // signal, so a black-holed port must not hold a service stop for long. They apply per phase
+    // (resolve, connect, send, receive) and the connect one per resolved address, so one probe of a
+    // black-holed dual-stack host can still take about twice this; a stop that arrives meanwhile
+    // waits for that one probe only (the runtime skips the second).
+    static constexpr int kProbeTimeoutMs = 2000;
+
+    PortAnswer ProbeServerPort(const AgentConfig& config, int port)
+    {
+        const ServerUrl url = ParseServerUrl(config.server_address, port);
+        if (!url.ok)
+            return PortAnswer::Nothing;
+
+        // `port`, not url.port: a port written into server.address does not reach the collector's
+        // endpoint either, and the question here is about the port the collector is using.
+        //
+        // Always TLS, whatever scheme server.address names: the agent never enables the collector's
+        // plaintext transport, so the endpoint builder (MakeEndpoints, allow_plaintext = false)
+        // sends an "http://" address over https as well. A plain-HTTP probe would get a 400 from
+        // the server's TLS listener and call a working server unreachable.
+        constexpr bool kHttps = true;
+        // No WinHTTP proxy: the collector's libcurl transport ignores the machine-wide WinHTTP proxy
+        // (netsh winhttp), so a probe through it could see a different network than the data does
+        // (a proxy that only lets CONNECT through to 443 would make a working 44330 look dead).
+        // Not matched: libcurl does follow HTTPS_PROXY / ALL_PROXY from the service's environment,
+        // and this probe does not. On such a host the probe goes direct while the data goes through
+        // that proxy; the two-checks-in-a-row rule and the hourly notices are what is left.
+        WinHttpSession sess(url.host, port, kHttps, config.allow_untrusted_certificate, WINHTTP_ACCESS_TYPE_NO_PROXY);
+        if (!sess.Valid())
+            return PortAnswer::Nothing;
+
+        std::vector<char> body;
+        std::wstring marker_name = Utf8ToWide(kServerMarkerHeader); // retired_port.hpp
+        std::string marker;
+        const int status = HttpGet(sess, L"/api/sensors/testConnection", kHttps, L"", body, &marker_name, &marker, kProbeTimeoutMs);
+        if (status != 200)
+            return PortAnswer::Nothing;
+        // Exactly the value the server sends. A "not a stranger" check, not authentication: any
+        // service on 443 of that host can send it (see kServerMarkerHeader).
+        return marker == kServerMarkerValue ? PortAnswer::HsmServer : PortAnswer::Unidentified;
     }
 
     // ---- Spawn --apply-update detached process ---------------------------------------------------

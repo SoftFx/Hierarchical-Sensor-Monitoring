@@ -35,7 +35,7 @@ permissions:
 
 env:
   IMAGE: hsmonitoring/hsm-caddy
-  VERSION: 2.11.4-7
+  VERSION: 2.11.4-8
 
 jobs:
   build-test:

@@ -1,4 +1,6 @@
+using HSMSensorDataObjects;
 using HSMServer.ApiObjectsConverters;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -15,6 +17,27 @@ namespace HSMServer.SensorApi
 
         // List<CommandRequestBase>: sensor registrations.
         public static JsonSerializerOptions Commands { get; } = BuildCommands();
+
+
+        // What makes a /commands list unreadable although it is valid JSON: an element
+        // that is null, or a command without a path. Null when there is nothing of the
+        // kind. Both transports ask before anything is applied and answer the whole
+        // request 400 (#1749): a per-path answer has no path to put such a command under,
+        // and it is the request's fault, the same on every repeat, so it must not be the
+        // 500 that tells a collector to send the package again.
+        public static string FindMalformedCommand(IReadOnlyList<CommandRequestBase> commands)
+        {
+            for (var i = 0; i < commands.Count; i++)
+            {
+                if (commands[i] is null)
+                    return $"The command at index {i} is null.";
+
+                if (commands[i].Path is null)
+                    return $"The command at index {i} has no path.";
+            }
+
+            return null;
+        }
 
 
         private static JsonSerializerOptions BuildValues()

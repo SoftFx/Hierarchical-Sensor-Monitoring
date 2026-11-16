@@ -157,18 +157,22 @@ namespace HSMServer.Core.Model
 
         public SensorType? GetSensorType() => SensorType == AnyType ? null : (SensorType)SensorType;
 
-        public bool IsMatch(BaseSensorModel sensor)
+        public bool IsMatch(BaseSensorModel sensor) => IsMatch(sensor.FullPath, sensor.Type, sensor.Root.FolderId);
+
+        // The same decision for a sensor that is not (yet) at that path: the
+        // sensor-move dry run asks what would match at the destination (#1721).
+        public bool IsMatch(string fullPath, SensorType type, Guid? rootFolderId)
         {
             if (_pathConverters.Count == 0)
                 return false;
 
-            if (!_pathConverters.Any(c => c.IsMatch(sensor.FullPath)))
+            if (!_pathConverters.Any(c => c.IsMatch(fullPath)))
                 return false;
 
-            if (GetSensorType().HasValue && GetSensorType() != sensor.Type)
+            if (GetSensorType().HasValue && GetSensorType() != type)
                 return false;
 
-            if (sensor.Root.FolderId != FolderId)
+            if (rootFolderId != FolderId)
                 return false;
 
             return true;

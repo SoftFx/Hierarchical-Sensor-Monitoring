@@ -1,17 +1,21 @@
-# HSM DataCollector
+# HSM DataCollector 4.0.0-preview
 
-## New default sensors (`AddAllComputerSensors`)
-* **Top-CPU sensors** — per-process CPU sensors are now part of the default computer-sensor set; each carries the executable path and a bounded list of system processes, all nested under `.computer` (#1179, #1318).
-* **Per-interface network speed sensors** — rx/tx MB/s sensors per active network interface, nested under `.computer`. Only interfaces carrying traffic are surfaced (#1189).
+Prerelease for testing. Changes since 3.5.0 (3.6-3.9 were not published). Since 3.10.0-preview only the Breaking section is new.
 
-## Reliability and queue
-* Retry policy no longer drops newer telemetry when a stale retry races queue overflow; FIFO-head ordering preserved across retries (#1088, #1090).
-* Collector shutdown is bounded and crash-isolated: hung user tasks, reentrant lifecycle transitions, and dispose-during-start no longer leak queues or crash the host (#1102, #1103, lifecycle state machine refactor).
-* Accepted telemetry is preserved across post-stop flush retries; last-value sensors are flushed on stop and dispose.
+## Breaking
+* **The collector session is the default transport** (ADR-0019): one WebSocket to the server on 443, no fallback to HTTP. Needs **HSMServer 3.43.0** or later and a proxy that passes WebSockets; otherwise set `CollectorOptions.Transport = Http`. A file larger than about 1 MiB is dropped and reported on a session (over HTTP it went up to 10 MiB): raise the server's `CollectorSessions.MaxFrameBytes` or use `Http`. Where no session can exist (.NET Framework with `AllowUntrustedServerCertificate`, an OS without WebSockets) the default stays HTTP and Start says why.
 
-## Behavior and configuration
-* HTTP client timeout is now configurable; untrusted TLS certificates require explicit opt-in (`AllowUntrustedServerCertificate`).
-* Request payloads are redacted from send logs.
+## New
+* Collector session: values, registrations, files (up to about 1 MiB by default) and server directives on one connection.
+* **TCP connection failure rate** sensor (`AddNetworkConnectionFailuresRate`, Windows).
+* Server directive channel: extra request headers and `X-Hsm-Directive` answers.
+* **`SensorOptions.PreviousPaths`**: history follows a sensor whose path changed.
 
-## Cross-language default-sensor conformance
-* Managed and native collectors now share a conformance suite covering default-sensor registration and options parity; this release locks the managed side of that contract.
+## Behaviour changes
+* `Service alive` registers its alert with a 5-minute inactivity period; before, it never fired on default settings.
+* A registration rejected with a 4xx is reported once and not resent; a command send is one attempt per cycle, in the order issued.
+* Stop drains registrations first, under one budget; the package in flight is kept on Dispose.
+
+## Reliability
+* Send failures, queue overflow and top-CPU sampling faults are reported (deduplicated).
+* Lifecycle races fixed: the obsolete `Initialize`, a failed start during Stop/Dispose.

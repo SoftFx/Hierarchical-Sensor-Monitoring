@@ -156,6 +156,10 @@ namespace HSMServer.ServiceExtensions
             // read-merge-write window, nothing to gate.
             services.AddScoped<SensorDeletionAdministrationService>();
 
+            // The sensor-move write engine (#1721): moves rendered through the
+            // core's own MoveSensorAsync entry (ADR-0018); stateless, scoped.
+            services.AddScoped<SensorMoveAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its policy guards live with the
@@ -188,6 +192,7 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<SensorIngestionService>()
+                    .AddSingleton<AgentDirectives>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()
                     // The clock of the session's silence limit, replaceable in tests.
@@ -327,14 +332,6 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseStaticFiles();
 
             applicationBuilder.UseRouting();
-
-            // Deprecated-port visibility (#1590): while the 44330/44333 aliases are still
-            // published through the deprecation window, a request that arrived by one
-            // logs a rate-limited warning so operators can find the stragglers. First of
-            // the guards: it only reads the Host header, while the guards below can
-            // short-circuit (404/401) — registered after them, a rejected legacy request
-            // would never be logged.
-            applicationBuilder.UseMiddleware<LegacyPortDeprecationMiddleware>();
 
             // Management-area isolation (#1356 step 3), before authentication: the area
             // guard allow-lists /api/v1 per endpoint (marker + policy) before any

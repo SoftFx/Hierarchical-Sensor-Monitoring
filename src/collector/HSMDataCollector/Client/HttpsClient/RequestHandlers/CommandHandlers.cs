@@ -14,9 +14,12 @@ namespace HSMDataCollector.Client.HttpsClient
 {
     internal sealed class CommandHandler : BaseHandlers<CommandRequestBase>
     {
-        protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
-
-        protected override int MaxRequestAttempts => int.MaxValue;
+        // One attempt per send (#1659 A3). This used to be int.MaxValue with a linear pause of up
+        // to 2 minutes: a send against an unreachable server never returned, so the command queue
+        // could neither take newer registrations into the package nor retry on its own period.
+        // A failed send now returns, the queue takes the package back and sends it again after
+        // PackageCollectPeriod, as the native collector does.
+        protected override int MaxRetryAttempts => 0;
 
         internal override object ConvertToRequestData(CommandRequestBase value) => value;
 
@@ -62,8 +65,12 @@ namespace HSMDataCollector.Client.HttpsClient
                     }
                     else
                     {
-                        var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        _logger.Error($"Command request for has been faulted. Status Code: {response.StatusCode}, Status Text: {error}.");
+                        // Not an error line of its own (#1659 A4): the command queue reports the
+                        // refused package once per window, with this status and the server's
+                        // message, from the PackageSendingInfo this send returns. A second line
+                        // here was one more entry per cycle for the same cause, and it carried
+                        // the raw body, which for a 400 is the per-path dictionary.
+                        _logger.Debug($"Command request has been refused. Status Code: {(int)response.StatusCode} ({response.StatusCode}).");
                     }
                 }
                 else

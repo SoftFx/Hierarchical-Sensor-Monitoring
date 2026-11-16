@@ -39,6 +39,7 @@
 #if defined(HSM_COLLECTOR_HTTP)
 #include "hsm_http_endpoints.hpp"
 #include "hsm_http_transport.hpp"
+#include "hsm_session_transport.hpp"
 #endif
 
 namespace
@@ -575,6 +576,50 @@ namespace
              << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
+
+#if defined(HSM_COLLECTOR_HTTP)
+    // True when `text` (UTF-8) is empty or consists only of the characters .NET's
+    // char.IsWhiteSpace accepts, so that string.IsNullOrWhiteSpace in the managed collector and this
+    // agree on the same bytes: U+0009..U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000..U+200A,
+    // U+2028, U+2029, U+202F, U+205F, U+3000. Matched as their UTF-8 byte sequences; anything else,
+    // an invalid sequence included, is not whitespace.
+    bool IsWhiteSpaceOnlyUtf8(const std::string& text)
+    {
+        const auto byte = [&](size_t at) { return at < text.size() ? static_cast<unsigned char>(text[at]) : 0u; };
+
+        size_t at = 0;
+        while (at < text.size())
+        {
+            const unsigned b0 = byte(at);
+            if (b0 == 0x20 || (b0 >= 0x09 && b0 <= 0x0D))
+            {
+                at += 1;
+                continue;
+            }
+
+            const unsigned b1 = byte(at + 1);
+            if (b0 == 0xC2 && (b1 == 0x85 || b1 == 0xA0))
+            {
+                at += 2;
+                continue;
+            }
+
+            const unsigned b2 = byte(at + 2);
+            // U+1680
+            const bool ogham = b0 == 0xE1 && b1 == 0x9A && b2 == 0x80;
+            // U+2000..U+200A, U+2028, U+2029, U+202F
+            const bool general = b0 == 0xE2 && b1 == 0x80 && ((b2 >= 0x80 && b2 <= 0x8A) || b2 == 0xA8 || b2 == 0xA9 || b2 == 0xAF);
+            // U+205F
+            const bool math = b0 == 0xE2 && b1 == 0x81 && b2 == 0x9F;
+            // U+3000
+            const bool ideographic = b0 == 0xE3 && b1 == 0x80 && b2 == 0x80;
+            if (!ogham && !general && !math && !ideographic)
+                return false;
+            at += 3;
+        }
+        return true;
+    }
+#endif
 
     // .NET serializes List<byte> as a numeric JSON array ([104,105]), NOT base64 (#1096 §15).
     std::string ByteArrayJson(const std::string& content)
@@ -1174,6 +1219,10 @@ namespace
         SensorLocation sensor_location = SensorLocation::Module;
         // DefaultAlertsOptions bitmask (managed [Flags]: DisableTtl=1, DisableStatusChange=2); 0 => None.
         int64_t default_alert_options = 0;
+        // AddOrUpdate.PreviousPaths (#1724): full product-relative paths the sensor was registered
+        // under before. Empty => the member is omitted (wire and canonical text), exactly as the
+        // managed collector omits a null list.
+        std::vector<std::string> previous_paths;
     };
 
     // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
@@ -1279,13 +1328,17 @@ namespace
     // new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc), AlertRepeatMode.Hourly, instantSend = true.
     constexpr const char* kDefaultScheduledTimeIso = "0001-01-01T12:00:00Z";
 
+    // The inactivity period of the ".module/Service alive" TTL alert (#1666): 5 minutes, the
+    // managed ServiceAlivePrototype.InactivityPeriod.
+    constexpr int64_t kServiceAliveInactivityMs = 300000;
+
     enum class DefaultAlertKind : int32_t
     {
         None = 0,
         EmaScheduledWarning,      // IfEmaMean/IfEmaValue <op> target -> InstantHourly (+Warning icon)
         FreeDiskScheduled,        // IfEmaValue <= target -> InstantHourly + ArrowDown + SensorError ({name} in template)
         ValueNotificationWarning, // IfValue <op> target -> ThenSendNotification + Warning
-        ServiceAliveTtl,          // IfInactivityPeriodIs() -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
+        ServiceAliveTtl,          // IfInactivityPeriodIs(5 min) -> InstantHourly + Clock + SensorError (TtlAlerts; no conditions)
         ServiceStatus             // IfValue != target + AndConfirmationPeriod(5m) -> InstantHourly
     };
 
@@ -1504,8 +1557,13 @@ namespace
 
         if (spec.kind == DefaultAlertKind::ServiceAliveTtl)
         {
-            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(): TtlValue unset
+            alert.kind = HSM_ALERT_KIND_TTL; // IfInactivityPeriodIs(5 min)
             alert.conditions_is_null = true; // SpecialAlertAction has a null conditions list
+            // The alert's own inactivity period (#1666), managed ServiceAlivePrototype.InactivityPeriod:
+            // the collector-off alert fires only after 5 minutes of silence. It becomes the
+            // registration's TTLs entry ([3000000000] ticks), byte-identical with the managed one.
+            alert.has_inactivity = true;
+            alert.inactivity_ms = kServiceAliveInactivityMs;
         }
         else
         {
@@ -1602,7 +1660,7 @@ namespace
         {
             AlertData alert = BuildDefaultAlert(def.alert, resolved_name);
             if (alert.kind == HSM_ALERT_KIND_TTL)
-                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (here [null])
+                reg.ttl_alerts.push_back(std::move(alert)); // TTLs derive from the alert (Service alive: [5 min])
             else
                 reg.alerts.push_back(std::move(alert));
         }
@@ -1735,6 +1793,24 @@ namespace
 
     // Canonical cross-language registration text — must stay byte-identical to the C#
     // harness RegistrationText (fixed field order; TTL in .NET ticks = ms * 10000).
+    // ',"PreviousPaths":["a","b"]' — or nothing for an empty list (#1724): a registration without
+    // previous paths stays byte-identical to the pre-0.13 wire and canonical text.
+    template <typename Escape>
+    std::string BuildPreviousPathsMember(const std::vector<std::string>& paths, Escape escape)
+    {
+        if (paths.empty())
+            return {};
+
+        std::string member = ",\"PreviousPaths\":[";
+        for (size_t i = 0; i < paths.size(); ++i)
+        {
+            if (i > 0)
+                member += ",";
+            member += "\"" + escape(paths[i]) + "\"";
+        }
+        return member + "]";
+    }
+
     std::string BuildRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
     {
         const std::string ttl_text = BuildTtlsText(options);
@@ -1771,7 +1847,8 @@ namespace
                ",\"IsSingletonSensor\":" + SingletonWireText(options) +
                ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
                ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) +
-               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) + "}";
+               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) +
+               BuildPreviousPathsMember(options.previous_paths, EscapeJson) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -1821,6 +1898,7 @@ namespace
              << ",\"DefaultAlertsOptions\":" << options.default_alert_options
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
+             << BuildPreviousPathsMember(options.previous_paths, EscapeJsonWire)
              << ",\"Key\":null"
              << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
@@ -2319,6 +2397,29 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        // Replace the registration's previous paths (#1724) and rebuild the payload. Null entries
+        // and entries of ASCII whitespace only are skipped — the managed collector's exact rule
+        // (PreviousPathsOf) — and an empty result removes the member. Same re-emission rules as
+        // AttachAlert.
+        hsm_result_t SetPreviousPaths(const char* const* paths, size_t count)
+        {
+            std::vector<std::string> kept;
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (paths[i] == nullptr)
+                    continue;
+                const std::string path = paths[i];
+                if (path.find_first_not_of(" \t\n\v\f\r") != std::string::npos)
+                    kept.push_back(path);
+            }
+
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            registration_options_.previous_paths = std::move(kept);
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
+            return HSM_RESULT_OK;
+        }
+
         // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
         std::string WireRegistrationJson() const
         {
@@ -2644,6 +2745,7 @@ namespace
         {
             AlertAttached,
             DescriptionChanged,
+            PreviousPathsChanged,
         };
 
         // A sensor's registration was rebuilt (an alert attached). Before Start nothing is needed —
@@ -2670,9 +2772,9 @@ namespace
         // hsm_collector_get_registration_json hands out pointers into registrations_, so a replaced
         // text is kept rather than freed under a caller. An alert attach keeps it until the
         // collector is destroyed (the 0.9.1 contract; attaches are bounded by the host's alerts). A
-        // description change (0.10.0, a new API with its own documented rule) keeps the latest
-        // kRetiredDescriptionTexts only: a host re-describing a sensor on every replica change must
-        // not grow memory without limit.
+        // description change (0.10.0, a new API with its own documented rule) — and a previous-paths
+        // change (0.13.0) — keeps the latest kRetiredDescriptionTexts only: a host re-describing a
+        // sensor on every replica change must not grow memory without limit.
         void RetireRegistrationLocked(std::string text, RegistrationChange change)
         {
             if (change == RegistrationChange::AlertAttached)
@@ -2702,6 +2804,88 @@ namespace
             endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
             sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
             send_wire_ = true;
+            use_session_ = false;
+        }
+
+        // The collector session as the transport (#1668): value batches and registrations travel as
+        // frames on one WebSocket and nothing goes over the HTTP routes. Same install contract as
+        // UseHttpTransport (before Start, one transport per collector). The session itself is
+        // opened by Start and closed by Stop; here only the choice is recorded, because the
+        // upgrade's headers include what the host may still set (extra request headers).
+        void UseSessionTransport()
+        {
+            http_transport_.reset();
+            endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
+            sender_ = [this](std::vector<std::string>& batch) { return SessionSendBatch(batch); };
+            send_wire_ = true;
+            use_session_ = true;
+        }
+
+        // Called by Start, before anything is sent. A new transport object for every run: the
+        // previous one, if any, was stopped by the Stop that preceded this Start.
+        void StartSessionTransport()
+        {
+            if (!use_session_)
+                return;
+
+            hsm::http::SessionOptions options;
+            // "<scheme>://host[:port]/api/sensors" -> "ws[s]://host[:port]/api/sensors/session".
+            options.url = endpoints_.connection_address + "/session";
+            if (options.url.compare(0, 4, "http") == 0)
+                options.url.replace(0, 4, "ws");
+            options.verify_peer = !allow_untrusted_certificate_;
+            options.headers = {
+                { "Key", access_key_ },
+                { "ClientName", client_name_ },
+                { "X-Collector-Kind", "native" },
+                { "X-Collector-Version", HSM_COLLECTOR_VERSION_STRING },
+            };
+            for (const auto& [hdr_name, hdr_value] : extra_request_headers_)
+                options.headers.push_back({ hdr_name, hdr_value });
+            options.log = [this](hsm::http::SessionLogLevel level, const std::string& message) {
+                if (level == hsm::http::SessionLogLevel::Error)
+                    LogError(message);
+                else
+                    LogMessage(level == hsm::http::SessionLogLevel::Info ? HSM_LOG_LEVEL_INFO : HSM_LOG_LEVEL_DEBUG, message);
+            };
+            // Directives the server pushes go where the X-Hsm-Directive headers go over HTTP.
+            options.on_directive = [this](const std::string& directive) { DispatchServerDirective(directive); };
+
+            session_transport_ = std::make_unique<hsm::http::SessionTransport>(std::move(options));
+            session_transport_->Start();
+        }
+
+        // One request of the registration path, over whichever transport is installed, in the
+        // shape the HTTP transport answers with. On a session the status is the ack's.
+        hsm::http::HttpResponse PostCommands(const std::string& body, const std::vector<hsm::http::HttpHeader>& headers, int64_t timeout_ms)
+        {
+            if (!use_session_)
+                return http_transport_->Post(endpoints_.CommandsList(), body, headers, timeout_ms);
+
+            hsm::http::HttpResponse response;
+            if (!session_transport_)
+            {
+                response.error = "no session";
+                return response;
+            }
+            // The caller has already split a batch down to what fits. What is left too large is
+            // one registration that cannot fit a frame on its own: it has no way to the server and
+            // trying again does not change that, so it is answered here as the 413 an HTTP server
+            // would give, which the caller treats as final. Zero room means no session, which is
+            // the transport's to say.
+            const size_t room = session_transport_->MaxBodyBytes();
+            if (room != 0 && body.size() > room)
+            {
+                response.transport_ok = true;
+                response.status_code = 413;
+                response.error = "the registration is larger than a collector session frame";
+                return response;
+            }
+            const auto result = session_transport_->Request("commands", body, timeout_ms);
+            response.transport_ok = result.acked;
+            response.status_code = result.status;
+            response.error = result.error;
+            return response;
         }
 
         // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
@@ -2719,24 +2903,36 @@ namespace
         //
         // The outcome tells the caller whether to try again. The managed command queue re-enqueues
         // a package whose send failed and re-sends it after PackageCollectPeriod
-        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); its Polly pipeline
-        // only adds in-send retries for exceptions (BaseHandlers.ShouldRetry, #1096). Native retries
+        // (QueueProcessorBase.DispatchPackageAsync + DelayAfterFailureAsync); a command send does
+        // not repeat inside itself (managed 3.6.3, #1659 A3). Native retries
         // on the worker's cycle, which is that same period: a transport failure (no HTTP response)
         // and a 5xx (a server restarting behind its proxy answers 502/503) are retried. A 4xx is
-        // final here — managed would re-send it every period until the queue evicts it, but a
-        // rejected payload or key never succeeds on repeat, and the values carrying the same key
-        // already report it.
+        // final, in managed too since 3.6.2 (#1659 A2): a rejected payload or key never succeeds
+        // on repeat, and the values carrying the same key already report it.
+        // Split: a batch that went out in several session frames and whose parts ended
+        // differently. Each part is already settled (the parts to retry are queued), so the caller
+        // has nothing to do; it is not Accepted, so no "registered" line is credited to it.
         enum class RegistrationPost
         {
             Accepted,
             Retry,
             Rejected,
+            Split,
         };
 
         RegistrationPost PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
         {
             if (sensors.empty())
                 return RegistrationPost::Accepted;
+
+            // No session: nothing can be sent, so nothing is serialized. The session reports its
+            // own state; this is the retry the caller already does for an unreachable server.
+            if (use_session_ && (!session_transport_ || !session_transport_->IsUp()))
+            {
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Not registered " + std::to_string(sensors.size()) +
+                                                    " sensor(s): no collector session; retrying on the next send cycle.");
+                return RegistrationPost::Retry;
+            }
 
             std::vector<uint64_t> versions;
             versions.reserve(sensors.size());
@@ -2750,6 +2946,34 @@ namespace
                 versions.push_back(snapshot.second);
             }
             body += "]";
+
+            // A batch that does not fit one session frame is posted in halves, each acknowledged
+            // and recorded on its own. One registration that does not fit on its own goes on and
+            // is answered 413 by PostCommands.
+            if (use_session_ && sensors.size() > 1)
+            {
+                const size_t room = session_transport_->MaxBodyBytes();
+                if (room != 0 && body.size() > room)
+                {
+                    const auto middle = sensors.begin() + static_cast<std::ptrdiff_t>(sensors.size() / 2);
+                    const std::vector<std::shared_ptr<NativeSensor>> first_half(sensors.begin(), middle);
+                    const std::vector<std::shared_ptr<NativeSensor>> second_half(middle, sensors.end());
+                    const RegistrationPost first = PostRegistrationsWire(first_half, runtime);
+                    const RegistrationPost second = PostRegistrationsWire(second_half, runtime);
+                    if (first == second && first != RegistrationPost::Split)
+                        return first;
+
+                    // The halves ended differently. The callers re-queue their whole input on
+                    // Retry, which would post an accepted half again and a half refused with a
+                    // 4xx on every cycle; so the half to retry is queued here and the caller is
+                    // told there is nothing left for it to do.
+                    if (first == RegistrationPost::Retry)
+                        RetryRegistrations(first_half);
+                    if (second == RegistrationPost::Retry)
+                        RetryRegistrations(second_half);
+                    return RegistrationPost::Split;
+                }
+            }
 
             const std::vector<hsm::http::HttpHeader> headers = {
                 { "Key", access_key_ },
@@ -2770,7 +2994,7 @@ namespace
                 timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
             }
 
-            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers, timeout_ms);
+            const auto response = PostCommands(body, headers, timeout_ms);
             // Name a single sensor by path; the connect batch by count.
             const std::string what = sensors.size() == 1 ? "sensor " + sensors.front()->Path()
                                                          : std::to_string(sensors.size()) + " sensor(s)";
@@ -2782,8 +3006,14 @@ namespace
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
                 const bool retry = response.status_code <= 0 || response.status_code >= 500;
-                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
-                         (retry ? "; retrying on the next send cycle." : "."));
+                const std::string message = "Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason +
+                                            (retry ? "; retrying on the next send cycle." : ".");
+                // On a session "no ack" is the state of the session, which the session reports
+                // itself when it changes; repeating it for every registration attempt is noise.
+                if (use_session_ && !response.transport_ok)
+                    LogMessage(HSM_LOG_LEVEL_DEBUG, message);
+                else
+                    LogError(message);
                 return retry ? RegistrationPost::Retry : RegistrationPost::Rejected;
             }
 
@@ -2909,6 +3139,37 @@ namespace
             return MonitoringBarJson(bar, path);
         }
 
+        // A file value in the outgoing format, as OutgoingValueJson does for the other values. On a
+        // live transport it is the FileSensorValue wire (`List<byte>` as a numeric array); before
+        // #1660 step 2b it went out in the canonical form below on every transport, which the
+        // server cannot read, so over HTTP the whole /list batch around it was refused and sent
+        // again on every cycle. The comment is always a string, as the managed file sensor sends
+        // it (its AddValue and SendFile pass "" when no comment is given).
+        std::string OutgoingFileJson(
+            const std::string& path,
+            const std::string& content,
+            const std::string& name,
+            const std::string& extension,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            if (send_wire_)
+                return BuildWireFileJson(extension, name, content, comment, /*comment_is_null=*/false, status, UnixTimeMilliseconds(), path);
+
+            // Canonical cross-language file payload (string content asserted as UTF-8 text).
+            std::ostringstream json;
+            json << "{"
+                 << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
+                 << "\"Path\":\"" << EscapeJson(path) << "\","
+                 << "\"Value\":\"" << EscapeJson(content) << "\","
+                 << "\"Name\":\"" << EscapeJson(name) << "\","
+                 << "\"Extension\":\"" << EscapeJson(extension) << "\","
+                 << "\"Status\":" << static_cast<int>(status) << ","
+                 << "\"Comment\":\"" << EscapeJson(comment) << "\","
+                 << "\"UnixTimeMs\":" << UnixTimeMilliseconds() << "}";
+            return json.str();
+        }
+
         // Surface a metric-source read failure through the deduplicated error log so a wedged live
         // reader is visible instead of degrading silently (the PeriodicTask silent-death lesson).
         // recreated=true: the source was rebuilt and the sensor keeps trying; false: the factory
@@ -2981,6 +3242,10 @@ namespace
             StopServiceStatusSampler();
             StopSelfMonitor();
             StopWorker();
+#if defined(HSM_COLLECTOR_HTTP)
+            if (session_transport_)
+                session_transport_->Stop(0);
+#endif
         }
 
         // Start: Stopped -> Starting -> Running. Idempotent (Running/Starting -> no-op),
@@ -3062,6 +3327,11 @@ namespace
             // builds (conformance) never set send_wire_, so this is a no-op there. A server that is
             // down or restarting (a 5xx from its proxy) gets the batch again on every worker cycle
             // until it accepts it (#1515), like the managed command queue's re-enqueue.
+            // On a session nothing can be sent before it is up, and Start does not wait for it:
+            // the registration batch below then fails at once and is retried by the worker on
+            // every cycle until the session accepts it, like a server that is down over HTTP.
+            StartSessionTransport();
+
             if (send_wire_)
                 PostRegistrationsOrRetry(sensors_snapshot, /*runtime=*/false);
 #endif
@@ -3195,6 +3465,13 @@ namespace
             // the C# stop flush.
             StopWorker();
             DrainQueueOnStop(terminal);
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // After the drain, which used the session if it was up. A graceful stop gives the
+            // close handshake a moment, so the server sees a normal closure.
+            if (session_transport_)
+                session_transport_->Stop(terminal ? 0 : kSessionCloseLingerMs);
+#endif
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -4010,7 +4287,8 @@ namespace
         }
 
         // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
-        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
+        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly. A collector that
+        // is not running is the usual silent no-op.
         void EnqueueFileIfRunning(std::string json)
         {
             {
@@ -4059,10 +4337,48 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(hang_mutex_);
                 send_hang_ = hang;
+                hang_ends_with_cancel_ = false;
             }
 
             hang_cv_.notify_all();
         }
+
+        // Test seams (#1751), for the conformance scenarios of the stop drain. All of them are off
+        // in a collector that does not call them.
+        //
+        // What the injected sender does with every send from now on: accept it (up), fail it at
+        // once (down), or hold it until the stop path cancels it (hung, the same hang as
+        // SetSendHang).
+        enum class TestSendMode
+        {
+            Up = 0,
+            Down = 1,
+            Hung = 2,
+        };
+
+        void TestSetSendMode(TestSendMode mode)
+        {
+            {
+                std::lock_guard<std::mutex> guard(hang_mutex_);
+                send_hang_ = mode == TestSendMode::Hung;
+                send_fail_all_ = mode == TestSendMode::Down;
+                hang_ends_with_cancel_ = false;
+            }
+
+            hang_cv_.notify_all();
+        }
+
+        // The injected hang, but the cancellation of a send parked in it ends it: the sends after
+        // it pass, so a batch cancelled in flight can be seen to be sent again by the stop drain.
+        void TestSetSendHangUntilCancelled()
+        {
+            std::lock_guard<std::mutex> guard(hang_mutex_);
+            send_hang_ = true;
+            hang_ends_with_cancel_ = true;
+        }
+
+        // Sends the dispatcher has started since creation, whatever became of them.
+        int64_t TestSendAttemptCount() const { return send_attempts_.load(std::memory_order_relaxed); }
 
         void AddExtraRequestHeader(std::string name, std::string value)
         {
@@ -4218,14 +4534,51 @@ namespace
             (void)period_ms;
             return SetError(HSM_RESULT_INVALID_STATE, "TCP connection failure rate sensor is only supported on Windows.");
 #else
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (state_ != CollectorState::Stopped)
-                return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
+            // The first period stays (#1752), the rule of the managed
+            // IWindowsCollection.AddNetworkConnectionFailuresRate: a later request with another
+            // period is not applied and is reported; the same period again is silently one sensor.
+            // The call itself still succeeds, as every repeated enable call of this ABI does.
+            int32_t kept_period_ms = 0;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ != CollectorState::Stopped)
+                    return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
 
-            tcp_fail_rate_enabled_ = true;
-            tcp_fail_rate_period_ms_ = period_ms;
-            ClearError();
+                if (!tcp_fail_rate_enabled_)
+                {
+                    tcp_fail_rate_enabled_ = true;
+                    tcp_fail_rate_period_ms_ = period_ms;
+                }
+                else if (tcp_fail_rate_period_ms_ != period_ms)
+                {
+                    kept_period_ms = tcp_fail_rate_period_ms_;
+                }
+
+                ClearError();
+            }
+
+            // Reported outside mutex_, which LogError takes on its way to `.module/Collector errors`.
+            // That sensor takes no value while the collector is stopped, so here the report reaches
+            // the logger only.
+            if (kept_period_ms != 0)
+                LogError("The TCP connection failure rate sensor was already enabled with a period of " +
+                         std::to_string(kept_period_ms) + " ms; the period of " + std::to_string(period_ms) +
+                         " ms of the second request is not applied.");
+
             return HSM_RESULT_OK;
+#endif
+        }
+
+        // Test seam (#1752): the sampling period the TCP connection failure rate sensor will run
+        // with, or 0 when it was never enabled. The registration does not carry the period, so
+        // nothing a test can read on the wire tells which request won.
+        int32_t TestTcpFailureRatePeriodMs()
+        {
+#ifdef _WIN32
+            std::lock_guard<std::mutex> guard(mutex_);
+            return tcp_fail_rate_enabled_ ? tcp_fail_rate_period_ms_ : 0;
+#else
+            return 0; // the sensor cannot be enabled off Windows
 #endif
         }
 
@@ -5110,10 +5463,21 @@ namespace
         void RunTcpFailureRateLoop()
         {
 #ifdef _WIN32
-            hsm::collector::WindowsTcpFailureSampler sampler;
+            // A tick on which neither address family could be read goes to the deduplicated error
+            // channel (the log and `.module/Collector errors`), once per window however long it
+            // lasts: the sensor goes on posting 0, and that must not pass for a quiet network
+            // (#1752, root rule 8). This thread holds neither mutex_ nor queue_mutex_ when it samples.
+            hsm::collector::WindowsTcpFailureSampler sampler([this](const std::string& message) { LogError(message); });
             const auto period = std::chrono::milliseconds(tcp_fail_rate_period_ms_);
 
-            sampler.Sample(); // seed baseline — first call returns nullopt
+            try
+            {
+                sampler.Sample(); // seed baseline — first call returns nullopt
+            }
+            catch (...)
+            {
+                // The seeding sample can report now: nothing may leave this thread's function.
+            }
 
             while (true)
             {
@@ -5547,6 +5911,8 @@ namespace
             // xfer-abort reads a lock-free atomic, so this is safe without the hang/queue locks.
             if (http_transport_)
                 http_transport_->Cancel();
+            if (session_transport_)
+                session_transport_->Cancel();
 #endif
 
             {
@@ -5569,6 +5935,8 @@ namespace
             // transport user left is the stop drain on this thread.
             if (http_transport_)
                 http_transport_->ResetCancel();
+            if (session_transport_)
+                session_transport_->ResetCancel();
 #endif
         }
 
@@ -5721,6 +6089,7 @@ namespace
                     batch_bytes += batch.size() + 1;
                 }
 
+                batch_handled_ = 0;
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
@@ -5731,15 +6100,25 @@ namespace
 
                 if (!sent)
                 {
+                    // A sender that delivers a batch in parts (the session, when the batch does
+                    // not fit one frame) says how many leading values are settled; only the rest
+                    // goes back, or the delivered part would arrive twice.
+                    // A value the sender emptied is settled too (dropped and counted by it).
+                    const size_t handled = (std::min)(batch_handled_, batch.size());
                     if (clear_remainder_on_failure)
                     {
-                        const size_t dropped = batch.size() + queue_.size();
+                        size_t dropped = queue_.size();
+                        for (size_t index = handled; index < batch.size(); ++index)
+                            dropped += batch[index].empty() ? 0 : 1;
                         queue_.clear();
                         return dropped;
                     }
 
-                    for (size_t index = 0; index < batch.size(); ++index)
-                        ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    for (size_t index = handled; index < batch.size(); ++index)
+                    {
+                        if (!batch[index].empty())
+                            ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                    }
 
                     return 0;
                 }
@@ -5750,6 +6129,9 @@ namespace
 
         bool TrySendBatch(std::vector<std::string>& batch)
         {
+            // Counted before anything can hang or fail the send (test seam, #1751).
+            send_attempts_.fetch_add(1, std::memory_order_relaxed);
+
             // Injected transport hang: block until the hang is lifted or the stop path cancels
             // in-flight sends. A cancelled hung send is a failed send — the worker re-enqueues
             // the batch and the stop drain drops it, keeping shutdown bounded.
@@ -5764,8 +6146,21 @@ namespace
                     --hung_sends_;
 
                     if (send_hang_)
+                    {
+                        // Test seam (#1751): the hang that ends with this cancellation.
+                        if (hang_ends_with_cancel_)
+                        {
+                            hang_ends_with_cancel_ = false;
+                            send_hang_ = false;
+                        }
+
                         return false;
+                    }
                 }
+
+                // Test seam (#1751): a sender that is down fails every send at once.
+                if (send_fail_all_)
+                    return false;
             }
 
             // The injected failure fires BEFORE anything is recorded — mirrors the C# harness's
@@ -5840,13 +6235,7 @@ namespace
                 for (const auto& h : response.response_headers)
                 {
                     if (h.name == "x-hsm-directive")
-                    {
-                        const auto colon = h.value.find(':');
-                        if (colon != std::string::npos)
-                            directive_callback_(h.value.substr(0, colon).c_str(), h.value.substr(colon + 1).c_str(), directive_user_data_);
-                        else
-                            directive_callback_(h.value.c_str(), "", directive_user_data_);
-                    }
+                        DispatchServerDirective(h.value);
                 }
             }
 
@@ -5879,6 +6268,122 @@ namespace
             }
 
             return response.IsSuccess();
+        }
+#endif
+
+#if defined(HSM_COLLECTOR_HTTP)
+        // One server directive, "name:argument" or a bare name, to the host's callback as verb and
+        // payload: the text of one X-Hsm-Directive header line over HTTP, or the body of one
+        // {"op":"directive"} push on the session (#1660 step 5). Both paths split it the same way,
+        // so the host sees the same calls in the same order whichever transport carried them.
+        // A directive that is empty or whitespace only carries nothing and is not handed on, as the
+        // managed ServerDirectives.Receive skips it (string.IsNullOrWhiteSpace).
+        void DispatchServerDirective(const std::string& directive)
+        {
+            if (directive_callback_ == nullptr || IsWhiteSpaceOnlyUtf8(directive))
+                return;
+
+            const auto colon = directive.find(':');
+            if (colon != std::string::npos)
+                directive_callback_(directive.substr(0, colon).c_str(), directive.substr(colon + 1).c_str(), directive_user_data_);
+            else
+                directive_callback_(directive.c_str(), "", directive_user_data_);
+        }
+
+        // The data queue's batch as `list` frames on the session. A batch that does not fit one
+        // frame is split; every frame is acknowledged on its own. The result is the HTTP rule:
+        // 2xx is delivered, anything else (or no ack) sends the batch back to the queue.
+        bool SessionSendBatch(std::vector<std::string>& batch)
+        {
+            // What one frame may wait for its ack: the request timeout, or what is left of the
+            // stop budget. Asked again for every frame: a batch split into several frames must
+            // not spend the remaining budget once per frame. False = the budget is spent.
+            const auto frame_timeout = [this](int64_t& timeout_ms) {
+                timeout_ms = request_timeout_ms_;
+                if (!stop_drain_active_)
+                    return true;
+
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           stop_drain_deadline_ - std::chrono::steady_clock::now())
+                                           .count();
+                if (remaining <= 0)
+                    return false;
+
+                timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
+                return true;
+            };
+
+            int64_t timeout_ms = 0;
+            if (!frame_timeout(timeout_ms))
+                return false;
+
+            const size_t room = session_transport_ ? session_transport_->MaxBodyBytes() : 0;
+            if (room == 0)
+            {
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Not sent " + std::to_string(batch.size()) + " value(s): no collector session.");
+                return false;
+            }
+
+            size_t index = 0;
+            while (index < batch.size())
+            {
+                // Everything before this frame was acknowledged, or dropped and counted.
+                batch_handled_ = index;
+                std::string body = "[";
+                size_t count = 0;
+                while (index < batch.size())
+                {
+                    const std::string& element = batch[index];
+                    // "[" + element + "]" must fit. A value that cannot fit a frame on its own
+                    // has no way to the server: dropped and counted, or it would come back with
+                    // every retry and block everything behind it.
+                    if (element.size() + 2 > room)
+                    {
+                        LogError("Dropped a value of " + std::to_string(element.size()) +
+                                 " bytes: it is larger than a collector session frame (" + std::to_string(room) + " bytes).");
+                        queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                        // Emptied: settled, whatever happens to the frame around it (the
+                        // dispatcher neither re-enqueues nor counts an emptied value).
+                        batch[index].clear();
+                        ++index;
+                        continue;
+                    }
+                    // The element, the closing "]" and, behind another element, a comma. The
+                    // frame's first element pays no comma: with the check above that makes it
+                    // always fit, so a frame is never left empty by a value that exactly fills it
+                    // (counting the comma there sent such a value round this loop forever).
+                    if (body.size() + element.size() + (count != 0 ? 2 : 1) > room)
+                        break;
+                    if (count != 0)
+                        body += ',';
+                    body += element;
+                    ++count;
+                    ++index;
+                }
+                if (count == 0)
+                    continue; // only dropped values were left
+                body += ']';
+
+                if (!frame_timeout(timeout_ms))
+                    return false;
+
+                const auto result = session_transport_->Request("list", body, timeout_ms);
+                if (!result.IsSuccess())
+                {
+                    const std::string msg = "Failed to send " + std::to_string(count) + " value(s) on the collector session: " +
+                                            (result.acked ? "status " + std::to_string(result.status) : std::string("no ack")) +
+                                            (result.error.empty() ? "" : " (" + result.error + ")");
+                    // A refusal by the server is an error worth a line. "No ack" is the state of
+                    // the session, which the session reports itself, and a send cancelled by the
+                    // stop is expected.
+                    if (result.acked)
+                        LogError(msg);
+                    else
+                        LogMessage(HSM_LOG_LEVEL_DEBUG, msg);
+                    return false;
+                }
+            }
+            return true;
         }
 #endif
 
@@ -5941,6 +6446,10 @@ namespace
         // send path during it; the worker is joined by then and only starts again after these are
         // cleared (thread creation/join carry the happens-before), so no lock is needed.
         bool stop_drain_active_ = false;
+        // Set by a sender that delivers a batch in parts: how many leading values of the batch in
+        // flight are settled (delivered, or dropped and counted). Read by the dispatcher after a
+        // failed send; only the sending thread touches it.
+        size_t batch_handled_ = 0;
         std::chrono::steady_clock::time_point stop_drain_deadline_{};
 
         // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
@@ -5985,6 +6494,11 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
         int hung_sends_ = 0; // sends parked in the injected hang (test seam), guarded by hang_mutex_
+        // Test seams (#1751), guarded by hang_mutex_: every send fails at once; the hang ends with
+        // the cancellation of a send parked in it.
+        bool send_fail_all_ = false;
+        bool hang_ends_with_cancel_ = false;
+        std::atomic<std::int64_t> send_attempts_{ 0 }; // sends started since creation (test seam)
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
@@ -6006,6 +6520,11 @@ namespace
         bool send_wire_ = false;
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
+        // The collector session, when it is the transport (UseSessionTransport). Created by Start
+        // and stopped by Stop; the pointer itself changes only while no sending thread runs.
+        std::unique_ptr<hsm::http::SessionTransport> session_transport_;
+        bool use_session_ = false;
+        static constexpr int64_t kSessionCloseLingerMs = 1000;
         hsm::http::Endpoints endpoints_;
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
         std::mutex pending_registrations_mutex_;
@@ -6342,22 +6861,10 @@ namespace
 
         const auto normalized_comment = TrimComment(CopyString(comment));
 
-        // Canonical cross-language file payload (string content asserted as UTF-8 text).
-        std::ostringstream json;
-        json << "{"
-             << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
-             << "\"Path\":\"" << EscapeJson(path_) << "\","
-             << "\"Value\":\"" << EscapeJson(content) << "\","
-             << "\"Name\":\"" << EscapeJson(name) << "\","
-             << "\"Extension\":\"" << EscapeJson(extension) << "\","
-             << "\"Status\":" << static_cast<int>(status) << ","
-             << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
-             << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
-             << "}";
-
         // Instant gating: dropped unless the collector is running (values before Start are
-        // lost). File payloads dispatch promptly — not gated by the package collect period.
-        collector->EnqueueFileIfRunning(json.str());
+        // lost). File payloads dispatch promptly — not gated by the package collect period. On a
+        // session a file value travels in a `list` frame like every other value (#1660 step 2b).
+        collector->EnqueueFileIfRunning(collector->OutgoingFileJson(path_, content, name, extension, status, normalized_comment));
         return HSM_RESULT_OK;
     }
 
@@ -7082,10 +7589,39 @@ extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* col
     return collector != nullptr ? collector->impl->TestRequeueDroppedTotal() : 0;
 }
 
+// Test-only (#1751), for the conformance scenarios of the stop drain; not in the public header.
+// What the injected sender does with every send from now on: 0 accepts it, 1 fails it at once,
+// 2 holds it until the stop path cancels it. Any other value is ignored.
+extern "C" void hsm_collector_test_set_send_mode(hsm_collector_t* collector, int32_t mode)
+{
+    if (collector != nullptr && mode >= 0 && mode <= 2)
+        collector->impl->TestSetSendMode(static_cast<NativeCollector::TestSendMode>(mode));
+}
+
+// The injected hang that ends with the cancellation of a send parked in it.
+extern "C" void hsm_collector_test_set_send_hang_until_cancelled(hsm_collector_t* collector)
+{
+    if (collector != nullptr)
+        collector->impl->TestSetSendHangUntilCancelled();
+}
+
+// Sends the dispatcher has started since the collector was created, whatever became of them.
+extern "C" int64_t hsm_collector_test_send_attempt_count(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestSendAttemptCount() : 0;
+}
+
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)
 {
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
+}
+
+// Test-only (#1752): the period the TCP connection failure rate sensor will sample with, 0 when it
+// is not enabled. Not in the public header, like the seams above.
+extern "C" int32_t hsm_collector_test_tcp_failure_rate_period_ms(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestTcpFailureRatePeriodMs() : 0;
 }
 
 // Public live transport (#1165): switch the collector from the in-memory recording sender to a real
@@ -7102,6 +7638,25 @@ extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collec
     if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
         return HSM_RESULT_INVALID_STATE;
     collector->impl->UseHttpTransport();
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+// Make the collector session the transport (#1668): one WebSocket to the server instead of the
+// HTTP routes. Same contract as hsm_collector_use_http_transport: before Start, and
+// HSM_RESULT_INVALID_STATE when the library was built without HSM_COLLECTOR_HTTP. Whether a
+// session can actually be opened (the server has sessions, this libcurl has WebSocket) is found
+// out at Start and reported through the log; the collector never switches to HTTP by itself.
+extern "C" hsm_result_t hsm_collector_use_session_transport(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(HSM_COLLECTOR_HTTP)
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
+    collector->impl->UseSessionTransport();
     return HSM_RESULT_OK;
 #else
     return HSM_RESULT_INVALID_STATE;
@@ -8331,6 +8886,20 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
     data->has_inactivity = true;
     data->inactivity_ms = period_ms;
     return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_sensor_set_previous_paths(hsm_sensor_t* sensor, const char* const* previous_paths, size_t count)
+{
+    if (sensor == nullptr || (previous_paths == nullptr && count > 0))
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = sensor->impl->SetPreviousPaths(previous_paths, count);
+    if (result == HSM_RESULT_OK)
+    {
+        if (const auto collector = sensor->impl->OwningCollector())
+            collector->OnRegistrationChanged(sensor->impl, NativeCollector::RegistrationChange::PreviousPathsChanged);
+    }
+    return result;
 }
 
 hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description)
