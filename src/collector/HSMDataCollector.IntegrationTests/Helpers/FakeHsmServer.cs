@@ -20,7 +20,7 @@ namespace HSMDataCollector.IntegrationTests.Helpers
     /// </summary>
     public sealed class FakeHsmServer : IDisposable
     {
-        private readonly HttpListener _listener = new HttpListener();
+        private readonly HttpListener _listener;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly ConcurrentQueue<CapturedRequest> _requests = new ConcurrentQueue<CapturedRequest>();
         private readonly Task _loop;
@@ -45,11 +45,29 @@ namespace HSMDataCollector.IntegrationTests.Helpers
 
         public FakeHsmServer()
         {
-            Port = GetFreeTcpPort();
+            // A probed port is free only until the probe stops: two servers starting at once
+            // can probe the same port, and the second listen then dies on the prefix conflict.
+            // Claim the port by listening on it and take another one when the claim is lost.
             // The collector posts to {address}:{port}/api/sensors/{endpoint}; a root prefix
             // captures every endpoint (data, addOrUpdate, commands, testConnection, file).
-            _listener.Prefixes.Add($"http://localhost:{Port}/");
-            _listener.Start();
+            for (var attempt = 0; ; attempt++)
+            {
+                var listener = new HttpListener();
+                var port = GetFreeTcpPort();
+                listener.Prefixes.Add($"http://localhost:{port}/");
+                try
+                {
+                    listener.Start();
+                    _listener = listener;
+                    Port = port;
+                    break;
+                }
+                catch (HttpListenerException) when (attempt < 9)
+                {
+                    listener.Close();
+                }
+            }
+
             _loop = Task.Run(AcceptLoopAsync);
         }
 

@@ -410,7 +410,7 @@ namespace HSMDataCollector.Tests
 
         private sealed class FakeHsmServer : IDisposable
         {
-            private readonly HttpListener _listener = new HttpListener();
+            private readonly HttpListener _listener;
             private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
             private readonly FakeHsmServerOptions _options;
             private readonly Task _listenTask;
@@ -428,10 +428,28 @@ namespace HSMDataCollector.Tests
             private FakeHsmServer(FakeHsmServerOptions options)
             {
                 _options = options;
-                Port = GetFreePort();
 
-                _listener.Prefixes.Add("http://127.0.0.1:" + Port.ToString(CultureInfo.InvariantCulture) + "/");
-                _listener.Start();
+                // A probed port is free only until the probe stops: this server races for ports
+                // with the scripted servers of the parallel transport tests, so claim the port
+                // by listening on it and take another one when the claim is lost.
+                for (var attempt = 0; ; attempt++)
+                {
+                    var listener = new HttpListener();
+                    var port = GetFreePort();
+                    listener.Prefixes.Add("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + "/");
+                    try
+                    {
+                        listener.Start();
+                        _listener = listener;
+                        Port = port;
+                        break;
+                    }
+                    catch (HttpListenerException) when (attempt < 9)
+                    {
+                        listener.Close();
+                    }
+                }
+
                 _listenTask = Task.Run(() => ListenAsync(_cancellationTokenSource.Token));
             }
 
