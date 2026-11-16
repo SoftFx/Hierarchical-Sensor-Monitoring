@@ -215,6 +215,23 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void GetFolder_CreationDate_IsAUtcInstant()
+        {
+            // #1676: the entity rebuilds its date from ticks with an
+            // Unspecified Kind, and a zone-less timestamp is not a valid
+            // JSON-Schema date-time — MCP clients reject the list over it.
+            // Pin the Kind the way the sensor-tree mapper does.
+            var folder = BuildFolder("dated");
+            _store.Add(folder);
+
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetFolder(folder.Id)).Value as FolderDto;
+
+            Assert.NotNull(dto);
+            Assert.Equal(DateTimeKind.Utc, dto.CreationDate!.Value.Kind);
+        }
+
+
+        [Fact]
         public void GetFolder_UnknownId_Is404()
         {
             Assert.Equal(404, StatusCodeOf(CreateController().GetFolder(Guid.NewGuid())));

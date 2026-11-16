@@ -7,7 +7,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) installed and running
-- Ports `80` and `443` available on the host — 443 is the single port serving the web UI and sensor ingestion (#1590); the deprecated `44330`/`44333` aliases keep answering through the deprecation window
+- Ports `80` and `443` available on the host — 443 is the single port serving the web UI and sensor ingestion (#1590); the `44330`/`44333` ports of older versions are no longer published (#1696)
 
 ---
 
@@ -132,8 +132,8 @@ Always mount these four directories. Without them, **all data is lost** when the
 | Port | Protocol | Purpose |
 |---|---|---|
 | `443` | HTTPS | Everything — web UI, sensor data ingestion, management API (#1590) |
-| `44330` | HTTPS | Deprecated alias of 443 (deprecation window) |
-| `44333` | HTTPS | Deprecated alias of 443 (deprecation window) |
+
+Ports `44330` and `44333` of the old two-port scheme are removed (#1696, breaking): point every collector, agent and bookmark at 443.
 
 If these ports are already in use, change them in `docker-compose.yml` and in `Config/appsettings.json`:
 

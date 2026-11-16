@@ -52,7 +52,7 @@ jobs:
           # Bounded network waits: a stalled mirror fails the step instead of hanging it.
           apt_net=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
           sudo apt-get "${apt_net[@]}" update
-          sudo apt-get "${apt_net[@]}" install -y build-essential cmake libcurl4-openssl-dev pkg-config
+          sudo apt-get "${apt_net[@]}" install -y build-essential cmake libcurl4-openssl-dev nlohmann-json3-dev pkg-config
 
       # The ubuntu-latest image ships rustup; pin the components this lane needs rather than
       # assuming the preinstalled profile carries them.

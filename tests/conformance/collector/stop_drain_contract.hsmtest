@@ -1,0 +1,123 @@
+# HSM collector conformance v1 — the stop drain: what a Stop or a Dispose sends of the work it
+# finds accepted, and what it leaves behind (#1751; the behaviour is #1659 A6, #1747 and #1748).
+# Format: case|action|arg1|arg2|...
+#
+# New verbs:
+#   dispose                             dispose the collector: the terminal stop, whose drain has the
+#                                       short budget
+#   set_sender_hang_until_cancelled     every data send blocks until the collector cancels it; that
+#                                       cancellation ends the hang, and the sends after it pass. A
+#                                       case waits for the park (wait_sender_parked) before it stops
+#   set_sender_mode|up|down|hung        what the sender does with every send of every kind from now
+#                                       on: down fails it at once, hung never answers it (the send
+#                                       ends when the collector gives it up), up accepts it
+#   expect_send_attempts|kind|count[|timeout_s]
+#                                       the sends of a kind the collector has STARTED so far, whatever
+#                                       became of them. kind: value (a package of values: data,
+#                                       priority, or a file value) or registration. With a timeout it
+#                                       polls until the count equals, then asserts equality
+#
+# Contract notes:
+# - Nothing here is timed. A send that must not happen is seen as a started send, or as a
+#   delivered value, never as a stop that took long.
+# - collect_period_ms=60000 keeps the dispatcher out of the timeline: what such a case sends, the
+#   stop sends. The cases that need a package IN FLIGHT at the stop use 20 ms and wait for the
+#   park, never for a time.
+# - Only value sends are counted here. A registration is a send of its own for the managed
+#   collector and its recording sender sees it; the in-memory sender of the native collector is
+#   never sent one. The order of registrations and values in the drain, and the budget they
+#   share, are in stop_drain_registration_contract.hsmtest.
+
+# The package that is in flight when Stop cancels it is not lost: it goes back to the queue and
+# the drain sends it again (#1659 A6). The 10 values are in the parked package or queued behind
+# it; whichever, each of them is delivered once. Order is not asserted: the cancelled package
+# returns to the tail.
+stop_sends_again_the_package_it_cancelled_in_flight|create_collector_with_limits|20000|50|20
+stop_sends_again_the_package_it_cancelled_in_flight|create_int_sensor|contract/drain/in-flight/stop
+stop_sends_again_the_package_it_cancelled_in_flight|start
+stop_sends_again_the_package_it_cancelled_in_flight|set_sender_hang_until_cancelled
+stop_sends_again_the_package_it_cancelled_in_flight|add_int_sequence|1|10|0|Ok|in-flight
+stop_sends_again_the_package_it_cancelled_in_flight|wait_sender_parked|10
+stop_sends_again_the_package_it_cancelled_in_flight|stop
+stop_sends_again_the_package_it_cancelled_in_flight|expect_sent_count|10
+stop_sends_again_the_package_it_cancelled_in_flight|expect_each_value_once|0|10
+
+# The same on Dispose, which before #1659 A6 dropped the package it had cancelled in flight.
+dispose_sends_again_the_package_it_cancelled_in_flight|create_collector_with_limits|20000|50|20
+dispose_sends_again_the_package_it_cancelled_in_flight|create_int_sensor|contract/drain/in-flight/dispose
+dispose_sends_again_the_package_it_cancelled_in_flight|start
+dispose_sends_again_the_package_it_cancelled_in_flight|set_sender_hang_until_cancelled
+dispose_sends_again_the_package_it_cancelled_in_flight|add_int_sequence|1|10|0|Ok|in-flight
+dispose_sends_again_the_package_it_cancelled_in_flight|wait_sender_parked|10
+dispose_sends_again_the_package_it_cancelled_in_flight|dispose
+dispose_sends_again_the_package_it_cancelled_in_flight|expect_sent_count|10
+dispose_sends_again_the_package_it_cancelled_in_flight|expect_each_value_once|0|10
+
+# The first failed value send ends the drain (#1747): 12 values are three packages of five, and a
+# stop against a sender that is down starts one value send, not three.
+first_failed_value_send_ends_the_stop_drain|create_collector_with_limits|20000|5|60000
+first_failed_value_send_ends_the_stop_drain|create_int_sensor|contract/drain/failed-send
+first_failed_value_send_ends_the_stop_drain|start
+first_failed_value_send_ends_the_stop_drain|add_int_sequence|1|12|0|Ok|pending
+first_failed_value_send_ends_the_stop_drain|set_sender_mode|down
+first_failed_value_send_ends_the_stop_drain|stop
+first_failed_value_send_ends_the_stop_drain|expect_send_attempts|value|1
+first_failed_value_send_ends_the_stop_drain|expect_sent_count|0
+
+# ... whatever the values are and wherever the collector keeps them (#1747). A file value and a
+# plain value are two queues of the managed collector and one queue of the native one; in both a
+# stop starts ONE value send for the two of them. Timeline: the file value is sent as soon as it
+# is added, and that send fails (attempt 1; the case waits for it, so it cannot fall into the
+# stop). The plain value is the default of a last-value sensor, which posts at the stop and needs
+# no sensor index (the drivers count an index differently across sensor kinds, so the file sensor
+# is created first and is sensor 0 in both). The stop then holds both values and starts one send
+# (attempt 2).
+# A priority sensor, the third value queue of the managed collector, has no portable scenario:
+# the native collector has no priority routing, and a managed priority value is sent the moment
+# it is added, which a case could wait for in the managed driver only.
+failed_value_send_ends_the_drain_for_every_kind_of_value|create_collector_with_limits|20000|50|60000
+failed_value_send_ends_the_drain_for_every_kind_of_value|create_file_sensor|contract/drain/failed-send/file|report|txt
+failed_value_send_ends_the_drain_for_every_kind_of_value|create_last_int_sensor|contract/drain/failed-send/last|7
+failed_value_send_ends_the_drain_for_every_kind_of_value|start
+failed_value_send_ends_the_drain_for_every_kind_of_value|set_sender_mode|down
+failed_value_send_ends_the_drain_for_every_kind_of_value|add_file_value|0|content|Ok|file
+failed_value_send_ends_the_drain_for_every_kind_of_value|expect_send_attempts|value|1|10
+failed_value_send_ends_the_drain_for_every_kind_of_value|stop
+failed_value_send_ends_the_drain_for_every_kind_of_value|expect_send_attempts|value|2
+failed_value_send_ends_the_drain_for_every_kind_of_value|expect_sent_count|0
+
+# What a stop could not deliver it discards (#1747): a start with a healthy sender sends none of
+# the 12 values that were pending at the failed stop, only what is added after it.
+values_of_a_failed_stop_are_not_sent_by_the_next_start|create_collector_with_limits|20000|5|60000
+values_of_a_failed_stop_are_not_sent_by_the_next_start|create_int_sensor|contract/drain/failed-send/restart
+values_of_a_failed_stop_are_not_sent_by_the_next_start|start
+values_of_a_failed_stop_are_not_sent_by_the_next_start|add_int_sequence|1|12|0|Ok|pending
+values_of_a_failed_stop_are_not_sent_by_the_next_start|set_sender_mode|down
+values_of_a_failed_stop_are_not_sent_by_the_next_start|stop
+values_of_a_failed_stop_are_not_sent_by_the_next_start|expect_sent_count|0
+values_of_a_failed_stop_are_not_sent_by_the_next_start|set_sender_mode|up
+values_of_a_failed_stop_are_not_sent_by_the_next_start|start
+values_of_a_failed_stop_are_not_sent_by_the_next_start|add_int_sequence|1|3|100|Ok|fresh
+values_of_a_failed_stop_are_not_sent_by_the_next_start|stop
+values_of_a_failed_stop_are_not_sent_by_the_next_start|expect_sent_count|3
+values_of_a_failed_stop_are_not_sent_by_the_next_start|expect_payload_value_sequence|0|3|100
+
+# Nothing of a send the drain gave up comes back (#1748). The sender hangs: one package of five is
+# in flight at the stop and seven values are queued behind it. The stop cancels the package, its
+# drain sends it again into the same hang and gives that send up when the budget is spent, and
+# discards everything. With the hang lifted, the next start sends none of the 12, only what is
+# added after it.
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|create_collector_with_limits|20000|5|20
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|create_int_sensor|contract/drain/hang/restart
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|start
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|set_sender_hang
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|add_int_sequence|1|12|0|Ok|doomed-by-hang
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|wait_sender_parked|10
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|stop
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|expect_sent_count|0
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|release_sender_hang
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|start
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|add_int_sequence|1|3|100|Ok|fresh
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|stop
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|expect_sent_count|3
+values_of_a_stop_against_a_hanging_sender_are_not_sent_by_the_next_start|expect_payload_value_sequence|0|3|100

@@ -277,6 +277,19 @@ namespace HSMServer.BackgroundServices
 
         public async ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
         {
+            commands = commands.ToList();
+
+            // Previous paths (#1724) work for the server's own collector too: the old sensors
+            // move first — the batch as a whole, like a collector's /commands batch — so the
+            // lookups below find them.
+            var registrations = commands.OfType<AddOrUpdateSensorRequest>()
+                .Select(request => new PreviousPathsRegistration(request.Path, request.PreviousPaths, request.SensorType?.Convert()))
+                .ToList();
+
+            if (registrations.Exists(registration => registration.PreviousPaths is { Count: > 0 }))
+                await _cache.ApplyPreviousPathsAsync(_key, _productModel.Id, registrations,
+                    HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector(SelfCollectorName, false), token);
+
             foreach (var command in commands)
             {
                 if (command is AddOrUpdateSensorRequest apiRequest)
@@ -294,6 +307,7 @@ namespace HSMServer.BackgroundServices
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
                         Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
+                        TypeIsExplicit = sensorType is not null,
                     };
 
                     await _cache.AddOrUpdateSensorAsync(coreRequest, token);

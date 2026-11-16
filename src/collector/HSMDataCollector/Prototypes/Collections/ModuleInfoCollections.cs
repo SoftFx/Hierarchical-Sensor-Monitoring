@@ -153,6 +153,9 @@ namespace HSMDataCollector.Prototypes
             "If TTL triggered and HSM server stopped receiving data, you need to check the status of the connected application.";
 
 
+        internal static readonly TimeSpan InactivityPeriod = TimeSpan.FromMinutes(5);
+
+
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromSeconds(15);
 
         protected override string SensorName => "Service alive";
@@ -164,10 +167,15 @@ namespace HSMDataCollector.Prototypes
             Type = SensorType.BooleanSensor;
             AggregateData = true;
 
-            TTL = TimeSpan.FromMinutes(1);
+            TTL = InactivityPeriod;
             KeepHistory = TimeSpan.FromDays(180);
 
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendInstantHourlyScheduledNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
+            // The alert carries its own inactivity period (#1666): a collector off for more than
+            // InactivityPeriod raises it, a shorter outage (a restart, an update) does not. With a
+            // TTL alert present the registration's TTLs come from the alert alone (ApiConverters),
+            // so the TTL above only keeps the options saying the same thing; the native
+            // ServiceAliveTtl catalog row sends the same value.
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs(InactivityPeriod).ThenSendInstantHourlyScheduledNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
         }
 
 

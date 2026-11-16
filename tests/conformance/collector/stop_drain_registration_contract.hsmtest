@@ -1,0 +1,65 @@
+# HSM collector conformance v1 — the stop drain: registrations and values (#1751; the behaviour is
+# #1659 A7 and #1747).
+# Format: case|action|arg1|arg2|...
+#
+# A registration (the AddOrUpdate command that tells the server what a sensor is) that the server
+# has not accepted yet is work for the stop drain, like a queued value. These cases need a sender
+# that is SENT the registrations and records them in one sequence with the value sends:
+#
+# New verbs:
+#   create_collector_sending_registrations|max_values_in_package|collect_period_ms|request_timeout_ms
+#       a collector whose registrations reach the sender of the case. The managed driver uses its
+#       recording sender (an IDataSender gets the registrations as command sends). The native
+#       driver uses the HTTP transport against a recording server of its own, because the
+#       in-memory sender of the native collector is never sent a registration; so the native
+#       driver has this verb in the HTTP build only. request_timeout_ms is the request timeout
+#       of the collector, and so its stop budget (clamped to 1..5 s).
+#       In such a case the sender is driven with set_sender_mode and read with
+#       expect_send_attempts and expect_sends; the payload assertions and the other fault
+#       injection of the recording sender are not for it.
+#   expect_sends|kind[,kind...]
+#       every send the collector has started so far, by kind (registration, value), in the order
+#       the sends were started
+#   (set_sender_mode and expect_send_attempts: stop_drain_contract.hsmtest)
+#
+# How a registration is made pending without a race: the sender is down at the start, so the
+# registration of the start fails (send 1) and waits for a next cycle, which
+# collect_period_ms=60000 never reaches. The case waits for that send, never for a time.
+# The value added then waits for the same cycle. What follows the stop, the stop's drain sent.
+
+# Registrations first (#1659 A7): values are of little use to a server that was never told what
+# their sensors are.
+stop_drain_sends_pending_registrations_before_values|create_collector_sending_registrations|50|60000|1000
+stop_drain_sends_pending_registrations_before_values|create_int_sensor|contract/drain/order
+stop_drain_sends_pending_registrations_before_values|set_sender_mode|down
+stop_drain_sends_pending_registrations_before_values|start
+stop_drain_sends_pending_registrations_before_values|expect_send_attempts|registration|1|10
+stop_drain_sends_pending_registrations_before_values|add_int|0|1|Ok|pending
+stop_drain_sends_pending_registrations_before_values|set_sender_mode|up
+stop_drain_sends_pending_registrations_before_values|stop
+stop_drain_sends_pending_registrations_before_values|expect_sends|registration,registration,value
+
+# One budget for the whole drain, not one for the registrations and one for the values (#1659
+# A7). Every send hangs: the registration send of the drain uses the budget up, and no value send
+# is started after it. With a budget of its own the value would have got a send. The case takes
+# the budget in wall clock (1 s), and asserts nothing about it.
+stop_drain_has_one_budget_for_registrations_and_values|create_collector_sending_registrations|50|60000|1000
+stop_drain_has_one_budget_for_registrations_and_values|create_int_sensor|contract/drain/budget
+stop_drain_has_one_budget_for_registrations_and_values|set_sender_mode|down
+stop_drain_has_one_budget_for_registrations_and_values|start
+stop_drain_has_one_budget_for_registrations_and_values|expect_send_attempts|registration|1|10
+stop_drain_has_one_budget_for_registrations_and_values|add_int|0|1|Ok|pending
+stop_drain_has_one_budget_for_registrations_and_values|set_sender_mode|hung
+stop_drain_has_one_budget_for_registrations_and_values|stop
+stop_drain_has_one_budget_for_registrations_and_values|expect_sends|registration,registration
+
+# A failed registration send ends the drain of the registrations only (#1747): the values are
+# still tried, once. Most values of a stop belong to sensors the server has known for long.
+failed_registration_send_does_not_end_the_drain_of_the_values|create_collector_sending_registrations|50|60000|1000
+failed_registration_send_does_not_end_the_drain_of_the_values|create_int_sensor|contract/drain/failed-registration
+failed_registration_send_does_not_end_the_drain_of_the_values|set_sender_mode|down
+failed_registration_send_does_not_end_the_drain_of_the_values|start
+failed_registration_send_does_not_end_the_drain_of_the_values|expect_send_attempts|registration|1|10
+failed_registration_send_does_not_end_the_drain_of_the_values|add_int|0|1|Ok|pending
+failed_registration_send_does_not_end_the_drain_of_the_values|stop
+failed_registration_send_does_not_end_the_drain_of_the_values|expect_sends|registration,registration,value

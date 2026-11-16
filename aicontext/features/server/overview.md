@@ -30,6 +30,8 @@ In-memory tree of Products -> Nodes -> Sensors. Source of truth for current sens
 ### UpdatesQueue
 `System.Threading.Channels`-based async queue for processing incoming sensor value updates. Decouples HTTP request handling from sensor model updates.
 
+A request the queue or its handler fails on with an exception comes back to the caller as an error result, not as an exception. For a sensor registration the cache sorts that result into a fault and a refusal (`TreeValuesCache.AddOrUpdateSensorAsync`, `TaskResult.IsFault`, #1756): an exception of the queue and a failed write of the sensor's row to the store are faults, which the Sensor API answers `500` so that a collector sends the registration again; the other callers of the cache do not read the mark. What the handler finds wrong once it runs (a product or a sensor that is not there, an exception while the settings are applied in memory) is logged and answered as applied, as before. A write the LevelDB layer fails on is caught and logged there and not thrown; the registration path alone asks the store for the outcome (`IDatabaseCore.AddSensorChecked` / `UpdateSensorChecked`) and takes a reported failure as a fault, every other caller writes with the void methods and is not told. A registration forwarded through an alias to another root product's queue is sorted by the same rule: its outcome there is awaited outside any queue (`ForwardedRegistration`), never by the handler that forwards. The rule in full: `aicontext/features/api/wire-contract/feature.md` § Statuses of the registration routes.
+
 ### BaseSensorModel<T>
 Typed sensor model. Manages:
 - Last value and history
@@ -109,6 +111,7 @@ TypeScript 5.3 + Webpack 5:
 - `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
+- `sensor-move/` - moving a sensor to another path, same or another product, keeping its id, history, settings and policies; the old path becomes an alias that keeps routing values to it (#1718, ADR-0018).
 - `collector-session/` - the WebSocket session a collector may hold with the server (#1664): `GET /api/sensors/session`, acks with the HTTP route's status, the server-wide session cap, the session registry and the `Open sessions` self-monitoring sensor. Meant to replace the HTTP routes for collectors after a transition period. No collector uses it yet.
 - `database-backup-monitoring/` - self-monitoring of the server's own database backup (#1525): per-run `Backup result` (status + TTL so a missed run turns Timeout), backup file sizes, duration, and per-database sizes.
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.

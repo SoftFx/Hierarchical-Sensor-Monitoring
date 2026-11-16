@@ -38,7 +38,14 @@ $corpusDir = Join-Path $repoRoot "tests/conformance/collector"
 
 # fixture name (no extension) -> set of case names
 $corpus = @{}
-foreach ($file in Get-ChildItem $corpusDir -Filter *.hsmtest) {
+# The shared fixtures plus collector/windows/ (scenarios both drivers run on Windows only).
+$corpusFiles = @(Get-ChildItem $corpusDir -Filter *.hsmtest)
+$windowsOnlyDir = Join-Path $corpusDir "windows"
+if (Test-Path $windowsOnlyDir) {
+    $corpusFiles += @(Get-ChildItem $windowsOnlyDir -Filter *.hsmtest)
+}
+
+foreach ($file in $corpusFiles) {
     $cases = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($line in [System.IO.File]::ReadAllLines($file.FullName)) {
         if ($line -match '^\s*(#|$)') { continue }

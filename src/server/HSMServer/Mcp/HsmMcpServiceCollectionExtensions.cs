@@ -45,6 +45,7 @@ namespace HSMServer.Mcp
                 .WithTools<PoliciesMcpTools>()
                 .WithTools<SensorMuteMcpTools>()
                 .WithTools<SensorDeletionMcpTools>()
+                .WithTools<SensorMoveMcpTools>()
                 .Services;
         }
     }

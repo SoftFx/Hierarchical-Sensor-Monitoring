@@ -145,6 +145,20 @@ namespace hsm::http
             }
         }
 
+        // The address the handle connected to, for the log: "ip:port", "[ip]:port" for IPv6, empty
+        // when libcurl did not get as far as a connection.
+        std::string PeerAddress(CURL* curl)
+        {
+            char* ip = nullptr;
+            long port = 0;
+            if (curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &ip) != CURLE_OK || ip == nullptr || *ip == '\0')
+                return {};
+            (void)curl_easy_getinfo(curl, CURLINFO_PRIMARY_PORT, &port);
+            const std::string address(ip);
+            const std::string host = address.find(':') != std::string::npos ? "[" + address + "]" : address;
+            return port > 0 ? host + ":" + std::to_string(port) : host;
+        }
+
         // CURLOPT_WRITEFUNCTION: the body of a refused upgrade (a 404 page) is dropped. Without
         // this libcurl would write it to stdout of the host process.
         size_t DiscardBody(char*, size_t size, size_t nitems, void*)
@@ -353,6 +367,7 @@ namespace hsm::http
     {
         WebSocketOpenResult result;
         Close();
+        closure_ = WebSocketClosure{};
 
         try
         {
@@ -474,6 +489,7 @@ namespace hsm::http
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 0L);
 
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status_code);
+            result.peer = PeerAddress(curl);
             if (rc != CURLE_OK)
             {
                 if (cancelled_.load())
@@ -581,7 +597,10 @@ namespace hsm::http
                 }
                 if (rc == CURLE_GOT_NOTHING)
                 {
-                    Release(); // the peer closed the connection without a close frame
+                    // libcurl read the end of the stream (recv returned 0) before any close frame:
+                    // the TCP connection ended without the WebSocket close handshake.
+                    closure_ = WebSocketClosure{};
+                    Release();
                     return WebSocketReceive::Closed;
                 }
                 if (rc != CURLE_OK || meta == nullptr)
@@ -617,6 +636,24 @@ namespace hsm::http
                         // peer's status code when it sent one.
                         size_t sent = 0;
                         (void)curl_ws_send(curl, payload.data(), payload.size() >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
+                        // RFC 6455 5.5.1: an optional 2-byte status code in network byte order,
+                        // then an optional reason text.
+                        closure_ = WebSocketClosure{};
+                        closure_.close_frame = true;
+                        if (payload.size() >= 2)
+                        {
+                            closure_.code = (static_cast<int>(static_cast<unsigned char>(payload[0])) << 8) |
+                                            static_cast<int>(static_cast<unsigned char>(payload[1]));
+                            // Only for the log: running out of memory here must not turn the
+                            // close into an Error.
+                            try
+                            {
+                                closure_.reason.assign(payload, 2, std::string::npos);
+                            }
+                            catch (...)
+                            {
+                            }
+                        }
                         Release();
                         return WebSocketReceive::Closed;
                     }

@@ -112,6 +112,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$br"
 
+          # The dependencies and features of the port are those of the in-tree overlay port at this
+          # commit: a release that gains a dependency (0.12.0: nlohmann-json, curl[websockets]) must
+          # publish it, or the registry port cannot build. The version line is set below.
+          cp src/native/collector/vcpkg-port/vcpkg.json ports/hsm-collector/vcpkg.json
+
           sed -i -E "s|REF collector-v[0-9]+\.[0-9]+\.[0-9]+|REF ${TAG}|" ports/hsm-collector/portfile.cmake
           sed -i -E "s|SHA512 [0-9a-f]{128}|SHA512 ${SHA}|" ports/hsm-collector/portfile.cmake
           sed -i -E "s|(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")|\1${VER}\2|" ports/hsm-collector/vcpkg.json
