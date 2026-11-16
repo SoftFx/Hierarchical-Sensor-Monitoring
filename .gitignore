@@ -159,6 +159,7 @@ src/tests/Autotests/test-results/
 !/.claude/commands/
 !/.claude/commands-parked/
 !/.claude/plugins/
+!/.claude/skills/
 !/.claude/settings.json
 
 # Conan/CMake user presets (generated, never committed)
