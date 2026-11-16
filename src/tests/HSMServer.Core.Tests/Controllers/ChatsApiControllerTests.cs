@@ -385,6 +385,29 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void GetChat_DetailDates_AreUtcInstants()
+        {
+            // #1676: the entity rebuilds its dates from ticks with an
+            // Unspecified Kind, and a zone-less timestamp is not a valid
+            // JSON-Schema date-time — MCP clients reject the whole list over
+            // it. Pin the Kind the way the sensor-tree mapper does.
+            var chat = BuildChat("dated", entity =>
+            {
+                // The entity maps AuthorizationTime only for a Telegram chat.
+                entity.TelegramType = (byte)ConnectedChatType.TelegramPrivate;
+                entity.AuthorizationTime = DateTime.UtcNow.Ticks;
+            });
+            _store.Add(chat);
+
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetChat(chat.Id)).Value as ChatDto;
+
+            Assert.NotNull(dto);
+            Assert.Equal(DateTimeKind.Utc, dto.CreationDate!.Value.Kind);
+            Assert.Equal(DateTimeKind.Utc, dto.TelegramAuthorizationTime!.Value.Kind);
+        }
+
+
+        [Fact]
         public void GetChats_ViewerOwner_ListsChats_WithDetailFieldsNulled()
         {
             _store.Add(BuildChat("global-chat"));
