@@ -24,9 +24,40 @@ namespace HSMDataCollector.Core
         string Module { get; }
 
 
+        /// <summary>
+        /// Raised when the collector enters <see cref="CollectorStatus.Starting"/>.
+        /// </summary>
+        /// <remarks>
+        /// Handlers of every lifecycle event run synchronously, in transition order, on the thread
+        /// that performs the transition and while it holds the collector's lifecycle lock. A handler
+        /// must return quickly: it must not block, and it must not wait synchronously for another
+        /// lifecycle operation (for example <c>Stop().Wait()</c>, or a wait on another thread that
+        /// calls <c>Start</c>, <c>Stop</c> or <c>Dispose</c>), because that operation can need the
+        /// lock the handler is running under, and the wait then never ends. Start long work from a handler
+        /// without waiting for it. An exception thrown by a handler is logged and does not affect the
+        /// transition or the other handlers.
+        /// </remarks>
         event Action ToStarting;
+
+        /// <summary>
+        /// Raised when the collector enters <see cref="CollectorStatus.Running"/>. Same handler
+        /// contract as <see cref="ToStarting"/>: do not block, do not wait for another lifecycle operation.
+        /// </summary>
         event Action ToRunning;
+
+        /// <summary>
+        /// Raised when the collector enters <see cref="CollectorStatus.Stopping"/>, from <c>Stop</c>
+        /// or from <c>Dispose</c> of an active collector. Same handler contract as
+        /// <see cref="ToStarting"/>: do not block, do not wait for another lifecycle operation.
+        /// </summary>
         event Action ToStopping;
+
+        /// <summary>
+        /// Raised when the collector returns to <see cref="CollectorStatus.Stopped"/>, from
+        /// <c>Stop</c>, from <c>Dispose</c> of an active collector, or after a failed start. Same
+        /// handler contract as <see cref="ToStarting"/>: do not block, do not wait for another
+        /// lifecycle operation.
+        /// </summary>
         event Action ToStopped;
 
         IEnumerable<ISensor> DefaultSensors { get; }

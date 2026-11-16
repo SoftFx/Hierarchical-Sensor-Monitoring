@@ -42,7 +42,7 @@ jobs:
         run: |
           docker run -d -it -u 0 \
             --name "${{ env.CONTAINER_NAME }}" \
-            -p 443:443 -p 44330:443 \
+            -p 443:443 \
             -v "$(pwd)/container-logs:/app/logs" \
             "${{ env.DOCKER_IMAGE_NAME }}:latest"
 
@@ -59,13 +59,6 @@ jobs:
             docker logs --tail 10 "${{ env.CONTAINER_NAME }}"
             sleep 10
           done'
-
-      - name: Check the deprecated-port alias still answers
-        run: |
-          # #1590 deprecation window: the 44330 alias forwards to the same single listener,
-          # so collectors still pointed at the old port keep working. Keep this check alive
-          # until the follow-up release removes the alias.
-          curl -vk --fail https://localhost:44330/api/sensors/testConnection
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4

@@ -40,6 +40,13 @@ namespace HSMDataCollector.Client.HttpsClient
             Content = JsonSerializer.Serialize(value, _options);
         }
 
+        /// <summary>
+        /// One element of a batch, written exactly as the batch constructor above writes it
+        /// inside its array. The collector session builds its frames from these, so a frame body
+        /// is the HTTP body byte for byte.
+        /// </summary>
+        internal static string SerializeElement(T value) => JsonSerializer.Serialize(value, _options);
+
         internal StringContent GetContent() => new StringContent(Content, Encoding.UTF8, "application/json");
     }
 }

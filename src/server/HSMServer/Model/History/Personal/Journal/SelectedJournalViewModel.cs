@@ -86,6 +86,10 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         var records = await _journal.GetPages(request).Flatten();
 
+        // A negative count answers newest first; SaveNewRecords evicts from the
+        // queue head, so the queue holds the records oldest first.
+        records.Reverse();
+
         Interlocked.Add(ref _totalSize, records.Count);
         TryAdd(nodeId, new ConcurrentQueue<JournalRecordViewModel>(records.Select(ToView)));
     }

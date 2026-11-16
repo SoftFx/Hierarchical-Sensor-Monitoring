@@ -25,6 +25,9 @@
     var editFolderAction = "@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)";
     var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
     var removeNodeAction = "@Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController)";
+    var getMoveSensorsModalAction = "@Url.Action(nameof(HomeController.GetMoveSensorsModal), ViewConstants.HomeController)";
+    var moveSensorsAction = "@Url.Action(nameof(HomeController.MoveSensors), ViewConstants.HomeController)";
+    var removeSensorAliasAction = "@Url.Action(nameof(HomeController.RemoveSensorAlias), ViewConstants.HomeController)";
     var editStatusAction = "@Url.Action(nameof(HomeController.GetSensorEditModal), ViewConstants.HomeController)";
 
     var enableGrafanaAction = "@Url.Action(nameof(HomeController.EnableGrafana), ViewConstants.HomeController)";
@@ -51,6 +54,7 @@
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
 @await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
+<div id="moveSensors_partial"></div>
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("~/Views/Tree/_IgnoreNotificationsModal.cshtml", (IgnoreNotificationsViewModel)null)</div>
 
 <div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status"></div>

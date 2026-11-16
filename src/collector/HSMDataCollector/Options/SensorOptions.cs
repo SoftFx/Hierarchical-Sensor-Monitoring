@@ -72,6 +72,34 @@ namespace HSMDataCollector.Options
 
         public SensorLocation SensorLocation { get; set; }
 
+        /// <summary>
+        /// Paths this sensor was registered under before a layout change, each a FULL path
+        /// relative to the product as the server tree shows it (e.g. <c>garage-server/System/CPU</c>)
+        /// — no computer/module prefix is added. On registration a server that supports sensor
+        /// move moves the sensor at such a path here, keeping its history, settings and alerts
+        /// (merging when this path already has a sensor of the same type). Repeating it on every
+        /// registration is safe; older servers ignore it. Null or blank entries are skipped.
+        /// The list belongs to ONE sensor: a helper that builds several sensors from one options
+        /// object (<c>AddSystemMonitoringSensors</c>, <c>AddAllDisksMonitoringSensors</c>, ...)
+        /// refuses options that carry previous paths with an <see cref="ArgumentException"/> —
+        /// set them on each sensor's own <c>Add*</c> call instead. The same holds for your own
+        /// sensors: do not reuse an options object that carries previous paths across several
+        /// <c>Create*Sensor</c> calls — the sensors would share the list, and the first of them to
+        /// register would take the old sensor's history (a merge cannot be undone).
+        /// </summary>
+        public List<string> PreviousPaths { get; set; }
+
+        // A previous path is a full path of one sensor: shared by several sensors it would move
+        // that sensor's history into whichever of them registers first (#1724 review).
+        internal static T ForSeveralSensors<T>(T options, string helper) where T : SensorOptions
+        {
+            if (ApiConverters.PreviousPathsOf(options) != null)
+                throw new ArgumentException($"{helper} builds several sensors from one options object; " +
+                    "PreviousPaths belongs to one sensor — set it on each sensor's own Add* call.", nameof(options));
+
+            return options;
+        }
+
         internal string CalculateSystemPath()
         {
             if (IsComputerSensor)

@@ -406,6 +406,17 @@ function buildContextMenu(node) {
             }
         }
 
+        // Sensor move (#1722): offered when every selected item is a sensor;
+        // the server re-checks the Manager role on every product involved.
+        let tree = $('#jstree').jstree(true);
+        if (isManager && selectedNodes.every(id => getCurrentElementType(tree.get_node(id)) === NodeType.Sensor)) {
+            contextMenu["MoveNodes"] = {
+                "label": `Move sensors...`,
+                "separator_after": true,
+                "action": _ => openMoveSensorsModal([].concat(selectedNodes))
+            }
+        }
+
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
             "action": _ => {
@@ -556,6 +567,15 @@ function buildContextMenu(node) {
                     if (isProduct)
                         window.location.href = `${editProductAction}?Product=${node.id}`;
                 }
+            };
+        }
+
+        // With several items selected only "Move sensors..." is offered:
+        // this entry would move just the right-clicked one.
+        if (curType === NodeType.Sensor && selectedNodesCount <= 1) {
+            contextMenu["Move"] = {
+                "label": `Move sensor...`,
+                "action": _ => openMoveSensorsModal([node.id])
             };
         }
 

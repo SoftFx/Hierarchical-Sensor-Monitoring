@@ -1,4 +1,5 @@
 using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.Authentication;
@@ -360,6 +361,55 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal(HSMServer.Model.ManagementApi.ManagementApiErrors.ForbiddenCode, root.GetProperty("error").GetString());
             Assert.False(string.IsNullOrEmpty(root.GetProperty("message").GetString()));
             Assert.Equal(System.Text.Json.JsonValueKind.Null, root.GetProperty("details").ValueKind);
+        }
+
+        [Fact]
+        public async Task Forbid_WithAReadOnlyTokenOnAnUnsafeMethod_SaysTheTokenIsReadOnly()
+        {
+            // #1708: the denial almost always means the read-only backstop,
+            // so the message must say the token is READ-ONLY (reads work,
+            // writes need a read-write token) — not that it may not use the
+            // management API at all.
+            var (provider, context) = Build(null);
+            context.Request.Method = "POST";
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(HsmApiTokenClaims.TokenId, TokenId),
+                new Claim(HsmApiTokenClaims.OwnerUserId, OwnerId.ToString()),
+            ], HsmApiTokenDefaults.AuthenticationScheme));
+
+            _managerMock.Setup(m => m.GetToken(TokenId)).Returns(BuildInfo() with { ReadOnly = true });
+
+            await provider.GetRequiredService<IAuthenticationService>()
+                .ForbidAsync(context, Scheme, new AuthenticationProperties());
+
+            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+
+            context.Response.Body.Position = 0;
+            using var body = await System.Text.Json.JsonDocument.ParseAsync(context.Response.Body);
+
+            var message = body.RootElement.GetProperty("message").GetString();
+
+            Assert.Contains("read-only", message);
+            Assert.Contains("read-write", message);
+        }
+
+        [Fact]
+        public async Task Forbid_WithoutTheReadOnlyFact_KeepsTheGenericText()
+        {
+            // No principal facts, no read-only answer — the structural
+            // defense-in-depth arm keeps the generic message.
+            var (provider, context) = Build(null);
+
+            await provider.GetRequiredService<IAuthenticationService>()
+                .ForbidAsync(context, Scheme, new AuthenticationProperties());
+
+            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+
+            context.Response.Body.Position = 0;
+            using var body = await System.Text.Json.JsonDocument.ParseAsync(context.Response.Body);
+
+            Assert.Contains("not permitted", body.RootElement.GetProperty("message").GetString());
         }
 
         [Fact]

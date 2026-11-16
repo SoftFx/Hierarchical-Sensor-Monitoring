@@ -1,0 +1,9 @@
+# MUST-FAIL: the pushed directive arrives, but the fixture demands another text. Proves
+# expect_directive_received compares the text the collector's directive receiver got.
+meta_session_directive_received_wrong_text|create_collector_on_session|50|20|5000
+meta_session_directive_received_wrong_text|create_int_sensor|meta/session/directive-text
+meta_session_directive_received_wrong_text|start
+meta_session_directive_received_wrong_text|expect_session_accepted_contains|commands|meta/session/directive-text"|15
+meta_session_directive_received_wrong_text|session_server_push_directive|sensor-disable:network
+meta_session_directive_received_wrong_text|expect_directives_received|1|15
+meta_session_directive_received_wrong_text|expect_directive_received|0|sensor-disable:disk

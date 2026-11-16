@@ -22,6 +22,10 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
   - enabledDates: 'yyyy-MM-dd' dates that follow their weekday schedule despite disabledDates.
   - customScheduleDates: per-date entries with EITHER scheduleType (resolves to the first daySchedules entry whose id equals it, else the first entry with a day whose English name starts with it (case-sensitive); max 50 chars; a value matching no id and no day name falls back to the date's normal handling: disabledDates first, then the regular weekday schedule) OR their own windows. A custom date with windows or a resolved scheduleType takes precedence over disabledDates.
 A date must not appear in both enabledDates and customScheduleDates; custom dates must be unique.
+Size and content bounds (#1706, enforced on every write path — REST, MCP and the web editor):
+- the YAML text is at most 10,000 characters;
+- YAML anchors and aliases (&name / *name) are rejected — write every entry out;
+- disabledDates holds at most 366 dates, overrides.enabledDates at most 366, overrides.customScheduleDates at most 50 (duplicate dates count toward the limits).
 Example:
 daySchedules:
   - id: workdays

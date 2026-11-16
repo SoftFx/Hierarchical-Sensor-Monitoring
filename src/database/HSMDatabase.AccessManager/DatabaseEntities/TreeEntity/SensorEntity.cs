@@ -31,5 +31,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public Dictionary<int, EnumOptionEntity> EnumOptions { get; init; }
 
         public TableSettingEntity TableSettings { get; init; }
+
+        /// Paths the sensor was moved away from (#1718, ADR-0018). Appended and
+        /// optional: null on rows written before sensor move existed.
+        public List<SensorAliasEntity> Aliases { get; init; }
     }
 }
