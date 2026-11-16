@@ -6,7 +6,10 @@ namespace HSMDataCollector.Core
         // it may then take this lock (gate -> _lock), never the reverse. Every method here takes only
         // this lock and calls no external code while holding it, so it cannot invert the order.
         private readonly object _lock = new object();
-        private CollectorStatus _status = CollectorStatus.Stopped;
+
+        // Written only under _lock. Volatile so that CanAcceptData, which reads this one field on
+        // every enqueue, can read it without the lock (#1061).
+        private volatile CollectorStatus _status = CollectorStatus.Stopped;
         private bool _disposed;
 
 
@@ -19,15 +22,23 @@ namespace HSMDataCollector.Core
             }
         }
 
+        /// <summary>
+        /// True while values may be enqueued: Starting, Running and Stopping.
+        /// </summary>
+        /// <remarks>
+        /// Lock-free on purpose: it is read on every enqueue path. It depends on the one field
+        /// <c>_status</c> only (not on <c>_disposed</c>), which every transition writes under
+        /// <c>_lock</c>, and a volatile read of it returns the latest written value. The lock gave
+        /// no more than that: its caller acts on the answer after the lock is released, so a
+        /// transition could follow the read either way, and the stop path is built for that (a
+        /// value enqueued during Stopping is drained, a late one is rejected by the stopped queue).
+        /// </remarks>
         internal bool CanAcceptData
         {
             get
             {
-                lock (_lock)
-                {
-                    var s = _status;
-                    return s == CollectorStatus.Starting || s == CollectorStatus.Running || s == CollectorStatus.Stopping;
-                }
+                var s = _status;
+                return s == CollectorStatus.Starting || s == CollectorStatus.Running || s == CollectorStatus.Stopping;
             }
         }
 

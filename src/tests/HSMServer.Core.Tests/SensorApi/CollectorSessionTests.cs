@@ -6,6 +6,7 @@ using HSMServer.ServerConfiguration;
 using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -163,6 +164,245 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Single(rejectedAck["body"].AsObject());
         }
 
+        // #1660 step 2b: a collector sends a file value on the session as an element of a list
+        // frame. It is stored exactly as the same value posted to the HTTP /file route, and as the
+        // same element posted to /list (where the native collector has always sent its files).
+        [Fact]
+        public async Task FileValue_InAListFrame_IsStoredAsOverTheFileRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var content = Enumerable.Range(0, 300).Select(i => (byte)(i % 256)).ToArray();
+            var time = DateTime.UtcNow.AddMinutes(-1);
+
+            string FileValue(string path) =>
+                $"{{\"Type\":6,\"Extension\":\"csv\",\"Name\":\"report\",\"Value\":[{string.Join(",", content)}],\"Comment\":\"note\"," +
+                $"\"Time\":\"{time:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overFile = await PostAsync(host, "file", FileValue("file/http-file"), _key);
+            var overList = await PostAsync(host, "list", $"[{FileValue("file/http-list")}]", _key);
+
+            await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{FileValue("file/session")}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, overFile.Status);
+            Assert.Equal(HttpStatusCode.OK, overList.Status);
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+
+            HSMCommon.Model.FileValue Stored(string path)
+            {
+                Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor), $"no sensor at {path}");
+
+                return HSMServer.Core.Extensions.SensorValueExtensions.DecompressContent(Assert.IsType<HSMCommon.Model.FileValue>(sensor.LastValue));
+            }
+
+            await TestWait.UntilAsync(() => new[] { "file/http-file", "file/http-list", "file/session" }
+                                                .All(path => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor) && sensor.LastValue is not null),
+                "the three file values to reach their sensors");
+
+            var expected = Stored("file/http-file");
+
+            Assert.Equal(content, expected.Value);
+            Assert.Equal(("report", "csv", "note"), (expected.Name, expected.Extension, expected.Comment));
+
+            foreach (var path in new[] { "file/http-list", "file/session" })
+            {
+                var stored = Stored(path);
+
+                Assert.Equal(expected.Value, stored.Value);
+                Assert.Equal((expected.Name, expected.Extension, expected.Comment, expected.Status, expected.Time, expected.OriginalSize),
+                             (stored.Name, stored.Extension, stored.Comment, stored.Status, stored.Time, stored.OriginalSize));
+            }
+        }
+
+        // A file the server refuses is an entry of the ack's dictionary, as on /list (the /file
+        // route answers it 406, which a collector would send again on every cycle).
+        [Fact]
+        public async Task FileValue_TheServerRefuses_IsAnEntryOfTheAck_AsOnTheListRoute()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            // A path deeper than a sensor path may be: the value is refused.
+            const string path = "file/a/b/c/d/e/f/g/h/i/j";
+            var file = $"{{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"n\",\"Value\":[104,105],\"Comment\":null,\"Time\":\"{DateTime.UtcNow:O}\",\"Status\":1,\"Key\":null,\"Path\":\"{path}\"}}";
+
+            var overList = await PostAsync(host, "list", $"[{file}]", _key);
+            var overFile = await PostAsync(host, "file", file, _key);
+
+            await SendAsync(socket, $"{{\"id\":2,\"op\":\"list\",\"body\":[{file}]}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(overList.Body), ack["body"]), $"HTTP /list answered {overList.Body}, the session {ack["body"]?.ToJsonString()}");
+            Assert.Equal("Path for the sensor is too long.", (string)ack["body"][path]);
+
+            // The /file route refuses the same value with a 406.
+            Assert.Equal(HttpStatusCode.NotAcceptable, overFile.Status);
+        }
+
+        // --- directive push (#1660 step 5) ---
+
+        // A directive-aware agent states X-Agent-Version. Right after the hello its session gets
+        // the whole set: the same texts, in the same order, as the X-Hsm-Directive headers of an
+        // HTTP answer to the same key and agent version.
+        [Fact]
+        public async Task Directives_AfterTheHello_AreTheHeadersOfAnHttpAnswer_InTextAndOrder()
+        {
+            var webRoot = StageAgent("9.9.9");
+
+            try
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["network", "module"]);
+
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+
+                var overHttp = await HttpDirectivesAsync(host, "0.5.1");
+
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+                var pushed = await ReceiveDirectivesAsync(socket, overHttp.Length);
+
+                Assert.Equal(new[] { "update-available:9.9.9", "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk",
+                              "sensor-disable:network", "sensor-disable:module", "sensor-enable:process" }, overHttp);
+                Assert.Equal(overHttp, pushed);
+
+                // Nothing more: the next frame is the answer to a ping.
+                await SendAsync(socket, "{\"op\":\"ping\"}");
+                Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_NotForASessionThatStatesNoAgentVersion()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+
+            // No push at all: the only timer of the session is its silence watch.
+            Assert.Single(host.Time.Timers);
+        }
+
+        [Fact]
+        public async Task Directives_ASwitchedGroup_IsPushedAloneAtTheNextCheck()
+        {
+            try
+            {
+                await using var host = await StartHost();
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // Auto-update is off: the six sensor groups.
+                Assert.Equal(6, (await ReceiveDirectivesAsync(socket, 6)).Length);
+
+                var check = await PushTimerAsync(host, TimeSpan.FromSeconds(15));
+
+                // A check that finds nothing new pushes nothing.
+                check.Fire();
+                await ExpectNoPushAsync(socket);
+
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["disk"]);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-disable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+
+                // Switched back on: the directive that changed again, and only it.
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+                check.Fire();
+                Assert.Equal(new[] { "sensor-enable:disk" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, []);
+            }
+        }
+
+        [Fact]
+        public async Task Directives_TheWholeSet_IsPushedAgainAtTheReannouncement()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            var first = await ReceiveDirectivesAsync(socket, 6);
+
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(first, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
+        // A push that fails while the session is up does not end the pushes: it is logged, what
+        // was not sent goes out at the next check, in order, and the re-announcements go on.
+        [Fact]
+        public async Task Directives_APushThatFails_IsSentAgainAtTheNextCheck_AndThePushesGoOn()
+        {
+            await using var host = await StartHost();
+
+            var failures = 1;
+            host.Handler.PushSend = (session, frame, token) =>
+                Interlocked.Decrement(ref failures) >= 0
+                    ? Task.FromException(new InvalidOperationException("the send failed"))
+                    : session.SendAsync(frame, token);
+
+            using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+            // The first send of the first round fails: nothing of that round goes out.
+            await TestWait.UntilAsync(() => Volatile.Read(ref failures) <= 0, "the failing push");
+            await TestWait.UntilAsync(() => host.Log.Matching("A directive push of collector session", "the send failed").Length == 1, "the failed push to be logged");
+            await ExpectNoPushAsync(socket);
+
+            // The next check pushes what the collector was not told, the whole set in order.
+            (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+            var pushed = await ReceiveDirectivesAsync(socket, 6);
+
+            Assert.Equal(new[] { "sensor-enable:computer", "sensor-enable:system", "sensor-enable:disk", "sensor-enable:network", "sensor-enable:module", "sensor-enable:process" }, pushed);
+            await ExpectNoPushAsync(socket);
+
+            // The loop is still there: the re-announcement comes.
+            (await PushTimerAsync(host, TimeSpan.FromMinutes(5))).Fire();
+
+            Assert.Equal(pushed, await ReceiveDirectivesAsync(socket, 6));
+            await ExpectNoPushAsync(socket);
+        }
+
+        [Fact]
+        public async Task Directives_ANewlyStagedAgent_IsPushedAtTheNextCheck()
+        {
+            var webRoot = StageAgent("0.5.1");
+
+            try
+            {
+                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+                using var socket = await OpenAgentSessionAsync(host, "0.5.1");
+
+                // The staged agent is the running one: no update.
+                Assert.DoesNotContain(await ReceiveDirectivesAsync(socket, 6), directive => directive.StartsWith("update-available"));
+
+                File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), "0.6.0");
+
+                // The staged version is read again once its cache is 15 s old.
+                host.Time.Advance(TimeSpan.FromSeconds(16));
+                (await PushTimerAsync(host, TimeSpan.FromSeconds(15))).Fire();
+
+                Assert.Equal(new[] { "update-available:0.6.0" }, await ReceiveDirectivesAsync(socket, 1));
+                await ExpectNoPushAsync(socket);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
         [Fact]
         public async Task EmptyBatch_Is400OnBothTransports_AndTheSessionDoesNotEchoIt()
         {
@@ -246,8 +486,10 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(overHttp.Type, overSession.Type);
 
             // The same batch again over both transports, now for a sensor that exists with
-            // another type, plus an empty batch: whatever the route answers, the ack answers.
-            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]" })
+            // another type, plus an empty batch, plus a registration the server refuses
+            // because it cannot convert it (a sensor type it does not know, #1749):
+            // whatever the route answers, the ack answers.
+            foreach (var body in new[] { "[{\"Type\":0,\"Path\":\"commands/http\",\"SensorType\":0}]", "[]", "[{\"Type\":0,\"Path\":\"commands/unknown-type\",\"SensorType\":99}]" })
             {
                 var again = await PostAsync(host, "commands", body, _key);
 
@@ -257,6 +499,256 @@ namespace HSMServer.Core.Tests.SensorApi
                 Assert.Equal((int)again.Status, (int)againAck["status"]);
                 Assert.True(JsonNode.DeepEquals(JsonNode.Parse(again.Body), againAck["body"]), $"HTTP answered {again.Body}, the session {againAck["body"]?.ToJsonString()}");
             }
+        }
+
+        // A fault of the server while it applies registrations is a 500 on both transports
+        // (#1749): a collector takes a 4xx on a registration as a final refusal and drops the
+        // package, and repeats a 5xx on its next cycle. It used to be a 400 on both.
+        //
+        // The 500 means "some commands faulted, the others were applied; send the package
+        // again": the command after the faulted one is applied too. A collector sends such a
+        // package again every cycle, ahead of what it issues later, so a server that stopped
+        // at the fault would let one command that faults on every repeat keep every later
+        // registration of that collector from being applied.
+        [Fact]
+        public async Task Commands_FaultOnOneCommand_Is500OnBothTransports_TheOthersAreApplied_AndTheResendAppliesTheFaultedOne()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            static string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"faulted/{transport}/before\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/faulted\",\"SensorType\":1}},{{\"Type\":0,\"Path\":\"faulted/{transport}/after\",\"SensorType\":1}}]";
+
+            bool Registered(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out _);
+
+            faulting.FaultOn("faulted/http/faulted", "faulted/session/faulted");
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var ack = await ReceiveTextAsync(socket);
+
+            Assert.Equal(HttpStatusCode.InternalServerError, http.Status);
+
+            var failed = JsonNode.Parse(ack);
+
+            Assert.Equal(9, (long)failed["ack"]);
+            Assert.Equal((int)http.Status, (int)failed["status"]);
+            Assert.Equal("failed to apply the commands", (string)failed["error"]);
+            Assert.Null(failed["body"]);
+
+            // The ack says nothing about the fault itself: its text stays in the server's log.
+            Assert.DoesNotContain(FaultingCache.FaultText, ack);
+
+            // On both transports everything but the faulted command is applied.
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.True(Registered($"faulted/{transport}/before"), $"{transport}: the command before the faulted one");
+                Assert.False(Registered($"faulted/{transport}/faulted"), $"{transport}: the faulted command");
+                Assert.True(Registered($"faulted/{transport}/after"), $"{transport}: the command after the faulted one");
+            }
+
+            // The session survives the fault, and the resend a collector sends is applied.
+            faulting.Recover();
+
+            var httpResend = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":10,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var resent = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, httpResend.Status);
+            Assert.Equal(10, (long)resent["ack"]);
+            Assert.Equal(200, (int)resent["status"]);
+            Assert.True(Registered("faulted/http/faulted"));
+            Assert.True(Registered("faulted/session/faulted"));
+        }
+
+        // During a storage outage every command of a package faults. That is one Error line
+        // for the frame, with the number of commands that faulted and the first fault, not a
+        // line per command.
+        [Fact]
+        public async Task Commands_SeveralFaultsInOneFrame_AreLoggedOnce_WithTheirNumber()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("outage/first", "outage/third");
+
+            await SendAsync(socket, "{\"id\":12,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"outage/first\",\"SensorType\":1}," +
+                                    "{\"Type\":0,\"Path\":\"outage/second\",\"SensorType\":1},{\"Type\":0,\"Path\":\"outage/third\",\"SensorType\":1}]}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(500, (int)ack["status"]);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "outage/second", out _));
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 12: 2 of 3 command(s) faulted", errors[0].Message);
+            Assert.Contains(FaultingCache.FaultText, errors[0].Message);
+        }
+
+        // A fault that repeats: the collector sends the frame again on every cycle for as long
+        // as it lasts. That is one Error line for the same fault of the same key, not one per
+        // cycle (the window and the count that follows it: RepeatedFaultLogTests); another
+        // fault is another line.
+        [Fact]
+        public async Task Commands_TheSameFaultOnEveryResend_IsLoggedOnce()
+        {
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig());
+            using var socket = await OpenAsync(host);
+
+            faulting.FaultOn("repeated/first", "repeated/another");
+
+            for (var id = 20; id < 23; id++)
+            {
+                await SendAsync(socket, $"{{\"id\":{id},\"op\":\"commands\",\"body\":[{{\"Type\":0,\"Path\":\"repeated/first\",\"SensorType\":1}}]}}");
+
+                Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+            }
+
+            var errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 1, host.Log.Dump());
+            Assert.Contains("frame 20: 1 of 1 command(s) faulted", errors[0].Message);
+
+            await SendAsync(socket, "{\"id\":23,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"repeated/another\",\"SensorType\":1}]}");
+
+            Assert.Equal(500, (int)(await ReceiveAsync(socket))["status"]);
+
+            errors = host.Log.Lines.Where(line => line.Level == NLog.LogLevel.Error).ToArray();
+
+            Assert.True(errors.Length == 2, host.Log.Dump());
+            Assert.Contains("frame 23: 1 of 1 command(s) faulted", errors[1].Message);
+        }
+
+        // A `commands` body the server cannot read is a 400 on both transports (#1749). The
+        // HTTP route used to end as a 500 here (its model binder threw), as `list` still does.
+        [Fact]
+        public async Task Commands_UnreadableBody_Is400OnBothTransports()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            const string unreadable = "[{\"Type\":0,\"Path\":\"unreadable/commands\",\"SensorType\":\"not-a-type\"}]";
+
+            var http = await PostAsync(host, "commands", unreadable, _key);
+
+            await SendAsync(socket, $"{{\"id\":11,\"op\":\"commands\",\"body\":{unreadable}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
+        }
+
+        // A `commands` list with a null element or with a command without a path is a
+        // malformed body on both transports (#1749): the whole request is a 400 and nothing
+        // of it is applied. Not a 500, which a collector would send again every cycle for a
+        // request that can never succeed.
+        [Theory]
+        [InlineData("null", "null")]
+        [InlineData("{\"Type\":0,\"SensorType\":1}", "pathless")]
+        public async Task Commands_ANullCommandOrOneWithoutAPath_Is400OnBothTransports_AndNothingIsApplied(string malformed, string folder)
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            string Package(string transport) =>
+                $"[{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/before\",\"SensorType\":1}},{malformed},{{\"Type\":0,\"Path\":\"malformed/{folder}/{transport}/after\",\"SensorType\":1}}]";
+
+            var http = await PostAsync(host, "commands", Package("http"), _key);
+
+            await SendAsync(socket, $"{{\"id\":13,\"op\":\"commands\",\"body\":{Package("session")}}}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.BadRequest, http.Status);
+            Assert.Equal(13, (long)ack["ack"]);
+            Assert.Equal((int)http.Status, (int)ack["status"]);
+            Assert.Equal("malformed body", (string)ack["error"]);
+            Assert.Null(ack["body"]);
+
+            foreach (var transport in new[] { "http", "session" })
+            {
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/before", out _), $"{transport}: the command before the malformed one");
+                Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"malformed/{folder}/{transport}/after", out _), $"{transport}: the command after the malformed one");
+            }
+
+            // The session survives a refused request.
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
+        }
+
+        // Sensor move from a collector (#1724): a registration's PreviousPaths moves the old sensor
+        // to the registered path — the same over the HTTP route and over the session, which both
+        // feed SensorIngestionService.AddOrUpdateSensorAsync.
+        [Fact]
+        public async Task PreviousPaths_MoveTheOldSensor_OverHttpAndOverTheSession()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands",
+                "[{\"Type\":0,\"Path\":\"layout/v1/http\",\"SensorType\":1},{\"Type\":0,\"Path\":\"layout/v1/session\",\"SensorType\":1}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/http", out var overHttp));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/session", out var overSession));
+
+            var http = await PostAsync(host, "commands",
+                "[{\"Type\":0,\"Path\":\"layout/v2/http\",\"SensorType\":1,\"PreviousPaths\":[\"layout/v1/http\"]}]", _key);
+            await SendAsync(socket,
+                "{\"id\":8,\"op\":\"commands\",\"body\":[{\"Type\":0,\"Path\":\"layout/v2/session\",\"SensorType\":1,\"PreviousPaths\":[\"layout/v1/session\"]}]}");
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(HttpStatusCode.OK, http.Status);
+            Assert.Equal(200, (int)ack["status"]);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v2/http", out var movedOverHttp));
+            Assert.Equal(overHttp.Id, movedOverHttp.Id);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v2/session", out var movedOverSession));
+            Assert.Equal(overSession.Id, movedOverSession.Id);
+            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "layout/v1/http", out _));
+        }
+
+        // A layout that reuses names (p0 becomes p1 while p1 becomes p2) arrives as one batch,
+        // listed in the order that merged the two sensors when registrations were applied one
+        // by one (#1718 review). Both transports take the batch as a whole.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PreviousPaths_OfAShiftedLayout_KeepBothSensors(bool overSession)
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var root = overSession ? "shift/session" : "shift/http";
+
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "list",
+                $"[{IntValue($"{root}/p0", 1)},{IntValue($"{root}/p1", 2)}]", _key)).Status);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p0", out var first));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p1", out var second));
+
+            var batch = $"[{{\"Type\":0,\"Path\":\"{root}/p1\",\"SensorType\":1,\"PreviousPaths\":[\"{root}/p0\"]}}," +
+                        $"{{\"Type\":0,\"Path\":\"{root}/p2\",\"SensorType\":1,\"PreviousPaths\":[\"{root}/p1\"]}}]";
+
+            if (overSession)
+            {
+                await SendAsync(socket, $"{{\"id\":9,\"op\":\"commands\",\"body\":{batch}}}");
+                Assert.Equal(200, (int)(await ReceiveAsync(socket))["status"]);
+            }
+            else
+                Assert.Equal(HttpStatusCode.OK, (await PostAsync(host, "commands", batch, _key)).Status);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p1", out var atP1));
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p2", out var atP2));
+            Assert.Equal(first.Id, atP1.Id);
+            Assert.Equal(second.Id, atP2.Id);
+            Assert.False(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, $"{root}/p0", out _));
         }
 
         [Fact]
@@ -535,9 +1027,13 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("127.0.0.1", session.RemoteIP);
             Assert.InRange(session.ConnectedAtUtc, before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
 
+            // A session that states an agent version gets the directives of its product first
+            // (#1660 step 5): the six sensor groups, auto-update being off.
+            await ReceiveDirectivesAsync(socket, 6);
+
             await Task.Delay(50);
             await SendAsync(socket, "{\"op\":\"ping\"}");
-            await ReceiveAsync(socket);
+            Assert.Equal("pong", (string)(await ReceiveAsync(socket))["op"]);
 
             Assert.True(Assert.Single(host.Registry.GetSessions()).LastFrameAtUtc > session.LastFrameAtUtc, "an inbound frame must move last-frame-at");
 
@@ -711,13 +1207,195 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null)
+        // What the server logs about a session: who opened it, and when it ends, who ended it
+        // and why, after how long, with what traffic. Under one short id, without the key.
+        [Fact]
+        public async Task Log_ClosedByTheCollector_SaysWhoWhyAndHowMuch()
+        {
+            await using var host = await StartHost();
+
+            string id;
+
+            using (var socket = await OpenAsync(host, configure: options =>
+                   {
+                       options.SetRequestHeader("X-Collector-Kind", "native");
+                       options.SetRequestHeader("X-Collector-Version", "0.12.0");
+                   }))
+            {
+                id = host.Registry.GetSessions().Single().Id.ToString("N")[..8];
+
+                await SendAsync(socket, $"{{\"id\":1,\"op\":\"list\",\"body\":[{IntValue("log/int", 1)}]}}");
+                Assert.Equal(200, (int)(await ReceiveAsync(socket))["status"]);
+
+                await SendAsync(socket, "{\"id\":2,\"op\":\"list\",\"body\":[]}");
+                Assert.Equal(400, (int)(await ReceiveAsync(socket))["status"]);
+
+                // A reason that tries to start a log line of its own.
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done\nforged", Deadline());
+            }
+
+            await TestWait.UntilAsync(() => host.Log.Matching($"Collector session {id} closed").Length == 1, $"the close line of {id}:{Environment.NewLine}{host.Log.Dump()}");
+
+            var opened = Assert.Single(host.Log.Matching($"Collector session {id} opened: "));
+            Assert.Equal(NLog.LogLevel.Info, opened.Level);
+            Assert.Contains($"product \"{TestProductsManager.ProductName}\", key \"{TestProductsManager.TestProductKey.DisplayName}\", client \"{ClientName}\"", opened.Message);
+            Assert.Contains("collector native 0.12.0, from 127.0.0.1; 1 session(s) open.", opened.Message);
+
+            var closed = Assert.Single(host.Log.Matching($"Collector session {id} closed after "));
+            Assert.Equal(NLog.LogLevel.Info, closed.Level);
+            Assert.Contains(": the collector closed it with 1000, reason \"done?forged\".", closed.Message);
+            Assert.Contains("frames in 3 (", closed.Message);
+            Assert.Contains("values accepted 1, requests refused 1", closed.Message);
+            Assert.Contains("last frame from the collector ", closed.Message);
+            Assert.Contains("0 session(s) open.", closed.Message);
+
+            Assert.DoesNotContain(_key, host.Log.Dump());
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_SilentSession_IsAWarningThatNamesTheSilence()
+        {
+            await using var host = await StartHost();
+            using var socket = await OpenAsync(host);
+
+            var watch = Assert.Single(host.Time.Timers);
+
+            await TestWait.UntilAsync(() => watch.IsArmed, "the watch to run while the server waits for a frame");
+            watch.Fire();
+
+            await TestWait.UntilAsync(() => host.Log.Matching("closed after ").Length == 1, $"the close line:{Environment.NewLine}{host.Log.Dump()}");
+
+            var closed = Assert.Single(host.Log.Matching("closed after "));
+            Assert.Equal(NLog.LogLevel.Warn, closed.Level);
+            Assert.Contains("the server cut the connection without a close handshake: no progress within three heartbeats", closed.Message);
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_ConnectionAbortedByTheCollector_IsAWarningWithoutACloseFrame()
+        {
+            await using var host = await StartHost();
+
+            var socket = await OpenAsync(host);
+
+            socket.Abort();
+            socket.Dispose();
+
+            await TestWait.UntilAsync(() => host.Log.Matching("closed after ").Length == 1, $"the close line:{Environment.NewLine}{host.Log.Dump()}");
+
+            var closed = Assert.Single(host.Log.Matching("closed after "));
+            Assert.Equal(NLog.LogLevel.Warn, closed.Level);
+            Assert.Contains("the connection ended without a close handshake (", closed.Message);
+            Assert.DoesNotContain("closed it with", closed.Message);
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+        [Fact]
+        public async Task Log_RefusedUpgrades_AreOneLineAMinute_WithoutTheKey()
+        {
+            await using var host = await StartHost();
+
+            // A key that exists but may not send: the session handler refuses it. (A key the
+            // server does not know is refused before the handler, by the Sensor API middleware,
+            // like on every HTTP route.)
+            var readOnlyKey = AddKey(KeyPermissions.CanReadSensorData).ToString();
+
+            for (var i = 0; i < 3; i++)
+                Assert.Equal(HttpStatusCode.NotAcceptable, await RefusedUpgradeStatus(host, readOnlyKey, Subprotocol));
+
+            var refused = Assert.Single(host.Log.Matching("A collector session upgrade is refused with 406"));
+            Assert.Equal(NLog.LogLevel.Warn, refused.Level);
+            Assert.Contains("cannot send data", refused.Message);
+            Assert.Contains($"Client \"{ClientName}\" from 127.0.0.1", refused.Message);
+            Assert.DoesNotContain(readOnlyKey, host.Log.Dump());
+
+            _output.WriteLine(host.Log.Dump());
+        }
+
+
+        private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> configure = null, AgentConfig agent = null, string webRoot = null)
         {
             var config = new CollectorSessionsConfig();
 
             configure?.Invoke(config);
 
-            return SensorApiTestHost.StartAsync(_valuesCache, config);
+            return SensorApiTestHost.StartAsync(_valuesCache, config, agent, webRoot);
+        }
+
+        // A web root whose agent/version.txt stages this agent version.
+        private static string StageAgent(string version)
+        {
+            var webRoot = Path.Combine(Path.GetTempPath(), $"hsm-session-directives-{Guid.NewGuid():N}");
+
+            Directory.CreateDirectory(Path.Combine(webRoot, "agent"));
+            File.WriteAllText(Path.Combine(webRoot, "agent", "version.txt"), version);
+
+            return webRoot;
+        }
+
+        private Task<ClientWebSocket> OpenAgentSessionAsync(SensorApiTestHost host, string agentVersion) =>
+            OpenAsync(host, configure: options => options.SetRequestHeader("X-Agent-Version", agentVersion));
+
+        // The X-Hsm-Directive headers of an accepted /list answer, in order.
+        private async Task<string[]> HttpDirectivesAsync(SensorApiTestHost host, string agentVersion)
+        {
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, "list"))
+            {
+                Content = new StringContent($"[{IntValue("directives/http", 1)}]", Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.Add("ClientName", ClientName);
+            request.Headers.Add("Key", _key);
+            request.Headers.Add("X-Agent-Version", agentVersion);
+
+            using var response = await http.SendAsync(request, Deadline());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            return response.Headers.TryGetValues("X-Hsm-Directive", out var values) ? values.ToArray() : [];
+        }
+
+        // The bodies of the next `count` frames, each of which must be a directive push.
+        private static async Task<string[]> ReceiveDirectivesAsync(ClientWebSocket socket, int count)
+        {
+            var directives = new string[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                var frame = await ReceiveAsync(socket);
+
+                Assert.True((string)frame["op"] == "directive", $"expected a directive push, the session sent {frame.ToJsonString()}");
+                Assert.Null(frame["id"]);
+                Assert.Null(frame["ack"]);
+
+                directives[i] = (string)frame["body"];
+            }
+
+            return directives;
+        }
+
+        // Nothing was pushed: the next frame is the answer to a ping.
+        private static async Task ExpectNoPushAsync(ClientWebSocket socket)
+        {
+            await SendAsync(socket, "{\"op\":\"ping\"}");
+
+            var frame = await ReceiveAsync(socket);
+
+            Assert.True((string)frame["op"] == "pong", $"expected nothing before the pong, the session sent {frame.ToJsonString()}");
+        }
+
+        // A timer of the directive push, by its period: 15 s for the check, 5 min for the
+        // re-announcement. Created when the session opens, after the hello.
+        private static async Task<ManualTimer> PushTimerAsync(SensorApiTestHost host, TimeSpan period)
+        {
+            await TestWait.UntilAsync(() => host.Time.Timers.Any(timer => timer.DueTime == period), $"the directive timer of {period}");
+
+            return host.Time.Timers.Single(timer => timer.DueTime == period);
         }
 
         private Guid AddKey(KeyPermissions? permissions = null)

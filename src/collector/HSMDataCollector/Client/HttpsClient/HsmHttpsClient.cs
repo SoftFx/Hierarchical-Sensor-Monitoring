@@ -13,7 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IErrorReportingSender, IStopDrainSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -31,14 +31,27 @@ namespace HSMDataCollector.Client
         private readonly HttpClient _client;
         private int _disposed;
 
+        // Where a failed send is reported. The logger until the collector that owns this client
+        // routes it to its deduplicator (RouteErrorsTo); a client used on its own keeps the logger.
+        private Action<string> _errorSink;
+
         // Bounded connection lifetime forces periodic DNS re-resolution (#1102-E4): without it a
         // busy keep-alive connection sticks to a stale IP indefinitely (e.g. after an LB move).
         private static readonly TimeSpan ConnectionLifetime = TimeSpan.FromMinutes(5);
+
+        // The host's headers for value requests (CollectorOptions.ExtraRequestHeaders), copied
+        // once: the options object stays the host's to change.
+        private readonly KeyValuePair<string, string>[] _extraRequestHeaders;
+
+        /// <summary>The directives the server attached to its answers (#1198, #1659 B1).</summary>
+        internal ServerDirectives Directives { get; }
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;
+            _extraRequestHeaders = new List<KeyValuePair<string, string>>(options.ExtraRequestHeaders).ToArray();
+            Directives = new ServerDirectives(logger);
 
 #if NET6_0_OR_GREATER
             var httpHandler = new SocketsHttpHandler
@@ -77,6 +90,40 @@ namespace HSMDataCollector.Client
             _dataHandler     = new DataHandlers(this, _endpoints, _logger);
             _priorityDataHandler = new DataHandlers(this, _endpoints, _logger);
             _fileHandler = new DataHandlers(this, _endpoints, _logger);
+
+            StopDrain = new SingleAttemptSender(this);
+        }
+
+        /// <summary>
+        /// This client for the stop drain (#1747): the value handlers do not repeat a failed
+        /// request inside the send. Stateless, so it is safe to use while another collector
+        /// that shares this client keeps sending through the client itself.
+        /// </summary>
+        public IDataSender StopDrain { get; }
+
+        private sealed class SingleAttemptSender : IDataSender
+        {
+            private readonly HsmHttpsClient _client;
+
+            internal SingleAttemptSender(HsmHttpsClient client) => _client = client;
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() => _client.TestConnectionAsync();
+
+            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) =>
+                _client._dataHandler.SendAsync(items, token, singleAttempt: true);
+
+            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) =>
+                _client._priorityDataHandler.SendAsync(items, token, singleAttempt: true);
+
+            // A command send is one attempt already (#1659 A3).
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) =>
+                _client.SendCommandAsync(commands, token);
+
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) =>
+                _client._fileHandler.SendAsync(file, token, singleAttempt: true);
+
+            // The client is disposed by whoever owns it, never through this view.
+            public void Dispose() { }
         }
 
 
@@ -133,6 +180,18 @@ namespace HSMDataCollector.Client
             tokenSourceToCancel.Cancel();
         }
 
+        public void RouteErrorsTo(Action<string> sink) => Volatile.Write(ref _errorSink, sink);
+
+        internal void ReportError(string message)
+        {
+            var sink = Volatile.Read(ref _errorSink);
+
+            if (sink != null)
+                sink(message);
+            else
+                _logger?.Error(message);
+        }
+
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
         {
             return _commandsHandler.SendAsync(commands, token);
@@ -153,7 +212,12 @@ namespace HSMDataCollector.Client
             return _fileHandler.SendAsync(file, token);
         }
 
-        internal async ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token)
+        /// <summary>
+        /// Posts one request. <paramref name="carriesValues"/> marks a request with sensor values:
+        /// it carries the host's extra headers, and the directives of its answer are read. A
+        /// registration does neither, as in the native collector.
+        /// </summary>
+        internal async ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token, bool carriesValues = false)
         {
             CancellationToken pendingRequestsToken;
 
@@ -179,7 +243,33 @@ namespace HSMDataCollector.Client
             }
 
             using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, pendingRequestsToken))
-                return await _client.PostAsync(uri, stringContent, linkedTokenSource.Token).ConfigureAwait(false);
+            {
+                if (!carriesValues)
+                    return await _client.PostAsync(uri, stringContent, linkedTokenSource.Token).ConfigureAwait(false);
+
+                using (var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = stringContent })
+                {
+                    foreach (var header in _extraRequestHeaders)
+                        request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+
+                    var response = await _client.SendAsync(request, linkedTokenSource.Token).ConfigureAwait(false);
+
+                    ReadDirectives(response);
+
+                    return response;
+                }
+            }
+        }
+
+        // Only an accepted request speaks for the server; the answer of a refused one, or of
+        // something in front of the server, is not acted on.
+        private void ReadDirectives(HttpResponseMessage response)
+        {
+            if (!response.IsSuccessStatusCode || !response.Headers.TryGetValues(ServerDirectives.HeaderName, out var directives))
+                return;
+
+            foreach (var directive in directives)
+                Directives.Receive(directive);
         }
 
 

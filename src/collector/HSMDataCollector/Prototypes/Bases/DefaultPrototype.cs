@@ -43,6 +43,8 @@ namespace HSMDataCollector.Prototypes
                 DataProcessor = customOptions?.DataProcessor ?? defaultOptions.DataProcessor,
 
                 SensorLocation = customOptions?.SensorLocation ?? defaultOptions.SensorLocation,
+
+                PreviousPaths = customOptions?.PreviousPaths ?? defaultOptions.PreviousPaths,
             };
         }
 
