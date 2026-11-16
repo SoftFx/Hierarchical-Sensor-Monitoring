@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
+using HSMServer.Filters;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
@@ -132,11 +133,17 @@ namespace HSMServer.Controllers
         /// the same visibility the web UI's remove-node has. A dry run
         /// (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
         /// of everything the real write would destroy and applies nothing.
+        /// The header is a strict boolean (#1675): "true"/"false" in any
+        /// casing, or absent, are the only accepted forms — anything else is
+        /// a 400 validation_failed before anything runs, so a typo can never
+        /// turn a preview into the irreversible write.
         /// </summary>
         /// <param name="id">Sensor id.</param>
         [HttpDelete("{id:guid}")]
+        [DryRunHeader]
         [ProducesResponseType(typeof(SensorDeletePreviewDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
@@ -170,6 +177,9 @@ namespace HSMServer.Controllers
         /// (<c>X-HSM-Dry-Run: true</c>) answers the prediction per sensor —
         /// conflicts, nodes to create, alert templates detached/applied,
         /// inherited settings that change — and applies nothing.
+        /// The header is a strict boolean (#1675): "true"/"false" in any
+        /// casing, or absent, are the only accepted forms — anything else
+        /// is a 400 validation_failed before anything runs.
         /// </summary>
         /// <remarks>The dry run shares status 200 with the real move but not its
         /// body: with <c>X-HSM-Dry-Run: true</c> the 200 body is a
@@ -177,8 +187,10 @@ namespace HSMServer.Controllers
         /// sensor in <c>sensors</c>), not the <c>SensorMoveResponseDto</c>
         /// declared below.</remarks>
         [HttpPost("move")]
+        [DryRunHeader]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(SensorMoveResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]

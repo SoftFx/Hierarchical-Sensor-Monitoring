@@ -93,6 +93,8 @@ Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorM
 
 **Controller** (the delete pins inside `SensorsApiControllerTests`, controller level — the same service-real harness): 204 on success with the sensor gone; the `X-HSM-Dry-Run: true` header → 200 + preview with nothing removed; unknown id → the uniform 404; a read-only owner → 403 with the sensor untouched.
 
+**Dry-run header fail-closed** (`DryRunHeaderFilterTests`, the filter invoked directly + the `AddHsmMvc` registration pin): malformed values (`maybe`, `True1`, `yes`, `1`, `0`) → 400 `validation_failed` under the header's field key before the action; absent/empty/`true`/`TRUE`/`false`/`False` reach the action; a stray header outside `/api/v1` is not the filter's business; a READ endpoint under `/api/v1` with a stray malformed header answers the same 400 (the rule is area-wide, not write-only — a visible behaviour change for clients that send the header everywhere); `WriteOptions` accepted forms pinned; and the MVC registration itself is pinned — `AddHsmMvc` (what `Program.cs` calls) must install the filter, or dropping/moving the line fails a test instead of quietly re-enabling the irreversible delete.
+
 ## Uniform JSON error contract (#1353)
 
 **Controller side** (`ManagementApiErrorContractTests`, controllers constructed directly):
