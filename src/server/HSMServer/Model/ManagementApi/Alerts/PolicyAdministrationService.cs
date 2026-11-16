@@ -20,8 +20,8 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
-
 using HSMServer.Validation;
+
 namespace HSMServer.Model.ManagementApi.Alerts
 {
     /// <summary>

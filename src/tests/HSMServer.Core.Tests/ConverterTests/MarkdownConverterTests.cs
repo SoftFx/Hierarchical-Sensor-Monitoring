@@ -85,5 +85,17 @@ namespace HSMServer.Core.Tests.ConverterTests
             Assert.DoesNotContain("< 5", html, StringComparison.Ordinal);
             Assert.Contains("&lt; 5", html, StringComparison.Ordinal);
         }
+
+        [Fact]
+        public void ToHtml_MarkupFreePlainText_PassesThroughUnchanged()
+        {
+            // #1710 review: the hot callers are plain text with no markup —
+            // with no '<' no tag can form, so the input skips the sanitizer
+            // parse and comes back exactly as it went in (entities included:
+            // already-encoded storage must not double-encode).
+            const string plain = "plain text, 100% &amp; & more \U0001F525";
+
+            Assert.Equal(plain, MarkdownHelper.ToHtml(plain).ToString());
+        }
     }
 }

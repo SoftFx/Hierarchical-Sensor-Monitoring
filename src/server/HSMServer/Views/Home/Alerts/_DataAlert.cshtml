@@ -21,8 +21,12 @@
 @{
     var allChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
 
+    // #1710 review: chat names are external text (a Telegram group title,
+    // a name typed in the chat editor) folded into the HtmlString below —
+    // encode each one, a title like <img src=x onerror=...> must render as
+    // inert text, like the icon already does.
     string GetActionChats(ActionViewModel action) =>
-         string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => allChats[ch]));
+         string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => WebUtility.HtmlEncode(allChats[ch])));
 
     bool isTemplate = ViewBag.IsTemplate ?? false;
 
@@ -82,7 +86,7 @@
 
                         string chatNames;
                         if (parentIds.Count != 0)
-                            chatNames = parentIds.ToNames(allChats);
+                            chatNames = WebUtility.HtmlEncode(parentIds.ToNames(allChats));
                         else
                             chatNames = lastMode?.GetDisplayName();
 

@@ -43,11 +43,15 @@ namespace HSMServer.Core.Tests.Validation
         [InlineData("prod\nalerts")]
         [InlineData("prod\r\nalerts")]
         [InlineData("tabbed\tname")]
+        [InlineData("line separator \u2028")]
+        [InlineData("paragraph separator \u2029")]
         public void SingleLineSurfaces_ForbidLineBreaksToo(string name)
         {
             // Names and icons render on one line (lists, dropdowns, Telegram
             // headers) — the line-break characters are forbidden there even
-            // though templates allow them (#1705 review).
+            // though templates allow them (#1705 review). U+2028/U+2029 are
+            // not control characters, but browsers and Telegram break lines
+            // on them all the same (#1710 review).
             Assert.True(TextFieldValidator.HasForbiddenCharacter(name, out var found, allowLineBreaks: false));
             Assert.StartsWith("U+", found, StringComparison.Ordinal);
         }
