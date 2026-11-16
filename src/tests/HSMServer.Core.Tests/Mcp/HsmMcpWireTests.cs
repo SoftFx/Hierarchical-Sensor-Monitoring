@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Schedule;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Mcp;
 using HSMServer.Middleware;
@@ -107,15 +108,9 @@ namespace HSMServer.Core.Tests.Mcp
 
         // #1588: the recorder's unified-journal writes are a no-op in this
         // host (no DB); the journal surface itself is covered by its own
-        // suites.
-        private static HSMServer.Core.Journal.IJournalService JournalServiceOfNulls()
-        {
-            var journal = new Moq.Mock<HSMServer.Core.Journal.IJournalService>();
-
-            journal.Setup(s => s.AddRecord(It.IsAny<HSMServer.Core.Model.JournalRecordModel>()));
-
-            return journal.Object;
-        }
+        // suites. An instance mock (not a nulls helper): the get_journal_record
+        // wire pin below seeds GetRecord through it.
+        private readonly Mock<HSMServer.Core.Journal.IJournalService> _journalServiceMock = new();
 
         private readonly Guid _ownerId = Guid.NewGuid();
         private readonly string _credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
@@ -696,6 +691,89 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        [Fact]
+        public async Task Wire_GetJournalRecord_TheFanoutPageRidesTheFanoutArguments()
+        {
+            // #1688 review: get_journal_record's fanoutOffset/fanoutLimit
+            // arguments must bind and reach the service through the real
+            // wire — a renamed or dropped argument (an SDK binding drift)
+            // would silently answer the DEFAULT page (the first 10 images).
+            // One call walks BOTH arguments at once over a seeded 12-image
+            // fan-out: a limit of 5 at offset 3 must answer exactly images
+            // 3..7 with the honest fanoutTotal.
+            const int images = 12;
+
+            var changeSetId = Guid.NewGuid();
+            var record = new HSMServer.Core.Model.JournalRecordModel(Guid.NewGuid(),
+                Core.TableOfChanges.InitiatorInfo.AsUser("wire-journal-writer"))
+            {
+                Enviroment = "Alert template",
+                PropertyName = "AlertTemplate:Create",
+                Path = "wire-template",
+                Kind = HSMServer.Core.Journal.JournalKinds.AlertTemplate,
+                ChangeSetId = changeSetId.ToString(),
+            };
+
+            _journalServiceMock.Setup(s => s.GetRecord(It.IsAny<JournalKey>()))
+                .Returns(record);
+            _journalMock.Setup(j => j.Get(changeSetId)).Returns(new HSMServer.Core.ChangeSets.ChangeSetModel
+            {
+                Id = changeSetId,
+                Author = "wire-journal-writer",
+                AuthorType = Core.TableOfChanges.InitiatorType.User,
+                CreatedAtUtc = DateTime.UtcNow,
+                Entries =
+                [
+                    new HSMServer.Core.ChangeSets.ChangeSetEntry
+                    {
+                        Kind = HSMServer.Core.ChangeSets.ChangeSetEntryKind.AlertTemplate,
+                        Operation = HSMServer.Core.ChangeSets.ChangeSetOperation.Create,
+                        EntityId = Guid.NewGuid(),
+                        ParentId = Guid.NewGuid(),
+                        Path = "wire-template",
+                        Fanout = Enumerable.Range(0, images).Select(i =>
+                            new HSMServer.Core.ChangeSets.NodePolicyImage
+                            {
+                                NodeKind = HSMServer.Core.ChangeSets.ChangeSetNodeKind.Sensor,
+                                NodeId = Guid.NewGuid(),
+                                RootProductId = _productA.Id,
+                                Path = $"wire/s{i}",
+                            }).ToList(),
+                    },
+                ],
+            });
+
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var result = await client.CallToolAsync("get_journal_record", new Dictionary<string, object>
+            {
+                ["recordId"] = HSMServer.Model.ManagementApi.Journal.JournalRecordId.Of(record),
+                ["fanoutOffset"] = 3,
+                ["fanoutLimit"] = 5,
+            });
+
+            Assert.NotEqual(true, result.IsError);
+            Assert.True(result.StructuredContent.HasValue);
+
+            var entry = result.StructuredContent.Value
+                .GetProperty("changeSet").GetProperty("entries")[0];
+
+            // The honest total survives the page; the page itself is exactly
+            // the [3, 3+5) window of the seeded fan-out — the default page
+            // (10 images from 0) or an unbound render would fail both.
+            Assert.Equal(images, entry.GetProperty("fanoutTotal").GetInt32());
+
+            var page = entry.GetProperty("fanout");
+
+            Assert.Equal(5, page.GetArrayLength());
+            Assert.Equal("wire/s3", page[0].GetProperty("path").GetString());
+            Assert.Equal("wire/s7", page[4].GetProperty("path").GetString());
+        }
+
+
         private IHost BuildHost()
         {
             return Host.CreateDefaultBuilder()
@@ -727,11 +805,13 @@ namespace HSMServer.Core.Tests.Mcp
                         // services — a no-op journal (this host has no DB) and
                         // the real recorder/engine over the mocked managers.
                         services.AddSingleton(_journalMock.Object);
+                        services.AddSingleton(_journalServiceMock.Object);
                         services.AddSingleton(_ => new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
-                            _journalMock.Object, JournalServiceOfNulls(),
+                            _journalMock.Object, _journalServiceMock.Object,
                             Microsoft.Extensions.Logging.Abstractions.NullLogger<HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder>.Instance));
                         services.AddScoped<HSMServer.Model.ManagementApi.ChangeSets.IChangeSetAdministrationService,
                             HSMServer.Model.ManagementApi.ChangeSets.ChangeSetAdministrationService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Journal.JournalAdministrationService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);

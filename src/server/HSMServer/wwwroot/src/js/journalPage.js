@@ -119,7 +119,11 @@
         $.get(window.journalUrls.details, { id: recordId, fanoutOffset: fanoutOffset || 0 }, function (html) {
             var $existing = $('#journalDetailsModal');
 
-            if ($existing.length > 0) {
+            // In-place swap only while the modal is OPEN (the fan-out paging
+            // links): Bootstrap leaves a closed modal in the DOM hidden, so
+            // reusing it there would feed the next Details click into an
+            // off-screen element — that path rebuilds and shows the modal.
+            if ($existing.length > 0 && $existing.hasClass('show')) {
                 $existing.find('.modal-content').html(html);
                 $existing.find('.modal-body').scrollTop(0);
                 return;

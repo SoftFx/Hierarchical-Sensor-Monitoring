@@ -287,11 +287,14 @@
         <member name="M:HSMServer.Controllers.JournalController.GetJournalTable(System.String,System.String,System.Nullable{System.Guid},System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
             <summary>The table page: newest configuration records visible to the caller.</summary>
         </member>
-        <member name="M:HSMServer.Controllers.JournalController.Details(System.String)">
+        <member name="M:HSMServer.Controllers.JournalController.Details(System.String,System.Int32)">
             <summary>
             The details view: the record plus its undo group's before/after
             images. The fan-out page rides the area's list ceiling (#1688): the
-            modal renders up to 200 images, the count header names the total.
+            modal renders up to 200 images per request, with prev/next paging
+            over <paramref name="fanoutOffset"/> when the fan-out is longer —
+            the rollback the modal guards acts on every node, so none of them
+            may become unreachable in the UI.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.JournalController.Rollback(System.String,System.Boolean,System.Boolean)">
@@ -1656,6 +1659,15 @@
             rides the same global-write authorization, name-uniqueness gate
             and undo journaling as the DTO path. A null id creates (the id is
             server-generated), a known id updates.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.TryValidateScheduleYaml(System.String,HSMServer.Core.Model.Policies.AlertSchedule@,System.Collections.Generic.List{System.String}@)">
+            <summary>
+            The #1706 write bounds every schedule save passes — the REST/MCP
+            DTO path (TryBuildValidatedSchedule) and the web editor's
+            SavePartial alike: a working-time schedule is a small, bounded,
+            anchor-free YAML document. One helper, so the two write paths
+            cannot drift apart.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
