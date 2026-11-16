@@ -21,6 +21,7 @@ using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
 using Microsoft.Extensions.Logging;
 
+using HSMServer.Validation;
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
     /// <summary>
@@ -665,6 +666,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Add(errors, "name", "The name is required.");
             else if (dto.Name.Length > MaxNameLength)
                 Add(errors, "name", $"The name must be at most {MaxNameLength} characters.");
+            else if (TextFieldValidator.HasForbiddenCharacter(dto.Name, out var nameChar, allowLineBreaks: false))
+                // #1705: no legitimate name carries control characters or
+                // bidi overrides; they spoof every renderer.
+                Add(errors, "name",
+                    $"The name must not contain control or bidirectional-override characters (found {nameChar}).");
 
             if (dto.Paths is null || dto.Paths.All(string.IsNullOrWhiteSpace))
                 Add(errors, "paths", "At least one path template is required.");
@@ -806,6 +812,17 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             if (policy.Template is { } message && (message.Contains('{') || message.Contains('}')))
                 Add(errors, $"{prefix}.template",
                     "The message template must not contain curly braces — it is rendered with string.Format, where braces throw at evaluation time or substitute another variable's value; use $variables.");
+
+            // #1705: control characters and bidi overrides in the message or
+            // the icon are rejected at write time; raw HTML stays a renderer
+            // concern (the audit) — it is escaped or sanitized there.
+            if (TextFieldValidator.HasForbiddenCharacter(policy.Template, out var templateChar))
+                Add(errors, $"{prefix}.template",
+                    $"The message template must not contain control or bidirectional-override characters (found {templateChar}).");
+
+            if (TextFieldValidator.HasForbiddenCharacter(policy.Icon, out var iconChar, allowLineBreaks: false))
+                Add(errors, $"{prefix}.icon",
+                    $"The icon must not contain control or bidirectional-override characters (found {iconChar}).");
 
             // #1673: the raw-ticks confirmation period rides the same shifted-time
             // arithmetic as the TTL intervals, so it carries the same upper bound.

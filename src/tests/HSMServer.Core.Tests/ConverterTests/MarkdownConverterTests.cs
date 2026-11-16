@@ -1,4 +1,5 @@
-﻿using HSMServer.Helpers;
+﻿using System;
+using HSMServer.Helpers;
 using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
@@ -47,5 +48,42 @@ namespace HSMServer.Core.Tests.ConverterTests
             Assert.Equal(expected, result);
         }
 
+        // #1705: ToHtml renders into innerHTML on the alert paths (the
+        // sensor-page action block and the test toast). The <markdown> spans
+        // keep their whitelist; the text AROUND them is stripped of tags
+        // (the ingestion sanitizer's own rules — markdown and br stay), so a
+        // stored <script> or <img onerror> in a policy template becomes
+        // inert text.
+        [Fact]
+        public void ToHtml_PlainHtmlOutsideMarkdownSpans_IsTagStripped()
+        {
+            var html = MarkdownHelper.ToHtml("pre <script>alert(1)</script> hello <img src=x onerror=alert(2)> post").ToString();
+
+            Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("<img", html, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("onerror", html, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("hello", html, StringComparison.Ordinal);
+            Assert.Contains("alert(1)", html, StringComparison.Ordinal); // the TEXT survives, inert
+        }
+
+        [Fact]
+        public void ToHtml_MarkdownSpans_StillConvert()
+        {
+            var html = MarkdownHelper.ToHtml("see <markdown>**bold** [link](https://example.com)</markdown> now").ToString();
+
+            Assert.Contains("<strong>bold</strong>", html, StringComparison.Ordinal);
+            Assert.Contains("href=\"https://example.com\"", html, StringComparison.Ordinal);
+            Assert.Contains("see", html, StringComparison.Ordinal);
+            Assert.Contains("now", html, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ToHtml_PlainAngleBracket_IsEscaped()
+        {
+            var html = MarkdownHelper.ToHtml("value < 5").ToString();
+
+            Assert.DoesNotContain("< 5", html, StringComparison.Ordinal);
+            Assert.Contains("&lt; 5", html, StringComparison.Ordinal);
+        }
     }
 }

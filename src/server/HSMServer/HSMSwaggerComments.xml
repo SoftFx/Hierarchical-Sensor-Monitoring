@@ -651,6 +651,20 @@
             src/agent/include/agent/retired_port.hpp).
             </summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.TestConnection">
+            <summary>
+            The dual-purpose pre-flight; the Key header decides which half is
+            being probed. A KEYLESS call is the liveness probe: the Docker
+            healthcheck, docker-compose and CI call this route without
+            credentials and must keep getting a constant 200 — answering 406
+            here marked every deployed container unhealthy and kept Caddy from
+            starting (#1678 review); it still carries the server marker, which
+            is not authentication. A KEYED call is the auth check: the
+            send-permission filter answers the key's own 406 reason when the
+            key is unusable (expired, blocked, read-only, #1649/#1678), so a
+            collector can tell "server up, key bad" from "cannot reach".
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Session">
             <summary>
             The collector session (#1664): a WebSocket upgrade, subprotocol hsm.sensors.v1,
@@ -3586,6 +3600,23 @@
             <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
             that polls it will stay on its current version regardless of its local config. Default false
             (opt-in: enable when ready to roll out, disable to halt).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Validation.TextFieldValidator">
+            <summary>
+            #1705: the characters no legitimate icon, message template or name
+            ever carries — C0 control characters (NUL above all; tab, newline and
+            carriage return stay allowed in a message template, which may be
+            multi-line — a Windows CRLF paste and a pre-change stored \r\n
+            round-trip), DEL, the C1 controls, and the bidirectional
+            embeddings/overrides/isolates that spoof display order (a name ending
+            in U+202E reads backwards). Raw HTML is deliberately NOT rejected
+            here: the renderers escape or sanitize it (the #1705 audit), and an
+            emoji-bearing icon is a legitimate value.
+            Single-line surfaces (names, icons) pass <c>allowLineBreaks: false</c>
+            — a newline in a name breaks single-line rendering in lists,
+            dropdowns and Telegram headers (a smaller cousin of the display
+            spoofing this validator exists to stop).
             </summary>
         </member>
     </members>

@@ -1,4 +1,5 @@
 ﻿using Ganss.Xss;
+using HSMServer.Core.Services;
 using Markdig;
 using Microsoft.AspNetCore.Html;
 using System;
@@ -64,12 +65,30 @@ namespace HSMServer.Helpers
             if (string.IsNullOrEmpty(input))
                 return HtmlString.Empty;
 
-            return new HtmlString(MarkdownTagRegex.Replace(input, match =>
+            // #1705: only the <markdown> spans were sanitized here — the text
+            // between them passed through RAW, and the alert paths render
+            // unsanitized policy template text through this helper (the
+            // sensor-page action block and the test toast, both into
+            // innerHTML). Strip tags in the plain parts with the ingestion
+            // sanitizer's own rules (markdown/br kept), so every caller
+            // renders safe HTML regardless of what is stored: a stored
+            // <script> or <img onerror> becomes inert text.
+            var result = new StringBuilder(input.Length * 2);
+            var lastPos = 0;
+
+            foreach (Match match in MarkdownTagRegex.Matches(input))
             {
+                result.Append(HtmlSanitizerService.Sanitize(input.Substring(lastPos, match.Index - lastPos)));
+
                 string content = match.Groups["content"].Value;
-                string convertedContent = _sanitizer.Sanitize(Markdown.ToHtml(content));
-                return convertedContent;
-            }));
+                result.Append(_sanitizer.Sanitize(Markdown.ToHtml(content)));
+
+                lastPos = match.Index + match.Length;
+            }
+
+            result.Append(HtmlSanitizerService.Sanitize(input[lastPos..]));
+
+            return new HtmlString(result.ToString());
         }
 
 
