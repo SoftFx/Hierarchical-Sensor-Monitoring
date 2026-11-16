@@ -133,5 +133,15 @@ namespace HSMSensorDataObjects.SensorRequests
         public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
 
         public List<EnumOption> EnumOptions { get; set;}
+
+        /// <summary>
+        /// Full paths, relative to the product (no computer/module prefix), this sensor
+        /// was registered under before (#1724). A server that knows sensor move moves the
+        /// sensor found at such a path to <see cref="BaseRequest.Path"/> — merging when a
+        /// sensor already exists there — so its history follows a collector layout change.
+        /// Null (and never empty) when unused: the collectors omit the member from the
+        /// wire then, so a registration without it is byte-identical to older collectors'.
+        /// </summary>
+        public List<string> PreviousPaths { get; set; }
     }
 }

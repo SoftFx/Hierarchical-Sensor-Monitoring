@@ -175,7 +175,7 @@ notes*). Это самый подробный источник по поведе
 ## 7. Сборка бандла своими руками (если нужен свежий билд)
 
 ```powershell
-vcpkg install curl:x64-windows
+vcpkg install curl:x64-windows nlohmann-json:x64-windows
 cmake -S src/wrapper -B build/wrapper `
   -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake `
   -DVCPKG_TARGET_TRIPLET=x64-windows

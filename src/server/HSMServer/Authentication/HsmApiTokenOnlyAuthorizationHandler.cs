@@ -23,7 +23,14 @@ namespace HSMServer.Authentication
     public sealed class HsmApiTokenOnlyAuthorizationHandler
         : AuthorizationHandler<HsmApiTokenOnlyRequirement>
     {
-        private static readonly string[] UnsafeMethods = ["POST", "PUT", "PATCH", "DELETE"];
+        // The write methods this backstop denies read-only credentials on.
+        // Internal and shared: the 403 text builder in HsmApiTokenHandler
+        // judges the SAME fact with the same list, so the two predicates
+        // cannot drift apart (#1708 review).
+        internal static readonly string[] UnsafeMethods = ["POST", "PUT", "PATCH", "DELETE"];
+
+        internal static bool IsUnsafeMethod(string method) =>
+            method is not null && UnsafeMethods.Contains(method, StringComparer.OrdinalIgnoreCase);
 
         private readonly IApiTokenManager _tokens;
 
@@ -75,9 +82,7 @@ namespace HSMServer.Authentication
             if (context.Resource is not HttpContext httpContext)
                 return false;
 
-            var method = httpContext.Request?.Method;
-
-            if (method is null || !UnsafeMethods.Contains(method, StringComparer.OrdinalIgnoreCase))
+            if (!IsUnsafeMethod(httpContext.Request?.Method))
                 return false;
 
             var tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId).Value;

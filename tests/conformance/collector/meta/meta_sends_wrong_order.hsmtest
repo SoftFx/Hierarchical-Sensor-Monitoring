@@ -1,0 +1,12 @@
+# MUST-FAIL: the collector sends the registration of its sensor at the start and the value at the
+# stop, and the fixture expects the same two sends in the other order. Proves expect_sends
+# compares the ORDER of the sends, not only which kinds were sent. Both sends are seen first
+# (expect_send_attempts), so a sender that recorded nothing is not what makes the case fail.
+meta_sends_wrong_order|create_collector_sending_registrations|50|60000|1000
+meta_sends_wrong_order|create_int_sensor|meta/sends/order
+meta_sends_wrong_order|start
+meta_sends_wrong_order|expect_send_attempts|registration|1|10
+meta_sends_wrong_order|add_int|0|1|Ok|sent
+meta_sends_wrong_order|stop
+meta_sends_wrong_order|expect_send_attempts|value|1
+meta_sends_wrong_order|expect_sends|value,registration

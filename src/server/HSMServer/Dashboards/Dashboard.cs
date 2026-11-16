@@ -25,6 +25,7 @@ namespace HSMServer.Dashboards
         {
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.SensorMovedEvent += SensorMovedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
         }
@@ -33,6 +34,7 @@ namespace HSMServer.Dashboards
         {
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.SensorMovedEvent += SensorMovedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -60,6 +62,7 @@ namespace HSMServer.Dashboards
         public override void Dispose()
         {
             _cache.ChangeSensorEvent -= ChangeSensorHandler;
+            _cache.SensorMovedEvent -= SensorMovedHandler;
 
             base.Dispose();
 
@@ -118,6 +121,15 @@ namespace HSMServer.Dashboards
                 foreach (var (_, panel) in Panels)
                     panel.AddSensor(sensor);
             }
+        }
+
+        // Subscriptions match on the full path and the root's folder, both of
+        // which a move changes (#1719): treat the sensor as if it had always
+        // been at its new path.
+        private void SensorMovedHandler(BaseSensorModel sensor, Guid oldParentId)
+        {
+            foreach (var (_, panel) in Panels)
+                panel.AddMovedSensor(sensor);
         }
 
 

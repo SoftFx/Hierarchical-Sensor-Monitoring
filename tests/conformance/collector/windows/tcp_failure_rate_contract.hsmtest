@@ -1,0 +1,32 @@
+# HSM collector conformance v1 — TCP connection failure rate sensor (Windows only; #1205, #1659 B2).
+# Lives in collector/windows/: both drivers run this folder on Windows only, because the sensor
+# and its registration exist only there.
+# New verb:
+#   enable_tcp_connection_failure_rate_sensor|period_ms
+#     opt in to the rate sensor over MIB_TCPSTATS.dwAttemptFails (IPv4 + IPv6); must be called
+#     before start. The sensor is registered by Start, before any sample is taken.
+#     Native: hsm_collector_enable_tcp_connection_failure_rate_sensor.
+#     Managed: IWindowsCollection.AddNetworkConnectionFailuresRate.
+# Notes:
+#   - Values are OS-sourced (the host's own failed connection attempts), so only the registration
+#     is pinned here. The delta math is pinned by the same accumulator cases in both unit suites.
+#   - The registration path is asserted by SUFFIX, as for every computer-level default sensor.
+
+tcp_failure_rate_registers_at_start|create_collector
+tcp_failure_rate_registers_at_start|enable_tcp_connection_failure_rate_sensor|60000
+tcp_failure_rate_registers_at_start|start
+tcp_failure_rate_registers_at_start|expect_registration_count|1
+tcp_failure_rate_registers_at_start|expect_registration_contains|0|.computer/Network/Connection failures rate"
+# The whole registration after the identity prefix, byte for byte: rate (9), failures per second
+# shown per minute, no TTL and no history limit, and the alert "more than 1 per second for
+# 5 minutes -> Error + notification".
+tcp_failure_rate_registers_at_start|expect_registration_contains|0|/.computer/Network/Connection failures rate","SensorType":9,"TTLTicks":null,"OriginalUnit":3000,"Description":"Failed TCP connection attempts per minute (MIB_TCPSTATS.dwAttemptFails, IPv4+IPv6).","EnumOptions":null,"Alerts":[{"Conditions":[{"Combination":0,"Operation":2,"Property":20,"Target":{"Type":0,"Value":"1"}}],"Status":3,"DestinationMode":3,"Template":"[$product] TCP connection failures elevated: $value/sec failed connection attempts","Icon":"\u274C","IsDisabled":false,"ConfirmationPeriod":3000000000,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}],"TtlAlerts":null,"KeepHistory":null,"SelfDestroy":null,"Statistics":0,"DisplayUnit":1,"IsSingletonSensor":true,"AggregateData":null,"EnableGrafana":true,"DefaultAlertsOptions":0}
+tcp_failure_rate_registers_at_start|stop
+
+# Asking twice is not two sensors.
+tcp_failure_rate_enabled_twice_registers_once|create_collector
+tcp_failure_rate_enabled_twice_registers_once|enable_tcp_connection_failure_rate_sensor|60000
+tcp_failure_rate_enabled_twice_registers_once|enable_tcp_connection_failure_rate_sensor|60000
+tcp_failure_rate_enabled_twice_registers_once|start
+tcp_failure_rate_enabled_twice_registers_once|expect_registration_count|1
+tcp_failure_rate_enabled_twice_registers_once|stop

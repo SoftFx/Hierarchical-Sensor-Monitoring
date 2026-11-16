@@ -14,6 +14,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -168,6 +169,12 @@ namespace hsm::test
             bool echo = true;
             // Send this interim response (e.g. 103) before the final one; 0 = none.
             int interim_status = 0;
+            // Behave like the collector session endpoint of an HSM server: select the session
+            // subprotocol, send a hello frame after the upgrade, answer every request frame with
+            // an ack and every application ping with a pong. `echo` is ignored in this mode.
+            bool session = false;
+            int max_frame_bytes = 4 * 1024 * 1024;
+            int heartbeat_seconds = 30;
         };
 
         WebSocketTestServer()
@@ -176,6 +183,9 @@ namespace hsm::test
         explicit WebSocketTestServer(Options options)
             : options_(std::move(options))
         {
+            refuse_status_.store(options_.refuse_with_status, std::memory_order_release);
+            if (options_.session && options_.subprotocol.empty())
+                options_.subprotocol = "hsm.sensors.v1";
 #if defined(_WIN32)
             WSADATA wsa;
             WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -244,6 +254,14 @@ namespace hsm::test
         {
             std::lock_guard<std::mutex> guard(mutex_);
             return handshake_head_;
+        }
+
+        // Raw request head of the last upgrade that was accepted. Unlike HandshakeHead it is not
+        // replaced by a refused upgrade or by a request that was no upgrade at all.
+        std::string AcceptedHandshakeHead() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return accepted_head_;
         }
 
         // Status codes of the close frames received from clients, in order (0 = no code).
@@ -339,17 +357,153 @@ namespace hsm::test
             return WriteAll(connection_, frame);
         }
 
-        // Starts the close handshake from the server side with the given status code.
-        bool SendClose(uint16_t code)
+        // Starts the close handshake from the server side with the given status code and reason.
+        bool SendClose(uint16_t code, const std::string& reason = {})
         {
             std::string payload;
             payload.push_back(static_cast<char>((code >> 8) & 0xFF));
             payload.push_back(static_cast<char>(code & 0xFF));
+            payload += reason;
             return SendFrame(0x8, /*fin=*/true, payload);
         }
 
+        // Session mode, changeable while the server runs.
+        // Refuse upgrades with this status from now on (0 = accept them).
+        void RefuseUpgradesWith(int status) { refuse_status_.store(status, std::memory_order_release); }
+        // The status of the acks from now on (200 by default).
+        void AckWith(int status) { ack_status_.store(status, std::memory_order_release); }
+        // Accept this many more `list` frames, then answer every later one with 503. A negative
+        // number lifts the limit.
+        void AcceptListFrames(int count) { list_budget_.store(count, std::memory_order_release); }
+        // The statuses of the next `commands` acks, one per frame in order; after them, AckWith's.
+        void AckNextCommandFramesWith(std::vector<int> statuses)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            command_acks_ = std::move(statuses);
+        }
+        // Stop (or resume) acknowledging requests; they are still received and recorded.
+        void StaySilent(bool silent) { silent_.store(silent, std::memory_order_release); }
+        // Application-level pings ({"op":"ping"}) received.
+        int SessionPings() const { return session_pings_.load(std::memory_order_acquire); }
+
         // Drops the TCP connection without a close frame.
         void Drop() { drop_.store(true, std::memory_order_release); }
+
+        // --- The scripted side of a session, for the conformance driver (#1660 step 3). ---
+        // tests/conformance/README.md, "Collector session", is the specification of these.
+
+        // One request frame of a session and how it was answered: the ack's status, or 0 when it
+        // was left without an ack.
+        struct SessionRequest
+        {
+            std::string frame;
+            int status = 0;
+        };
+
+        // Every request frame received so far (heartbeats are not requests), in order.
+        std::vector<SessionRequest> SessionRequests() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return session_requests_;
+        }
+
+        // What the hello of the sessions accepted from now on states.
+        void SetHello(int max_frame_bytes, int heartbeat_seconds)
+        {
+            hello_frame_bytes_.store(max_frame_bytes, std::memory_order_release);
+            hello_heartbeat_seconds_.store(heartbeat_seconds, std::memory_order_release);
+        }
+
+        // The status of the acks of one op ("list" or "commands") from now on. It takes
+        // precedence over AckWith, which sets the status of every op. A request of any other op
+        // is not touched by it.
+        void AckOpWith(const std::string& op, int status)
+        {
+            if (op == "list")
+                list_ack_status_.store(status, std::memory_order_release);
+            else if (op == "commands")
+                commands_ack_status_.store(status, std::memory_order_release);
+        }
+
+        // The next `count` requests are recorded and get no ack.
+        void StaySilentFor(int count) { silent_budget_.store(count, std::memory_order_release); }
+
+        // Stop (or resume) answering application-level pings; they are still counted.
+        void AnswerSessionPings(bool answer) { answer_pings_.store(answer, std::memory_order_release); }
+
+        // Upgrade requests refused so far.
+        int RefusedUpgrades() const { return refused_upgrades_.load(std::memory_order_acquire); }
+
+        // Requests that were not a WebSocket upgrade: what a collector on a session must never send.
+        int PlainHttpRequests() const { return plain_http_requests_.load(std::memory_order_acquire); }
+
+        // How many times the accept loop found no connection waiting. Two more of these while no
+        // connection is being served mean that everything that was in the listen backlog has
+        // been read.
+        uint64_t IdleAcceptPolls() const { return idle_accept_polls_.load(std::memory_order_acquire); }
+
+        // One request that is no upgrade, made by the test itself: what PlainHttpRequests counts.
+        // Returns true when the server has answered and closed, so the request is counted by then.
+        // The server serves one connection at a time, so a request made while a session is open
+        // is read only when that session has ended: the wait for the answer is bounded by
+        // `answer_timeout_ms`, and a request that gets no answer by then returns false instead
+        // of hanging the test. No passing case comes near the bound.
+        bool SendPlainHttpRequest(int answer_timeout_ms = 10000) const
+        {
+            const socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock == INVALID_SOCKET)
+                return false;
+
+            sockaddr_in address{};
+            address.sin_family = AF_INET;
+            address.sin_port = htons(static_cast<uint16_t>(port_));
+            address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+            const bool sent = connect(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
+                              WriteAll(sock, "GET /api/sensors/list HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+
+            bool answered = false;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(answer_timeout_ms);
+            char buffer[256];
+            while (sent)
+            {
+                const auto left = std::chrono::duration_cast<std::chrono::microseconds>(deadline - std::chrono::steady_clock::now()).count();
+                if (left <= 0)
+                    break;
+
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(sock, &readfds);
+                timeval tv{};
+                tv.tv_sec = static_cast<decltype(tv.tv_sec)>(left / 1000000);
+                tv.tv_usec = static_cast<decltype(tv.tv_usec)>(left % 1000000);
+#if defined(_WIN32)
+                const int nfds = 0;
+#else
+                const int nfds = sock + 1;
+#endif
+                const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
+                if (ready < 0)
+                {
+#if !defined(_WIN32)
+                    if (errno == EINTR)
+                        continue;
+#endif
+                    break;
+                }
+                if (ready == 0)
+                    continue; // the deadline is checked at the top
+
+                if (recv(sock, buffer, static_cast<int>(sizeof(buffer)), 0) <= 0)
+                {
+                    answered = true; // the server answered and closed
+                    break;
+                }
+            }
+
+            closesocket(sock);
+            return sent && answered;
+        }
 
     private:
         bool WaitReadable(socket_t sock) const
@@ -401,10 +555,16 @@ namespace hsm::test
 
         static bool WriteAll(socket_t sock, const std::string& data)
         {
+            // A peer that has gone must be an error here, not a SIGPIPE that ends the test binary.
+#if defined(MSG_NOSIGNAL)
+            const int flags = MSG_NOSIGNAL;
+#else
+            const int flags = 0;
+#endif
             size_t sent = 0;
             while (sent < data.size())
             {
-                const int n = send(sock, data.data() + sent, static_cast<int>(data.size() - sent), 0);
+                const int n = send(sock, data.data() + sent, static_cast<int>(data.size() - sent), flags);
                 if (n <= 0)
                     return false;
                 sent += static_cast<size_t>(n);
@@ -468,7 +628,10 @@ namespace hsm::test
                     return;
                 }
                 if (ready == 0)
+                {
+                    idle_accept_polls_.fetch_add(1, std::memory_order_release);
                     continue;
+                }
 
                 const socket_t conn = accept(listen_, nullptr, nullptr);
                 if (conn == INVALID_SOCKET)
@@ -504,9 +667,14 @@ namespace hsm::test
             }
 
             const std::string key = ws_detail::HeaderValue(head, "sec-websocket-key");
-            if (options_.refuse_with_status != 0 || key.empty())
+            const int refuse = refuse_status_.load(std::memory_order_acquire);
+            if (key.empty())
+                plain_http_requests_.fetch_add(1, std::memory_order_release);
+            else if (refuse != 0)
+                refused_upgrades_.fetch_add(1, std::memory_order_release);
+            if (refuse != 0 || key.empty())
             {
-                const int status = options_.refuse_with_status != 0 ? options_.refuse_with_status : 400;
+                const int status = refuse != 0 ? refuse : 400;
                 WriteAll(conn, "HTTP/1.1 " + std::to_string(status) + " Refused\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 return false;
             }
@@ -519,7 +687,12 @@ namespace hsm::test
             if (!options_.subprotocol.empty())
                 response += "Sec-WebSocket-Protocol: " + options_.subprotocol + "\r\n";
             response += "\r\n";
-            return WriteAll(conn, response);
+            if (!WriteAll(conn, response))
+                return false;
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            accepted_head_ = head;
+            return true;
         }
 
         void Serve(socket_t conn)
@@ -533,6 +706,16 @@ namespace hsm::test
             }
             upgrades_.fetch_add(1, std::memory_order_release);
             connected_.store(true, std::memory_order_release);
+
+            if (options_.session)
+            {
+                const int scripted_bytes = hello_frame_bytes_.load(std::memory_order_acquire);
+                const int scripted_heartbeat = hello_heartbeat_seconds_.load(std::memory_order_acquire);
+                SendFrame(0x1, /*fin=*/true,
+                          "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" +
+                              std::to_string(scripted_bytes != 0 ? scripted_bytes : options_.max_frame_bytes) + ",\"heartbeatSeconds\":" +
+                              std::to_string(scripted_heartbeat != 0 ? scripted_heartbeat : options_.heartbeat_seconds) + "}}");
+            }
 
             for (;;)
             {
@@ -602,14 +785,103 @@ namespace hsm::test
 
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
-                    received_.push_back(payload);
+                    if (!(options_.session && payload.find("\"op\":\"ping\"") != std::string::npos))
+                        received_.push_back(payload);
                 }
-                if (options_.echo)
+                if (options_.session)
+                    AnswerSessionFrame(payload);
+                else if (options_.echo)
                     SendFrame(0x1, /*fin=*/true, "echo:" + payload);
             }
         }
 
+        // What an HSM server answers to one frame of a collector session.
+        void AnswerSessionFrame(const std::string& payload)
+        {
+            if (payload.find("\"op\":\"ping\"") != std::string::npos)
+            {
+                session_pings_.fetch_add(1, std::memory_order_release);
+                if (answer_pings_.load(std::memory_order_acquire))
+                    SendFrame(0x1, /*fin=*/true, "{\"op\":\"pong\"}");
+                return;
+            }
+
+            // The collector writes its frames as {"id":N,"op":...}: the id is the first number.
+            const size_t at = payload.find("\"id\":");
+            if (at == std::string::npos)
+                return;
+
+            bool silent = silent_.load(std::memory_order_acquire);
+            if (!silent)
+            {
+                int budget = silent_budget_.load(std::memory_order_acquire);
+                while (budget > 0 && !silent_budget_.compare_exchange_weak(budget, budget - 1, std::memory_order_acq_rel))
+                {
+                }
+                silent = budget > 0;
+            }
+            if (silent)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                session_requests_.push_back({ payload, 0 });
+                return;
+            }
+
+            size_t end = at + 5;
+            while (end < payload.size() && payload[end] >= 48 && payload[end] <= 57)
+                ++end;
+            const std::string id = payload.substr(at + 5, end - (at + 5));
+
+            const bool is_list = payload.find("\"op\":\"list\"") != std::string::npos;
+            const bool is_commands = !is_list && payload.find("\"op\":\"commands\"") != std::string::npos;
+            int status = ack_status_.load(std::memory_order_acquire);
+            const int op_status = is_list       ? list_ack_status_.load(std::memory_order_acquire)
+                                  : is_commands ? commands_ack_status_.load(std::memory_order_acquire)
+                                                : 0;
+            if (op_status != 0)
+                status = op_status;
+            if (is_list)
+            {
+                int budget = list_budget_.load(std::memory_order_acquire);
+                if (budget == 0)
+                    status = 503;
+                else if (budget > 0)
+                    list_budget_.store(budget - 1, std::memory_order_release);
+            }
+            else if (is_commands)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!command_acks_.empty())
+                {
+                    status = command_acks_.front();
+                    command_acks_.erase(command_acks_.begin());
+                }
+            }
+            // Recorded with its status only once the ack is written: a test that sees a request as
+            // accepted and then cuts the session must not race the ack it is counting on.
+            const bool acked = SendFrame(0x1, /*fin=*/true,
+                                         status >= 200 && status < 300 ? "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"body\":{}}"
+                                                                       : "{\"ack\":" + id + ",\"status\":" + std::to_string(status) + ",\"error\":\"refused by the test\"}");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            session_requests_.push_back({ payload, acked ? status : 0 });
+        }
+
         Options options_;
+        std::atomic<int> refuse_status_{ 0 };
+        std::atomic<int> ack_status_{ 200 };
+        std::atomic<bool> silent_{ false };
+        std::atomic<int> list_budget_{ -1 };
+        std::atomic<int> session_pings_{ 0 };
+        std::atomic<int> hello_frame_bytes_{ 0 };       // 0 = options_.max_frame_bytes
+        std::atomic<int> hello_heartbeat_seconds_{ 0 }; // 0 = options_.heartbeat_seconds
+        std::atomic<int> list_ack_status_{ 0 };         // 0 = ack_status_
+        std::atomic<int> commands_ack_status_{ 0 };     // 0 = ack_status_
+        std::atomic<int> silent_budget_{ 0 };
+        std::atomic<bool> answer_pings_{ true };
+        std::atomic<int> refused_upgrades_{ 0 };
+        std::atomic<int> plain_http_requests_{ 0 };
+        std::atomic<uint64_t> idle_accept_polls_{ 0 };
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };
@@ -621,9 +893,12 @@ namespace hsm::test
         std::mutex send_mutex_;
         socket_t connection_ = INVALID_SOCKET; // guarded by send_mutex_
         mutable std::mutex mutex_;
-        std::string handshake_head_;        // guarded by mutex_
-        std::string last_pong_;             // guarded by mutex_
-        std::vector<std::string> received_; // guarded by mutex_
-        std::vector<int> close_codes_;      // guarded by mutex_
+        std::string accepted_head_;                    // guarded by mutex_
+        std::string handshake_head_;                   // guarded by mutex_
+        std::string last_pong_;                        // guarded by mutex_
+        std::vector<std::string> received_;            // guarded by mutex_
+        std::vector<int> command_acks_;                // guarded by mutex_
+        std::vector<int> close_codes_;                 // guarded by mutex_
+        std::vector<SessionRequest> session_requests_; // guarded by mutex_
     };
 } // namespace hsm::test

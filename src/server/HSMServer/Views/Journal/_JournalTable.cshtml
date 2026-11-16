@@ -30,9 +30,12 @@
                 <td>@item.Time.ToString("yyyy-MM-dd HH:mm:ss")</td>
                 <td>@item.Author</td>
                 <td>
-                    @if (item.Kind is null)
+                    @* Legacy/unclassified rows (#1679) render Kind "other" since the
+                       payload change; keep their LIGHT badge so they stay visually
+                       distinct from real non-rollbackable kinds (treeCrud, folder). *@
+                    @if (string.Equals(item.Kind, JournalAdministrationService.OtherKind, StringComparison.OrdinalIgnoreCase))
                     {
-                        <span class="badge bg-light text-dark">other</span>
+                        <span class="badge bg-light text-dark">@item.Kind</span>
                     }
                     else if (item.Rollbackable)
                     {

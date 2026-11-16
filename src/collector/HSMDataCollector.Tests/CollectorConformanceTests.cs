@@ -8,6 +8,7 @@ using HSMDataCollector.Prototypes.Collections.Network;
 using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
+using HSMDataCollector.Tests.Transport;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -49,6 +50,7 @@ namespace HSMDataCollector.Tests
                     await state.Collector.Stop().ConfigureAwait(false);
 
                 state.Collector?.Dispose();
+                state.SessionServer?.Dispose();
             }
         }
 
@@ -91,6 +93,7 @@ namespace HSMDataCollector.Tests
                     await state.Collector.Stop().ConfigureAwait(false);
 
                 state.Collector?.Dispose();
+                state.SessionServer?.Dispose();
             }
 
             Assert.True(detected != null, $"Must-fail fixture '{caseName}' passed — the driver is not detecting wrong expectations.");
@@ -204,6 +207,16 @@ namespace HSMDataCollector.Tests
                             TTL = long.Parse(step.Arg(1)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))) : (TimeSpan?)null,
                             SensorUnit = int.Parse(step.Arg(2)) >= 0 ? (Unit)int.Parse(step.Arg(2)) : (Unit?)null,
                             Description = ExpandTextToken(step.Arg(3)),
+                        }));
+                    break;
+
+                case "create_int_sensor_with_previous_paths":
+                    // #1724: the managed surface is the options property; native sets them on the handle.
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new InstantSensorOptions
+                        {
+                            PreviousPaths = step.Arg(1).Split(';').Select(ExpandTextToken).ToList(),
                         }));
                     break;
 
@@ -839,6 +852,82 @@ namespace HSMDataCollector.Tests
                     state.Sender.ReleaseHangs();
                     break;
 
+                // ---- the stop drain (#1751): stop_drain_contract, stop_drain_registration_contract ----
+
+                // The terminal stop. Synchronous in the collector's API; the case goes on when it returns.
+                case "dispose":
+                    state.Collector.Dispose();
+                    break;
+
+                // A data send blocks until the collector cancels it; that cancellation ends the hang.
+                case "set_sender_hang_until_cancelled":
+                    state.Sender.HangSendsUntilCancelled();
+                    break;
+
+                // What the sender does with every send of every kind from now on: up, down, hung.
+                case "set_sender_mode":
+                    state.Sender.SetMode(step.Arg(0));
+                    break;
+
+                // A collector whose registrations reach the sender of the case. Here that is the
+                // recording sender: an IDataSender is sent the registrations as command sends.
+                case "create_collector_sending_registrations":
+                    state.Sender = new RecordingSender();
+                    state.Collector = CreateCollector(
+                        state.Sender,
+                        maxValuesInPackage: int.Parse(step.Arg(0)),
+                        collectPeriodMs: int.Parse(step.Arg(1)),
+                        requestTimeoutMs: int.Parse(step.Arg(2)));
+                    break;
+
+                // The sends of one kind the collector has started so far, whatever became of them.
+                case "expect_send_attempts":
+                {
+                    var kind = ParseSendKind(step.Arg(0));
+                    var expectedAttempts = int.Parse(step.Arg(1));
+
+                    if (step.TryArg(2, out var attemptsSeconds))
+                    {
+                        var attemptsBy = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(attemptsSeconds));
+                        while (state.Sender.Sends.Count(sent => sent == kind) != expectedAttempts && DateTime.UtcNow < attemptsBy)
+                            await Task.Delay(10).ConfigureAwait(false);
+                    }
+
+                    var attempts = state.Sender.Sends.Count(sent => sent == kind);
+                    Assert.True(attempts == expectedAttempts, $"Expected {expectedAttempts} {kind} send(s) started, got {attempts}.");
+                    break;
+                }
+
+                // Every send the collector has started so far, by kind, in the order of their start.
+                case "expect_sends":
+                {
+                    var expectedSends = step.Arg(0).Split(',').Select(ParseSendKind).ToArray();
+                    var sends = state.Sender.Sends;
+
+                    Assert.True(
+                        expectedSends.SequenceEqual(sends),
+                        $"Expected the sends [{string.Join(", ", expectedSends)}], got [{string.Join(", ", sends)}].");
+                    break;
+                }
+
+                // (#1750) Of the registrations the sender delivered (a send it accepted), the last
+                // one of the sensor whose path ends with the suffix: what the server holds of it.
+                // The recording sender keeps the registrations of accepted command sends only.
+                case "expect_last_delivered_registration":
+                {
+                    var delivered = state.Sender.Registrations
+                        .Where(registration => registration.Path != null && registration.Path.EndsWith(step.Arg(0), StringComparison.Ordinal))
+                        .ToList();
+
+                    Assert.True(delivered.Count > 0, $"No registration of a path ending with '{step.Arg(0)}' was delivered.");
+
+                    var description = delivered[delivered.Count - 1].Description;
+                    Assert.True(
+                        description == step.Arg(1),
+                        $"The last delivered registration of '{step.Arg(0)}' has the description '{description ?? "null"}', expected '{step.Arg(1)}'.");
+                    break;
+                }
+
                 // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload
                 // of each OpenTime, over the bars whose Path ends with the suffix.
                 case "expect_bar_sum":
@@ -1038,9 +1127,330 @@ namespace HSMDataCollector.Tests
                         state.Collector.Windows.AddNetworkInterfacesSpeed();
                     break;
 
+                // ---- the collector session as the transport (#1660 step 3) ----
+
+                case "create_collector_on_session":
+                    state.Collector = CreateCollectorOnSession(
+                        SessionServer(state),
+                        maxValuesInPackage: int.Parse(step.Arg(0)),
+                        collectPeriodMs: int.Parse(step.Arg(1)),
+                        requestTimeoutMs: int.Parse(step.Arg(2)),
+                        directives: state.Directives);
+                    break;
+
+                case "session_server_push_directive":
+                    Assert.True(SessionServer(state).PushDirective(step.Arg(0)) > 0, "session_server_push_directive: no session is open.");
+                    break;
+
+                case "session_server_push_frame":
+                    Assert.True(SessionServer(state).Push(step.Arg(0)) > 0, "session_server_push_frame: no session is open.");
+                    break;
+
+                case "expect_directives_received":
+                {
+                    var expected = int.Parse(step.Arg(0));
+
+                    await PollAsync(() => state.Directives.Count >= expected, step.Arg(1)).ConfigureAwait(false);
+
+                    Assert.True(state.Directives.Count == expected,
+                                $"Expected {expected} directive(s) at the collector, got {state.Directives.Count}: {string.Join(" | ", state.Directives)}");
+                    break;
+                }
+
+                case "expect_directive_received":
+                {
+                    var index = int.Parse(step.Arg(0));
+                    var received = state.Directives.ToArray();
+
+                    Assert.True(index < received.Length, $"expect_directive_received: only {received.Length} directive(s) arrived, no #{index}.");
+                    Assert.Equal(step.Arg(1), received[index]);
+                    break;
+                }
+
+                case "session_server_hello":
+                    SessionServer(state).MaxFrameBytes = int.Parse(step.Arg(0));
+                    SessionServer(state).HeartbeatSeconds = int.Parse(step.Arg(1));
+                    break;
+
+                case "session_server_refuse_upgrades":
+                    SessionServer(state).RefuseUpgrades(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_server_accept_upgrades":
+                    SessionServer(state).AcceptUpgrades();
+                    break;
+
+                case "session_server_ack":
+                    Assert.True(step.Arg(0) == "list" || step.Arg(0) == "commands", $"session_server_ack: unknown op '{step.Arg(0)}'.");
+                    Assert.True(int.Parse(step.Arg(1)) > 0, "session_server_ack: 0 is no status; session_server_stay_silent leaves a request without an ack.");
+                    SessionServer(state).AckWith(step.Arg(0), int.Parse(step.Arg(1)));
+                    break;
+
+                case "session_server_stay_silent":
+                    SessionServer(state).StaySilentFor(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_server_stop_answering_pings":
+                    SessionServer(state).StopAnsweringPings();
+                    break;
+
+                case "session_server_drop_sessions":
+                    SessionServer(state).DropSessions();
+                    break;
+
+                case "session_server_close_sessions":
+                    SessionServer(state).CloseSessions(int.Parse(step.Arg(0)));
+                    break;
+
+                case "session_http_request":
+                {
+                    // The driver's own request, not the collector's: it puts on the server's
+                    // record what expect_no_http_requests looks for.
+                    var server = SessionServer(state);
+
+                    using (var client = new System.Net.Http.HttpClient())
+                    using (await client.GetAsync($"{server.ServerAddress}:{server.Port}/api/sensors/list").ConfigureAwait(false)) { }
+
+                    break;
+                }
+
+                case "expect_session_pings_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Pings >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} heartbeat(s) from the collector, got {server.Pings}.");
+                    break;
+                }
+
+                case "expect_session_count":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Sessions == expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected {expected} session(s), got {server.Sessions}.");
+                    break;
+                }
+
+                case "expect_session_count_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Sessions >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} session(s), got {server.Sessions}.");
+                    break;
+                }
+
+                case "expect_refused_upgrades_at_least":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.RefusedUpgrades >= expected, step.Arg(1)).ConfigureAwait(false),
+                                $"Expected at least {expected} refused upgrade(s), got {server.RefusedUpgrades}.");
+                    break;
+                }
+
+                case "expect_session_ints_once":
+                {
+                    var server = SessionServer(state);
+                    var expected = Enumerable.Range(int.Parse(step.Arg(0)), int.Parse(step.Arg(1))).ToList();
+
+                    // Polled until every value is there; exactly-once is then read off the same snapshot.
+                    await PollAsync(() => !expected.Except(SessionDeliveredInts(server)).Any(), step.Arg(2)).ConfigureAwait(false);
+
+                    var delivered = SessionDeliveredInts(server);
+
+                    foreach (var value in expected)
+                        Assert.True(delivered.Count(v => v == value) == 1,
+                                    $"Expected int value {value} delivered once on the session, got {delivered.Count(v => v == value)} time(s). Delivered: {string.Join(",", delivered)}");
+                    break;
+                }
+
+                case "expect_session_accepted_contains":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+
+                    Assert.True(await PollAsync(() => server.Accepted.Any(r => r.Op == op && r.Frame.Contains(text)), step.Arg(2)).ConfigureAwait(false),
+                                $"No accepted {op} request contains: {text}");
+                    break;
+                }
+
+                case "expect_session_requests_containing":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+                    var expected = int.Parse(step.Arg(2));
+                    Func<int> count = () => server.Requests.Count(r => r.Op == op && r.Frame.Contains(text));
+
+                    await PollAsync(() => count() == expected, step.Arg(3)).ConfigureAwait(false);
+
+                    Assert.True(count() == expected, $"Expected {expected} {op} request(s) containing '{text}', got {count()}.");
+                    break;
+                }
+
+                case "expect_session_requests_containing_at_least":
+                {
+                    var server = SessionServer(state);
+                    var op = step.Arg(0);
+                    var text = ExpandTextToken(step.Arg(1));
+                    var expected = int.Parse(step.Arg(2));
+                    Func<int> count = () => server.Requests.Count(r => r.Op == op && r.Frame.Contains(text));
+
+                    Assert.True(await PollAsync(() => count() >= expected, step.Arg(3)).ConfigureAwait(false),
+                                $"Expected at least {expected} {op} request(s) containing '{text}', got {count()}.");
+                    break;
+                }
+
+                case "expect_session_no_request_contains":
+                {
+                    var text = ExpandTextToken(step.Arg(0));
+
+                    Assert.DoesNotContain(SessionServer(state).Requests, r => r.Frame.Contains(text));
+                    break;
+                }
+
+                case "expect_session_frames_fit":
+                {
+                    var limit = int.Parse(step.Arg(0));
+
+                    foreach (var request in SessionServer(state).Requests)
+                        Assert.True(Encoding.UTF8.GetByteCount(request.Frame) <= limit,
+                                    $"A {request.Op} frame of {Encoding.UTF8.GetByteCount(request.Frame)} bytes is over the limit of {limit}.");
+                    break;
+                }
+
+                case "expect_no_http_requests":
+                    Assert.True(SessionServer(state).HttpRequests.Count == 0,
+                                "The collector made HTTP requests: " + string.Join(", ", SessionServer(state).HttpRequests));
+                    break;
+
+                case "expect_session_upgrade_header":
+                {
+                    Assert.True(SessionServer(state).Sessions > 0, "expect_session_upgrade_header: no upgrade has been accepted yet.");
+
+                    var headers = SessionServer(state).UpgradeHeaders;
+
+                    Assert.True(headers.TryGetValue(step.Arg(0), out var actual), $"The upgrade carried no {step.Arg(0)} header.");
+                    Assert.Equal(step.Arg(1), actual);
+                    break;
+                }
+
+                case "expect_session_close_code":
+                {
+                    var server = SessionServer(state);
+                    var expected = int.Parse(step.Arg(0));
+
+                    Assert.True(await PollAsync(() => server.Closes.Count > 0 && server.Closes.Last() == expected, step.Arg(1)).ConfigureAwait(false),
+                                $"The last close frame of the collector does not carry {expected}. Close codes: " + string.Join(",", server.Closes));
+                    break;
+                }
+
+                case "expect_session_closed_normally":
+                {
+                    var server = SessionServer(state);
+
+                    // The last close, not any close: an earlier session of the case may have been
+                    // ended by the collector for a reason of its own.
+                    Assert.True(await PollAsync(() => server.Closes.Count > 0 && server.Closes.Last() == 1000, "5").ConfigureAwait(false),
+                                "The collector did not close its last session with 1000. Close codes: " + string.Join(",", server.Closes));
+                    break;
+                }
+
+                case "enable_tcp_connection_failure_rate_sensor":
+                    // (#1659 B2) period_ms. Used only by collector/windows/, which runs on Windows.
+                    state.Collector.Windows.AddNetworkConnectionFailuresRate(TimeSpan.FromMilliseconds(int.Parse(step.Arg(0))));
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
+        }
+
+        // The scripted session server of a case, created by the first verb that needs it.
+        private static ScriptedSessionServer SessionServer(ContractState state) =>
+            state.SessionServer ?? (state.SessionServer = new ScriptedSessionServer());
+
+        // A collector whose transport is the collector session to the scripted server: no
+        // recording sender, everything it sends is a frame the server records. The pause between
+        // attempts to open a session is shortened; no scenario depends on it.
+        // The directives the collector receives are recorded into `directives`, whole and in order of
+        // arrival: the managed collector handles them inside (no public surface), so the driver reads
+        // its internal receiver, where the HTTP header path hands them too.
+        private static DataCollector CreateCollectorOnSession(ScriptedSessionServer server, int maxValuesInPackage, int collectPeriodMs, int requestTimeoutMs,
+            System.Collections.Concurrent.ConcurrentQueue<string> directives)
+        {
+            var options = new CollectorOptions
+            {
+                AccessKey = "conformance-key",
+                ServerAddress = server.ServerAddress,
+                Port = server.Port,
+                AllowPlaintextTransport = true,
+                Transport = CollectorTransport.Session,
+                ClientName = "conformance-client",
+                ComputerName = "conformance-host",
+                Module = "conformance-module",
+                MaxQueueSize = 20000,
+                MaxValuesInPackage = maxValuesInPackage,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
+                RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
+                ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
+                MaxDeduplicatedMessages = 100,
+                SessionTimings = new HSMDataCollector.Client.Session.SessionTimings
+                {
+                    MinBackoff = TimeSpan.FromMilliseconds(50),
+                    MaxBackoff = TimeSpan.FromMilliseconds(500),
+                },
+            };
+
+            var collector = new DataCollector(options);
+
+            ((HSMDataCollector.Client.Session.SessionDataSender)options.DataSender).Directives.Observer = directives.Enqueue;
+
+            return collector;
+        }
+
+        // The int values of the accepted list frames, read from the wire JSON of their elements.
+        private static List<int> SessionDeliveredInts(ScriptedSessionServer server)
+        {
+            var values = new List<int>();
+
+            foreach (var element in server.AcceptedElements("list"))
+            {
+                using (var document = JsonDocument.Parse(element))
+                {
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("Type", out var type) && type.ValueKind == JsonValueKind.Number && type.GetInt32() == 1
+                        && root.TryGetProperty("Value", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+                        values.Add(number);
+                }
+            }
+
+            return values;
+        }
+
+        // Re-checks until the condition holds or the timeout (seconds, as written in the fixture)
+        // runs out; a timeout of 0 checks once.
+        private static async Task<bool> PollAsync(Func<bool> condition, string timeoutSeconds)
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(timeoutSeconds));
+
+            while (!condition())
+            {
+                if (DateTime.UtcNow >= deadline)
+                    return false;
+
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+
+            return true;
         }
 
         private static DataCollector CreateCollector(
@@ -1052,7 +1462,8 @@ namespace HSMDataCollector.Tests
             int port = 443,
             int maxQueueSize = 20000,
             int maxValuesInPackage = 50,
-            int collectPeriodMs = 20)
+            int collectPeriodMs = 20,
+            int requestTimeoutMs = 1000)
         {
             return new DataCollector(new CollectorOptions
             {
@@ -1066,10 +1477,23 @@ namespace HSMDataCollector.Tests
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = maxValuesInPackage,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
-                RequestTimeout = TimeSpan.FromSeconds(1),
+                RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
             });
+        }
+
+        // The kinds of send a fixture names (expect_send_attempts, expect_sends).
+        private static string ParseSendKind(string kind)
+        {
+            switch (kind)
+            {
+                case RecordingSender.ValueSend:
+                case RecordingSender.RegistrationSend:
+                    return kind;
+                default:
+                    throw new InvalidOperationException($"Unknown kind of send '{kind}': value or registration.");
+            }
         }
 
         private static BarSensorOptions BuildConformanceBarOptions(int barPeriodMs, int postPeriodMs, int precision = 2)
@@ -1798,6 +2222,10 @@ namespace HSMDataCollector.Tests
                    $"\"AggregateData\":{Bool(request.AggregateData)}," +
                    $"\"EnableGrafana\":{Bool(request.EnableGrafana)}," +
                    $"\"DefaultAlertsOptions\":{((long)request.DefaultAlertsOptions).ToString(CultureInfo.InvariantCulture)}" +
+                   // Sensor move (#1724): present only when the sensor has previous paths, like the wire.
+                   (request.PreviousPaths == null
+                       ? ""
+                       : ",\"PreviousPaths\":[" + string.Join(",", request.PreviousPaths.Select(p => "\"" + EscapeJson(p) + "\"")) + "]") +
                    "}";
         }
 
@@ -2159,8 +2587,19 @@ namespace HSMDataCollector.Tests
             return cases.ToDictionary(x => x.Key, x => (IReadOnlyList<ContractStep>)x.Value, StringComparer.Ordinal);
         }
 
-        private static IReadOnlyList<string> FindContractFiles() =>
-            Directory.GetFiles(FindContractDirectory(), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        // The shared fixtures, plus collector/windows/ on Windows: scenarios for sensors that exist
+        // only there (the native driver registers that folder under if(WIN32)).
+        private static IReadOnlyList<string> FindContractFiles()
+        {
+            var directory = FindContractDirectory();
+            var files = Directory.GetFiles(directory, "*.hsmtest").ToList();
+            var windowsOnly = Path.Combine(directory, "windows");
+
+            if (DataCollector.IsWindowsOS && Directory.Exists(windowsOnly))
+                files.AddRange(Directory.GetFiles(windowsOnly, "*.hsmtest"));
+
+            return files.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }
 
         private static IReadOnlyList<string> FindMetaContractFiles() =>
             Directory.GetFiles(Path.Combine(FindContractDirectory(), "meta"), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
@@ -2215,6 +2654,12 @@ namespace HSMDataCollector.Tests
             public DataCollector Collector { get; set; }
 
             public RecordingSender Sender { get; set; }
+
+            // The scripted server of a session case; null in every other case.
+            public ScriptedSessionServer SessionServer { get; set; }
+
+            // The server directives the collector of a session case received, in order (#1660 step 5).
+            public System.Collections.Concurrent.ConcurrentQueue<string> Directives { get; } = new System.Collections.Concurrent.ConcurrentQueue<string>();
 
             public List<IDisposable> Sensors { get; } = new List<IDisposable>();
 
@@ -2399,15 +2844,126 @@ namespace HSMDataCollector.Tests
             // Models a dead/black-holed transport: every data send blocks until the caller's
             // cancellation token fires (like the real HTTP client against an unreachable server).
             // Nothing is recorded — the bounded stop must give up on these sends, not wait them out.
-            public void HangSends() => Volatile.Write(ref _hangSends, 1);
+            public void HangSends() => Volatile.Write(ref _hangSends, HangLatched);
+
+            // (#1751) The same hang, but the cancellation of a send parked in it ends it: the sends
+            // after it pass. A package cancelled in flight can then be seen to be sent again.
+            public void HangSendsUntilCancelled() => Volatile.Write(ref _hangSends, HangUntilCancelled);
+
+            private const int HangOff = 0;
+            private const int HangLatched = 1;
+            private const int HangUntilCancelled = 2;
 
             // (#1480) Lift the hang: every parked send continues (to the fail-token check below) and
             // later sends are not blocked. Mirrors the native hsm_collector_set_send_hang(false).
             public void ReleaseHangs()
             {
-                Volatile.Write(ref _hangSends, 0);
+                Volatile.Write(ref _hangSends, HangOff);
                 _hangRelease.TrySetResult(true);
             }
+
+            // ---- (#1751) every send of every kind: the record of the sends, and set_sender_mode ----
+
+            public const string ValueSend = "value";
+            public const string RegistrationSend = "registration";
+
+            private const int ModeUp = 0;
+            private const int ModeDown = 1;
+            private const int ModeHung = 2;
+
+            // Guarded by _lock, with the record below: a send reads the mode it starts in and
+            // enters the record in one step.
+            private int _mode = ModeUp;
+
+            // Completed when the mode leaves hung, with the mode that ended it; a new one for every
+            // time it is entered.
+            private TaskCompletionSource<int> _modeRelease =
+                new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            private readonly List<string> _sends = new List<string>();
+
+            // Every send the collector has started, by kind, in the order of their start: recorded
+            // before anything can hang or fail it.
+            public IReadOnlyList<string> Sends
+            {
+                get
+                {
+                    lock (_lock)
+                        return _sends.ToList();
+                }
+            }
+
+            // up: every send is accepted (a send parked in hung continues and is accepted). down:
+            // every send fails at once, as a send with no answer does (a send parked in hung fails).
+            // hung: every send waits until the collector gives it up (its token is cancelled).
+            // A parked send ends with the mode that ended the hang, not with whatever mode is set
+            // by the time its continuation runs (#1750): a case that sets down and then up fails
+            // the parked send, whatever the thread pool does in between.
+            public void SetMode(string mode)
+            {
+                int next;
+
+                switch (mode)
+                {
+                    case "up": next = ModeUp; break;
+                    case "down": next = ModeDown; break;
+                    case "hung": next = ModeHung; break;
+                    default: throw new InvalidOperationException($"set_sender_mode: unknown mode '{mode}' (up, down, hung).");
+                }
+
+                TaskCompletionSource<int> release = null;
+
+                lock (_lock)
+                {
+                    if (_mode == ModeHung && next != ModeHung)
+                    {
+                        release = _modeRelease;
+                        _modeRelease = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    _mode = next;
+                }
+
+                release?.TrySetResult(next);
+            }
+
+            // The first step of every send: enters it in the record and applies the mode. Returns
+            // false for a send the mode fails. A send without a wait completes synchronously, as
+            // the sends of this sender always did.
+            private async Task<bool> EnterAsync(string kind, CancellationToken token)
+            {
+                int mode;
+                Task<int> release;
+
+                lock (_lock)
+                {
+                    _sends.Add(kind);
+                    mode = _mode;
+                    release = _modeRelease.Task;
+                }
+
+                if (mode == ModeHung)
+                {
+                    Interlocked.Increment(ref _parkedSends);
+                    try
+                    {
+                        var cancelled = Task.Delay(Timeout.Infinite, token);
+                        if (await Task.WhenAny(release, cancelled).ConfigureAwait(false) != release)
+                            await cancelled.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _parkedSends);
+                    }
+
+                    mode = release.Result;
+                }
+
+                return mode != ModeDown;
+            }
+
+            // A send that got no answer: there is no status, so no queue takes it for a refusal.
+            private static PackageSendingInfo NoAnswer() => new PackageSendingInfo(0, null, "Conformance: the sender is down.");
 
             // Data sends currently parked in the hang — their package has already left the queue.
             public int ParkedSends => Volatile.Read(ref _parkedSends);
@@ -2421,7 +2977,12 @@ namespace HSMDataCollector.Tests
 
             public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
-                if (Volatile.Read(ref _hangSends) == 1)
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
+                var hang = Volatile.Read(ref _hangSends);
+
+                if (hang != HangOff)
                 {
                     Interlocked.Increment(ref _parkedSends);
                     try
@@ -2430,7 +2991,15 @@ namespace HSMDataCollector.Tests
                         // path giving up on a dead transport), which throws as before.
                         var cancelled = Task.Delay(Timeout.Infinite, token);
                         if (await Task.WhenAny(_hangRelease.Task, cancelled).ConfigureAwait(false) != _hangRelease.Task)
+                        {
+                            // The hang that ends with its first cancellation ends here, before the
+                            // cancellation reaches the collector: whatever the collector sends in
+                            // answer to it passes.
+                            if (hang == HangUntilCancelled)
+                                Interlocked.CompareExchange(ref _hangSends, HangOff, HangUntilCancelled);
+
                             await cancelled.ConfigureAwait(false);
+                        }
                     }
                     finally
                     {
@@ -2447,8 +3016,11 @@ namespace HSMDataCollector.Tests
                 return default;
             }
 
-            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            public async ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                     _values.AddRange(items);
 
@@ -2456,9 +3028,13 @@ namespace HSMDataCollector.Tests
             }
 
             // Sensor registrations (AddOrUpdateSensorRequest) are part of the recorded contract
-            // (registration_contract.hsmtest); they do not consume fail/hang injection.
-            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+            // (registration_contract.hsmtest); they do not consume the fail/hang injection of the
+            // data sends. set_sender_mode applies to them as to every send.
+            public async ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
             {
+                if (!await EnterAsync(RegistrationSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                 {
                     foreach (var command in commands)
@@ -2505,8 +3081,12 @@ namespace HSMDataCollector.Tests
 
             // File payloads are part of the recorded contract (file_contract.hsmtest); they do not
             // consume fail/hang injection — those fixtures target the data queue only.
-            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+            // set_sender_mode applies to them as to every send, and a file value is a value send.
+            public async ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
             {
+                if (!await EnterAsync(ValueSend, token).ConfigureAwait(false))
+                    return NoAnswer();
+
                 lock (_lock)
                     _values.Add(file);
 

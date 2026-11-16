@@ -40,6 +40,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        // For writers whose next step depends on the write having happened
+        // (the sensor-move merge deletes the source rows afterwards, #1720).
+        public void PutSensorValueOrThrow(byte[] key, byte[] value) => _openedDb.Put(key, value);
+
         public void RemoveSensorValues(byte[] from, byte[] to)
         {
             try
