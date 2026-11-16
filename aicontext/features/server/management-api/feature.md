@@ -39,7 +39,7 @@ Epic #1347 gives non-interactive clients (AI agents, scripts, resident services)
 | 5 | Delete template (204; 409 when per-sensor policy removal fails) | API client |
 | 6 | List schedules (paginated; caller-wide alerts:read gate; sensors filtered per visibility) | API client |
 | 7 | Get one schedule by id (same gate) | API client |
-| 17 | Create/update a schedule (admin + read-write token; name-unique, parser-validated YAML with the `daySchedules` key required — an explicit empty list is valid, #1598; system timezone id — IANA or Windows) | API client |
+| 17 | Create/update a schedule (admin + read-write token; name-unique, parser-validated YAML with the `daySchedules` key required — an explicit empty list is valid, #1598; anchors/aliases rejected, YAML ≤ 10,000 chars, ≤ 366 disabled/enabled dates and ≤ 50 custom dates — enforced on EVERY write path incl. the web editor (#1706); system timezone id — IANA or Windows) | API client |
 | 18 | Delete a schedule (detach policy references first; 409 keeps the schedule alive for the retry) | API client |
 | 8 | List visible root products (paginated; empty list for an unsighted owner) | API client |
 | 9 | Get a node (product/folder) with direct children | API client |
