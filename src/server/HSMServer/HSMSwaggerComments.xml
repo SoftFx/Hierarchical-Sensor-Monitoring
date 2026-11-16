@@ -2784,7 +2784,10 @@
             <summary>Only records keyed by this entity id.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.Kind">
-            <summary>Entity kind; null on legacy and non-configuration records.</summary>
+            <summary>Entity kind; "other" on legacy and non-configuration records — the same rows the kind=other filter returns (#1679).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.ProductId">
+            <summary>Root product id; null on folder- and global-scoped records (schedules, templates) and on legacy rows whose root product is no longer derivable (#1679). Pre-#1610 template rows render their stamped folder id as stored.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Journal.JournalRecordDto.ChangeSetId">
             <summary>The undo group of the write; null when the record is not rollbackable.</summary>
