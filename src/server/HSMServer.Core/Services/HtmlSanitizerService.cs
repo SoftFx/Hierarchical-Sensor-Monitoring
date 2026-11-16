@@ -31,13 +31,18 @@ namespace HSMServer.Core.Services
 
         /// <summary>
         /// The single ingestion gate for user-supplied text (#1709 review):
-        /// the credential mask first (so a masked URL never depends on the
-        /// sanitizer's transformations), then the HTML sanitizer. Every
-        /// converter — both copies, value AND comment of every sensor type —
-        /// runs its text through here, so the two cannot drift apart.
+        /// the HTML sanitizer first, the credential mask on its OUTPUT. The
+        /// sanitizer decodes entities and strips tags, so the masker must see
+        /// the text exactly as it will be stored — an entity-encoded '@'
+        /// (mongodb://u:p&amp;#64;h) or a tag splitting the URL from its '@'
+        /// both still mask. The sanitizer re-encodes markup characters but
+        /// leaves ':', '/' and '@' literal, so masking after it cannot
+        /// reintroduce markup. Every converter — both copies, value AND
+        /// comment of every sensor type — runs its text through here, so the
+        /// two cannot drift apart.
         /// </summary>
         public static string SanitizeText(string text) =>
-            Sanitize(CredentialMasker.MaskCredentials(text));
+            CredentialMasker.MaskCredentials(Sanitize(text));
 
     }
 }

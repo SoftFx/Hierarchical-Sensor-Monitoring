@@ -906,7 +906,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ChangeLast = false,
             });
 
-            await TestWait.UntilAsync(() => sensor.LastValue is { }, "the UI-added value to land");
+            // #1709 review: wait on the MASKED VALUE itself — LastValue is
+            // already set by the add above, so waiting for it to exist never
+            // waited for the manual edit to land.
+            await TestWait.UntilAsync(
+                () => sensor.LastValue?.RawValue?.ToString() == "mongodb://***@mongo:27017/db",
+                "the masked manual edit to land");
 
             Assert.Equal("mongodb://***@mongo:27017/db", sensor.LastValue.RawValue?.ToString());
             // #1709 review: the comment of the manual edit masks too — the

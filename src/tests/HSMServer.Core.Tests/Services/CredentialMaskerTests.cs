@@ -56,6 +56,11 @@ namespace HSMServer.Core.Tests.Services
         // authorities keep their later '@'s, which live in the path.
         [InlineData("http://[::1]/a:b@c")]
         [InlineData("file:///C:/x@y")]
+        // #1709 review: an all-digit password prefix before a raw '/' reads
+        // as host:port — indistinguishable from a real scheme://host:port/
+        // ...@path URL (http://host:8080/a@b above), so this ONE obfuscated-
+        // password shape stays unmasked (documented in the wire contract).
+        [InlineData("mongodb://backup:1234/56@mongo/db")]
         [InlineData("plain text, no url at all")]
         public void LeavesCredentialFreeTextAlone(string input)
         {
@@ -113,6 +118,25 @@ namespace HSMServer.Core.Tests.Services
 
             Assert.Equal("mongodb://***@mongo:27017/db", converted.Value);
             Assert.Equal("conn: mongodb://***@mongo:27017/db", converted.Comment);
+        }
+
+        // #1709 review: the sanitizer runs FIRST and the mask reads its
+        // OUTPUT — the sanitizer decodes entities and strips tags, so both
+        // obfuscated shapes below still mask. With the old order (masking
+        // the raw input) both credentials were stored intact: the masker saw
+        // no literal '@' in the first, and two '@'-less words in the second.
+        [Theory]
+        [InlineData("mongodb://backup:secret&#64;mongo:27017/db", "mongodb://***@mongo:27017/db")]
+        [InlineData("mongodb://backup:secret<i class=\"x\"></i>@mongo/db", "mongodb://***@mongo/db")]
+        public void SanitizerDecodedUrls_MaskAtIngestion(string raw, string expected)
+        {
+            var converted = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue
+            {
+                Path = "Scheduled Tasks/Mongo Backup Task",
+                Value = raw,
+            }.Convert();
+
+            Assert.Equal(expected, converted.Value);
         }
 
         // #1709 review: comments are the field most likely to carry an
