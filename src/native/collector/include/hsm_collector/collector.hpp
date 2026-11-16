@@ -54,8 +54,9 @@ namespace hsm::collector
         std::vector<std::pair<std::string, std::string>> extra_request_headers;
 
         // Called on the send thread whenever the server returns an X-Hsm-Directive response
-        // header. First arg: verb ("update-available", "sensor-disable", …). Second arg: payload
-        // after the colon, or empty string when absent.
+        // header, and on the session thread for every directive the server pushes on a collector
+        // session (#1660 step 5). First arg: verb ("update-available", "sensor-disable", …).
+        // Second arg: payload after the colon, or empty string when absent.
         std::function<void(const std::string&, const std::string&)> on_server_directive;
     };
 
@@ -191,6 +192,15 @@ namespace hsm::collector
         void UseHttpTransport()
         {
             Check(hsm_collector_use_http_transport(handle_), "HTTP transport is not available (build with HSM_COLLECTOR_HTTP).");
+        }
+
+        /// Make the collector session the transport: one persistent WebSocket to the server instead
+        /// of the HTTP routes. Call INSTEAD of UseHttpTransport, before Start. There is no fallback
+        /// to HTTP: while no session is up, values wait in the queue. File values are refused on a
+        /// session (the add call fails with HSM_RESULT_INVALID_STATE). Throws hsm::collector::Error if the library was built without the HTTP transport.
+        void UseSessionTransport()
+        {
+            Check(hsm_collector_use_session_transport(handle_), "The session transport is not available (build with HSM_COLLECTOR_HTTP).");
         }
 
         /// Install the ready-made Windows PDH/Win32 metric-source factory so the value-typed default
@@ -674,6 +684,8 @@ namespace hsm::collector
         /// Enable the TCP connection failure rate sensor (Windows only, push-fed Rate). Call BEFORE
         /// Start(). Each `period` it reads the failed-connection-attempt counter delta (IPv4+IPv6) and
         /// posts a Rate sensor at ".computer/Network/Connection failures rate" (displayed per minute).
+        /// Asked for more than once, the first period stays: the same period again is silent, another
+        /// period is not applied and is reported through the collector's logger (no throw).
         void EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds period)
         {
             Check(

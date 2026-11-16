@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.11.4 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.14.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -157,10 +157,22 @@ endif()
 option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
 if(HSM_COLLECTOR_HTTP)
     find_package(CURL REQUIRED)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp)
+    # The session transport reads the server's JSON frames (hello, acks) with nlohmann/json: the
+    # collector carries no parser of its own for bytes that come off the network. Header-only and
+    # private, so it adds nothing to what a consumer of the built library links.
+    find_package(nlohmann_json REQUIRED)
+    get_target_property(HSM_NLOHMANN_JSON_INCLUDES nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp)
+    target_include_directories(hsm_collector_core SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${CURL_INCLUDE_DIRS})
+    if(WIN32)
+        # The WebSocket connection waits on its socket with select(). The collector core now uses
+        # it (session transport), so every consumer of the static core links Winsock; a libcurl
+        # DLL does not bring it along.
+        target_link_libraries(hsm_collector_core PUBLIC ws2_32)
+    endif()
 endif()
 
 # Header-only C++ RAII wrapper over the C ABI.
@@ -266,6 +278,8 @@ hsm_collector_apply_sanitizer(hsm_collector_tests)
 # in-proc capture server). The define gates the #ifdef'd test code; ws2_32 auto-links on MSVC.
 if(HSM_COLLECTOR_HTTP)
     target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_HTTP=1)
+    # The conformance driver reads the registration bodies the recording server got (#1750).
+    target_include_directories(hsm_collector_tests SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
 endif()
 
 enable_testing()
@@ -323,6 +337,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refused_upgrade_reports_status
         COMMAND hsm_collector_tests native_ws_refused_upgrade_reports_status
     )
+    add_test(NAME native_ws_tells_a_close_frame_from_a_tcp_close
+        COMMAND hsm_collector_tests native_ws_tells_a_close_frame_from_a_tcp_close
+    )
     add_test(NAME native_ws_assembles_fragmented_messages
         COMMAND hsm_collector_tests native_ws_assembles_fragmented_messages
     )
@@ -332,8 +349,63 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refuses_binary_and_oversized_messages
         COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
     )
+    # #1668: the collector session as the transport. Like the native_ws_* tests above they need a
+    # libcurl with WebSocket and skip, saying so, on one without.
+    add_test(NAME native_session_delivers_registrations_and_values
+        COMMAND hsm_collector_tests native_session_delivers_registrations_and_values
+    )
+    add_test(NAME native_session_queues_while_refused_and_delivers_after_connect
+        COMMAND hsm_collector_tests native_session_queues_while_refused_and_delivers_after_connect
+    )
+    add_test(NAME native_session_reconnects_after_a_drop
+        COMMAND hsm_collector_tests native_session_reconnects_after_a_drop
+    )
+    add_test(NAME native_session_logs_how_a_session_ended
+        COMMAND hsm_collector_tests native_session_logs_how_a_session_ended
+    )
+    add_test(NAME native_session_logs_open_failures_by_kind
+        COMMAND hsm_collector_tests native_session_logs_open_failures_by_kind
+    )
+    add_test(NAME native_session_ack_timeout_reopens_and_resends
+        COMMAND hsm_collector_tests native_session_ack_timeout_reopens_and_resends
+    )
+    add_test(NAME native_session_splits_a_batch_to_the_frame_limit
+        COMMAND hsm_collector_tests native_session_splits_a_batch_to_the_frame_limit
+    )
+    add_test(NAME native_session_partly_delivered_batch_is_not_sent_twice
+        COMMAND hsm_collector_tests native_session_partly_delivered_batch_is_not_sent_twice
+    )
+    add_test(NAME native_session_splits_a_registration_batch_to_the_frame_limit
+        COMMAND hsm_collector_tests native_session_splits_a_registration_batch_to_the_frame_limit
+    )
+    add_test(NAME native_session_split_registration_retries_only_the_failed_part
+        COMMAND hsm_collector_tests native_session_split_registration_retries_only_the_failed_part
+    )
+    add_test(NAME native_session_delivers_file_values
+        COMMAND hsm_collector_tests native_session_delivers_file_values
+    )
+    add_test(NAME native_session_hands_pushed_directives_to_the_host
+        COMMAND hsm_collector_tests native_session_hands_pushed_directives_to_the_host
+    )
+    add_test(NAME native_session_oversized_value_is_dropped_once
+        COMMAND hsm_collector_tests native_session_oversized_value_is_dropped_once
+    )
+    add_test(NAME native_session_value_at_the_frame_limit_does_not_stall_the_sender
+        COMMAND hsm_collector_tests native_session_value_at_the_frame_limit_does_not_stall_the_sender
+    )
+    # A regression here is a sender that spins forever: fail in a minute, not at ctest's default.
+    set_tests_properties(native_session_value_at_the_frame_limit_does_not_stall_the_sender PROPERTIES TIMEOUT 90)
+    add_test(NAME native_session_transport_request_contract
+        COMMAND hsm_collector_tests native_session_transport_request_contract
+    )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
+    )
+    add_test(NAME native_http_posts_file_values_in_the_wire_format
+        COMMAND hsm_collector_tests native_http_posts_file_values_in_the_wire_format
+    )
+    add_test(NAME native_http_hands_header_directives_to_the_host
+        COMMAND hsm_collector_tests native_http_hands_header_directives_to_the_host
     )
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start
@@ -452,6 +524,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout
+    native_wire_registration_with_previous_paths_matches_net_byte_layout
     native_wire_registration_with_alerts_matches_net_byte_layout
     native_wire_registration_full_options_matches_net_byte_layout
     native_version_string_matches_net
@@ -541,6 +614,11 @@ set(NATIVE_REGRESSION_TESTS
     tcp_failure_accumulator_unreadable_family_keeps_baseline
     tcp_failure_accumulator_neither_readable_returns_nullopt
     tcp_failure_accumulator_families_seed_independently
+    # #1752: the sampler seam (family readers in, error report out). Portable, so the report of
+    # "neither address family could be read" is pinned on every lane, not only where the OS read runs.
+    tcp_failure_sampler_reports_when_neither_family_is_readable
+    tcp_failure_sampler_stays_quiet_when_one_family_is_readable
+    tcp_failure_sampler_report_collapses_in_the_collector_error_channel
     # Linux /proc parser + delta math (#1414). Portable: pure functions over sample text, run on
     # every lane; the fixture values are shared with the managed ProcParsersTests.
     proc_stat_parses_aggregate_cpu_line
@@ -593,6 +671,11 @@ if(WIN32)
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
     )
+    # #1752: a repeated enable call keeps the first period and reports another one (Windows-only for
+    # the same reason: off Windows the call is refused before it looks at the period).
+    add_test(NAME native_tcp_failure_rate_repeated_enable_keeps_the_first_period
+        COMMAND hsm_collector_tests native_tcp_failure_rate_repeated_enable_keeps_the_first_period
+    )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
         COMMAND hsm_collector_tests native_linux_metric_sources_rejected_off_linux
@@ -644,6 +727,7 @@ add_conformance_test(conformance_bar_stddev_contract native/bar_stddev_contract.
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
 add_conformance_test(conformance_flush_contract flush_contract.hsmtest)
+add_conformance_test(conformance_stop_drain_contract stop_drain_contract.hsmtest)
 add_conformance_test(conformance_rate_contract rate_contract.hsmtest)
 add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
@@ -652,6 +736,7 @@ add_conformance_test(conformance_registration_contract registration_contract.hsm
 add_conformance_test(conformance_timespan_version_contract timespan_version_contract.hsmtest)
 add_conformance_test(conformance_alert_registration_contract alert_registration_contract.hsmtest)
 add_conformance_test(conformance_options_surface_contract options_surface_contract.hsmtest)
+add_conformance_test(conformance_previous_paths_contract previous_paths_contract.hsmtest)
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
@@ -660,6 +745,53 @@ add_conformance_test(conformance_unix_default_sensors_contract unix_default_sens
 add_conformance_test(conformance_module_markers_contract module_markers_contract.hsmtest)
 add_conformance_test(conformance_metric_source_contract metric_source_contract.hsmtest)
 add_conformance_test(conformance_default_endpoint_contract default_endpoint_contract.hsmtest)
+
+# The collector session scenarios (#1660 step 3) need the session transport, which exists in the
+# HTTP build only. Their must-fail fixtures go with them.
+if(HSM_COLLECTOR_HTTP)
+    add_conformance_test(conformance_session_transport_contract session_transport_contract.hsmtest)
+    foreach(session_meta
+            meta_session_ints_once_missing
+            meta_session_ints_once_duplicate
+            meta_session_accepted_contains_wrong_text
+            meta_session_frames_fit_too_small
+            meta_session_no_request_contains_present
+            meta_session_http_request_seen
+            meta_session_directives_received_wrong_count
+            meta_session_directive_received_wrong_text)
+        add_test(
+            NAME ${session_meta}
+            COMMAND hsm_collector_tests meta_session_must_fail
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/${session_meta}.hsmtest
+        )
+    endforeach()
+endif()
+
+# The stop drain scenarios about registrations (#1751) need a sender that is sent the
+# registrations. For the native collector that is the HTTP transport (its in-memory sender is
+# never sent one), so they exist in the HTTP build only, with the must-fail fixture of their
+# assertion. stop_drain_contract above runs in every build.
+if(HSM_COLLECTOR_HTTP)
+    add_conformance_test(conformance_stop_drain_registration_contract stop_drain_registration_contract.hsmtest)
+    add_test(
+        NAME meta_sends_wrong_order
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_sends_wrong_order.hsmtest
+    )
+    # The order of a sensor's registrations across failed sends (#1750): same sender, same build.
+    add_conformance_test(conformance_registration_order_contract registration_order_contract.hsmtest)
+    add_test(
+        NAME meta_last_delivered_registration_wrong_description
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_last_delivered_registration_wrong_description.hsmtest
+    )
+endif()
+
+# collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
+# the folder on Windows only, too.
+if(WIN32)
+    add_conformance_test(conformance_tcp_failure_rate_contract windows/tcp_failure_rate_contract.hsmtest)
+endif()
 
 add_test(
     NAME native_default_sensors_wire_golden
@@ -686,6 +818,7 @@ add_meta_conformance_test(meta_eventually_value_above_unreachable.hsmtest)
 add_meta_conformance_test(meta_no_new_payloads_but_arriving.hsmtest)
 add_meta_conformance_test(meta_payload_contains_wrong_value.hsmtest)
 add_meta_conformance_test(meta_payload_not_contains_present.hsmtest)
+add_meta_conformance_test(meta_send_attempts_wrong_count.hsmtest)
 add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
 add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)

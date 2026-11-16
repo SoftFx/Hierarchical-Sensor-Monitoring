@@ -69,8 +69,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsProcessTimeInGC(_prototype.ProcessTimeInGC.Get(options)));
         }
 
-        public IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
-            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessTimeInGC(options).AddProcessThreadPoolThreadCount(options);
+        public IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddProcessMonitoringSensors));
+
+            return AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessTimeInGC(options).AddProcessThreadPoolThreadCount(options);
+        }
 
         #endregion
 
@@ -92,8 +96,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
         }
 
-        public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
-            AddFreeRamMemory(options).AddTotalCpu(options).AddGlobalTimeInGC(options);
+        public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddSystemMonitoringSensors));
+
+            return AddFreeRamMemory(options).AddTotalCpu(options).AddGlobalTimeInGC(options);
+        }
 
         #endregion
 
@@ -165,13 +173,24 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
-            .AddDiskAverageWriteSpeed(diskBarOptions);
+        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddDiskMonitoringSensors));
+            SensorOptions.ForSeveralSensors(diskBarOptions, nameof(AddDiskMonitoringSensors));
 
-        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions)
-            .AddDisksAverageWriteSpeed(diskBarOptions);
+            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
+                .AddDiskAverageWriteSpeed(diskBarOptions);
+        }
+
+        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null)
+        {
+            // Both up front: the per-disk check runs lazily, after earlier sensors were added.
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllDisksMonitoringSensors));
+            SensorOptions.ForSeveralSensors(diskBarOptions, nameof(AddAllDisksMonitoringSensors));
+
+            return AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions)
+                .AddDisksAverageWriteSpeed(diskBarOptions);
+        }
 
         #endregion
 
@@ -198,8 +217,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsVersion(_prototype.WindowsVersion.Get(options)));
         }
 
-        public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+        public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions)
+        {
+            SensorOptions.ForSeveralSensors(infoOptions, nameof(AddWindowsInfoMonitoringSensors));
+            SensorOptions.ForSeveralSensors(logsOptions, nameof(AddWindowsInfoMonitoringSensors));
+
+            return AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+        }
 
         public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {
@@ -211,8 +235,12 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsSystemErrorLogs(_prototype.WindowsSystemErrorLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) =>
-            AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
+        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddErrorWindowsLogs));
+
+            return AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
+        }
 
         public IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null)
         {
@@ -224,11 +252,19 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsSystemWarningLogs(_prototype.WindowsSystemWarningLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) =>
-            AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
+        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddWarningWindowsLogs));
 
-        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) =>
-            AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
+            return AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
+        }
+
+        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllWindowsLogs));
+
+            return AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
+        }
 
         #endregion
 
@@ -256,8 +292,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
 
-        public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
-            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllQueueDiagnosticSensors));
+
+            return AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
+        }
 
         #endregion
 
@@ -272,7 +312,66 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddNetworkInterfacesSpeed() => ToWindows(new WindowsNetworkInterfaceSpeedMonitor(_storage));
 
-        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();
+        private readonly object _tcpFailureRateGate = new object();
+
+        public IWindowsCollection AddNetworkConnectionFailuresRate(TimeSpan? period = null)
+        {
+            // Before the monitor is built: building it puts the rate sensor into the storage, and
+            // a Windows-only sensor must not be left there by a call that then throws.
+            EnsureCorrectOs();
+
+            lock (_tcpFailureRateGate)
+            {
+                // Asked for once per collector: a second request is not a second monitor. The
+                // storage is the record of what was taken: a monitor it refused (the collector
+                // was stopping) is not there, so the next call tries again.
+                //
+                // The period of the first request stays: the rate sensor was created with it.
+                // A second request with another period is reported, not swallowed: the host
+                // gets a rate it did not ask for last. The native enable call follows the same
+                // rule since native 0.13.1 (#1752).
+                var asked = period ?? TimeSpan.FromMinutes(1);
+
+                // Before the look at what is already there: whether a period that cannot be
+                // used throws must not depend on which call it comes in.
+                WindowsTcpFailureRateMonitor.EnsurePeriod(asked);
+
+                if (_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var existing))
+                {
+                    if (existing is WindowsTcpFailureRateMonitor monitor && monitor.Period != asked)
+                        _storage.ReportError($"The TCP connection failure rate sensor was already added with a period of {monitor.Period}; the period {asked} of the second request is not applied.");
+
+                    return this;
+                }
+
+                var added = new WindowsTcpFailureRateMonitor(_storage, asked);
+
+                try
+                {
+                    return ToWindows(added);
+                }
+                finally
+                {
+                    // INVARIANT: the storage holds the monitor and its rate sensor together or
+                    // neither of them. The two are registered one after the other, and the
+                    // storage can take the first and refuse the second: the collector began to
+                    // stop in between (the monitor comes back disposed), or the sensor limit was
+                    // reached (the registration throws). The rate sensor then leaves again, or
+                    // the next Start would register it and it would post 0 with no monitor
+                    // behind it. Checked under the gate of this method, so no other request for
+                    // this sensor sees the pair half built.
+                    if (!_storage.TryGetValue(WindowsTcpFailureRateMonitor.MonitorPath, out var stored) || !ReferenceEquals(stored, added))
+                        added.WithdrawSensor();
+                }
+            }
+        }
+
+        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null)
+        {
+            SensorOptions.ForSeveralSensors(options, nameof(AddAllNetworkSensors));
+
+            return AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options).AddNetworkInterfacesSpeed();
+        }
 
         #endregion
 

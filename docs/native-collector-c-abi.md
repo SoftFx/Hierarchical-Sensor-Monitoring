@@ -156,9 +156,81 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.14.0** (#1660 steps 2b and 5, #1666) — no new entry point, behaviour changes:
+  - `hsm_sensor_add_file*` return `HSM_RESULT_OK` on a collector session (they returned
+    `HSM_RESULT_INVALID_STATE`): a file value travels as an element of a `list` frame, and one
+    whose element does not fit the server's frame limit is dropped, reported and counted as
+    overflow.
+  - A file value leaves the queue in the wire format on every transport. Before, it left in the
+    canonical corpus format, which the server cannot read, so over HTTP the whole `/list` batch
+    that carried a file was refused and sent again every cycle.
+  - Directives the server pushes on a session reach the host's directive callback, as the `X-Hsm-Directive` header lines do over HTTP.
+  - The default `Service alive` TTL alert carries its own 5-minute inactivity period
+    (`"TTLs":[3000000000]`; it carried none).
+- **0.13.1** (#1752, parity with the managed `Connection failures rate` sensor) — no ABI change;
+  two behaviours of `hsm_collector_enable_tcp_connection_failure_rate_sensor` (Windows).
+  **Asked for more than once, the first period stays**: until now the last period given before
+  Start was the one used. A repeated call with the same period changes nothing and reports nothing;
+  a repeated call with another period does not apply it and reports
+  `The TCP connection failure rate sensor was already enabled with a period of <first> ms; the
+  period of <asked> ms of the second request is not applied.` through the collector's logger (only
+  there: the call comes while the collector is stopped, when `.module/Collector errors` takes no
+  values). The result codes are unchanged: such a call still
+  returns `HSM_RESULT_OK`, `period_ms <= 0` is `HSM_RESULT_INVALID_ARGUMENT`, a call after Start is
+  `HSM_RESULT_INVALID_STATE`. The first period holds for the life of the collector, across a Stop
+  and a later Start too. **Neither address family readable**: a sample on which
+  `GetTcpStatisticsEx` fails for both IPv4 and IPv6 is reported through the collector's error
+  channel, the logger and `.module/Collector errors`
+  (`TCP connection failure rate sampling error: the TCP statistics of neither IPv4 nor IPv6 could
+  be read.`), deduplicated like every other error, so once per
+  `exception_deduplicator_window_ms`; until now the sensor went on posting 0 and said nothing. One
+  unreadable family is not reported. Both are the rules of the managed
+  `IWindowsCollection.AddNetworkConnectionFailuresRate`. Pinned by
+  `native_tcp_failure_rate_repeated_enable_keeps_the_first_period` (Windows) and the portable
+  `tcp_failure_sampler_*` cases.
+- **0.13.0** (#1724, sensor move) — one additive entry point.
+  `hsm_sensor_set_previous_paths(sensor, previous_paths, count)` declares the paths the sensor was
+  registered under before a layout change, each a FULL path relative to the product as the server
+  tree shows it (no computer/module prefix is added). The registration carries them as
+  `"PreviousPaths":[...]` right after `EnumOptions`; a server that supports sensor move moves the
+  sensor found at such a path here (history, settings, alerts), merging into a sensor of the same
+  type already at the new path (the first listed path wins); older servers ignore the member.
+  The strings are copied. NULL entries and entries of ASCII whitespace only are dropped — the rule
+  of the managed `SensorOptions.PreviousPaths`, so both collectors send the same bytes. `count == 0`
+  (`previous_paths` may then be NULL) removes the list, and a list left empty after dropping blanks
+  omits the member: such a registration is byte-identical to 0.12.x. A NULL array with a non-zero
+  count, or a NULL sensor, is `HSM_RESULT_INVALID_ARGUMENT`. Re-emission rules as
+  `hsm_sensor_set_description` (0.10.0): before Start the paths ride the Start registration; while
+  running the run's recorded registration is replaced in place and the sensor re-posted on the HTTP
+  transport. The bounded retirement of replaced registration texts (the latest 256) now covers
+  previous-path changes too, so a pointer from `hsm_collector_get_registration_json` follows the
+  0.10.0 rule. Pinned by `native_wire_registration_with_previous_paths_matches_net_byte_layout`
+  and, cross-language, `previous_paths_contract` (verb `create_int_sensor_with_previous_paths`, both
+  drivers). Server behaviour: `aicontext/features/server/sensor-move/feature.md`.
+- **0.12.0** (#1668) — one additive entry point: the collector session as a transport.
+  `hsm_collector_use_session_transport(collector)` (C++ `Collector::UseSessionTransport()`), called
+  before Start like `hsm_collector_use_http_transport`, makes the collector keep one WebSocket to
+  `GET <server>/api/sensors/session` (subprotocol `hsm.sensors.v1`, ADR-0017) and send value batches
+  (`list` frames) and registrations (`commands` frames) on it, each acknowledged with the status
+  the same HTTP request would have got. Nothing goes over the HTTP routes, and there is no
+  fallback to them: while no session is up, values wait in the send queue and registrations are
+  retried, exactly as when the server is unreachable over HTTP. Start does not wait for the
+  session. The collector reconnects with a jittered backoff (1 s to 60 s), sends a heartbeat when
+  it has been quiet for the interval the server announced, and gives a session up after two and a
+  half intervals of server silence or when a request gets no ack within the request timeout. A
+  batch larger than the server's frame limit travels in several frames (values and registrations
+  alike); if a later frame fails, only the unacknowledged part goes back to the queue. File values are refused before the queue:
+  `hsm_sensor_add_file` / `hsm_sensor_add_file_from_path` return `HSM_RESULT_INVALID_STATE` and one error is logged; the
+  session has no op for them yet. Needs a libcurl with WebSocket
+  (8.14.0 or newer); with an older one Start logs one error and nothing is delivered until the
+  setting or libcurl changes. The HTTP build gains a build dependency, the header-only
+  nlohmann/json (the frames that come off the network are parsed by a maintained library, not by
+  collector code), and on Windows the core now links `ws2_32`. `hsm_collector_use_http_transport`
+  and its behavior are unchanged, and it stays the default of the agent and the probe. Pinned by
+  `native_session_*` (HTTP lane, both platforms, `HSM_REQUIRE_WEBSOCKET=1`).
 - **0.11.4** (#1662) — internal building block, ABI unchanged, no behavior change. Adds a WebSocket
   client connection (`src/hsm_ws_connection.{hpp,cpp}`) for the collector session of ADR-0017. It
-  is compiled into the HTTP build and **not used by the send path yet**. The WebSocket protocol is
+  is compiled into the HTTP build and was not used by the send path until 0.12.0. The WebSocket protocol is
   libcurl's own (`CONNECT_ONLY=2`, `curl_ws_send` / `curl_ws_recv`); the collector carries no
   RFC 6455 code. It therefore needs a libcurl of at least 8.14.0 built with WebSocket support, at
   build time and at run time: the vcpkg dependency now asks for the `websockets` feature of `curl`,

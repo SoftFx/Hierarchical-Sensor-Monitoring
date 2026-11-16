@@ -121,6 +121,12 @@ namespace HSMDataCollector.DefaultSensors
 
 
 
+        protected void EnsureCorrectOs()
+        {
+            if (!IsCorrectOs)
+                throw _notSupportedException;
+        }
+
         protected DefaultSensorsCollection Register(ISensor sensor)
         {
             if (!IsCorrectOs)
