@@ -13,7 +13,6 @@ namespace HSMServer.Filters
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class DryRunHeaderAttribute : Attribute { }
 
-
     /// <summary>
     /// The OpenAPI parameter of the dry-run header for the operations marked
     /// with <see cref="DryRunHeaderAttribute"/> — the description is the wire
@@ -30,8 +29,9 @@ namespace HSMServer.Filters
 
             operation.Parameters.Add(new OpenApiParameter
             {
-                // nameof: the compile-time tie to the header the filter and the
-                // write options read — renaming it must not desync the spec.
+                // the shared constant ties the spec to the header the filter
+                // and the write options read — renaming it must not desync
+                // the spec.
                 Name = ChangeSetHeaders.DryRun,
                 In = ParameterLocation.Header,
                 Required = false,

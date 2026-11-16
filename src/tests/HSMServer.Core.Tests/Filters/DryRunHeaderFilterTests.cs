@@ -30,7 +30,7 @@ namespace HSMServer.Core.Tests.Filters
         [InlineData("0")]
         public void AMalformedHeader_FailsClosedWith400BeforeTheAction(string raw)
         {
-            var context = ExecutingContext("/api/v1/sensors/00000000-0000-0000-0000-000000000000", raw);
+            var context = ExecutingContext("/api/v1/sensors/00000000-0000-0000-0000-000000000000", raw, "DELETE");
 
             new DryRunHeaderFilter().OnActionExecuting(context);
 
@@ -54,7 +54,7 @@ namespace HSMServer.Core.Tests.Filters
         [InlineData("False")]
         public void AValidOrAbsentHeader_ReachesTheAction(string raw)
         {
-            var context = ExecutingContext("/api/v1/sensors/00000000-0000-0000-0000-000000000000", raw);
+            var context = ExecutingContext("/api/v1/sensors/00000000-0000-0000-0000-000000000000", raw, "DELETE");
 
             new DryRunHeaderFilter().OnActionExecuting(context);
 
@@ -66,11 +66,30 @@ namespace HSMServer.Core.Tests.Filters
         {
             // The sensor-data API and the web controllers do not honour the
             // header; a stray value there is not this filter's contract.
-            var context = ExecutingContext("/api/sensors/list", "maybe");
+            var context = ExecutingContext("/api/sensors/list", "maybe", "POST");
 
             new DryRunHeaderFilter().OnActionExecuting(context);
 
             Assert.Null(context.Result);
+        }
+
+        [Fact]
+        public void AReadEndpoint_WithAStrayMalformedHeader_AlsoFailsClosed()
+        {
+            // The guard covers every /api/v1 request, reads included: a
+            // client that sends X-HSM-Dry-Run: 1 on every request by
+            // default gets the 400 on reads too — the strict rule is a
+            // visible behaviour change for such clients, pinned here
+            // instead of being discoverable only on the write paths.
+            var context = ExecutingContext("/api/v1/products", "1", "GET");
+
+            new DryRunHeaderFilter().OnActionExecuting(context);
+
+            var result = Assert.IsType<ObjectResult>(context.Result);
+            Assert.Equal(400, result.StatusCode);
+
+            var error = Assert.IsType<ManagementApiErrorDto>(result.Value);
+            Assert.Equal(ManagementApiErrors.ValidationFailedCode, error.Error);
         }
 
         [Fact]
@@ -112,9 +131,10 @@ namespace HSMServer.Core.Tests.Filters
             return http.Request.WriteOptions().DryRun;
         }
 
-        private static ActionExecutingContext ExecutingContext(string path, string raw)
+        private static ActionExecutingContext ExecutingContext(string path, string raw, string method)
         {
             var http = new DefaultHttpContext();
+            http.Request.Method = method;
             http.Request.Path = path;
 
             if (raw is not null)

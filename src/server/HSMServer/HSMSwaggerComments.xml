@@ -595,6 +595,10 @@
             the same visibility the web UI's remove-node has. A dry run
             (the <c>X-HSM-Dry-Run: true</c> header) answers 200 with a preview
             of everything the real write would destroy and applies nothing.
+            The header is a strict boolean (#1675): "true"/"false" in any
+            casing, or absent, are the only accepted forms — anything else is
+            a 400 validation_failed before anything runs, so a typo can never
+            turn a preview into the irreversible write.
             </summary>
             <param name="id">Sensor id.</param>
         </member>
@@ -612,6 +616,9 @@
             (<c>X-HSM-Dry-Run: true</c>) answers the prediction per sensor —
             conflicts, nodes to create, alert templates detached/applied,
             inherited settings that change — and applies nothing.
+            The header is a strict boolean (#1675): "true"/"false" in any
+            casing, or absent, are the only accepted forms — anything else
+            is a 400 validation_failed before anything runs.
             </summary>
             <remarks>The dry run shares status 200 with the real move but not its
             body: with <c>X-HSM-Dry-Run: true</c> the 200 body is a
@@ -793,6 +800,31 @@
             the Key header (the Grafana JSON datasource above all — TryGetKey reads
             Request.Headers["Key"] exclusively), so a positive "parameter derives from
             BaseRequest" match would silently strip their credential from the spec.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.DryRunHeaderFilter">
+            <summary>
+            #1675: the dry-run header is the safety switch of the journaled writes,
+            and sensor deletion above all is irreversible — a value that is not a
+            boolean must fail CLOSED, before the write runs. bool.TryParse answers
+            false for "maybe" or a typo like "True1", which used to turn the
+            caller's preview request into the real write. An absent or empty
+            header stays a normal write, and "true"/"false" (any casing) keep
+            their meanings; anything else non-empty answers the management API's
+            400 validation_failed under the header's field key.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.DryRunHeaderAttribute">
+            <summary>
+            Marks an operation that honours the dry-run header; the swagger filter
+            documents the header (and its fail-closed rule, #1675) on the operation.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.DryRunHeaderSwaggerFilter">
+            <summary>
+            The OpenAPI parameter of the dry-run header for the operations marked
+            with <see cref="T:HSMServer.Filters.DryRunHeaderAttribute"/> — the description is the wire
+            contract the filter enforces (#1675).
             </summary>
         </member>
         <member name="T:HSMServer.Filters.ManagementApiSecuritySwaggerFilter">
@@ -1647,6 +1679,15 @@
             rides the same global-write authorization, name-uniqueness gate
             and undo journaling as the DTO path. A null id creates (the id is
             server-generated), a known id updates.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService.TryValidateScheduleYaml(System.String,HSMServer.Core.Model.Policies.AlertSchedule@,System.Collections.Generic.List{System.String}@)">
+            <summary>
+            The #1706 write bounds every schedule save passes — the REST/MCP
+            DTO path (TryBuildValidatedSchedule) and the web editor's
+            SavePartial alike: a working-time schedule is a small, bounded,
+            anchor-free YAML document. One helper, so the two write paths
+            cannot drift apart.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
@@ -2570,8 +2611,11 @@
             <summary>
             Parse the write options of a management-API request: the dry-run
             header plus the request's implicit undo-group id. The dry-run
-            header is a strict boolean: only "true" (any casing) previews, so
-            a "0" or "no" never silently suppresses the write.
+            header is a strict boolean: "true" (any casing) previews, and a
+            value that parses as neither true nor false never reaches this
+            parse — <c>DryRunHeaderFilter</c> fails the request closed with a
+            400 before the write runs (#1675), so a typo cannot turn a
+            preview into the real, irreversible write.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
