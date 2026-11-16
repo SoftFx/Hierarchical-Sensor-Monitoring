@@ -1175,6 +1175,40 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "legacy/registered", out _));
         }
 
+        // #1678 + review: testConnection doubles as the deployment LIVENESS
+        // probe — the Docker healthcheck, docker-compose and CI call it
+        // without credentials and must keep getting a constant 200 (a 406
+        // there marked every deployed container unhealthy and kept Caddy from
+        // starting). The AUTH half of the pre-flight is the keyed call below.
+        [Fact]
+        public async Task TestConnection_WithoutCredentials_Answers200_TheLivenessProbe()
+        {
+            await using var host = await StartHost();
+
+            using var http = new HttpClient();
+            using var response = await http.GetAsync(new Uri(host.HttpBase, "testConnection"), Deadline());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task TestConnection_WithAKeyThatCannotSend_Answers406()
+        {
+            await using var host = await StartHost();
+
+            var readOnly = AddKey(KeyPermissions.CanReadSensorData).ToString();
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, (await PostAsync(host, "list", $"[{IntValue("tc/refused", 5)}]", readOnly)).Status);
+
+            using var http = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(host.HttpBase, "testConnection"));
+            request.Headers.Add("Key", readOnly);
+
+            using var response = await http.SendAsync(request, Deadline());
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+        }
+
         // The number behind the default session cap: what one idle session holds on the
         // server. The clients are raw sockets that only do the upgrade, so nearly all of the
         // measured growth is the server's. Printed for the record; the assertion is only a

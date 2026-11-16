@@ -130,7 +130,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `file` | `FileSensorValue` |
 | `commands` | command batch (response: error dictionary keyed by sensor path; statuses below) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` (statuses below) |
-| `testConnection` | — (response: 200 with header `X-Hsm-Server: 1`, which identifies an HSM server; the HSM Agent's retired-port check relies on it, #1655) |
+| `testConnection` | — ; the dual-purpose pre-flight, decided by the `Key` header: a KEYLESS call is the liveness probe the Docker healthcheck, docker-compose and CI rely on — a constant 200, nothing more (#1678 review: answering 406 there marked every deployed container unhealthy and kept Caddy from starting); a KEYED call is the auth check — an unusable key (expired/blocked, or without send permission) answers the key's own 406 reason (#1649/#1678), and only a usable send key answers 200. The 200s carry the header `X-Hsm-Server: 1`, which identifies an HSM server — the HSM Agent's retired-port check relies on it (#1655) |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
 
 ### Statuses of the registration routes (#1749)
