@@ -18,6 +18,10 @@ services:
     user: '0'
     ports:
       - '443:443'       # single port — Web UI + Sensor API (https)
+    environment:
+      # SSO client secret (#1782), read from the environment only; empty = unused. SSO itself is
+      # switched on in the Oidc section of Config/appsettings.json.
+      Oidc__ClientSecret: '${HSM_OIDC_CLIENT_SECRET:-}'
     volumes:
       - ./Logs:/app/Logs                       # NLog output
       - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)

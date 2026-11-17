@@ -93,6 +93,7 @@ TypeScript 5.3 + Webpack 5:
 ## Authentication
 
 - Cookie-based authentication
+- Optional SSO sign-in through an OpenID Connect provider (off by default; password login stays): `sso-login/feature.md` (#1782)
 - Custom `UserManager` with roles: Viewer (read-only), Manager (read-write)
 - Hiding a button is not authorization: a mutating MVC action must check the role server-side and
   be POST (+ antiforgery for a destructive one), because the auth cookie is `SameSite=Lax` and rides
@@ -109,6 +110,7 @@ TypeScript 5.3 + Webpack 5:
 - `dashboards/` - server-owned dashboard behavior and data shaping.
 - `bar-stddev/` - per-bar standard deviation (#1509): storage (MemoryPack, appended field), exact compression of σ, Sensor API / Grafana / CSV output, the sensor page's Candlestick / Mean ± σ view and the dashboard `StdDev (σ)` property; also why the server builds against the in-repo DTO (`src/Directory.Build.targets`).
 - `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
+- `sso-login/` - the optional OpenID Connect sign-in of the web UI (#1782): `Oidc` settings with an environment-only client secret, provider username = HSM login, auto-created users without roles, `IsAdmin` from an optional provider group, absolute cookie lifetime, local logout.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
 - `sensor-move/` - moving a sensor to another path, same or another product, keeping its id, history, settings and policies; the old path becomes an alias that keeps routing values to it (#1718, ADR-0018).

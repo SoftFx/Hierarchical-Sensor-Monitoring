@@ -6,6 +6,19 @@
 
 <div class="mx-auto" style="width: 30vh">
     <h4>Login</h4>
+    @if (Model.SsoDisplayName != null)
+    {
+        <div class="mb-3">
+            <a class="btn btn-primary w-100" id="ssoLogin" href="@Url.Action(nameof(AccountController.Sso), "Account")">
+                Sign in with @(string.IsNullOrWhiteSpace(Model.SsoDisplayName) ? "SSO" : Model.SsoDisplayName) <i class="fas fa-sign-in-alt"></i>
+            </a>
+        </div>
+        <div class="text-center text-muted mb-3" id="ssoSeparator">or with a password</div>
+    }
+    @if (Model.SsoError != null)
+    {
+        <div class="mb-3" id="ssoError" style="color: red">@Model.SsoError</div>
+    }
     <div>
         <form method="post" action="@nameof(AccountController.Authenticate)" enctype="application/x-www-form-urlencoded">
             <div class="mb-1">

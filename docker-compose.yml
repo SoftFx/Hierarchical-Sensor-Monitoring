@@ -84,6 +84,9 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
+      # SSO client secret (#1782), read from the environment only; empty = unused. SSO itself is
+      # switched on in the Oidc section of Config/appsettings.json.
+      Oidc__ClientSecret: '${HSM_OIDC_CLIENT_SECRET:-}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config

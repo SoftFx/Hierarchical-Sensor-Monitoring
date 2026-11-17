@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Authentication.Sso;
 using HSMServer.Mcp;
 using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
@@ -67,7 +68,8 @@ builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDef
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddHsmApiTokenScheme();
+                .AddHsmApiTokenScheme()
+                .AddHsmOidc(serverConfig.Oidc);
 
 builder.Services.AddHsmApiTokenAuthorization();
 
@@ -141,6 +143,15 @@ try
         logger.Warn($"Kestrel keys {legacyPorts} in {ServerConfig.ConfigName} are IGNORED and have been removed from the file: " +
                     $"the server listens on the single Kestrel.{nameof(KestrelConfig.Port)} ({serverConfig.Kestrel.Port}, default {KestrelConfig.DefaultPort}). " +
                     "Set Kestrel.Port explicitly if you need a different port.");
+
+    if (serverConfig.OidcClientSecretIgnoredInSettingsFile)
+        logger.Error($"{OidcConfig.ClientSecretKey} in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
+                     "the SSO client secret is read from the environment only (Oidc__ClientSecret=...).");
+
+    if (serverConfig.OidcErrors.Count > 0)
+        logger.Error($"SSO sign-in is OFF, the {OidcConfig.SectionName} section is enabled but incomplete: {string.Join(" ", serverConfig.OidcErrors)}");
+    else if (serverConfig.Oidc.IsActive)
+        logger.Info($"SSO sign-in is ON: provider {serverConfig.Oidc.Authority}, client {serverConfig.Oidc.ClientId}, redirect path {HsmOidcDefaults.CallbackPath}.");
 
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
         forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);

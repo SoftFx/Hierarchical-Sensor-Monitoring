@@ -1,6 +1,7 @@
 ﻿using HSMCommon;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using HSMServer.Authentication.Sso;
 using HSMServer.Constants;
 using HSMServer.Extensions;
 using HSMServer.Filters;
@@ -8,14 +9,15 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -25,11 +27,15 @@ namespace HSMServer.Controllers
     public class AccountController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
+        private readonly OidcConfig _oidc;
+        private readonly ILogger<AccountController> _logger;
 
 
-        public AccountController(IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public AccountController(IUserManager userManager, TreeViewModel treeViewModel, OidcConfig oidc, ILogger<AccountController> logger) : base(userManager)
         {
             _treeViewModel = treeViewModel;
+            _oidc = oidc;
+            _logger = logger;
         }
 
 
@@ -38,9 +44,40 @@ namespace HSMServer.Controllers
         [AllowAnonymous]
         [UnauthorizedAccessOnlyFilter]
         [ActionName(nameof(Index))]
-        public IActionResult Index()
+        public IActionResult Index([FromQuery(Name = HsmOidcDefaults.ErrorQueryKey)] SsoSignInError ssoError = SsoSignInError.None)
         {
-            return View(new LoginViewModel());
+            return View(new LoginViewModel
+            {
+                SsoDisplayName = _oidc.IsActive ? _oidc.DisplayName : null,
+                SsoError = HsmOidcDefaults.Describe(ssoError),
+            });
+        }
+
+        // Starts the OIDC sign-in (#1782); 404 when SSO is off, so the route reveals nothing.
+        // The challenge runs here rather than as a ChallengeResult: it reads the provider's
+        // discovery document first, and a provider that cannot be reached must send the
+        // person back to the password form, not to the error page.
+        [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
+        [HttpGet]
+        public async Task<IActionResult> Sso()
+        {
+            if (!_oidc.IsActive)
+                return NotFound();
+
+            try
+            {
+                await HttpContext.ChallengeAsync(HsmOidcDefaults.AuthenticationScheme,
+                    new AuthenticationProperties { RedirectUri = HsmOidcDefaults.AfterSignInPath });
+
+                return new EmptyResult();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "SSO sign-in could not start: the identity provider at {Authority} is unavailable.", _oidc.Authority);
+
+                return Redirect(HsmOidcDefaults.LoginErrorPath(SsoSignInError.ProviderUnavailable));
+            }
         }
 
         [AllowAnonymous]
@@ -203,12 +240,8 @@ namespace HSMServer.Controllers
 
         private Task Authenticate(string login, bool keepLoggedIn)
         {
-            var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
-            ClaimsIdentity id = new(claims, "ApplicationCookie",
-                ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
             AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
-            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
+            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, HsmCookiePrincipal.Create(login), properties);
         }
     }
 }
