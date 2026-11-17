@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model.Policies
 
         public long? ConfirmationPeriod { get; }
 
-        public DateTime BuildDate { get; init; }
+        public DateTime BuildDate { get; internal init; }
 
         public DateTime SendTime { get; }
 
@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
 
-        public AlertRepeatMode SchedulePeriod { get; init; }
+        public AlertRepeatMode SchedulePeriod { get; internal init; }
 
         public bool ShouldSendFirstMessage { get; }
 

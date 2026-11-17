@@ -26,20 +26,23 @@ namespace HSMServer.Core.Tests.Notifications
         public void AddMessage_WhileTheReportOfItsModeIsBeingBuilt_AlertIsInExactlyOneReport(int lateAlertHour)
         {
             var builder = new ScheduleBuilder();
-            var lateAlertAdded = false;
+            var flushing = false;
+            var lateAlertAddedDuringFlush = false;
 
             void AddLateAlert()
             {
-                lateAlertAdded = true;
+                lateAlertAddedDuringFlush = flushing;
                 builder.AddMessage(BuildAlert(AlertRepeatMode.Hourly, lateAlertHour, "late alert"));
             }
 
             builder.AddMessage(BuildAlert(AlertRepeatMode.Hourly, hour: 10, "ten o'clock"));
             builder.AddMessage(BuildAlert(AlertRepeatMode.Hourly, hour: 11, "eleven o'clock", grouping: AddLateAlert));
 
+            flushing = true;
+
             var reports = string.Concat(builder.GetReports().ToList().Concat(builder.GetReports().ToList()));
 
-            Assert.True(lateAlertAdded);
+            Assert.True(lateAlertAddedDuringFlush);
             Assert.Equal(1, CountOf("late alert", reports));
             Assert.Equal(1, CountOf("ten o'clock", reports));
             Assert.Equal(1, CountOf("eleven o'clock", reports));
@@ -63,9 +66,12 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         // The reports are produced one by one and each is sent before the next one is asked for,
-        // so an alert can arrive between two reports of one flush.
-        [Fact]
-        public void AddMessage_BetweenTwoReportsOfOneFlush_AlertIsInExactlyOneReport()
+        // so an alert can arrive between two reports of one flush: for the mode that has just
+        // been reported, or for the one that is still waiting.
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AddMessage_BetweenTwoReportsOfOneFlush_AlertIsInExactlyOneReport(bool lateAlertModeIsAlreadyReported)
         {
             var builder = new ScheduleBuilder();
 
@@ -79,9 +85,10 @@ namespace HSMServer.Core.Tests.Notifications
                 Assert.True(flush.MoveNext());
                 reports.Add(flush.Current);
 
-                // Goes to the mode this flush has not reported yet, whichever it is.
-                var pendingMode = flush.Current.Contains("hourly alert") ? AlertRepeatMode.Daily : AlertRepeatMode.Hourly;
-                builder.AddMessage(BuildAlert(pendingMode, hour: 10, "late alert"));
+                var reportedMode = flush.Current.Contains("hourly alert") ? AlertRepeatMode.Hourly : AlertRepeatMode.Daily;
+                var pendingMode = reportedMode is AlertRepeatMode.Hourly ? AlertRepeatMode.Daily : AlertRepeatMode.Hourly;
+
+                builder.AddMessage(BuildAlert(lateAlertModeIsAlreadyReported ? reportedMode : pendingMode, hour: 10, "late alert"));
 
                 while (flush.MoveNext())
                     reports.Add(flush.Current);
