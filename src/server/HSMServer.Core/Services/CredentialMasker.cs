@@ -92,13 +92,31 @@ namespace HSMServer.Core.Services
                 var authorityAt = schemeAt + SchemeSeparator.Length;
 
                 // The authority ends at the first '/', '?', '#' or character
-                // RFC 3986 excludes from it entirely; the shared pointer
-                // never rescans what an earlier "://" already covered.
+                // RFC 3986 excludes from it entirely — except the ';' or '#'
+                // closing an HTML entity, which is encoded TEXT, not a
+                // boundary; the shared pointer never rescans what an earlier
+                // "://" already covered.
                 if (authorityEnd < authorityAt)
                     authorityEnd = authorityAt;
 
-                while (authorityEnd < wordEnd && !IsAuthorityEnd(value[authorityEnd]))
-                    authorityEnd++;
+                while (authorityEnd < wordEnd)
+                {
+                    var boundary = value[authorityEnd];
+
+                    if (!IsAuthorityEnd(boundary))
+                    {
+                        authorityEnd++;
+                        continue;
+                    }
+
+                    // In the sanitizer's output '&' always travels as an
+                    // entity, and a password may legally contain it —
+                    // mongodb://u:p&amp;ss@host (#1709 review).
+                    if ((boundary == ';' || boundary == '#') && EndsEntity(value, authorityEnd))
+                        authorityEnd++;
+                    else
+                        break;
+                }
 
                 // 1) The common shape: the authority contains '@' — the LAST
                 //    one separates the credential (a raw '@' in
@@ -113,23 +131,46 @@ namespace HSMServer.Core.Services
                 //    '/', '?' and '#' (that is its point) but no character
                 //    RFC 3986 excludes from an authority — an email in the
                 //    next JSON field is not a password tail (#1709 review).
-                //    The zone scan reaches the END of the word: when it too
-                //    finds no '@', no later "://" searches far enough right
-                //    to see one, so the word is done. Without the break, a
-                //    word whose only '@' sits BEFORE the first "://"
-                //    (@a://q:x/@a://q:x/...) makes every hit rescan the whole
-                //    tail — quadratic on the request thread.
+                //    When the zone finds no '@' at all: a zone that stopped
+                //    at a boundary proves its whole span '@'-free, so every
+                //    "://" inside it cannot mask either and the scan resumes
+                //    FROM the boundary (a later well-formed URL in the same
+                //    word still masks); only a zone that reached the END of
+                //    the word proves nothing ahead can mask — that case (and
+                //    only it) breaks, which keeps the scan linear: without
+                //    the break a word whose only '@' sits BEFORE the first
+                //    "://" (@a://q:x/@a://q:x/...) makes every hit rescan
+                //    the whole tail — quadratic on the request thread.
                 if (separator < 0 && PasswordMayRunPastDelimiters(value, authorityAt, authorityEnd))
                 {
                     var credentialEnd = authorityAt;
 
-                    while (credentialEnd < wordEnd && !IsCredentialZoneEnd(value[credentialEnd]))
-                        credentialEnd++;
+                    while (credentialEnd < wordEnd)
+                    {
+                        var boundary = value[credentialEnd];
+
+                        if (!IsCredentialZoneEnd(boundary))
+                        {
+                            credentialEnd++;
+                            continue;
+                        }
+
+                        if ((boundary == ';' || boundary == '#') && EndsEntity(value, credentialEnd))
+                            credentialEnd++;
+                        else
+                            break;
+                    }
 
                     separator = LastIndexInRange(value, '@', authorityAt, credentialEnd);
 
                     if (separator < 0)
-                        break;
+                    {
+                        if (credentialEnd == wordEnd)
+                            break;
+
+                        searchFrom = credentialEnd;
+                        continue;
+                    }
                 }
 
                 // The credential must carry the password marker ':' with a
@@ -218,6 +259,33 @@ namespace HSMServer.Core.Services
         private static bool IsCredentialZoneEnd(char ch) =>
             ch is '"' or '\'' or ',' or ';' or '<' or '>' or '(' or ')'
                 or '{' or '}' or '[' or ']' or '\\' or '|';
+
+        // Whether the ';' or '#' at 'at' closes an HTML entity: '&' followed
+        // by 1-9 entity characters (letters, digits, '#'). In the sanitizer's
+        // output '&' always travels entity-encoded (&amp;), and the entity is
+        // the TEXT it encodes — a password may legally contain '&', so the
+        // boundary scans step over the whole entity instead of splitting the
+        // credential at its ';' (#1709 review).
+        private static bool EndsEntity(string value, int at)
+        {
+            var start = at - 9;
+
+            if (start < 0)
+                start = 0;
+
+            for (var i = at - 1; i >= start; i--)
+            {
+                var ch = value[i];
+
+                if (ch == '&')
+                    return true;
+
+                if (!char.IsLetterOrDigit(ch) && ch != '#')
+                    return false;
+            }
+
+            return false;
+        }
 
         private static int IndexInRange(string value, char of, int from, int end)
         {

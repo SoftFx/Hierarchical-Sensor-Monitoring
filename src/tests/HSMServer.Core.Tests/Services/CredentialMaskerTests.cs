@@ -39,6 +39,11 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("(mongodb://u:p@mongo:27017)", "(mongodb://***@mongo:27017)")]
         // two credentials in ONE word, separated by a path delimiter
         [InlineData("a://u:p@h/x://y:z@w", "a://***@h/x://***@w")]
+        // #1709 review: an @-free zone before a boundary proves nothing
+        // inside it can mask — the scan resumes AT the boundary, so a later
+        // well-formed credential in the SAME word still masks.
+        [InlineData("{\"a\":\"x://u:p/q\",\"b\":\"mongodb://u:p@h/db\"}", "{\"a\":\"x://u:p/q\",\"b\":\"mongodb://***@h/db\"}")]
+        [InlineData("see http://a:b/c,mongodb://u:p@h/db", "see http://a:b/c,mongodb://***@h/db")]
         public void MasksTheCredentialPart(string input, string expected)
         {
             Assert.Equal(expected, CredentialMasker.MaskCredentials(input));
@@ -68,6 +73,16 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("{\"url\":\"http://example.com\",\"owner\":\"admin@corp.com\"}")]
         [InlineData("{\"conn\":\"mongodb://h1:27017,h2:27017/db\",\"owner\":\"a@b.com\"}")]
         [InlineData("https://example.com,contact:ops@corp.com")]
+        // #1709 review: a raw RFC-illegal character (';', ',', '"', ...) in
+        // an UNENCODED password also ends the authority/credential zone, so
+        // these password shapes stay unmasked — a documented limit: treating
+        // them as password text would read the credential-free JSON tails
+        // pinned above ('{"x":"http://a:b/c","o":"d@e.com"}'-shaped values)
+        // as credentials and destroy them. '&' does NOT share the limit: it
+        // always travels entity-encoded, and entities are stepped over.
+        [InlineData("mongodb://u:p;ss@host/db")]
+        [InlineData("mongodb://u:p,ss@host/db")]
+        [InlineData("mongodb://u:p\"x@h/db")]
         [InlineData("plain text, no url at all")]
         public void LeavesCredentialFreeTextAlone(string input)
         {
@@ -90,16 +105,23 @@ namespace HSMServer.Core.Tests.Services
             // runs to the end of the word and finds nothing — without the
             // break it is one full-tail rescan per "://" (quadratic).
             var atFrontBattery = "@" + string.Concat(Enumerable.Repeat(fallbackFiller, 60_000));
+            // same, but one ';' terminates the word: the first zone scan
+            // crosses the whole tail, and linearity then depends on the scan
+            // resuming AT the boundary — resuming at schemeAt+1 instead
+            // rescans the tail once per "://" (quadratic).
+            var inWordBattery = "@" + string.Concat(Enumerable.Repeat("a://q:x/", 60_000)) + ";";
 
             var stopwatch = Stopwatch.StartNew();
             var noAtResult = CredentialMasker.MaskCredentials(noAtBattery);
             var portResult = CredentialMasker.MaskCredentials(portBattery);
             var atFrontResult = CredentialMasker.MaskCredentials(atFrontBattery);
+            var inWordResult = CredentialMasker.MaskCredentials(inWordBattery);
             stopwatch.Stop();
 
             Assert.Equal(noAtBattery, noAtResult);
             Assert.Equal(string.Concat(Enumerable.Repeat(filler, 60_000)) + "@z mongodb://***@mongo:27017/db", portResult);
             Assert.Equal(atFrontBattery, atFrontResult);
+            Assert.Equal(inWordBattery, inWordResult);
             Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"masking the batteries took {stopwatch.Elapsed}");
         }
 
@@ -133,10 +155,14 @@ namespace HSMServer.Core.Tests.Services
         // obfuscated shapes below still mask. With the old order (masking
         // the raw input) both credentials were stored intact: the masker saw
         // no literal '@' in the first, and two '@'-less words in the second.
+        // The '&' case pins the entity handling: the sanitizer RE-ENCODES
+        // '&' as '&amp;', and the masker steps over the entity instead of
+        // ending the credential at its ';'.
         [Theory]
         [InlineData("mongodb://backup:secret&#64;mongo:27017/db", "mongodb://***@mongo:27017/db")]
         [InlineData("mongodb://backup:secret<i class=\"x\"></i>@mongo/db", "mongodb://***@mongo/db")]
-        public void SanitizerDecodedUrls_MaskAtIngestion(string raw, string expected)
+        [InlineData("mongodb://u:p&ss@host/db", "mongodb://***@host/db")]
+        public void SanitizerRewrittenUrls_MaskAtIngestion(string raw, string expected)
         {
             var converted = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue
             {
