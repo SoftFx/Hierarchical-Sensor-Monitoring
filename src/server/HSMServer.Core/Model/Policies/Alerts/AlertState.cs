@@ -25,7 +25,8 @@ namespace HSMServer.Core.Model.Policies
 
         public string this[string propertyName]
         {
-            get => _publicProperties[propertyName].GetValue(this, null).ToString();
+            // A variable the value does not carry (no comment, no unit, no previous value) is null.
+            get => _publicProperties[propertyName].GetValue(this, null)?.ToString();
             set => _publicProperties[propertyName].SetValue(this, value);
         }
 

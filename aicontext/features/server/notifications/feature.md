@@ -188,6 +188,26 @@ Post-#1265 each channel owns a dedicated `ChannelAccumulator` (`src/server/HSMSe
 
 The invariant is pinned by `ChatFolderBindingTests.Chat_MultiChannel_AccumulatorsAreIndependent` — drain Telegram and assert `SlackAccumulator.ShouldSend` / `MattermostAccumulator.ShouldSend` are still true. Extended in #1288 to also drain Slack and re-assert Mattermost's timer is intact. A pre-fix regression (shared buffer) would fail the assertions because the first drain would have bumped the shared timer into the future.
 
+### A drain always empties the buffer (#1776)
+
+`MessageBuilder.GetAggregateMessage` (used by every accumulator and by `ScheduleBuilder` reports) must leave nothing behind, whatever fails while the message is built:
+
+- An alert that `AlertsGrouper.ApplyToGroup` throws on is appended to the message ungrouped (`AlertResult.ToString()`), it is not lost.
+- `AlertsGrouper.TakeGroups()` hands the groups over and clears the grouper before any group is rendered; a group whose `ToString()` throws is replaced in the message by its first alert, ungrouped (the "N times" / item list of the group is lost).
+- Such failures are logged at Error once per message, with the count, the first policy id and the first exception — not once per alert. Only an alert whose own `ToString()` throws is dropped, with its own Error record.
+- `AlertState.this[string]` returns `null` for a template variable the value does not carry (`$comment`, `$unit`, `$prevValue`, ...). Two alerts that differ only in such a variable are grouped like any other pair; the empty one shows as an empty item in the `[a, b]` list.
+
+Before #1776 the buffer was cleared only after a successful pass. One pair of alerts that differed in a `null` variable threw a `NullReferenceException` out of the drain, stayed in the buffer, and threw again on every aggregation period: the chat received nothing until the server restarted, while new alerts kept piling up in the buffer. Pinned by `MessageBuilderTests`.
+
+### Per-alert log lines
+
+An alert passes `ConfirmationManager` → `ScheduleManager` → `TreeValuesCache.SendAlertMessage` → the channel's `DeliverAsync`. The stage markers that identify nothing (`RegisterNotification enter`, `ProcessMessage started`, `ScheduleManager`'s `Sending N immediate/first alerts`, `TSend: NewAlertMessageEvent Invoke`, `TSend: DeliverAsync enter`) are logged at Debug, which Release builds do not write (`nlog.config`). At Info remain:
+
+- `ConfirmationManager`: `Sending N immediate alerts for <sensorId>` — channel-independent, so an alert that goes to Slack/Mattermost only, or is dropped in `TreeValuesCache.SendAlertMessage` (notifications off, product without a folder), still leaves a line with the sensor id;
+- `TelegramBot`: one line per alert with its text (`TSend: builder '...'` for an aggregated chat, `TSend: SendMessageAsync '...'` for an immediate one) and `TSend: SendMessageAsync: message '...' is sent` per message that actually left.
+
+A sensor that alerts on every value therefore costs two log lines per alert, not seven.
+
 ## Management UI
 
 ### Chat CRUD

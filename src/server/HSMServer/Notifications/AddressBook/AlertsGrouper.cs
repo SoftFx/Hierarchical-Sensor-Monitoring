@@ -18,12 +18,15 @@ namespace HSMServer.Notifications.AddressBook
             groups.Add(new GroupedNotification(result));
         }
 
-        internal IEnumerable<string> GetGroups()
+        // Hands the groups over and forgets them before any of them is rendered, so a group that
+        // fails to render is not kept for the next message.
+        internal List<GroupedNotification> TakeGroups()
         {
-            foreach (var group in this.SelectMany(p => p.Value).OrderBy(g => g.FirstNotifyTime))
-                yield return group.ToString();
+            var groups = this.SelectMany(p => p.Value).OrderBy(g => g.FirstNotifyTime).ToList();
 
             Clear();
+
+            return groups;
         }
     }
 }

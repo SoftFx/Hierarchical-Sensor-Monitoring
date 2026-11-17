@@ -14,7 +14,7 @@ namespace HSMServer.Core.Confirmation
 
         internal void RegisterNotification(Guid sensorId, PolicyResult policyResult)
         {
-            _logger.Info($"RegisterNotification enter: sensor:{sensorId}, is empty: {policyResult.IsEmpty}");
+            _logger.Debug($"RegisterNotification enter: sensor:{sensorId}, is empty: {policyResult.IsEmpty}");
 
             if (policyResult.IsEmpty)
                 return;
