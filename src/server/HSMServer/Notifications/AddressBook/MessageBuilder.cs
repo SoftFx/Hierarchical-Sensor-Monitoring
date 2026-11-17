@@ -76,6 +76,8 @@ namespace HSMServer.Notifications.AddressBook
                     ungrouped.Add(group.BaseAlert);
                 }
 
+            var dropped = 0;
+
             foreach (var alert in ungrouped)
                 try
                 {
@@ -83,12 +85,13 @@ namespace HSMServer.Notifications.AddressBook
                 }
                 catch (Exception ex)
                 {
+                    dropped++;
                     _logger.Error($"Alert of policy {alert.PolicyId} cannot be rendered and is dropped from the message: {ex}");
                 }
 
             // One record per message, not per alert: a fault that hits every alert must not flood the log.
             if (ungrouped.Count > 0)
-                _logger.Error($"{ungrouped.Count} alert(s) could not be aggregated and are sent ungrouped, first policy {ungrouped[0].PolicyId}: {firstError}");
+                _logger.Error($"{ungrouped.Count} alert(s) could not be aggregated: {ungrouped.Count - dropped} sent ungrouped, {dropped} dropped; first policy {ungrouped[0].PolicyId}: {firstError}");
 
             return builder.ToString();
         }
