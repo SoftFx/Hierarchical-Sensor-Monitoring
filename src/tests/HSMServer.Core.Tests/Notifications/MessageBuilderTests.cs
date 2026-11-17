@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Notifications.AddressBook;
 using Xunit;
@@ -106,15 +107,47 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(string.Empty, builder.GetAggregateMessage());
         }
 
-
-        private static AlertResult BuildAlert(string template, string comment, string rendered = null)
+        // #1778. The drain reads the buffer branch by branch; the alert arrives when the drain is
+        // past the branch it belongs to and has not finished yet.
+        [Fact]
+        public void AddMessage_ToBranchTheDrainHasAlreadyPassed_AlertIsInExactlyOneMessage()
         {
-            var state = new AlertState
+            var builder = new MessageBuilder();
+            var groupedTemplates = new List<string>();
+
+            void AddLateAlertOnSecondTemplate(string template)
+            {
+                groupedTemplates.Add(template);
+
+                // Which template the drain reads first depends on the dictionary order: the late
+                // alert goes to the one it has finished with.
+                if (groupedTemplates.Count == 2)
+                    builder.AddMessage(BuildAlert(groupedTemplates[0], comment: "late alert"));
+            }
+
+            foreach (var template in new[] { "one: $comment", "two: $comment" })
+                builder.AddMessage(BuildAlert(template, comment: "on time", grouping: () => AddLateAlertOnSecondTemplate(template)));
+
+            var messages = builder.GetAggregateMessage() + builder.GetAggregateMessage();
+
+            Assert.Equal(2, groupedTemplates.Count); // the late alert was added, and during the first drain
+            Assert.Equal(1, CountOf("late alert", messages));
+            Assert.Equal(2, CountOf("on time", messages));
+            Assert.Equal(string.Empty, builder.GetAggregateMessage());
+        }
+
+
+        private static int CountOf(string text, string message) => message.Split(text).Length - 1;
+
+        private static AlertResult BuildAlert(string template, string comment, string rendered = null, Action grouping = null)
+        {
+            var state = new DrainInterleavingState
             {
                 Template = AlertState.BuildSystemTemplate(template),
                 Product = "Product",
                 Path = "Bridge/Errors",
                 Comment = comment,
+                Grouping = grouping,
             };
 
             return new AlertResult(new AlertDestination(), string.Empty, rendered ?? state.BuildComment(), Guid.NewGuid(), template, state);

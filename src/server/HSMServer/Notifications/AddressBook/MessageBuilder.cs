@@ -1,7 +1,5 @@
-﻿using HSMCommon.Collections;
-using HSMServer.Core.Model.Policies;
+﻿using HSMServer.Core.Model.Policies;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 
@@ -15,21 +13,36 @@ namespace HSMServer.Notifications.AddressBook
 
     internal sealed class MessageBuilder : IMessageBuilder
     {
-        private readonly CStringDict<CStringDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
         private static readonly NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(MessageBuilder));
 
         private readonly AlertsGrouper _grouper = new();
+        private readonly object _treeLock = new();
+
+        // template -> rendered comment -> policyId -> alert. Alerts arrive on the thread that raises
+        // them while the periodic flush drains the buffer on another one, so the tree is read and
+        // changed only under _treeLock. A drain takes the whole tree and leaves an empty one: an
+        // alert is either in the tree that was taken or in the new one, never in a branch that the
+        // drain has already read and is about to drop (#1778).
+        private Dictionary<string, Dictionary<string, Dictionary<Guid, AlertResult>>> _alertsTree = new();
 
 
         public void AddMessage(AlertResult alert)
         {
             var mapComment = alert.IsStatusIsChangeResult ? string.Empty : alert.LastComment;
-            var branch = _alertsTree[alert.Template][mapComment];
 
-            if (branch.TryGetValue(alert.PolicyId, out var policy))
-                policy.TryAddResult(alert);
-            else
-                branch.TryAdd(alert.PolicyId, alert with { });
+            lock (_treeLock)
+            {
+                if (!_alertsTree.TryGetValue(alert.Template, out var comments))
+                    _alertsTree[alert.Template] = comments = new();
+
+                if (!comments.TryGetValue(mapComment, out var branch))
+                    comments[mapComment] = branch = new();
+
+                if (branch.TryGetValue(alert.PolicyId, out var policy))
+                    policy.TryAddResult(alert);
+                else
+                    branch.Add(alert.PolicyId, alert with { });
+            }
         }
 
         // Always empties the buffer. An alert left behind by an exception would fail again on
@@ -39,10 +52,18 @@ namespace HSMServer.Notifications.AddressBook
             var ungrouped = new List<AlertResult>(); // sent as they are, after the groups
             Exception firstError = null;
 
-            foreach (var (_, sensorAlerts) in _alertsTree)
+            Dictionary<string, Dictionary<string, Dictionary<Guid, AlertResult>>> taken;
+
+            // From here on the taken tree belongs to the drain alone: AddMessage finishes its
+            // change under the lock and keeps no reference to a branch after it.
+            lock (_treeLock)
             {
+                taken = _alertsTree;
+                _alertsTree = new();
+            }
+
+            foreach (var (_, sensorAlerts) in taken)
                 foreach (var (_, alerts) in sensorAlerts)
-                {
                     foreach (var (_, aggrAlert) in alerts)
                         try
                         {
@@ -53,14 +74,6 @@ namespace HSMServer.Notifications.AddressBook
                             firstError ??= ex;
                             ungrouped.Add(aggrAlert);
                         }
-
-                    alerts.Clear();
-                }
-
-                sensorAlerts.Clear();
-            }
-
-            _alertsTree.Clear();
 
             var builder = new StringBuilder(1 << 10);
 
