@@ -945,16 +945,18 @@ namespace HSMServer.Core.Cache
         {
             // #1709: the manual value/comment edit from the web UI's status
             // modal rides this path, bypassing the API converters' ingestion
-            // gate — mask the two text fields here so a pasted connection
-            // string stores the same ***@ as collector ingestion. A COPY, not
-            // a mutation: the caller's request keeps its original text.
+            // gate — run the two text fields through the SAME SanitizeText
+            // gate (sanitizer first, mask on its decoded output), so a pasted
+            // connection string — entity-encoded or tag-split included —
+            // stores exactly what collector ingestion would store. A COPY,
+            // not a mutation: the caller's request keeps its original text.
             var masked = new UpdateSensorValueRequestModel(request.Id, string.Empty)
             {
                 Id = request.Id,
                 Initiator = request.Initiator,
                 Status = request.Status,
-                Comment = Services.CredentialMasker.MaskCredentials(request.Comment),
-                Value = Services.CredentialMasker.MaskCredentials(request.Value),
+                Comment = Services.HtmlSanitizerService.SanitizeText(request.Comment),
+                Value = Services.HtmlSanitizerService.SanitizeText(request.Value),
                 ChangeLast = request.ChangeLast,
             };
 

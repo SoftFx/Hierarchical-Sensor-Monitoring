@@ -13,9 +13,13 @@ namespace HSMServer.Core.Services
     /// A credential is user:password@ INSIDE the authority; the host after
     /// it is never parsed, so replica-set host lists, bracketed IPv6 hosts
     /// and URLs embedded in JSON, parentheses or trailing punctuation still
-    /// mask (#1709 review). The scan is word-by-word and linear in the input
-    /// length — every character is examined a bounded number of times, so an
-    /// adversarial megabyte value cannot pin a request thread.
+    /// mask (#1709 review). The authority ends at every character RFC 3986
+    /// excludes from it entirely, so a URL without a path cannot "own" the
+    /// rest of its word — a later JSON field or an email address after a
+    /// comma stays intact instead of reading as the credential tail. The
+    /// scan is word-by-word and linear in the input length — every character
+    /// is examined a bounded number of times, so an adversarial megabyte
+    /// value cannot pin a request thread.
     /// </summary>
     public static class CredentialMasker
     {
@@ -87,12 +91,13 @@ namespace HSMServer.Core.Services
 
                 var authorityAt = schemeAt + SchemeSeparator.Length;
 
-                // The authority ends at the first '/', '?' or '#'; the shared
-                // pointer never rescans what an earlier "://" already covered.
+                // The authority ends at the first '/', '?', '#' or character
+                // RFC 3986 excludes from it entirely; the shared pointer
+                // never rescans what an earlier "://" already covered.
                 if (authorityEnd < authorityAt)
                     authorityEnd = authorityAt;
 
-                while (authorityEnd < wordEnd && !IsPathDelimiter(value[authorityEnd]))
+                while (authorityEnd < wordEnd && !IsAuthorityEnd(value[authorityEnd]))
                     authorityEnd++;
 
                 // 1) The common shape: the authority contains '@' — the LAST
@@ -104,15 +109,24 @@ namespace HSMServer.Core.Services
                 //    host[:port] (mongodb://backup:pa/ss@host/db — a raw '/',
                 //    '?' or '#' in the password ends the authority scan early),
                 //    the password runs past the delimiter and the separator is
-                //    the last '@' of the whole word. That scan reaches the END
-                //    of the word: when it too finds no '@', no later "://"
-                //    searches far enough right to see one, so the word is done.
-                //    Without the break, a word whose only '@' sits BEFORE the
-                //    first "://" (@a://q:x/@a://q:x/...) makes every hit
-                //    rescan the whole tail — quadratic on the request thread.
+                //    the last '@' of the credential zone. The zone crosses
+                //    '/', '?' and '#' (that is its point) but no character
+                //    RFC 3986 excludes from an authority — an email in the
+                //    next JSON field is not a password tail (#1709 review).
+                //    The zone scan reaches the END of the word: when it too
+                //    finds no '@', no later "://" searches far enough right
+                //    to see one, so the word is done. Without the break, a
+                //    word whose only '@' sits BEFORE the first "://"
+                //    (@a://q:x/@a://q:x/...) makes every hit rescan the whole
+                //    tail — quadratic on the request thread.
                 if (separator < 0 && PasswordMayRunPastDelimiters(value, authorityAt, authorityEnd))
                 {
-                    separator = LastIndexInRange(value, '@', authorityAt, wordEnd);
+                    var credentialEnd = authorityAt;
+
+                    while (credentialEnd < wordEnd && !IsCredentialZoneEnd(value[credentialEnd]))
+                        credentialEnd++;
+
+                    separator = LastIndexInRange(value, '@', authorityAt, credentialEnd);
 
                     if (separator < 0)
                         break;
@@ -145,17 +159,13 @@ namespace HSMServer.Core.Services
         }
 
         // The fallback of the raw-password case — only a userinfo-shaped
-        // authority may take it: an EMPTY authority, a bracketed IPv6 host
-        // ([::1]) and a host:port authority are hosts, and their later '@'s
-        // live in the path (http://[::1]/a:b@c, file:///C:/x@y) — masking
-        // there would destroy credential-free values.
-        private static bool PasswordMayRunPastDelimiters(string value, int from, int end)
-        {
-            if (from >= end || value[from] == '[')
-                return false;
-
-            return !LooksLikeHostPort(value, from, end);
-        }
+        // authority may take it: an EMPTY authority (a bracketed IPv6 host
+        // ends the scan at its '[' immediately) and a host:port authority
+        // are hosts, and their later '@'s live in the path
+        // (http://[::1]/a:b@c, file:///C:/x@y) — masking there would
+        // destroy credential-free values.
+        private static bool PasswordMayRunPastDelimiters(string value, int from, int end) =>
+            from < end && !LooksLikeHostPort(value, from, end);
 
         // host, or host:port with an all-digit port and a non-empty host.
         // Anything else (a colon tail that is not digits, several colons,
@@ -192,8 +202,22 @@ namespace HSMServer.Core.Services
             return true;
         }
 
-        private static bool IsPathDelimiter(char ch) =>
-            ch is '/' or '?' or '#';
+        // The path delimiters, plus the characters RFC 3986 excludes from
+        // the authority entirely. Without them a URL without a path "owns"
+        // the rest of its whitespace-free word:
+        // http://example.com","owner":"admin@corp.com would read its own
+        // JSON tail as user:password@ and destroy it (#1709 review).
+        private static bool IsAuthorityEnd(char ch) =>
+            ch is '/' or '?' or '#'
+                or '"' or '\'' or ',' or ';' or '<' or '>' or '(' or ')'
+                or '{' or '}' or '[' or ']' or '\\' or '|';
+
+        // The same set minus the path delimiters: the raw-password fallback
+        // exists to reach across '/', '?' and '#', but nothing above can sit
+        // inside a credential, so it ends the zone.
+        private static bool IsCredentialZoneEnd(char ch) =>
+            ch is '"' or '\'' or ',' or ';' or '<' or '>' or '(' or ')'
+                or '{' or '}' or '[' or ']' or '\\' or '|';
 
         private static int IndexInRange(string value, char of, int from, int end)
         {

@@ -61,6 +61,13 @@ namespace HSMServer.Core.Tests.Services
         // ...@path URL (http://host:8080/a@b above), so this ONE obfuscated-
         // password shape stays unmasked (documented in the wire contract).
         [InlineData("mongodb://backup:1234/56@mongo/db")]
+        // #1709 review: the authority ends at characters RFC 3986 excludes
+        // from it, so a URL without a path does not own the rest of its
+        // word — the JSON tail / the email after the comma is NOT a
+        // credential, and these values store verbatim (no data loss).
+        [InlineData("{\"url\":\"http://example.com\",\"owner\":\"admin@corp.com\"}")]
+        [InlineData("{\"conn\":\"mongodb://h1:27017,h2:27017/db\",\"owner\":\"a@b.com\"}")]
+        [InlineData("https://example.com,contact:ops@corp.com")]
         [InlineData("plain text, no url at all")]
         public void LeavesCredentialFreeTextAlone(string input)
         {
@@ -107,8 +114,9 @@ namespace HSMServer.Core.Tests.Services
         public void StringSensorValues_MaskAtIngestion()
         {
             // The converter both ingest paths ride: the value AND the comment
-            // are masked before the sanitizer, so the secret never reaches
-            // storage even when it travels inside a comment.
+            // pass the SanitizeText gate — sanitizer first, then the mask on
+            // its decoded output — so the secret never reaches storage even
+            // when it travels inside a comment.
             var converted = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue
             {
                 Path = "Scheduled Tasks/Mongo Backup Task",

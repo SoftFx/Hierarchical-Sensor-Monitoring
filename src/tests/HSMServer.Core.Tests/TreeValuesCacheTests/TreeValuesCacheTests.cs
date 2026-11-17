@@ -902,7 +902,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Id = sensor.Id,
                 Status = HSMCommon.Model.SensorStatus.Ok,
                 Comment = "conn: mongodb://backup:secret@mongo:27017/db",
-                Value = "mongodb://backup:secret@mongo:27017/db",
+                // #1709 review: the modal rides the SanitizeText gate now —
+                // an entity-encoded '@' decodes in the sanitizer and masks
+                // here exactly as it does at collector ingestion.
+                Value = "mongodb://backup:secret&#64;mongo:27017/db",
                 ChangeLast = false,
             });
 
