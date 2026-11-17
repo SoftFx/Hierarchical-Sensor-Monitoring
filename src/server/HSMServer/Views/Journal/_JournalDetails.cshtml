@@ -1,4 +1,5 @@
 @using HSMServer.Model.ManagementApi.Journal
+@using HSMServer.Model.ManagementApi.ChangeSets
 
 @model JournalRecordDetailsDto
 
@@ -94,38 +95,69 @@
                             </div>
                         </div>
                     }
-                    @if (entry.Fanout is { Count: > 0 })
+                    @if (entry.Fanout is { Count: > 0 } || entry.FanoutTotal > 0)
                     {
-                        <div class="fw-bold mt-1">Fan-out (@entry.Fanout.Count nodes)</div>
-                        @foreach (var image in entry.Fanout)
+                        var fanoutOffset = (int)(ViewData["FanoutOffset"] ?? 0);
+                        @* #1688: the rendered list is a page over the fan-out; the header
+                           names the total, and prev/next walk it in steps of the page limit —
+                           the rollback this modal guards acts on every node, so none may be
+                           unreachable here. One offset pages every entry of the undo group
+                           at once (one request = one group): an entry shorter than the
+                           current offset says so instead of rendering an empty list. *@
+                        if (entry.Fanout.Count == 0)
                         {
-                            <details class="mb-1">
-                                <summary class="text-muted">@image.Path</summary>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <div class="fw-bold">Before</div>
-                                        @foreach (var policy in image.BeforePolicies ?? [])
-                                        {
-                                            <pre class="mb-1 small">@policy</pre>
-                                        }
-                                        @foreach (var policy in image.BeforeTtlPolicies ?? [])
-                                        {
-                                            <pre class="mb-1 small">@policy</pre>
-                                        }
+                            <div class="text-muted mt-1">
+                                Fan-out: @entry.FanoutTotal nodes, none on this page (the page is shared
+                                by every entry of the undo group).
+                                <a href="#" class="journal-fanout-page ms-2 small" data-record-id="@Model.Record.Id"
+                                   data-fanout-offset="@Math.Max(0, fanoutOffset - ChangeSetAdministrationService.MaxFanoutLimit)">← previous</a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="fw-bold mt-1">
+                                Fan-out (@entry.Fanout.Count of @entry.FanoutTotal nodes)
+                                @if (fanoutOffset > 0)
+                                {
+                                    <a href="#" class="journal-fanout-page ms-2 small" data-record-id="@Model.Record.Id"
+                                       data-fanout-offset="@Math.Max(0, fanoutOffset - ChangeSetAdministrationService.MaxFanoutLimit)">← previous</a>
+                                }
+                                @if (fanoutOffset + entry.Fanout.Count < entry.FanoutTotal)
+                                {
+                                    <a href="#" class="journal-fanout-page ms-2 small" data-record-id="@Model.Record.Id"
+                                       data-fanout-offset="@(fanoutOffset + entry.Fanout.Count)">next →</a>
+                                }
+                            </div>
+                            @foreach (var image in entry.Fanout)
+                            {
+                                <details class="mb-1">
+                                    <summary class="text-muted">@image.Path</summary>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="fw-bold">Before</div>
+                                            @foreach (var policy in image.BeforePolicies ?? [])
+                                            {
+                                                <pre class="mb-1 small">@policy</pre>
+                                            }
+                                            @foreach (var policy in image.BeforeTtlPolicies ?? [])
+                                            {
+                                                <pre class="mb-1 small">@policy</pre>
+                                            }
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="fw-bold">After</div>
+                                            @foreach (var policy in image.AfterPolicies ?? [])
+                                            {
+                                                <pre class="mb-1 small">@policy</pre>
+                                            }
+                                            @foreach (var policy in image.AfterTtlPolicies ?? [])
+                                            {
+                                                <pre class="mb-1 small">@policy</pre>
+                                            }
+                                        </div>
                                     </div>
-                                    <div class="col-6">
-                                        <div class="fw-bold">After</div>
-                                        @foreach (var policy in image.AfterPolicies ?? [])
-                                        {
-                                            <pre class="mb-1 small">@policy</pre>
-                                        }
-                                        @foreach (var policy in image.AfterTtlPolicies ?? [])
-                                        {
-                                            <pre class="mb-1 small">@policy</pre>
-                                        }
-                                    </div>
-                                </div>
-                            </details>
+                                </details>
+                            }
                         }
                     }
                 </div>

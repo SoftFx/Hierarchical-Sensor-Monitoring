@@ -75,10 +75,12 @@ namespace HSMServer.Mcp
         }
 
         [McpServerTool(Name = "get_journal_record", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("One journal record's details: the record plus its undo group's per-entity before/after images (policy lists as JSON rows, template and schedule bodies) for the entries visible to the token's owner. An unknown or invisible record id answers the uniform not-found error.")]
+        [Description("One journal record's details: the record plus its undo group's per-entity before/after images (policy lists as JSON rows, template and schedule bodies) for the entries visible to the token's owner. An unknown or invisible record id answers the uniform not-found error. Each entry's fan-out (the per-sensor images of a template write) is a PAGE bounded by default (#1688): fanoutOffset/fanoutLimit select it (limit capped at 200), fanoutTotal says how much there is — a template over hundreds of sensors stays readable within the output limit.")]
         public Task<JournalRecordDetailsDto> GetJournalRecordAsync(
-            [Description("Journal record id (the `id` field of list_journal_records rows).")] string recordId) =>
-            Task.FromResult(McpToolWriteErrors.Unwrap(_journal.GetRecord(recordId, User)));
+            [Description("Journal record id (the `id` field of list_journal_records rows).")] string recordId,
+            [Description("Skip this many fan-out images per entry (default 0).")] int fanoutOffset = 0,
+            [Description("Fan-out images per entry: default 10, max 200 (a non-positive value means the default).")] int fanoutLimit = ChangeSetAdministrationService.DefaultFanoutLimit) =>
+            Task.FromResult(McpToolWriteErrors.Unwrap(_journal.GetRecord(recordId, User, fanoutOffset: fanoutOffset, fanoutLimit: fanoutLimit)));
 
         [McpServerTool(Name = "rollback_journal_record", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
         [Description("Rolls back a journal record's request (its undo group): compensating writes replayed in reverse order through the same write gates — every write of the SAME request is undone together. Requires an ADMIN token owner (Manager tokens are denied, #1588). Refuses with a per-entity diff when an entity changed after the write recorded it, unless force is set. dryRun reports conflicts and the restore plan without applying anything. The rollback itself is journaled — its record is the redo handle. Restores configuration only: notifications sent, alerts fired and sensor history are untouched.")]

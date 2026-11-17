@@ -112,8 +112,23 @@
         });
     }
 
-    function showDetails(recordId) {
-        $.get(window.journalUrls.details, { id: recordId }, function (html) {
+    function showDetails(recordId, fanoutOffset) {
+        // #1688: the modal renders one page of the fan-out (200 images);
+        // fanoutOffset walks the rest — every node stays reachable before
+        // the Rollback button that acts on all of them.
+        $.get(window.journalUrls.details, { id: recordId, fanoutOffset: fanoutOffset || 0 }, function (html) {
+            var $existing = $('#journalDetailsModal');
+
+            // In-place swap only while the modal is OPEN (the fan-out paging
+            // links): Bootstrap leaves a closed modal in the DOM hidden, so
+            // reusing it there would feed the next Details click into an
+            // off-screen element — that path rebuilds and shows the modal.
+            if ($existing.length > 0 && $existing.hasClass('show')) {
+                $existing.find('.modal-content').html(html);
+                $existing.find('.modal-body').scrollTop(0);
+                return;
+            }
+
             var $modal = $(
                 '<div class="modal fade" id="journalDetailsModal" tabindex="-1">' +
                 '<div class="modal-dialog modal-xl"><div class="modal-content"></div></div></div>');
@@ -134,6 +149,10 @@
 
         $(document).on('click', '.journal-details-btn', function () {
             showDetails($(this).data('record-id'));
+        });
+
+        $(document).on('click', '.journal-fanout-page', function () {
+            showDetails($(this).data('record-id'), $(this).data('fanout-offset'));
         });
     });
 }());

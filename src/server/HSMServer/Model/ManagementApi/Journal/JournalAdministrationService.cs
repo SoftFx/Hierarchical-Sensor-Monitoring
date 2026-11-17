@@ -263,7 +263,8 @@ namespace HSMServer.Model.ManagementApi.Journal
         }
 
         public PolicyWriteResult<JournalRecordDetailsDto> GetRecord(string recordId, ClaimsPrincipal user,
-            IJournalRecordAccess access = null)
+            IJournalRecordAccess access = null, int fanoutOffset = 0,
+            int fanoutLimit = ChangeSetAdministrationService.DefaultFanoutLimit)
         {
             access ??= new TokenJournalRecordAccess(_authorization, _users, user);
 
@@ -279,7 +280,7 @@ namespace HSMServer.Model.ManagementApi.Journal
                 // already was, #1588 review round 4).
                 Record = Enrich(Render(record), record,
                     new Dictionary<string, ChangeSetModel>(StringComparer.Ordinal), stripRollbackable: false),
-                ChangeSet = UndoGroupDetails(record, user, access),
+                ChangeSet = UndoGroupDetails(record, user, access, fanoutOffset, fanoutLimit),
             });
         }
 
@@ -452,12 +453,12 @@ namespace HSMServer.Model.ManagementApi.Journal
         };
 
         private ChangeSetDetailsDto UndoGroupDetails(JournalRecordModel record, ClaimsPrincipal user,
-            IJournalRecordAccess access)
+            IJournalRecordAccess access, int fanoutOffset, int fanoutLimit)
         {
             if (!Guid.TryParse(record.ChangeSetId, out var changeSetId))
                 return null;
 
-            var details = _changeSets.GetChangeSet(changeSetId, user, access.ChangeSetAccess);
+            var details = _changeSets.GetChangeSet(changeSetId, user, access.ChangeSetAccess, fanoutOffset, fanoutLimit);
 
             return details.Success ? details.Value : null;
         }
