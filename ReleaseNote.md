@@ -1,25 +1,21 @@
 # HSM Server
 
-## Breaking
-* **Ports 44330 and 44333 are removed (#1696):** 443 serves everything. Upgrade the image first while the old ports still answer, wait until agents report 0.6.0 (0.5.50+ moves itself to 443), point other clients (collectors, probes, Grafana, scripts) at 443, then replace the compose files. A client that cannot move yet: map `'44330:443'` on `caddy` in `docker-compose.override.yml`.
-* **Collectors default to the collector session (ADR-0019):** HSMDataCollector 4.0.0-preview, HSM Agent 0.6.0 and Linux probe 0.13.0 use one WebSocket on 443, no HTTP fallback; agents switch when they self-update. Before upgrading: behind a proxy that drops WebSockets set `server.transport` (agent) / `hsm.transport` (probe) to `"http"`; behind your own reverse proxy set `Kestrel__TrustedProxies`, or only 20 collectors connect.
+## Notifications
+* A chat with aggregated messages no longer goes silent until a restart after an alert with an empty variable (`$comment`, `$unit`...); an alert that cannot be grouped is sent as it is (#1776).
+* Alerts arriving while a chat's aggregated message is built are no longer lost (#1778).
+* Five per-alert trace lines moved from Info to Debug: Release logs write two lines per alert instead of seven.
 
-## Collector sessions
-* `GET /api/sensors/session`: values, registrations, files, directives on one WebSocket. Max 1 000 sessions, 20 per client address (`CollectorSessions`); opens, closes, refusals logged (#1664).
-* These collectors register a 5-minute `Service alive` alert; before, it never fired by default (#1666).
+## Stricter validation
+* Sensor-policy templates with `{` or `}` are rejected (#1674); control and bidi-override characters are rejected in names and templates, alert texts are sanitized (#1705).
+* TTL and template TTL: at least 1 minute, bounded to the DateTime range; status policies that would trigger themselves are rejected (#1673, #1707).
+* Schedule YAML: no anchors or aliases, bounded size and dates (#1706).
 
-## Sensor move
-* Move sensors in the web UI, `/api/v1`, MCP (dry run): id and history stay, the old path becomes an alias; a move onto an occupied path merges (#1718).
-* Collectors can declare previous paths: history follows a layout change.
-
-## Sensor API
-* A rejected key gets one 406, not three ERRORs (#1649); a client abort is not an error (#1648).
-* Malformed command: 400, server fault: 500; one bad command no longer fails its batch (#1749, #1756).
+## API
+* Version sensor values are accepted on the Sensor API (#1671).
+* A malformed `/list` element or `X-HSM-Dry-Run` header answers 400 instead of 500 (#1672, #1675); an unknown template type returns only the `sensorType` error (#1677).
+* `testConnection` without credentials answers 406 (#1678); a read-only token's write denial says the token is read-only (#1708).
+* Product policy endpoints are authorized through the node's root product (#1680).
 
 ## Web UI
-* Journal: operation type (#1638); bar-chart hover: UTC label (#1647); template preview refills after a blocked Save (#1650).
-
-## Dependencies
-* Bundled HsmAgent 0.6.0 (was 0.5.28): session by default, leaves a retired 44330/44333 (#1655).
-* Bundled Linux probe 0.13.0 (was 0.10.0): session by default.
-* Server self-monitoring: HSMDataCollector 3.5.0 over HTTP.
+* Journal: large record fan-outs are paged (#1688); filters work for legacy rows (#1679).
+* Chat and folder dates are shown in UTC (#1676).
