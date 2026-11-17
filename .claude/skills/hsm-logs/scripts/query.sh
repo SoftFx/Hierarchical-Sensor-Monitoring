@@ -3,7 +3,7 @@
 #
 # usage: query.sh [-s START] [-e END] [-l LIMIT] [-t ACCOUNT:PROJECT] '<LogsQL>'
 #   START/END: RFC3339 (2026-11-16T15:00:00Z) or a relative age (15m, 6h, 2d); default START=1h, END=now
-#   LIMIT:     max records returned (default 1000); stats queries return few rows anyway
+#   LIMIT:     max records returned (default 100); stats queries return few rows anyway
 #   TENANT:    VictoriaLogs tenant, default 0:1 (the HSM production server)
 #
 # Settings: TTS_LOGS_URL (log server address), TTS_LOGS_API_USER (Authentik username) and
@@ -11,7 +11,7 @@
 # found when running inside a git worktree). Values are never printed.
 set -euo pipefail
 
-start="1h"; end=""; limit=1000; tenant="0:1"
+start="1h"; end=""; limit=100; tenant="0:1"
 while getopts "s:e:l:t:h" opt; do
   case "$opt" in
     s) start="$OPTARG" ;;
@@ -39,7 +39,10 @@ load_env() {
     [[ "$line" == *=* ]] || continue
     k="${line%%=*}"; k="${k%"${k##*[![:space:]]}"}"
     v="${line#*=}"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
-    case "$v" in \"*\"|\'*\') v="${v:1:${#v}-2}" ;; esac
+    case "$v" in
+      \"*\"|\'*\') v="${v:1:${#v}-2}" ;;
+      *) v="${v%%[[:space:]]#*}" ;;   # unquoted: ' #...' is a comment
+    esac
     case "$k" in
       TTS_LOGS_URL|TTS_LOGS_API_USER|TTS_LOGS_API_PASSWORD) [ -n "${!k:-}" ] || export "$k=$v" ;;
     esac
