@@ -29,6 +29,25 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Matches(@"^\[Product\]Bridge/Errors \[(, limit is reached|limit is reached, )\]$", line);
         }
 
+        [Fact]
+        public void GetAggregateMessage_ThreeAlertsOneWithNullVariable_AreGroupedInOneLine()
+        {
+            var builder = new MessageBuilder();
+
+            builder.AddMessage(BuildAlert(Template, comment: "limit is reached"));
+            builder.AddMessage(BuildAlert(Template, comment: null));
+            builder.AddMessage(BuildAlert(Template, comment: "no liquidity"));
+
+            var message = builder.GetAggregateMessage();
+
+            // The null lands at the start, in the middle or at the end of the item list,
+            // depending on the dictionary order.
+            var line = Assert.Single(message.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            Assert.StartsWith("[Product]Bridge/Errors [", line);
+            Assert.Contains("limit is reached", line);
+            Assert.Contains("no liquidity", line);
+        }
+
         // Record.Exception: the next message must be empty whether the first drain threw or not.
         [Fact]
         public void GetAggregateMessage_AlertsDifferOnlyInVariableThatIsNullInOne_NextMessageIsEmpty()

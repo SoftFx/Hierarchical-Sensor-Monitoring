@@ -62,16 +62,23 @@ namespace HSMServer.Notifications.AddressBook
 
             if (apply)
             {
+                var collectItems = !isEmptyDiff && diffName != PathConst;
+
+                // Read both values before the group is changed: if a read throws, the caller
+                // sends the alert ungrouped, and the group must not have counted it.
+                var baseItem = collectItems ? _baseState[diffName] : null;
+                var newItem = collectItems ? alert[diffName] : null;
+
                 _mainDiff = diffName;
                 _totalItems++;
 
-                if (!isEmptyDiff && !GroupByPath)
+                if (collectItems)
                 {
                     if (_groupedItems.IsEmpty)
-                        _groupedItems.Enqueue(_baseState[diffName]);
+                        _groupedItems.Enqueue(baseItem);
 
                     if (_groupedItems.Count < MaxGroupedItemsCount)
-                        _groupedItems.Enqueue(alert[diffName]);
+                        _groupedItems.Enqueue(newItem);
                 }
 
                 if (FirstNotifyTime > result.BuildDate)
