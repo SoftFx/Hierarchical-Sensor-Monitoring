@@ -13,7 +13,13 @@
     /// Single-line surfaces (names, icons) pass <c>allowLineBreaks: false</c>
     /// — a newline in a name breaks single-line rendering in lists,
     /// dropdowns and Telegram headers (a smaller cousin of the display
-    /// spoofing this validator exists to stop).
+    /// spoofing this validator exists to stop). There the Unicode line
+    /// separators U+2028/U+2029 are rejected with it: they are not
+    /// control characters, but browsers and Telegram break lines on them
+    /// all the same. The soft direction marks (U+200E/U+200F/U+061C) are
+    /// deliberately still allowed everywhere: they are ordinary marks of
+    /// mixed-direction text, outside #1705's embedding/override/isolate
+    /// set.
     /// </summary>
     internal static class TextFieldValidator
     {
@@ -40,6 +46,8 @@
         private static bool IsAllowed(char c, bool allowLineBreaks) =>
             (allowLineBreaks && c is '\t' or '\n' or '\r') ||
             (c >= ' ' && c < '\u007F') ||
-            (c > '\u009F' && c is not (>= '\u202A' and <= '\u202E') and not (>= '\u2066' and <= '\u2069'));
+            (c > '\u009F' &&
+             c is not (>= '\u202A' and <= '\u202E') and not (>= '\u2066' and <= '\u2069') &&
+             (allowLineBreaks || c is not ('\u2028' or '\u2029')));
     }
 }

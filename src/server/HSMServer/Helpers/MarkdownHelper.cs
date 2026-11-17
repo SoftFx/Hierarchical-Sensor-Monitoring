@@ -65,6 +65,14 @@ namespace HSMServer.Helpers
             if (string.IsNullOrEmpty(input))
                 return HtmlString.Empty;
 
+            // #1710 review: the hot callers (_SensorValuesTable — up to three
+            // calls per history row, the tree refresh) are plain text with no
+            // markup at all. With no '<' no tag can form — neither HTML nor a
+            // <markdown> span — and a bare '&' renders as text, so this is
+            // exactly the pre-#1705 passthrough: skip the AngleSharp parse.
+            if (input.IndexOf('<') < 0)
+                return new HtmlString(input);
+
             // #1705: only the <markdown> spans were sanitized here — the text
             // between them passed through RAW, and the alert paths render
             // unsanitized policy template text through this helper (the
@@ -78,7 +86,8 @@ namespace HSMServer.Helpers
 
             foreach (Match match in MarkdownTagRegex.Matches(input))
             {
-                result.Append(HtmlSanitizerService.Sanitize(input.Substring(lastPos, match.Index - lastPos)));
+                if (match.Index > lastPos)
+                    result.Append(HtmlSanitizerService.Sanitize(input.Substring(lastPos, match.Index - lastPos)));
 
                 string content = match.Groups["content"].Value;
                 result.Append(_sanitizer.Sanitize(Markdown.ToHtml(content)));
@@ -86,7 +95,8 @@ namespace HSMServer.Helpers
                 lastPos = match.Index + match.Length;
             }
 
-            result.Append(HtmlSanitizerService.Sanitize(input[lastPos..]));
+            if (input.Length > lastPos)
+                result.Append(HtmlSanitizerService.Sanitize(input[lastPos..]));
 
             return new HtmlString(result.ToString());
         }

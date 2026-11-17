@@ -14,9 +14,9 @@ using HSMServer.Core.Schedule;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Validation;
 using ScheduleModel = HSMServer.Core.Model.Policies.AlertSchedule;
 
-using HSMServer.Validation;
 namespace HSMServer.Model.ManagementApi.AlertSchedules
 {
     /// <summary>

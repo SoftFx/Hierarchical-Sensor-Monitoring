@@ -19,9 +19,9 @@ using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Notifications.Chats;
+using HSMServer.Validation;
 using Microsoft.Extensions.Logging;
 
-using HSMServer.Validation;
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
     /// <summary>
