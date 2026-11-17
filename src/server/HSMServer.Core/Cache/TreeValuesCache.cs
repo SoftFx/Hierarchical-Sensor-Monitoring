@@ -1511,7 +1511,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            _logger.Info($"TSend: NewAlertMessageEvent Invoke");
+            _logger.Debug($"TSend: NewAlertMessageEvent Invoke");
             NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
         }
 

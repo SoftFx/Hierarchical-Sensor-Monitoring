@@ -14,7 +14,7 @@ namespace HSMServer.Core.Managers
 
         internal void ProcessMessage(AlertMessage message)
         {
-            _logger.Info("ProcessMessage started");
+            _logger.Debug("ProcessMessage started");
 
             var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
             var sendFirstAlerts = new List<AlertResult>();
@@ -22,7 +22,7 @@ namespace HSMServer.Core.Managers
 
             if (notApplyAlerts.Count > 0)
             {
-                _logger.Info($"Sending {notApplyAlerts.Count} immediate alerts");
+                _logger.Debug($"Sending {notApplyAlerts.Count} immediate alerts");
                 SendAlertMessage(sensorId, notApplyAlerts);
             }
 
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Managers
 
             if (sendFirstAlerts.Count > 0)
             {
-                _logger.Info($"Sending {sendFirstAlerts.Count} first alerts");
+                _logger.Debug($"Sending {sendFirstAlerts.Count} first alerts");
                 SendAlertMessage(sensorId, sendFirstAlerts);
             }
         }

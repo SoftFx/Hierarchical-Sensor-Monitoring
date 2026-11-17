@@ -175,7 +175,7 @@ namespace HSMServer.Notifications
         {
             try
             {
-                _logger.Info($"TSend: DeliverAsync enter");
+                _logger.Debug($"TSend: DeliverAsync enter");
 
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                 {
