@@ -27,6 +27,8 @@ namespace HSMServer.Notifications.AddressBook
 
         internal DateTime FirstNotifyTime { get; private set; }
 
+        internal AlertResult BaseAlert => _baseAlert;
+
 
         internal GroupedNotification(AlertResult alert)
         {
