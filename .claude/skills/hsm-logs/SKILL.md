@@ -44,12 +44,12 @@ $S -s 2026-11-16T19:40:00Z -e 2026-11-16T20:00:00Z '"DatabaseCore" | fields _tim
 - The helper returns at most 100 records by default (`-l N` for more); add `| fields ...` to keep
   the output small.
 
-Settings in `.env`: `TTS_LOGS_URL`, `TTS_LOGS_API_USER`, `TTS_LOGS_API_PASSWORD` for prod, and the
-same keys with the `TTS_LOGS_STAGING_` prefix for staging. If they are missing, the person creates an
-Authentik App password (Settings → Tokens and App passwords on that log server's Authentik) and
-fills them in, or copies them from the TT Server / TT Aggregator project. Plain `KEY=value` lines; a
-` #` in an unquoted value starts a comment. Never print or ask for the values, and never send one
-log server's credentials to the other.
+Settings in `.env`: `TTS_LOGS_URL`, `TTS_LOGS_API_USER`, `TTS_LOGS_API_PASSWORD`. Both log servers
+sit behind the same Authentik, so one App password reads both; staging is the prod address with
+`staging.` in front of the host (`TTS_LOGS_STAGING_URL` overrides it). If the keys are missing, the
+person creates an Authentik App password (Settings → Tokens and App passwords) and fills them in,
+or copies them from the TT Server / TT Aggregator project. Plain `KEY=value` lines; a ` #` in an
+unquoted value starts a comment. Never print or ask for the values.
 
 Answer with the log server, the query you ran and the time range; quote only the relevant lines.
 For people the same data is in each log server's VMUI with `accountID=0&projectID=1`.
