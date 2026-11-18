@@ -31,6 +31,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
 using HSMServer.SensorApi.Sessions;
 using HSMServer.Migrations;
+using HSMServer.Model.ManagementApi.AccessKeys;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -93,6 +94,12 @@ namespace HSMServer.ServiceExtensions
             // The shared alert read implementation (#1393) — same shape: behind
             // both the REST alert controllers and the MCP alert tools.
             services.AddScoped<AlertReadService>();
+
+            // The shared access-key read implementation (#1787) — same shape:
+            // behind both the REST access-keys controller and the MCP list
+            // tool. The id source for the write surface (#1789) and the
+            // "has the installed agent connected" signal.
+            services.AddScoped<AccessKeysReadService>();
 
             // The shared chat read implementation — same shape as the two above:
             // behind both the REST chat controller and the MCP chat tools. The

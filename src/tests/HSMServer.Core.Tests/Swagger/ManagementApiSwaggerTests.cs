@@ -430,6 +430,13 @@ namespace HSMServer.Core.Tests.Swagger
             // sensor-tree item endpoints.
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicies))] = [400, 401, 403, 404, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicy))] = [401, 403, 404, 500],
+
+            // The access-keys read surface (#1787): the nested pattern of the
+            // policy lists — the parent product's 404/403 admission on both
+            // arms, and the item's unknown/foreign/master key id is the same
+            // plain 404.
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKeys))] = [400, 401, 403, 404, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKey))] = [401, 403, 404, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],

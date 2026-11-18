@@ -2,6 +2,7 @@ using System;
 using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel;
+using HSMServer.Model.ManagementApi.AccessKeys;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
@@ -176,6 +177,32 @@ namespace HSMServer.Mcp
 
         /// <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         [Description("Total page count at the effective limit (0 when the collection is empty).")]
+        public int TotalPages { get; init; }
+    }
+
+
+    /// <summary>Result of the list_access_keys tool.</summary>
+    [Description("Result of the list_access_keys tool: one page of the product's access keys plus the effective paging echo.")]
+    public sealed record McpAccessKeysResult
+    {
+        /// <summary>The product's access keys of the served page, ordered by display name then id.</summary>
+        [Description("The product's access keys of the served page, ordered by display name then id.")]
+        public List<AccessKeyDto> AccessKeys { get; init; }
+
+        /// <summary>The product's keys, whatever the limit.</summary>
+        [Description("The product's keys, whatever the limit.")]
+        public int TotalFound { get; init; }
+
+        /// <summary>The effective page size (the clamped `limit`).</summary>
+        [Description("The effective page size (the clamped `limit`).")]
+        public int Limit { get; init; }
+
+        /// <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        [Description("The 1-based page actually served (a page past the end serves the last page).")]
+        public int Page { get; init; }
+
+        /// <summary>Total page count at the effective limit (0 when the product has no keys).</summary>
+        [Description("Total page count at the effective limit (0 when the product has no keys).")]
         public int TotalPages { get; init; }
     }
 
