@@ -95,7 +95,7 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public bool OidcClientSecretIgnoredInSettingsFile { get; }
 
-        // Why an enabled Oidc section is not used (empty when it is off or complete).
+        // Why the Oidc section is not used (empty when it is off and well-formed, or complete).
         [JsonIgnore]
         public IReadOnlyList<string> OidcErrors { get; }
 
@@ -134,7 +134,7 @@ namespace HSMServer.ServerConfiguration
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
             CollectorSessions = Register<CollectorSessionsConfig>(nameof(CollectorSessions));
-            Oidc = Register<OidcConfig>(OidcConfig.SectionName);
+            Oidc = OidcConfig.Bind(configuration.GetSection(OidcConfig.SectionName));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());

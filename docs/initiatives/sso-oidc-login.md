@@ -50,7 +50,7 @@ Technical choices (implementation): Authorization Code + PKCE via `Microsoft.Asp
 
 ## Risks
 
-- **Username collision:** a provider account whose username equals a local HSM login (e.g. `admin`) signs into that HSM user. Accepted: the provider is the company's own and its usernames are administered; who may sign in is gated by the policy binding.
+- **Username collision:** a provider account whose username equals a local HSM login (e.g. `admin`) signs into that HSM user. Accepted (owner, after review): the provider is the company's own, its usernames are administered and users cannot change them (Authentik setting "Allow users to change username" off); who may sign in is gated by the policy binding. The built-in admin `default` is excluded from SSO in code.
 - **Admin sync revokes:** with `AdminGroup` set, an HSM admin who is not in the group loses `IsAdmin` on the next SSO sign-in (password sign-ins do not touch it).
 - **Revocation delay:** a person disabled at the provider keeps HSM access until the cookie's `SessionLifetime` ends (deleting the HSM user ends it at once).
 - **Redirect URI mismatch** behind a proxy: the server builds it from the request host; the bundled Caddy keeps the original `Host`, so it is `https://<HSM_DOMAIN>/signin-oidc`.

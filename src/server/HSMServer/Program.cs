@@ -149,7 +149,7 @@ try
                      "the SSO client secret is read from the environment only (Oidc__ClientSecret=...).");
 
     if (serverConfig.OidcErrors.Count > 0)
-        logger.Error($"SSO sign-in is OFF, the {OidcConfig.SectionName} section is enabled but incomplete: {string.Join(" ", serverConfig.OidcErrors)}");
+        logger.Error($"SSO sign-in is OFF, the {OidcConfig.SectionName} section has errors: {string.Join(" ", serverConfig.OidcErrors)}");
     else if (serverConfig.Oidc.IsActive)
         logger.Info($"SSO sign-in is ON: provider {serverConfig.Oidc.Authority}, client {serverConfig.Oidc.ClientId}, redirect path {HsmOidcDefaults.CallbackPath}.");
 

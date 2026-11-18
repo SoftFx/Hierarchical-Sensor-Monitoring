@@ -165,6 +165,21 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task FrontChannelSignOutEndpoint_IsClosed()
+        {
+            // The handler's default /signout-oidc would clear the HSM cookie on any
+            // cross-site GET; logout is local only, so the path must not be handled.
+            var cookie = await SignIn();
+
+            var signOut = new HttpRequestMessage(HttpMethod.Get, "/signout-oidc");
+            signOut.Headers.Add("Cookie", cookie);
+            var response = await _client.SendAsync(signOut);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.DoesNotContain(SetCookies(response), c => c.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        }
+
+        [Fact]
         public async Task Challenge_UsesPkceAndTheConfiguredScopes()
         {
             var challenge = await _client.GetAsync("/login");

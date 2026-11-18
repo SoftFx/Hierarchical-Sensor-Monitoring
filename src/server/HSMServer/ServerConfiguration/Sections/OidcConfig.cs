@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.ServerConfiguration
@@ -67,10 +68,45 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public bool IsActive { get; private set; }
 
+        // Values of the section that could not be converted (Bind); each one switches SSO off.
+        private readonly List<string> _bindErrors = new();
+
         [JsonIgnore]
         public IReadOnlyList<string> ScopeList =>
             (Scopes ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+
+        // Binds the section key by key instead of with Get<OidcConfig>(), which throws on the
+        // first value it cannot convert ("SessionLifetime": "12h", "Enabled": "yes") and
+        // would stop the server at startup. A bad value keeps its default, is reported by
+        // Validate and switches SSO off; the valid ones survive the resave.
+        public static OidcConfig Bind(IConfigurationSection section)
+        {
+            var config = new OidcConfig();
+
+            var settable = typeof(OidcConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                             .Where(p => p.SetMethod?.IsPublic == true && p.GetCustomAttribute<JsonIgnoreAttribute>() is null);
+
+            foreach (var property in settable)
+            {
+                var value = section[property.Name];
+
+                if (value is null)
+                    continue;
+
+                try
+                {
+                    property.SetValue(config, section.GetValue(property.PropertyType, property.Name));
+                }
+                catch (InvalidOperationException)
+                {
+                    config._bindErrors.Add($"{SectionName}.{property.Name} = '{value}' is not a valid {property.PropertyType.Name} " +
+                                           $"(e.g. {property.GetValue(config) ?? "text"}); the default is used.");
+                }
+            }
+
+            return config;
+        }
 
         public static string ReadClientSecret(IConfiguration environment)
         {
@@ -86,12 +122,12 @@ namespace HSMServer.ServerConfiguration
                          .Any(provider => provider.TryGet(ClientSecretKey, out var value) && !string.IsNullOrWhiteSpace(value));
 
 
-        // Returns the problems that keep an enabled section from working (empty when it is
-        // disabled or complete) and sets IsActive accordingly. It does not throw: SSO is an
-        // optional login path, and a typo in it must not take the monitoring server down.
+        // Returns the problems that keep the section from working (empty when it is disabled
+        // and well-formed, or complete) and sets IsActive accordingly. It does not throw: SSO
+        // is an optional login path, and a typo in it must not take the monitoring server down.
         public List<string> Validate()
         {
-            var errors = new List<string>();
+            var errors = new List<string>(_bindErrors);
 
             if (!Enabled)
             {

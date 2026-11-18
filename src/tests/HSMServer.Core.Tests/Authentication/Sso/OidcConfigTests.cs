@@ -157,6 +157,63 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public void Bind_ReadsEveryWellFormedValue()
+        {
+            var config = Bind("""
+                { "Oidc": { "Enabled": "true", "Authority": "https://sso.example.test/", "ClientId": "hsm",
+                            "Scopes": "openid profile email", "UsernameClaim": "email", "GroupsClaim": "roles",
+                            "AdminGroup": "hsm-admins", "AutoCreateUsers": false, "DisplayName": "Authentik",
+                            "SessionLifetime": "08:30:00", "ClientSecret": "ignored-here" } }
+                """);
+
+            Assert.True(config.Enabled);
+            Assert.Equal("https://sso.example.test/", config.Authority);
+            Assert.Equal("hsm", config.ClientId);
+            Assert.Equal("openid profile email", config.Scopes);
+            Assert.Equal("email", config.UsernameClaim);
+            Assert.Equal("roles", config.GroupsClaim);
+            Assert.Equal("hsm-admins", config.AdminGroup);
+            Assert.False(config.AutoCreateUsers);
+            Assert.Equal("Authentik", config.DisplayName);
+            Assert.Equal(new TimeSpan(8, 30, 0), config.SessionLifetime);
+            Assert.Null(config.ClientSecret);         // never from the settings file
+        }
+
+        [Fact]
+        public void Bind_MalformedValue_SwitchesSsoOff_InsteadOfThrowing()
+        {
+            // Get<OidcConfig>() throws on this, and ServerConfig runs before the server starts.
+            var config = Bind("""{ "Oidc": { "Enabled": true, "Authority": "https://sso.example.test/", "ClientId": "hsm", "SessionLifetime": "12h" } }""");
+            config.ClientSecret = Secret;
+
+            var error = Assert.Single(config.Validate());
+
+            Assert.Contains("Oidc.SessionLifetime = '12h'", error);
+            Assert.False(config.IsActive);
+            // The valid values survive, so the resave does not erase the operator's settings.
+            Assert.Equal("https://sso.example.test/", config.Authority);
+            Assert.Equal(TimeSpan.FromHours(12), config.SessionLifetime);
+        }
+
+        [Fact]
+        public void Bind_MalformedEnabled_IsReported()
+        {
+            var config = Bind("""{ "Oidc": { "Enabled": "yes" } }""");
+
+            Assert.Contains(config.Validate(), error => error.Contains("Oidc.Enabled = 'yes'"));
+            Assert.False(config.IsActive);
+        }
+
+        [Fact]
+        public void Bind_MissingSection_IsTheDefault()
+        {
+            var config = Bind("{}");
+
+            Assert.Empty(config.Validate());
+            Assert.False(config.Enabled);
+        }
+
+        [Fact]
         public void ReadClientSecret_TakesTheEnvironmentKey()
         {
             var environment = new ConfigurationBuilder()
@@ -198,8 +255,8 @@ namespace HSMServer.Core.Tests.Authentication.Sso
 
 
         private static OidcConfig Bind(string json) =>
-            new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build()
-                                      .GetSection(OidcConfig.SectionName).Get<OidcConfig>();
+            OidcConfig.Bind(new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build()
+                                                      .GetSection(OidcConfig.SectionName));
 
         private static IConfigurationRoot BuildFromFile(string json)
         {

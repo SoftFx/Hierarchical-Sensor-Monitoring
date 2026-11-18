@@ -32,6 +32,7 @@ namespace HSMServer.Authentication.Sso
         public static string Describe(SsoSignInError error) => error switch
         {
             SsoSignInError.MissingUsername => "SSO sign-in failed: the identity provider did not send a username.",
+            SsoSignInError.ReservedUsername => "SSO sign-in failed: this username is reserved for the built-in administrator.",
             SsoSignInError.UnknownUser => "SSO sign-in failed: there is no HSM user with your username. Ask an administrator to create it.",
             SsoSignInError.CreateFailed => "SSO sign-in failed: the HSM user could not be created.",
             SsoSignInError.ProviderFailure => "SSO sign-in failed: the identity provider did not complete the sign-in.",
@@ -76,7 +77,7 @@ namespace HSMServer.Authentication.Sso
             context.Properties.IssuedUtc = now;
             context.Properties.ExpiresUtc = now + config.SessionLifetime;
             context.Properties.AllowRefresh = false;
-            context.Properties.RedirectUri = HsmOidcDefaults.AfterSignInPath;
+            context.ReturnUri = HsmOidcDefaults.AfterSignInPath;
         }
 
         public override Task RemoteFailure(RemoteFailureContext context)
@@ -123,6 +124,11 @@ namespace HSMServer.Authentication.Sso
 
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.CallbackPath = new PathString(HsmOidcDefaults.CallbackPath);
+
+            // Logout is local only. The handler's front-channel endpoint (/signout-oidc by
+            // default) would sign the HSM cookie out on any cross-site GET, because the HSM
+            // principal carries no sid/iss for it to check.
+            options.RemoteSignOutPath = PathString.Empty;
 
             options.Scope.Clear();
             foreach (var scope in config.ScopeList)

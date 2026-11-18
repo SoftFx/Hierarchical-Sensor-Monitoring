@@ -123,6 +123,28 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task BuiltInDefaultAdmin_IsNeverSignedInBySso()
+        {
+            // A fresh database starts with admin "default" / password "default".
+            AddExisting("default", isAdmin: true);
+            _config.AdminGroup = "hsm-admins";
+
+            var result = await Service().ResolveUser(External("default", "hsm-admins"));
+
+            Assert.Equal(SsoSignInError.ReservedUsername, result.Error);
+            Assert.Empty(_updates);
+        }
+
+        [Fact]
+        public async Task BuiltInDefaultAdmin_IsNotCreatedEither()
+        {
+            var result = await Service().ResolveUser(External("default"));
+
+            Assert.Equal(SsoSignInError.ReservedUsername, result.Error);
+            Assert.Empty(_added);
+        }
+
+        [Fact]
         public async Task UnknownUser_IsCreatedWithoutPasswordRolesOrAdmin()
         {
             var result = await Service().ResolveUser(External("petrov", "hsm-admins"));

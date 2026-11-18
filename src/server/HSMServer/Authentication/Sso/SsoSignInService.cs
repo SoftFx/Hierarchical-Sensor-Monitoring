@@ -13,6 +13,8 @@ namespace HSMServer.Authentication.Sso
         None,
         // The provider's token had no value in Oidc.UsernameClaim.
         MissingUsername,
+        // The username is the built-in "default" admin, which SSO never signs in.
+        ReservedUsername,
         // No HSM user has that login and Oidc.AutoCreateUsers is off.
         UnknownUser,
         // Creating the user failed (storage refused it).
@@ -51,6 +53,14 @@ namespace HSMServer.Authentication.Sso
             {
                 logger.LogWarning("SSO sign-in rejected: the provider sent no '{Claim}' claim.", config.UsernameClaim);
                 return SsoSignInResult.Fail(SsoSignInError.MissingUsername);
+            }
+
+            // The built-in admin of a fresh database has the password "default": a provider
+            // account that happens to be named so must not inherit it.
+            if (login == UserManager.DefaultUserUsername)
+            {
+                logger.LogWarning("SSO sign-in rejected: '{Login}' is the built-in HSM admin and can sign in only with its password.", login);
+                return SsoSignInResult.Fail(SsoSignInError.ReservedUsername);
             }
 
             bool? isAdmin = string.IsNullOrWhiteSpace(config.AdminGroup) ? null : IsInGroup(external, config.AdminGroup.Trim());

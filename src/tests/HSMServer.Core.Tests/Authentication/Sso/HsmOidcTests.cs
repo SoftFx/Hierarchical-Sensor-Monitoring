@@ -121,6 +121,7 @@ namespace HSMServer.Core.Tests.Authentication.Sso
             Assert.True(options.GetClaimsFromUserInfoEndpoint);
             Assert.Equal(CookieAuthenticationDefaults.AuthenticationScheme, options.SignInScheme);
             Assert.Equal(new PathString("/signin-oidc"), options.CallbackPath);
+            Assert.False(options.RemoteSignOutPath.HasValue);       // logout is local only
             Assert.True(options.Scope.ToHashSet().SetEquals(["openid", "profile", "email"]));
             Assert.Equal("email", options.TokenValidationParameters.NameClaimType);
             Assert.Equal(typeof(HsmOidcEvents), options.EventsType);
@@ -148,7 +149,7 @@ namespace HSMServer.Core.Tests.Authentication.Sso
             Assert.Equal(Now, context.Properties.IssuedUtc);
             Assert.Equal(Now.AddHours(8), context.Properties.ExpiresUtc);
             Assert.False(context.Properties.AllowRefresh);
-            Assert.Equal("/Home", context.Properties.RedirectUri);
+            Assert.Equal("/Home", context.ReturnUri);
         }
 
         [Theory]
