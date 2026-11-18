@@ -101,6 +101,12 @@ namespace HSMServer.ServiceExtensions
             // "has the installed agent connected" signal.
             services.AddScoped<AccessKeysReadService>();
 
+            // The shared access-key write engine (#1789): create/update/delete
+            // rendered through the core's own key entries (the web page's
+            // path), with the informational TreeCrud audit trail. Scoped for
+            // the same reason as the read twin.
+            services.AddScoped<AccessKeysAdministrationService>();
+
             // The shared chat read implementation — same shape as the two above:
             // behind both the REST chat controller and the MCP chat tools. The
             // id source the alert/template write endpoints validate

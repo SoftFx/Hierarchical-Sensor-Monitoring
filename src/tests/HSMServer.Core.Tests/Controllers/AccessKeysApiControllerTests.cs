@@ -9,6 +9,8 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AccessKeys;
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -28,19 +30,30 @@ namespace HSMServer.Core.Tests.Controllers
     {
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
+        private readonly Mock<IUserManager> _users = new();
+        private readonly Mock<HSMServer.Core.Journal.IJournalService> _journal = new();
+        private readonly System.Collections.Generic.List<HSMServer.Core.Model.JournalRecordModel> _journalRecords = [];
 
 
         public AccessKeysApiControllerTests()
         {
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+
+            _journal.Setup(j => j.AddRecord(It.IsAny<HSMServer.Core.Model.JournalRecordModel>()))
+                .Callback<HSMServer.Core.Model.JournalRecordModel>(_journalRecords.Add);
         }
 
 
-        private static ClaimsPrincipal BuildPrincipal() =>
+        private static ClaimsPrincipal BuildPrincipal() => BuildPrincipal(Guid.NewGuid());
+
+        private static ClaimsPrincipal BuildPrincipal(Guid ownerId) =>
             new(new ClaimsIdentity(
             [
-                new Claim(HsmApiTokenClaims.OwnerUserId, Guid.NewGuid().ToString()),
+                new Claim(HsmApiTokenClaims.OwnerUserId, ownerId.ToString()),
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
@@ -70,7 +83,9 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         private AccessKeysApiController CreateController() =>
-            new(new AccessKeysReadService(_cache.Object, _authorization.Object))
+            new(new AccessKeysReadService(_cache.Object, _authorization.Object),
+                new AccessKeysAdministrationService(_cache.Object, _authorization.Object,
+                    _users.Object, _journal.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -210,6 +225,337 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(404, StatusCodeOf(masterResult));
             Assert.Equivalent(ErrorBodyOf(unknown), ErrorBodyOf(foreignResult));
             Assert.Equivalent(ErrorBodyOf(unknown), ErrorBodyOf(masterResult));
+        }
+
+
+        // ---- the write surface (#1789) -------------------------------------
+
+
+        private static string[] FieldErrorsOf(IActionResult result, string field)
+        {
+            var errors = Assert.IsType<ManagementApiErrorDto>(
+                Assert.IsType<ObjectResult>(result).Value).Details;
+
+            return Assert.IsType<string[]>(errors[field]);
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_Returns201_EchoesTheCredentialGuid_DefaultsToTheAgentProfile_Journals()
+        {
+            var product = AddProduct("Alpha");
+
+            // A known owner, so the journal record's initiator is pinnable.
+            var ownerId = Guid.NewGuid();
+            _users.Setup(u => u[ownerId]).Returns(new User("the-owner") { Id = ownerId });
+
+            AccessKeyModel added = null;
+            _cache.Setup(c => c.AddAccessKey(It.IsAny<AccessKeyModel>()))
+                .Callback<AccessKeyModel>(k => added = k)
+                .Returns((AccessKeyModel k) => k);
+
+            var controller = new AccessKeysApiController(
+                new AccessKeysReadService(_cache.Object, _authorization.Object),
+                new AccessKeysAdministrationService(_cache.Object, _authorization.Object,
+                    _users.Object, _journal.Object))
+            {
+                ControllerContext = new ControllerContext
+                {
+                    HttpContext = new DefaultHttpContext { User = BuildPrincipal(ownerId) },
+                },
+            };
+
+            var result = Assert.IsType<CreatedAtActionResult>(controller.CreateAccessKey(
+                product.Id, new CreateAccessKeyRequestDto { DisplayName = "  agent-key  " }));
+
+            Assert.Equal(201, result.StatusCode);
+            Assert.Equal(nameof(AccessKeysApiController.GetProductAccessKey), result.ActionName);
+            Assert.Equal(added.Id, result.RouteValues["keyId"]);
+
+            var dto = Assert.IsType<AccessKeyDto>(result.Value);
+
+            // The echo carries the credential GUID — the hand-over.
+            Assert.Equal(added.Id, dto.Id);
+            Assert.Equal("agent-key", dto.DisplayName);
+
+            // The key attaches to the ROUTE product and defaults to the
+            // agent profile (send data, add nodes, add sensors — no
+            // read-back).
+            Assert.Equal(product.Id, added.ProductId);
+            Assert.Equal(["canSendSensorData", "canAddNodes", "canAddSensors"], dto.Permissions);
+
+            // #1794 review: the (authorId, productId) ctor leaves the
+            // init-only ExpirationTime at MinValue — an API-issued key would
+            // be born EXPIRED (refused on first use, unresurrectable through
+            // the expired-unblock guard). The unlimited preset is pinned
+            // here so that can never regress.
+            Assert.Equal(DateTime.MaxValue, added.ExpirationTime);
+            Assert.True(added.IsValid(Core.Model.KeyPermissions.CanSendSensorData, out _));
+            Assert.NotEqual(DateTime.MinValue, dto.ExpirationTime);
+
+            // The credential-lifecycle audit trail: an informational TreeCrud
+            // record naming the TOKEN OWNER as the initiator.
+            var record = Assert.Single(_journalRecords);
+            Assert.Equal("Create access key", record.Enviroment);
+            Assert.Equal("accessKey", record.PropertyName);
+            Assert.Equal(product.Id.ToString(), record.ProductId);
+            Assert.Contains("the-owner", record.Initiator);
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_ExplicitPermissions_ParsedFromNames()
+        {
+            var product = AddProduct("Alpha");
+
+            _cache.Setup(c => c.AddAccessKey(It.IsAny<AccessKeyModel>()))
+                .Returns((AccessKeyModel k) => k);
+
+            var dto = Assert.IsType<AccessKeyDto>(Assert.IsType<CreatedAtActionResult>(CreateController().CreateAccessKey(
+                    product.Id, new CreateAccessKeyRequestDto { DisplayName = "reader", Permissions = ["canReadSensorData"] }))
+                .Value);
+
+            Assert.Equal(["canReadSensorData"], dto.Permissions);
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_EvaluatorForbidden_IsUniform403()
+        {
+            var product = AddProduct("Alpha");
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            var result = CreateController().CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = "agent-key" });
+
+            Assert.Equal(403, StatusCodeOf(result));
+            Assert.Equal(ManagementApiErrors.ForbiddenCode, ErrorBodyOf(result).Error);
+            Assert.Equal(PolicyWriteResult.WriteDeniedMessage, ErrorBodyOf(result).Message);
+            _cache.Verify(c => c.AddAccessKey(It.IsAny<AccessKeyModel>()), Times.Never());
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_UnknownProduct_IsTheSame404_AsInvisible()
+        {
+            var controller = CreateController();
+
+            var unknown = controller.CreateAccessKey(Guid.NewGuid(), new CreateAccessKeyRequestDto { DisplayName = "k" });
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.NotFound);
+
+            var invisible = controller.CreateAccessKey(Guid.NewGuid(), new CreateAccessKeyRequestDto { DisplayName = "k" });
+
+            Assert.Equal(404, StatusCodeOf(unknown));
+            Assert.Equal(404, StatusCodeOf(invisible));
+            Assert.Equivalent(ErrorBodyOf(unknown), ErrorBodyOf(invisible));
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_NameAndPermissionRules_AnswerTheWebStrings()
+        {
+            var product = AddProduct("Alpha");
+            AddKey(product, "taken");
+
+            var controller = CreateController();
+
+            var blank = controller.CreateAccessKey(product.Id, new CreateAccessKeyRequestDto { DisplayName = "  " });
+            Assert.Equal(400, StatusCodeOf(blank));
+            Assert.Contains("Display name is required.", FieldErrorsOf(blank, "displayName"));
+
+            var longName = controller.CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = new string('a', 101) });
+            Assert.Contains("Display name length should be less than 100.", FieldErrorsOf(longName, "displayName"));
+
+            var duplicate = controller.CreateAccessKey(product.Id, new CreateAccessKeyRequestDto { DisplayName = "taken" });
+            Assert.Contains("Access key with the same name already exists.", FieldErrorsOf(duplicate, "displayName"));
+
+            var controlChar = controller.CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = "bad\u0007name" });
+            Assert.Contains(FieldErrorsOf(controlChar, "displayName"),
+                message => message.Contains("must not contain control or bidirectional-override characters"));
+
+            var unknownPermission = controller.CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = "key", Permissions = ["fly"] });
+            Assert.Contains(FieldErrorsOf(unknownPermission, "permissions"),
+                message => message.Contains("'fly' is not one of"));
+
+            var emptyPermissions = controller.CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = "key", Permissions = [] });
+            Assert.Contains("At least one permission should be selected.", FieldErrorsOf(emptyPermissions, "permissions"));
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_SeveralProblems_ReportAllFieldsInOne400()
+        {
+            var product = AddProduct("Alpha");
+
+            var result = CreateController().CreateAccessKey(product.Id,
+                new CreateAccessKeyRequestDto { DisplayName = " ", Permissions = ["fly"] });
+
+            Assert.Equal(400, StatusCodeOf(result));
+
+            var details = ErrorBodyOf(result).Details;
+
+            Assert.Contains("displayName", details.Keys);
+            Assert.Contains("permissions", details.Keys);
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_RenameRepermissionBlock_AppliesThePartialUpdate()
+        {
+            var product = AddProduct("Alpha");
+            var key = AddKey(product, "agent");
+
+            Core.Cache.UpdateEntities.AccessKeyUpdate applied = default;
+            _cache.Setup(c => c.UpdateAccessKey(It.IsAny<Core.Cache.UpdateEntities.AccessKeyUpdate>()))
+                .Callback<Core.Cache.UpdateEntities.AccessKeyUpdate>(u => applied = u)
+                .Returns((Core.Cache.UpdateEntities.AccessKeyUpdate u) =>
+                {
+                    key.Update(u);
+
+                    return key;
+                });
+
+            var dto = Assert.IsType<AccessKeyDto>(Assert.IsType<OkObjectResult>(CreateController().UpdateAccessKey(
+                    product.Id, key.Id, new UpdateAccessKeyRequestDto
+                    {
+                        DisplayName = "renamed",
+                        Permissions = ["canSendSensorData"],
+                        State = "blocked",
+                    }))
+                .Value);
+
+            Assert.Equal("renamed", applied.DisplayName);
+            Assert.Equal(Core.Model.KeyPermissions.CanSendSensorData, applied.Permissions);
+            Assert.Equal(Core.Model.KeyState.Blocked, applied.State);
+
+            Assert.Equal("renamed", dto.DisplayName);
+            Assert.Equal(["canSendSensorData"], dto.Permissions);
+            Assert.Equal("blocked", dto.State);
+
+            Assert.Equal("Update access key", Assert.Single(_journalRecords).Enviroment);
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_UnblockOfAnExpiredKey_LandsOnExpired()
+        {
+            var product = AddProduct("Alpha");
+
+            var entity = EntitiesFactory.BuildAccessKeyEntity(name: "expired", productId: product.Id.ToString()) with
+            {
+                ExpirationTime = DateTime.UtcNow.AddDays(-1).Ticks,
+                State = (byte)Core.Model.KeyState.Blocked,
+            };
+            var key = new Core.Model.AccessKeyModel(entity);
+            product.AccessKeys[key.Id] = key;
+
+            Core.Cache.UpdateEntities.AccessKeyUpdate applied = default;
+            _cache.Setup(c => c.UpdateAccessKey(It.IsAny<Core.Cache.UpdateEntities.AccessKeyUpdate>()))
+                .Callback<Core.Cache.UpdateEntities.AccessKeyUpdate>(u => applied = u)
+                .Returns((Core.Cache.UpdateEntities.AccessKeyUpdate u) => key);
+
+            CreateController().UpdateAccessKey(product.Id, key.Id, new UpdateAccessKeyRequestDto { State = "active" });
+
+            // The web page's guard: the expiration still stands.
+            Assert.Equal(Core.Model.KeyState.Expired, applied.State);
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_UnknownOrForeignKey_Is403Or404PerTheEvaluator()
+        {
+            var product = AddProduct("Alpha");
+            var other = AddProduct("Beta");
+            var foreign = AddKey(other, "foreign");
+
+            var controller = CreateController();
+
+            Assert.Equal(404, StatusCodeOf(controller.UpdateAccessKey(product.Id, Guid.NewGuid(),
+                new UpdateAccessKeyRequestDto { State = "blocked" })));
+            Assert.Equal(404, StatusCodeOf(controller.UpdateAccessKey(product.Id, foreign.Id,
+                new UpdateAccessKeyRequestDto { State = "blocked" })));
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            Assert.Equal(403, StatusCodeOf(controller.UpdateAccessKey(product.Id, Guid.NewGuid(),
+                new UpdateAccessKeyRequestDto { State = "blocked" })));
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_CoreFailure_Is409WithAFixedMessage()
+        {
+            var product = AddProduct("Alpha");
+            var key = AddKey(product, "agent");
+
+            _cache.Setup(c => c.UpdateAccessKey(It.IsAny<Core.Cache.UpdateEntities.AccessKeyUpdate>()))
+                .Returns((Core.Model.AccessKeyModel)null);
+
+            var result = CreateController().UpdateAccessKey(product.Id, key.Id,
+                new UpdateAccessKeyRequestDto { DisplayName = "renamed" });
+
+            Assert.Equal(409, StatusCodeOf(result));
+            Assert.Equal("The access key could not be updated.", ErrorBodyOf(result).Message);
+        }
+
+
+        [Fact]
+        public void DeleteAccessKey_Returns204_AndJournalsTheRemoval()
+        {
+            var product = AddProduct("Alpha");
+            var key = AddKey(product, "agent");
+
+            _cache.Setup(c => c.RemoveAccessKey(key.Id)).Returns(key);
+
+            var result = CreateController().DeleteAccessKey(product.Id, key.Id);
+
+            Assert.Equal(204, StatusCodeOf(result));
+            Assert.Equal("Remove access key", Assert.Single(_journalRecords).Enviroment);
+        }
+
+
+        [Fact]
+        public void DeleteAccessKey_UnknownProduct_Is404_EvaluatorForbidden_Is403()
+        {
+            var controller = CreateController();
+
+            Assert.Equal(404, StatusCodeOf(controller.DeleteAccessKey(Guid.NewGuid(), Guid.NewGuid())));
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            var product = AddProduct("Alpha");
+
+            Assert.Equal(403, StatusCodeOf(controller.DeleteAccessKey(product.Id, Guid.NewGuid())));
+        }
+
+
+        [Fact]
+        public void DeleteAccessKey_CoreFailure_Is409_KeyVanishedConcurrently_Is404()
+        {
+            var product = AddProduct("Alpha");
+            var present = AddKey(product, "present");
+            var vanished = AddKey(product, "vanished");
+
+            _cache.Setup(c => c.RemoveAccessKey(It.IsAny<Guid>())).Returns((Core.Model.AccessKeyModel)null);
+
+            var failure = CreateController().DeleteAccessKey(product.Id, present.Id);
+            Assert.Equal(409, StatusCodeOf(failure));
+            Assert.Equal("The access key could not be removed.", ErrorBodyOf(failure).Message);
+
+            // Vanished mid-write — the plain 404, not a ghost conflict.
+            product.AccessKeys.TryRemove(vanished.Id, out _);
+
+            Assert.Equal(404, StatusCodeOf(CreateController().DeleteAccessKey(product.Id, vanished.Id)));
         }
     }
 }

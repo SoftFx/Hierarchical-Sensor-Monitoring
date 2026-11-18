@@ -21,11 +21,16 @@ namespace HSMServer.Core.Tests.Mcp
     {
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
+        private readonly Mock<IUserManager> _users = new();
+        private readonly Mock<HSMServer.Core.Journal.IJournalService> _journal = new();
 
 
         public AccessKeysMcpToolsTests()
         {
             _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
         }
 
@@ -61,7 +66,10 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
         private AccessKeysMcpTools CreateTools() =>
-            new(new AccessKeysReadService(_cache.Object, _authorization.Object), AccessorOf());
+            new(new AccessKeysReadService(_cache.Object, _authorization.Object),
+                new AccessKeysAdministrationService(_cache.Object, _authorization.Object,
+                    _users.Object, _journal.Object),
+                AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>
             new HttpContextAccessor
@@ -114,6 +122,71 @@ namespace HSMServer.Core.Tests.Mcp
             // through the tool error text unchanged.
             Assert.Equal(ManagementApiErrors.NotFoundMessage, unknown.Message);
             Assert.Equal(unknown.Message, invisible.Message);
+        }
+
+
+        [Fact]
+        public void CreateAccessKey_DelegatesAndEchoesTheCreatedKey()
+        {
+            var product = AddProduct("Alpha");
+
+            _cache.Setup(c => c.AddAccessKey(It.IsAny<AccessKeyModel>()))
+                .Returns((AccessKeyModel k) => k);
+
+            var dto = CreateTools().CreateAccessKey(product.Id, "agent-key");
+
+            Assert.Equal("agent-key", dto.DisplayName);
+            Assert.Equal(["canSendSensorData", "canAddNodes", "canAddSensors"], dto.Permissions);
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_DelegatesAndEchoesTheUpdatedKey()
+        {
+            var product = AddProduct("Alpha");
+            var key = AddKey(product, "agent");
+
+            _cache.Setup(c => c.UpdateAccessKey(It.IsAny<Core.Cache.UpdateEntities.AccessKeyUpdate>()))
+                .Returns((Core.Cache.UpdateEntities.AccessKeyUpdate u) =>
+                {
+                    key.Update(u);
+
+                    return key;
+                });
+
+            var dto = CreateTools().UpdateAccessKey(product.Id, key.Id, state: "blocked");
+
+            Assert.Equal(key.Id, dto.Id);
+            Assert.Equal("blocked", dto.State);
+        }
+
+
+        [Fact]
+        public void UpdateAccessKey_ForbiddenDecision_IsToolError()
+        {
+            var product = AddProduct("Alpha");
+
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().UpdateAccessKey(product.Id, Guid.NewGuid(), state: "blocked"));
+
+            Assert.Equal(HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult.WriteDeniedMessage, error.Message);
+        }
+
+
+        [Fact]
+        public void DeleteAccessKey_ReturnsTheDeletedEnvelope_OnSuccess()
+        {
+            var product = AddProduct("Alpha");
+            var key = AddKey(product, "agent");
+
+            _cache.Setup(c => c.RemoveAccessKey(key.Id)).Returns(key);
+
+            var deleted = CreateTools().DeleteAccessKey(product.Id, key.Id);
+
+            Assert.Equal(key.Id, deleted.Id);
         }
     }
 }

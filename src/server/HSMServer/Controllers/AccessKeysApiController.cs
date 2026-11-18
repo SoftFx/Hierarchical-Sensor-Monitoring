@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AccessKeys;
+using HSMServer.Model.ManagementApi.Alerts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,10 +31,12 @@ namespace HSMServer.Controllers
     public sealed class AccessKeysApiController : ControllerBase
     {
         private readonly AccessKeysReadService _reader;
+        private readonly AccessKeysAdministrationService _writer;
 
-        public AccessKeysApiController(AccessKeysReadService reader)
+        public AccessKeysApiController(AccessKeysReadService reader, AccessKeysAdministrationService writer)
         {
             _reader = reader;
+            _writer = writer;
         }
 
 
@@ -70,5 +73,75 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetProductAccessKey(Guid productId, Guid keyId) =>
             _reader.GetProductAccessKey(User, productId, keyId).ToActionResult();
+
+        /// <summary>
+        /// Issue an access key on the product — the credential hand-over step of the
+        /// agent-installation scenario. The write needs the owner's ProductManager role
+        /// and a read-write token (the web page's gate). The display name follows the
+        /// web form's rules; permissions default to the agent profile (send data, add
+        /// nodes, add sensors — no read-back) when omitted. The 201 echo carries the
+        /// key's GUID — the credential itself, like the read surface exposes it.
+        /// </summary>
+        /// <param name="productId">Product id (any visible node works — the key attaches to that node).</param>
+        /// <param name="request">The body: display name + optional permission names.</param>
+        [HttpPost("accessKeys")]
+        [ProducesResponseType(typeof(AccessKeyDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public IActionResult CreateAccessKey(Guid productId, [FromBody] CreateAccessKeyRequestDto request)
+        {
+            var result = _writer.CreateAccessKey(productId, request, User);
+
+            return result.Success
+                ? CreatedAtAction(nameof(GetProductAccessKey),
+                    new { productId, keyId = result.Value.Id }, result.Value)
+                : PolicyWriteResult.ToActionResult(result.Failure);
+        }
+
+        /// <summary>
+        /// Modify one key of the product: rename, re-permission, block or unblock (the
+        /// kill-switch for a misbehaving agent). Every body field is optional — null
+        /// means leave unchanged. The write needs the owner's ProductManager role and a
+        /// read-write token.
+        /// </summary>
+        /// <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+        /// <param name="keyId">Key id.</param>
+        /// <param name="request">The body: optional new display name, permission names, state.</param>
+        [HttpPatch("accessKeys/{keyId:guid}")]
+        [ProducesResponseType(typeof(AccessKeyDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public IActionResult UpdateAccessKey(Guid productId, Guid keyId,
+            [FromBody] UpdateAccessKeyRequestDto request) =>
+            _writer.UpdateAccessKey(productId, keyId, request, User).ToActionResult();
+
+        /// <summary>
+        /// Remove one key of the product — the credential stops being accepted on its
+        /// next presentation. The write needs the owner's ProductManager role and a
+        /// read-write token.
+        /// </summary>
+        /// <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+        /// <param name="keyId">Key id.</param>
+        [HttpDelete("accessKeys/{keyId:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public IActionResult DeleteAccessKey(Guid productId, Guid keyId)
+        {
+            var result = _writer.DeleteAccessKey(productId, keyId, User);
+
+            return result.Success ? NoContent() : PolicyWriteResult.ToActionResult(result.Failure);
+        }
     }
 }

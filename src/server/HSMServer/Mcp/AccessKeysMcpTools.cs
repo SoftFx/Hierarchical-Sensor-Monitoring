@@ -8,26 +8,34 @@ using ModelContextProtocol.Server;
 namespace HSMServer.Mcp
 {
     /// <summary>
-    /// The access-key list tool of the MCP surface (#1787): one product's
-    /// access keys — a thin rendering of <see cref="AccessKeysReadService"/>,
-    /// the same engine the REST controller runs on (the #1393 pattern).
+    /// The access-key tools of the MCP surface (#1787/#1789): one product's
+    /// keys (the id-discovery list) and the credential-lifecycle writes —
+    /// thin renderings of <see cref="AccessKeysReadService"/> and
+    /// <see cref="AccessKeysAdministrationService"/>, the same engines the
+    /// REST controller runs on (the #1393 pattern).
     /// </summary>
     // The id-discovery surface of the agent-installation scenario: the listed
-    // key ids are the handles the write tools (#1789) will take, and each
-    // item's lastUseTime/lastIp answer "has the installed agent connected"
-    // without any new endpoint. The key id IS the credential and travels
-    // deliberately (web parity — see the DTO's remarks); sight, the 404
-    // uniformity and the master-key exclusion all live in the read service,
-    // shared with REST — the tool is the adapter.
+    // key ids are the handles the write tools take, and each item's
+    // lastUseTime/lastIp answer "has the installed agent connected" without
+    // any new endpoint. The key id IS the credential and travels deliberately
+    // (web parity — see the DTO's remarks); sight, the 404 uniformity, the
+    // master-key exclusion and the ProductManager write gate all live in the
+    // shared services — the tools are the adapter. Read-write enforcement
+    // needs no tool-level check: /mcp serves every message via POST, and the
+    // HsmApiToken management policy rejects read-only tokens on unsafe
+    // methods outright.
     [McpServerToolType]
     public sealed class AccessKeysMcpTools
     {
         private readonly AccessKeysReadService _reader;
+        private readonly AccessKeysAdministrationService _writer;
         private readonly IHttpContextAccessor _http;
 
-        public AccessKeysMcpTools(AccessKeysReadService reader, IHttpContextAccessor http)
+        public AccessKeysMcpTools(AccessKeysReadService reader, AccessKeysAdministrationService writer,
+            IHttpContextAccessor http)
         {
             _reader = reader;
+            _writer = writer;
             _http = http;
         }
 
@@ -50,6 +58,45 @@ namespace HSMServer.Mcp
                 Page = result.Page,
                 TotalPages = result.TotalPages,
             };
+        }
+
+
+        // Idempotent=false: a create — re-sending it after a network retry
+        // would issue a SECOND credential (or answer the duplicate-name
+        // error).
+        [McpServerTool(Name = "create_access_key", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Issues an access key on a product — the credential hand-over step of installing an HSM agent (the response's key id IS the credential). The write needs the token owner's ProductManager role. Permissions default to the agent profile ('canSendSensorData', 'canAddNodes', 'canAddSensors') when omitted; at least one when given. The display name: 1..100 chars, no control/bidi characters, unique among the product's keys. The response echoes the created key.")]
+        public AccessKeyDto CreateAccessKey(
+            [Description("Product id to issue the key on (any visible node works — the key attaches to that node).")] Guid productId,
+            [Description("The new key's display name: 1..100 characters, unique among the product's keys.")] string displayName,
+            [Description("The key's permission names ('canSendSensorData', 'canAddNodes', 'canAddSensors', 'canReadSensorData'); at least one. Omitted = the agent profile (send data, add nodes, add sensors).")] string[] permissions = null) =>
+            McpToolWriteErrors.Unwrap(_writer.CreateAccessKey(productId,
+                new CreateAccessKeyRequestDto { DisplayName = displayName, Permissions = permissions }, User));
+
+        // Idempotent=true: the retry-safe state-set writes — re-sending the
+        // same partial update converges on the same key.
+        [McpServerTool(Name = "update_access_key", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Modifies one key of a product: rename, re-permission, block or unblock (the kill-switch for a misbehaving agent — its key is refused, the data keeps flowing elsewhere). Every argument is optional — omit what stays unchanged. Unblocking a key whose expiration has passed lands on 'expired'. The write needs the token owner's ProductManager role. The response echoes the updated key.")]
+        public AccessKeyDto UpdateAccessKey(
+            [Description("Product id the key belongs to.")] Guid productId,
+            [Description("Key id (from list_access_keys).")] Guid keyId,
+            [Description("Optional new display name (same rules as on create).")] string displayName = null,
+            [Description("Optional new permission names (at least one when given).")] string[] permissions = null,
+            [Description("Optional new state: 'active' (unblock) or 'blocked'.")] string state = null) =>
+            McpToolWriteErrors.Unwrap(_writer.UpdateAccessKey(productId, keyId,
+                new UpdateAccessKeyRequestDto { DisplayName = displayName, Permissions = permissions, State = state }, User));
+
+        // Idempotent=false: a delete — re-sending it after a network retry
+        // answers the not-found error for an already-removed key.
+        [McpServerTool(Name = "delete_access_key", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Removes one key of a product — the credential stops being accepted on its next presentation. The write needs the token owner's ProductManager role.")]
+        public McpDeletedResult DeleteAccessKey(
+            [Description("Product id the key belongs to.")] Guid productId,
+            [Description("Key id (from list_access_keys).")] Guid keyId)
+        {
+            McpToolWriteErrors.Unwrap(_writer.DeleteAccessKey(productId, keyId, User));
+
+            return new McpDeletedResult { Id = keyId };
         }
 
 

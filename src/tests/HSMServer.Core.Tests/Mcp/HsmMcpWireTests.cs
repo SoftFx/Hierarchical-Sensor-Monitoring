@@ -55,11 +55,13 @@ namespace HSMServer.Core.Tests.Mcp
     {
         private static readonly string[] SpecTools =
         [
+            "create_access_key",
             "create_alert_schedule",
             "create_alert_template",
             "create_product",
             "create_sensor_policy",
             "create_sensor_ttl_policy",
+            "delete_access_key",
             "delete_alert_schedule",
             "delete_alert_template",
             "delete_sensor",
@@ -88,6 +90,7 @@ namespace HSMServer.Core.Tests.Mcp
             "remove_sensor_alias",
             "rollback_journal_record",
             "unmute_sensor",
+            "update_access_key",
             "update_alert_schedule",
             "update_alert_template",
             "update_sensor_policy",
@@ -490,7 +493,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(37, tools.Count);
+                Assert.Equal(40, tools.Count);
 
                 foreach (var tool in tools)
                 {

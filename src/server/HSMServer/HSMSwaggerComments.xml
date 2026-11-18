@@ -46,6 +46,38 @@
             <param name="productId">Product id (any visible node of the tree works — sight is resolved at the node's root product).</param>
             <param name="keyId">Key id.</param>
         </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.CreateAccessKey(System.Guid,HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto)">
+            <summary>
+            Issue an access key on the product — the credential hand-over step of the
+            agent-installation scenario. The write needs the owner's ProductManager role
+            and a read-write token (the web page's gate). The display name follows the
+            web form's rules; permissions default to the agent profile (send data, add
+            nodes, add sensors — no read-back) when omitted. The 201 echo carries the
+            key's GUID — the credential itself, like the read surface exposes it.
+            </summary>
+            <param name="productId">Product id (any visible node works — the key attaches to that node).</param>
+            <param name="request">The body: display name + optional permission names.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.UpdateAccessKey(System.Guid,System.Guid,HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto)">
+            <summary>
+            Modify one key of the product: rename, re-permission, block or unblock (the
+            kill-switch for a misbehaving agent). Every body field is optional — null
+            means leave unchanged. The write needs the owner's ProductManager role and a
+            read-write token.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+            <param name="request">The body: optional new display name, permission names, state.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.DeleteAccessKey(System.Guid,System.Guid)">
+            <summary>
+            Remove one key of the product — the credential stops being accepted on its
+            next presentation. The write needs the owner's ProductManager role and a
+            read-write token.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+        </member>
         <member name="T:HSMServer.Controllers.AgentController">
              <summary>
              Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
@@ -938,9 +970,11 @@
         </member>
         <member name="T:HSMServer.Mcp.AccessKeysMcpTools">
             <summary>
-            The access-key list tool of the MCP surface (#1787): one product's
-            access keys — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService"/>,
-            the same engine the REST controller runs on (the #1393 pattern).
+            The access-key tools of the MCP surface (#1787/#1789): one product's
+            keys (the id-discovery list) and the credential-lifecycle writes —
+            thin renderings of <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService"/> and
+            <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService"/>, the same engines the
+            REST controller runs on (the #1393 pattern).
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
@@ -1785,6 +1819,43 @@
         <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.AuthorId">
             <summary>The id of the user who created the key; null for keys created by the system (e.g. a product's default key).</summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDtoMapper">
+            <summary>
+            The shared AccessKeyModel → <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto"/> mapping of the
+            access-key surface — one mapping for the read service (#1787) and the
+            write service (#1789), so an echoed write and a read of the same key
+            can never diverge.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService">
+            <summary>
+            The access-key write engine (#1789): issue, modify and remove a
+            product's agent credentials — the token-side twin of the web UI's
+            access-keys page. Transport-agnostic: the REST controller and the MCP
+            write tools render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through the
+            shared envelopes.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.CreateAccessKey(System.Guid,HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Issue a key on the product: admission (the owner's ProductManager
+            role + a read-write token), the web form's display-name rules, the
+            permission names (the agent profile when omitted), then the core's
+            own add path. The result echoes the created key — the GUID in the
+            echo IS the credential, exactly like the read surface exposes it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.UpdateAccessKey(System.Guid,System.Guid,HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Modify one key of the product: rename, re-permission, block or
+            unblock (the kill-switch). Every field is optional — null means
+            leave unchanged. Unblocking a key whose expiration has passed
+            lands on 'expired', the web page's own guard.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.DeleteAccessKey(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one key of the product — the credential stops being accepted on its next presentation.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService">
             <summary>
             The access-key read implementation (#1787): one product's keys,
@@ -1805,6 +1876,38 @@
             key of another product and a server-wide master key all answer the
             same 404.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto">
+            <summary>
+            The create-access-key request body. Validation (the web form's display
+            name rules, the permission names) is owned by the administration
+            service, not by binding attributes — the REST and MCP transports share
+            one validation decision with the web UI's error strings.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto.DisplayName">
+            <summary>The new key's display name: 1..100 characters, no control
+            or bidirectional-override characters, unique among the product's
+            keys. Surrounding whitespace is trimmed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto.Permissions">
+            <summary>The key's permission names ('canSendSensorData', 'canAddNodes', 'canAddSensors', 'canReadSensorData'); at least one. Omitted or null = the agent profile ('canSendSensorData', 'canAddNodes', 'canAddSensors') — enough for an HSM agent, no read-back.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto">
+            <summary>
+            The update-access-key request body — a partial update: every field is
+            optional and null means "leave unchanged" (the PolicyDto "null means
+            omit" convention).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.DisplayName">
+            <summary>The key's new display name (same rules as on create: 1..100 characters, no control/bidi-override characters, unique among the product's keys). Null = leave unchanged.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.Permissions">
+            <summary>The key's new permission names (at least one). Null = leave unchanged.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.State">
+            <summary>The key's new stored state: 'active' (unblock) or 'blocked' (the kill-switch for a misbehaving agent; the agent's data keeps flowing, its key is refused). 'expired' is derived, not settable. Null = leave unchanged.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>
