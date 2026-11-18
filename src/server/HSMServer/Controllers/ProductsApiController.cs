@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -21,7 +23,10 @@ namespace HSMServer.Controllers
     // (the owner-sight predicate — never a 403-per-item).
     //
     // Since #1391 the read logic lives in SensorTreeReadService, shared with the
-    // MCP tools; this controller is the REST rendering of it.
+    // MCP tools; this controller is the REST rendering of it. Since #1786 the
+    // create path renders ProductAdministrationService the same way — the
+    // token-side twin of the web UI's add-product modal (any live read-write
+    // caller; the creator becomes the product's author).
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -30,10 +35,12 @@ namespace HSMServer.Controllers
     public sealed class ProductsApiController : ControllerBase
     {
         private readonly SensorTreeReadService _reader;
+        private readonly ProductAdministrationService _writer;
 
-        public ProductsApiController(SensorTreeReadService reader)
+        public ProductsApiController(SensorTreeReadService reader, ProductAdministrationService writer)
         {
             _reader = reader;
+            _writer = writer;
         }
 
 
@@ -51,5 +58,37 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetProducts(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
             Ok(_reader.ListProducts(User, page, pageSize, HttpContext.RequestAborted));
+
+        /// <summary>
+        /// Create a root product — the first step of the agent-installation
+        /// scenario. Any live read-write token may create one (the web UI's rule:
+        /// the creator becomes the product's author); this surface also grants
+        /// the creator the ProductManager role on the new product, so it is
+        /// immediately visible and manageable by the creating token. The name
+        /// follows the web form's rules (required, at most 100 chars of the
+        /// allowed charset, unique among root products); the product's default
+        /// access key and the tree-CRUD journal record are created by the same
+        /// core path the web UI drives.
+        /// </summary>
+        /// <param name="request">The body carrying the new product's name.</param>
+        [HttpPost]
+        [ProducesResponseType(typeof(ProductDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateProduct([FromBody] CreateProductRequestDto request)
+        {
+            var result = await _writer.CreateProductAsync(request?.Name, User);
+
+            if (!result.Success)
+                return PolicyWriteResult.ToActionResult(result.Failure);
+
+            // A product has no GET {id} of its own — the node endpoint serves
+            // the created tree node, so the Location header points there.
+            return CreatedAtAction(nameof(NodesApiController.GetNode), "Nodes",
+                new { id = result.Value.Id }, result.Value);
+        }
     }
 }

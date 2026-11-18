@@ -151,6 +151,13 @@ namespace HSMServer.ServiceExtensions
             // no read-merge-write window needs no per-node gate.
             services.AddScoped<SensorMuteAdministrationService>();
 
+            // The product-creation write engine (#1786): create rendered through
+            // the core's own AddProductAsync entry (the web UI's add-product
+            // path — default access key and TreeCrud journal record included).
+            // Scoped for the same reason as the mute engine: a boundary-less
+            // write with no read-merge-write window.
+            services.AddScoped<ProductAdministrationService>();
+
             // The sensor-deletion write engine (#1637): delete rendered through
             // the core's own RemoveSensorAsync entry (the web UI's remove-node
             // path). Scoped for the same reason as the mute engine — no

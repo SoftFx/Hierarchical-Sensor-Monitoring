@@ -402,6 +402,12 @@ namespace HSMServer.Core.Tests.Swagger
             // Forbidden arm; the search list answers 404 for an unknown/invisible
             // product filter and has no 403 path at all.
             [(typeof(ProductsApiController), nameof(ProductsApiController.GetProducts))] = [400, 401, 500],
+
+            // The product-creation write (#1786): the web-parity name
+            // validation (400), the create gate's 403 (defense-in-depth
+            // beyond the policy backstop that already rejects read-only
+            // tokens on POST), and the core's own add failure (409).
+            [(typeof(ProductsApiController), nameof(ProductsApiController.CreateProduct))] = [400, 401, 403, 409, 500],
             [(typeof(NodesApiController), nameof(NodesApiController.GetNode))] = [400, 401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
