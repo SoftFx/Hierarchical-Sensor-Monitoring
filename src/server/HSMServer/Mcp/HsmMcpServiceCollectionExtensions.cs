@@ -38,6 +38,7 @@ namespace HSMServer.Mcp
                 // HsmMcpServerRegistrationTests.
                 .WithHttpTransport(options => options.Stateless = true)
                 .WithTools<SensorTreeMcpTools>()
+                .WithTools<ProductsMcpTools>()
                 .WithTools<AlertsMcpTools>()
                 .WithTools<JournalMcpTools>()
                 .WithTools<ChatsMcpTools>()

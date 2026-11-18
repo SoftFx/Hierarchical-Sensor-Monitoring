@@ -423,6 +423,18 @@
             <param name="page">1-based page number; clamped into [1, totalPages].</param>
             <param name="pageSize">Page size, 1..200 (default 50).</param>
         </member>
+        <member name="M:HSMServer.Controllers.ProductsApiController.CreateProduct(HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto)">
+            <summary>
+            Create a root product — the first step of the agent-installation
+            scenario. Any live read-write token may create one (the web UI's rule:
+            the creator becomes the product's author). The name follows the web
+            form's rules (required, at most 100 chars of the allowed charset,
+            unique among root products); the product's default access key and the
+            tree-CRUD journal record are created by the same core path the web UI
+            drives.
+            </summary>
+            <param name="request">The body carrying the new product's name.</param>
+        </member>
         <member name="M:HSMServer.Controllers.SensorHistoryController.NodeChartHistory(HSMServer.Model.Model.History.NodeChartRequest)">
             <summary>
             Node-level overlay chart (issue #1235): returns the node's comparable child sensors as one line
@@ -1186,6 +1198,15 @@
             (<see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> for the reads,
             <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyAdministrationService"/> (#1500) for the writes), the
             same engines the REST policy controllers run on.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.ProductsMcpTools">
+            <summary>
+            The product tool of the MCP surface (#1786): create a root product —
+            the first step of the agent-installation scenario (the product is what
+            an HSM agent's access key belongs to). A thin delegation to
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService"/>, the same engine the REST
+            create endpoint runs on.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorDeletionMcpTools">
@@ -2966,6 +2987,19 @@
             ManagementApiErrorDetailsSchemaFilter); the three fields are always present.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto">
+            <summary>
+            The create-product request body: the new root product's name. Validation
+            (required, length, charset, root-name uniqueness) is owned by the
+            administration service, not by binding attributes — the REST and MCP
+            transports share one validation decision with the web UI's error strings.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto.Name">
+            <summary>The new product's name: 1..100 characters from
+            '0-9a-zA-Z .,_-=#:;%&amp;*()', unique among root products. Surrounding
+            whitespace is trimmed before validation and storage.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto">
             <summary>
             Minimal reference to a tree node (product or folder): enough for an agent to
@@ -3057,6 +3091,24 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.TotalSensors">
             <summary>Total number of direct child sensors (the list above may be capped).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService">
+            <summary>
+            The product-creation write engine (#1786): the first step of the
+            agent-installation scenario — the token-side twin of the web UI's
+            add-product modal. Transport-agnostic: the REST controller and the MCP
+            tool render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through the shared
+            envelopes every other administration service uses.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService.CreateProductAsync(System.String,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Create a root product: admission first (any live read-write
+            caller), then the name rules of the web view model, then the core's
+            own add path (which also writes the TreeCrud journal record and
+            creates the product's default access key). The result echoes the
+            created product.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductDto">
             <summary>
