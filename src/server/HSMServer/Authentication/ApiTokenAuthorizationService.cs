@@ -68,8 +68,10 @@ namespace HSMServer.Authentication
         // with NO boundary to authorize against (the product does not exist
         // yet). Mirrors the web UI's rule that any authenticated user may
         // create a product and become its author: any LIVE caller with a
-        // read-write token is allowed, role-less owners included (their
-        // first product is how they get a role at all). A denial is recorded
+        // read-write token is allowed, role-less owners included (the
+        // creation service then grants the creator the ProductManager role
+        // on the new product, so what a role-less owner creates is
+        // immediately visible and manageable by them). A denial is recorded
         // ONCE, as AuthorizationDenied — like the caller-wide gate above it
         // answers 403 and discloses nothing about any concrete target, so it
         // must not feed the enumeration-probe signal of per-target 404s.

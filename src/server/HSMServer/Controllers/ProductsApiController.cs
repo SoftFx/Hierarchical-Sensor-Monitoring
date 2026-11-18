@@ -1,9 +1,9 @@
+using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -62,11 +62,13 @@ namespace HSMServer.Controllers
         /// <summary>
         /// Create a root product — the first step of the agent-installation
         /// scenario. Any live read-write token may create one (the web UI's rule:
-        /// the creator becomes the product's author). The name follows the web
-        /// form's rules (required, at most 100 chars of the allowed charset,
-        /// unique among root products); the product's default access key and the
-        /// tree-CRUD journal record are created by the same core path the web UI
-        /// drives.
+        /// the creator becomes the product's author); this surface also grants
+        /// the creator the ProductManager role on the new product, so it is
+        /// immediately visible and manageable by the creating token. The name
+        /// follows the web form's rules (required, at most 100 chars of the
+        /// allowed charset, unique among root products); the product's default
+        /// access key and the tree-CRUD journal record are created by the same
+        /// core path the web UI drives.
         /// </summary>
         /// <param name="request">The body carrying the new product's name.</param>
         [HttpPost]

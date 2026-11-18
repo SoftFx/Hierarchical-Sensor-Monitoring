@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi.Alerts;
 
 namespace HSMServer.Model.ManagementApi.SensorTree
@@ -16,7 +18,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// tool render its <see cref="PolicyWriteResult{T}"/> through the shared
     /// envelopes every other administration service uses.
     /// </summary>
-    // DESIGN: creation semantics stay in the core — this service only decides
+    // DESIGN: the creation semantics stay in the core — this service only decides
     // admission (the boundary-less write gate of the evaluator: any live
     // read-write caller, mirroring the web UI where any authenticated user
     // creates a product), validates the name with the SAME rules and error
@@ -25,10 +27,22 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     // the concurrent-duplicate case the pre-check cannot see) and delegates
     // the write itself to TreeValuesCache.AddProductAsync, the SAME entry the
     // web UI drives: the default access key, the author id and the TreeCrud
-    // journal record naming the initiator all happen in that one place. The
-    // author does NOT get a manager role from creation itself (the core never
-    // touches roles) — the web flow relies on the author being granted the
-    // role out-of-band, and this surface deliberately keeps that behavior.
+    // journal record naming the initiator all happen in that one place.
+    //
+    // ONE deliberate divergence from the web flow: the core grants the author
+    // NO role on creation, and the web UI assigns roles out-of-band — an
+    // unattended creator would end up unable to SEE the product it just made
+    // (sight is role-based), stuck with an id that 404s. This surface
+    // therefore grants the creator the ProductManager role itself, through
+    // the web UI's own role-assignment pattern (EditUserRole's
+    // ProductsRoles/UpdateUser round-trip) — what a role-less owner creates
+    // is immediately visible and manageable by that owner, which the
+    // agent-installation scenario requires (issue #1787's key surface is
+    // gated on the product Manager role). The grant runs AFTER the journaled
+    // creation and is best-effort on a persistence failure: the product
+    // exists, so failing the request would read as "not created" (a retry
+    // would trip the duplicate-name 400) — the failure is logged and an
+    // admin can grant the role by hand.
     //
     // Stateless over singletons -> Scoped registration.
     public sealed class ProductAdministrationService
@@ -39,6 +53,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         private const string NameLengthMessage = "New product name length should be less than 100.";
         private const string NameDuplicateMessage = "Product with the same name already exists.";
         private const string NameCharsetMessage = "New product name contains forbidden characters.";
+
+        // The sibling surfaces' fixed-conflict pattern (the deletion's
+        // NotRemovedMessage): the core's internal reason never reaches the
+        // API client — it is logged server-side instead.
+        private const string NotCreatedMessage = "The product could not be created.";
 
         // AddProductViewModel's charset, verbatim.
         private const string NamePattern = @"^[0-9a-zA-Z .,_\-=#:;%&*()]*$";
@@ -51,8 +70,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // error).
         private const string DuplicateNameRaceMarker = "name already in use";
 
-        private static readonly System.Text.RegularExpressions.Regex NameRegex =
-            new(NamePattern, System.Text.RegularExpressions.RegexOptions.Compiled);
+        private static readonly Regex NameRegex = new(NamePattern, RegexOptions.Compiled);
+
+        private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
@@ -71,8 +91,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// Create a root product: admission first (any live read-write
         /// caller), then the name rules of the web view model, then the core's
         /// own add path (which also writes the TreeCrud journal record and
-        /// creates the product's default access key). The result echoes the
-        /// created product.
+        /// creates the product's default access key), then the ProductManager
+        /// role grant that makes the product visible and manageable by its
+        /// creator. The result echoes the created product.
         /// </summary>
         public async Task<PolicyWriteResult<ProductDto>> CreateProductAsync(string name, ClaimsPrincipal user)
         {
@@ -101,6 +122,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             {
                 var product = await _cache.AddProductAsync(trimmed, AuthorIdOf(user), InitiatorOf(user));
 
+                await GrantManagerRoleAsync(product.Id, user);
+
                 return PolicyWriteResult<ProductDto>.Ok(SensorTreeDtoMapper.ToProductDto(product));
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains(DuplicateNameRaceMarker))
@@ -114,8 +137,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             catch (InvalidOperationException ex)
             {
                 // The core's queue/persistence failure — the write never
-                // landed, the message carries the core's own reason.
-                return PolicyWriteResult<ProductDto>.Fail(PolicyWriteOutcome.Conflict, message: ex.Message);
+                // landed; the reason stays in the server log, the client
+                // gets the fixed message (the sibling surfaces' pattern).
+                _logger.Warn(ex, $"Cannot add root product '{trimmed}': the core rejected the request.");
+
+                return PolicyWriteResult<ProductDto>.Fail(PolicyWriteOutcome.Conflict, message: NotCreatedMessage);
             }
         }
 
@@ -152,13 +178,32 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         // The write initiator mirrors every other management write: the
         // token's OWNER as a user, so the audit trail names the owner.
-        private InitiatorInfo InitiatorOf(ClaimsPrincipal user)
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal user) =>
+            InitiatorInfo.AsUser(OwnerOf(user)?.Name ?? "api-token");
+
+        // The creator's own Manager role on the new product — the web UI's
+        // role-assignment pattern (EditUserRole), see the DESIGN comment. The
+        // role REPLACES any stale entry the user holds for the same product id
+        // (a retried create after a failed removal cannot accumulate roles).
+        private async Task GrantManagerRoleAsync(Guid productId, ClaimsPrincipal user)
+        {
+            var owner = OwnerOf(user);
+
+            if (owner is null)
+                return; // unreachable after the gate: the evaluator resolved a live owner
+
+            owner.ProductsRoles.RemoveAll(role => role.Item1 == productId);
+            owner.ProductsRoles.Add((productId, ProductRoleEnum.ProductManager));
+
+            if (!await _users.UpdateUser(owner))
+                _logger.Warn($"Cannot grant the ProductManager role on product '{productId}' to '{owner.Name}': the user update did not persist — the product exists; grant the role by hand.");
+        }
+
+        private User OwnerOf(ClaimsPrincipal user)
         {
             var ownerClaim = user?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
 
-            var owner = Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
-
-            return InitiatorInfo.AsUser(owner?.Name ?? "api-token");
+            return Guid.TryParse(ownerClaim, out var ownerId) ? _users[ownerId] : null;
         }
     }
 }

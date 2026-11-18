@@ -35,7 +35,7 @@ namespace HSMServer.Mcp
         // Idempotent=false: a create — re-sending it after a network retry
         // would create a second product (or answer the duplicate-name error).
         [McpServerTool(Name = "create_product", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Creates a root product — the container an HSM agent's access key belongs to; the first step of installing an agent. Any read-write token may create one; the token's owner becomes the product's author, and the product is created with a default full-permission access key. The name must be 1..100 characters of '0-9 a-z A-Z space .,_-=#:;%&*()', unique among root products (the response echoes the created product).")]
+        [Description("Creates a root product — the container an HSM agent's access key belongs to; the first step of installing an agent. Any read-write token may create one; the token's owner becomes the product's author and gets the ProductManager role on it (the product is immediately visible and manageable by the creator), and the product is created with a default full-permission access key. The name must be 1..100 characters of '0-9 a-z A-Z space .,_-=#:;%&*()', unique among root products (the response echoes the created product).")]
         public async System.Threading.Tasks.Task<ProductDto> CreateProductAsync(
             [Description("Product name: 1..100 characters of '0-9a-zA-Z .,_-=#:;%&*()', unique among root products. Surrounding whitespace is trimmed.")] string name) =>
             McpToolWriteErrors.Unwrap(await _writer.CreateProductAsync(name, User));

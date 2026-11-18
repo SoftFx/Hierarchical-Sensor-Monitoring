@@ -715,9 +715,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public void ProductCreate_RolelessOwner_ReadWriteToken_Allowed()
         {
-            // The web UI lets ANY authenticated user create a product (their
-            // first product is how a role-less owner gets a role at all) —
-            // the mirror keeps that: there is no boundary to see or manage.
+            // The web UI lets ANY authenticated user create a product — the
+            // mirror keeps that: there is no boundary to see or manage. The
+            // creation service grants the creator the ProductManager role on
+            // the new product, so a role-less owner's creation is
+            // immediately visible and manageable by them.
             _owner.IsAdmin = false;
             _info = BuildInfo(readOnly: false);
 

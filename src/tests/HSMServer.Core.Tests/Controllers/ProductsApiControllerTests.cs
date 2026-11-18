@@ -209,6 +209,7 @@ namespace HSMServer.Core.Tests.Controllers
             var ownerId = Guid.NewGuid();
             var owner = new HSMServer.Model.Authentication.User("the-owner") { Id = ownerId };
             _users.Setup(u => u[ownerId]).Returns(owner);
+            _users.Setup(u => u.UpdateUser(It.IsAny<HSMServer.Model.Authentication.User>())).ReturnsAsync(true);
 
             var created = BuildRoot("Alpha", Guid.NewGuid());
 
@@ -242,10 +243,38 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.NotNull(initiator);
             Assert.Equal("the-owner", initiator.Info);
 
+            // The creator's own sight (#1792 review): the service grants the
+            // owner the ProductManager role on the new product through the
+            // web UI's role-assignment pattern, so the created product is
+            // immediately visible and manageable by the creating token.
+            Assert.Contains((created.Id, HSMServer.Model.Authentication.ProductRoleEnum.ProductManager), owner.ProductsRoles);
+            _users.Verify(u => u.UpdateUser(owner), Times.Once());
+
             // The trimmed name reaches the core, exactly once.
             VerifyAddProduct(Times.Once());
             _cache.Verify(c => c.AddProductAsync("Alpha", It.IsAny<Guid>(),
                 It.IsAny<Core.TableOfChanges.InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once());
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateProduct_RoleGrantPersistenceFailure_StillReturns201()
+        {
+            // The grant runs AFTER the journaled creation and is best-effort:
+            // the product exists, so failing the request would read as "not
+            // created" — a retry would trip the duplicate-name 400. The
+            // failure is logged; an admin can grant the role by hand.
+            var ownerId = Guid.NewGuid();
+            var owner = new HSMServer.Model.Authentication.User("the-owner") { Id = ownerId };
+            _users.Setup(u => u[ownerId]).Returns(owner);
+            _users.Setup(u => u.UpdateUser(It.IsAny<HSMServer.Model.Authentication.User>())).ReturnsAsync(false);
+
+            SetupAddProduct(BuildRoot("Alpha", Guid.NewGuid()));
+
+            var result = await CreateController(BuildPrincipal(ownerId)).CreateProduct(new CreateProductRequestDto { Name = "Alpha" });
+
+            Assert.Equal(201, StatusCodeOf(result));
+            _users.Verify(u => u.UpdateUser(owner), Times.Once());
         }
 
 
@@ -334,8 +363,11 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public async System.Threading.Tasks.Task CreateProduct_CoreAddFailure_Is409WithTheCoreReason()
+        public async System.Threading.Tasks.Task CreateProduct_CoreAddFailure_Is409WithAFixedMessage()
         {
+            // The core's internal reason never reaches the API client (the
+            // sibling surfaces' fixed-conflict pattern); it is logged
+            // server-side instead.
             _cache.Setup(c => c.AddProductAsync(It.IsAny<string>(), It.IsAny<Guid>(),
                     It.IsAny<Core.TableOfChanges.InitiatorInfo>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("Cannot add root product 'Alpha': database unavailable"));
@@ -344,7 +376,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(409, StatusCodeOf(result));
             Assert.Equal(ManagementApiErrors.ConflictCode, ErrorBodyOf(result).Error);
-            Assert.Equal("Cannot add root product 'Alpha': database unavailable", ErrorBodyOf(result).Message);
+            Assert.Equal("The product could not be created.", ErrorBodyOf(result).Message);
         }
     }
 }
