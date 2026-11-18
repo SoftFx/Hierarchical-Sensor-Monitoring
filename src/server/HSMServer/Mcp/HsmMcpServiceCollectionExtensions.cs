@@ -40,6 +40,7 @@ namespace HSMServer.Mcp
                 .WithTools<SensorTreeMcpTools>()
                 .WithTools<ProductsMcpTools>()
                 .WithTools<AccessKeysMcpTools>()
+                .WithTools<AgentInstallerMcpTools>()
                 .WithTools<AlertsMcpTools>()
                 .WithTools<JournalMcpTools>()
                 .WithTools<ChatsMcpTools>()
