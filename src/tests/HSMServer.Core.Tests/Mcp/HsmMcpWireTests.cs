@@ -74,6 +74,7 @@ namespace HSMServer.Core.Tests.Mcp
             "get_node",
             "get_sensor",
             "get_sensor_history",
+            "list_access_keys",
             "list_alert_schedules",
             "list_alert_templates",
             "list_chats",
@@ -489,7 +490,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(36, tools.Count);
+                Assert.Equal(37, tools.Count);
 
                 foreach (var tool in tools)
                 {

@@ -17,6 +17,35 @@
             </summary>
             <param name="user">User object (password field must be password hash).</param>
         </member>
+        <member name="T:HSMServer.Controllers.AccessKeysApiController">
+            <summary>
+            A product's access keys (#1787) — the id-discovery surface of the
+            agent-installation scenario: the listed key ids are the handles the
+            write surface (#1789) takes, and each item's lastUseTime/lastIp answer
+            "has the installed agent connected". Bearer-token authenticated only;
+            reads follow the owner's product sight (unknown and invisible products
+            answer the same 404; a key of another product is the same 404 too —
+            the key id space is global).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.GetProductAccessKeys(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The product's access keys, ordered by display name then id, paginated.
+            The key id IS the credential and is returned deliberately (web parity —
+            the web UI shows it to users who can see the product's keys).
+            </summary>
+            <param name="productId">Product id (any visible node of the tree works — sight is resolved at the node's root product).</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.GetProductAccessKey(System.Guid,System.Guid)">
+            <summary>
+            One access key of the product by id. An unknown key id, a key of a
+            different product and a server-wide master key all answer the same 404.
+            </summary>
+            <param name="productId">Product id (any visible node of the tree works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+        </member>
         <member name="T:HSMServer.Controllers.AgentController">
              <summary>
              Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
@@ -907,6 +936,13 @@
             answering false would cut the whole web UI off).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.AccessKeysMcpTools">
+            <summary>
+            The access-key list tool of the MCP surface (#1787): one product's
+            access keys — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService"/>,
+            the same engine the REST controller runs on (the #1393 pattern).
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
             The alert tools of the MCP surface — four reads (#1391) and, since the
@@ -1037,6 +1073,24 @@
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpAccessKeysResult">
+            <summary>Result of the list_access_keys tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.AccessKeys">
+            <summary>The product's access keys of the served page, ordered by display name then id.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.TotalFound">
+            <summary>The product's keys, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the product has no keys).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpChatsResult">
             <summary>Result of the list_chats tool.</summary>
@@ -1691,6 +1745,66 @@
         </member>
         <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Operation">
             <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto">
+            <summary>
+            A product access key — the credential an HSM agent sends in the Key
+            header of every sensor-data request. This is the id-discovery surface
+            for the agent-installation scenario (#1787): the listed ids are the
+            handles the write surface (#1789) takes, and lastUseTime/lastIp answer
+            "has the installed agent connected" without any new endpoint.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.Id">
+            <summary>Key id — the credential itself (the value the agent sends in the Key header). Exposed deliberately: web parity.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.DisplayName">
+            <summary>The key's display name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.ProductId">
+            <summary>The owning product's id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.State">
+            <summary>Stored state: 'active', 'expired' or 'blocked' (an expiration that has passed still reads 'active' here until a validation marks it — read expirationTime for the effective picture).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.Permissions">
+            <summary>The key's permission flags as names: 'canSendSensorData', 'canAddNodes', 'canAddSensors', 'canReadSensorData' (empty when the key holds none).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.CreationTime">
+            <summary>Creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.ExpirationTime">
+            <summary>Expiration time (UTC); far future means the key never expires.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.LastUseTime">
+            <summary>When the key was last used by an agent (UTC); null when it never was.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.LastIp">
+            <summary>The IP address the key was last used from; null when it never was.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.AuthorId">
+            <summary>The id of the user who created the key; null for keys created by the system (e.g. a product's default key).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService">
+            <summary>
+            The access-key read implementation (#1787): one product's keys,
+            paginated, and one key by id — the id source for the write surface
+            (#1789) and the "has the installed agent connected" signal (the key's
+            lastUseTime/lastIp ride on the DTO; no new endpoint is needed).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService.ListProductAccessKeys(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>
+            One product's access keys, ordered by display name then id, paginated.
+            An unknown and an invisible product answer the same 404.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService.GetProductAccessKey(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>
+            One key of one product by id. Unknown product, invisible product, a
+            key of another product and a server-wide master key all answer the
+            same 404.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>
