@@ -22,10 +22,10 @@ namespace HSMDataCollector.Tests
 
             var registration = prototypes.TotalCPU.Get(new BarSensorOptions
             {
-                PreviousPaths = new List<string> { "garage-server/System monitoring/Total CPU" },
+                PreviousPaths = new List<string> { "demo-server/System monitoring/Total CPU" },
             }).ToApi();
 
-            Assert.Equal(new[] { "garage-server/System monitoring/Total CPU" }, registration.PreviousPaths);
+            Assert.Equal(new[] { "demo-server/System monitoring/Total CPU" }, registration.PreviousPaths);
         }
 
         [Fact]

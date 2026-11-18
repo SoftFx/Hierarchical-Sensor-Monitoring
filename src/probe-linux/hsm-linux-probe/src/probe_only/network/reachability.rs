@@ -478,7 +478,7 @@ pub(crate) mod tests {
     fn the_gateway_is_the_lowest_metric_default_route() {
         assert_eq!(
             default_route(WIFI_DOCKER_ROUTE),
-            Ok(DefaultRoute::Via(Ipv4Addr::new(192, 168, 88, 1)))
+            Ok(DefaultRoute::Via(Ipv4Addr::new(198, 51, 100, 1)))
         );
         let header = header();
         assert_eq!(
@@ -487,7 +487,7 @@ pub(crate) mod tests {
         );
         // A default route that is down is not used.
         let down =
-            format!("{header}\nwlp3s0\t00000000\t0158A8C0\t0002\t0\t0\t600\t00000000\t0\t0\t0\n");
+            format!("{header}\nwlp3s0\t00000000\t016433C6\t0002\t0\t0\t600\t00000000\t0\t0\t0\n");
         assert_eq!(default_route(&down), Ok(DefaultRoute::Missing));
         // A VPN tunnel with a lower metric than the Wi-Fi route: no gateway to probe.
         let tunnel = format!(
@@ -497,8 +497,8 @@ pub(crate) mod tests {
         for broken in [
             String::new(),
             "Iface\tDestination\n".to_string(),
-            format!("{header}\nwlp3s0\t00000000\t0158A8C0\n"),
-            format!("{header}\nwlp3s0\tXYZ\t0158A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"),
+            format!("{header}\nwlp3s0\t00000000\t016433C6\n"),
+            format!("{header}\nwlp3s0\tXYZ\t016433C6\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"),
         ] {
             assert!(default_route(&broken).is_err(), "{broken:?}");
         }
@@ -613,7 +613,7 @@ pub(crate) mod tests {
         );
         let mut tried = tried.lock().unwrap().clone();
         tried.sort();
-        let gateway = ("192.168.88.1:53".parse::<SocketAddr>().unwrap(), true);
+        let gateway = ("198.51.100.1:53".parse::<SocketAddr>().unwrap(), true);
         let internet = ("1.1.1.1:443".parse::<SocketAddr>().unwrap(), false);
         assert_eq!(
             tried,

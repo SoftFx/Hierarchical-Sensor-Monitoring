@@ -4,7 +4,7 @@
 
 ## Problem
 
-HSM cannot move a sensor. A collector that changes its layout leaves the old sensors behind with their history and starts new, empty ones; the operator's only tool is deletion, which loses the history. The concrete case: stale `garage-server/...` nodes on the owner's server, deleted by hand after a probe layout change.
+HSM cannot move a sensor. A collector that changes its layout leaves the old sensors behind with their history and starts new, empty ones; the operator's only tool is deletion, which loses the history. The concrete case: stale `demo-server/...` nodes on the owner's server, deleted by hand after a probe layout change.
 
 ## Goals
 

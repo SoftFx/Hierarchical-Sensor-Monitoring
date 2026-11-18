@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn a_completed_job_is_every_container_exited_zero_without_a_restart_policy() {
-        // garage's lingua-ci/ci-image: Exited (0), restart policy "no".
+        // demo's lumina-ci/ci-image: Exited (0), restart policy "no".
         assert_eq!(completed_job(&[exited("a", 0, "no")]), Some(true));
         assert_eq!(
             completed_job(&[exited("a", 0, "")]),

@@ -322,7 +322,7 @@ mod tests {
 
     const CAP: usize = 1024 * 1024;
 
-    // Raw bytes read off garage-server's /var/run/docker.sock (Docker 26.1.5, API 1.45) with a
+    // Raw bytes read off demo-server's /var/run/docker.sock (Docker 26.1.5, API 1.45) with a
     // plain socket client, headers and framing untouched.
     const CHUNKED: &[u8] = include_bytes!("../../../fixtures/docker/http/inspect-chunked.http");
     const CONTENT_LENGTH: &[u8] =

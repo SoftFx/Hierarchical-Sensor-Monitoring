@@ -28,7 +28,7 @@
 //!
 //! `/proc/self/mountinfo` (which filesystems), `statvfs(2)` of each reported mount point, sysfs
 //! `uevent` files and `/proc/diskstats`. Nothing under a mount is ever opened, listed or read:
-//! `statvfs` is answered from the filesystem's superblock. Measured on garage-server
+//! `statvfs` is answered from the filesystem's superblock. Measured on demo-server
 //! (2026-09-29): `statvfs` on the sleeping FUSE-NTFS archives and on an ext4 partition of a
 //! sleeping disk left both disks in standby (`smartctl -n standby`, before / 5 s / 35 s after).
 //!
@@ -1636,17 +1636,17 @@ impl Source for WriteSpeedSource<'_> {
 pub mod tests {
     use super::*;
 
-    /// The four garage-server filesystems after the naming rule, with their disks.
-    pub const GARAGE_NODES: &[(&str, &str)] = &[
+    /// The four demo-server filesystems after the naming rule, with their disks.
+    pub const DEMO_NODES: &[(&str, &str)] = &[
         ("root", "sdc"),
-        ("wd4tb", "sda"),
-        ("mediacentr", "sdb"),
+        ("wdisk", "sda"),
+        ("mediastore", "sdb"),
         ("oldlinux", "sdb"),
     ];
 
-    /// Every disk sensor path garage-server registers (at the product root, #1493).
-    pub fn garage_paths() -> Vec<String> {
-        GARAGE_NODES
+    /// Every disk sensor path demo-server registers (at the product root, #1493).
+    pub fn demo_paths() -> Vec<String> {
+        DEMO_NODES
             .iter()
             .flat_map(|(name, _)| {
                 [
@@ -1665,7 +1665,7 @@ pub mod tests {
 
     #[test]
     fn free_space_uses_the_fragment_size_and_whole_megabytes() {
-        // garage-server's root filesystem on 2026-09-29.
+        // demo-server's root filesystem on 2026-09-29.
         let stats = FsStats {
             fragment_size: 4096,
             blocks: 27_224_445,
@@ -1690,8 +1690,8 @@ pub mod tests {
     #[test]
     fn paths_follow_the_windows_per_drive_naming() {
         assert_eq!(
-            free_space_path("wd4tb"),
-            ".computer/Disks monitoring/Free space on wd4tb disk"
+            free_space_path("wdisk"),
+            ".computer/Disks monitoring/Free space on wdisk disk"
         );
         assert_eq!(
             write_speed_path("root"),
@@ -1753,7 +1753,7 @@ pub mod tests {
         use hsm_collector::CollectorOptions;
 
         let tree = FakeTree::new("per-sample");
-        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
+        tree.file("mountinfo", mounts::tests::DEMO_MOUNTINFO);
         let environment = HostEnvironment {
             sys_root: tree.0.join("sys"),
             mountinfo: tree.0.join("mountinfo"),
@@ -1761,7 +1761,7 @@ pub mod tests {
             diskstats: tree.0.join("diskstats"),
             statvfs: recording_statvfs,
             online_cpus: || Ok(1),
-            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
             docker_state: None,
             disk_names: None,
             disk_written: None,
@@ -1785,7 +1785,7 @@ pub mod tests {
         };
 
         // oldlinux unmounted between two re-scans: never statvfs'd (it would answer for `/`).
-        let without_oldlinux = mounts::tests::GARAGE_MOUNTINFO
+        let without_oldlinux = mounts::tests::DEMO_MOUNTINFO
             .lines()
             .filter(|line| !line.contains("/mnt/oldlinux"))
             .collect::<Vec<_>>()
@@ -1799,7 +1799,7 @@ pub mod tests {
         assert_eq!(calls.len(), 3);
 
         // Plugged back in (same device): resumed on this very sample, not at the next re-scan.
-        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
+        tree.file("mountinfo", mounts::tests::DEMO_MOUNTINFO);
         let calls = asked(&mut space);
         assert!(calls.contains(&PathBuf::from("/mnt/oldlinux")), "{calls:?}");
         assert_eq!(calls.len(), 4);
@@ -1814,9 +1814,9 @@ pub mod tests {
         use hsm_collector::CollectorOptions;
 
         let tree = FakeTree::new("rescan");
-        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
-        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
-        diskstats::tests::garage_sysfs(&tree);
+        tree.file("mountinfo", mounts::tests::DEMO_MOUNTINFO);
+        tree.file("diskstats", diskstats::tests::DEMO_DISKSTATS);
+        diskstats::tests::demo_sysfs(&tree);
         let environment = HostEnvironment {
             sys_root: tree.0.join("sys"),
             mountinfo: tree.0.join("mountinfo"),
@@ -1832,7 +1832,7 @@ pub mod tests {
                 })
             },
             online_cpus: || Ok(1),
-            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
             docker_state: None,
             disk_names: None,
             disk_written: None,
@@ -1858,7 +1858,7 @@ pub mod tests {
         assert_eq!(read, metered);
 
         // A USB stick is plugged in and the oldlinux partition is unmounted.
-        let mounted = mounts::tests::GARAGE_MOUNTINFO
+        let mounted = mounts::tests::DEMO_MOUNTINFO
             .lines()
             .filter(|line| !line.contains("/mnt/oldlinux"))
             .chain(["900 676 8:49 / /media/usb rw,relatime - vfat /dev/sdd1 rw"])
@@ -1925,10 +1925,10 @@ pub mod tests {
         use hsm_collector::CollectorOptions;
 
         let tree = FakeTree::new("written-today");
-        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
-        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
+        tree.file("mountinfo", mounts::tests::DEMO_MOUNTINFO);
+        tree.file("diskstats", diskstats::tests::DEMO_DISKSTATS);
         tree.file("boot_id", "4b1c7a52-0000-4000-8000-000000000001\n");
-        diskstats::tests::garage_sysfs(&tree);
+        diskstats::tests::demo_sysfs(&tree);
         let environment = HostEnvironment {
             sys_root: tree.0.join("sys"),
             mountinfo: tree.0.join("mountinfo"),
@@ -1945,7 +1945,7 @@ pub mod tests {
                 })
             },
             online_cpus: || Ok(1),
-            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
             docker_state: None,
             disk_names: None,
             disk_written: Some(tree.0.join(written::FILE_NAME)),
@@ -1953,7 +1953,7 @@ pub mod tests {
             proc_net: PathBuf::from("/nonexistent/proc-net"),
         };
         // sdc wrote 2 000 000 sectors (1.024 GB) since the first read; the HDDs nothing.
-        let later = diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 685671624 ");
+        let later = diskstats::tests::DEMO_DISKSTATS.replace(" 683671624 ", " 685671624 ");
         let start = written::tests::MIDNIGHT + 9 * 3_600_000;
 
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
@@ -2020,11 +2020,11 @@ pub mod tests {
                     && root.contains("(about 23:59:30) to this one"),
                 "{root}"
             );
-            // mediacentr and oldlinux share sdb: each says so.
+            // mediastore and oldlinux share sdb: each says so.
             assert!(registrations
                 .iter()
                 .any(|json| json.contains("Written per day on oldlinux disk")
-                    && json.contains("also the volume written per day of: mediacentr")));
+                    && json.contains("also the volume written per day of: mediastore")));
             collector.stop().expect("stop");
         }
 
@@ -2032,7 +2032,7 @@ pub mod tests {
         // continues from the ledger.
         tree.file(
             "diskstats",
-            &diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 687671624 "),
+            &diskstats::tests::DEMO_DISKSTATS.replace(" 683671624 ", " 687671624 "),
         );
         let collector = Collector::new(&options).expect("create");
         let (_, write) = build(&collector, &DisksConfig::default(), &environment, &logger);
@@ -2058,7 +2058,7 @@ pub mod tests {
         }
         assert_eq!(write.posts, 0, "nothing before the day's end");
         // 23:59:33: the day's totals are posted, written and read once per filesystem (root,
-        // wd4tb, mediacentr, oldlinux), and the day is remembered as posted.
+        // wdisk, mediastore, oldlinux), and the day is remembered as posted.
         let late = written::tests::MIDNIGHT + 86_373_000;
         NOW_MS.with(|now| now.set(late));
         write.sample(&logger);
@@ -2091,7 +2091,7 @@ pub mod tests {
         assert!(write.identities.contains_key("sdc"));
         tree.file(
             "diskstats",
-            &diskstats::tests::GARAGE_DISKSTATS
+            &diskstats::tests::DEMO_DISKSTATS
                 .lines()
                 .filter(|line| !line.contains(" sdc "))
                 .collect::<Vec<_>>()
@@ -2106,14 +2106,14 @@ pub mod tests {
     const HOUR_MS: i64 = 3_600_000;
     const DAY_MS: i64 = 24 * HOUR_MS;
 
-    /// garage-server's mounts, disks and sysfs, with a boot id and a ledger file.
+    /// demo-server's mounts, disks and sysfs, with a boot id and a ledger file.
     #[cfg(unix)]
     fn written_host(tag: &str) -> (crate::probe_only::host::tests::FakeTree, HostEnvironment) {
         let tree = crate::probe_only::host::tests::FakeTree::new(tag);
-        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
-        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
+        tree.file("mountinfo", mounts::tests::DEMO_MOUNTINFO);
+        tree.file("diskstats", diskstats::tests::DEMO_DISKSTATS);
         tree.file("boot_id", "4b1c7a52-0000-4000-8000-000000000001\n");
-        diskstats::tests::garage_sysfs(&tree);
+        diskstats::tests::demo_sysfs(&tree);
         let environment = HostEnvironment {
             sys_root: tree.0.join("sys"),
             mountinfo: tree.0.join("mountinfo"),
@@ -2129,7 +2129,7 @@ pub mod tests {
                 })
             },
             online_cpus: || Ok(1),
-            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
             docker_state: None,
             disk_names: None,
             disk_written: Some(tree.0.join(written::FILE_NAME)),
@@ -2139,9 +2139,9 @@ pub mod tests {
         (tree, environment)
     }
 
-    /// sdc (the root disk) wrote 2 000 000 sectors (1.024 GB) since `GARAGE_DISKSTATS`.
+    /// sdc (the root disk) wrote 2 000 000 sectors (1.024 GB) since `DEMO_DISKSTATS`.
     fn diskstats_later() -> String {
-        diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 685671624 ")
+        diskstats::tests::DEMO_DISKSTATS.replace(" 683671624 ", " 685671624 ")
     }
 
     fn test_collector() -> Collector {
@@ -2232,7 +2232,7 @@ pub mod tests {
         );
     }
 
-    /// sdc wrote AND read 2 000 000 sectors (1.024 GB each) since `GARAGE_DISKSTATS`.
+    /// sdc wrote AND read 2 000 000 sectors (1.024 GB each) since `DEMO_DISKSTATS`.
     fn diskstats_written_and_read_later() -> String {
         diskstats_later().replace(" 161806974 ", " 163806974 ")
     }
@@ -2259,7 +2259,7 @@ pub mod tests {
 
         // The host rebooted: the saved counters are not trusted, the day's totals continue.
         tree.file("boot_id", "4b1c7a52-0000-4000-8000-000000000002\n");
-        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
+        tree.file("diskstats", diskstats::tests::DEMO_DISKSTATS);
         let collector = test_collector();
         let mut write = written_source(&collector, &environment, &quiet);
         collector.start().expect("start");
@@ -2293,7 +2293,7 @@ pub mod tests {
         // A device reset sets both of sdc's counters back.
         tree.file(
             "diskstats",
-            &diskstats::tests::GARAGE_DISKSTATS
+            &diskstats::tests::DEMO_DISKSTATS
                 .replace(" 683671624 ", " 1000 ")
                 .replace(" 161806974 ", " 1000 "),
         );
@@ -2407,7 +2407,7 @@ pub mod tests {
         );
         assert_eq!(write.ledger.posted_day, Some(written::tests::utc(d1).0));
 
-        // Day D+2: wd4tb (sda) is unmounted after its day was measured, and one of the other
+        // Day D+2: wdisk (sda) is unmounted after its day was measured, and one of the other
         // six posts fails. The day is marked (values went out); what it loses is named.
         let d2 = midnight + 2 * DAY_MS;
         at(d2 + 9 * HOUR_MS);
@@ -2419,7 +2419,7 @@ pub mod tests {
             .lock()
             .unwrap()
             .iter_mut()
-            .filter(|node| node.name == "wd4tb")
+            .filter(|node| node.name == "wdisk")
             .for_each(|node| node.mounted = false);
         FAIL_POSTS.with(|left| left.set(1));
         at(d2 + window);
@@ -2502,9 +2502,9 @@ pub mod tests {
         assert!(registrations
             .iter()
             .any(|json| json.contains("Read per day on oldlinux disk")
-                && json.contains("also the volume read per day of: mediacentr")));
+                && json.contains("also the volume read per day of: mediastore")));
         // Every filesystem with Written per day has Read per day.
-        for (name, _) in GARAGE_NODES {
+        for (name, _) in DEMO_NODES {
             for path in [written_per_day_path(name), read_per_day_path(name)] {
                 assert!(
                     registrations.iter().any(|json| json.contains(&path)),
@@ -2592,7 +2592,7 @@ pub mod tests {
                 .unwrap_or_else(|| panic!("{path} registered"))
                 .clone()
         };
-        for (name, disk) in GARAGE_NODES {
+        for (name, disk) in DEMO_NODES {
             let write = find(&write_speed_path(name));
             let read = find(&read_speed_path(name));
             // The same bar, unit, statistics, TTL and (no) alerts: only the path and the words.
@@ -2621,7 +2621,7 @@ pub mod tests {
             diskstats: tree.0.join("diskstats"),
             statvfs,
             online_cpus: || Ok(1),
-            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
             docker_state: None,
             disk_names: None,
             disk_written: None,

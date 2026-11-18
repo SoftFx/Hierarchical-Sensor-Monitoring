@@ -74,7 +74,7 @@ namespace HSMDataCollector.Options
 
         /// <summary>
         /// Paths this sensor was registered under before a layout change, each a FULL path
-        /// relative to the product as the server tree shows it (e.g. <c>garage-server/System/CPU</c>)
+        /// relative to the product as the server tree shows it (e.g. <c>demo-server/System/CPU</c>)
         /// — no computer/module prefix is added. On registration a server that supports sensor
         /// move moves the sensor at such a path here, keeping its history, settings and alerts
         /// (merging when this path already has a sensor of the same type). Repeating it on every

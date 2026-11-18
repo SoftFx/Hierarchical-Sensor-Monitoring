@@ -14,7 +14,7 @@ namespace HSMServer.Core.Tests
     // out of config.json, the config schema and the tar entry modes install.sh relies on.
     public class LinuxProbeInstallerBundleTests
     {
-        private const string Folder = "hsm-linux-probe-garage";
+        private const string Folder = "hsm-linux-probe-demo";
         private const string PackageName = "hsm-linux-probe_0.1.0_amd64.deb";
         private const string Key = "11111111-2222-3333-4444-555555555555";
         private const string CaPem = "-----BEGIN CERTIFICATE-----\nTUlJ\n-----END CERTIFICATE-----\n";
@@ -315,7 +315,7 @@ namespace HSMServer.Core.Tests
 
             Assert.Equal(Folder + "/", names[0]);
             Assert.All(names, n => Assert.StartsWith(Folder + "/", n));
-            Assert.Equal(Folder, LinuxProbeInstallerBundle.BundleFolderName("garage"));
+            Assert.Equal(Folder, LinuxProbeInstallerBundle.BundleFolderName("demo"));
         }
 
         [Fact]
@@ -383,13 +383,13 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void BundleFileName_FollowsTheProductName()
         {
-            Assert.Equal("hsm-linux-probe-garage.tar.gz", LinuxProbeInstallerBundle.BundleFileName("garage"));
+            Assert.Equal("hsm-linux-probe-demo.tar.gz", LinuxProbeInstallerBundle.BundleFileName("demo"));
         }
 
         [Theory]
         [InlineData("Prod (EU);poweroff", "Prod_EU_poweroff")]
         [InlineData("a && rm -rf *", "a_rm_-rf")]
-        [InlineData("Garage server", "Garage_server")]
+        [InlineData("Demo server", "Demo_server")]
         [InlineData("--help", "help")]
         [InlineData("..", "product")]
         [InlineData("#;&*()", "product")]

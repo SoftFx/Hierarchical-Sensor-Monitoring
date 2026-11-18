@@ -893,13 +893,13 @@ pub mod tests {
     fn the_mount_point_fallback_matches_on_any_shared_mount_point() {
         assert_eq!(
             same_disk(
-                "mounts:/mnt/mediacentr|/mnt/oldlinux",
+                "mounts:/mnt/mediastore|/mnt/oldlinux",
                 "mounts:/mnt/oldlinux"
             ),
             Some(true)
         );
         assert_eq!(
-            same_disk("mounts:/mnt/wd4tb", "mounts:/mnt/mediacentr"),
+            same_disk("mounts:/mnt/wdisk", "mounts:/mnt/mediastore"),
             Some(false)
         );
         assert_eq!(same_disk("wwid:x", "wwid:x"), Some(true));

@@ -829,7 +829,7 @@ hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
 hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description);
 
 /* Paths this sensor was registered under before a layout change (0.13.0, sensor move #1724): each a
-   FULL path relative to the product as the server tree shows it (e.g. "garage-server/System/CPU") —
+   FULL path relative to the product as the server tree shows it (e.g. "demo-server/System/CPU") —
    no computer/module prefix is added. A server that supports sensor move moves the sensor found at
    such a path to this sensor's path on registration, keeping its history, settings and alerts
    (merging into a sensor of the same type already there; the first listed path wins). Repeating it

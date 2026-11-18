@@ -2,7 +2,7 @@
  {
   "Id": "c76f47b82f9c710b3b7bafd1bf34240e734138d313118b1a7258a1ba09cb1261",
   "Created": "2026-09-26T10:28:33.304889582Z",
-  "Name": "/lingua-seaweedfs",
+  "Name": "/lumina-seaweedfs",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -37,9 +37,9 @@
     "com.docker.compose.depends_on": "",
     "com.docker.compose.image": "sha256:f439911d40e63d91d60af1c28e16291f466f6fb55243b569143b64102dba1533",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua",
+    "com.docker.compose.project": "lumina",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina",
     "com.docker.compose.service": "seaweedfs",
     "com.docker.compose.version": "2.26.1"
    }
@@ -113,7 +113,7 @@
    "FinishedAt": "0001-01-01T00:00:00Z"
   },
   "Config": {
-   "Image": "garage-caddy:2.11.4-dynv6",
+   "Image": "demo-caddy:2.11.4-dynv6",
    "Labels": {
     "com.docker.compose.config-hash": "6cddbf453081f150e0b9897b6fcf09c629b0845487ee30d59f03e18fca1e2033",
     "com.docker.compose.container-number": "1",
@@ -139,7 +139,7 @@
  {
   "Id": "82274bb7d70e0e462117d8d1ec10b4b5d3a34ff442f557c1015d21743f3ddd7e",
   "Created": "2026-09-23T22:14:25.74322586Z",
-  "Name": "/lingua-mongo",
+  "Name": "/lumina-mongo",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -174,9 +174,9 @@
     "com.docker.compose.depends_on": "",
     "com.docker.compose.image": "sha256:1b70d5bf141c2c93946a8f8e39f3f22a0a04a6d24e22cf47472b703856c715de",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua",
+    "com.docker.compose.project": "lumina",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina",
     "com.docker.compose.replace": "67a7521cc52a1cf4a2d6b5b07588750eb2204120efe7acd59904e00acc8ad001",
     "com.docker.compose.service": "mongo",
     "com.docker.compose.version": "2.26.1"
@@ -193,7 +193,7 @@
  {
   "Id": "e54f7714803250e93ce2ad7e83312fc9c9ed1abb8a3873fb5b1eb29bcbe20ba2",
   "Created": "2026-09-23T11:10:59.372347596Z",
-  "Name": "/lingua-ci-runner-heavy-1",
+  "Name": "/lumina-ci-runner-heavy-1",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -216,9 +216,9 @@
     "com.docker.compose.depends_on": "ci-image:service_completed_successfully:false,dind:service_started:false",
     "com.docker.compose.image": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua-ci",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+    "com.docker.compose.project": "lumina-ci",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina-ci/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina-ci",
     "com.docker.compose.replace": "c5aec7275d7037f673737455f5bcd5b65bf641b9d7661fd3ea937c2bed5bc036",
     "com.docker.compose.service": "runner-heavy",
     "com.docker.compose.version": "2.26.1"
@@ -235,7 +235,7 @@
  {
   "Id": "3537ef2ee8672b7d4a2791ab988f31b057efc625262768633e70223e97aea595",
   "Created": "2026-09-23T11:10:59.320064446Z",
-  "Name": "/lingua-ci-ci-image-1",
+  "Name": "/lumina-ci-ci-image-1",
   "RestartCount": 0,
   "State": {
    "Status": "exited",
@@ -258,9 +258,9 @@
     "com.docker.compose.depends_on": "dind:service_started:false",
     "com.docker.compose.image": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua-ci",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+    "com.docker.compose.project": "lumina-ci",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina-ci/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina-ci",
     "com.docker.compose.replace": "25b7dc2cb05e6b1fdbfe8c083d53cf07e56db835b165da09ca65c89b5d220965",
     "com.docker.compose.service": "ci-image",
     "com.docker.compose.version": "2.26.1"
@@ -277,7 +277,7 @@
  {
   "Id": "e9d7ff6f1b1ef4638583ec94273fecb813883a0407224f212e4f5151e18cea00",
   "Created": "2026-09-23T11:10:59.320019795Z",
-  "Name": "/lingua-ci-janitor-1",
+  "Name": "/lumina-ci-janitor-1",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -300,9 +300,9 @@
     "com.docker.compose.depends_on": "dind:service_started:false",
     "com.docker.compose.image": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua-ci",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+    "com.docker.compose.project": "lumina-ci",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina-ci/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina-ci",
     "com.docker.compose.replace": "44b0b092a77e5013bd7d0ada277b6cfe7ec0f6d51f3b1cde48d53b3b3f85c8cf",
     "com.docker.compose.service": "janitor",
     "com.docker.compose.version": "2.26.1"
@@ -319,7 +319,7 @@
  {
   "Id": "32cd82c25d05fb9506dd220e20122f357301bd8cc6bbf95fcbf0810d718b84bf",
   "Created": "2026-09-23T10:26:55.687870929Z",
-  "Name": "/lingua-ci-runner-light-1",
+  "Name": "/lumina-ci-runner-light-1",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -342,9 +342,9 @@
     "com.docker.compose.depends_on": "dind:service_started:false",
     "com.docker.compose.image": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua-ci",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+    "com.docker.compose.project": "lumina-ci",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina-ci/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina-ci",
     "com.docker.compose.service": "runner-light",
     "com.docker.compose.version": "2.26.1"
    }
@@ -360,7 +360,7 @@
  {
   "Id": "7b65f26233fc7b3093e9bfdd8672223bc721490caadbd2be1240ed3f65657824",
   "Created": "2026-09-23T10:13:43.09801579Z",
-  "Name": "/lingua-ci-dind-1",
+  "Name": "/lumina-ci-dind-1",
   "RestartCount": 0,
   "State": {
    "Status": "running",
@@ -383,9 +383,9 @@
     "com.docker.compose.depends_on": "",
     "com.docker.compose.image": "sha256:90f854ec83e3eb2208ddbfe5fe7d9413d82f79a4201f3b15943381480b1b03dd",
     "com.docker.compose.oneoff": "False",
-    "com.docker.compose.project": "lingua-ci",
-    "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
-    "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+    "com.docker.compose.project": "lumina-ci",
+    "com.docker.compose.project.config_files": "/srv/docker/lumina-ci/compose.yml",
+    "com.docker.compose.project.working_dir": "/srv/docker/lumina-ci",
     "com.docker.compose.service": "dind",
     "com.docker.compose.version": "2.26.1"
    }

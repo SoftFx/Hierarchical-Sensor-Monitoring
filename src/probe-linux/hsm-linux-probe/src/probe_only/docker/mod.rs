@@ -1198,7 +1198,7 @@ pub(crate) mod tests {
     use super::*;
     use hsm_collector::CollectorOptions;
 
-    /// Serves the garage captures: the listing, every inspect, and the two stats rounds (5.3 s
+    /// Serves the demo captures: the listing, every inspect, and the two stats rounds (5.3 s
     /// apart on the host, taken at the old 5 s cadence) in turn.
     pub(crate) struct FixtureEngine {
         pub list: Vec<ContainerSummary>,
@@ -1215,7 +1215,7 @@ pub(crate) mod tests {
     }
 
     impl FixtureEngine {
-        pub fn garage() -> Self {
+        pub fn demo() -> Self {
             let inspects: Vec<serde_json::Value> = serde_json::from_str(INSPECT).unwrap();
             Self {
                 list: serde_json::from_str(CONTAINERS).unwrap(),
@@ -1301,9 +1301,9 @@ pub(crate) mod tests {
         Logger::new(Level::Error, None)
     }
 
-    /// A source over the garage captures whose stop check never fires (the process-global
+    /// A source over the demo captures whose stop check never fires (the process-global
     /// shutdown flag is set by another unit test).
-    pub(crate) fn garage_source<'c>(
+    pub(crate) fn demo_source<'c>(
         collector: &'c Collector,
         engine: FixtureEngine,
         config: &DockerConfig,
@@ -1315,28 +1315,28 @@ pub(crate) mod tests {
             config,
             &quiet(),
             state_path,
-            Some(GARAGE_MEM_TOTAL),
+            Some(DEMO_MEM_TOTAL),
         );
         source.should_stop = || false;
         source
     }
 
-    const GARAGE_MEM_TOTAL: u64 = 16_298_872 * 1024;
+    const DEMO_MEM_TOTAL: u64 = 16_298_872 * 1024;
 
-    /// Drive the garage fixtures through one poll and two stats rounds, as the running source
+    /// Drive the demo fixtures through one poll and two stats rounds, as the running source
     /// would over its first minute.
-    pub(crate) fn drive_garage(collector: &Collector) {
-        drive_garage_on(collector, |_| {});
+    pub(crate) fn drive_demo(collector: &Collector) {
+        drive_demo_on(collector, |_| {});
     }
 
-    /// `drive_garage`, then `more` on the same source.
-    fn drive_garage_on(
+    /// `drive_demo`, then `more` on the same source.
+    fn drive_demo_on(
         collector: &Collector,
         more: impl FnOnce(&mut DockerSource<'_, FixtureEngine>),
     ) {
-        let mut source = garage_source(
+        let mut source = demo_source(
             collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );
@@ -1374,10 +1374,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_garage_tree_has_no_empty_nodes() {
+    fn the_demo_tree_has_no_empty_nodes() {
         let collector = test_collector();
         collector.start().expect("start");
-        drive_garage(&collector);
+        drive_demo(&collector);
         let paths = registered(&collector);
         collector.stop().expect("stop");
 
@@ -1386,7 +1386,7 @@ pub(crate) mod tests {
             .filter(|p| p.starts_with(".probe/Docker/"))
             .collect();
         // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors (CPU, Memory used %,
-        // Disk written per hour); the twelfth, lingua-ci/ci-image, is a completed one-shot job and
+        // Disk written per hour); the twelfth, lumina-ci/ci-image, is a completed one-shot job and
         // not monitored at all.
         assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
         assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
@@ -1397,7 +1397,7 @@ pub(crate) mod tests {
         // The exited one-shot image build (Exited (0), restart "no"): a completed job, no node.
         assert!(paths
             .iter()
-            .all(|p| !p.starts_with(".probe/Docker/lingua-ci/ci-image/")));
+            .all(|p| !p.starts_with(".probe/Docker/lumina-ci/ci-image/")));
         // No healthcheck, no Health node.
         assert!(!has(".probe/Docker/hsm/app/Health"));
     }
@@ -1406,14 +1406,14 @@ pub(crate) mod tests {
     fn an_unreachable_daemon_backs_off_and_posts_nothing() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         engine.down = true;
         // A 5 s period, so the doubling is visible under the 60 s cap.
         let config = DockerConfig {
             sample_period_sec: 5,
             ..DockerConfig::default()
         };
-        let mut source = garage_source(&collector, engine, &config, None);
+        let mut source = demo_source(&collector, engine, &config, None);
         let error = source.poll(&quiet(), &|| false).expect_err("down");
         assert!(error.is_unavailable());
         assert!(
@@ -1479,9 +1479,9 @@ pub(crate) mod tests {
             std::env::temp_dir().join(format!("hsm-probe-docker-grid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             Some(dir.join(state::STATE_FILE_NAME)),
         );
@@ -1550,13 +1550,13 @@ pub(crate) mod tests {
         );
     }
 
-    /// The garage tree primed before Start: everything registers in the Start batch.
+    /// The demo tree primed before Start: everything registers in the Start batch.
     #[test]
     fn prime_registers_the_whole_tree_before_start_with_alerts() {
         let collector = test_collector();
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );
@@ -1635,7 +1635,7 @@ pub(crate) mod tests {
     fn a_vanished_service_after_restart_registers_its_status_only() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         engine
             .list
             .retain(|c| c.label(identity::SERVICE_LABEL) != Some("portainer"));
@@ -1651,7 +1651,7 @@ pub(crate) mod tests {
         let path = dir.join(state::STATE_FILE_NAME);
         state.save(&path).unwrap();
 
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
             engine,
             &DockerConfig::default(),
@@ -1685,7 +1685,7 @@ pub(crate) mod tests {
         for (compose_only, expected) in [(true, 0), (false, 3)] {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut engine = FixtureEngine::garage();
+            let mut engine = FixtureEngine::demo();
             engine.list = vec![bare.clone()];
             engine.inspects.insert(
                 bare.id.clone(),
@@ -1697,7 +1697,7 @@ pub(crate) mod tests {
                 compose_only,
                 ..DockerConfig::default()
             };
-            let mut source = garage_source(&collector, engine, &config, None);
+            let mut source = demo_source(&collector, engine, &config, None);
             source.poll(&quiet(), &|| false).expect("poll");
             let standalone = registered(&collector)
                 .into_iter()
@@ -1713,9 +1713,9 @@ pub(crate) mod tests {
         // keeps its status (from the listing) but posts no guessed health or stats.
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         engine.wedged = Some("abbd59dcacc8");
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
         source
             .poll(&quiet(), &|| false)
             .expect("a timeout on one container is not an outage");
@@ -1741,9 +1741,9 @@ pub(crate) mod tests {
         {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut source = garage_source(
+            let mut source = demo_source(
                 &collector,
-                FixtureEngine::garage(),
+                FixtureEngine::demo(),
                 &DockerConfig::default(),
                 Some(path.clone()),
             );
@@ -1755,9 +1755,9 @@ pub(crate) mod tests {
 
         // A restarted source adopts every remembered node before naming anything.
         let collector = test_collector();
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             Some(path.clone()),
         );
@@ -1786,12 +1786,12 @@ pub(crate) mod tests {
         state.save(&path).unwrap();
 
         let config = DockerConfig {
-            exclude: vec!["portainer/*".into(), "lingua-ci/janitor".into()],
+            exclude: vec!["portainer/*".into(), "lumina-ci/janitor".into()],
             ..DockerConfig::default()
         };
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &config,
             Some(path.clone()),
         );
@@ -1807,15 +1807,15 @@ pub(crate) mod tests {
             .all(|p| !p.starts_with(".probe/Docker/portainer/")));
         assert!(paths
             .iter()
-            .all(|p| !p.starts_with(".probe/Docker/lingua-ci/janitor/")));
+            .all(|p| !p.starts_with(".probe/Docker/lumina-ci/janitor/")));
         assert!(paths
             .iter()
-            .any(|p| p.starts_with(".probe/Docker/lingua-ci/runner-heavy/")));
+            .any(|p| p.starts_with(".probe/Docker/lumina-ci/runner-heavy/")));
         let (saved, _) = State::load(&path);
         assert!(!saved.services.contains_key(&portainer));
         assert!(!saved
             .services
-            .contains_key(&ServiceKey::new("lingua-ci", "janitor")));
+            .contains_key(&ServiceKey::new("lumina-ci", "janitor")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1823,7 +1823,7 @@ pub(crate) mod tests {
     fn a_changed_memory_limit_rewrites_the_memory_used_description() {
         let collector = test_collector();
         collector.start().expect("start");
-        drive_garage_on(&collector, |source| {
+        drive_demo_on(&collector, |source| {
             // hsm/app's container is recreated with mem_limit 512m.
             for round in &mut source.engine.rounds {
                 for (id, stats) in round.iter_mut() {
@@ -1850,7 +1850,7 @@ pub(crate) mod tests {
         assert!(app[0].contains("**512 MB** on this host"), "{}", app[0]);
     }
 
-    const CI_IMAGE: &str = ".probe/Docker/lingua-ci/ci-image/Service status";
+    const CI_IMAGE: &str = ".probe/Docker/lumina-ci/ci-image/Service status";
 
     fn set_ci_image_state(engine: &mut FixtureEngine, state: &str) {
         let ci = engine
@@ -1865,15 +1865,15 @@ pub(crate) mod tests {
     fn a_completed_job_is_not_monitored_until_it_runs_again() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );
         source.poll(&quiet(), &|| false).expect("poll");
         assert!(!registered(&collector).iter().any(|p| p == CI_IMAGE));
-        let job = ServiceKey::new("lingua-ci", "ci-image");
+        let job = ServiceKey::new("lumina-ci", "ci-image");
         assert!(!source.tracker().state.services.contains_key(&job));
 
         // The job is rebuilt: a running container makes it a service from then on...
@@ -1891,7 +1891,7 @@ pub(crate) mod tests {
         let collector = test_collector();
         collector.start().expect("start");
         let mut state = State::default();
-        let job = ServiceKey::new("lingua-ci", "ci-image");
+        let job = ServiceKey::new("lumina-ci", "ci-image");
         let mut record = state::ServiceRecord::new(&job);
         record.last_seen = unix_now() - 60;
         state.services.insert(job, record);
@@ -1901,9 +1901,9 @@ pub(crate) mod tests {
         let path = dir.join(state::STATE_FILE_NAME);
         state.save(&path).unwrap();
 
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             Some(path),
         );
@@ -1946,7 +1946,7 @@ pub(crate) mod tests {
         ServiceKey::new(project, service)
     }
 
-    /// Poll, then the two garage stats rounds `apart_ms` apart starting at `at_ms`.
+    /// Poll, then the two demo stats rounds `apart_ms` apart starting at `at_ms`.
     fn two_rounds(source: &mut DockerSource<'_, FixtureEngine>, at_ms: i64, apart_ms: i64) {
         let never = || false;
         set_clock(at_ms);
@@ -1977,9 +1977,9 @@ pub(crate) mod tests {
     fn disk_written_is_posted_once_just_after_its_hour_with_the_window() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );
@@ -2027,9 +2027,9 @@ pub(crate) mod tests {
         {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut before = garage_source(
+            let mut before = demo_source(
                 &collector,
-                FixtureEngine::garage(),
+                FixtureEngine::demo(),
                 &DockerConfig::default(),
                 Some(path.clone()),
             );
@@ -2046,9 +2046,9 @@ pub(crate) mod tests {
             .contains("\"written\""));
 
         // Back at 13:40 with the same containers; gitea/db wrote 1 MB while the probe was down.
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         add_written(&mut engine, 1, GITEA_DB, 1_000_000);
-        let mut after = garage_source(
+        let mut after = demo_source(
             &collector,
             engine,
             &DockerConfig::default(),
@@ -2089,9 +2089,9 @@ pub(crate) mod tests {
         {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut before = garage_source(
+            let mut before = demo_source(
                 &collector,
-                FixtureEngine::garage(),
+                FixtureEngine::demo(),
                 &DockerConfig::default(),
                 Some(path.clone()),
             );
@@ -2104,9 +2104,9 @@ pub(crate) mod tests {
         // the measured 13:00 hour is still posted — its sensor is registered on demand.
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         engine.down = true;
-        let mut after = garage_source(&collector, engine, &DockerConfig::default(), Some(path));
+        let mut after = demo_source(&collector, engine, &DockerConfig::default(), Some(path));
         after.clock = test_clock;
         set_clock(H13 + 60 * 60_000 + 1_000);
         let posted = after.roll_written_hours(&quiet());
@@ -2128,7 +2128,7 @@ pub(crate) mod tests {
     fn an_idle_containers_first_burst_is_counted() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         let set = |engine: &mut FixtureEngine, round: usize, value: Option<u64>| {
             let stats = engine.rounds[round]
                 .iter_mut()
@@ -2150,7 +2150,7 @@ pub(crate) mod tests {
         // gitea/db has done no block I/O yet (io.stat lists no device), then writes 4 KiB.
         set(&mut engine, 0, None);
         set(&mut engine, 1, Some(4_096));
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
         source.clock = test_clock;
         two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
         set_clock(H13 + 60 * 60_000 + 1_000);
@@ -2173,7 +2173,7 @@ pub(crate) mod tests {
         // to services that list a counter: its hour is a measured 0, posted, with its sensor.
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         for round in &mut engine.rounds {
             let stats = round
                 .iter_mut()
@@ -2182,7 +2182,7 @@ pub(crate) mod tests {
                 .1;
             stats.blkio_stats.io_service_bytes_recursive = Some(Vec::new());
         }
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
         source.clock = test_clock;
         two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
         set_clock(H13 + 60 * 60_000 + 1_000);
@@ -2204,14 +2204,14 @@ pub(crate) mod tests {
     fn a_host_without_write_counters_keeps_no_record_and_writes_no_state() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         for round in &mut engine.rounds {
             for stats in round.values_mut() {
                 // Docker Desktop's shape.
                 stats.blkio_stats.io_service_bytes_recursive = Some(Vec::new());
             }
         }
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
         source.clock = test_clock;
         two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
         collector.stop().expect("stop");
@@ -2227,9 +2227,9 @@ pub(crate) mod tests {
     #[test]
     fn priming_stops_at_the_first_container_that_does_not_answer() {
         let collector = test_collector();
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         engine.wedged = Some("abbd59dcacc8");
-        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
         let db = source
             .engine
             .list
@@ -2270,9 +2270,9 @@ pub(crate) mod tests {
         {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut before = garage_source(
+            let mut before = demo_source(
                 &collector,
-                FixtureEngine::garage(),
+                FixtureEngine::demo(),
                 &DockerConfig::default(),
                 Some(path.clone()),
             );
@@ -2285,7 +2285,7 @@ pub(crate) mod tests {
         // more than the old counter: a baseline, not a too-small delta.
         let collector = test_collector();
         collector.start().expect("start");
-        let mut engine = FixtureEngine::garage();
+        let mut engine = FixtureEngine::demo();
         add_written(&mut engine, 1, GITEA_DB, 1_000_000);
         let inspect = engine
             .inspects
@@ -2294,7 +2294,7 @@ pub(crate) mod tests {
             .unwrap()
             .1;
         inspect.state.started_at = "2026-09-29T13:15:00Z".into();
-        let mut after = garage_source(&collector, engine, &DockerConfig::default(), Some(path));
+        let mut after = demo_source(&collector, engine, &DockerConfig::default(), Some(path));
         after.clock = test_clock;
         let never = || false;
         set_clock(H13 + 20 * 60_000);
@@ -2322,9 +2322,9 @@ pub(crate) mod tests {
     fn an_hour_that_ended_while_the_probe_was_down_is_dropped_not_posted_late() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );
@@ -2346,9 +2346,9 @@ pub(crate) mod tests {
     fn a_recreated_container_keeps_the_service_hour() {
         let collector = test_collector();
         collector.start().expect("start");
-        let mut source = garage_source(
+        let mut source = demo_source(
             &collector,
-            FixtureEngine::garage(),
+            FixtureEngine::demo(),
             &DockerConfig::default(),
             None,
         );

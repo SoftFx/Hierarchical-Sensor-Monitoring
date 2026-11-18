@@ -208,7 +208,7 @@ mod tests {
     use super::*;
 
     const PERIOD: Duration = Duration::from_secs(5);
-    const GARAGE_MEM_TOTAL: u64 = 16_298_872 * 1024;
+    const DEMO_MEM_TOTAL: u64 = 16_298_872 * 1024;
 
     fn counters(container_ns: u64, system_ns: u64, at_ms: u64) -> CpuCounters {
         CpuCounters {
@@ -218,7 +218,7 @@ mod tests {
         }
     }
 
-    fn garage_stats(fixture: &str) -> HashMap<String, ContainerStats> {
+    fn demo_stats(fixture: &str) -> HashMap<String, ContainerStats> {
         serde_json::from_str(fixture).unwrap()
     }
 
@@ -245,9 +245,9 @@ mod tests {
     }
 
     #[test]
-    fn the_garage_gitea_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
-        let t0 = garage_stats(STATS_T0);
-        let t1 = garage_stats(STATS_T1);
+    fn the_demo_gitea_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
+        let t0 = demo_stats(STATS_T0);
+        let t1 = demo_stats(STATS_T1);
         let a = CpuCounters::from_stats(by_prefix(&t0, "abbd59dcacc8"), Duration::ZERO).unwrap();
         let b =
             CpuCounters::from_stats(by_prefix(&t1, "abbd59dcacc8"), Duration::from_millis(5_272))
@@ -346,22 +346,21 @@ mod tests {
 
     #[test]
     fn a_stopped_container_has_no_counters() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         let stopped = by_prefix(&t0, "3537ef2ee867");
         assert_eq!(CpuCounters::from_stats(stopped, Duration::ZERO), None);
-        assert_eq!(memory_reading(stopped, Some(GARAGE_MEM_TOTAL)), None);
+        assert_eq!(memory_reading(stopped, Some(DEMO_MEM_TOTAL)), None);
     }
 
     #[test]
     fn memory_subtracts_inactive_file_against_the_limit() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         // hsm app: 267_550_720 usage − 57_462_784 inactive_file over a 256 MiB limit.
-        let reading =
-            memory_reading(by_prefix(&t0, "c5abbadb3674"), Some(GARAGE_MEM_TOTAL)).unwrap();
+        let reading = memory_reading(by_prefix(&t0, "c5abbadb3674"), Some(DEMO_MEM_TOTAL)).unwrap();
         assert_eq!(reading.used, 267_550_720 - 57_462_784);
         assert_eq!(reading.limit, 268_435_456);
         assert!(!reading.unlimited);
-        let service = service_memory(&[reading], Some(GARAGE_MEM_TOTAL)).unwrap();
+        let service = service_memory(&[reading], Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(
             (service.used_percent - 78.265).abs() < 0.01,
             "{}",
@@ -380,10 +379,10 @@ mod tests {
             }
         }))
         .unwrap();
-        let reading = memory_reading(&stats, Some(GARAGE_MEM_TOTAL)).unwrap();
+        let reading = memory_reading(&stats, Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(reading.unlimited);
-        assert_eq!(reading.limit, GARAGE_MEM_TOTAL);
-        let service = service_memory(&[reading], Some(GARAGE_MEM_TOTAL)).unwrap();
+        assert_eq!(reading.limit, DEMO_MEM_TOTAL);
+        let service = service_memory(&[reading], Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(service.unlimited);
         assert_eq!(limit_megabytes(service.limit_bytes), 15_916);
         assert!(
@@ -445,7 +444,7 @@ mod tests {
     #[test]
     fn mem_total_parses_from_meminfo() {
         let text = "MemTotal:       16298872 kB\nMemFree:          812344 kB\n";
-        assert_eq!(parse_mem_total(text), Some(GARAGE_MEM_TOTAL));
+        assert_eq!(parse_mem_total(text), Some(DEMO_MEM_TOTAL));
         assert_eq!(parse_mem_total("MemFree: 1 kB\n"), None);
         assert_eq!(parse_mem_total("MemTotal: lots kB\n"), None);
     }

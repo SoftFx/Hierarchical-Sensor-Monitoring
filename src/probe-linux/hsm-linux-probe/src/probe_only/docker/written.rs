@@ -487,7 +487,7 @@ mod tests {
     const H13: i64 = 1_790_686_800_000;
     const MIN: i64 = 60_000;
 
-    fn garage_stats(fixture: &str) -> HashMap<String, ContainerStats> {
+    fn demo_stats(fixture: &str) -> HashMap<String, ContainerStats> {
         serde_json::from_str(fixture).unwrap()
     }
 
@@ -527,9 +527,9 @@ mod tests {
     }
 
     #[test]
-    fn the_garage_write_counters_are_cgroup_v2_lowercase_writes() {
-        let t0 = garage_stats(STATS_T0);
-        let t1 = garage_stats(STATS_T1);
+    fn the_demo_write_counters_are_cgroup_v2_lowercase_writes() {
+        let t0 = demo_stats(STATS_T0);
+        let t1 = demo_stats(STATS_T1);
         // gitea/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
         // (2_881_179_648) are not counted.
         let mut plain = Stacking::default();
@@ -578,9 +578,9 @@ mod tests {
 
     #[test]
     fn a_running_container_without_a_write_counter_has_written_0_once_the_host_accounts_io() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         let mut plain = Stacking::default();
-        // lingua-admin freshly recreated on cgroup v2: running, io.stat lists no device yet.
+        // lumina-admin freshly recreated on cgroup v2: running, io.stat lists no device yet.
         let fresh = running(serde_json::json!([]));
         let reads_only = running(serde_json::json!([
             { "major": 8, "minor": 0, "op": "read", "value": 24_576 }
@@ -997,8 +997,8 @@ mod tests {
 
     #[test]
     fn an_hour_in_which_a_container_stayed_idle_is_posted_as_0() {
-        // #1574: lingua-admin, recreated with its sibling, did no block I/O for hours; its hours
-        // are measured zeros, posted like lingua-api's `write 0`, not gaps.
+        // #1574: lumina-admin, recreated with its sibling, did no block I/O for hours; its hours
+        // are measured zeros, posted like lumina-api's `write 0`, not gaps.
         let period = Duration::from_secs(60);
         let mut record = WriteRecord::new(H13);
         let started = Some("2026-09-29T12:58:00Z");

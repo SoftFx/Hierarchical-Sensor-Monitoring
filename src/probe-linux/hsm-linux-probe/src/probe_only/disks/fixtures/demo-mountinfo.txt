@@ -13,12 +13,12 @@
 795 788 0:34 / /sys/fs/fuse/connections rw,nosuid,nodev,noexec,relatime shared:226 master:20 - fusectl fusectl rw
 796 788 0:35 / /sys/kernel/config rw,nosuid,nodev,noexec,relatime shared:227 master:19 - configfs configfs rw
 800 676 0:38 / /tmp rw,nosuid,nodev shared:228 master:47 - tmpfs tmpfs rw,nr_inodes=1048576,inode64
-801 676 8:17 / /mnt/.rw/mediacentr ro,nosuid,noatime shared:230 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
-802 676 8:17 / /mnt/mediacentr ro,nosuid,noatime shared:231 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
-803 802 8:17 /FotoBackupOld /mnt/mediacentr/FotoBackupOld ro,nosuid,noatime shared:232 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
-804 676 8:2 / /mnt/.rw/wd4tb ro,nosuid,noatime shared:234 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
-805 676 8:2 / /mnt/wd4tb ro,nosuid,noatime shared:235 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
-809 805 8:2 /backup /mnt/wd4tb/backup ro,nosuid,noatime shared:236 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+801 676 8:17 / /mnt/.rw/mediastore ro,nosuid,noatime shared:230 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+802 676 8:17 / /mnt/mediastore ro,nosuid,noatime shared:231 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+803 802 8:17 /OldArchive /mnt/mediastore/OldArchive ro,nosuid,noatime shared:232 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+804 676 8:2 / /mnt/.rw/wdisk ro,nosuid,noatime shared:234 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+805 676 8:2 / /mnt/wdisk ro,nosuid,noatime shared:235 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+809 805 8:2 /backup /mnt/wdisk/backup ro,nosuid,noatime shared:236 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
 810 676 8:21 / /mnt/oldlinux ro,nosuid,noatime shared:237 master:106 - ext4 /dev/sdb5 rw
 811 676 0:44 / /var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/merged ro,nosuid,relatime shared:238 master:116 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/7LUOLK2DIRPWAYZ6HFXBRRIUR3:/var/lib/docker/overlay2/l/F7WGUDJM326XIQJD3A2C3I74EX,upperdir=/var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/diff,workdir=/var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/work
 812 676 0:56 / /var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/merged ro,nosuid,relatime shared:239 master:162 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/ZFJ5NYHIGA5DM6H5QCNOBA5UVQ:/var/lib/docker/overlay2/l/5LJD5EDM6CWFQO7QS7533X4MDA,upperdir=/var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/diff,workdir=/var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/work

@@ -120,12 +120,12 @@ pub mod tests {
     use super::*;
     use crate::probe_only::host::tests::FakeTree;
 
-    /// `/proc/diskstats` of garage-server (2026-09-29).
-    pub const GARAGE_DISKSTATS: &str = include_str!("fixtures/garage-diskstats.txt");
+    /// `/proc/diskstats` of demo-server (2026-09-29).
+    pub const DEMO_DISKSTATS: &str = include_str!("fixtures/demo-diskstats.txt");
 
     #[test]
     fn diskstats_parses_sectors_written_and_read_per_device() {
-        let stats = parse_diskstats(GARAGE_DISKSTATS);
+        let stats = parse_diskstats(DEMO_DISKSTATS);
         assert_eq!(stats["sda"].written, 307_480_584);
         assert_eq!(stats["sdb"].written, 39_386_608);
         assert_eq!(stats["sdb5"].written, 280);
@@ -138,10 +138,10 @@ pub mod tests {
         assert!(parse_diskstats("short line\n").is_empty());
     }
 
-    /// garage-server's sysfs for its four mounted partitions: `/sys/dev/block/<maj:min>` links into
+    /// demo-server's sysfs for its four mounted partitions: `/sys/dev/block/<maj:min>` links into
     /// the device tree, each partition directory sits inside its disk's (as in the kernel).
     #[cfg(unix)]
-    pub fn garage_sysfs(tree: &FakeTree) {
+    pub fn demo_sysfs(tree: &FakeTree) {
         for (disk, disk_number, partitions) in [
             ("sda", "8:0", &[("sda2", "8:2")][..]),
             ("sdb", "8:16", &[("sdb1", "8:17"), ("sdb5", "8:21")][..]),
@@ -177,13 +177,13 @@ pub mod tests {
     /// Symlinks need a Unix host; elsewhere (the probe is Linux-only) the fake sysfs stays empty
     /// and the write-speed sensors simply do not register.
     #[cfg(not(unix))]
-    pub fn garage_sysfs(_tree: &FakeTree) {}
+    pub fn demo_sysfs(_tree: &FakeTree) {}
 
     #[cfg(unix)]
     #[test]
     fn partitions_map_to_their_whole_disk() {
         let tree = FakeTree::new("sysfs");
-        garage_sysfs(&tree);
+        demo_sysfs(&tree);
         let sys = tree.0.join("sys");
         assert_eq!(whole_disk(&sys, "8:2", "/dev/sda2").as_deref(), Some("sda"));
         assert_eq!(
