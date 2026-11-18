@@ -128,46 +128,7 @@ namespace HSMServer.Model.ManagementApi.AccessKeys
             };
         }
 
-        private static AccessKeyDto ToDto(AccessKeyModel key) => new()
-        {
-            Id = key.Id,
-            DisplayName = key.DisplayName,
-            ProductId = key.ProductId,
-            State = key.State switch
-            {
-                KeyState.Active => "active",
-                KeyState.Expired => "expired",
-                KeyState.Blocked => "blocked",
-                // Unreachable while the enum has exactly the three members
-                // above — but a future member must not silently read as
-                // 'active' (a label admission decisions key on).
-                _ => "unknown",
-            },
-            Permissions = PermissionsOf(key.Permissions),
-            CreationTime = key.CreationTime.ToUtcInstant(),
-            ExpirationTime = key.ExpirationTime.ToUtcInstant(),
-            LastUseTime = key.LastUseTime == DateTime.MinValue ? null : key.LastUseTime.ToUtcInstant(),
-            LastIp = key.LastIP,
-            AuthorId = key.AuthorId,
-        };
-
-        // The stored flags are a long; the wire carries their names — the
-        // agent reads permissions, not bits (the enum-table style of the
-        // area's DTO remarks).
-        private static string[] PermissionsOf(KeyPermissions permissions)
-        {
-            List<string> names = new(4);
-
-            if ((permissions & KeyPermissions.CanSendSensorData) != 0)
-                names.Add("canSendSensorData");
-            if ((permissions & KeyPermissions.CanAddNodes) != 0)
-                names.Add("canAddNodes");
-            if ((permissions & KeyPermissions.CanAddSensors) != 0)
-                names.Add("canAddSensors");
-            if ((permissions & KeyPermissions.CanReadSensorData) != 0)
-                names.Add("canReadSensorData");
-
-            return [.. names];
-        }
+        private static AccessKeyDto ToDto(AccessKeyModel key) =>
+            AccessKeyDtoMapper.ToDto(key);
     }
 }

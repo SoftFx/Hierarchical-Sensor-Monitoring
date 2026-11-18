@@ -437,6 +437,15 @@ namespace HSMServer.Core.Tests.Swagger
             // plain 404.
             [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKeys))] = [400, 401, 403, 404, 500],
             [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKey))] = [401, 403, 404, 500],
+
+            // The access-key write surface (#1789): the product's write
+            // admission (404/403), the web-parity name/permission
+            // validation (400), the core's own add/update/remove failure
+            // (409 — the honest-verification pattern; a key vanishing
+            // concurrently answers the plain 404).
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.CreateAccessKey))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.UpdateAccessKey))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.DeleteAccessKey))] = [401, 403, 404, 409, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],
