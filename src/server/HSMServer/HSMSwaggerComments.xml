@@ -118,6 +118,42 @@
             Read `wwwroot/agent/version.txt` (one-line version string staged by CI). Falls back to
             "0.0.0" so the manifest stays valid even when the version file was not staged yet.
         </member>
+        <member name="T:HSMServer.Controllers.AgentInstallerApiController">
+            <summary>
+            The agent-installer download surface of the management API (#1788): the
+            bundle (zip for windows, tar.gz for linux) under the management bearer,
+            either streamed directly (scripts) or handed over as a ONE-TIME
+            short-lived download link (MCP-native orchestrators — the link needs no
+            Authorization header on the target machine). The bundle embeds the
+            product's existing send-data access key; it never generates one.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentInstallerApiController.GetInstaller(System.Guid,System.String)">
+            <summary>
+            Stream the product's agent-installer bundle: a signed-exe zip for
+            `os=windows`, a .deb tar.gz for `os=linux` — the same bundle the web
+            Downloads page serves, with the product's send-data key embedded in
+            the generated config. A read-only token suffices (the ProductManager
+            owner can already read the key).
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="os">'windows' or 'linux'.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentInstallerApiController.IssueInstallerLink(System.Guid,System.String)">
+            <summary>
+            Issue a ONE-TIME short-lived (~10 min) download link for the product's
+            bundle: `{url, expiresAt, fileName, size, sha256}`. The URL needs no
+            Authorization header — the token inside it is the credential, valid
+            for a single download — so an orchestrator can curl the bundle on the
+            target machine without the management bearer. The sha256 pins the
+            EXACT bytes the redemption serves.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="os">'windows' or 'linux'.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.AgentInstallerDownloadController">
+            already-redeemed token answers one plain 404 (the link must not become
+        </member>
         <member name="T:HSMServer.Controllers.AlertSchedulesApiController">
             <summary>
             CRUD over alert schedules (epic #1347). Bearer-token authenticated
@@ -977,6 +1013,14 @@
             REST controller runs on (the #1393 pattern).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.AgentInstallerMcpTools">
+            <summary>
+            The agent-installer tool of the MCP surface (#1788): issue a ONE-TIME
+            short-lived download link for a product's installer bundle — a thin
+            rendering of <see cref="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService"/>, the
+            same engine the REST controller runs on (the #1393 pattern).
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
             The alert tools of the MCP surface — four reads (#1391) and, since the
@@ -1413,6 +1457,27 @@
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildZip(System.Byte[],HSMServer.Model.Agent.AgentBundleOptions)">
             <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts + README.</summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.AgentInstallerDownloadLinks">
+            <summary>
+            The ONE-TIME download-link store of the agent-installer surface (#1788):
+            a bearer-authenticated caller issues a short-lived link, and the
+            redemption endpoint serves the bundle to whoever holds the link — no
+            Authorization header, no management token on the target machine (ADR
+            docs/adr/0001-provision-not-push.md: the orchestrator never needs the
+            raw bearer credential in its shell).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerDownloadLinks.Issue(HSMServer.Model.Agent.AgentInstallerDownloadLinks.Link)">
+            <summary>Issue a link for the given bundle; the token is the URL secret.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerDownloadLinks.TryRedeem(System.Guid)">
+            <summary>
+            Redeem a link: SINGLE USE — a successful redemption removes it, an
+            expired one is indistinguishable from an unknown token (the plain
+            not-found answer; the link must not become an enumeration or
+            reuse oracle).
+            </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentKeySelector">
             <summary>
@@ -1908,6 +1973,75 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.State">
             <summary>The key's new stored state: 'active' (unblock) or 'blocked' (the kill-switch for a misbehaving agent; the agent's data keeps flowing, its key is refused). 'expired' is derived, not settable. Null = leave unchanged.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext">
+            <summary>
+            The request facts the bundle build and the link URL need — captured
+            once per call (REST controller or MCP tool) through <see cref="M:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.Of(System.Security.Claims.ClaimsPrincipal,Microsoft.AspNetCore.Http.HttpContext)"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.Host">
+            <summary>The request host WITHOUT port (the resolver's input).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.UrlAuthority">
+            <summary>The request host WITH port when non-default (the link URL's authority).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService">
+            <summary>
+            The agent-installer surface's engine (#1788): admission at the product
+            (the owner's ProductManager role — a read-only token suffices, the
+            initiative's decision #5: the bundle discloses a credential the PM can
+            already read), the bundle build (the SAME builders the web Downloads
+            page drives, embedding the product's existing send-data key — never
+            generating one), and the one-time link issuance for MCP-native
+            orchestrators. Transport-agnostic: the REST controller and the MCP
+            tool render its results through the shared envelopes.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.GetBundle(System.Guid,System.String,HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext)">
+            <summary>
+            Build the product's bundle and answer it for direct streaming
+            (the script path — the management bearer on every request).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.IssueLink(System.Guid,System.String,HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext)">
+            <summary>
+            Build the product's bundle and issue a ONE-TIME short-lived
+            download link for it — the MCP-native hand-over: the orchestrator
+            curls the link on the target machine without the management
+            bearer. The result carries the absolute URL, the expiry, the file
+            name, the size and the sha256 of the EXACT bytes the redemption
+            will serve.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.AgentInstallerBundleResult">
+            <summary>The built bundle: the bytes, the download file name, the content type.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.AgentInstallerBundleResult.#ctor(System.Byte[],System.String,System.String)">
+            <summary>The built bundle: the bytes, the download file name, the content type.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto">
+            <summary>
+            A one-time download link for a product's agent-installer bundle (#1788):
+            everything an orchestrator needs to fetch the bundle ON THE TARGET
+            MACHINE without the management bearer — the URL carries a single-use
+            short-lived token, and the sha256 lets it verify the bytes it curled.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Url">
+            <summary>The absolute download URL — single use, short-lived; works without an Authorization header.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.ExpiresAt">
+            <summary>When the link dies (UTC ISO 8601) whether or not it was redeemed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.FileName">
+            <summary>The bundle's file name (a .zip for windows, a .tar.gz for linux).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Size">
+            <summary>The bundle's size in bytes.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Sha256">
+            <summary>The bundle's SHA-256 (lowercase hex) — verify the downloaded bytes against it.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>

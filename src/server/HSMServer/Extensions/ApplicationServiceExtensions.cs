@@ -107,6 +107,15 @@ namespace HSMServer.ServiceExtensions
             // the same reason as the read twin.
             services.AddScoped<AccessKeysAdministrationService>();
 
+            // The one-time installer-download links (#1788): Singleton —
+            // in-memory, cross-request (the RestoreService session-store
+            // pattern: ConcurrentDictionary + timer sweep).
+            services.AddSingleton<HSMServer.Model.Agent.AgentInstallerDownloadLinks>();
+
+            // The agent-installer engine (#1788): admission + bundle build +
+            // link issuance, shared by the REST controller and the MCP tool.
+            services.AddScoped<HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService>();
+
             // The shared chat read implementation — same shape as the two above:
             // behind both the REST chat controller and the MCP chat tools. The
             // id source the alert/template write endpoints validate

@@ -446,6 +446,13 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.CreateAccessKey))] = [400, 401, 403, 404, 409, 500],
             [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.UpdateAccessKey))] = [400, 401, 403, 404, 409, 500],
             [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.DeleteAccessKey))] = [401, 403, 404, 409, 500],
+
+            // The agent-installer surface (#1788): the os/no-key/address
+            // validations (400), the PM admission (403) with the area 404,
+            // and the not-staged binary (503 — the capacity-abort arm, like
+            // the sensor search's evaluation budget).
+            [(typeof(AgentInstallerApiController), nameof(AgentInstallerApiController.GetInstaller))] = [400, 401, 403, 404, 500, 503],
+            [(typeof(AgentInstallerApiController), nameof(AgentInstallerApiController.IssueInstallerLink))] = [400, 401, 403, 404, 500, 503],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],

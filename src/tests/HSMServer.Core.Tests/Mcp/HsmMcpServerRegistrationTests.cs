@@ -48,6 +48,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "delete_sensor_policy",
                 "delete_sensor_ttl_policy",
                 "find_sensors",
+                "get_agent_installer",
                 "get_alert_schedule",
                 "get_alert_template",
                 "get_chat",
@@ -138,7 +139,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(40, tools.Count);
+            Assert.Equal(41, tools.Count);
             Assert.All(tools, tool =>
             {
                 var schema = tool.ProtocolTool.OutputSchema;
