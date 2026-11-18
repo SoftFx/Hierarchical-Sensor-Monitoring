@@ -38,11 +38,17 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     // ProductsRoles/UpdateUser round-trip) — what a role-less owner creates
     // is immediately visible and manageable by that owner, which the
     // agent-installation scenario requires (issue #1787's key surface is
-    // gated on the product Manager role). The grant runs AFTER the journaled
-    // creation and is best-effort on a persistence failure: the product
-    // exists, so failing the request would read as "not created" (a retry
-    // would trip the duplicate-name 400) — the failure is logged and an
-    // admin can grant the role by hand.
+    // gated on the product Manager role). ACCEPTED CONSEQUENCE: a resolvable
+    // product role is one of the caller-wide gate's arms (CanSeeAnyBoundary),
+    // so a role-less account that creates its first product also opens the
+    // caller-wide reads (global alert schedules, the chats id discovery) —
+    // the web UI already shows those resources to every logged-in user, and
+    // the alternative (an author-sight rule outside the role model) would
+    // fragment the sight model the whole /api/v1 area is built on; pinned by
+    // a test. The grant runs AFTER the journaled creation and is best-effort
+    // on a persistence failure: the product exists, so failing the request
+    // would read as "not created" (a retry would trip the duplicate-name
+    // 400) — the failure is logged and an admin can grant the role by hand.
     //
     // Stateless over singletons -> Scoped registration.
     public sealed class ProductAdministrationService
@@ -118,13 +124,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 return PolicyWriteResult<ProductDto>.Fail(PolicyWriteOutcome.Validation,
                     NameError(NameDuplicateMessage));
 
+            Core.Model.ProductModel product;
+
             try
             {
-                var product = await _cache.AddProductAsync(trimmed, AuthorIdOf(user), InitiatorOf(user));
-
-                await GrantManagerRoleAsync(product.Id, user);
-
-                return PolicyWriteResult<ProductDto>.Ok(SensorTreeDtoMapper.ToProductDto(product));
+                product = await _cache.AddProductAsync(trimmed, AuthorIdOf(user), InitiatorOf(user));
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains(DuplicateNameRaceMarker))
             {
@@ -143,6 +147,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
                 return PolicyWriteResult<ProductDto>.Fail(PolicyWriteOutcome.Conflict, message: NotCreatedMessage);
             }
+
+            // The grant runs AFTER the journaled creation and OUTSIDE the
+            // create's error mapping: the product exists, so no grant
+            // failure may turn the 201 into a "not created" answer (a retry
+            // would trip the duplicate-name 400). GrantManagerRoleAsync
+            // swallows and logs everything of its own.
+            await GrantManagerRoleAsync(product.Id, user);
+
+            return PolicyWriteResult<ProductDto>.Ok(SensorTreeDtoMapper.ToProductDto(product));
         }
 
 
@@ -182,9 +195,24 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             InitiatorInfo.AsUser(OwnerOf(user)?.Name ?? "api-token");
 
         // The creator's own Manager role on the new product — the web UI's
-        // role-assignment pattern (EditUserRole), see the DESIGN comment. The
-        // role REPLACES any stale entry the user holds for the same product id
-        // (a retried create after a failed removal cannot accumulate roles).
+        // role-assignment pattern (EditUserRole), see the DESIGN comment.
+        //
+        // Concurrency: this is a PROGRAMMATIC writer an agent may call in
+        // parallel, while every authorization decision of the same owner
+        // READS the same ProductsRoles list. Grants for one owner are
+        // therefore serialized on the owner instance, and the list is
+        // REPLACED by a fresh snapshot (never mutated in place): a reader
+        // that fetched the property enumerates a list this code will never
+        // touch again, so the evaluator cannot hit "Collection was modified"
+        // from under a create. The web UI's own in-place mutations are
+        // unchanged (interactive, low-concurrency — the pre-existing
+        // pattern); the residual window (two parallel creates by the SAME
+        // owner persisting out of order) is the web flow's own hazard and
+        // accepted here.
+        //
+        // The role REPLACES any stale entry the user holds for the same
+        // product id (a retried create after a failed removal cannot
+        // accumulate roles).
         private async Task GrantManagerRoleAsync(Guid productId, ClaimsPrincipal user)
         {
             var owner = OwnerOf(user);
@@ -192,11 +220,35 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             if (owner is null)
                 return; // unreachable after the gate: the evaluator resolved a live owner
 
-            owner.ProductsRoles.RemoveAll(role => role.Item1 == productId);
-            owner.ProductsRoles.Add((productId, ProductRoleEnum.ProductManager));
+            try
+            {
+                Task<bool> persist;
 
-            if (!await _users.UpdateUser(owner))
-                _logger.Warn($"Cannot grant the ProductManager role on product '{productId}' to '{owner.Name}': the user update did not persist — the product exists; grant the role by hand.");
+                lock (owner)
+                {
+                    var roles = new List<(Guid, ProductRoleEnum)>(owner.ProductsRoles);
+
+                    roles.RemoveAll(role => role.Item1 == productId);
+                    roles.Add((productId, ProductRoleEnum.ProductManager));
+
+                    owner.ProductsRoles = roles;
+
+                    // Started inside the lock so the entity snapshot
+                    // (User.ToEntity enumerates ProductsRoles) is serialized
+                    // with the swap; only the await happens outside it.
+                    persist = _users.UpdateUser(owner);
+                }
+
+                if (!await persist)
+                    _logger.Warn($"Cannot persist the ProductManager role on product '{productId}' for '{owner.Name}': the user update did not persist — the role stays ACTIVE IN MEMORY until the next restart and then disappears; grant the role by hand.");
+            }
+            catch (Exception ex)
+            {
+                // The product exists and is journaled: any grant failure is
+                // logged and swallowed — the 201 must stand, and an admin
+                // can grant the role by hand.
+                _logger.Warn(ex, $"Cannot grant the ProductManager role on product '{productId}' to '{owner.Name}': the grant failed after the product was created; grant the role by hand.");
+            }
         }
 
         private User OwnerOf(ClaimsPrincipal user)

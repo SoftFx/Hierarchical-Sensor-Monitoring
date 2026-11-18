@@ -6,6 +6,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
+using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
@@ -275,6 +276,88 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(201, StatusCodeOf(result));
             _users.Verify(u => u.UpdateUser(owner), Times.Once());
+        }
+
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async System.Threading.Tasks.Task CreateProduct_GrantThrowing_AlwaysReturns201(bool invalidOperation)
+        {
+            // #1792 review r2: the grant runs OUTSIDE the create's error
+            // mapping — an exception from the role grant (including an
+            // InvalidOperationException) must never turn the 201 of an
+            // existing product into a 409 "not created" or a 500.
+            var ownerId = Guid.NewGuid();
+            var owner = new HSMServer.Model.Authentication.User("the-owner") { Id = ownerId };
+            _users.Setup(u => u[ownerId]).Returns(owner);
+            _users.Setup(u => u.UpdateUser(It.IsAny<HSMServer.Model.Authentication.User>()))
+                .ThrowsAsync(invalidOperation
+                    ? new InvalidOperationException("Collection was modified")
+                    : new Exception("database unavailable"));
+
+            SetupAddProduct(BuildRoot("Alpha", Guid.NewGuid()));
+
+            var result = await CreateController(BuildPrincipal(ownerId)).CreateProduct(new CreateProductRequestDto { Name = "Alpha" });
+
+            Assert.Equal(201, StatusCodeOf(result));
+            _users.Verify(u => u.UpdateUser(owner), Times.Once());
+        }
+
+
+        private delegate void TryProductCallback(Guid id, out Core.Model.ProductModel product);
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateProduct_RolelessOwner_OpensProductSightAndTheCallerWideGate()
+        {
+            // #1792 review r2: the PM-role grant's ACCEPTED consequence,
+            // pinned end-to-end with the REAL evaluator — a role-less owner
+            // that creates its first product can see that product (the
+            // grant's purpose) AND passes the caller-wide gate (a resolvable
+            // product role is one of its arms). Documented in the service's
+            // DESIGN comment and the feature doc.
+            var ownerId = Guid.NewGuid();
+            var owner = new HSMServer.Model.Authentication.User("the-owner") { Id = ownerId, IsAdmin = false };
+
+            var users = new Mock<IUserManager>();
+            users.Setup(u => u[ownerId]).Returns(owner);
+            users.Setup(u => u.UpdateUser(It.IsAny<HSMServer.Model.Authentication.User>())).ReturnsAsync(true);
+
+            var tokens = new Mock<IApiTokenManager>();
+            tokens.Setup(t => t.IsTokenLive(It.IsAny<string>())).Returns(true);
+            tokens.Setup(t => t.GetToken(It.IsAny<string>()))
+                .Returns(new ApiTokenInfo { OwnerUserId = ownerId, ReadOnly = false });
+
+            var created = BuildRoot("Alpha", Guid.NewGuid());
+            SetupAddProduct(created);
+            _cache.Setup(c => c.TryGetProduct(It.IsAny<Guid>(), out It.Ref<Core.Model.ProductModel>.IsAny))
+                .Callback(new TryProductCallback((Guid _, out Core.Model.ProductModel p) => p = created))
+                .Returns(true);
+
+            var evaluator = new ApiTokenAuthorizationService(users.Object, tokens.Object,
+                new Mock<IFolderManager>().Object, _cache.Object, new Mock<IApiTokenSecurityEventSink>().Object);
+            var principal = BuildPrincipal(ownerId);
+
+            // Before: a role-less owner sees nothing anywhere — the
+            // caller-wide gate's closed state.
+            Assert.False(evaluator.CanSeeAnyBoundary(principal));
+
+            var controller = new ProductsApiController(new SensorTreeReadService(_cache.Object, evaluator),
+                    new ProductAdministrationService(_cache.Object, evaluator, users.Object))
+            {
+                ControllerContext = new ControllerContext
+                {
+                    HttpContext = new DefaultHttpContext { User = principal },
+                },
+            };
+
+            Assert.Equal(201, StatusCodeOf(await controller.CreateProduct(new CreateProductRequestDto { Name = "Alpha" })));
+
+            // After: the created product is visible to its creator, and the
+            // caller-wide gate is open — the accepted consequence.
+            Assert.True(evaluator.IsVisible(principal, ApiTokenResource.Product(created.Id)));
+            Assert.True(evaluator.CanSeeAnyBoundary(principal));
         }
 
 
