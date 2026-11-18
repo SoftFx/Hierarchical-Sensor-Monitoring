@@ -1105,10 +1105,21 @@ namespace HSMServer.Core.Cache
 
         public async Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default)
         {
-            if (!TryGetSensorById(request.Id, out var sensor))
-                return TaskResult.FromError($"Sensor {sensor.Id} was not found"); 
+            // #1709: the manual value/comment edit from the web UI's status
+            // modal rides this path, bypassing the API converters' ingestion
+            // gate — run the two text fields through the SAME SanitizeText
+            // gate, so a pasted connection string — entity-encoded or
+            // tag-split included — stores exactly what collector ingestion
+            // would store. WithText builds a COPY, not a mutation: the
+            // caller's request keeps its original text.
+            var masked = request.WithText(
+                comment: Services.HtmlSanitizerService.SanitizeText(request.Comment),
+                value: Services.HtmlSanitizerService.SanitizeText(request.Value));
 
-            return await ProcessRequestAsync(sensor.Root.Id, request, token);
+            if (!TryGetSensorById(masked.Id, out var sensor))
+                return TaskResult.FromError($"Sensor {masked.Id} was not found");
+
+            return await ProcessRequestAsync(sensor.Root.Id, masked, token);
         }
 
         private void UpdateSensorValue(UpdateSensorValueRequestModel request)

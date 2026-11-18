@@ -883,6 +883,45 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return sensors;
         }
 
+        [Fact]
+        public async Task UpdateSensorValue_MasksCredentialsInTheUiPathTextFields()
+        {
+            // #1709 review: the manual value/comment edit from the web UI's
+            // status modal rides UpdateSensorValueAsync, outside the API
+            // converters — the cache masks the two text fields at its entry,
+            // so a pasted connection string stores the same ***@ as
+            // collector ingestion.
+            Guid accessKey = Guid.Parse(TestProductsManager.TestProductKey.Id);
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.String, "uiMask/string", DateTime.UtcNow);
+
+            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, value);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "uiMask/string", out var sensor));
+
+            await _valuesCache.UpdateSensorValueAsync(new UpdateSensorValueRequestModel(sensor.Id, sensor.Path)
+            {
+                Id = sensor.Id,
+                Status = HSMCommon.Model.SensorStatus.Ok,
+                Comment = "conn: mongodb://backup:secret@mongo:27017/db",
+                // #1709 review: the modal rides the SanitizeText gate now —
+                // an entity-encoded '@' decodes in the sanitizer and masks
+                // here exactly as it does at collector ingestion.
+                Value = "mongodb://backup:secret&#64;mongo:27017/db",
+                ChangeLast = false,
+            });
+
+            // #1709 review: wait on the MASKED VALUE itself — LastValue is
+            // already set by the add above, so waiting for it to exist never
+            // waited for the manual edit to land.
+            await TestWait.UntilAsync(
+                () => sensor.LastValue?.RawValue?.ToString() == "mongodb://***@mongo:27017/db",
+                "the masked manual edit to land");
+
+            Assert.Equal("mongodb://***@mongo:27017/db", sensor.LastValue.RawValue?.ToString());
+            // #1709 review: the comment of the manual edit masks too — the
+            // modal is where a pasted exception message lands.
+            Assert.Equal("conn: mongodb://***@mongo:27017/db", sensor.LastValue.Comment);
+        }
+
         private static AddSensorValueRequest BuildSensorStoreInfo(Guid key, string path, SensorType type, ProductModel product) =>
             new(key, product.Id, path, SensorValuesFactory.BuildValue(type));
     }
