@@ -13,10 +13,12 @@ namespace HSMServer.Core.Services
     /// A credential is user:password@ INSIDE the authority; the host after
     /// it is never parsed, so replica-set host lists, bracketed IPv6 hosts
     /// and URLs embedded in JSON, parentheses or trailing punctuation still
-    /// mask (#1709 review). The authority ends at every character RFC 3986
-    /// excludes from it entirely, so a URL without a path cannot "own" the
-    /// rest of its word — a later JSON field or an email address after a
-    /// comma stays intact instead of reading as the credential tail. The
+    /// mask (#1709 review). The authority ends at a HEURISTIC boundary set
+    /// — the characters RFC 3986 excludes from an authority, plus the
+    /// sub-delims ' ( ) , ; that commonly delimit JSON and prose — so a
+    /// URL without a path cannot "own" the rest of its word: a later JSON
+    /// field or an email address after a comma stays intact instead of
+    /// reading as the credential tail. The
     /// scan is word-by-word and linear in the input length — every character
     /// is examined a bounded number of times, so an adversarial megabyte
     /// value cannot pin a request thread.
@@ -128,9 +130,12 @@ namespace HSMServer.Core.Services
                 //    '?' or '#' in the password ends the authority scan early),
                 //    the password runs past the delimiter and the separator is
                 //    the last '@' of the credential zone. The zone crosses
-                //    '/', '?' and '#' (that is its point) but no character
-                //    RFC 3986 excludes from an authority — an email in the
-                //    next JSON field is not a password tail (#1709 review).
+                //    '/', '?' and '#' (that is its point) and a raw '<' — the
+                //    sanitizer drops everything from an unclosed '<tag' shape,
+                //    so a '<' inside the password must mask BEFORE the
+                //    sanitizer runs (#1709 review) — but no other boundary
+                //    character: an email in the next JSON field is not a
+                //    password tail (#1709 review).
                 //    When the zone finds no '@' at all: a zone that stopped
                 //    at a boundary proves its whole span '@'-free, so every
                 //    "://" inside it cannot mask either and the scan resumes
@@ -208,10 +213,11 @@ namespace HSMServer.Core.Services
         private static bool PasswordMayRunPastDelimiters(string value, int from, int end) =>
             from < end && !LooksLikeHostPort(value, from, end);
 
-        // host, or host:port with an all-digit port and a non-empty host.
-        // Anything else (a colon tail that is not digits, several colons,
-        // an empty segment) cannot be an authority, so it reads as the
-        // user:password shape instead.
+        // host, or host:port with an all-digit port — possibly EMPTY: RFC
+        // 3986 allows 'port = *DIGIT', so a TRAILING colon is still a
+        // host:port (http://example.com:/a@b) and its later '@'s live in
+        // the path (#1709 review). A leading colon or several colons
+        // cannot be an authority, so they read as the user:password shape.
         private static bool LooksLikeHostPort(string value, int from, int end)
         {
             if (from >= end)
@@ -233,9 +239,13 @@ namespace HSMServer.Core.Services
             if (colon < 0)
                 return true;
 
-            if (colon == from || colon == end - 1)
-                return false;
+            if (colon == from)
+                return false; // an empty host is not host:port
 
+            // colon == end - 1: an EMPTY port is still host:port — RFC
+            // 3986 defines 'port = *DIGIT', so the digit loop below is
+            // empty and the value stays a host whose '@'s live in the
+            // path (#1709 review).
             for (var i = colon + 1; i < end; i++)
                 if (!char.IsDigit(value[i]))
                     return false;
@@ -243,9 +253,11 @@ namespace HSMServer.Core.Services
             return true;
         }
 
-        // The path delimiters, plus the characters RFC 3986 excludes from
-        // the authority entirely. Without them a URL without a path "owns"
-        // the rest of its whitespace-free word:
+        // The path delimiters, plus the heuristic boundary set: the
+        // characters RFC 3986 excludes from an authority, PLUS the
+        // sub-delims ' ( ) , ; — legal there, but they commonly delimit
+        // JSON and prose. Without them a URL without a path "owns" the
+        // rest of its whitespace-free word:
         // http://example.com","owner":"admin@corp.com would read its own
         // JSON tail as user:password@ and destroy it (#1709 review).
         private static bool IsAuthorityEnd(char ch) =>
@@ -253,11 +265,16 @@ namespace HSMServer.Core.Services
                 or '"' or '\'' or ',' or ';' or '<' or '>' or '(' or ')'
                 or '{' or '}' or '[' or ']' or '\\' or '|';
 
-        // The same set minus the path delimiters: the raw-password fallback
-        // exists to reach across '/', '?' and '#', but nothing above can sit
-        // inside a credential, so it ends the zone.
+        // The same set minus the path delimiters and minus '<': the
+        // raw-password fallback exists to reach across '/', '?' and '#',
+        // and it also crosses a raw '<' — the sanitizer drops everything
+        // from an unclosed '<tag' shape, so a '<' inside a password must
+        // mask before the sanitizer runs (#1709 review). A raw '>' starts
+        // nothing and travels as an entity after the sanitizer, so it
+        // still ends the zone; every other character above cannot sit
+        // inside a credential, so it ends the zone too.
         private static bool IsCredentialZoneEnd(char ch) =>
-            ch is '"' or '\'' or ',' or ';' or '<' or '>' or '(' or ')'
+            ch is '"' or '\'' or ',' or ';' or '>' or '(' or ')'
                 or '{' or '}' or '[' or ']' or '\\' or '|';
 
         // Whether the ';' or '#' at 'at' closes an HTML entity: '&' followed

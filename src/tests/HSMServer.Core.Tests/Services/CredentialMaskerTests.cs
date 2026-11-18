@@ -39,6 +39,13 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("(mongodb://u:p@mongo:27017)", "(mongodb://***@mongo:27017)")]
         // two credentials in ONE word, separated by a path delimiter
         [InlineData("a://u:p@h/x://y:z@w", "a://***@h/x://***@w")]
+        // #1709 review: a password with BOTH a raw '@' and a raw '/' is
+        // only PARTLY masked — the separator is the last '@' of the
+        // AUTHORITY, so the tail past the '/' leaks. Preferring the zone's
+        // last '@' here would also grab the '@' of a query-string email
+        // (mongodb://u:p@h/db?email=a@b) and destroy a credential-free
+        // value; a documented limit (wire contract).
+        [InlineData("mongodb://u:p@ss/x@host/db", "mongodb://***@ss/x@host/db")]
         // #1709 review: an @-free zone before a boundary proves nothing
         // inside it can mask — the scan resumes AT the boundary, so a later
         // well-formed credential in the SAME word still masks.
@@ -56,6 +63,9 @@ namespace HSMServer.Core.Tests.Services
         [InlineData("mongodb://user:@mongo/db")] // empty password — nothing to leak
         [InlineData("http://host:8080/path?email=a@b")] // host:port is not a credential — an '@' in the path/query never masks
         [InlineData("http://host:8080/a@b/c")]
+        // #1709 review: RFC 3986 defines 'port = *DIGIT' — an EMPTY port
+        // is still host:port, so the '@' after the path never masks.
+        [InlineData("http://example.com:/a@b")]
         // #1709 review: the raw-password fallback only fires for a
         // userinfo-shaped authority — empty, bracketed and host:port
         // authorities keep their later '@'s, which live in the path.
@@ -136,9 +146,9 @@ namespace HSMServer.Core.Tests.Services
         public void StringSensorValues_MaskAtIngestion()
         {
             // The converter both ingest paths ride: the value AND the comment
-            // pass the SanitizeText gate — sanitizer first, then the mask on
-            // its decoded output — so the secret never reaches storage even
-            // when it travels inside a comment.
+            // pass the SanitizeText gate — mask, sanitize, mask again — so
+            // the secret never reaches storage even when it travels inside
+            // a comment.
             var converted = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue
             {
                 Path = "Scheduled Tasks/Mongo Backup Task",
@@ -150,18 +160,25 @@ namespace HSMServer.Core.Tests.Services
             Assert.Equal("conn: mongodb://***@mongo:27017/db", converted.Comment);
         }
 
-        // #1709 review: the sanitizer runs FIRST and the mask reads its
-        // OUTPUT — the sanitizer decodes entities and strips tags, so both
-        // obfuscated shapes below still mask. With the old order (masking
-        // the raw input) both credentials were stored intact: the masker saw
-        // no literal '@' in the first, and two '@'-less words in the second.
-        // The '&' case pins the entity handling: the sanitizer RE-ENCODES
-        // '&' as '&amp;', and the masker steps over the entity instead of
-        // ending the credential at its ';'.
+        // #1709 review: the gate masks on BOTH sides of the sanitizer. The
+        // PRE-sanitize pass catches a raw '<' in the password: the
+        // sanitizer reads '<ss@…' as an unclosed tag and DROPS everything
+        // after it, so with the old sanitize-then-mask order the value
+        // below was stored as 'mongodb://u:p' — the user and the password
+        // prefix in clear. The POST-sanitize pass catches the shapes the
+        // sanitizer rewrites into form — an entity-decoded '@' or a tag
+        // splitting the URL from its '@'. The '&' case pins the entity
+        // handling: the sanitizer RE-ENCODES '&' as '&amp;', and the masker
+        // steps over the entity instead of ending the credential at its ';'.
         [Theory]
         [InlineData("mongodb://backup:secret&#64;mongo:27017/db", "mongodb://***@mongo:27017/db")]
         [InlineData("mongodb://backup:secret<i class=\"x\"></i>@mongo/db", "mongodb://***@mongo/db")]
         [InlineData("mongodb://u:p&ss@host/db", "mongodb://***@host/db")]
+        // unclosed '<tag' shape — only the PRE-sanitize pass can mask it
+        [InlineData("mongodb://u:p<ss@host/db", "mongodb://***@host/db")]
+        // closed tag: the PRE pass cannot cross '>', the sanitizer strips
+        // the tag and the POST pass masks the joined text
+        [InlineData("mongodb://u:p<ss>t@host/db", "mongodb://***@host/db")]
         public void SanitizerRewrittenUrls_MaskAtIngestion(string raw, string expected)
         {
             var converted = new HSMSensorDataObjects.SensorValueRequests.StringSensorValue

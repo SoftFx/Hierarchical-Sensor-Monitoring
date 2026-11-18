@@ -946,19 +946,13 @@ namespace HSMServer.Core.Cache
             // #1709: the manual value/comment edit from the web UI's status
             // modal rides this path, bypassing the API converters' ingestion
             // gate — run the two text fields through the SAME SanitizeText
-            // gate (sanitizer first, mask on its decoded output), so a pasted
-            // connection string — entity-encoded or tag-split included —
-            // stores exactly what collector ingestion would store. A COPY,
-            // not a mutation: the caller's request keeps its original text.
-            var masked = new UpdateSensorValueRequestModel(request.Id, string.Empty)
-            {
-                Id = request.Id,
-                Initiator = request.Initiator,
-                Status = request.Status,
-                Comment = Services.HtmlSanitizerService.SanitizeText(request.Comment),
-                Value = Services.HtmlSanitizerService.SanitizeText(request.Value),
-                ChangeLast = request.ChangeLast,
-            };
+            // gate, so a pasted connection string — entity-encoded or
+            // tag-split included — stores exactly what collector ingestion
+            // would store. WithText builds a COPY, not a mutation: the
+            // caller's request keeps its original text.
+            var masked = request.WithText(
+                comment: Services.HtmlSanitizerService.SanitizeText(request.Comment),
+                value: Services.HtmlSanitizerService.SanitizeText(request.Value));
 
             if (!TryGetSensorById(masked.Id, out var sensor))
                 return TaskResult.FromError($"Sensor {masked.Id} was not found");

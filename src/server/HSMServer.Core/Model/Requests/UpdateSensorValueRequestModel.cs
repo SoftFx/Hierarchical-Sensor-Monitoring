@@ -31,6 +31,25 @@ namespace HSMServer.Core.Model.Requests
 
         public UpdateSensorValueRequestModel(Guid key, string path) { }
 
+
+        // #1709: the manual UI edit is sanitized as a COPY —
+        // TreeValuesCache.UpdateSensorValueAsync runs the two text fields
+        // through the SanitizeText ingestion gate and rebuilds the request
+        // through here. Add any new property to this copy too, or the UI
+        // path silently drops it.
+        public UpdateSensorValueRequestModel WithText(string comment, string value) =>
+            // 'Id' is required-init and the (key, path) ctor ignores its
+            // arguments (legacy signature), so the initializer repeats it.
+            new(Id, string.Empty)
+            {
+                Id = Id,
+                Initiator = Initiator,
+                Status = Status,
+                Comment = comment,
+                Value = value,
+                ChangeLast = ChangeLast,
+            };
+
         public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue?.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
 
         public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
