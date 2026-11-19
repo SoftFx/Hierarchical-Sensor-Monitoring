@@ -317,7 +317,7 @@ switches covered the disk sensor, so **while `probe.disks.enabled` is not set** 
 ### Docker Compose services (#1416)
 
 Everything lives under one node in the probe's module node:
-`.probe/Docker/<project>/<service>/<sensor>`, e.g. `.probe/Docker/gitea/db/Service status`. Source: the Docker Engine API on
+`.probe/Docker/<project>/<service>/<sensor>`, e.g. `.probe/Docker/gitsrv/db/Service status`. Source: the Docker Engine API on
 `probe.docker.socket` (default `/var/run/docker.sock`); every number below is in
 `hsm-linux-probe/src/probe_only/docker/contract.rs`, every alert in `…/docker/alerts.rs`.
 
@@ -1171,7 +1171,7 @@ Placeholders only — **no secrets**:
 * `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
   (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`60`, 1–300; the bars stay
   5 minutes whatever it is; the state poll runs on the tick nearest every 60 s), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
-  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lumina-ci/janitor"`). A host without Docker needs no change: the
+  patterns, `*` within a segment, e.g. `"panelhost/*"`, `"lumina-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
   **Upgrade note (0.8.1):** the default `samplePeriodSec` went from 5 to 60 (owner decision
   2026-10-05), but configs seeded from the skeleton of an earlier `.deb` spell out

@@ -1391,9 +1391,9 @@ pub(crate) mod tests {
         assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
         assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
         let has = |p: &str| paths.iter().any(|x| x == p);
-        assert!(has(".probe/Docker/gitea/db/Service status"));
-        assert!(has(".probe/Docker/gitea/db/Health"));
-        assert!(has(".probe/Docker/gitea/db/CPU"));
+        assert!(has(".probe/Docker/gitsrv/db/Service status"));
+        assert!(has(".probe/Docker/gitsrv/db/Health"));
+        assert!(has(".probe/Docker/gitsrv/db/CPU"));
         // The exited one-shot image build (Exited (0), restart "no"): a completed job, no node.
         assert!(paths
             .iter()
@@ -1445,8 +1445,8 @@ pub(crate) mod tests {
         let status = collector
             .registrations()
             .into_iter()
-            .find(|json| json.contains(".probe/Docker/gitea/db/Service status"))
-            .expect("gitea/db registered at runtime");
+            .find(|json| json.contains(".probe/Docker/gitsrv/db/Service status"))
+            .expect("gitsrv/db registered at runtime");
         assert!(status.contains("$operation Running"), "{status}");
     }
 
@@ -1579,7 +1579,7 @@ pub(crate) mod tests {
         };
         // Service status: the Windows ServiceStatusPrototype alert, byte for byte (the same text
         // the native collector's own service-status registration golden pins).
-        let status = find("gitea/db/Service status");
+        let status = find("gitsrv/db/Service status");
         assert!(
             status.contains(
                 "\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":5,\"Property\":20,\
@@ -1591,25 +1591,25 @@ pub(crate) mod tests {
             "{status}"
         );
         for path in [
-            "gitea/db/CPU",
-            "gitea/db/Memory used %",
-            "gitea/db/Health",
-            "gitea/db/Restart count",
-            "gitea/db/OOM killed",
+            "gitsrv/db/CPU",
+            "gitsrv/db/Memory used %",
+            "gitsrv/db/Health",
+            "gitsrv/db/Restart count",
+            "gitsrv/db/OOM killed",
         ] {
             assert!(
                 find(path).contains("\"Alerts\":[{"),
                 "{path} carries its alert"
             );
         }
-        // The limit lives in the Memory used % description (gitea/db: 1 GiB).
+        // The limit lives in the Memory used % description (gitsrv/db: 1 GiB).
         assert!(
-            find("gitea/db/Memory used %").contains("**1024 MB** on this host"),
+            find("gitsrv/db/Memory used %").contains("**1024 MB** on this host"),
             "{}",
-            find("gitea/db/Memory used %")
+            find("gitsrv/db/Memory used %")
         );
         // Disk written per hour: decimal MB, EMA statistics, no alert, and the one-hour offset stated.
-        let written = find("gitea/db/Disk written per hour");
+        let written = find("gitsrv/db/Disk written per hour");
         assert!(written.contains("\"OriginalUnit\":3"), "{written}");
         assert!(written.contains("\"Statistics\":1"), "{written}");
         assert!(!written.contains("\"Alerts\":[{"), "{written}");
@@ -1619,9 +1619,9 @@ pub(crate) mod tests {
         );
         // The state sensors store only changes on the server.
         for path in [
-            "gitea/db/Service status",
-            "gitea/db/Health",
-            "gitea/db/OOM killed",
+            "gitsrv/db/Service status",
+            "gitsrv/db/Health",
+            "gitsrv/db/OOM killed",
         ] {
             assert!(
                 find(path).contains("\"AggregateData\":true"),
@@ -1638,9 +1638,9 @@ pub(crate) mod tests {
         let mut engine = FixtureEngine::demo();
         engine
             .list
-            .retain(|c| c.label(identity::SERVICE_LABEL) != Some("portainer"));
+            .retain(|c| c.label(identity::SERVICE_LABEL) != Some("panelhost"));
         let mut state = State::default();
-        let key = ServiceKey::new("portainer", "portainer");
+        let key = ServiceKey::new("panelhost", "panelhost");
         let mut record = state::ServiceRecord::new(&key);
         record.last_seen = unix_now() - 3_600;
         state.services.insert(key.clone(), record);
@@ -1658,16 +1658,16 @@ pub(crate) mod tests {
             Some(path.clone()),
         );
         source.poll(&quiet(), &|| false).expect("poll");
-        let portainer: Vec<String> = registered(&collector)
+        let panelhost: Vec<String> = registered(&collector)
             .into_iter()
-            .filter(|p| p.starts_with(".probe/Docker/portainer/"))
+            .filter(|p| p.starts_with(".probe/Docker/panelhost/"))
             .collect();
         assert_eq!(
-            portainer,
-            vec![".probe/Docker/portainer/portainer/Service status"]
+            panelhost,
+            vec![".probe/Docker/panelhost/panelhost/Service status"]
         );
         // The poll persisted the other services it met: 10 listed services (ci-image is a
-        // completed job) plus the remembered portainer.
+        // completed job) plus the remembered panelhost.
         let (saved, _) = State::load(&path);
         assert_eq!(saved.services.len(), 11);
         assert_eq!(source.tracker().state.services.len(), 11);
@@ -1709,7 +1709,7 @@ pub(crate) mod tests {
 
     #[test]
     fn a_wedged_container_does_not_blank_the_others() {
-        // gitea-db's inspect and stats time out; every other service still reports, and db
+        // gitsrv-db's inspect and stats time out; every other service still reports, and db
         // keeps its status (from the listing) but posts no guessed health or stats.
         let collector = test_collector();
         collector.start().expect("start");
@@ -1724,11 +1724,11 @@ pub(crate) mod tests {
             .expect("nor in the stats tick");
         let paths = registered(&collector);
         let has = |p: &str| paths.iter().any(|x| x == p);
-        assert!(has(".probe/Docker/gitea/db/Service status"));
-        assert!(!has(".probe/Docker/gitea/db/Health"));
-        assert!(!has(".probe/Docker/gitea/db/CPU"));
-        assert!(has(".probe/Docker/gitea/gitea/Health"));
-        assert!(has(".probe/Docker/gitea/gitea/CPU"));
+        assert!(has(".probe/Docker/gitsrv/db/Service status"));
+        assert!(!has(".probe/Docker/gitsrv/db/Health"));
+        assert!(!has(".probe/Docker/gitsrv/db/CPU"));
+        assert!(has(".probe/Docker/gitsrv/gitsrv/Health"));
+        assert!(has(".probe/Docker/gitsrv/gitsrv/CPU"));
     }
 
     #[test]
@@ -1750,8 +1750,8 @@ pub(crate) mod tests {
             source.poll(&quiet(), &|| false).expect("poll");
         }
         let (saved, _) = State::load(&path);
-        let db = &saved.services[&ServiceKey::new("gitea", "db")];
-        assert_eq!(db.node.as_deref(), Some("Docker/gitea/db"));
+        let db = &saved.services[&ServiceKey::new("gitsrv", "db")];
+        assert_eq!(db.node.as_deref(), Some("Docker/gitsrv/db"));
 
         // A restarted source adopts every remembered node before naming anything.
         let collector = test_collector();
@@ -1762,8 +1762,8 @@ pub(crate) mod tests {
             Some(path.clone()),
         );
         assert_eq!(
-            source.naming.node(&ServiceKey::new("gitea", "db")),
-            "Docker/gitea/db"
+            source.naming.node(&ServiceKey::new("gitsrv", "db")),
+            "Docker/gitsrv/db"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1772,12 +1772,12 @@ pub(crate) mod tests {
     fn excluded_services_are_not_monitored_and_leave_the_state() {
         let collector = test_collector();
         collector.start().expect("start");
-        // portainer was monitored before (it is in the state); now both it and janitor are excluded.
+        // panelhost was monitored before (it is in the state); now both it and janitor are excluded.
         let mut state = State::default();
-        let portainer = ServiceKey::new("portainer", "portainer");
-        let mut record = state::ServiceRecord::new(&portainer);
+        let panelhost = ServiceKey::new("panelhost", "panelhost");
+        let mut record = state::ServiceRecord::new(&panelhost);
         record.last_seen = unix_now() - 60;
-        state.services.insert(portainer.clone(), record);
+        state.services.insert(panelhost.clone(), record);
         let dir =
             std::env::temp_dir().join(format!("hsm-probe-docker-exclude-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1786,7 +1786,7 @@ pub(crate) mod tests {
         state.save(&path).unwrap();
 
         let config = DockerConfig {
-            exclude: vec!["portainer/*".into(), "lumina-ci/janitor".into()],
+            exclude: vec!["panelhost/*".into(), "lumina-ci/janitor".into()],
             ..DockerConfig::default()
         };
         let mut source = demo_source(
@@ -1796,7 +1796,7 @@ pub(crate) mod tests {
             Some(path.clone()),
         );
         assert!(
-            !source.tracker().state.services.contains_key(&portainer),
+            !source.tracker().state.services.contains_key(&panelhost),
             "dropped from the state at start: no Stopped, no alerts"
         );
         source.poll(&quiet(), &|| false).expect("poll");
@@ -1804,7 +1804,7 @@ pub(crate) mod tests {
         let paths = registered(&collector);
         assert!(paths
             .iter()
-            .all(|p| !p.starts_with(".probe/Docker/portainer/")));
+            .all(|p| !p.starts_with(".probe/Docker/panelhost/")));
         assert!(paths
             .iter()
             .all(|p| !p.starts_with(".probe/Docker/lumina-ci/janitor/")));
@@ -1812,7 +1812,7 @@ pub(crate) mod tests {
             .iter()
             .any(|p| p.starts_with(".probe/Docker/lumina-ci/runner-heavy/")));
         let (saved, _) = State::load(&path);
-        assert!(!saved.services.contains_key(&portainer));
+        assert!(!saved.services.contains_key(&panelhost));
         assert!(!saved
             .services
             .contains_key(&ServiceKey::new("lumina-ci", "janitor")));
@@ -1940,7 +1940,7 @@ pub(crate) mod tests {
 
     /// 2026-09-29 13:00:00 UTC, ms.
     const H13: i64 = 1_790_686_800_000;
-    const GITEA_DB: &str = "abbd59dcacc8";
+    const GITSRV_DB: &str = "abbd59dcacc8";
 
     fn key_of(project: &str, service: &str) -> ServiceKey {
         ServiceKey::new(project, service)
@@ -1994,23 +1994,23 @@ pub(crate) mod tests {
         set_clock(H13 + 60 * 60_000 + 1_000);
         let posted = source.roll_written_hours(&quiet());
         collector.stop().expect("stop");
-        // Every monitored service measured the hour: gitea/db wrote 163_840 bytes between the two
+        // Every monitored service measured the hour: gitsrv/db wrote 163_840 bytes between the two
         // captures; a service that wrote nothing measured a real 0.
         assert_eq!(posted.len(), 11, "{posted:?}");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .unwrap()
             .1;
         assert_eq!(db.bytes, 163_840);
         assert_eq!(db.megabytes(), 0.16);
         assert_eq!(db.comment(), "13:00–14:00 UTC; measured 0 of 60 min");
-        let caddy = posted
+        let cproxy = posted
             .iter()
-            .find(|(key, _)| *key == key_of("caddy", "caddy"))
+            .find(|(key, _)| *key == key_of("cproxy", "cproxy"))
             .unwrap()
             .1;
-        assert_eq!(caddy.bytes, 0);
+        assert_eq!(cproxy.bytes, 0);
         // Posted once: the next tick of the same hour has nothing to post.
         set_clock(H13 + 60 * 60_000 + 6_000);
         assert!(source.roll_written_hours(&quiet()).is_empty());
@@ -2045,9 +2045,9 @@ pub(crate) mod tests {
             .unwrap()
             .contains("\"written\""));
 
-        // Back at 13:40 with the same containers; gitea/db wrote 1 MB while the probe was down.
+        // Back at 13:40 with the same containers; gitsrv/db wrote 1 MB while the probe was down.
         let mut engine = FixtureEngine::demo();
-        add_written(&mut engine, 1, GITEA_DB, 1_000_000);
+        add_written(&mut engine, 1, GITSRV_DB, 1_000_000);
         let mut after = demo_source(
             &collector,
             engine,
@@ -2068,7 +2068,7 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .unwrap()
             .1;
         // Before the stop (163_840) plus the downtime (1 MB): the hour is continued, not lost.
@@ -2114,13 +2114,13 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .unwrap()
             .1;
         assert_eq!(db.bytes, 163_840);
         assert!(paths
             .iter()
-            .any(|p| p == ".probe/Docker/gitea/db/Disk written per hour"));
+            .any(|p| p == ".probe/Docker/gitsrv/db/Disk written per hour"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2132,7 +2132,7 @@ pub(crate) mod tests {
         let set = |engine: &mut FixtureEngine, round: usize, value: Option<u64>| {
             let stats = engine.rounds[round]
                 .iter_mut()
-                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .find(|(id, _)| id.starts_with(GITSRV_DB))
                 .unwrap()
                 .1;
             let entries = stats
@@ -2147,7 +2147,7 @@ pub(crate) mod tests {
                 }
             }
         };
-        // gitea/db has done no block I/O yet (io.stat lists no device), then writes 4 KiB.
+        // gitsrv/db has done no block I/O yet (io.stat lists no device), then writes 4 KiB.
         set(&mut engine, 0, None);
         set(&mut engine, 1, Some(4_096));
         let mut source = demo_source(&collector, engine, &DockerConfig::default(), None);
@@ -2158,7 +2158,7 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .expect("posted")
             .1;
         assert_eq!(
@@ -2169,7 +2169,7 @@ pub(crate) mod tests {
 
     #[test]
     fn an_idle_container_posts_0_like_its_neighbours() {
-        // #1574: gitea/db recreated and idle — io.stat lists no device, `[]` in every round — next
+        // #1574: gitsrv/db recreated and idle — io.stat lists no device, `[]` in every round — next
         // to services that list a counter: its hour is a measured 0, posted, with its sensor.
         let collector = test_collector();
         collector.start().expect("start");
@@ -2177,7 +2177,7 @@ pub(crate) mod tests {
         for round in &mut engine.rounds {
             let stats = round
                 .iter_mut()
-                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .find(|(id, _)| id.starts_with(GITSRV_DB))
                 .unwrap()
                 .1;
             stats.blkio_stats.io_service_bytes_recursive = Some(Vec::new());
@@ -2191,13 +2191,13 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .expect("an idle hour is posted, not skipped")
             .1;
         assert_eq!(db.bytes, 0);
         assert!(paths
             .iter()
-            .any(|p| p == ".probe/Docker/gitea/db/Disk written per hour"));
+            .any(|p| p == ".probe/Docker/gitsrv/db/Disk written per hour"));
     }
 
     #[test]
@@ -2239,7 +2239,7 @@ pub(crate) mod tests {
             .id
             .clone();
         // Three replicas that all time out: one timeout, not three.
-        let key = ServiceKey::new("gitea", "db");
+        let key = ServiceKey::new("gitsrv", "db");
         let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = std::sync::Arc::clone(&lines);
         let logger = Logger::with_sink(Level::Debug, move |line: &str| {
@@ -2252,7 +2252,7 @@ pub(crate) mod tests {
         let lines = lines.lock().unwrap();
         assert_eq!(lines.len(), 1, "{lines:#?}");
         assert!(
-            lines[0].contains("priming stats of gitea/db container abbd59dcacc8 failed")
+            lines[0].contains("priming stats of gitsrv/db container abbd59dcacc8 failed")
                 && lines[0].contains("its other replicas are not asked either"),
             "{lines:#?}"
         );
@@ -2281,16 +2281,16 @@ pub(crate) mod tests {
             Source::stop(&mut before, &quiet());
             collector.stop().expect("stop");
         }
-        // gitea/db was restarted (same id, new StartedAt) and its new cgroup has already written
+        // gitsrv/db was restarted (same id, new StartedAt) and its new cgroup has already written
         // more than the old counter: a baseline, not a too-small delta.
         let collector = test_collector();
         collector.start().expect("start");
         let mut engine = FixtureEngine::demo();
-        add_written(&mut engine, 1, GITEA_DB, 1_000_000);
+        add_written(&mut engine, 1, GITSRV_DB, 1_000_000);
         let inspect = engine
             .inspects
             .iter_mut()
-            .find(|(id, _)| id.starts_with(GITEA_DB))
+            .find(|(id, _)| id.starts_with(GITSRV_DB))
             .unwrap()
             .1;
         inspect.state.started_at = "2026-09-29T13:15:00Z".into();
@@ -2308,7 +2308,7 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .unwrap()
             .1;
         assert_eq!(
@@ -2334,7 +2334,7 @@ pub(crate) mod tests {
         set_clock(H13 + 130 * 60_000);
         assert!(source.roll_written_hours(&quiet()).is_empty());
         collector.stop().expect("stop");
-        let record = source.tracker.state.services[&key_of("gitea", "db")]
+        let record = source.tracker.state.services[&key_of("gitsrv", "db")]
             .written
             .clone()
             .unwrap();
@@ -2354,12 +2354,12 @@ pub(crate) mod tests {
         );
         source.clock = test_clock;
         two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
-        // gitea/db is recreated: the same service under a new id whose counter starts afresh.
+        // gitsrv/db is recreated: the same service under a new id whose counter starts afresh.
         let old = source
             .engine
             .list
             .iter()
-            .position(|c| c.id.starts_with(GITEA_DB))
+            .position(|c| c.id.starts_with(GITSRV_DB))
             .unwrap();
         let new_id = format!("ffff{}", &source.engine.list[old].id[4..]);
         source.engine.list[old].id = new_id.clone();
@@ -2367,7 +2367,7 @@ pub(crate) mod tests {
             .engine
             .inspects
             .iter()
-            .find(|(id, _)| id.starts_with(GITEA_DB))
+            .find(|(id, _)| id.starts_with(GITSRV_DB))
             .unwrap()
             .1
             .clone();
@@ -2375,7 +2375,7 @@ pub(crate) mod tests {
         for (round, entries) in source.engine.rounds.iter_mut().enumerate().take(2) {
             let mut stats = entries
                 .iter()
-                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .find(|(id, _)| id.starts_with(GITSRV_DB))
                 .unwrap()
                 .1
                 .clone();
@@ -2396,15 +2396,15 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let db = posted
             .iter()
-            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .find(|(key, _)| *key == key_of("gitsrv", "db"))
             .unwrap()
             .1;
         // Old container: 163_840. New one: its first sample is a baseline, then 500 bytes.
         assert_eq!(db.bytes, 163_840 + 500);
-        let record = &source.tracker.state.services[&key_of("gitea", "db")];
+        let record = &source.tracker.state.services[&key_of("gitsrv", "db")];
         let baselines = &record.written.as_ref().unwrap().baselines;
         assert!(
-            baselines.keys().all(|id| !id.starts_with(GITEA_DB)),
+            baselines.keys().all(|id| !id.starts_with(GITSRV_DB)),
             "old id pruned"
         );
     }

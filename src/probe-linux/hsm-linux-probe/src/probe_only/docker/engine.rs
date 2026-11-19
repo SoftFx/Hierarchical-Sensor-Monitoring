@@ -465,9 +465,9 @@ pub(crate) mod tests {
     fn the_demo_container_list_parses() {
         let list: Vec<ContainerSummary> = serde_json::from_str(CONTAINERS).unwrap();
         assert_eq!(list.len(), 12);
-        let db = list.iter().find(|c| c.name() == "gitea-db-1").unwrap();
+        let db = list.iter().find(|c| c.name() == "gitsrv-db-1").unwrap();
         assert_eq!(db.state, "running");
-        assert_eq!(db.label("com.docker.compose.project"), Some("gitea"));
+        assert_eq!(db.label("com.docker.compose.project"), Some("gitsrv"));
         assert_eq!(db.label("com.docker.compose.service"), Some("db"));
         let ci = list
             .iter()
@@ -484,7 +484,7 @@ pub(crate) mod tests {
             .iter()
             .filter(|i| i.state.health.is_some())
             .collect();
-        assert_eq!(with_health.len(), 4, "seaweedfs, mongo, gitea, db");
+        assert_eq!(with_health.len(), 4, "objstore, mdb, gitsrv, db");
         assert!(with_health
             .iter()
             .all(|i| i.state.health.as_ref().unwrap().status == "healthy"));

@@ -95,7 +95,7 @@ pub fn is_valid_pattern(pattern: &str) -> bool {
 }
 
 /// Whether a service matches an exclude pattern. Segment-wise: `*` matches any run of characters
-/// within its segment (never across the `/`), so `portainer/*` is every service of `portainer`.
+/// within its segment (never across the `/`), so `panelhost/*` is every service of `panelhost`.
 pub fn matches_pattern(pattern: &str, key: &ServiceKey) -> bool {
     match pattern.split_once('/') {
         Some((project, service)) => {
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn compose_names_pass_through_unchanged() {
         let mut naming = Naming::default();
-        assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
+        assert_eq!(naming.node(&key("gitsrv", "db")), "Docker/gitsrv/db");
         assert_eq!(
             naming.node(&key("lumina-ci", "runner-heavy")),
             "Docker/lumina-ci/runner-heavy"
@@ -400,10 +400,10 @@ mod tests {
 
     #[test]
     fn exclude_patterns_match_segment_wise() {
-        let portainer = key("portainer", "portainer");
+        let panelhost = key("panelhost", "panelhost");
         let janitor = key("lumina-ci", "janitor");
-        assert!(matches_pattern("portainer/*", &portainer));
-        assert!(matches_pattern("*/portainer", &portainer));
+        assert!(matches_pattern("panelhost/*", &panelhost));
+        assert!(matches_pattern("*/panelhost", &panelhost));
         assert!(matches_pattern("lumina-ci/janitor", &janitor));
         assert!(matches_pattern("lumina-ci/*tor", &janitor));
         assert!(matches_pattern("*/*", &janitor));
@@ -417,8 +417,8 @@ mod tests {
             "_standalone/adhoc",
             &key("_standalone", "adhoc")
         ));
-        assert!(is_valid_pattern("portainer/*"));
-        for bad in ["portainer", "a/b/c", "/x", "x/", ""] {
+        assert!(is_valid_pattern("panelhost/*"));
+        for bad in ["panelhost", "a/b/c", "/x", "x/", ""] {
             assert!(!is_valid_pattern(bad), "{bad}");
         }
     }
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn same_service_name_in_two_projects_is_not_a_collision() {
         let mut naming = Naming::default();
-        assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
+        assert_eq!(naming.node(&key("gitsrv", "db")), "Docker/gitsrv/db");
         assert_eq!(naming.node(&key("lumina", "db")), "Docker/lumina/db");
     }
 
@@ -447,12 +447,12 @@ mod tests {
     #[test]
     fn membership_comes_from_the_compose_labels() {
         let compose = summary(
-            "gitea-db-1",
-            &[(PROJECT_LABEL, "gitea"), (SERVICE_LABEL, "db")],
+            "gitsrv-db-1",
+            &[(PROJECT_LABEL, "gitsrv"), (SERVICE_LABEL, "db")],
         );
         assert_eq!(
             membership(&compose, true),
-            Membership::Service(key("gitea", "db"))
+            Membership::Service(key("gitsrv", "db"))
         );
     }
 

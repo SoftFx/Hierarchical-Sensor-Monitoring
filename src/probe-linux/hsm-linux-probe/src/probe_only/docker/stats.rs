@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn the_demo_gitea_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
+    fn the_demo_gitsrv_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
         let t0 = demo_stats(STATS_T0);
         let t1 = demo_stats(STATS_T1);
         let a = CpuCounters::from_stats(by_prefix(&t0, "abbd59dcacc8"), Duration::ZERO).unwrap();

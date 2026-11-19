@@ -183,14 +183,14 @@ mod tests {
     }
 
     fn sample() -> State {
-        let key = ServiceKey::new("gitea", "db");
+        let key = ServiceKey::new("gitsrv", "db");
         let mut record = ServiceRecord::new(&key);
         record.containers.insert("abbd59dcacc8".into(), 2);
         record.restart_total = 5;
         record.restart_posted = Some(5);
         record.oom_latch_until = Some(1_790_500_000);
         record.last_seen = 1_790_413_000;
-        record.node = Some("Docker/gitea/db".into());
+        record.node = Some("Docker/gitsrv/db".into());
         let mut written = WriteRecord::new(1_790_686_800_000);
         written
             .sample(
@@ -223,11 +223,11 @@ mod tests {
 
     #[test]
     fn a_file_from_before_disk_written_still_loads() {
-        let text = r#"{"version": 1, "services": [{"project": "gitea", "service": "db",
+        let text = r#"{"version": 1, "services": [{"project": "gitsrv", "service": "db",
             "containers": {"abbd59dcacc8": 2}, "restartTotal": 5, "restartPosted": 5,
-            "lastSeen": 1790413000, "node": "Docker/gitea/db"}]}"#;
+            "lastSeen": 1790413000, "node": "Docker/gitsrv/db"}]}"#;
         let state = State::parse(text).expect("parses");
-        let record = &state.services[&ServiceKey::new("gitea", "db")];
+        let record = &state.services[&ServiceKey::new("gitsrv", "db")];
         assert_eq!(record.restart_total, 5);
         assert_eq!(record.written, None);
         assert!(!state.to_json().contains("written"), "absent stays absent");
