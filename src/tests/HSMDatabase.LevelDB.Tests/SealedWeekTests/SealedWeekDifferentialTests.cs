@@ -77,7 +77,7 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         pair.AssertSameReads(sensors.All, random);
 
         // Sensor-move merges: into an empty sensor, and into one that shares some ticks with the source.
-        var target = Guid.NewGuid();
+        var target = new Guid("9d2c51e7-0000-4000-8000-0000000000aa");
         pair.Merge(dense, target);
 
         foreach (var tick in Ticks(pair, sensors.Rate).Take(20))
@@ -108,11 +108,12 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
 
         var random = new Random(seed);
         var (data, sensors) = Seed(random);
-        var extra = Guid.NewGuid();
+        var extra = RandomGuid(random);
         var all = sensors.All.Append(extra).ToList();
         var types = new Dictionary<Guid, SensorType>(sensors.Types) { [extra] = SensorType.Integer };
 
         using var pair = WeekPair.Create(data);
+        output.WriteLine($"sealed {pair.Seal.SealedRows} rows into {pair.Seal.Chunks.Count} chunks; {pair.Seal.RefusedSensors} sensor(s) refused");
 
         for (int step = 0; step < steps; step++)
         {
@@ -154,14 +155,18 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
 
             if (step % 40 == 39)
             {
-                output.WriteLine($"step {step}: {what}; checking");
                 pair.AssertSameReads(all, random, probesPerSensor: 4);
+                output.WriteLine($"step {step}: {what}; checked {pair.Plain.GetAll().Count()} rows ({pair.Compare.FidelityMatches} fidelity matches so far)");
             }
         }
 
         pair.Reopen();
         pair.AssertSameReads(all, random);
-        output.WriteLine($"fidelity matches: {pair.Compare.FidelityMatches}");
+
+        // A run that deleted (almost) everything compares nothing: it must not pass for proof.
+        var remaining = pair.Plain.GetAll().Count();
+        output.WriteLine($"{remaining} rows remain; fidelity matches: {pair.Compare.FidelityMatches}");
+        Assert.True(remaining > data.Count / 2, $"only {remaining} of {data.Count} rows remain");
         Assert.True(pair.Compare.FidelityMatches > 0);
     }
 
@@ -229,32 +234,41 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         return ticks.Count == 0 ? WeekPair.WeekFrom : ticks[ticks.Count / 2];
     }
 
-    // Whole sensors, ranges inside and across the chunks as sealed, across sensors, empty and reversed ones.
+    // Whole sensors (rarely), ranges inside and across the chunks as sealed, across two neighbouring sensors,
+    // empty and reversed ones. Each takes a small bite, so the week keeps sealed rows to compare to the end.
     private static (byte[] from, byte[] to) RandomRange(WeekPair pair, List<Guid> sensors, Random random)
     {
         var sensor = sensors[random.Next(sensors.Count)];
 
         switch (random.Next(6))
         {
-            case 0:
+            case 0 when random.Next(4) == 0:
                 return (Key(sensor, 0), Key(sensor, DateTime.MaxValue.Ticks));
 
+            case 0:
             case 1:
             case 2:
                 {
                     var chunk = pair.Seal.Chunks[random.Next(pair.Seal.Chunks.Count)];
                     var span = Math.Max(1, chunk.LastTick - chunk.FirstTick);
-                    var from = chunk.FirstTick + random.NextInt64(-span / 4, span);
-                    var to = from + random.NextInt64(0, span / 2 + 1);
+                    var from = chunk.FirstTick + random.NextInt64(-span / 8, span);
+                    var to = from + random.NextInt64(0, span / 16 + 1);
                     return (Key(chunk.SensorId, from), Key(chunk.SensorId, to));
                 }
 
             case 3:
                 {
-                    var other = sensors[random.Next(sensors.Count)];
-                    var a = Key(sensor, Mid(pair, sensor));
-                    var b = Key(other, Mid(pair, other));
-                    return ByteOrder.Instance.Compare(a, b) <= 0 ? (a, b) : (b, a);
+                    // From the last rows of one sensor to the first rows of the next one in key order.
+                    var ordered = sensors.OrderBy(s => Key(s, 0), ByteOrder.Instance).ToList();
+                    var i = ordered.IndexOf(sensor);
+                    if (i == ordered.Count - 1)
+                        i--;
+
+                    var a = Ticks(pair, ordered[i]);
+                    var b = Ticks(pair, ordered[i + 1]);
+                    var from = a.Count == 0 ? WeekPair.WeekTo : a[a.Count - 1 - a.Count / 20];
+                    var to = b.Count == 0 ? WeekPair.WeekFrom : b[b.Count / 20];
+                    return (Key(ordered[i], from), Key(ordered[i + 1], to));
                 }
 
             default:

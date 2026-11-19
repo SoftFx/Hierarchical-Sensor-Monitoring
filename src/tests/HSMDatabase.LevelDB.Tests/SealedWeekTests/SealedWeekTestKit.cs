@@ -131,14 +131,14 @@ internal static class TestValues
     ];
 
     private static readonly MemoryPackFormatter _formatter = new();
-    private static int _serial;
 
 
     public static byte[] Bytes(SensorType type, long tick, Random random) => _formatter.Serialize(Make(type, tick, random));
 
     public static BaseValue Make(SensorType type, long tick, Random random)
     {
-        var serial = Interlocked.Increment(ref _serial);
+        // From the caller's generator, not a process-wide counter: the bytes of a seeded run do not depend on test order.
+        var serial = random.NextInt64();
         var level = Math.Round(random.NextDouble() * 100, 2);
         var time = new DateTime(tick, DateTimeKind.Utc);
 
@@ -424,7 +424,9 @@ internal sealed class WeekPair : IDisposable
             Assert.Equal(Plain.CalculateHistorySize(from, to).count, Sealed.CalculateHistorySize(from, to).count);
         }
 
-        var ids = sensors.Append(Guid.NewGuid()).ToList();
+        var unknown = new byte[16];
+        random.NextBytes(unknown);
+        var ids = sensors.Append(new Guid(unknown)).ToList();
         AssertSameFirstLast(Plain.GetLastAndFirstValues(ids), Sealed.GetLastAndFirstValues(ids), "GetLastAndFirstValues");
 
         var prefilled = () => ids.Where((_, i) => i % 2 == 0).ToDictionary(id => id, id => ((byte[])[9, 9], (byte[])null));
@@ -442,6 +444,24 @@ internal sealed class WeekPair : IDisposable
                 foreach (var (key, (_, _, value)) in plainFill)
                     Compare.Value(value, sealedFill.Single(kv => kv.Key.AsSpan().SequenceEqual(key)).Value.Item3, $"FillLatestValues {new Guid(key)} to {toTick}");
             }
+
+        // The walk branch: toKey is not a key of the sensor itself (DatabaseCore never asks this; the store must
+        // still answer like the row worker, which walks the sensor's rows below toKey).
+        foreach (var toTick in new[] { WeekFrom + random.NextInt64(0, WeekTo - WeekFrom), DateTime.MaxValue.Ticks })
+        {
+            Dictionary<byte[], (long, byte[], byte[])> WalkRequest() => ids.ToDictionary(
+                id => new DbKey(id, 0).ToPrefixBytes(),
+                id => (0L, new DbKey(ids[(ids.IndexOf(id) + 1) % ids.Count], toTick).ToBytes(), (byte[])null));
+
+            var plainWalk = WalkRequest();
+            var sealedWalk = WalkRequest();
+
+            Plain.FillLatestValues(plainWalk);
+            Sealed.FillLatestValues(sealedWalk);
+
+            foreach (var (key, (_, _, value)) in plainWalk)
+                Compare.Value(value, sealedWalk.Single(kv => kv.Key.AsSpan().SequenceEqual(key)).Value.Item3, $"FillLatestValues walk {new Guid(key)}");
+        }
     }
 
     private void AssertSameFirstLast(Dictionary<Guid, (byte[], byte[])> plain, Dictionary<Guid, (byte[], byte[])> sealedResult, string what)

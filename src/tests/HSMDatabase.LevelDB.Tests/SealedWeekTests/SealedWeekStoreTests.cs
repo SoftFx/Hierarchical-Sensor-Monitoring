@@ -171,7 +171,7 @@ public sealed class SealedWeekStoreTests
         }
 
         // First and last values: what the caller accumulated from other weeks is kept, every other sensor is answered.
-        var fromOtherWeeks = new Dictionary<Guid, (byte[], byte[])> { [sensors.Dense] = ([1], [2]), [Guid.NewGuid()] = ([3], [4]) };
+        var fromOtherWeeks = new Dictionary<Guid, (byte[], byte[])> { [sensors.Dense] = ([1], [2]), [new Guid("51e0b7aa-0000-4000-8000-0000000000bb")] = ([3], [4]) };
         var expectedOthers = pair.Plain.GetLastAndFirstValues(others);
         var result = store.GetLastAndFirstValues(sensors.All, fromOtherWeeks);
 

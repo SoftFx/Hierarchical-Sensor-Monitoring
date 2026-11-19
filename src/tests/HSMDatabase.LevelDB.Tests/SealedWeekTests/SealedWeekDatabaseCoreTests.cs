@@ -28,11 +28,13 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
     private FidelityComparer _compare;
     private List<SealedChunk> _sealedChunks = [];
 
-    private readonly Guid _dense = Guid.NewGuid();
-    private readonly Guid _bar = Guid.NewGuid();
-    private readonly Guid _file = Guid.NewGuid();
-    private readonly Guid _sparse = Guid.NewGuid();
-    private readonly Guid _target = Guid.NewGuid();
+    // Fixed ids: where a sensor sorts among the others decides which chunks a seek passes (#1803 review R4).
+    private readonly Guid _dense = new("6a1e0c1d-0000-4000-8000-000000000001");
+    private readonly Guid _bar = new("2b7f4e90-0000-4000-8000-000000000002");
+    private readonly Guid _file = new("c3d2a511-0000-4000-8000-000000000003");
+    private readonly Guid _sparse = new("8e4b7c02-0000-4000-8000-000000000004");
+    private readonly Guid _target = new("f0a9d6e3-0000-4000-8000-000000000005");
+    private readonly Guid _unknown = new("47c18b24-0000-4000-8000-000000000006");
 
 
     public SealedWeekDatabaseCoreTests(ITestOutputHelper output)
@@ -280,7 +282,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
 
     private void AssertSameHistory(string when)
     {
-        var sensors = new[] { _dense, _bar, _file, _sparse, _target, Guid.NewGuid() };
+        var sensors = new[] { _dense, _bar, _file, _sparse, _target, _unknown };
         var weekStart = new DateTime(DateTimeMethods.GetStartOfWeekTicks(SealedWeekDay.Ticks), DateTimeKind.Utc);
         var ranges = new (DateTime from, DateTime to)[]
         {
