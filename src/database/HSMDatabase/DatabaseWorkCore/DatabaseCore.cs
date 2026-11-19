@@ -41,15 +41,30 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public ISnapshotDatabase Snapshots { get; }
 
-        // 1 while a compaction (the manual whole-database one or a background shard
-        // step, #1801) runs; taken with CompareExchange so two callers never both enter.
-        private int _compactRunning;
+        // Compaction state (#1801), changed with CompareExchange only. Idle to Busy while a
+        // compaction (the manual whole-database one or a background shard step) runs, so
+        // two callers never both enter; Idle to Closed once, by Dispose, after which no
+        // compaction starts. Dispose waits for Busy to end: a LevelDB compaction cannot be
+        // cancelled, and closing a shard under it would free the native database that the
+        // running compaction still uses.
+        private const int CompactIdle = 0, CompactBusy = 1, CompactClosed = 2;
+        private static readonly TimeSpan ShutdownWaitLogInterval = TimeSpan.FromSeconds(30);
+
+        private int _compactState;
+        private int _disposeStarted;
+        private volatile string _compactingDatabase;
 
         // Shards whose background compaction failed, and when they may be tried again.
-        // Touched only while _compactRunning is held.
+        // Touched only while the compaction state is Busy.
         private readonly Dictionary<string, DateTime> _compactionRetryAfter = [];
 
-        public bool IsCompactRunning => Volatile.Read(ref _compactRunning) == 1;
+        public bool IsCompactRunning => Volatile.Read(ref _compactState) == CompactBusy;
+
+        internal bool IsDisposeStarted => Volatile.Read(ref _disposeStarted) == 1;
+
+        // Test seam: wraps every compaction of a weekly shard (the shard, then the call
+        // that compacts it), so a test can hold a compaction open or make it throw.
+        internal Action<IIntervalDatabase, Action> CompactShardHook { get; set; }
 
         public bool IsExportRunning { get; private set; }
 
@@ -1030,15 +1045,19 @@ namespace HSMDatabase.DatabaseWorkCore
         public void Compact()
         {
             if (!TryEnterCompact())
-                return;
+            {
+                if (IsDisposeStarted)
+                    _logger.Info("CompactDB refused: the database is shutting down");
 
-            string name = string.Empty;
+                return;
+            }
 
             try
             {
                 _logger.Info($"CompactDB start: Enviroment database {ConfigDbSize}");
                 try
                 {
+                    _compactingDatabase = "Enviroment";
                     _environmentDatabase.Compact();
                 }
                 catch (Exception ex)
@@ -1047,39 +1066,21 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
                 _logger.Info($"CompactDB stop: Enviroment database {ConfigDbSize}");
 
-                _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
-                try
-                {
-                    var currentWeekStart = DateTimeMethods.GetStartOfWeekTicks(DateTime.UtcNow.Ticks);
+                var currentWeekStart = DateTimeMethods.GetStartOfWeekTicks(DateTime.UtcNow.Ticks);
 
-                    foreach (var db in _sensorValuesDatabases)
-                    {
-                        name = db.Name;
-                        CompactAndMarkClosed(db, currentWeekStart);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
-                }
+                _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
+
+                foreach (var shard in _sensorValuesDatabases.GetShards())
+                    if (!StopForShutdown())
+                        CompactAndMarkClosed(shard.Path, () => shard.Database, currentWeekStart);
 
                 _logger.Info($"CompactDB stop: Sensor values database {SensorHistoryDbSize}");
 
                 _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
-                try
-                {
-                    var currentWeekStart = DateTimeMethods.GetStartOfWeekTicks(DateTime.UtcNow.Ticks);
 
-                    foreach (var db in _journalValuesDatabases)
-                    {
-                        name = db.Name;
-                        CompactAndMarkClosed(db, currentWeekStart);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
-                }
+                foreach (var shard in _journalValuesDatabases.GetShards())
+                    if (!StopForShutdown())
+                        CompactAndMarkClosed(shard.Path, () => shard.Database, currentWeekStart);
 
                 _logger.Info($"CompactDB stop: Journal database {JournalDbSize}");
             }
@@ -1096,16 +1097,51 @@ namespace HSMDatabase.DatabaseWorkCore
 
         // The manual path compacts every shard as before, and marks the closed ones so the
         // background step does not compact them again (#1801). The current week is not
-        // marked: its next write would remove the marker anyway.
-        private void CompactAndMarkClosed(IIntervalDatabase db, long currentWeekStart)
+        // marked: its next write would remove the marker anyway. A shard that fails (to
+        // open or to compact) is logged with its name and the next shard goes on.
+        private void CompactAndMarkClosed(string name, Func<IIntervalDatabase> open, long currentWeekStart)
         {
-            var changeCount = db.ChangeCount;
-            var sizeBefore = db.Name.GetSize();
+            try
+            {
+                var db = open();
+                var changeCount = db.ChangeCount;
+                var sizeBefore = name.GetSize();
 
-            db.Compact();
+                CompactShard(db);
 
-            if (db.From < currentWeekStart)
-                TryMarkCompacted(db, changeCount, sizeBefore, db.Name.GetSize());
+                if (db.From < currentWeekStart)
+                    TryMarkCompacted(db, changeCount, sizeBefore, name.GetSize());
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"An error was occurred while compacting database [{name}]: {ex.Message}");
+            }
+        }
+
+        // The manual run goes over every database and can take minutes: once disposal has
+        // begun it compacts no further shard, so the shutdown waits for one shard, not all.
+        private bool StopForShutdown()
+        {
+            if (!IsDisposeStarted)
+                return false;
+
+            if (_compactingDatabase is not null)
+            {
+                _logger.Info("CompactDB stopped: the database is shutting down; the remaining shards are left as they are");
+                _compactingDatabase = null;
+            }
+
+            return true;
+        }
+
+        private void CompactShard(IIntervalDatabase db)
+        {
+            _compactingDatabase = db.Name;
+
+            if (CompactShardHook is { } hook)
+                hook(db, db.Compact);
+            else
+                db.Compact();
         }
 
         // A marker the manual path cannot write costs one more compaction later, and must
@@ -1125,14 +1161,57 @@ namespace HSMDatabase.DatabaseWorkCore
         private static string CompactedMarkerContent(long sizeBefore, long sizeAfter) =>
             $"Compacted at {DateTime.UtcNow:O}: {sizeBefore} -> {sizeAfter} bytes{Environment.NewLine}";
 
-        private bool TryEnterCompact() => Interlocked.CompareExchange(ref _compactRunning, 1, 0) == 0;
+        private bool TryEnterCompact()
+        {
+            if (IsDisposeStarted || Interlocked.CompareExchange(ref _compactState, CompactBusy, CompactIdle) != CompactIdle)
+                return false;
 
-        private void ExitCompact() => Volatile.Write(ref _compactRunning, 0);
+            // Dispose may have begun between the check and the swap: this compaction does
+            // not start either, and Dispose (waiting for the state) goes on.
+            if (IsDisposeStarted)
+            {
+                ExitCompact();
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ExitCompact()
+        {
+            _compactingDatabase = null;
+            Interlocked.CompareExchange(ref _compactState, CompactIdle, CompactBusy);
+        }
+
+        // Called by Dispose before any database is closed: refuses every later compaction
+        // and waits for a running one to finish, however long it takes, since it cannot be
+        // cancelled. The log says what the shutdown is waiting for.
+        private void CloseCompaction()
+        {
+            System.Diagnostics.Stopwatch watch = null;
+            var nextLog = TimeSpan.Zero;
+
+            while (Interlocked.CompareExchange(ref _compactState, CompactClosed, CompactIdle) != CompactIdle)
+            {
+                watch ??= System.Diagnostics.Stopwatch.StartNew();
+
+                if (watch.Elapsed >= nextLog)
+                {
+                    _logger.Warn($"Shutdown is waiting for the compaction of [{_compactingDatabase ?? "unknown"}] to finish ({watch.Elapsed.TotalSeconds:F0} s so far)");
+                    nextLog += ShutdownWaitLogInterval;
+                }
+
+                Thread.Sleep(50);
+            }
+
+            if (watch is not null)
+                _logger.Info($"The compaction finished; shutdown goes on after waiting {watch.Elapsed.TotalSeconds:F1} s");
+        }
 
         public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod)
         {
             if (!TryEnterCompact())
-                return HistoryShardCompactionOutcome.Busy;
+                return IsDisposeStarted ? HistoryShardCompactionOutcome.ShuttingDown : HistoryShardCompactionOutcome.Busy;
 
             try
             {
@@ -1189,7 +1268,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 var changeCount = db.ChangeCount;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                db.Compact();
+                CompactShard(db);
 
                 var sizeAfter = name.GetSize();
                 // A marker that cannot be written throws into the failure path below: the
@@ -1294,7 +1373,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void Dispose()
         {
+            // The server disposes it twice (the tree cache and the container): once is enough.
+            if (Interlocked.Exchange(ref _disposeStarted, 1) == 1)
+                return;
+
             _logger.Info($"Starting disposing {nameof(DatabaseCore)}...");
+
+            CloseCompaction();
             _environmentDatabase.Dispose();
             foreach (var item in _sensorValuesDatabases)
             {

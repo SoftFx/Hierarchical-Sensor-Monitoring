@@ -14,5 +14,8 @@ namespace HSMServer.Core.DataLayer
 
         /// <summary>The compaction of one shard failed; it was logged and the shard is retried later.</summary>
         Failed,
+
+        /// <summary>The database is being disposed; no compaction starts any more.</summary>
+        ShuttingDown,
     }
 }

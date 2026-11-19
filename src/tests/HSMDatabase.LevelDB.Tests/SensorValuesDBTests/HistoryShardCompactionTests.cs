@@ -201,6 +201,107 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
 
+    [Fact]
+    public void Dispose_WaitsForARunningCompaction_AndRefusesTheOnesAskedAfterItBegan()
+    {
+        Add(_lastWeek, 1);
+
+        var order = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        _core.CompactShardHook = (db, compact) =>
+        {
+            order.Enqueue("compaction started");
+            entered.Set();
+            release.Wait();
+            compact(); // throws, or worse, if the shard was closed under it
+            order.Enqueue("compaction returned");
+        };
+
+        var step = Task.Run(() => Step());
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+
+        var dispose = Task.Run(() =>
+        {
+            _core.Dispose();
+            order.Enqueue("disposed");
+        });
+        Assert.True(SpinWait.SpinUntil(() => _core.IsDisposeStarted, TimeSpan.FromSeconds(10)));
+
+        // Asked after disposal began: refused, the hook is not entered again.
+        Assert.Equal(HistoryShardCompactionOutcome.ShuttingDown, Step());
+        _core.Compact();
+        Assert.False(dispose.Wait(TimeSpan.FromMilliseconds(300)));
+
+        release.Set();
+
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, step.Result);
+        Assert.True(dispose.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Equal(["compaction started", "compaction returned", "disposed"], order);
+        Assert.Equal(HistoryShardCompactionOutcome.ShuttingDown, Step());
+    }
+
+    [Fact]
+    public void ManualCompact_StopsAfterTheCurrentShard_OnceDisposalBegan()
+    {
+        Add(_lastWeek, 1);
+        Add(_lastWeek.AddDays(-7), 2);
+
+        var compacted = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        _core.CompactShardHook = (db, compact) =>
+        {
+            entered.Set();
+            release.Wait();
+            compact();
+            compacted.Enqueue(db.Name);
+        };
+
+        var manual = Task.Run(_core.Compact);
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+
+        var dispose = Task.Run(_core.Dispose);
+        Assert.True(SpinWait.SpinUntil(() => _core.IsDisposeStarted, TimeSpan.FromSeconds(10)));
+
+        release.Set();
+
+        Assert.True(manual.Wait(TimeSpan.FromSeconds(10)));
+        Assert.True(dispose.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Single(compacted);
+    }
+
+    [Fact]
+    public void ManualCompact_GoesOnAfterAShardFails()
+    {
+        var twoWeeksAgo = _lastWeek.AddDays(-7);
+
+        Add(twoWeeksAgo, 1);
+        Add(_lastWeek, 2);
+        _core.AddJournalValue(new JournalKey(_sensor, _lastWeek.Ticks), new JournalRecordEntity { Initiator = "test" });
+
+        // Shards are walked newest week first: the failing one comes before the others.
+        var failing = Shard(_lastWeek).Name;
+        _core.CompactShardHook = (db, compact) =>
+        {
+            if (db.Name == failing)
+                throw new IOException("test: compaction fails");
+
+            compact();
+        };
+
+        _core.Compact();
+
+        Assert.False(HasMarker(_lastWeek));
+        Assert.True(HasMarker(twoWeeksAgo));
+        Assert.True(CompactedShardMarker.ExistsIn(((IDatabaseSettings)_settings).GetPathToJournalValueDatabase(
+            DateTimeMethods.GetStartOfWeekTicks(_lastWeek.Ticks), DateTimeMethods.GetEndOfWeekTicks(_lastWeek.Ticks))));
+        Assert.False(_core.IsCompactRunning);
+    }
+
+
     private HistoryShardCompactionOutcome Step(TimeSpan quiet = default, DateTime? now = null) =>
         _core.CompactNextDueHistoryShard(now ?? DateTime.UtcNow, quiet);
 
