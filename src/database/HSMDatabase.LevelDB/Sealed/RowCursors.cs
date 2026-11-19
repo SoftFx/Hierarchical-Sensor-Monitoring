@@ -17,6 +17,16 @@ namespace HSMDatabase.LevelDB.Sealed
 
         byte[] Value { get; }
 
+        /// <summary>
+        /// The current key compared bytewise with <paramref name="other"/>. A chunk cursor answers from the sensor
+        /// prefix alone when it differs, without reading the chunk: a corrupt chunk of one sensor must not fail
+        /// reads that only pass by it on their way to another sensor.
+        /// </summary>
+        int CompareKey(byte[] other);
+
+        /// <summary>Whether the current key starts with <paramref name="prefix"/> (the row database's StartsWith).</summary>
+        bool KeyStartsWith(byte[] prefix);
+
         void Seek(byte[] target);
 
         void SeekToFirst();
@@ -64,6 +74,10 @@ namespace HSMDatabase.LevelDB.Sealed
         public byte[] Key => _key ??= iterator.Key();
 
         public byte[] Value => iterator.Value();
+
+        public int CompareKey(byte[] other) => KeyOrder.Compare(Key, other);
+
+        public bool KeyStartsWith(byte[] prefix) => Key.AsSpan().StartsWith(prefix);
 
 
         public void Seek(byte[] target)
@@ -118,6 +132,10 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public byte[] Value => _current.Value;
 
+        public int CompareKey(byte[] other) => _current.CompareKey(other);
+
+        public bool KeyStartsWith(byte[] prefix) => _current.KeyStartsWith(prefix);
+
         /// <summary>True when the current row comes from a chunk, false when from the overlay.</summary>
         public bool IsChunkRow => ReferenceEquals(_current, chunks);
 
@@ -158,9 +176,9 @@ namespace HSMDatabase.LevelDB.Sealed
             }
 
             // Steps past the current key in every child that holds it: the overlay row and the chunk row it hides.
-            if (overlay.IsValid && KeyOrder.Equal(overlay.Key, key))
+            if (overlay.IsValid && overlay.CompareKey(key) == 0)
                 overlay.Next();
-            if (chunks.IsValid && KeyOrder.Equal(chunks.Key, key))
+            if (chunks.IsValid && chunks.CompareKey(key) == 0)
                 chunks.Next();
 
             PickSmallest();
@@ -186,9 +204,9 @@ namespace HSMDatabase.LevelDB.Sealed
             }
             else
             {
-                if (overlay.IsValid && KeyOrder.Equal(overlay.Key, key))
+                if (overlay.IsValid && overlay.CompareKey(key) == 0)
                     overlay.Prev();
-                if (chunks.IsValid && KeyOrder.Equal(chunks.Key, key))
+                if (chunks.IsValid && chunks.CompareKey(key) == 0)
                     chunks.Prev();
             }
 
@@ -217,7 +235,7 @@ namespace HSMDatabase.LevelDB.Sealed
             else if (!chunks.IsValid)
                 _current = overlay;
             else
-                _current = KeyOrder.Compare(overlay.Key, chunks.Key) <= 0 ? overlay : chunks;
+                _current = chunks.CompareKey(overlay.Key) >= 0 ? overlay : chunks;
         }
 
         private void PickLargest()
@@ -227,7 +245,7 @@ namespace HSMDatabase.LevelDB.Sealed
             else if (!chunks.IsValid)
                 _current = overlay;
             else
-                _current = KeyOrder.Compare(overlay.Key, chunks.Key) >= 0 ? overlay : chunks;
+                _current = chunks.CompareKey(overlay.Key) <= 0 ? overlay : chunks;
         }
     }
 }

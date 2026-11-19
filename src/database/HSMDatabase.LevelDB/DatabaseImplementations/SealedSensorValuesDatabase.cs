@@ -134,12 +134,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                         else
                             cursor.SeekToLast();
 
-                        if (cursor.IsValid && cursor.Key.StartsWith(key) && cursor.Key.IsSmaller(toKey))
+                        if (cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey))
                             keyValuePairs[key] = (from, toKey, cursor.Value);
                     }
                     else
                     {
-                        for (cursor.Seek(key); cursor.IsValid && cursor.Key.StartsWith(key) && cursor.Key.IsSmaller(toKey); cursor.Next())
+                        for (cursor.Seek(key); cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey); cursor.Next())
                             keyValuePairs[key] = (from, toKey, cursor.Value);
                     }
                 }
@@ -158,7 +158,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 cursor.Seek(key);
 
-                return cursor.IsValid && cursor.Key.StartsWith(sensorId) ? cursor.Value : null;
+                return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
             }
             catch (Exception e)
             {
@@ -174,7 +174,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 using var cursor = OpenCursor();
 
-                bool CheckValue() => cursor.IsValid && cursor.Key.StartsWith(sensorId) && cursor.Key.IsSmallerOrEquals(key);
+                bool CheckValue() => cursor.IsValid && StartsWith(cursor, sensorId) && Le(cursor, key);
 
                 cursor.Seek(key);
 
@@ -204,7 +204,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 cursor.Seek(key);
 
-                return cursor.IsValid && cursor.Key.StartsWith(sensorId) ? cursor.Value : null;
+                return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
             }
             catch (Exception e)
             {
@@ -240,14 +240,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     {
                         cursor.Seek(minKey.ToBytes());
 
-                        if (cursor.IsValid && cursor.Key.StartsWith(prefixBytes))
+                        if (cursor.IsValid && StartsWith(cursor, prefixBytes))
                             currentFirstValue = cursor.Value;
                     }
 
                     // As in the row database: a seek past the end finds no last value (it does not fall back to the last key).
                     cursor.Seek(maxKey.ToBytes());
 
-                    if (cursor.IsValid && cursor.Key.StartsWith(prefixBytes))
+                    if (cursor.IsValid && StartsWith(cursor, prefixBytes))
                     {
                         currentLastValue = cursor.Value;
                     }
@@ -255,7 +255,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     {
                         cursor.Prev();
 
-                        if (cursor.IsValid && cursor.Key.StartsWith(prefixBytes))
+                        if (cursor.IsValid && StartsWith(cursor, prefixBytes))
                             currentLastValue = cursor.Value;
                     }
 
@@ -296,7 +296,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             using var cursor = OpenCursor();
 
-            for (cursor.Seek(from); cursor.IsValid && cursor.Key.IsSmallerOrEquals(to); cursor.Next())
+            for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
                 yield return cursor.Value;
         }
 
@@ -310,15 +310,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             if (!cursor.IsValid)
                 cursor.SeekToLast();
 
-            while (cursor.IsValid && cursor.Key.IsGreater(to))
+            while (cursor.IsValid && Gt(cursor, to))
             {
                 cursor.Prev();
 
-                if (!cursor.IsValid || cursor.Key.IsSmaller(from))
+                if (!cursor.IsValid || Lt(cursor, from))
                     yield break;
             }
 
-            for (; cursor.IsValid && cursor.Key.IsGreaterOrEquals(from); cursor.Prev())
+            for (; cursor.IsValid && Ge(cursor, from); cursor.Prev())
                 yield return (cursor.Key, cursor.Value);
         }
 
@@ -331,7 +331,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             long count = 0, keyBytes = 0, valueBytes = 0;
 
             using (var cursor = OpenCursor())
-                for (cursor.Seek(from); cursor.IsValid && cursor.Key.IsSmallerOrEquals(to); cursor.Next())
+                for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
                     count++;
 
             foreach (var (key, value) in _openedDb.GetValueKeyPairFromTo(from, to))
@@ -531,6 +531,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (KeyOrder.Compare(key, to) > 0)
                     yield break;
 
+                // The chunk before `from` of another sensor: all its rows are below `from`, so it is not read.
+                if (KeyOrder.Compare(key, from) < 0 && from.Length >= KeyOrder.SensorIdLength &&
+                    !key.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(from.AsSpan(0, KeyOrder.SensorIdLength)))
+                    continue;
+
                 var chunk = iterator.Value();
                 ChunkHeader? header = null;
 
@@ -571,6 +576,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             return next is not null && KeyOrder.Compare(next, to) <= 0;
         }
+
+        // The row database's key checks (ByteArrayExtensions) on the merged cursor. Every key of a chunk is 24
+        // bytes, so against a 24-byte bound the length-first order is the bytewise one, which the chunk cursor
+        // answers from the sensor prefix when that settles it; any other case compares the full key as before.
+        private static bool UseFullKey(MergedRowCursor cursor, byte[] other) => !cursor.IsChunkRow || other.Length != KeyOrder.KeyLength;
+
+        private static bool StartsWith(MergedRowCursor cursor, byte[] prefix) =>
+            cursor.IsChunkRow && prefix.Length <= KeyOrder.SensorIdLength ? cursor.KeyStartsWith(prefix) : cursor.Key.StartsWith(prefix);
+
+        private static bool Le(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsSmallerOrEquals(other) : cursor.CompareKey(other) <= 0;
+
+        private static bool Lt(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsSmaller(other) : cursor.CompareKey(other) < 0;
+
+        private static bool Ge(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsGreaterOrEquals(other) : cursor.CompareKey(other) >= 0;
+
+        private static bool Gt(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsGreater(other) : cursor.CompareKey(other) > 0;
 
         private static bool InRange(byte[] key, byte[] from, byte[] to) => KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(key, to) <= 0;
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HSMDatabase.AccessManager.Formatters;
 using HSMDatabase.SealedHistory;
@@ -8,8 +9,10 @@ namespace HSMDatabase.LevelDB.Sealed
     /// <summary>
     /// The rows of the chunk database of a sealed week, in key order, decoded one chunk at a time and only when
     /// needed. Arriving at a chunk's first row costs nothing (a chunk is stored under the key of its first row);
-    /// arriving at its last row reads its verified header; a value, or a step inside the chunk, decodes it. A seek
-    /// decodes at most the one chunk that can hold the target. Values leave as MemoryPack bytes, re-serialized
+    /// the key of its last row reads its verified header; a value, or a step inside the chunk, decodes it. A seek
+    /// decodes at most the one chunk that can hold the target. A chunk of another sensor than the key it is
+    /// compared with is ordered by its sensor prefix and never read, so a corrupt chunk fails only the reads
+    /// of its own sensor that reach it. Values leave as MemoryPack bytes, re-serialized
     /// from the decoded rows. A chunk that cannot be read throws <see cref="SealedChunkReadException"/> (already
     /// logged and counted); the cursor never yields fewer rows instead.
     /// </summary>
@@ -26,6 +29,7 @@ namespace HSMDatabase.LevelDB.Sealed
         private byte[] _chunkKey;
         private byte[] _chunk;
         private ChunkHeader _header;
+        private bool _headerRead;
         private List<HistoryRow> _rows;
 
         // The last chunk decoded: the merged cursor re-seeks onto the chunk it just left.
@@ -50,7 +54,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public byte[] Key => _key ??= _position switch
         {
             Position.FirstRow => _chunkKey,
-            Position.LastRow => KeyOrder.RowKey(_chunkKey, _header.LastKey),
+            Position.LastRow => KeyOrder.RowKey(_chunkKey, Header().LastKey),
             _ => KeyOrder.RowKey(_chunkKey, _rows[_index].Key),
         };
 
@@ -62,6 +66,25 @@ namespace HSMDatabase.LevelDB.Sealed
                 return _formatter.Serialize(_rows[_index].Value);
             }
         }
+
+        // Every row of a chunk carries the sensor prefix of the chunk's key: a key of another sensor is ordered
+        // against the whole chunk by the prefix, before anything of the chunk is read.
+        public int CompareKey(byte[] other)
+        {
+            if (other.Length >= KeyOrder.SensorIdLength)
+            {
+                int bySensor = KeyOrder.Compare(_chunkKey.AsSpan(0, KeyOrder.SensorIdLength), other.AsSpan(0, KeyOrder.SensorIdLength));
+
+                if (bySensor != 0)
+                    return bySensor;
+            }
+
+            return KeyOrder.Compare(Key, other);
+        }
+
+        public bool KeyStartsWith(byte[] prefix) => prefix.Length <= KeyOrder.SensorIdLength
+            ? _chunkKey.AsSpan(0, prefix.Length).SequenceEqual(prefix)
+            : Key.AsSpan().StartsWith(prefix);
 
 
         public void Seek(byte[] target)
@@ -83,13 +106,17 @@ namespace HSMDatabase.LevelDB.Sealed
                 _iterator.SeekToLast();
             }
 
-            // The chunk before the target holds the target's first row only if its last row reaches it.
+            // The chunk before the target holds the target's first row only if its last row reaches it. A chunk of
+            // another sensor never does (its key, and with it every row, is below the target's sensor), and is
+            // passed by without reading it.
             if (_iterator.IsValid)
             {
                 AtChunk();
-                _header = _reader.ReadHeader(_chunkKey, _chunk);
 
-                if (KeyOrder.Compare(KeyOrder.RowKey(_chunkKey, _header.LastKey), target) >= 0)
+                var sameSensor = target.Length < KeyOrder.SensorIdLength ||
+                    _chunkKey.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(target.AsSpan(0, KeyOrder.SensorIdLength));
+
+                if (sameSensor && KeyOrder.Compare(KeyOrder.RowKey(_chunkKey, Header().LastKey), target) >= 0)
                 {
                     _position = Position.Row;
                     Decode();
@@ -156,7 +183,7 @@ namespace HSMDatabase.LevelDB.Sealed
 
             AtFirstRow();
 
-            if (KeyOrder.Compare(Key, lastKey) <= 0)
+            if (CompareKey(lastKey) <= 0)
                 throw _reader.Fail(_chunkKey, "the chunk starts at or before the last row of the chunk before it", null);
         }
 
@@ -186,7 +213,7 @@ namespace HSMDatabase.LevelDB.Sealed
 
             AtLastRow();
 
-            if (KeyOrder.Compare(Key, firstKey) >= 0)
+            if (CompareKey(firstKey) >= 0)
                 throw _reader.Fail(_chunkKey, "the chunk ends at or after the first row of the chunk after it", null);
         }
 
@@ -198,7 +225,20 @@ namespace HSMDatabase.LevelDB.Sealed
             _chunkKey = _iterator.Key();
             _chunk = _iterator.Value();
             _rows = null;
+            _headerRead = false;
             _key = null;
+        }
+
+        // The verified header of the chunk under the iterator, read once.
+        private ChunkHeader Header()
+        {
+            if (!_headerRead)
+            {
+                _header = _reader.ReadHeader(_chunkKey, _chunk);
+                _headerRead = true;
+            }
+
+            return _header;
         }
 
         private void AtFirstRow()
@@ -208,10 +248,12 @@ namespace HSMDatabase.LevelDB.Sealed
             _position = Position.FirstRow;
         }
 
+        // The key of the last row needs the header; it is read when the key is, unless a comparison with
+        // another sensor's key settles the order first.
         private void AtLastRow()
         {
             AtChunk();
-            _header = _reader.ReadHeader(_chunkKey, _chunk);
+            _reader.CheckKey(_chunkKey);
             _position = Position.LastRow;
         }
 

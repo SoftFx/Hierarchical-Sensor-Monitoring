@@ -126,6 +126,50 @@ public sealed class SealedWeekStoreTests
         pair.AssertSameReads(sensors.All, new Random(10), probesPerSensor: 3);
     }
 
+    [Fact]
+    public void CorruptLastChunkOfOneSensor_DoesNotReachTheNextSensor()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(18));
+        Guid a = default, b = default;
+
+        using var pair = WeekPair.Create(seed, beforeOpen: p =>
+        {
+            // A sensor whose last chunk is directly followed by another sensor's chunk.
+            var ordered = p.Seal.Chunks.OrderBy(c => Key(c.SensorId, c.FirstTick), ByteOrder.Instance).ToList();
+            var i = ordered.FindIndex(c => c.SensorId == sensors.Dense && c.FirstTick == DenseChunks(p, sensors.Dense)[^1].FirstTick);
+            if (i == ordered.Count - 1)
+                i = ordered.FindLastIndex(ordered.Count - 2, c => c.SensorId != ordered[^1].SensorId);
+            a = ordered[i].SensorId;
+            b = ordered[i + 1].SensorId;
+            CorruptChunk(p, ordered.Where(c => c.SensorId == a).OrderBy(c => c.FirstTick).Last());
+        });
+
+        Assert.NotEqual(a, b);
+        var store = pair.SealedStore;
+        var prefix = Key(b, 0).AsSpan(0, 16).ToArray();
+
+        // Reads of the next sensor, both ways and by point, never touch the corrupt chunk.
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(b), Max(b)), store.GetKeysValuesTo(Min(b), Max(b)), "next sensor, newest first");
+        pair.Compare.Values(pair.Plain.GetValuesFrom(Min(b), Max(b)), store.GetValuesFrom(Min(b), Max(b)), "next sensor, oldest first");
+        foreach (var key in new[] { Min(b), Max(b), Key(b, WeekPair.WeekFrom) })
+        {
+            pair.Compare.Value(pair.Plain.Get(key, prefix), store.Get(key, prefix), "Get");
+            pair.Compare.Value(pair.Plain.GetFirst(key, prefix), store.GetFirst(key, prefix), "GetFirst");
+            pair.Compare.Value(pair.Plain.GetLatest(key, prefix), store.GetLatest(key, prefix), "GetLatest");
+        }
+
+        Assert.Equal(0, store.ChunkReadFailures);
+
+        // A retention-style delete of the next sensor from its minimum goes through.
+        var refused = SealedHistoryDiagnostics.ChunkRewriteFailures;
+        var ticks = store.GetKeysValuesTo(Min(b), Max(b)).Select(r => DbKey.FromBytes(r.key).Timestamp).ToList();
+        pair.Remove(Min(b), Key(b, ticks[ticks.Count / 2]));
+
+        Assert.Equal(refused, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(b), Max(b)), store.GetKeysValuesTo(Min(b), Max(b)), "next sensor after the delete");
+        Assert.Equal(0, store.ChunkReadFailures);
+    }
+
     // Flips one payload byte of a chunk in the closed chunk database.
     private static SealedChunk CorruptChunk(WeekPair pair, SealedChunk chunk)
     {
