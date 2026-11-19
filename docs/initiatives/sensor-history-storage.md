@@ -319,14 +319,14 @@ Hypertable on the integer tick dimension, weekly chunks, unique index on `(senso
 - 2026-11-19: existing history is sealed too, in the background, oldest week first.
 - 2026-11-19: source rows are kept for a configured number of weeks after a verified seal, then deleted.
 
-## Proposed Direction
+## Direction
 
 Keep LevelDB and add a codec of our own for closed periods. Decided on 2026-11-19 and recorded in `docs/decisions/0020-sealed-sensor-history.md`; closed weeks in Parquet, raised for their lower implementation risk, are an alternative considered there.
 
 1. Compact closed weekly shards automatically. It is the cheapest gain and changes no format.
 2. Seal closed periods into chunks on top of LevelDB: current data stays one row per value, so writes, rewrites and late values keep working; a background job re-encodes a closed period per sensor with the bit-level codec. Reads merge sealed chunks with any rows written into that period later.
-3. Decide separately whether values may be rounded, and if so per sensor rather than globally.
-4. Do not adopt DuckDB, VictoriaMetrics, ClickHouse, TimescaleDB or QuestDB as the history store.
+3. Values are not rounded in the first version. Whether they may be, and if so per sensor rather than globally, is a separate decision.
+4. DuckDB, VictoriaMetrics, ClickHouse, TimescaleDB, QuestDB and Parquet are not adopted as the history store.
 
 ## Work Breakdown
 

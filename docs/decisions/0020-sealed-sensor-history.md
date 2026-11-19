@@ -47,6 +47,7 @@ Independently of all of the above, closed weekly shards are compacted automatica
 - Adding a persisted field to a value type now means changing the codec in the same change; until then sensors that use the field stay unsealed.
 - `ReceivingTime` of sealed values loses its sub-millisecond part. Code that matches it exactly must not rely on sealed data; the one known case, the File value lookup, is covered by not sealing File sensors.
 - An older server does not see `SensorValuesSealedV1_*`: after a rollback the history of sealed weeks is hidden, not deleted, and the overlay rows remain readable. Unsealing before a rollback restores it, with the rounded `ReceivingTime`.
+- An older server also deletes without knowing about chunks: retention and "clear history" run by it remove overlay rows only, so the chunks would bring that history back after the next upgrade. A rollback therefore unseals first; rolling back with sealed weeks in place is supported for reading, not for a return to the newer version.
 - While source rows are kept, a sealed week takes more space than before, not less. The gain arrives when the keep period ends.
 - Values still cross the storage interface as MemoryPack bytes, so a sealed read decodes a chunk and re-serializes each value. It is cheap next to the decode and is the price of leaving the cache untouched.
 - A read of a sealed week decodes whole chunks; the chunk size bounds that cost and is fixed with the codec.
