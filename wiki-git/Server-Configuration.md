@@ -209,7 +209,9 @@ The settings are read when the server starts. An invalid value stops the start w
 
 **Unseal.** **Configuration → Database**, select a week in *Values Database* and press **Unseal** (administrators only) to turn a sealed week back into ordinary rows. The job then leaves that week alone until the file `hsm-unsealed` is deleted from the week's `SensorValuesV2_*` directory. Unseal every sealed week before rolling the server back to a version without sealed history: an older server cannot see sealed weeks.
 
-The job reports itself under **HSM Server Monitoring → Database → Sealed history** (last run, sealed weeks, rows and bytes sealed, sensors left as rows, verification failures, chunk read and rewrite failures).
+To cancel an unseal that cannot finish (a damaged chunk), delete the file `hsm-unsealing` from the week's `SensorValuesSealedV1_*` directory.
+
+The job reports itself under **HSM Server Monitoring → Database → Sealed history** (last run, sealed weeks, weeks needing attention, rows and bytes sealed, sensors left as rows, verification failures, chunk read, rewrite and directory sync failures). **Weeks needing attention** above 0 means the job has stopped touching a week until you act; its comment says which week and what to do. Never delete a `SensorValuesSealedV1_*` directory by hand unless that comment says its rows are complete: after the keep period it holds the only copy of the week.
 
 ---
 

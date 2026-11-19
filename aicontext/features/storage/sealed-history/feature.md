@@ -228,14 +228,15 @@ The codec stores nothing. The sealed week store below keeps chunks in a sibling 
 
 **The signal.** A week is sealed only when `hsm-sealed` exists inside the chunk directory. `SealedWeekWriter` writes every chunk batch with a sync, closes the database, writes the marker as a temporary file flushed to disk and renames it; the marker is therefore never over chunks that a crash or a power loss can take back. `LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to)` opens a sealed week when the marker is there and the plain row worker otherwise, with a warning in the log when the chunk directory exists without it (an interrupted or running seal; it is not read). The marker lives with the chunks, so it travels with them on a copy or restore. The weekly shard dictionary also lists a week that has a complete chunk directory but no row directory (opening it creates an empty overlay); a chunk directory without the marker is not a week by itself. The pre-V2 dictionary used by `MigrateDatabaseV2` never attaches sealed weeks.
 
-`SealedWeekWriter.Open` always starts from an empty chunk database: a directory without the marker is what an interrupted seal left, not data (its source rows are still in the row database), and stale if those rows changed since, so it is deleted first. A directory with the marker is refused, and so is any directory whose name does not start with `SensorValuesSealedV1_`, before anything is touched: a wrong path (the row database, the database folder) is never deleted.
+`SealedWeekWriter.Open` always starts from an empty chunk database. Since #1804 it writes `hsm-sealing` into the new directory before the database exists, and it deletes an existing directory only when it is provably the remains of an interrupted seal (`SealedWeekStatus.MayDeleteChunkDirectory`, section "Sealing job", A): such a directory is not data (its source rows are still in the row database) and stale if those rows changed since. Any other existing directory without the marker is refused untouched (`WeekNeedsAttentionException`): after source-row removal it may hold the only copy of the week. A directory with the marker is refused, and so is any directory whose name does not start with `SensorValuesSealedV1_`, before anything is touched: a wrong path (the row database, the database folder) is never deleted.
 
 The hand-off of step 2 to the sealing job, and how #1804 meets it (details in the section "Sealing job"):
 
 - Chunks are written while the source rows stay in the overlay, the week is marked complete only after verification, and source rows are deleted only after the keep period. A crash at any point before the marker leaves the week read from its rows alone.
 - A week is opened as sealed or as rows by its marker. Since #1804 the shard dictionary holds a `SensorValuesWeek` handle per week, and the job swaps a week to the sealed store live, in the same step that writes the marker.
 - A delete of the week between encoding and the marker must not come back from a chunk: the job keeps a delete log while it encodes and drops the chunks of every sensor a delete touched (a write, as opposed to a delete, is harmless: the overlay wins).
-- **The marker's durability.** On Linux and macOS, `SealedWeekWriter.Complete`/`WriteMarker` and every marker of the job now sync the directory after the rename (`fsync` on the directory through libc; .NET has none) and sync the database folder for the chunk directory's own entry. On Windows NTFS journals the rename and there is nothing to call. The source rows are removed only once the keep period (at least one week by configuration) has passed and `hsm-sealed` is still on disk. See "Deviations" in the job section for how this reads the "reopened as sealed" rule.
+- **The marker's durability** (`DurableFile`). On Windows every marker is renamed into place with `MoveFileExW(..., MOVEFILE_WRITE_THROUGH)`, which returns once the move is on the disk. On Linux and macOS the directory is synced after the rename (`fsync` on the directory through libc; .NET has none), and the database folder is synced for the chunk directory's own entry when the directory is created. A failed sync after `hsm-sealed` (including a missing libc symbol) fails the seal before the swap: the marker is deleted again, the week stays rows and is sealed again after the backoff. A failed sync after any other marker is logged as an error once per process and counted (`SealedHistoryDiagnostics.DirectorySyncFailures`, self-monitoring `Chunk directory sync failures`): those markers only shorten or repeat a step when lost. The source rows are removed only once the keep period (at least one week by configuration) has passed and `hsm-sealed` is still on disk. See "Deviations" in the job section for how this reads the "reopened as sealed" rule.
+- **One residual assumption: the wall clock.** The keep period ends at a wall-clock time written at seal time. A clock that jumps forward by weeks shortens it accordingly.
 
 ### Merged reads
 
@@ -322,40 +323,78 @@ A point read or a first page costs one chunk decode (about 0.2 ms) instead of mi
 
 ### Stages and markers (A)
 
-A week's stage is read from files in its own directories (`SealedWeekStages.Read`), never from a separate database. Every file is small, human-readable text, written as a temporary file flushed to disk and renamed over the target, after which the directory is synced (see "The marker's durability" above).
+A week's stage is read from files in its own directories (`SealedWeekStages.Read`), never from a separate database. Every file is small, human-readable text, written as a temporary file flushed to disk and renamed over the target (see "The marker's durability" above).
 
 | File | Where | Meaning |
 |---|---|---|
-| `hsm-sealing` | chunk directory | A seal started (informational; a chunk directory without `hsm-sealed` is an incomplete seal anyway). Deleted after the swap. |
+| `hsm-sealing` | chunk directory | Written by `SealedWeekWriter.Open` before the chunk database exists; deleted after the swap. Its presence (without the later markers) is what proves a marker-less directory to be an interrupted seal. |
 | `hsm-rows-left` | chunk directory | The sensors left as rows on purpose: id, reason, a fingerprint of their rows (count and SHA-256 of keys and values). Written before `hsm-sealed` and rewritten by folds. Missing or unreadable only costs a retry. |
-| `hsm-keep-source-rows-until` | chunk directory | First line: the UTC time after which the source rows may be removed. Written before `hsm-sealed`. Missing or unreadable: the source rows are kept. An operator may edit it to keep them longer. |
-| `hsm-sealed` | chunk directory | Step 2's signal, unchanged in meaning and still the only file a read acts on: the chunks are complete and the week is read merged. Its text now describes the seal (rows, sensors, chunks, bytes, keep time). |
+| `hsm-sealed` | chunk directory | Step 2's signal, unchanged in meaning and still the only file a read acts on: the chunks are complete and the week is read merged. Its text names the format and encoder revision, describes the seal and repeats the keep time on a line `Source rows kept until: <UTC time>`. |
+| `hsm-keep-source-rows-until` | chunk directory | First line: the UTC time after which the source rows may be removed. Written just after `hsm-sealed` (until then the keep line of `hsm-sealed` is read). An operator may edit it to keep the rows longer. |
 | `hsm-source-rows-removed` | chunk directory | The source rows that equal their chunk rows are gone. |
-| `hsm-unsealing` | chunk directory | An unseal is in progress. |
-| `hsm-unsealed` | row directory | An operator unsealed the week; the job never seals it again until the file is deleted. |
+| `hsm-unsealing` | chunk directory | An unseal is in progress. Deleting it cancels the unseal (G). |
+| `hsm-unsealed` | row directory | An operator unsealed the week; written only after every chunk row is in the overlay. The job never seals the week again until the file is deleted. |
 
-| Stage | Files |
-|---|---|
-| Not sealed | no chunk directory |
-| Incomplete seal (running or interrupted) | chunk directory without `hsm-sealed` and without `hsm-unsealing` |
-| Sealed, source rows kept until T | `hsm-sealed`, `hsm-keep-source-rows-until` |
-| Source rows removed | `hsm-sealed`, `hsm-source-rows-removed` |
-| Being unsealed | `hsm-unsealing` (with `hsm-sealed` while the copy runs; without it once the week is rows again) |
+| Stage | Files | The job |
+|---|---|---|
+| Not sealed | no chunk directory | seals it when due |
+| Incomplete seal | no `hsm-sealed`; `hsm-sealing`, and none of `hsm-keep-source-rows-until`, `hsm-source-rows-removed`, `hsm-unsealing` | deletes the directory and seals again |
+| Sealed, source rows kept until T | `hsm-sealed`, T from the keep file or the marker | removes the source rows after T |
+| Source rows removed | `hsm-sealed`, `hsm-source-rows-removed` | folds |
+| Being unsealed | `hsm-sealed`, `hsm-unsealing` | finishes the unseal first |
+| Unsealed, leftover directory | no `hsm-sealed`; `hsm-unsealing`, and `hsm-unsealed` in the row directory | deletes the directory (lowest priority) |
+| **Needs attention** | any other chunk directory without `hsm-sealed` | nothing: never deleted, sealed or touched; reported |
 
-Step 2's rule (marker present = sealed week) stays true at every instant: `hsm-sealed` is written only after the chunks are complete and verified, and removed (by an unseal) only after every chunk row is in the overlay and before any chunk is deleted.
+**The one rule that lets the job delete a chunk directory** is `SealedWeekStatus.MayDeleteChunkDirectory`: only an incomplete seal or an unsealed leftover, as defined above. `SealedWeekWriter.Open` (before a seal) and the unseal's clean-up both ask it; every other marker-less directory may hold the only copy of the week. Its truth table over a chunk directory without `hsm-sealed` (S = `hsm-sealing`, K = keep file, R = `hsm-source-rows-removed`, U = `hsm-unsealing`, D = `hsm-unsealed` in the row directory; `hsm-rows-left` does not matter):
+
+| Markers present (no `hsm-sealed`) | Stage | May delete |
+|---|---|---|
+| S | Incomplete seal | yes |
+| S, `hsm-rows-left` | Incomplete seal | yes |
+| S, D | Incomplete seal (the planner does not seal an unsealed week) | yes |
+| S, K | Needs attention | no |
+| S, R | Needs attention | no |
+| S, U | Needs attention | no |
+| K | Needs attention | no |
+| K, R | Needs attention | no |
+| U | Needs attention | no |
+| U, D | Unsealed leftover | yes |
+| U, R, D | Unsealed leftover | yes |
+| none | Needs attention | no |
+| none, D | Needs attention | no |
+
+As a rule: S without K, R and U is an incomplete seal; otherwise U together with D is an unsealed leftover; everything else needs attention. These thirteen lines are the cases of the test `WithoutHsmSealed_OnlyAnInterruptedSealOrAFinishedUnsealMayBeDeleted`, which also checks that the seal's writer deletes exactly the first kind and refuses the rest untouched.
+
+Step 2's rule (marker present = sealed week) stays true at every instant: `hsm-sealed` is written only after the chunks are complete and verified, and removed (by an unseal) only after every chunk row is in the overlay and `hsm-unsealed` is written, and before any chunk is deleted.
+
+### Weeks that need attention
+
+The job never acts on such a week; the pass reports it (`HistorySealingPassReport.WeeksNeedingAttention`, the self-monitoring sensor `Weeks needing attention` with Error status, and an error in the log once per process per week and reason). Causes and what to do:
+
+| Cause | What it means | What to do |
+|---|---|---|
+| A chunk directory without `hsm-sealed` that is neither an incomplete seal nor an unsealed leftover | The marker was lost (an operator, a partial restore, file-system damage). After source-row removal the chunks are the only copy of the week, which is now served from its (nearly empty) rows. | Put `hsm-sealed` back (any text) and restart the server; or, if the rows are known to be complete, delete the directory. |
+| `hsm-keep-source-rows-until` cannot be read (missing with no keep line in `hsm-sealed`, or a first line that is not a UTC time) | The source rows are kept indefinitely. | Write a UTC time on the first line, e.g. `2026-12-01T00:00:00.0000000Z`. |
+| A chunk cannot be read during source-row removal | Its overlay rows stay; the other chunks' rows went; the removal is retried daily and the week stays in its stage. | Clear the history range of the sensor named in the chunk read error (step 2 removes an unreadable chunk that lies wholly inside a delete range); or leave it, nothing is lost. |
+| A chunk cannot be read during an unseal | The unseal stops before anything irreversible: `hsm-sealed` stays, `hsm-unsealing` stays and the job retries daily; while it is there, source-row removal and folds of that week wait. | Cancel the unseal (delete `hsm-unsealing`), or clear the history range of that sensor and press Unseal again. |
 
 ### The week handle and the live swap (B)
 
 The shard dictionary holds a `SensorValuesWeek` per week instead of the row worker or the sealed store directly. It serves the week through its current instance and can replace it:
 
-- **Same native row database.** The replacement is built over the open row database of the instance it replaces (LevelDB allows one handle per directory). The swap therefore closes nothing a running read uses; the old instance is told it no longer owns the row database.
-- **Leases.** Every read takes a lease on the instance current when it starts (a range read when its enumeration starts) and returns it when it ends; a replaced instance is disposed when its last lease ends. After a seal the replaced row worker owns nothing, so disposing it frees nothing; after an unseal the replaced sealed store closes its chunk database only then.
-- **When.** The seal swaps in the same exclusive step that writes `hsm-sealed`: the sealed store is opened over the chunk directory first (if that fails, nothing has changed and no marker exists), then the marker is written, then the reference is replaced. From then on every delete goes to the sealed store and rewrites chunks. A read that started on the row worker finishes on it and sees the whole week: during the keep period the row database still holds every row.
-- **Window.** Writes and deletes wait only while the exclusive step runs: the drop of the chunks a delete touched (rare), three small marker writes with their syncs, and opening the chunk database.
+- **Same native databases.** The replacement is built over the open row database of the instance it replaces (LevelDB allows one handle per directory), and for a seal over the chunk database the seal's writer still has open (it is handed over, not closed and opened again). The swap therefore closes nothing a running read uses; the old instance is told it no longer owns the row database.
+- **Leases.** Every read takes a lease on the instance current when it starts (a range read when its enumeration starts) and returns it when it ends; a replaced instance is disposed when its last lease ends. After a seal the replaced row worker owns nothing, so disposing it frees nothing; after an unseal the replaced sealed store closes its chunk database only then. A read that is never disposed keeps its lease forever: nothing waits for leases (see G), and the history table of the web UI disposes its page read on reload and on dispose.
+- **When.** The seal swaps in the same exclusive step that writes `hsm-sealed`. From then on every delete goes to the sealed store and rewrites chunks. A read that started on the row worker finishes on it and sees the whole week: during the keep period the row database still holds every row.
+- **The seal's commit** holds the week's exclusive gate only for what must be atomic with the delete-log check: the check, the rare synced drop of the chunks of sensors a delete touched, the `hsm-sealed` write (with write-through or a directory sync), and the swap (a reference assignment). The record of sensors left as rows and the sealed store are prepared before the gate; the keep file is written and `hsm-sealing` deleted after it.
+- **Hold times.** Every exclusive step logs how long it held the gate (Debug; Warn from 100 ms) and the pass report keeps the longest per kind. Measured on the synthetic week (Windows, SSD): seal commit 5.8–9.7 ms, a source-row removal step 7–8.5 ms, an unseal copy step up to 10 ms, the unseal commit 16 ms, a fold commit 2.7 ms.
+
+Why the gate's hold time matters: a sensor with `AggregateValues` on rewrites its span row on every equal value (`TreeValuesCache` saves `LastDbValue`, keyed by the first tick of the run, with `AggregatedValuesCount` and `LastReceivingTime` updated), in whatever week the run began. A long run of equal values therefore keeps writing into an old, possibly sealed, week on the ingestion path, and those writes wait while the gate is held.
+
+The cost of the gate on the write path (one shared `ReaderWriterLockSlim` entry per write, no recursion): `SealedHistoryBench --put-bench`, 400,000 puts into a current week, three rounds: 1 thread 462–482 k/s directly on the worker against 468–470 k/s through the handle; 8 threads 349–359 k/s against 348–360 k/s. Within the noise of the runs (−2.6 % to +1.4 %); no cheaper gate is needed.
 
 ### A delete that races a seal (C)
 
-Every write and range delete holds the week's gate shared for its whole duration; the job takes it exclusively for its commit steps. Before it reads anything, a seal opens a **delete log** on the week (under the exclusive gate, so a delete already running has finished and is reflected in what the seal reads); from then on every range delete records its range before it touches anything. The seal encodes from one LevelDB snapshot outside the gate. Its commit, under the exclusive gate, deletes from the chunk database every chunk of each sensor a recorded range touches (in one synced batch), and only then writes the markers and swaps. A delete cannot run between that check and the swap, and every delete after the swap goes to the sealed store. The dropped sensors stay rows (counted as `DeletedDuringSeal`) and are sealed later by a fold.
+Every write and range delete holds the week's gate shared for its whole duration; the job takes it exclusively for its commit steps. Before it reads anything, a seal opens a **delete log** on the week (under the exclusive gate, so a delete already running has finished and is reflected in what the seal reads); from then on every range delete records its range before it touches anything. The seal encodes from one LevelDB snapshot outside the gate. Its commit, under the exclusive gate, deletes from the chunk database every chunk of each sensor a recorded range touches (in one synced batch), and only then writes the marker and swaps. A delete cannot run between that check and the swap, and every delete after the swap goes to the sealed store. The dropped sensors stay rows (counted as `DeletedDuringSeal`) and are sealed later by a fold.
 
 A write during encoding is not recorded and aborts nothing: the row is in the overlay, which wins over the chunk row on every read, and the source-row removal keeps it because it differs from its chunk row (a new key has no chunk row at all). A later fold takes it into the chunks. So a week that keeps receiving late values is sealed on the first attempt.
 
@@ -365,38 +404,42 @@ A fold runs the same way: delete log first, then snapshots of the overlay and th
 
 ### Removing the source rows (E)
 
-When the keep time has passed (and `hsm-sealed` is still on disk), the job walks the chunk database chunk by chunk. Each step, under the exclusive gate, re-reads the chunk, decodes it and, for each of its rows, reads the overlay row with the same key and deletes it only if it equals the chunk row by `RowFidelity`. A row written after the seal differs and stays; a chunk that cannot be read keeps all its overlay rows, is counted, and the week stays in its stage (the pass is a failure, retried after the backoff). When every chunk has been read, `hsm-source-rows-removed` is written. Every step is idempotent, so a crash anywhere leaves a correct week and the next pass finishes the job. The deletes clear the compaction marker, and step 0's background compaction compacts the week once it has been quiet for 3 hours. The job does not compact it itself: compaction is its own one-shard-per-pass step with its own failure handling, and compacting inside the sealing pass would hold the shared maintenance state for a much longer step.
+When the keep time has passed (and `hsm-sealed` is still on disk), the job walks the chunk database chunk by chunk. Each step, under the exclusive gate, re-reads the chunk, decodes it and, for each of its rows, reads the overlay row with the same key and deletes it only if it equals the chunk row by `RowFidelity`. A row written after the seal (a late value, an edit, a rewritten aggregated span row) differs and stays. A chunk that cannot be read keeps all its overlay rows; the week then needs attention, stays in its stage and is retried after the backoff. When every chunk has been read, `hsm-source-rows-removed` is written. Every step is idempotent, so a crash anywhere leaves a correct week and the next pass finishes the job. The deletes clear the compaction marker, and step 0's background compaction compacts the week once it has been quiet for 3 hours. The job does not compact it itself: compaction is its own one-shard-per-pass step with its own failure handling, and compacting inside the sealing pass would hold the shared maintenance state for a much longer step.
 
 ### Folding (F)
 
-A fold is considered only for a week whose source rows are gone. The job counts the week's foldable overlay rows: rows of sensors that are not File sensors and not listed in `hsm-rows-left` with an unchanged fingerprint. The count is kept in memory and redone only when the week's change counter moves or the instance serving it changes. A week is folded at once when it has at least `FoldMinRows` such rows, otherwise once the job has seen it unchanged for `FoldQuietPeriod` (by the job's own clock: after a restart the period starts again). So a trickle of late values does not rewrite the week on every pass.
+A fold is considered only for a week whose source rows are gone. The job counts the week's foldable overlay rows: rows of sensors that are not File sensors and not listed in `hsm-rows-left` with an unchanged fingerprint. The count is kept in memory and redone when the instance serving the week changes, and otherwise at most once an hour (`FoldRecountInterval`) while the week's change counter keeps moving, so a week whose aggregated span rows are rewritten all the time does not cost an overlay scan every pass. A week is folded at once when it has at least `FoldMinRows` such rows, otherwise once the **number** of its foldable rows has stayed the same for `FoldQuietPeriod` (by the job's own clock: after a restart the period starts again). A row rewritten in place does not change that number, so a week with a few continuously rewritten span rows is folded about once per quiet period (a test runs three days of 7-minute passes with three rewrites before each: 1 to 4 folds, at most one count per hour), and a trickle of new late values is folded once it stops growing.
 
-Per sensor with foldable rows: its overlay rows merged with its chunk rows (the overlay wins) are encoded in batches of at most one chunk, decoded and compared with the merged rows field by field, and committed (old chunks deleted, new chunks put, one synced batch, under the chunk write lock and the exclusive gate); the new chunks are then read back and compared byte for byte, and if they differ the old chunks are put back. Then the overlay rows of the sensor that equal the new chunk rows are deleted by the rule of E. A sensor without chunks (left as rows earlier because a delete raced its seal, or written to the week only after the seal) is sealed by a fold in the same way. Folded rows are removed as soon as the new chunks verify; they get no keep period. File values stay rows.
+Per sensor with foldable rows: its overlay rows merged with its chunk rows (the overlay wins) are encoded in batches of at most one chunk, decoded and compared with the merged rows field by field, and committed (old chunks deleted, new chunks put, one synced batch, under the chunk write lock and the exclusive gate); the new chunks are then read back and compared byte for byte, and if they differ the old chunks are put back. Then the overlay rows of the sensor that equal the new chunk rows are deleted by the rule of E; a row rewritten after the fold read it differs and stays (it wins on reads). A sensor without chunks (left as rows earlier because a delete raced its seal, or written to the week only after the seal) is sealed by a fold in the same way. File values stay rows.
+
+> **The one place rows are deleted without a waiting period.** A fold removes the overlay rows it folded as soon as the new chunks verify. That includes a sensor sealed for the first time by a fold: its rows get no keep period. Every other source row waits for the keep period.
 
 ### Unseal (G)
 
 `IDatabaseCore.UnsealHistoryWeek(name, utcNow)`, behind the Unseal button on the Configuration page (`HomeController.Unseal`, admin only, POST with an antiforgery token; the controller only calls the core). It works from whatever stage an earlier unseal reached:
 
 1. Write `hsm-unsealing`.
-2. Copy: chunk by chunk, under the exclusive gate, every chunk row whose key the overlay does not hold is written into the overlay (MemoryPack of the decoded value, the same bytes a merged read returns), synced. An overlay row always wins. Rows come back with the codec's fidelity (`ReceivingTime` to the millisecond). An unreadable chunk stops the unseal: its rows exist nowhere else.
-3. Under the exclusive gate: write `hsm-unsealed` in the row directory, delete `hsm-sealed`, swap the week to a row worker over the same row database.
-4. Delete the chunk directory once no read uses the replaced sealed store (it waits up to 30 s; if a read still holds it, the directory is deleted by the next sealing pass or the next unseal).
+2. Copy: chunk by chunk, under the exclusive gate, every chunk row whose key the overlay does not hold is written into the overlay (MemoryPack of the decoded value, the same bytes a merged read returns), synced. An overlay row always wins. Rows come back with the codec's fidelity (`ReceivingTime` to the millisecond). An unreadable chunk stops the unseal (the week needs attention): its rows exist nowhere else.
+3. Under the exclusive gate: write `hsm-unsealed` in the row directory, delete `hsm-sealed`, swap the week to a row worker over the same row database. The unseal is now done.
+4. Delete the chunk directory, if no read still uses the replaced sealed store. This is checked once, never waited for (not on the HTTP request, not under the maintenance state): if a read holds it, the week is an unsealed leftover and a later pass deletes the directory (the lowest-priority action, retried an hour later each time, never holding anything else back).
 
-A crash before 3 leaves a sealed week whose overlay holds some or all chunk rows (reads unchanged); a crash after the marker deletion leaves a week of rows with an unread chunk directory. In both cases `hsm-unsealing` makes the next pass finish the unseal before anything else (`FinishUnseal`), or the operator presses Unseal again. A sealed marker over a partly deleted chunk directory cannot happen: chunks are deleted only in 4.
+A crash before 3 leaves a sealed week whose overlay holds some or all chunk rows (reads unchanged) and `hsm-unsealing`, so the next pass finishes the unseal before anything else (`FinishUnseal`), or the operator presses Unseal again. A crash after 3 leaves an unsealed leftover. A sealed marker over a partly deleted chunk directory cannot happen: chunks are deleted only in 4, and only by the deletion rule.
+
+**Cancelling an unseal** is deleting `hsm-unsealing` (with the server stopped, or at any time: the job reads the stage at every pass). While `hsm-sealed` is there the week returns to its previous stage. The rows the copy already wrote equal their chunk rows: in the keep period they are the source rows anyway; after source-row removal they count as foldable rows, and the next fold re-encodes those sensors and removes them (tested).
 
 ### Coexistence and shutdown (H)
 
-A pass and an unseal enter `DatabaseCore`'s compaction state (`TryEnterCompact`), the same one the manual Compact and the background compaction step use: none of the five ever runs at the same time as another, on any week, and the Compact button answers "already running" during a pass. `Dispose` refuses new passes and waits for a running one. A pass is also interruptible: it checks for shutdown between sensors, chunk steps and copy steps, and stops there (outcome `Interrupted`, nothing to undo; the next pass resumes). The longest uninterruptible piece is the encoding and verification of one sensor (a whole week, its densest sensor included, seals in 1.2 to 2.2 s, see Measured).
+A pass and an unseal enter `DatabaseCore`'s compaction state (`TryEnterCompact`), the same one the manual Compact and the background compaction step use: none of the five ever runs at the same time as another, on any week, and the Compact button answers "already running" during a pass. `Dispose` refuses new passes and waits for a running one. A pass is also interruptible: it checks for shutdown between sensors (of a seal, a fold and the count of foldable rows), chunk steps and copy steps, and stops there (outcome `Interrupted`, nothing to undo; the next pass resumes). Nothing in the job waits or sleeps. The longest uninterruptible piece is the encoding and verification of one sensor (a whole week, its densest sensor included, seals in 1.2 to 2.2 s, see Measured).
 
 ### Memory and pacing (I)
 
 A week is sealed sensor by sensor from one snapshot: a first pass over the sensor's keys counts its rows, so batches have the codec's own balanced sizes; then one batch of at most 4,096 rows is decoded at a time, and only the encoded chunks of the current sensor are held (about 7.5 bytes per row). Verification reads the chunks back and streams the source rows again. A fold holds the old and new chunks of one sensor. The planner works in UTC working hours (`WorkingHoursStartUtc`..`WorkingHoursEndUtc`, the whole day when equal, may wrap past midnight); an operator's unseal ignores them. One action per pass, every 7 minutes.
 
-The order of a pass: finish an interrupted unseal; remove the source rows of a week whose keep time passed; seal a closed week (its end, the next Monday 00:00 UTC, plus `SealAfter` is not in the future); fold. Within each kind the oldest week first.
+The order of a pass: finish an interrupted unseal; remove the source rows of a week whose keep time passed; seal a closed week (its end, the next Monday 00:00 UTC, plus `SealAfter` is not in the future); fold; delete an unsealed leftover directory. Within each kind the oldest week first. A week that needs attention gets no action.
 
 ### Failure handling (J)
 
-- A week whose action fails (I/O error, an unreadable chunk during source-row removal, a fold whose chunks read back wrong, a store that cannot open) is logged with its name, held back for a day (`HistorySealingPlanner.FailureBackoff`, in memory like the compaction's), and the next weeks go on.
+- A week whose action fails (I/O error, an unreadable chunk during source-row removal or an unseal, a fold whose chunks read back wrong, a store that cannot open, a marker that cannot be made durable) is logged with its name, held back for a day (`HistorySealingPlanner.FailureBackoff`, in memory like the compaction's), and the next weeks go on. The causes an operator has to act on are also reported as weeks needing attention.
 - A sensor the codec refuses (`Refused:<reason>`), whose written chunks do not decode back to its rows (`VerificationFailed`), with a row that cannot be deserialized (`UnreadableSourceRow`), with an unexpected key length (`UnexpectedKey`) or an unreadable chunk during a fold (`UnreadableChunk`) stays rows, is counted by reason in the pass and listed in `hsm-rows-left` with a fingerprint of its rows. It is tried again only when its rows change. A sensor whose work was dropped because of a delete (`DeletedDuringSeal`, `DeletedDuringFold`) is counted but not listed, so the next fold takes it.
 - File sensors are skipped by the type of their first row and not counted.
 - An unreadable source row leaves its sensor as rows instead of failing the whole week (see Deviations).
@@ -409,10 +452,10 @@ Section `HistorySealing` of `Config/appsettings.json`, read once at startup (`Hi
 |---|---|---|
 | `Enabled` | `false` | ADR-0020, decision 10: off until the rollout step decides otherwise. |
 | `SealAfterDays` | `7` | Days after a week closed before it is sealed (1..3650). Our choice: late values are harmless after a seal, this only keeps the job off weeks collectors are still catching up on. |
-| `KeepSourceRowsWeeks` | `4` | Weeks the source rows stay after a verified seal (1..520). ADR-0020 leaves the number to configuration; the minimum of one week carries the durability rule of step 2. The keep time is fixed into each week's `hsm-keep-source-rows-until` when it is sealed; a later change applies to weeks sealed afterwards. |
+| `KeepSourceRowsWeeks` | `4` | Weeks the source rows stay after a verified seal (1..520). ADR-0020 leaves the number to configuration; the minimum of one week carries the durability rule of step 2. The keep time is fixed into each week when it is sealed; a later change applies to weeks sealed afterwards. |
 | `WorkingHoursStartUtc`, `WorkingHoursEndUtc` | `"00:00"`, `"00:00"` | Daily UTC window, `HH:mm`; equal values mean all day. |
 | `FoldMinRows` | `10000` | A sealed week with this many rows to fold is folded at the next pass. |
-| `FoldQuietHours` | `24` | Fewer rows are folded once the week's overlay has not changed for this long. |
+| `FoldQuietHours` | `24` | Fewer rows are folded once their number has not changed for this long. |
 
 ### Self-monitoring
 
@@ -422,11 +465,12 @@ Under `Database/Sealed history` in the "HSM Server Monitoring" product (`History
 |---|---|
 | `Last run` (string) | action and outcome; the comment is the full pass report; Error status on a failed pass. Posted for every pass while the job is on (including "nothing due"). |
 | `Sealed weeks` (int) | complete sealed weeks on disk after the pass |
+| `Weeks needing attention` (int) | weeks the job will not touch until an operator acts; the comment names each week and the reason (see "Weeks that need attention"); Error status above 0. Posted with every pass. |
 | `Rows sealed` (int) | rows written into chunks by the last seal or fold |
 | `Bytes before` / `Bytes after` (MB) | key and value bytes of those rows / key and chunk bytes written for them |
 | `Sensors left as rows` (int) | with the reasons in the comment, for the last seal or fold |
 | `Verification failures` (int) | sensors whose chunks did not decode back to their rows in the last seal or fold; Error status above 0 |
-| `Chunk read failures`, `Chunk rewrite failures` (int) | `SealedHistoryDiagnostics` counters since the process started, posted when they change once there is a pass or one is above 0; Error status above 0 |
+| `Chunk read failures`, `Chunk rewrite failures`, `Chunk directory sync failures` (int) | `SealedHistoryDiagnostics` counters since the process started, posted when they change once there is a pass or one is above 0; Error status above 0 |
 
 ### Measured (2026-11-19, `SealedHistoryBench --job-synthetic` / `--job-shard`, Release, one machine)
 
@@ -437,21 +481,23 @@ Under `Database/Sealed history` in the "HSM Server Monitoring" product (`History
 | History on disk: rows compacted → sealed with source rows kept → removed and compacted | 75.2 → 89.1 → 18.5 MB (3 weeks; File rows stay) | 21.8 → 25.6 → 3.8 MB |
 | Remove the source rows of one week | 0.9–1.1 s; heap +18 MB | 0.7 s; heap +20 MB |
 | Fold about 1,000 late values and edits over 20 sensors | 0.10 s (35,146 rows re-encoded) | 0.07 s (12,467 rows re-encoded) |
-| Unseal one week | 1.4 s; heap +18 MB | 1.5 s; heap +18 MB |
+| Unseal one week | 1.4–1.6 s; heap +18 MB | 1.5 s; heap +18 MB |
 
-Before the compaction that follows source-row removal, the week is larger than before (deletes are tombstones): 107 MB for the three synthetic weeks.
+Before the compaction that follows source-row removal, the week is larger than before (deletes are tombstones): 107 MB for the three synthetic weeks. The production shard copy was measured before the review changes of the seal's commit; the synthetic run was repeated after them (the hold times in B are from it).
 
 ### Deviations and readings of ADR-0020
 
-- **"Reopened as sealed".** Step 2 asked that source rows never be deleted on the strength of a marker written in the same run without the week having been reopened as sealed. The live swap opens the sealed store in the same step as the marker (it cannot reopen the chunk database later without closing it under running reads). What protects the source rows instead: the directory sync after every marker on Linux and macOS, the keep period of at least one week, and the check that `hsm-sealed` is on disk when the removal starts. On Windows there is no directory sync to call.
+- **"Reopened as sealed".** Step 2 asked that source rows never be deleted on the strength of a marker written in the same run without the week having been reopened as sealed. The live swap opens the sealed store in the same step as the marker (it cannot reopen the chunk database later without closing it under running reads). What protects the source rows instead: the marker is made durable before the swap (write-through on Windows, a directory sync on Linux and macOS that fails the seal if it fails), the keep period of at least one week, and the check that `hsm-sealed` is on disk when the removal starts.
 - **Unreadable source row.** It leaves its sensor as rows (counted, listed) instead of failing the whole week: the other sensors of the week are sealed.
-- **Folded rows get no keep period.** As specified for folds: they are removed once the new chunks verified, so a sensor sealed late by a fold has no source-row grace either.
+- **Folded rows get no keep period** (see F).
 - **An unseal is sticky** (`hsm-unsealed`): otherwise the job would seal the week again at its next pass.
 - **Keep time fixed per week**: changing `KeepSourceRowsWeeks` does not move the keep time of weeks already sealed (edit their file instead).
+- **Unsealed leftover is stricter than "`hsm-unsealed` and no `hsm-sealed`"**: it also requires `hsm-unsealing` in the chunk directory, which every unseal writes first.
 
 ## UI / Operator Visibility
 
 - Configuration page, "Values Database" row: the **Unseal** button (admins) turns the selected week back into rows; the result or the error is shown next to the buttons.
+- Operator actions on files (server stopped, or at any time for the job's markers): put back a lost `hsm-sealed`; fix `hsm-keep-source-rows-until`; delete `hsm-unsealing` to cancel an unseal; delete `hsm-unsealed` to let a week be sealed again. See "Weeks that need attention".
 - Self-monitoring sensors under `Database/Sealed history` (above).
 - The log: every pass that did something logs its report at Info (Error when it failed), every sensor left as rows a Warn line with its reason.
 - The benchmark reports refusals and mismatches for a shard.
@@ -497,7 +543,11 @@ The sealing job (#1804), in the same project (`--filter FullyQualifiedName~Histo
 - A crash after each stage (test seam `SealingCheckpoint` throws, the test restarts the database): seal after opening, mid-way through the sensors, after encoding, after the marker, after the swap; source-row removal mid-way and after its marker; fold after encoding, after the commit, mid-way through the overlay deletes, at the end; unseal after its marker, mid-way through the copy, after `hsm-unsealed`, after the swap, at the end. Each restarts correct and completes.
 - The races, each through a checkpoint: a range delete during a seal's encoding (C) and during a fold (D) do not come back (mutation-checked: without the delete-log check both fail on the very first comparison); a write during encoding is kept and the sensor is still sealed; a read across the seal's swap finishes on the row worker with every row; a read across the unseal's swap keeps the chunk database open and the directory is deleted only after it ends.
 - Three randomized runs (logged seeds) of late writes, partial range deletes and retention deletes between 30 passes, with an unseal and restarts.
-- In `HSMServer.Core.Tests` (`HistorySealingSensorsTests`): the self-monitoring values of a pass, a failed pass, the counters, the service not calling the database when off, the configuration defaults and validation.
+- In `HSMServer.Core.Tests` (`HistorySealingSensorsTests`): the self-monitoring values of a pass, a failed pass, the counters, weeks needing attention, the service not calling the database when off, the configuration defaults and validation; `HistoryTableViewModelDisposalTests`: the history table disposes its page read on reload and on dispose.
+- `HistorySealingSafetyTests` (part of the same class): the truth table of the deletion rule; a lost `hsm-sealed` in three stages (chunks untouched for ten days of passes, the week reported, the marker put back restores it); a missing or unparsable keep time (kept, reported) and the fallback to the marker's keep line; a cancelled unseal whose copied rows are folded away; an unreadable chunk under source-row removal (its rows stay), under a fold (the old chunks stay, other sensors fold) and under an unseal (stops before anything irreversible; clearing the range lets it finish); a range delete between unseal copy steps; a span row rewritten after a seal (kept by the removal), rewritten during a fold (stays and wins), and rewritten continuously for three days (no thrash, at most one count per hour); a directory sync failing after `hsm-sealed` (the seal fails, the week stays rows, the retry seals it); an abandoned read across an unseal (`HistorySealingJobTests`: the unseal returns at once, the older week's removal still runs, the leftover goes once the read is disposed).
+- Crash images (`ACrashImageAtAnyStage_...`, review T4e): at nine checkpoints of seal, removal, fold and unseal the database folder is copied file by file while every database is open and the copy is opened as a new root. **Skipped on Windows**: the LevelDB build there opens every open database's `NNNNNN.log` and `MANIFEST-*` without read sharing; copying them fails with `ERROR_SHARING_VIOLATION` (0x80070020), also when opened with `FileShare.ReadWrite | FileShare.Delete`. Not yet run on Linux.
+
+The new protections were mutation-checked (each removed, the named test run, restored): the stage rule falling back to "any marker-less directory is an incomplete seal" fails the three lost-marker cases; the writer deleting any directory fails ten truth-table cases; a non-strict sync of `hsm-sealed` fails the sync test; recounting the overlay on every pass, or restarting the quiet period on every change, fails the continuous-rewrite test; deleting the leftover without checking for reads fails the abandoned-read test; not reporting a stage's attention fails the lost-marker and keep-time tests.
 
 ## Notes
 
