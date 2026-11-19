@@ -143,6 +143,64 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
 
+    [Fact]
+    public void ManualCompact_MarksTheClosedShards_ButNotTheCurrentWeek()
+    {
+        Add(_lastWeek, 1);
+        Add(DateTime.UtcNow, 2);
+        _core.AddJournalValue(new JournalKey(_sensor, _lastWeek.Ticks), new JournalRecordEntity { Initiator = "test" });
+
+        _core.Compact();
+
+        Assert.True(HasMarker(_lastWeek));
+        Assert.False(HasMarker(DateTime.UtcNow));
+        Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step());
+        Assert.False(_core.IsCompactRunning);
+    }
+
+    [Fact]
+    public void FailedMarkerDelete_IsNotRetriedOnEveryWrite()
+    {
+        Add(_lastWeek, 1);
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
+
+        var marker = Path.Combine(Shard(_lastWeek).Name, CompactedShardMarker.FileName);
+        var attempts = 0;
+        var original = DatabaseImplementations.IntervalDataseBase.DeleteMarkerFile;
+
+        DatabaseImplementations.IntervalDataseBase.DeleteMarkerFile = path =>
+        {
+            if (path != marker)
+            {
+                original(path);
+                return;
+            }
+
+            attempts++;
+            throw new IOException("test: marker delete fails");
+        };
+
+        try
+        {
+            Add(_lastWeek.AddMinutes(1), 2);
+            Add(_lastWeek.AddMinutes(2), 3);
+            Add(_lastWeek.AddMinutes(3), 4);
+        }
+        finally
+        {
+            DatabaseImplementations.IntervalDataseBase.DeleteMarkerFile = original;
+        }
+
+        Assert.Equal(1, attempts);
+        Assert.False(Shard(_lastWeek).IsCompacted);
+        Assert.True(File.Exists(marker)); // stale on disk: one compaction missed after a restart
+
+        // In this run the shard is due again, and its next compaction rewrites the marker.
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
+        Assert.True(Shard(_lastWeek).IsCompacted);
+    }
+
+
     private HistoryShardCompactionOutcome Step(TimeSpan quiet = default, DateTime? now = null) =>
         _core.CompactNextDueHistoryShard(now ?? DateTime.UtcNow, quiet);
 

@@ -1050,10 +1050,12 @@ namespace HSMDatabase.DatabaseWorkCore
                 _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
                 try
                 {
+                    var currentWeekStart = DateTimeMethods.GetStartOfWeekTicks(DateTime.UtcNow.Ticks);
+
                     foreach (var db in _sensorValuesDatabases)
                     {
                         name = db.Name;
-                        db.Compact();
+                        CompactAndMarkClosed(db, currentWeekStart);
                     }
                 }
                 catch (Exception ex)
@@ -1066,10 +1068,12 @@ namespace HSMDatabase.DatabaseWorkCore
                 _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
                 try
                 {
+                    var currentWeekStart = DateTimeMethods.GetStartOfWeekTicks(DateTime.UtcNow.Ticks);
+
                     foreach (var db in _journalValuesDatabases)
                     {
                         name = db.Name;
-                        db.Compact();
+                        CompactAndMarkClosed(db, currentWeekStart);
                     }
                 }
                 catch (Exception ex)
@@ -1089,6 +1093,37 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
         }
+
+        // The manual path compacts every shard as before, and marks the closed ones so the
+        // background step does not compact them again (#1801). The current week is not
+        // marked: its next write would remove the marker anyway.
+        private void CompactAndMarkClosed(IIntervalDatabase db, long currentWeekStart)
+        {
+            var changeCount = db.ChangeCount;
+            var sizeBefore = db.Name.GetSize();
+
+            db.Compact();
+
+            if (db.From < currentWeekStart)
+                TryMarkCompacted(db, changeCount, sizeBefore, db.Name.GetSize());
+        }
+
+        // A marker the manual path cannot write costs one more compaction later, and must
+        // not stop the manual compaction of the remaining shards.
+        private void TryMarkCompacted(IIntervalDatabase db, long changeCount, long sizeBefore, long sizeAfter)
+        {
+            try
+            {
+                db.TryMarkCompacted(changeCount, CompactedMarkerContent(sizeBefore, sizeAfter));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Failed to write the compaction marker of {db.Name}; the background compaction will compact it again");
+            }
+        }
+
+        private static string CompactedMarkerContent(long sizeBefore, long sizeAfter) =>
+            $"Compacted at {DateTime.UtcNow:O}: {sizeBefore} -> {sizeAfter} bytes{Environment.NewLine}";
 
         private bool TryEnterCompact() => Interlocked.CompareExchange(ref _compactRunning, 1, 0) == 0;
 
@@ -1157,7 +1192,9 @@ namespace HSMDatabase.DatabaseWorkCore
                 db.Compact();
 
                 var sizeAfter = name.GetSize();
-                var marked = db.TryMarkCompacted(changeCount, $"Compacted at {DateTime.UtcNow:O}: {sizeBefore} -> {sizeAfter} bytes{Environment.NewLine}");
+                // A marker that cannot be written throws into the failure path below: the
+                // shard then waits for the backoff instead of being compacted every pass.
+                var marked = db.TryMarkCompacted(changeCount, CompactedMarkerContent(sizeBefore, sizeAfter));
 
                 _compactionRetryAfter.Remove(name);
 
