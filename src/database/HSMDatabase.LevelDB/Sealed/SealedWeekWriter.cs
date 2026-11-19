@@ -148,7 +148,7 @@ namespace HSMDatabase.LevelDB.Sealed
             using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var writer = new StreamWriter(stream))
             {
-                writer.Write($"Sealed chunk format v{ChunkCodec.FormatVersion} at {DateTime.UtcNow:O}{Environment.NewLine}{description}{Environment.NewLine}");
+                writer.Write($"Sealed chunk format v{ChunkCodec.FormatVersion}, encoder r{ChunkCodec.EncoderRevision} at {DateTime.UtcNow:O}{Environment.NewLine}{description}{Environment.NewLine}");
                 writer.Flush();
                 stream.Flush(flushToDisk: true);
             }
