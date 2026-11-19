@@ -76,6 +76,70 @@ namespace HSMDatabase.SealedHistory.Tests
             Assert.Contains(member, result.Refusal.Message);
         }
 
+        /// <summary>Every Nullable member of every sealed record, found by reflection, so a Nullable added later is covered.</summary>
+        public static IEnumerable<object[]> NullableMembers =>
+            SealedRecords.SelectMany(r => r.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(p => p.SetMethod is { IsPublic: true } && Nullable.GetUnderlyingType(p.PropertyType) is not null)
+                .Where(p => !p.IsDefined(typeof(MemoryPackIgnoreAttribute), true))
+                .Select(p => new object[] { r, p.Name }));
+
+
+        [Fact]
+        public void The_Nullable_member_list_is_complete()
+        {
+            var members = NullableMembers.Select(m => $"{((Type)m[0]).Name}.{m[1]}").ToHashSet();
+
+            foreach (var record in SealedRecords)
+                Assert.Contains($"{record.Name}.LastReceivingTime", members);
+
+            Assert.Contains("DoubleValue.EmaValue", members);
+            Assert.Contains("IntegerBarValue.FirstValue", members);
+            Assert.Contains("DoubleBarValue.StdDev", members);
+            Assert.Contains("DoubleBarValue.EmaCount", members);
+        }
+
+        /// <summary>
+        /// MemoryPack copies a Nullable as raw memory, so a stored row can hold a hasValue byte other than 0 or 1. The
+        /// encoder must refuse it for every Nullable member, the ones added later included.
+        /// </summary>
+        [Theory]
+        [MemberData(nameof(NullableMembers))]
+        public void A_stored_non_canonical_hasValue_byte_is_refused(Type record, string member)
+        {
+            var property = record.GetProperty(member);
+            var underlying = Nullable.GetUnderlyingType(property.PropertyType);
+
+            object marker = underlying switch
+            {
+                _ when underlying == typeof(double) => BitConverter.Int64BitsToDouble(0x4123_4567_89AB_CDEF),
+                _ when underlying == typeof(int) => 0x5EA1_ED42,
+                _ when underlying == typeof(long) => 0x0ABC_DEF0_1234_5678L,
+                _ when underlying == typeof(DateTime) => new DateTime(MarkerTicks, DateTimeKind.Utc),
+                _ => null,
+            };
+            Assert.True(marker is not null, $"{record.Name}.{member}: no marker for Nullable<{underlying.Name}>; extend this test");
+
+            var value = Baseline(record);
+            property.SetValue(value, marker);
+
+            var bytes = MemoryPackSerializer.Serialize<BaseValue>(value);
+            var markerBytes = MarkerBytes(marker);
+            int at = bytes.AsSpan().IndexOf(markerBytes);
+            Assert.True(at >= 0, $"{record.Name}.{member}: marker not found in the MemoryPack bytes");
+
+            // Nullable<T> is { bool hasValue; T value; }: hasValue sits (size of T?) - (size of T) bytes before the value.
+            int hasValueAt = at - NullableValueOffset(underlying);
+            Assert.Equal(1, bytes[hasValueAt]);
+            bytes[hasValueAt] = 2;
+
+            var stored = MemoryPackSerializer.Deserialize<BaseValue>(bytes);
+            var result = ChunkCodec.Encode([new HistoryRow(Samples.Start.Ticks, stored)]);
+
+            Assert.False(result.IsSuccess, $"{record.Name}.{member}: a non-canonical hasValue byte was accepted");
+            Assert.Equal(ChunkRefusalReason.UnrepresentableValue, result.Refusal.Reason);
+            Assert.Contains(member, result.Refusal.Message);
+        }
+
         /// <summary>
         /// The contract stated directly: random rows of every type, many of them re-read from MemoryPack bytes with
         /// random bytes patched (as a damaged or odd stored row would be). Either Encode refuses, or every chunk decodes
@@ -182,6 +246,22 @@ namespace HSMDatabase.SealedHistory.Tests
                 return null;
             }
         }
+
+        private static byte[] MarkerBytes(object marker) => marker switch
+        {
+            double d => BitConverter.GetBytes(d),
+            int i => BitConverter.GetBytes(i),
+            long l => BitConverter.GetBytes(l),
+            DateTime t => BitConverter.GetBytes((ulong)t.Ticks | UtcKind),
+            _ => throw new ArgumentOutOfRangeException(nameof(marker)),
+        };
+
+        private static int NullableValueOffset(Type underlying) =>
+            (int)typeof(EncodeDecodeContractTests).GetMethod(nameof(ValueOffset), BindingFlags.NonPublic | BindingFlags.Static)
+                .MakeGenericMethod(underlying).Invoke(null, null);
+
+        private static int ValueOffset<T>() where T : struct =>
+            System.Runtime.CompilerServices.Unsafe.SizeOf<T?>() - System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
 
         private static int IndexOf(byte[] bytes, ulong pattern)
         {

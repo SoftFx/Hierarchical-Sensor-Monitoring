@@ -208,7 +208,7 @@ Not operator-visible. The benchmark reports refusals and mismatches for a shard.
 
 ## Tests
 
-`src/tests/HSMDatabase.SealedHistory.Tests` (in `HSMServer.sln`, run by the server CI lane):
+`src/tests/HSMDatabase.SealedHistory.Tests` (in `HSMServer.sln`). The server CI lane runs it on pushes to `master` and `develop` only, not on pull requests: run `dotnet test src/tests/HSMDatabase.SealedHistory.Tests -c Release` locally before pushing any codec change.
 
 - round trip of every sealed type with ordinary, extreme and randomized (fixed seed) inputs, one row, the row limit, splitting;
 - every MemoryPack-persisted member of every sealed record round-trips and is compared by `RowFidelity` (fails when a record gains a member the codec drops);

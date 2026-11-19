@@ -147,11 +147,9 @@ namespace HSMDatabase.SealedHistory.Format
                         return false;
 
                     double scaled = Math.Round(value * scale);
+                    // A larger exponent only scales this value further: no exponent can work.
                     if (Math.Abs(scaled) > MaxExactInteger)
-                    {
-                        ok = false;
-                        break;
-                    }
+                        return false;
 
                     long mantissa = (long)scaled;
                     mantissas[i] = mantissa;
