@@ -86,8 +86,12 @@ namespace HSMServer.Controllers
                 return PolicyWriteResult.ToActionResult(result.Failure);
 
             // A product has no GET {id} of its own — the node endpoint serves
-            // the created tree node, so the Location header points there.
-            return CreatedAtAction(nameof(NodesApiController.GetNode), "Nodes",
+            // the created tree node, so the Location header points there. The
+            // controller name for link generation is the class name minus the
+            // "Controller" suffix — "NodesApi", not "Nodes": the latter matches
+            // the web UI's conventional {controller}/{action} route and emits
+            // a cookie-authenticated /Nodes/GetNode URL instead (#1786 reopen).
+            return CreatedAtAction(nameof(NodesApiController.GetNode), "NodesApi",
                 new { id = result.Value.Id }, result.Value);
         }
     }

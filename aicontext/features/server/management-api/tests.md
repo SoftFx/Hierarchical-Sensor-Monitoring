@@ -2,7 +2,7 @@
 
 > Owner: server | Last reviewed: 2026-10-19 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), the OpenAPI publication (`ManagementApiSwaggerTests`), sensor muting (`SensorMuteApiControllerTests`), and sensor deletion (`SensorDeletionAdministrationServiceTests` engine level + the delete pins inside `SensorsApiControllerTests`).
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests` + the create-Location wire pin in `ProductsApiCreateLocationWireTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), the OpenAPI publication (`ManagementApiSwaggerTests`), sensor muting (`SensorMuteApiControllerTests`), and sensor deletion (`SensorDeletionAdministrationServiceTests` engine level + the delete pins inside `SensorsApiControllerTests`).
 
 ## Conventions (area admission)
 
@@ -40,11 +40,13 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 
 Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorModel` graphs built through the entities factory) and `IApiTokenAuthorizationService`; controllers constructed directly with a token principal.
 
-**Products** (`ProductsApiControllerTests`):
+**Products** (`ProductsApiControllerTests`, the create Location pin in `ProductsApiCreateLocationWireTests`):
 
 - Conventions reflection pin (route `api/v1/products`).
 - Root-only listing: nested folders excluded, invisible roots excluded by `IsVisible`; an owner who sees nothing gets an EMPTY list (200), never a 403.
 - Ordering name-then-id; pagination math (`page=2&pageSize=2` over 5 → items 3-4); page-beyond-end → the (possibly partial) last page; field mapping incl. the UTC-pinned `creationDate`.
+- **Create** (#1786): admission via `AuthorizeProductCreate` (403 on denial); the web form's name rules verbatim (required-after-trim / length / charset / duplicate — field-keyed 400s under `name`); the core's own add failure → fixed-message 409; author + initiator + ProductManager grant + name-trim verified on the core calls; the grant's persistence failure and throwing arm never demote the 201.
+- **Create Location wire pin** (#1786 reopen): the unit pin of `ControllerName` ("NodesApi" — the class name minus the `Controller` suffix) is not enough on its own, so a TestServer wire test assembles the production routing surface (the app's own controllers through `MapControllers` PLUS the same conventional `{controller}/{action}` routes `Program.cs` registers) and asserts the 201's Location is exactly `/api/v1/nodes/{id}` — a wrong controller name resolves through the conventional route into the web UI's cookie-authenticated `/Nodes/GetNode` URL — then GETs the Location with the same bearer token and expects 200 from the management API's node endpoint.
 
 **Nodes** (`NodesApiControllerTests`):
 
