@@ -10,7 +10,7 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     internal abstract class ValuesDatabaseDictionary<T> : IEnumerable<T> where T : IDisposable
     {
-        private readonly SortedDictionary<long, Lazy<T>> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
+        private readonly SortedDictionary<long, Shard> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
         private readonly object _lock = new();
 
         protected readonly IDatabaseSettings _dbSettings;
@@ -38,15 +38,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 {
                     (var from, var to) = GetDatesFromFolderName(directory);
                     if (!_dbs.ContainsKey(from))
-                    {
-                        var db = new Lazy<T>(() =>
-                        {
-                            string name = GetDbPath.Invoke(from, to);
-                            return CreateDb.Invoke(name, from, to);
-                        }, LazyThreadSafetyMode.ExecutionAndPublication);
-
-                        _dbs.Add(from, db);
-                    }
+                        _dbs.Add(from, CreateShard(from, to));
                 }
             }
         }
@@ -56,24 +48,40 @@ namespace HSMDatabase.DatabaseWorkCore
             var from = DateTimeMethods.GetStartOfWeekTicks(time);
             var to = DateTimeMethods.GetEndOfWeekTicks(time);
 
-            if (_dbs.TryGetValue(from, out var existingDb))
-                return existingDb.Value;
+            if (_dbs.TryGetValue(from, out var existingShard))
+                return existingShard.Database;
 
             lock (_lock)
             {
-                if (!_dbs.TryGetValue(from, out var db))
+                if (!_dbs.TryGetValue(from, out var shard))
                 {
-                    db = new Lazy<T>(() =>
-                        {
-                            string name = GetDbPath.Invoke(from, to);
-                            return CreateDb.Invoke(name, from, to);
-                        }, LazyThreadSafetyMode.ExecutionAndPublication);
+                    shard = CreateShard(from, to);
 
-                    _dbs.Add(from, db);
+                    _dbs.Add(from, shard);
                 }
 
-                return db.Value;
+                return shard.Database;
             }
+        }
+
+        /// <summary>
+        /// Every known shard, newest week first, WITHOUT opening the ones not opened yet:
+        /// a caller that only needs the name, the week or the marker of a shard must not
+        /// pay for opening the LevelDB database behind it (#1801).
+        /// </summary>
+        internal List<Shard> GetShards()
+        {
+            lock (_lock)
+            {
+                return [.. _dbs.Values];
+            }
+        }
+
+        private Shard CreateShard(long from, long to)
+        {
+            var path = GetDbPath.Invoke(from, to);
+
+            return new Shard(from, path, new Lazy<T>(() => CreateDb.Invoke(path, from, to), LazyThreadSafetyMode.ExecutionAndPublication));
         }
 
         private string[] GetSensorValuesDirectories()
@@ -107,19 +115,25 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IEnumerator<T> GetEnumerator()
         {
-            List<Lazy<T>> dbCopies;
-
-            lock (_lock)
+            foreach (var shard in GetShards())
             {
-                dbCopies = [.. _dbs.Values];
-            }
-
-            foreach (var db in dbCopies)
-            {
-                yield return db.Value;
+                yield return shard.Database;
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+
+        internal sealed class Shard(long from, string path, Lazy<T> database)
+        {
+            public long From { get; } = from;
+
+            public string Path { get; } = path;
+
+            public bool IsOpened => database.IsValueCreated;
+
+            /// <summary>Opens the shard on first use.</summary>
+            public T Database => database.Value;
+        }
     }
 }

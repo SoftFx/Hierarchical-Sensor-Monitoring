@@ -1,6 +1,6 @@
 # Database Architecture
 
-> Owner: shared | Last reviewed: 2026-05-26 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-19 | Canonical: yes
 
 ## Overview
 
@@ -31,6 +31,28 @@ HSM stores application data in an embedded **LevelDB** database through `HSMData
 - `ConcurrentStorage<T>` pattern: in-memory cache synced with LevelDB on writes
 - Serialization uses MemoryPack for high performance
 - **A failed write of a sensor or product row is logged, not thrown.** `EnvironmentDatabaseWorker` catches the exception of the LevelDB `Put`, writes an `Error` line and returns, and `IDatabaseCore.AddSensor` / `UpdateSensor` are void: their callers are not told. One caller has to know, the registration of a sensor by a collector (#1756: a registration answered as applied is not sent again). It uses the checked variants, `IDatabaseCore.AddSensorChecked` / `UpdateSensorChecked` (over `IEnvironmentDatabase.WriteSensorIdToList` / `WriteSensor`), which do the same writes and return the failure, or null when the row was written; nothing is thrown there either. In the worker the void methods are the checked ones with the outcome dropped, so the two cannot drift apart; `AddSensorChecked` differs from `AddSensor` only in what it does after a failure (it does not write the row when the id list could not be written, and takes the id off the list again when the row could not). Do not move another caller to the checked variants without deciding what it does with a failure: today a failed write leaves the object in memory and the next save writes it.
+
+## Weekly Shards and Their Compaction
+
+Sensor history and the presentation journal are split into one LevelDB database per week (`SensorValuesV2_<from>_<to>` under the database folder, `JournalValues_<from>_<to>` under `Journals/`; Monday 00:00 to the next Monday). `ValuesDatabaseDictionary<T>` discovers the shard directories at startup and opens each one lazily, on first use; `GetShards()` lists them without opening any.
+
+Rewritten and deleted rows stay in a shard's files until a LevelDB compaction merges them, and a week nobody writes to any more is not compacted on its own (a production week measured 65 MB before and 23 MB after `Compact()`). Two paths compact:
+
+- **Manual:** the Compact button (`HomeController.Compact` → `IDatabaseCore.Compact`) compacts the environment database and every shard, the current week included, in one go. It writes the compaction marker into every closed shard it compacted (not into the current week's, whose next write would remove it), so the background step does not compact those shards again.
+- **Background (#1801):** `HistoryCompactionService` calls `IDatabaseCore.CompactNextDueHistoryShard` every 10 minutes (first pass 10 minutes after start). Each call compacts **at most one** shard, so the backlog of the first run after an upgrade (every closed week, sensor and journal) drains one shard per pass instead of in one burst. The newest due week goes first; on the same week the sensor shard before the journal shard.
+
+A shard is due (`HistoryShardCompactionPlanner`, pure and unit-tested) when all of these hold:
+
+- its week began before the current week did: the current week and any later one are never compacted by the service;
+- it carries no compaction marker: it was never compacted, or it changed since;
+- it has not changed for the quiet period (3 hours, longer than the hourly retention pass): a shard still being trimmed or written to waits until that stops instead of being compacted after every change;
+- no failed attempt holds it back: a failed compaction is logged with the shard name and the shard is retried a day later (in memory; a restart retries at once). Other shards go on meanwhile.
+
+**The compaction marker** is a file named `hsm-compacted` inside the shard directory (`CompactedShardMarker`). It is written after a compaction (background or manual) and removed by the shard worker (`IntervalDataseBase.OnBeforeChange`) before any write or delete that changes the shard: a late value, a clear-history or retention delete that finds rows, a sensor-move merge, a journal write. A range delete that finds no row leaves it in place. Because it is removed before the data changes, a crash in between costs at most one extra compaction. A change that lands while the compaction runs keeps the marker off (`TryMarkCompacted` compares the change counter read before the compaction). If the marker cannot be deleted, the shard still counts as changed in memory and the failure is logged once (not on every later write); the stale file on disk can make the shard miss one compaction after a restart, which costs space, not data. If the background step cannot write a marker, the step counts as failed and the shard waits for the failure backoff. The marker lives in the shard rather than in the environment database so that it is read without opening the shard, survives a restart, and travels with the shard when the directory is copied, backed up or restored. LevelDB claims only `CURRENT`, `LOCK`, `LOG*`, `MANIFEST-*` and numbered files of its directory and ignores this one.
+
+Each background compaction logs the shard path and its size before and after. The two paths share `IsCompactRunning`, taken with a compare-and-swap: the service skips its pass while the manual compaction runs, and the button answers "already running" while a background step runs. In the manual path a shard that fails to open or to compact is logged with its name and the next shard goes on.
+
+**Shutdown and compaction exclude each other.** Once `DatabaseCore.Dispose` has begun, no compaction starts (the background step answers `ShuttingDown`, the button is refused), and `Dispose` waits for a running one to finish before it closes any database: a LevelDB compaction cannot be cancelled, and closing a shard under it would free the native database it still uses. A manual run that is going over all databases stops after the shard it is compacting, so the shutdown waits for one shard, not for the rest. The wait is logged with the name of the database being compacted, every 30 s. The server disposes the database after the host has stopped its hosted services, when the DI container is disposed (and once more from `TreeValuesCache.DisposeAsync`; the second call returns at once). The host's shutdown timeout (`HostOptions.ShutdownTimeout`, 30 s by default, not set by HSM) bounds only how long the host waits for the hosted services to stop, so it does not cut this wait short. What can is the process manager: `docker stop` kills the container 10 s after SIGTERM unless `stop_grace_period` says otherwise, and HSM's compose files do not set it. A kill during a compaction is what a crash is to LevelDB: the shard reopens from its last consistent state, keeps no marker, and is compacted again later.
 
 ## Native Libraries
 

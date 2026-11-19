@@ -111,13 +111,22 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void DeleteValueFromTo(byte[] from, byte[] to)
+        // beforeFirstDelete runs once, right before the first key of the range is deleted,
+        // and not at all when the range holds no key: a weekly shard uses it to drop its
+        // compaction marker only when the delete really changes it (#1801).
+        public void DeleteValueFromTo(byte[] from, byte[] to, Action beforeFirstDelete = null)
         {
             using var iterator = _database.CreateIterator(_iteratorOptions);
 
             iterator.Seek(from);
             while (iterator.IsValid && iterator.Key().IsSmallerOrEquals(to))
             {
+                if (beforeFirstDelete is not null)
+                {
+                    beforeFirstDelete();
+                    beforeFirstDelete = null;
+                }
+
                 _database.Delete(iterator.Key());
                 iterator.Next();
             }

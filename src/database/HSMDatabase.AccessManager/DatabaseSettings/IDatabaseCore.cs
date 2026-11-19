@@ -274,6 +274,15 @@ namespace HSMServer.Core.DataLayer
 
         void Compact();
 
+        /// <summary>
+        /// Compacts at most one closed weekly shard (sensor history or journal) that is due:
+        /// never compacted, or changed since its last compaction, and quiet for
+        /// <paramref name="quietPeriod"/> (#1801). Shares <see cref="IsCompactRunning"/> with
+        /// <see cref="Compact"/>, so the two never overlap; answers Busy when the other runs and
+        /// ShuttingDown once disposal has begun (disposal waits for a running compaction).
+        /// </summary>
+        HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod);
+
 
         IEnumerable<(byte[], byte[])> GetAll();
 

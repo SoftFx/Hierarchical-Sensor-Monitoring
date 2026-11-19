@@ -47,6 +47,8 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | HSM Server Core | Shared server domain/core project. | Code/project term. |
 | Self-monitoring | The server watching itself: a dedicated product ("HSM Server Monitoring") where the server reports its own health and traffic the same way collectors report customer products. | The operator's surface for server-side performance questions; home of the token usage sensors. Say "self-monitoring", not "telemetry" (too generic) or "internal metrics". |
 | LevelDB storage | On-disk database implementation used by HSM. | Mention LMDB/native dependencies only when relevant. |
+| Weekly shard | One LevelDB database holding one week (Monday to Monday) of data. The general term for both kinds: sensor history shards (`SensorValuesV2_<from>_<to>`) and journal shards (`Journals/JournalValues_<from>_<to>`). | A shard is closed once its week has ended; only the current week takes ordinary writes. |
+| Compaction marker | The `hsm-compacted` file inside a weekly shard: the shard was compacted and has not changed since (#1801). | Removed before any change to the shard; see `architecture/database.md`. |
 | Snapshot | Persisted or cached representation of current tree/state. | Be explicit: tree snapshot, sensor snapshot, or database snapshot. |
 | History shard | The weekly shard that holds sensor history, one row per value (`SensorValuesV2_<from>_<to>`). | See Weekly shard. |
 | Sealed week | A closed week whose sensor history has been encoded into chunks (ADR-0020). Not implemented yet. | The opposite is a week still held as rows. Do not call it "archived": the data stays online and readable. |
