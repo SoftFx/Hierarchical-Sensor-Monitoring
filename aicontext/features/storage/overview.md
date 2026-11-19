@@ -15,3 +15,8 @@ recovery behavior.
 - `cache-recovery/` - restart/cache rebuild behavior.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.
+
+## Related
+
+- `docs/initiatives/sensor-history-storage.md` - measurement of alternative stores
+  and codecs for sensor history, and the proposed direction (not implemented).
