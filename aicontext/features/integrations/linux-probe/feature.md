@@ -75,8 +75,8 @@ The probe registers **two separately pinned sets**:
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 28 paths) by
-   `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
+   opened, listed or read. Pinned for demo-server (4 filesystems, 28 paths) by
+   `DISKS_DEMO_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.
 3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
@@ -97,8 +97,8 @@ The probe registers **two separately pinned sets**:
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
-   `DOCKER_GARAGE_SET`.
+   demo-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
+   `DOCKER_DEMO_SET`.
 4. **Top CPU processes** (#1479, part of the probe-only set; `probe_only/top_cpu/`) —
    `.computer/Top CPU processes/<name>`, the Windows agents' sensor family, **wire-identical** to
    `cpu_top.cpp`/`RunTopCpuLoop` and `WindowsTopCpuMonitor.cs` so alert templates carry over: Double,

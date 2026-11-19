@@ -41,8 +41,8 @@ namespace HSMServer.Mcp
         public async Task<McpSensorMoveResult> MoveSensorsAsync(
             [Description("Ids of the sensors to move, 1..100. With `path`, exactly one.")] List<Guid> sensorIds,
             [Description("Id of the destination ROOT product.")] Guid product,
-            [Description("Full new path of ONE sensor relative to the product, e.g. `garage/system/CPU`. Exactly one of `path` and `node`.")] string path = null,
-            [Description("Destination node path relative to the product, e.g. `garage/system`; sensors keep their names. Empty string = directly under the product. Exactly one of `path` and `node`.")] string node = null,
+            [Description("Full new path of ONE sensor relative to the product, e.g. `demo/system/CPU`. Exactly one of `path` and `node`.")] string path = null,
+            [Description("Destination node path relative to the product, e.g. `demo/system`; sensors keep their names. Empty string = directly under the product. Exactly one of `path` and `node`.")] string node = null,
             [Description("`fail` (default): a sensor whose destination is taken is not moved. `merge`: it absorbs the sensor there (same type only; IRREVERSIBLE).")] string onConflict = null,
             [Description("Predict the move without applying anything — the answer carries `preview` instead of `value`.")] bool dryRun = false,
             CancellationToken cancellationToken = default)

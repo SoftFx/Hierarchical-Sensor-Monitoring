@@ -4746,8 +4746,8 @@ namespace
         // The host from the #1445 report in its own numbers: 51 GB free, draining ~1.3 GB/h. Decimal
         // GB and a rate that is not a round MiB figure, on purpose - these two series check the
         // retuned window against the real thing rather than against a convenient one.
-        constexpr double kGarageFreeSpace = 51000000000.0;
-        constexpr double kGarageDrainPerInterval = 216666666.0; // per 10 min = 1.3 GB/h
+        constexpr double kDemoFreeSpace = 51000000000.0;
+        constexpr double kDemoDrainPerInterval = 216666666.0; // per 10 min = 1.3 GB/h
 
         // Mirrors the managed PredictionProbe: a seeded sampler plus a free-space cursor.
         struct Probe
@@ -4957,10 +4957,10 @@ namespace
     {
         using namespace disk_prediction_series;
 
-        Probe probe(3, kGarageFreeSpace);
+        Probe probe(3, kDemoFreeSpace);
 
         // Calibration is three measurements, so the first estimate lands 30 minutes after Start.
-        probe.Drain(3, kGarageDrainPerInterval);
+        probe.Drain(3, kDemoDrainPerInterval);
 
         const auto first_estimate = probe.Post();
 
@@ -4969,7 +4969,7 @@ namespace
 
         // Four more hours of the same drain: the rate is unchanged, so the estimate is just the
         // countdown of the free space that is actually gone.
-        probe.Drain(21, kGarageDrainPerInterval);
+        probe.Drain(21, kDemoDrainPerInterval);
 
         const auto later = probe.Post();
 
@@ -4980,15 +4980,15 @@ namespace
     {
         using namespace disk_prediction_series;
 
-        Probe probe(3, kGarageFreeSpace);
-        probe.Drain(24, kGarageDrainPerInterval);
+        Probe probe(3, kDemoFreeSpace);
+        probe.Drain(24, kDemoDrainPerInterval);
 
         const auto steady = probe.Post();
 
         // One 10-minute interval at FOUR TIMES the drain - the size of swing the reported host
         // showed between adjacent posts. A single sample moves the estimate by at most the
         // smoothing factor (2.7 %) of the distance to what it just measured.
-        probe.Drain(1, kGarageDrainPerInterval * 4.0);
+        probe.Drain(1, kDemoDrainPerInterval * 4.0);
 
         const auto after_burst = probe.Post();
 
@@ -9506,11 +9506,11 @@ namespace
             hsm_collector_create_int_sensor_with_options(collector.value, "p/move", 60000, 3, "d", &sensor.value) == HSM_RESULT_OK,
             "previous-paths sensor create");
 
-        const char* paths[] = { "garage-server/System/CPU", nullptr, " \t ", "old/move" };
+        const char* paths[] = { "demo-server/System/CPU", nullptr, " \t ", "old/move" };
         Require(hsm_sensor_set_previous_paths(sensor.value, paths, 4) == HSM_RESULT_OK, "set previous paths");
 
         Require(
-            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"garage-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}",
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"demo-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}",
             "AddOrUpdateSensorRequest wire layout with PreviousPaths");
 
         Require(hsm_sensor_set_previous_paths(sensor.value, nullptr, 0) == HSM_RESULT_OK, "clear previous paths");

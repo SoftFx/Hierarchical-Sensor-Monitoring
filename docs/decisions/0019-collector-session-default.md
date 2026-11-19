@@ -10,7 +10,7 @@
 
 ADR-0017 brought the collector session (one WebSocket per collector on 443) and kept it off by default: a collector opened one only when its transport setting said so, and turning the default on was left as a decision of its own (step 8 of epic #1660). By 2026-11-13 the session carries everything a collector sends: values, registrations and commands (step 3), file values (step 2b), server directives (step 5), with the `Service alive` alert after 5 minutes off as the disconnect alert (step 6). Both collectors, the agent and the Linux probe can use it.
 
-On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 server release, rather than after the garage soak of step 7.
+On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 server release, rather than after the demo soak of step 7.
 
 ## Decision
 
@@ -32,7 +32,7 @@ On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 serv
 
 ## Alternatives Considered
 
-- Keep the default `http` until the garage soak (step 7) is done: the original plan; the owner chose not to wait.
+- Keep the default `http` until the demo soak (step 7) is done: the original plan; the owner chose not to wait.
 - Strict `session` everywhere, including hosts where none can exist: such hosts would send nothing after the upgrade until someone set `http` by hand. Rejected by the owner in favour of point 4.
 
 ## References

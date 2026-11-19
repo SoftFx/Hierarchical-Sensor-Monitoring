@@ -283,8 +283,8 @@ mod tests {
         let mut naming = Naming::default();
         assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
         assert_eq!(
-            naming.node(&key("lingua-ci", "runner-heavy")),
-            "Docker/lingua-ci/runner-heavy"
+            naming.node(&key("lumina-ci", "runner-heavy")),
+            "Docker/lumina-ci/runner-heavy"
         );
     }
 
@@ -401,17 +401,17 @@ mod tests {
     #[test]
     fn exclude_patterns_match_segment_wise() {
         let portainer = key("portainer", "portainer");
-        let janitor = key("lingua-ci", "janitor");
+        let janitor = key("lumina-ci", "janitor");
         assert!(matches_pattern("portainer/*", &portainer));
         assert!(matches_pattern("*/portainer", &portainer));
-        assert!(matches_pattern("lingua-ci/janitor", &janitor));
-        assert!(matches_pattern("lingua-ci/*tor", &janitor));
+        assert!(matches_pattern("lumina-ci/janitor", &janitor));
+        assert!(matches_pattern("lumina-ci/*tor", &janitor));
         assert!(matches_pattern("*/*", &janitor));
         assert!(
-            !matches_pattern("lingua/*", &janitor),
+            !matches_pattern("lumina/*", &janitor),
             "a project prefix is not a match"
         );
-        assert!(!matches_pattern("lingua-ci/jan", &janitor));
+        assert!(!matches_pattern("lumina-ci/jan", &janitor));
         assert!(!matches_pattern("*", &janitor), "no '/', no match");
         assert!(matches_pattern(
             "_standalone/adhoc",
@@ -427,7 +427,7 @@ mod tests {
     fn same_service_name_in_two_projects_is_not_a_collision() {
         let mut naming = Naming::default();
         assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
-        assert_eq!(naming.node(&key("lingua", "db")), "Docker/lingua/db");
+        assert_eq!(naming.node(&key("lumina", "db")), "Docker/lumina/db");
     }
 
     fn summary(name: &str, labels: &[(&str, &str)]) -> ContainerSummary {

@@ -60,7 +60,7 @@ fake Sensor API, and every `/commands` registration and `/list` value was captur
 the managed collector from `src/collector` via `collector.Unix.AddAllDefaultSensors(new Version(0,1,0))`
 on .NET 8; the probe via `probe::tests::parity_capture` (an `#[ignore]`d audit test — rerun it with
 `HSM_PARITY_ADDRESS`/`HSM_PARITY_PORT` set) linked against the #1414 collector (`4889f3f`,
-collector 0.7.0) with `linux-default-sensors` on — the build the garage-server trial ran.
+collector 0.7.0) with `linux-default-sensors` on — the build the demo-server trial ran.
 
 **Registration is byte-identical** for all 15 shared paths: `SensorType`, `OriginalUnit`,
 `DisplayUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `Statistics`, `AggregateData`, `EnableGrafana`,
@@ -120,8 +120,8 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 Sensors that exist **only in this probe** (owner decisions of 2026-09-24/29, #1476, #1481, #1416).
 They are pinned separately from the parity set by
 `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` (`PROBE_ONLY_SET` +
-`DISKS_GARAGE_SET` + `DOCKER_GARAGE_SET` + `NETWORK_SET`, nothing more, nothing less, the disks and Docker sets
-built from garage-server captures), and their registration shape and alerts by
+`DISKS_DEMO_SET` + `DOCKER_DEMO_SET` + `NETWORK_SET`, nothing more, nothing less, the disks and Docker sets
+built from demo-server captures), and their registration shape and alerts by
 `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts` and
 `docker::tests::prime_registers_the_whole_tree_before_start_with_alerts`.
 
@@ -134,7 +134,7 @@ turns the sensor to Timeout on the server instead of leaving its last value look
 **Sampling cadences** (owner decision 2026-10-05): Docker stats and `CPU temperature` are sampled
 **once a minute** (5 s before), because their samples only feed 5-minute bars — the records/day do
 not change, the bars hold 5 samples instead of 60 — while at 5 s the Docker Engine API was asked
-eleven times every 5 seconds on garage-server (one stats call per running container); the disk
+eleven times every 5 seconds on demo-server (one stats call per running container); the disk
 counters stay at 5 s (`DISK_SAMPLE_PERIOD`: a local `/proc/diskstats` read that costs nothing and
 also drives the daily write/read totals), as do top-CPU (60 s), the top disk I/O helper (60 s, advanced, opt-in), the shared collector's own bars,
 the heartbeat and the dispatch, which this decision did not touch.
@@ -188,7 +188,7 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 | `Read per day on <name> disk` | as `Written per day` | as `Written per day`, posted with it | **26 h** | — | Σ Δ `/proc/diskstats` **sectors read** × 512, from the same line of the same 5-s reads (#1506); registered wherever `Written per day` is |
 
 **Cost:** ≈ 288 × 5 + 2 ≈ **1 440 records/day per filesystem** (`Written per day`, `Read per
-day`: 1/day each); garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 770/day.
+day`: 1/day each); demo-server has four (`root`, `wdisk`, `mediastore`, `oldlinux`) ≈ 5 770/day.
 
 **Written per day — the midnight rules** (#1498; until 0.6.1 this was `Written today`, posted
 every 5 minutes — those nodes are stale history since). Each 5-s sample adds the disk's delta to
@@ -228,7 +228,7 @@ Disks not seen for more than a day are dropped from the file. One case cannot
 be told apart: a removable disk without a WWID or serial swapped, within one boot, for another
 such disk at the same mount point — both identities are that mount point, so the second continues
 the first one's day. Two filesystems
-on one disk (`mediacentr`, `oldlinux` on `sdb`) both report that disk's total, and their
+on one disk (`mediastore`, `oldlinux` on `sdb`) both report that disk's total, and their
 descriptions say so.
 
 **Read per day** (#1506) is the exact mirror for the bytes read: the "sectors read" field of the
@@ -248,8 +248,8 @@ is logged once per disk, in **one line naming both totals** (`its measured 1.024
 Mounts of one source device — bind mounts, sub-directory mounts, the read-only re-mounts systemd
 adds in the service's namespace — are **one** filesystem (a mount hidden under a later mount on the
 same path is ignored: `statvfs` only reaches the one on top), reported at a whole-filesystem mount
-(`root` field `/`) when there is one, then the shortest mount point: on garage-server
-`/mnt/.rw/wd4tb`, `/mnt/wd4tb` and `/mnt/wd4tb/backup` (all `/dev/sda2`) are one `wd4tb`. Once
+(`root` field `/`) when there is one, then the shortest mount point: on demo-server
+`/mnt/.rw/wdisk`, `/mnt/wdisk` and `/mnt/wdisk/backup` (all `/dev/sda2`) are one `wdisk`. Once
 reported, a mount point is kept while its device stays mounted there — another mount of the same
 device appearing elsewhere (a backup script mounting it at a shorter path) does not move it. The set is
 resolved before the collector starts and **re-scanned every 10 minutes**: a new filesystem
@@ -266,26 +266,26 @@ on a host that auto-mounts removable media under per-volume paths (`/media/<user
 
 **Known gap — a separate `/home` (or `/root`).** The unit's `ProtectHome=yes` makes `/home`,
 `/root` and `/run/user` inaccessible in the service's namespace: systemd first **unmounts**
-everything there and then over-mounts an inaccessible node (verified on garage-server with
+everything there and then over-mounts an inaccessible node (verified on demo-server with
 `systemd-run -p InaccessiblePaths=/run/lock`: the original mount is gone from the unit's
 mountinfo). So a real filesystem mounted there does not exist for the probe and is not reported.
 The probe names it with one WARN line when `/etc/fstab` lists a real filesystem at or below such
 a path (a filesystem mounted by other means — a mount unit, a script — cannot be seen at all). On such a host, `ProtectHome=read-only`
 in a drop-in makes it visible (read-only; the probe never reads anything under a mount) — a
-hardening trade-off left to the operator. garage-server has no separate `/home`.
+hardening trade-off left to the operator. demo-server has no separate `/home`.
 
 **Which disk the write speed is read from** (`probe_only/disks/diskstats.rs`): the mount's
 `major:minor` in `/sys/dev/block/` (falling back to the source's name in `/sys/class/block/`); a
 partition is replaced by its parent disk (`sda2` → `sda`). Two filesystems on one disk
-(`mediacentr` on `sdb1` and `oldlinux` on `sdb5`) both carry that disk's number, and the
+(`mediastore` on `sdb1` and `oldlinux` on `sdb5`) both carry that disk's number, and the
 description says so. The first sample, a counter that went backwards and an implausible interval
 (under 2.5 s or over 15 s) only set the baseline — never a 0.
 
 **What is read — and what never is.** `/proc/self/mountinfo`, `statvfs(2)` of each reported mount
 point, sysfs `uevent` files and `/proc/diskstats`. Nothing under a mount is ever opened, listed or
-read. `statvfs` is answered from the superblock: **measured on garage-server (2026-09-29)**, it did
+read. `statvfs` is answered from the superblock: **measured on demo-server (2026-09-29)**, it did
 not wake the sleeping archive disks — `smartctl -n standby` reported both in STANDBY before, 5 s
-after and 35 s after `statvfs` on the FUSE-NTFS `/mnt/wd4tb` and `/mnt/mediacentr` and the ext4
+after and 35 s after `statvfs` on the FUSE-NTFS `/mnt/wdisk` and `/mnt/mediastore` and the ext4
 `/mnt/oldlinux`. So the archives are polled directly every 5 minutes; the earlier plan of reading
 their free space from a backup-snapshot file is dropped.
 
@@ -397,7 +397,7 @@ Behavior at the edges:
   monitored`). A service the state remembers that is now excluded is dropped from the state at
   start (no `Stopped`, no alert). Only an exclude list: whatever is not excluded is monitored.
 - **Completed one-shot jobs** (owner decision): a Compose service whose containers have all exited
-  with code 0 under restart policy `no` (garage's `lingua-ci/ci-image`, an image build) is a job
+  with code 0 under restart policy `no` (demo's `lumina-ci/ci-image`, an image build) is a job
   that finished, not a service that stopped — no sensors, one INFO line
   (`<project>/<service>: completed job (exit 0, no restart policy), not monitored`), no config
   knob. Once such a service has a running container it is a service from then on (remembered in
@@ -445,7 +445,7 @@ postrm removes it on remove/purge. After installing Docker on a host that
 already runs the probe: `sudo /usr/lib/hsm-linux-probe/docker-access.sh install && sudo systemctl
 daemon-reload && sudo systemctl restart hsm-linux-probe`.
 
-**Tests** run on captures from garage-server (Docker 26.1.5, API 1.45, 12 containers in 6 Compose
+**Tests** run on captures from demo-server (Docker 26.1.5, API 1.45, 12 containers in 6 Compose
 projects) under `hsm-linux-probe/fixtures/docker/`: the listing, the inspects (trimmed to the
 fields the probe reads — `Config.Env` and mounts dropped), two stats rounds 5.3 s apart, and three
 raw HTTP responses (chunked, `Content-Length`, 404) byte for byte.
@@ -925,11 +925,11 @@ hsm-linux-probe-io`, and `ls -l /run/hsm-linux-probe-io/` (the snapshot's age: `
 `wall_ms`). A snapshot with no readable counters at all (a kernel without task I/O accounting, or a
 helper stripped of its capabilities — it logs that itself once) is one ERROR until it recovers.
 
-**Cost** (measured on garage-server, 2026-10-13): 203 processes; reading every `/proc/<pid>/io`
+**Cost** (measured on demo-server, 2026-10-13): 203 processes; reading every `/proc/<pid>/io`
 costs 2.9 ms of CPU and every `/proc/<pid>/stat` 3.5 ms (Python) — at the 60 s cadence ≈ 0.005 % of
 one core, now spent in the helper; the snapshot is ~10 KB on tmpfs (version 2 adds three numbers per
 line), read by the probe every 5 s. Since 0.10.0 the helper also reads every thread's
-`task/<tid>/io` — one more small read per thread, still procfs only (not re-measured on garage).
+`task/<tid>/io` — one more small read per thread, still procfs only (not re-measured on demo).
 The probe today uses 0.2 % CPU / 21 MB RSS. procfs only: no disk access. Records: one per minute
 per name in a top — at most `2 × count` × 1 440 ≈ 28 800/day at the defaults, in practice only the
 few processes above 1 MiB/s — plus at most `2 × count` per day.
@@ -942,7 +942,7 @@ src/probe-linux/
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
     src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/, top_disk_io/) and their threads
-    fixtures/docker/   Engine API captures from garage-server
+    fixtures/docker/   Engine API captures from demo-server
   hsm-linux-probe-io/  the root helper of top disk I/O (#1547): reads /proc/<pid>/{stat,io,task/*/io,exe}, writes
                        the snapshot; its library (stat parser, scan, reaper walk, snapshot format,
                        clocks) is shared with the probe
@@ -1171,7 +1171,7 @@ Placeholders only — **no secrets**:
 * `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
   (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`60`, 1–300; the bars stay
   5 minutes whatever it is; the state poll runs on the tick nearest every 60 s), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
-  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
+  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lumina-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
   **Upgrade note (0.8.1):** the default `samplePeriodSec` went from 5 to 60 (owner decision
   2026-10-05), but configs seeded from the skeleton of an earlier `.deb` spell out

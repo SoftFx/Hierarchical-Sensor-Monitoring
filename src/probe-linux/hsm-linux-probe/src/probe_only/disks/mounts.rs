@@ -336,18 +336,18 @@ pub fn name_key(fs: &Filesystem) -> String {
 pub mod tests {
     use super::*;
 
-    /// `/proc/<probe pid>/mountinfo` as the hsm-linux-probe service sees it on garage-server
+    /// `/proc/<probe pid>/mountinfo` as the hsm-linux-probe service sees it on demo-server
     /// (2026-09-29): its own namespace, with the read-only re-mounts and bind mounts systemd adds,
     /// the FUSE-NTFS archives mounted three times each, and Docker overlays (two kept of eleven).
-    pub const GARAGE_MOUNTINFO: &str = include_str!("fixtures/garage-mountinfo.txt");
+    pub const DEMO_MOUNTINFO: &str = include_str!("fixtures/demo-mountinfo.txt");
 
-    fn garage() -> Vec<Filesystem> {
-        real_filesystems(&parse_mountinfo(GARAGE_MOUNTINFO), &[])
+    fn demo() -> Vec<Filesystem> {
+        real_filesystems(&parse_mountinfo(DEMO_MOUNTINFO), &[])
     }
 
     #[test]
-    fn garage_has_four_real_filesystems_one_per_device() {
-        let filesystems = garage();
+    fn demo_has_four_real_filesystems_one_per_device() {
+        let filesystems = demo();
         let summary: Vec<(String, String, String)> = filesystems
             .iter()
             .map(|fs| {
@@ -364,11 +364,11 @@ pub mod tests {
                 ("/dev/sdc1".into(), "/".into(), "ext4".into()),
                 (
                     "/dev/sdb1".into(),
-                    "/mnt/mediacentr".into(),
+                    "/mnt/mediastore".into(),
                     "fuseblk".into()
                 ),
                 ("/dev/sdb5".into(), "/mnt/oldlinux".into(), "ext4".into()),
-                ("/dev/sda2".into(), "/mnt/wd4tb".into(), "fuseblk".into()),
+                ("/dev/sda2".into(), "/mnt/wdisk".into(), "fuseblk".into()),
             ]
         );
         // The root filesystem also backs the service's StateDirectory/LogsDirectory bind mounts.
@@ -376,8 +376,8 @@ pub mod tests {
         assert!(root
             .mount_points
             .contains(&PathBuf::from("/var/lib/hsm-linux-probe")));
-        // /mnt/.rw/wd4tb (3 segments) and /mnt/wd4tb/backup (a sub-directory mount) lose to
-        // /mnt/wd4tb.
+        // /mnt/.rw/wdisk (3 segments) and /mnt/wdisk/backup (a sub-directory mount) lose to
+        // /mnt/wdisk.
         assert_eq!(filesystems[3].mount_points.len(), 3);
         assert_eq!(filesystems[3].device, "8:2");
     }
@@ -421,7 +421,7 @@ pub mod tests {
 
     #[test]
     fn a_separate_home_hidden_by_protect_home_is_found_through_fstab() {
-        // Observed on garage-server with `systemd-run -p InaccessiblePaths=/run/lock`: the tmpfs
+        // Observed on demo-server with `systemd-run -p InaccessiblePaths=/run/lock`: the tmpfs
         // entry at /run/lock is gone from the unit's mountinfo, only the inaccessible node remains —
         // ProtectHome=yes does the same to /home, /root and /run/user.
         let fstab = "\
@@ -434,11 +434,11 @@ tmpfs         /home/cache     tmpfs   defaults          0 0
 ";
         // In the service's namespace: `/` and /srv/data are real, /home is only the inaccessible
         // node (the capture's own /home line), the ext4 /home entry is absent.
-        let mut text = GARAGE_MOUNTINFO.to_string();
+        let mut text = DEMO_MOUNTINFO.to_string();
         text.push_str("900 676 8:49 / /srv/data rw - xfs /dev/sdd1 rw\n");
         let hidden = fstab_hidden(fstab, &parse_mountinfo(&text));
         assert_eq!(hidden, vec![PathBuf::from("/home")]);
-        // Without a separate /home in fstab — garage-server — nothing is reported.
+        // Without a separate /home in fstab — demo-server — nothing is reported.
         assert!(fstab_hidden("UUID=x / ext4 defaults 0 1\n", &parse_mountinfo(&text)).is_empty());
     }
 
@@ -463,8 +463,8 @@ tmpfs         /home/cache     tmpfs   defaults          0 0
             hidden_filesystems(&parse_mountinfo(text)),
             vec![PathBuf::from("/data"), PathBuf::from("/media/usb")]
         );
-        // On garage-server nothing real is hidden (its /home is a directory on `/`).
-        assert!(hidden_filesystems(&parse_mountinfo(GARAGE_MOUNTINFO)).is_empty());
+        // On demo-server nothing real is hidden (its /home is a directory on `/`).
+        assert!(hidden_filesystems(&parse_mountinfo(DEMO_MOUNTINFO)).is_empty());
         let mut names = BTreeMap::new();
         assign_names(&filesystems, &mut names);
         assert_eq!(names["/media/usb"], "usb");
@@ -495,20 +495,20 @@ tmpfs         /home/cache     tmpfs   defaults          0 0
 
     #[test]
     fn exclude_patterns_match_the_reported_mount_point() {
-        let mounts = parse_mountinfo(GARAGE_MOUNTINFO);
-        let filesystems = real_filesystems(&mounts, &["/mnt/wd4*".into(), "/mnt/oldlinux".into()]);
+        let mounts = parse_mountinfo(DEMO_MOUNTINFO);
+        let filesystems = real_filesystems(&mounts, &["/mnt/wd*".into(), "/mnt/oldlinux".into()]);
         let points: Vec<String> = filesystems
             .iter()
             .map(|fs| fs.mount_point.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(points, vec!["/", "/mnt/mediacentr"]);
+        assert_eq!(points, vec!["/", "/mnt/mediastore"]);
     }
 
     #[test]
     fn a_reported_mount_point_is_kept_while_its_device_stays_mounted_there() {
-        // A backup script mounts the mediacentr archive at a shorter path as well.
+        // A backup script mounts the mediastore archive at a shorter path as well.
         let text = format!(
-            "{GARAGE_MOUNTINFO}900 1 8:17 / /backup ro,nosuid,noatime - fuseblk /dev/sdb1 rw
+            "{DEMO_MOUNTINFO}900 1 8:17 / /backup ro,nosuid,noatime - fuseblk /dev/sdb1 rw
 "
         );
         let mounts = parse_mountinfo(&text);
@@ -523,33 +523,33 @@ tmpfs         /home/cache     tmpfs   defaults          0 0
             point_of_sdb1(real_filesystems(&mounts, &[])),
             Some(PathBuf::from("/backup"))
         );
-        // Already reported at /mnt/mediacentr: it stays there, its sensors keep their name.
-        let keep: BTreeSet<PathBuf> = [PathBuf::from("/mnt/mediacentr")].into();
+        // Already reported at /mnt/mediastore: it stays there, its sensors keep their name.
+        let keep: BTreeSet<PathBuf> = [PathBuf::from("/mnt/mediastore")].into();
         assert_eq!(
             point_of_sdb1(real_filesystems_keeping(&mounts, &[], &keep)),
-            Some(PathBuf::from("/mnt/mediacentr"))
+            Some(PathBuf::from("/mnt/mediastore"))
         );
     }
 
     #[test]
     fn globs() {
-        assert!(glob_matches("/mnt/*", "/mnt/wd4tb"));
+        assert!(glob_matches("/mnt/*", "/mnt/wdisk"));
         assert!(glob_matches("/mnt/*", "/mnt/a/b"));
         assert!(glob_matches("*", "/"));
-        assert!(glob_matches("/mnt/*tb", "/mnt/wd4tb"));
-        assert!(glob_matches("/mnt/wd4tb", "/mnt/wd4tb"));
-        assert!(!glob_matches("/mnt/wd4tb", "/mnt/wd4tb2"));
+        assert!(glob_matches("/mnt/*sk", "/mnt/wdisk"));
+        assert!(glob_matches("/mnt/wdisk", "/mnt/wdisk"));
+        assert!(!glob_matches("/mnt/wdisk", "/mnt/wdisk2"));
         assert!(!glob_matches("/mnt/*/x", "/mnt/a"));
         assert!(glob_matches("*a*b*", "xaybz"));
     }
 
     #[test]
-    fn garage_names_are_root_and_last_segments() {
+    fn demo_names_are_root_and_last_segments() {
         let mut names = BTreeMap::new();
-        assign_names(&garage(), &mut names);
+        assign_names(&demo(), &mut names);
         assert_eq!(names["/"], "root");
-        assert_eq!(names["/mnt/wd4tb"], "wd4tb");
-        assert_eq!(names["/mnt/mediacentr"], "mediacentr");
+        assert_eq!(names["/mnt/wdisk"], "wdisk");
+        assert_eq!(names["/mnt/mediastore"], "mediastore");
         assert_eq!(names["/mnt/oldlinux"], "oldlinux");
         assert_eq!(names.len(), 4);
     }
