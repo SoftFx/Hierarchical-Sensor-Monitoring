@@ -193,8 +193,9 @@ public sealed partial class HistorySealingJobTests
         AssertSameHistory("removed after the finished tail");
     }
 
-    // A tail that cannot be finished (hsm-sealing cannot be deleted): no overlay row of the week is deleted, the week is
-    // reported. Fails if the guard before each overlay-delete step is removed.
+    // A tail that cannot be finished: every directory sync of this week's chunk directory fails (the static test seam
+    // DurableFile.FailSync, the same on every platform). No overlay row of the week is deleted and the week is reported.
+    // Fails if the check that the tail is finished and durable before a removal begins is removed.
     [Fact]
     public void AnUnfinishableSealTail_RefusesEveryOverlayDelete()
     {
@@ -203,28 +204,53 @@ public sealed partial class HistorySealingJobTests
 
         CrashAt(SealingCheckpoints.SealBeforeTail, 1);
         Assert.Equal(HistorySealingOutcome.Failed, Pass(SealTime).Outcome);
+        Restart();
 
-        var sealing = Path.Combine(SealedPath(), SealedWeekStages.SealingFileName);
+        var chunkDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(SealedPath()));
+        var sealing = Path.Combine(chunkDirectory, SealedWeekStages.SealingFileName);
+        var keep = Path.Combine(chunkDirectory, SealedWeekStages.KeepSourceRowsUntilFileName);
 
-        Restart(() => File.SetAttributes(sealing, FileAttributes.ReadOnly));
+        Assert.True(File.Exists(sealing));
+        Assert.False(File.Exists(keep));
+
+        DurableFile.FailSync = directory => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)), chunkDirectory, StringComparison.Ordinal);
 
         try
         {
             var overlay = OverlayRows();
 
-            Assert.Equal(HistorySealingAction.RemoveSourceRows, Pass(AfterKeep).Action); // the older week
+            // The first pass writes the keep file but cannot sync it, and leaves hsm-sealing; it removes the older week's rows.
+            Assert.Equal(HistorySealingAction.RemoveSourceRows, Pass(AfterKeep).Action);
+            Assert.True(File.Exists(sealing));
+            Assert.True(File.Exists(keep));
 
+            // The next one deletes hsm-sealing but cannot make that durable: the removal of this week is refused.
             var removal = Pass(AfterKeep);
             Assert.Equal((HistorySealingAction.RemoveSourceRows, HistorySealingOutcome.Failed), (removal.Action, removal.Outcome));
             Assert.True(removal.WeeksNeedingAttention.ContainsKey(WeekName()));
             Assert.Equal(overlay, OverlayRows());
-            Assert.True(File.Exists(sealing));
+
+            // And on every later attempt, while the syncs keep failing.
+            var retry = Pass(AfterKeep + HistorySealingPlanner.FailureBackoff);
+            Assert.Equal((HistorySealingAction.RemoveSourceRows, HistorySealingOutcome.Failed), (retry.Action, retry.Outcome));
+            Assert.Equal(overlay, OverlayRows());
+
+            // The directory: still sealed, the keep file written, hsm-sealing gone (not durably), no removal marker.
+            Assert.True(SealedWeekMarker.ExistsIn(chunkDirectory));
+            Assert.False(File.Exists(sealing));
+            Assert.True(File.Exists(keep));
+            Assert.False(File.Exists(Path.Combine(chunkDirectory, SealedWeekStages.SourceRowsRemovedFileName)));
             AssertSameHistory("an unfinishable seal tail");
         }
         finally
         {
-            File.SetAttributes(sealing, FileAttributes.Normal);
+            DurableFile.FailSync = null;
         }
+
+        // Once the syncs work again the removal goes through.
+        var done = Pass(AfterKeep + 2 * HistorySealingPlanner.FailureBackoff);
+        Assert.Equal((HistorySealingAction.RemoveSourceRows, HistorySealingOutcome.Done), (done.Action, done.Outcome));
+        AssertSameHistory("removed once the tail was finished");
     }
 
     #endregion
