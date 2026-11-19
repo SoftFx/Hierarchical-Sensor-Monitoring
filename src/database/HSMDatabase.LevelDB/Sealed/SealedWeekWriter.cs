@@ -37,6 +37,12 @@ namespace HSMDatabase.LevelDB.Sealed
         /// </summary>
         public static SealedWeekWriter Open(string sealedPath)
         {
+            // Open deletes the directory it is given: anything but a sealed week's chunk directory is refused before
+            // it is touched (the week's row database, the database folder).
+            var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sealedPath)));
+            if (!name.StartsWith(SealedWeekMarker.DirectoryPrefix + "_", StringComparison.Ordinal))
+                throw new ArgumentException($"{sealedPath} is not a sealed week directory ({SealedWeekMarker.DirectoryPrefix}_<from>_<to>)", nameof(sealedPath));
+
             if (SealedWeekMarker.ExistsIn(sealedPath))
                 throw new InvalidOperationException($"{sealedPath} is already a complete sealed week");
 

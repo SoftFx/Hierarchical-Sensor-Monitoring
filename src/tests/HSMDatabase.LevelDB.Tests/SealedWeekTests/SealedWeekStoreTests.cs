@@ -359,6 +359,32 @@ public sealed class SealedWeekStoreTests
         }
     }
 
+    // Open deletes what an interrupted seal left; handed another directory by mistake (the row database, the
+    // database folder) it must touch nothing.
+    [Theory]
+    [InlineData("SensorValuesV2_1_2")]
+    [InlineData("Databases")]
+    [InlineData("SensorValuesSealedV1")]
+    public void Writer_RefusesADirectoryThatIsNotASealedWeekDirectory(string name)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"hsm-1803-{Guid.NewGuid():N}");
+        var directory = Path.Combine(root, name);
+        var file = Path.Combine(directory, "data.ldb");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(file, "not a chunk database");
+
+            Assert.Throws<ArgumentException>(() => SealedWeekWriter.Open(directory));
+            Assert.True(File.Exists(file));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void Writer_RefusesAWeekThatIsAlreadySealed()
     {
