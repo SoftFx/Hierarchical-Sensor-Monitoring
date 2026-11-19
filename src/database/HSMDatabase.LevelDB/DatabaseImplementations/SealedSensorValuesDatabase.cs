@@ -112,9 +112,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
         {
+            MergedRowCursor cursor = null;
+
             try
             {
-                using var cursor = OpenCursor();
+                cursor = OpenCursor();
 
                 foreach (var (key, value) in keyValuePairs)
                 {
@@ -123,30 +125,50 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     if (latestValue != null || To < from)
                         continue;
 
-                    if (toKey.Length == KeyOrder.KeyLength && toKey.StartsWith(key))
-                    {
-                        // The row database walks every row from the sensor's first one up to toKey and keeps the
-                        // last; with toKey inside the sensor's key range that is the last row before toKey.
-                        cursor.Seek(toKey);
+                    byte[] latest = null;
 
-                        if (cursor.IsValid)
-                            cursor.Prev();
+                    try
+                    {
+                        if (toKey.Length == KeyOrder.KeyLength && toKey.StartsWith(key))
+                        {
+                            // The row database walks every row from the sensor's first one up to toKey and keeps the
+                            // last; with toKey inside the sensor's key range that is the last row before toKey.
+                            cursor.Seek(toKey);
+
+                            if (cursor.IsValid)
+                                cursor.Prev();
+                            else
+                                cursor.SeekToLast();
+
+                            if (cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey))
+                                latest = cursor.Value;
+                        }
                         else
-                            cursor.SeekToLast();
-
-                        if (cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey))
-                            keyValuePairs[key] = (from, toKey, cursor.Value);
+                        {
+                            for (cursor.Seek(key); cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey); cursor.Next())
+                                latest = cursor.Value;
+                        }
                     }
-                    else
+                    catch (SealedChunkReadException)
                     {
-                        for (cursor.Seek(key); cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey); cursor.Next())
-                            keyValuePairs[key] = (from, toKey, cursor.Value);
+                        // Already logged and counted. Only this sensor goes without a value from this week; the
+                        // cursor may have stopped anywhere, so the next sensor gets a fresh one.
+                        cursor.Dispose();
+                        cursor = OpenCursor();
+                        continue;
                     }
+
+                    if (latest is not null)
+                        keyValuePairs[key] = (from, toKey, latest);
                 }
             }
             catch (Exception e)
             {
                 _logger.Error(e, "Failed to fill sensors latest values");
+            }
+            finally
+            {
+                cursor?.Dispose();
             }
         }
 
@@ -216,14 +238,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
         {
+            results ??= new Dictionary<Guid, (byte[], byte[])>();
+            MergedRowCursor cursor = null;
+
             try
             {
-                results ??= new Dictionary<Guid, (byte[], byte[])>();
-
                 if (!sensorIds.Any())
                     return results;
 
-                using var cursor = OpenCursor();
+                cursor = OpenCursor();
 
                 foreach (var sensorId in sensorIds)
                 {
@@ -236,27 +259,38 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                     var firstAlreadyKnown = results.TryGetValue(sensorId, out var existing) && existing.Item1 != null;
 
-                    if (!firstAlreadyKnown)
+                    try
                     {
-                        cursor.Seek(minKey.ToBytes());
+                        if (!firstAlreadyKnown)
+                        {
+                            cursor.Seek(minKey.ToBytes());
+
+                            if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                                currentFirstValue = cursor.Value;
+                        }
+
+                        // As in the row database: a seek past the end finds no last value (it does not fall back to the last key).
+                        cursor.Seek(maxKey.ToBytes());
 
                         if (cursor.IsValid && StartsWith(cursor, prefixBytes))
-                            currentFirstValue = cursor.Value;
-                    }
-
-                    // As in the row database: a seek past the end finds no last value (it does not fall back to the last key).
-                    cursor.Seek(maxKey.ToBytes());
-
-                    if (cursor.IsValid && StartsWith(cursor, prefixBytes))
-                    {
-                        currentLastValue = cursor.Value;
-                    }
-                    else if (cursor.IsValid)
-                    {
-                        cursor.Prev();
-
-                        if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                        {
                             currentLastValue = cursor.Value;
+                        }
+                        else if (cursor.IsValid)
+                        {
+                            cursor.Prev();
+
+                            if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                                currentLastValue = cursor.Value;
+                        }
+                    }
+                    catch (SealedChunkReadException)
+                    {
+                        // Already logged and counted. This sensor keeps what the caller had for it; the others go on
+                        // with a fresh cursor.
+                        cursor.Dispose();
+                        cursor = OpenCursor();
+                        continue;
                     }
 
                     if (results.TryGetValue(sensorId, out existing))
@@ -269,8 +303,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
+                // Unlike the row worker, which returns an empty dictionary here: what the caller accumulated from
+                // other weeks is kept.
                 _logger.Error($"Failed getting latest values - {e.Message}");
-                return new Dictionary<Guid, (byte[], byte[])>();
+                return results;
+            }
+            finally
+            {
+                cursor?.Dispose();
             }
         }
 

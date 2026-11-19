@@ -127,6 +127,52 @@ public sealed class SealedWeekStoreTests
     }
 
     [Fact]
+    public void CorruptChunk_CostsOnlyItsOwnSensorTheStartupValues()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(20));
+
+        using var pair = WeekPair.Create(seed, beforeOpen: p => CorruptChunk(p, DenseChunks(p, sensors.Dense)[2]));
+
+        var store = pair.SealedStore;
+        var others = sensors.All.Where(s => s != sensors.Dense).ToList();
+
+        // Latest values: the dense sensor is left unfilled, every other sensor is filled.
+        Dictionary<byte[], (long, byte[], byte[])> Request() =>
+            sensors.All.ToDictionary(id => new DbKey(id, 0).ToPrefixBytes(), id => (0L, new DbKey(id, DateTime.MaxValue.Ticks).ToBytes(), (byte[])null));
+
+        var plainFill = Request();
+        var sealedFill = Request();
+        pair.Plain.FillLatestValues(plainFill);
+        store.FillLatestValues(sealedFill);
+
+        foreach (var id in sensors.All)
+        {
+            var prefix = new DbKey(id, 0).ToPrefixBytes();
+            var expected = plainFill.Single(kv => kv.Key.AsSpan().SequenceEqual(prefix)).Value.Item3;
+            var actual = sealedFill.Single(kv => kv.Key.AsSpan().SequenceEqual(prefix)).Value.Item3;
+
+            if (id == sensors.Dense)
+                Assert.Null(actual);
+            else
+                pair.Compare.Value(expected, actual, $"latest of {id}");
+        }
+
+        // First and last values: what the caller accumulated from other weeks is kept, every other sensor is answered.
+        var fromOtherWeeks = new Dictionary<Guid, (byte[], byte[])> { [sensors.Dense] = ([1], [2]), [Guid.NewGuid()] = ([3], [4]) };
+        var expectedOthers = pair.Plain.GetLastAndFirstValues(others);
+        var result = store.GetLastAndFirstValues(sensors.All, fromOtherWeeks);
+
+        Assert.Same(fromOtherWeeks, result);
+        Assert.Equal([1], result[sensors.Dense].Item1);
+        Assert.Equal([2], result[sensors.Dense].Item2);
+        foreach (var (id, (first, last)) in expectedOthers)
+        {
+            pair.Compare.Value(first, result[id].Item1, $"first of {id}");
+            pair.Compare.Value(last, result[id].Item2, $"last of {id}");
+        }
+    }
+
+    [Fact]
     public void CorruptLastChunk_IsDeletedByARetentionDeleteThatReachesTheEndOfTheWeek()
     {
         var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(19));
