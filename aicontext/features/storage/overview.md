@@ -1,6 +1,6 @@
 # Storage Features Overview
 
-> Owner: storage | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: storage | Last reviewed: 2026-11-19 | Canonical: yes
 
 The storage area owns LevelDB/LMDB-backed persistence, key formats, value
 serialization, snapshots, journals, interval data, retention, and restart

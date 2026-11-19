@@ -97,7 +97,7 @@ This document records what was measured, what follows from it, and the direction
 | ClickHouse + decimal split + ms receiving time | 12.6 | — | — | — |
 | TimescaleDB, uncompressed / compressed | 191.2 / 18.2 | 18.9 / 13.3 | 258 | 253 / 225 |
 | TimescaleDB compressed + decimal split + ms receiving time | 11.3 | — | — | — |
-| QuestDB, closed native partitions / converted to Parquet | 230.5 / 21.7 | 18.8 | 924 | 924 |
+| QuestDB, closed native partitions (21.7 after conversion to Parquet, not timed) | 230.5 | 18.8 | 924 | 924 |
 
 Rows marked "ms receiving time" lose sub-millisecond precision of `ReceivingTime` only; everything else in them is exact. The chunked stores hold sealed data, so single-value writes do not apply to them: current data stays in plain LevelDB rows.
 
@@ -127,7 +127,7 @@ Deletes need compaction to free space: deleting three days of every sensor grew 
 
 ### Parquet
 
-Parquet is the best of the standard formats by size (13.3–13.7 B/row), but it is a file format, not a database: files are immutable, so it can only hold closed periods. Read through DuckDB, every query has a floor of about 9–13 ms; the start-up loop over all sensors takes 4.6 s against 13.7 ms for LevelDB. Smaller row groups made reads slower. Two thirds of the file is the two timestamp columns.
+Parquet is the best of the standard formats by size (13.3–13.7 B/row), but it is a file format, not a database: files are immutable, so it can only hold closed periods. Read through DuckDB, every query has a floor of about 9–13 ms; the start-up loop over all sensors takes 4.6 s against 13.7 ms for LevelDB. Smaller row groups made reads slower. The two timestamp columns are 60% of the file.
 
 With the same transforms as the chunk codec below (doubles split into decimal mantissa and exponent, receiving time as a millisecond delta, bar open and close as differences) the file is 10.4 B/row. Q2 then takes 31.7 ms: 17.5 ms to read the stored columns and the rest to rebuild bar open and close with window functions.
 
@@ -186,7 +186,7 @@ The store keeps LevelDB and replaces one row per value with one chunk per sensor
 | Bar open / close | 40.0 | — | 1.5 |
 
 - When a double changes, 47–53 of its 52 mantissa bits change, so XOR with the previous value saves little.
-- Where the collector writes rounded decimals (bars, Double, EMA fields), scaling to an integer and coding the difference takes single-digit bits. The integer coder picks raw values, the first difference or the second difference (delta-of-delta) per chunk: the second difference wins for bar open times and EMA, the first for bar counts and means.
+- Where the stored values are rounded decimals (bars, Double, EMA fields), scaling to an integer and coding the difference takes single-digit bits. The integer coder picks raw values, the first difference or the second difference (delta-of-delta) per chunk: the second difference wins for bar open times and EMA, the first for bar counts and means.
 - Rate values are computed ratios such as `0.29124565993142887`. They do not scale to integers, and Rate is 61% of all rows.
 - Predicting a field from another field of the same row adds little: a bar's `min` equals the previous `min` in 65% of rows and the `mean` of the same row in 41%. The useful cross-field relations are structural: a bar's open equals the previous close in 99.4% of rows, and the bar length is constant.
 - zstd over already-encoded hourly chunks makes the store larger; over week chunks it helps.
@@ -236,7 +236,7 @@ Bits per value at week chunks, with zstd in brackets where it helps:
 | DoubleBar mean | 6.5 | 5.1 | 5.9 | 6.5 | 3.7 | 5.8 |
 | DoubleBar min / max | 3.9 / 5.7 | 3.3 / 5.1 | 3.6 / 5.5 | unchanged | 2.6 / 3.9 | unchanged |
 
-- Bar fields and Double EMA are already stored with two decimals by the collector, so rounding them gains almost nothing. The gain is in Rate and in plain Double values.
+- Bar fields already carry two decimals in this data, so rounding them gains almost nothing. The gain is in Rate, in plain Double values and, with significant digits, in Double EMA.
 - A fixed number of decimal places compresses better than significant digits but rounds small values to zero (relative error up to 1.0 for Rate and Double at one or two places).
 - Whole store with every double rounded: 5.5 B/row at 3 significant digits (relative error up to 0.5%), 5.7 B/row at 4 (up to 0.05%).
 
