@@ -86,10 +86,12 @@ This document records what was measured, what follows from it, and the direction
 | DuckDB, arrival order + primary key | 85.4 | 11.5 | — | 174 |
 | Parquet + zstd, sorted | 13.7 | 13.2 | immutable | immutable |
 | Parquet + decimal split + ms receiving time | 10.4 | 31.7 | immutable | immutable |
+| Parquet, standard encodings only, ms receiving time | 11.1 | — | immutable | immutable |
+| Same, doubles rounded to 3 significant digits (what-if) | 8.5 | 21.6 | immutable | immutable |
 | Chunked LevelDB, byte-aligned codec, hour chunks | 14.4 | 1.00 | — | — |
 | Chunked LevelDB, bit-level codec + zstd, week chunks | 9.5 | 0.92 | — | — |
 | Same, receiving time at 1 ms | 7.5 | 0.75 | — | — |
-| Same, doubles rounded to 4 significant digits (what-if) | 5.7 | 0.94 | — | — |
+| Same, doubles rounded to 3 significant digits (what-if) | 5.5 | 0.97 | — | — |
 | **External servers** | | | | |
 | VictoriaMetrics, value and status only | 5.1 | 13.1 | 445 | not last-write-wins |
 | VictoriaMetrics + VictoriaLogs, every field | 19.6 | 60.9 | — | not last-write-wins |
@@ -130,6 +132,22 @@ Deletes need compaction to free space: deleting three days of every sensor grew 
 Parquet is the best of the standard formats by size (13.3–13.7 B/row), but it is a file format, not a database: files are immutable, so it can only hold closed periods. Read through DuckDB, every query has a floor of about 9–13 ms; the start-up loop over all sensors takes 4.6 s against 13.7 ms for LevelDB. Smaller row groups made reads slower. The two timestamp columns are 60% of the file.
 
 With the same transforms as the chunk codec below (doubles split into decimal mantissa and exponent, receiving time as a millisecond delta, bar open and close as differences) the file is 10.4 B/row. Q2 then takes 31.7 ms: 17.5 ms to read the stored columns and the rest to rebuild bar open and close with window functions.
+
+**Closed weeks in Parquet with standard encodings only.** The owner's alternative to a codec of our own: keep the current week in LevelDB and write each closed week as one Parquet file, with no transform that needs our own code to read back. The files were written by DuckDB with `PARQUET_VERSION V2` and zstd, sorted by `(sensor_no, time_ticks)`.
+
+| File | B/row |
+|---|---|
+| Lossless | 13.3 |
+| Receiving time as a millisecond delta, the rest exact | 11.1 |
+| Also doubles as integers of `round(v × 1000)` (3 decimal places) | 9.3 |
+| Also doubles rounded to 3 significant digits, kept as doubles | 8.5 |
+
+- The writer chose dictionary encoding, not delta encoding, for the scaled integers, so storing doubles as integers did not bring the delta coder into play.
+- Readers, week of the dense sensor: DuckDB with its metadata cache 15.6–21.6 ms; Parquet.Net (pure managed) 89–96 ms with the default row groups of 122,880 rows and 19.8 ms with row groups of 5,000 rows. Smaller row groups help the managed reader and hurt DuckDB.
+- Start-up read of the latest value of every sensor: 11 ms as one pass with DuckDB, 2.1–34 s as a per-sensor loop depending on reader and row-group size.
+- Sealing a week (LevelDB rows to a sorted file): 1.2 s and 530 MiB of memory; at ×20, 13.8 s and 7.3 GiB with DuckDB unconstrained.
+- Retention is a rewrite of the file: 0.12–0.15 s at this size, 1.2–1.9 s and 3–4 GiB at ×20.
+- Late values: a read that merges the file with a LevelDB overlay holding 1% of the sensor's rows takes 20.8 ms against 17.3 ms for the file alone; the overlay row wins on an equal key.
 
 ### VictoriaMetrics and VictoriaLogs
 
@@ -238,7 +256,9 @@ Bits per value at week chunks, with zstd in brackets where it helps:
 
 - Bar fields already carry two decimals in this data, so rounding them gains almost nothing. The gain is in Rate, in plain Double values and, with significant digits, in Double EMA.
 - A fixed number of decimal places compresses better than significant digits but rounds small values to zero (relative error up to 1.0 for Rate and Double at one or two places).
-- Whole store with every double rounded: 5.5 B/row at 3 significant digits (relative error up to 0.5%), 5.7 B/row at 4 (up to 0.05%).
+- Whole store with every double rounded: 5.5 B/row at 3 significant digits (relative error up to 0.5%), 5.7 B/row at 4 (up to 0.05%), 5.6 B/row at 3 decimal places.
+- Three decimal places are not safe for Rate: no non-zero value became zero, but 45% of the non-zero Rate values moved by more than 1% and 22% by more than 10%. With three significant digits no value in any column moved by more than 1%.
+- After rounding, a Rate row is 33.5 bits, of which the value is about 3 and the two timestamps are the rest.
 
 ### ClickHouse
 
@@ -287,7 +307,8 @@ Hypertable on the integer tick dimension, weekly chunks, unique index on `(senso
 5. DuckDB does not fit as the primary store: slow single-row writes and rewrites, deletes that do not return space, and a file that is not much smaller.
 6. VictoriaMetrics and Prometheus are small only for what they are built for: an unchanged number on a regular grid. On this data, with every field kept, VictoriaMetrics is larger than the alternatives, rounds doubles, loses rows that share a millisecond, and cannot express "last write wins" or a range delete.
 7. Difference-based encoding gives no order of magnitude here, because timestamps are irregular at 100 ns precision and a changed double changes almost all of its mantissa. Decimal scaling is what compresses bars.
-8. After the values are encoded well, the timestamps dominate. Precision is the remaining lever: the receiving time at 1 ms takes the store from 9.5 to 7.5 B/row, and rounding Rate and Double values to four significant digits would take it to 5.7.
+8. Closed weeks in Parquet are a workable alternative to a codec of our own, at a cost: 8.5 against 5.5 B/row with the same rounding (11.1 against 7.5 without it), and 16–22 ms against 1 ms for a week of one sensor. The sealing job, the merged read and retention by rewrite are needed either way; Parquet replaces only the block encoder, and adds a reader dependency and a memory-hungry seal.
+9. After the values are encoded well, the timestamps dominate. Precision is the remaining lever: the receiving time at 1 ms takes the store from 9.5 to 7.5 B/row, and rounding Rate and Double values to four significant digits would take it to 5.7.
 
 ## Decisions (owner)
 
@@ -297,7 +318,7 @@ Hypertable on the integer tick dimension, weekly chunks, unique index on `(senso
 
 ## Proposed Direction
 
-Keep LevelDB and add a codec of our own for closed periods. The owner's reading of the results on 2026-11-19 is the same; it becomes a decision with an ADR.
+Keep LevelDB and add a codec of our own for closed periods. The owner's reading of the results on 2026-11-19 leans the same way, with closed weeks in Parquet as the alternative the owner raised for its lower implementation risk; the choice between the two is the subject of the ADR.
 
 1. Compact closed weekly shards automatically. It is the cheapest gain and changes no format.
 2. Seal closed periods into chunks on top of LevelDB: current data stays one row per value, so writes, rewrites and late values keep working; a background job re-encodes a closed period per sensor with the bit-level codec. Reads merge sealed chunks with any rows written into that period later.
@@ -310,7 +331,7 @@ Keep LevelDB and add a codec of our own for closed periods. The owner's reading 
 |---|---|---|
 | 1 | Confirm on a larger deployment | Size before and after `Compact()` on production data |
 | 2 | Scheduled compaction of closed weeks | No format change |
-| 3 | ADR: chunk format for sealed periods | Block layout, version, checksum, chunk period, precision of `ReceivingTime` |
+| 3 | ADR: format for sealed periods | Own chunk codec or Parquet; block layout, version, checksum, chunk period, precision of `ReceivingTime` |
 | 4 | Chunk codec and sealing job | Lossless round-trip tests over every value type |
 | 5 | Merged reads, retention and clear-history on sealed data | Includes sensor-move merge |
 | 6 | Rounding by kind of sensor | Needs the missing measurement and an owner decision |
