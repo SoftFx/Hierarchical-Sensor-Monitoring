@@ -48,7 +48,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Self-monitoring | The server watching itself: a dedicated product ("HSM Server Monitoring") where the server reports its own health and traffic the same way collectors report customer products. | The operator's surface for server-side performance questions; home of the token usage sensors. Say "self-monitoring", not "telemetry" (too generic) or "internal metrics". |
 | LevelDB storage | On-disk database implementation used by HSM. | Mention LMDB/native dependencies only when relevant. |
 | Snapshot | Persisted or cached representation of current tree/state. | Be explicit: tree snapshot, sensor snapshot, or database snapshot. |
-| History shard | The LevelDB database that holds one week of sensor history, one row per value (`SensorValuesV2_<from>_<to>`). | "Weekly shard" in older text. |
+| History shard | The weekly shard that holds sensor history, one row per value (`SensorValuesV2_<from>_<to>`). | See Weekly shard (added with #1801). |
 | Sealed week | A closed week whose sensor history has been encoded into chunks (ADR-0020). Not implemented yet. | The opposite is a week still held as rows. Do not call it "archived": the data stays online and readable. |
 | Chunk | A bounded run of one sensor's history rows encoded as one stored value in a sealed week. | Not a LevelDB block and not a Parquet row group. |
 | Overlay | The row database of a sealed week, holding what was written to that week after sealing. | On an equal key the overlay row wins over the chunk. |
