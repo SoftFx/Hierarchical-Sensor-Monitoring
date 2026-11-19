@@ -6,6 +6,12 @@ The storage area owns LevelDB/LMDB-backed persistence, key formats, value
 serialization, snapshots, journals, interval data, retention, and restart
 recovery behavior.
 
+## Feature Folders
+
+- [`sealed-history/`](sealed-history/feature.md) - chunk format of sealed sensor
+  history (ADR-0020): byte layout, fidelity rules, versioning, encoder refusals.
+- [`restore/`](restore/feature.md) - restore flow.
+
 ## Feature Folders To Add Here
 
 - `leveldb/` - database implementation, native dependencies, prefix layout.
