@@ -2,7 +2,7 @@
 
 > Owner: storage | Last reviewed: 2026-11-19 | Canonical: yes
 >
-> Status: measurement finished, direction proposed, no decision recorded yet. One breakdown is still missing: rounding by kind of sensor (CPU, disk, network), see "Not measured".
+> Status: measurement finished; the direction is decided in ADR-0020 and tracked in epic #1800. Nothing is implemented yet. One breakdown is still missing: rounding by kind of sensor (CPU, disk, network), see "Not measured".
 
 ## Problem
 
@@ -314,11 +314,14 @@ Hypertable on the integer tick dimension, weekly chunks, unique index on `(senso
 
 - 2026-11-19: `ReceivingTime` may be stored at millisecond precision. `Time` stays exact: it is part of the row key.
 - 2026-11-19: an external database server is acceptable; the store does not have to be embedded.
-- Not decided: rounding of stored values. It was measured as a what-if only.
+- 2026-11-19: LevelDB stays, with a codec of our own for closed weeks (ADR-0020). Closed weeks in Parquet were considered and not chosen.
+- 2026-11-19: no rounding of values in the first version; everything except `ReceivingTime` is exact. Rounding stays a what-if until it has its own decision.
+- 2026-11-19: existing history is sealed too, in the background, oldest week first.
+- 2026-11-19: source rows are kept for a configured number of weeks after a verified seal, then deleted.
 
 ## Proposed Direction
 
-Keep LevelDB and add a codec of our own for closed periods. The owner's reading of the results on 2026-11-19 leans the same way, with closed weeks in Parquet as the alternative the owner raised for its lower implementation risk; the choice between the two is the subject of the ADR.
+Keep LevelDB and add a codec of our own for closed periods. Decided on 2026-11-19 and recorded in `docs/decisions/0020-sealed-sensor-history.md`; closed weeks in Parquet, raised for their lower implementation risk, are an alternative considered there.
 
 1. Compact closed weekly shards automatically. It is the cheapest gain and changes no format.
 2. Seal closed periods into chunks on top of LevelDB: current data stays one row per value, so writes, rewrites and late values keep working; a background job re-encodes a closed period per sensor with the bit-level codec. Reads merge sealed chunks with any rows written into that period later.
@@ -327,14 +330,16 @@ Keep LevelDB and add a codec of our own for closed periods. The owner's reading 
 
 ## Work Breakdown
 
-| Step | Scope | Notes |
+Epic #1800, one PR per step.
+
+| Step | Issue | Scope |
 |---|---|---|
-| 1 | Confirm on a larger deployment | Size before and after `Compact()` on production data |
-| 2 | Scheduled compaction of closed weeks | No format change |
-| 3 | ADR: format for sealed periods | Own chunk codec or Parquet; block layout, version, checksum, chunk period, precision of `ReceivingTime` |
-| 4 | Chunk codec and sealing job | Lossless round-trip tests over every value type |
-| 5 | Merged reads, retention and clear-history on sealed data | Includes sensor-move merge |
-| 6 | Rounding by kind of sensor | Needs the missing measurement and an owner decision |
+| 0 | #1801 | Compact closed weekly shards automatically. Independent of the rest; includes the size check on a production database |
+| 1 | #1802 | Chunk codec library: all value types, round-trip and golden-file tests, chunk size fixed |
+| 2 | #1803 | Sealed week store and merged reads behind `ISensorValuesDatabase`; differential tests against a plain week |
+| 3 | #1804 | Sealing job: verification, keep period, delete and compact, configuration switch, self-monitoring sensors, unseal |
+| 4 | #1805 | Rollout on a test deployment, then production; decide the default |
+| — | not planned | Rounding by kind of sensor: needs the missing measurement and an owner decision |
 
 ## Risks
 
