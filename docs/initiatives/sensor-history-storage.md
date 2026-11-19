@@ -129,7 +129,7 @@ Deletes need compaction to free space: deleting three days of every sensor grew 
 
 ### Parquet
 
-Parquet is the best of the standard formats by size (13.3–13.7 B/row), but it is a file format, not a database: files are immutable, so it can only hold closed periods. Read through DuckDB, every query has a floor of about 9–13 ms; the start-up loop over all sensors takes 4.6 s against 13.7 ms for LevelDB. Smaller row groups made reads slower. The two timestamp columns are 60% of the file.
+Parquet is the best of the standard formats by size (13.3–13.7 B/row), but it is a file format, not a database: files are immutable, so it can only hold closed periods. Read through DuckDB, every query has a floor of about 9–13 ms; the start-up loop over all sensors takes 4.6 s against 13.7 ms for LevelDB. Smaller row groups made reads through DuckDB slower. The two timestamp columns are 60% of the file.
 
 With the same transforms as the chunk codec below (doubles split into decimal mantissa and exponent, receiving time as a millisecond delta, bar open and close as differences) the file is 10.4 B/row. Q2 then takes 31.7 ms: 17.5 ms to read the stored columns and the rest to rebuild bar open and close with window functions.
 
@@ -258,7 +258,7 @@ Bits per value at week chunks, with zstd in brackets where it helps:
 - A fixed number of decimal places compresses better than significant digits but rounds small values to zero (relative error up to 1.0 for Rate and Double at one or two places).
 - Whole store with every double rounded: 5.5 B/row at 3 significant digits (relative error up to 0.5%), 5.7 B/row at 4 (up to 0.05%), 5.6 B/row at 3 decimal places.
 - Three decimal places are not safe for Rate: no non-zero value became zero, but 45% of the non-zero Rate values moved by more than 1% and 22% by more than 10%. With three significant digits no value in any column moved by more than 1%.
-- After rounding, a Rate row is 33.5 bits, of which the value is about 3 and the two timestamps are the rest.
+- After rounding, the value of a Rate row takes about 3 bits and the two timestamps about 32 (measured before zstd; the whole row is 33.5 bits after it).
 
 ### ClickHouse
 
