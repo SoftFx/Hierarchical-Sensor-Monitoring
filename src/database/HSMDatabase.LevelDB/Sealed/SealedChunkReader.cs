@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -21,7 +22,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public long FirstTick { get; }
 
 
-        internal SealedChunkReadException(string database, Guid sensorId, long firstTick, string message, Exception inner)
+        public SealedChunkReadException(string database, Guid sensorId, long firstTick, string message, Exception inner = null)
             : base($"Sealed chunk {sensorId}:{firstTick} in {database}: {message}", inner)
         {
             Database = database;
@@ -38,6 +39,10 @@ namespace HSMDatabase.LevelDB.Sealed
     internal sealed class SealedChunkReader(string database)
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+        // The chunks already logged as errors in this process, by database and chunk key. Bounded by the number
+        // of corrupt chunks, not by the number of reads.
+        private static readonly ConcurrentDictionary<string, byte> _loggedChunks = new();
 
         private long _failures;
 
@@ -106,7 +111,14 @@ namespace HSMDatabase.LevelDB.Sealed
 
             Interlocked.Increment(ref _failures);
             SealedHistoryDiagnostics.CountChunkReadFailure();
-            _logger.Error(exception, exception.Message);
+
+            // Every failure counts; a chunk is an error in the log once per process. A corrupt chunk stays corrupt,
+            // and the callers that retry (the sensor history load, retention) would otherwise repeat it forever.
+            var chunk = $"{database}|{(chunkKey is null ? "?" : Convert.ToHexString(chunkKey))}";
+            if (_loggedChunks.TryAdd(chunk, 0))
+                _logger.Error(exception, exception.Message + " (logged once per process; later failures of this chunk are counted only)");
+            else
+                _logger.Debug(exception.Message);
 
             return exception;
         }

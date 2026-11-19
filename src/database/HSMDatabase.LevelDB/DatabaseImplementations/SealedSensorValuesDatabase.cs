@@ -110,6 +110,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Point reads (mirror LevelDBDatabaseAdapter and SensorValuesDatabaseWorker)
 
+        // Get, GetLatest and GetFirst let an unreadable chunk through as SealedChunkReadException instead of the
+        // row worker's "no value" fallback: DatabaseCore reads null as "this week has none" and would answer with
+        // another week's value. Any other failure keeps the row worker's fallback.
+
         public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
         {
             MergedRowCursor cursor = null;
@@ -182,7 +186,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not SealedChunkReadException)
             {
                 _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
 
@@ -210,7 +214,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 return CheckValue() ? cursor.Value : null;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not SealedChunkReadException)
             {
                 _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
 
@@ -228,7 +232,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not SealedChunkReadException)
             {
                 _logger.Error($"Failed getting first value {key.GetString()} - {e.Message}");
 

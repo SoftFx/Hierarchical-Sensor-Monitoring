@@ -53,10 +53,13 @@ public sealed class SealedWeekStoreTests
         pair.Compare.Values(pair.Plain.GetValuesFrom(Key(sensors.Dense, chunks[0].FirstTick), Key(sensors.Dense, chunks[0].LastTick)),
             store.GetValuesFrom(Key(sensors.Dense, chunks[0].FirstTick), Key(sensors.Dense, chunks[0].LastTick)), "first chunk");
 
-        // A point read inside it behaves like a failed point read of the row database: logged, counted, no value.
+        // A point read inside it fails too, rather than answering "no value" (DatabaseCore would take another week's).
         var failures = store.ChunkReadFailures;
-        Assert.Null(store.GetLatest(Key(sensors.Dense, corrupt.LastTick), Key(sensors.Dense, 0).AsSpan(0, 16).ToArray()));
-        Assert.Equal(failures + 1, store.ChunkReadFailures);
+        var prefix = Key(sensors.Dense, 0).AsSpan(0, 16).ToArray();
+        Assert.Throws<SealedChunkReadException>(() => store.GetLatest(Key(sensors.Dense, corrupt.LastTick), prefix));
+        Assert.Throws<SealedChunkReadException>(() => store.GetFirst(Key(sensors.Dense, corrupt.FirstTick + 1), prefix));
+        Assert.Throws<SealedChunkReadException>(() => store.Get(Key(sensors.Dense, corrupt.FirstTick + 1), prefix));
+        Assert.Equal(failures + 3, store.ChunkReadFailures);
     }
 
     [Fact]

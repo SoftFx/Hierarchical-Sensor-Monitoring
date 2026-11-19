@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
@@ -288,7 +288,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return result;
         }
-        public byte[] GetLatestValue(Guid sensorId, long to) => _inner.GetLatestValue(sensorId, to);
+        // Throws instead of reading when set and true for the sensor: a history read that cannot be answered.
+        internal Func<Guid, Exception> FailGetLatestValue { get; set; }
+
+        public byte[] GetLatestValue(Guid sensorId, long to) =>
+            FailGetLatestValue?.Invoke(sensorId) is { } failure ? throw failure : _inner.GetLatestValue(sensorId, to);
         public byte[] GetFirstValue(Guid sensorId) => _inner.GetFirstValue(sensorId);
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);
         public Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors) => _inner.GetLatestValuesFromTo(sensors);

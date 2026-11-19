@@ -2,6 +2,7 @@ using HSMCommon.Model;
 using HSMDatabase.AccessManager;
 using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.LevelDB.DatabaseImplementations;
+using HSMDatabase.LevelDB.Sealed;
 using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
 using Xunit;
@@ -133,6 +134,63 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
     }
 
 
+    // A corrupt chunk must not turn into "this week has no value": DatabaseCore would answer with another week's.
+    [Fact]
+    public void CorruptLastChunk_FailsLatestValue_InsteadOfAnsweringFromAnOlderWeek()
+    {
+        _plain = Open(_plainSettings);
+        _sealed = Open(_sealedSettings);
+        Fill(_dense, SensorType.Double, SealedWeekDay, 9_000, TimeSpan.FromSeconds(20));
+        Fill(_file, SensorType.File, SealedWeekDay, 3, TimeSpan.FromHours(1));
+        Fill(_dense, SensorType.Double, OtherWeekDay, 20, TimeSpan.FromMinutes(1));          // an older week
+        Fill(_sparse, SensorType.Integer, SealedWeekDay.AddDays(7), 20, TimeSpan.FromMinutes(1)); // a newer week, another sensor
+        Fill(_sparse, SensorType.Integer, SealedWeekDay, 20, TimeSpan.FromMinutes(1));
+
+        SealTheWeek(beforeOpen: (chunkPath, seal) =>
+        {
+            var chunks = seal.Chunks.Where(c => c.SensorId == _dense).OrderBy(c => c.FirstTick).ToList();
+            CorruptChunk(chunkPath, chunks[0]);
+            CorruptChunk(chunkPath, chunks[^1]);
+        });
+
+        var before = SealedHistoryDiagnostics.ChunkReadFailures;
+
+        // The newest value is in the corrupt last chunk; the older week holds values too.
+        Assert.ThrowsAny<SealedChunkReadException>(() => _sealed.GetLatestValue(_dense, DateTime.MaxValue.Ticks));
+        // A point inside the corrupt first chunk: the answer would otherwise come from the older week.
+        Assert.ThrowsAny<SealedChunkReadException>(() => _sealed.GetLatestValue(_dense, SealedWeekDay.AddMinutes(30).Ticks));
+        Assert.True(SealedHistoryDiagnostics.ChunkReadFailures > before);
+
+        // A sensor without a corrupt chunk reads as before.
+        _compare.Value(_plain.GetLatestValue(_sparse, DateTime.MaxValue.Ticks), _sealed.GetLatestValue(_sparse, DateTime.MaxValue.Ticks), "latest of another sensor");
+        _compare.Value(_plain.GetFirstValue(_sparse), _sealed.GetFirstValue(_sparse), "first of another sensor");
+    }
+
+    [Fact]
+    public void CorruptFirstChunk_FailsFirstValue_InsteadOfAnsweringFromALaterWeek()
+    {
+        _plain = Open(_plainSettings);
+        _sealed = Open(_sealedSettings);
+        Fill(_dense, SensorType.Double, SealedWeekDay, 9_000, TimeSpan.FromSeconds(20));
+        Fill(_file, SensorType.File, SealedWeekDay, 3, TimeSpan.FromHours(1));
+        Fill(_dense, SensorType.Double, SealedWeekDay.AddDays(7), 20, TimeSpan.FromMinutes(1)); // a later week
+
+        SealTheWeek(beforeOpen: (chunkPath, seal) =>
+            CorruptChunk(chunkPath, seal.Chunks.Where(c => c.SensorId == _dense).OrderBy(c => c.FirstTick).First()));
+
+        Assert.ThrowsAny<SealedChunkReadException>(() => _sealed.GetFirstValue(_dense));
+    }
+
+    private static void CorruptChunk(string chunkPath, SealedChunk chunk)
+    {
+        using var chunks = new LevelDBDatabaseAdapter(chunkPath);
+        var key = new DbKey(chunk.SensorId, chunk.FirstTick).ToBytes();
+
+        Assert.True(chunks.TryRead(key, out var bytes));
+        bytes[bytes.Length / 2] ^= 0x5A;
+        chunks.Put(key, bytes);
+    }
+
     [Fact]
     public void Compaction_OfASealedWeek_ReportsTheSizeOfBothDirectories()
     {
@@ -180,7 +238,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
 
     private BaseValue Value(SensorType type, DateTime time) => TestValues.Make(type, time.Ticks, _random);
 
-    private void SealTheWeek()
+    private void SealTheWeek(Action<string, SealResult> beforeOpen = null)
     {
         _sealed.Dispose();
 
@@ -193,6 +251,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
         Assert.Equal(1, seal.RefusedSensors); // File
 
         _compare = new FidelityComparer(seal.SealedOriginals);
+        beforeOpen?.Invoke(settings.GetPathToSealedSensorValueDatabase(from, to), seal);
         _sealed = Open(_sealedSettings);
     }
 

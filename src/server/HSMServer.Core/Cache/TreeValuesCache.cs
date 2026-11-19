@@ -1444,9 +1444,21 @@ namespace HSMServer.Core.Cache
 
         private bool IsBorderedValue(BaseSensorModel sensor, long pointTicks, out BaseValue latest)
         {
-            var bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev pointTicks value
-
             latest = null;
+            byte[] bytes;
+
+            try
+            {
+                bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev pointTicks value
+            }
+            catch (HSMDatabase.LevelDB.Sealed.SealedChunkReadException ex)
+            {
+                // The value is in a sealed chunk that cannot be read (#1803; logged and counted where it was found).
+                // Without it the range is not adjusted, and the delete goes on: a corrupt chunk must not block the
+                // clear or retention delete that is the way to remove it.
+                _logger.Warn($"{nameof(ClearSensorHistory)} {sensor.Id}: the value at tick {pointTicks} cannot be read ({ex.Message}); the range is not adjusted to it");
+                return false;
+            }
 
             if (bytes is not null)
             {
