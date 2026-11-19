@@ -27,23 +27,25 @@ Constraints that shape the decision:
 ## Decision
 
 1. **Current data does not change.** The current and recent weeks stay one row per value in `SensorValuesV2_<from>_<to>`.
-2. **A closed week is sealed.** The rows of each sensor are encoded into chunks and stored in a sibling LevelDB database `SensorValuesSealedV1_<from>_<to>` under the key `sensorId | firstTick`. A chunk holds a bounded number of rows of one sensor and starts with a header: format version, value type, row count, first and last tick, checksum.
+2. **A closed week is sealed.** The rows of each sensor are encoded into chunks and stored in a sibling LevelDB database `SensorValuesSealedV1_<from>_<to>` under the key `sensorId | firstTick`. A chunk holds a bounded number of rows of one sensor and starts with a header: format version, encoder revision, value type, row count, first and last tick, checksum.
 3. **The codec is ours; the compressor is not.** Columns are encoded separately (delta-of-delta for ticks, decimal-scaled integers with a per-chunk choice of raw, first or second difference for doubles, with a fallback to XOR with the previous value) and the result is compressed with zstd from a library.
 4. **Sealed data is exact except for `ReceivingTime`.** It is stored as the difference from `Time` rounded to a millisecond; `Time`, which is part of the key, and every other field are bit-exact. Values are not rounded.
 5. **The row database of a sealed week stays as its overlay.** Anything written to that week after sealing — a late value, an edit, the result of a sensor-move merge — is an ordinary row there. A read merges chunks and overlay in key order; on an equal key the overlay row wins.
 6. **A range delete rewrites.** It removes the overlay rows, removes the chunks that lie wholly inside the range and re-encodes the chunks on its boundary.
 7. **Some data is never sealed.** File sensor values stay rows. So does any sensor with a row the codec cannot represent exactly: the encoder refuses the input instead of writing an approximation, and the refusal is counted.
 8. **Sealing verifies before it deletes, and deletes late.** The job decodes every chunk it wrote and compares it with the source rows field by field. The source rows are then kept for a configured number of weeks; when that period ends each row is compared with its chunk again and deleted only if they still match. Existing history is sealed the same way, oldest week first.
-9. **The format is versioned and fails loudly.** A chunk with an unknown version or a bad checksum is an error, never an empty result. A change to the bytes written for the same input requires a new format version, and old versions keep decoding.
+9. **The format is versioned and fails loudly.** A chunk with an unknown version or a bad checksum is an error, never an empty result. A change to the bytes written for the same input requires a new format version or a new encoder revision (point 12), and old versions keep decoding.
 10. **Sealing is off by default** until the rollout step decides otherwise, and an unseal operation turns a sealed week back into rows.
 11. **The seam is `ISensorValuesDatabase`.** A sealed week is a second implementation of it; nothing above `DatabaseCore` changes.
+12. **Format version and encoder revision are separate.** The header carries both. The format version changes only when a reader of the current version could not decode the new chunks correctly (a new column encoding, a changed layout, a changed meaning); a reader refuses an unknown format version and decodes every older one forever. The encoder revision changes whenever the encoder's output bytes change but stay decodable by the same format version (a better choice among existing encodings, other parameters, a compressor upgrade); it records which encoder wrote a chunk, and readers ignore it. Golden chunks of every released encoder revision stay in the repository as decode tests forever; only the current revision's set pins the exact bytes the encoder writes.
 
 Independently of all of the above, closed weekly shards are compacted automatically.
 
 ## Consequences
 
 - History of closed weeks shrinks from 122 to about 7.5 bytes per value on the measured data, and a one-sensor read of such a week gets faster, not slower.
-- HSM owns a storage format. It needs golden-file tests that pin the bytes, a test that fails when a value type gains a field the codec does not cover, and a format-version bump for every change.
+- HSM owns a storage format. It needs golden-file tests that pin the bytes, a test that fails when a value type gains a field the codec does not cover, and a format-version bump for every change a reader of the current version could not decode.
+- An encoder improvement ships without a format bump: it bumps the encoder revision and adds a golden set beside the old ones, and chunks written by an older encoder can be found by their header for re-encoding.
 - Adding a persisted field to a value type now means changing the codec in the same change; until then sensors that use the field stay unsealed.
 - `ReceivingTime` of sealed values loses its sub-millisecond part. Code that matches it exactly must not rely on sealed data; the one known case, the File value lookup, is covered by not sealing File sensors.
 - An older server does not see `SensorValuesSealedV1_*`: after a rollback the history of sealed weeks is hidden, not deleted, and the overlay rows remain readable. Unsealing before a rollback restores it, with the rounded `ReceivingTime`.

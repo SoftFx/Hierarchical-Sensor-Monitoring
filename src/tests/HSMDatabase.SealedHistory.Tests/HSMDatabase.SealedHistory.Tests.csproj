@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Golden\*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Golden\**\*.bin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
