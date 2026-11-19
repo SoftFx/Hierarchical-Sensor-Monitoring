@@ -11,8 +11,8 @@ namespace HSMDatabase.AccessManager
         NotSealed,
 
         /// <summary>
-        /// A chunk directory without <see cref="SealedWeekMarker.FileName"/>: a seal that is running or was interrupted.
-        /// Not read; the week is rows only, and the next seal starts the directory again.
+        /// The remains of an interrupted seal: a chunk directory with <see cref="SealedWeekStages.SealingFileName"/> and none
+        /// of the markers a seal writes later. Not read; the week is rows only, and the next seal deletes and restarts it.
         /// </summary>
         IncompleteSeal,
 
@@ -23,10 +23,27 @@ namespace HSMDatabase.AccessManager
         SourceRowsRemoved,
 
         /// <summary>
-        /// An unseal began and has not finished. The week is sealed while <see cref="SealedWeekMarker.FileName"/> is there,
-        /// and rows only once it is gone; the job finishes the unseal before it does anything else with the week.
+        /// An unseal began and has not finished: <see cref="SealedWeekMarker.FileName"/> is still there, the week is sealed,
+        /// and the job finishes the unseal before it does anything else with the week. Deleting
+        /// <see cref="SealedWeekStages.UnsealingFileName"/> cancels it (the week returns to its previous stage).
         /// </summary>
         Unsealing,
+
+        /// <summary>
+        /// A finished unseal whose chunk directory is still there: every chunk row is in the overlay, the week is rows
+        /// (<see cref="SealedWeekStages.UnsealedFileName"/> in the row directory, no <see cref="SealedWeekMarker.FileName"/>).
+        /// The directory is only clean-up.
+        /// </summary>
+        UnsealedLeftover,
+
+        /// <summary>
+        /// A chunk directory without <see cref="SealedWeekMarker.FileName"/> that is neither an interrupted seal nor a
+        /// finished unseal: the marker was lost (an operator, a partial restore, file-system damage) while the chunks may be
+        /// the only copy of the week. The week is served from its rows alone; the job never deletes, seals or touches the
+        /// directory and reports it. Recovery: put <c>hsm-sealed</c> back (any text) and restart, or delete the directory if
+        /// the rows are known to be complete.
+        /// </summary>
+        NeedsAttention,
     }
 
 
@@ -35,7 +52,17 @@ namespace HSMDatabase.AccessManager
     /// <param name="KeepSourceRowsUntilUtc">When the source rows of a sealed week may go; null when unknown (kept).</param>
     /// <param name="IsSealedMarkerPresent">The step-2 signal: chunks complete and read merged with the overlay.</param>
     /// <param name="UnsealedByOperator">An operator unsealed the week: the job leaves it as rows.</param>
-    public readonly record struct SealedWeekStatus(SealedWeekStage Stage, DateTime? KeepSourceRowsUntilUtc, bool IsSealedMarkerPresent, bool UnsealedByOperator);
+    /// <param name="Attention">Why an operator has to look at the week; null when nothing is wrong.</param>
+    public readonly record struct SealedWeekStatus(SealedWeekStage Stage, DateTime? KeepSourceRowsUntilUtc, bool IsSealedMarkerPresent,
+        bool UnsealedByOperator, string Attention = null)
+    {
+        /// <summary>
+        /// The one rule that lets the job delete a week's chunk directory (#1804, review S1/T1): only (a) the remains of an
+        /// interrupted seal, or (b) the leftover of a finished unseal. Any other chunk directory may hold the only copy of
+        /// rows and is never deleted.
+        /// </summary>
+        public bool MayDeleteChunkDirectory => Stage is SealedWeekStage.IncompleteSeal or SealedWeekStage.UnsealedLeftover;
+    }
 
 
     /// <summary>
@@ -47,7 +74,7 @@ namespace HSMDatabase.AccessManager
     /// </summary>
     public static class SealedWeekStages
     {
-        /// <summary>In the chunk directory while a seal writes it; informational (an incomplete seal is recognised without it).</summary>
+        /// <summary>In the chunk directory from before its database exists until the seal is done.</summary>
         public const string SealingFileName = "hsm-sealing";
 
         /// <summary>In the chunk directory: the first line is the UTC time after which the source rows may be removed.</summary>
@@ -65,6 +92,9 @@ namespace HSMDatabase.AccessManager
         /// <summary>In the row directory: an operator unsealed this week; the job does not seal it again until the file is deleted.</summary>
         public const string UnsealedFileName = "hsm-unsealed";
 
+        /// <summary>The line of the <c>hsm-sealed</c> text that repeats the keep time (read when the keep file is missing).</summary>
+        public const string KeepLinePrefix = "Source rows kept until: ";
+
 
         public static SealedWeekStatus Read(string rowPath, string sealedPath)
         {
@@ -73,41 +103,85 @@ namespace HSMDatabase.AccessManager
             if (!Directory.Exists(sealedPath))
                 return new(SealedWeekStage.NotSealed, null, false, unsealedByOperator);
 
-            var sealedMarker = SealedWeekMarker.ExistsIn(sealedPath);
+            bool Has(string name) => File.Exists(Path.Combine(sealedPath, name));
 
-            if (File.Exists(Path.Combine(sealedPath, UnsealingFileName)))
-                return new(SealedWeekStage.Unsealing, null, sealedMarker, unsealedByOperator);
+            var sealedMarker = SealedWeekMarker.ExistsIn(sealedPath);
+            var unsealing = Has(UnsealingFileName);
 
             if (!sealedMarker)
-                return new(SealedWeekStage.IncompleteSeal, null, false, unsealedByOperator);
+            {
+                // A seal writes hsm-sealing before its database, and the keep file only after hsm-sealed; an unseal writes
+                // hsm-unsealing first and hsm-unsealed (row directory) only after every chunk row is in the overlay.
+                if (Has(SealingFileName) && !Has(KeepSourceRowsUntilFileName) && !Has(SourceRowsRemovedFileName) && !unsealing)
+                    return new(SealedWeekStage.IncompleteSeal, null, false, unsealedByOperator);
 
-            if (File.Exists(Path.Combine(sealedPath, SourceRowsRemovedFileName)))
+                if (unsealing && unsealedByOperator)
+                    return new(SealedWeekStage.UnsealedLeftover, null, false, true);
+
+                return new(SealedWeekStage.NeedsAttention, null, false, unsealedByOperator,
+                    $"{Path.GetFileName(sealedPath)} has no {SealedWeekMarker.FileName} but is neither an interrupted seal nor a finished unseal " +
+                    "(its marker was lost?): the week is served from its rows alone and the directory is left untouched. Put hsm-sealed back " +
+                    "and restart if the chunks belong to the week, or delete the directory if its rows are complete.");
+            }
+
+            if (unsealing)
+                return new(SealedWeekStage.Unsealing, null, true, unsealedByOperator);
+
+            if (Has(SourceRowsRemovedFileName))
                 return new(SealedWeekStage.SourceRowsRemoved, null, true, unsealedByOperator);
 
-            return new(SealedWeekStage.SealedKeepingSourceRows, ReadKeepUntil(sealedPath), true, unsealedByOperator);
+            var (until, problem) = ReadKeepUntil(sealedPath);
+
+            return new(SealedWeekStage.SealedKeepingSourceRows, until, true, unsealedByOperator, problem);
         }
 
-        /// <summary>The first line of the keep file as a UTC time; null when the file is missing or unreadable (the rows are then kept).</summary>
-        public static DateTime? ReadKeepUntil(string sealedPath)
+        /// <summary>
+        /// The keep time: the first line of the keep file, or the keep line of <c>hsm-sealed</c> when the keep file is not
+        /// written yet. A keep file that cannot be read, or neither source, leaves the time unknown (the rows are kept) and
+        /// says why.
+        /// </summary>
+        public static (DateTime? until, string problem) ReadKeepUntil(string sealedPath)
         {
+            var path = Path.Combine(sealedPath, KeepSourceRowsUntilFileName);
+
             try
             {
-                var path = Path.Combine(sealedPath, KeepSourceRowsUntilFileName);
+                if (File.Exists(path))
+                {
+                    var first = File.ReadLines(path).FirstOrDefaultLine();
 
-                if (!File.Exists(path))
-                    return null;
+                    return TryParse(first, out var until)
+                        ? (until, null)
+                        : (null, $"{path}: the first line '{first}' is not a UTC time (expected e.g. 2026-12-01T00:00:00.0000000Z); the source rows are kept until it is fixed");
+                }
 
-                using var reader = new StreamReader(path);
-                var line = reader.ReadLine()?.Trim();
+                foreach (var line in File.ReadLines(Path.Combine(sealedPath, SealedWeekMarker.FileName)))
+                    if (line.StartsWith(KeepLinePrefix, StringComparison.Ordinal) && TryParse(line[KeepLinePrefix.Length..], out var fromMarker))
+                        return (fromMarker, null);
 
-                return DateTime.TryParse(line, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var until)
-                    ? DateTime.SpecifyKind(until, DateTimeKind.Utc)
-                    : null;
+                return (null, $"{path} is missing and {SealedWeekMarker.FileName} names no keep time; the source rows are kept until the file " +
+                              "is written with a UTC time on its first line (e.g. 2026-12-01T00:00:00.0000000Z)");
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                return null;
+                return (null, $"{path} cannot be read ({e.Message}); the source rows are kept");
             }
+        }
+
+        private static bool TryParse(string text, out DateTime until)
+        {
+            var ok = DateTime.TryParse(text?.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out until);
+
+            until = DateTime.SpecifyKind(until, DateTimeKind.Utc);
+            return ok;
+        }
+
+        private static string FirstOrDefaultLine(this System.Collections.Generic.IEnumerable<string> lines)
+        {
+            foreach (var line in lines)
+                return line;
+
+            return null;
         }
     }
 }
