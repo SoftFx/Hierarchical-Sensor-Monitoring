@@ -215,7 +215,14 @@ The codec stores nothing. The sealed week store below keeps chunks in a sibling 
 
 **The signal.** A week is sealed only when `hsm-sealed` exists inside the chunk directory. `SealedWeekWriter` writes every chunk batch with a sync, closes the database, writes the marker as a temporary file flushed to disk and renames it; the marker is therefore never over chunks that a crash or a power loss can take back. `LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to)` opens a sealed week when the marker is there and the plain row worker otherwise, with a warning in the log when the chunk directory exists without it (an interrupted or running seal; it is not read). The marker lives with the chunks, so it travels with them on a copy or restore. The weekly shard dictionary also lists a week that has a complete chunk directory but no row directory (opening it creates an empty overlay); a chunk directory without the marker is not a week by itself. The pre-V2 dictionary used by `MigrateDatabaseV2` never attaches sealed weeks.
 
-What #1804 must do with it: write chunks while the source rows stay in the overlay, mark the week complete only after verification, and delete source rows only after that. A crash at any point before the marker leaves the week read from its rows alone. The switch from rows to the merged view happens when the week is opened; a week already open when it is marked keeps being served as rows until it is reopened. A delete or edit of the week between encoding and the marker must not be lost: the job has to detect it (for example with the shard's `ChangeCount`, as `TryMarkCompacted` does) and redo the affected sensor, otherwise a chunk would bring back a deleted row.
+`SealedWeekWriter.Open` always starts from an empty chunk database: a directory without the marker is what an interrupted seal left, not data (its source rows are still in the row database), and stale if those rows changed since, so it is deleted first. A directory with the marker is refused.
+
+What #1804 must do with it:
+
+- Write chunks while the source rows stay in the overlay, mark the week complete only after verification, and delete source rows only after that. A crash at any point before the marker leaves the week read from its rows alone.
+- The switch from rows to the merged view happens when the week is opened; a week already open when it is marked keeps being served as rows until it is reopened.
+- A delete or edit of the week between encoding and the marker must not be lost: the job has to detect it (for example with the shard's `ChangeCount`, as `TryMarkCompacted` does) and redo the affected sensor, otherwise a chunk would bring back a deleted row.
+- **The marker is not durable against power loss on its own.** The rename that publishes it is not followed by an fsync of the directory (.NET offers none), so on Linux a power loss can lose the rename while the chunks it describes survive. Source rows must therefore never be deleted on the strength of a marker written in the same run without the week having been reopened as sealed since; the keep period covers this in practice. A sealed directory that lost its marker is visible only as the "incomplete seal" warning when the week is opened, and is rebuilt by the next seal.
 
 ### Merged reads
 
@@ -223,13 +230,15 @@ Every read opens a `MergedRowCursor` over two children: the overlay's LevelDB it
 
 Values leave the interface as MemoryPack bytes: a chunk row is decoded and re-serialized. Such a value equals its source by `RowFidelity` (field by field, `ReceivingTime` to the millisecond), not necessarily byte for byte; an overlay row comes back byte for byte.
 
-Cost: a chunk is decoded only when needed. Arriving at a chunk's first row costs nothing (its key is the chunk's key); arriving at its last row reads the verified header; a value or a step inside the chunk decodes it. A seek decodes at most the one chunk that can hold the target. Range reads are lazy in both directions, chunk by chunk, and a page read stops after the chunks its rows come from (plus, going backwards, the header of the chunk before).
+Cost: a chunk is read only when needed. Arriving at a chunk's first row costs nothing (its key is the chunk's key; the chunk's bytes are not even fetched); the key of its last row reads the verified header; a value or a step inside the chunk decodes it. A seek decodes at most the one chunk that can hold the target. Range reads are lazy in both directions, chunk by chunk, and a page read stops after the chunks its rows come from (plus, going backwards, the header of the chunk before, if it belongs to the same sensor).
+
+**A chunk of another sensor is never read on the way.** Every row of a chunk carries the sensor prefix of the chunk's key, so against a key of another sensor the chunk is ordered by that prefix alone: a seek does not read the header of the previous sensor's last chunk, a backward read stops at a sensor boundary without reading the chunk beyond it, and a range delete does not read the chunk before `from` when it belongs to another sensor. A corrupt chunk therefore fails only reads and deletes of its own sensor, and costs no CRC pass on its neighbours' reads.
 
 ### Writes and range deletes
 
 `PutSensorValue` / `PutSensorValueOrThrow` write the overlay, exactly as the row worker does. `RemoveSensorValues(from, to)`:
 
-1. Under the chunk write lock, plan from the chunks that have a row in the range: a chunk wholly inside is deleted; a chunk on a border is decoded, its rows outside the range re-encoded (verified by decoding and `RowFidelity` before anything is written) and stored under the key of its new first row; an unreadable chunk is deleted only when it provably lies wholly inside the range (its key is in the range and the next chunk's key, or the sensor's largest possible key, is too).
+1. Under the chunk write lock, plan from the chunks that have a row in the range: a chunk wholly inside is deleted; a chunk on a border is decoded, its rows outside the range re-encoded (verified by decoding and `RowFidelity` before anything is written) and stored under the key of its new first row; an unreadable chunk is deleted only when it provably lies wholly inside the range: its key is in the range, and either the next chunk's key or `sensor | (To - 1)` is too. The second bound is an invariant of a weekly database: every row has `From <= tick < To` (`To` is the next Monday 00:00), because `DatabaseCore.AddSensorValue` stores a value in the week of its own `Time` under that same tick and the sensor-move merge copies a row within its week under the same tick. So a retention or clear-history delete that reaches the end of the week removes an unreadable chunk; one that ends inside the week is refused, as it must be (the chunk might hold rows after the cutoff).
 2. Apply all of it as **one synced LevelDB write batch** to the chunk database.
 3. Delete the overlay rows in the range, as the row worker does.
 
@@ -245,12 +254,31 @@ No lock on reads. A read creates the overlay iterator first and the chunk iterat
 
 ### Errors
 
-A chunk that fails to decode, or does not fit its key (the header's first key differs from the stored key, chunks overlap), raises `SealedChunkReadException`, logged as an error where it is found and counted per week (`ChunkReadFailures`) and process-wide (`SealedHistoryDiagnostics.ChunkReadFailures`). How it reaches the caller follows the row worker's existing contract per method: range reads (`GetValuesFrom`, `GetValuesTo`, `GetKeysValuesTo`, `GetAll`) and `CalculateHistorySize` throw from the enumeration, so a range read never ends early as if the data ended; point reads (`Get`, `GetLatest`, `GetFirst`, `GetLastAndFirstValues`, `FillLatestValues`) catch, log and return the same fallback as a failed LevelDB read (`[]`, null, an empty dictionary, unchanged entries), as the row worker does for any storage error. A read whose range only borders a corrupt chunk may still fail on it: a backward read needs the verified header of the chunk before its first row. The counters are not wired into the server's self-monitoring sensors yet.
+A chunk that fails to decode, or does not fit its key (the header's first key differs from the stored key, chunks overlap), raises `SealedChunkReadException`. Every failure is counted per week (`ChunkReadFailures`) and process-wide (`SealedHistoryDiagnostics.ChunkReadFailures`); a given chunk is logged as an error once per process (by database and chunk key) and at debug level after that, because a corrupt chunk stays corrupt and its readers retry. The counters are not wired into the server's self-monitoring sensors yet.
+
+How it reaches the caller, per method:
+
+| Method | On an unreadable chunk |
+|---|---|
+| `GetValuesFrom`, `GetValuesTo`, `GetKeysValuesTo`, `GetAll` | Throw from the enumeration: a range read never ends early as if the data ended. |
+| `Get`, `GetLatest`, `GetFirst` | Throw. The row worker answers "no value" for a failed read, but `DatabaseCore.GetLatestValue` / `GetFirstValue` read null as "this week has none" and would answer with another week's value; a stale newest or oldest value must not be taken for the sensor's own. Any other failure keeps the row worker's fallback. |
+| `FillLatestValues`, `GetLastAndFirstValues` | Per sensor: the sensor whose chunk cannot be read gets nothing from this week (its entry stays as the caller had it), every other sensor is answered, and the dictionary the caller accumulated is always returned. Neither has a caller in the server today; `DatabaseCore` would fill such a sensor from another week. |
+| `CalculateHistorySize` | Never throws (it is informational: the history info of a node, the delete preview). An unreadable chunk adds its stored bytes; the count falls back to a lower bound (overlay rows, the readable chunks' rows no overlay row hides, and for an unreadable chunk wholly in the range with a readable header its row count less the overlay rows in its span). |
+| `RemoveSensorValues` | Refused when a border chunk cannot be rewritten (logged, counted in `ChunkRewriteFailures`); an unreadable chunk wholly inside the range is deleted with it (see above). |
+
+What the server does with a throwing `GetLatestValue` / `GetFirstValue` (`HSMServer.Core`):
+
+| Caller | On the exception |
+|---|---|
+| The sensor history load (`BaseSensorModelT.LoadHistoryUnderLock`, at first use and from `RetryFailedHistoryLoad`) | The load fails as for any storage error: the sensor is not taken as loaded, self-destroy is deferred (`ShouldDestroy` is false), and the maintenance sweep retries with a backoff (1 h after the failure, then 2, 4, 8, 16 h, then every 24 h, a capped number of retries per sweep). A chunk that stays corrupt keeps the sensor in that state; it is never destroyed on a guessed age. |
+| `RefreshAfterMerge` (after a sensor-move merge) | The queue logs the failed item; the survivor keeps the newest value it had. |
+| The previous-path move check (`HaveValuesInTheSamePeriod`) | The path is not applied, with its own warning: the overlap check cannot be made and a merge is for good. |
+| `IsBorderedValue` (clear history and retention of an aggregating sensor) | Treated as "no bordering value": logged, and the delete goes on with its range unadjusted, so a corrupt chunk never blocks the delete that removes it. |
 
 ### Sizes, export, the database list
 
-- `ISensorValuesDatabase.CalculateHistorySize(from, to)` (new): the row worker returns what `DatabaseCore.CalculateSensorHistorySize` summed before (rows, key bytes, value bytes); a sealed week returns the number of values a read returns and the bytes stored: overlay keys and values plus chunk keys and chunk bytes.
-- `DatabaseCore.SensorHistoryDbSize` adds each week's chunk directory (also an incomplete one: it takes disk space). `TotalDbSize` already counted it.
+- `ISensorValuesDatabase.CalculateHistorySize(from, to)` (new): the row worker returns what `DatabaseCore.CalculateSensorHistorySize` summed before (rows, key bytes, value bytes); a sealed week returns the number of values a read returns and the bytes stored: overlay keys and values plus chunk keys and chunk bytes (a lower-bound count if a chunk cannot be read, see Errors).
+- `DatabaseCore.SensorHistoryDbSize` adds each week's chunk directory (also an incomplete one: it takes disk space). `TotalDbSize` already counted it. The sizes `DatabaseCore` logs around a compaction and writes into the compaction marker include the chunk directory too.
 - The CSV export (`ExportValuesDatabase`) reads `GetAll`, i.e. the merged stream; the size column is then the re-serialized value size of a chunk row.
 - The Configuration page lists weeks by the row database name, which a sealed week keeps; export looks it up by that name.
 
@@ -267,12 +295,13 @@ Both weeks compacted, warm medians; the overlay holds only refused (File) sensor
 | On disk, plain → sealed | 29.9 MB → 6.6 MB | 22.9 MB → 4.0 MB |
 | Page of 100, newest first | 0.041 → 0.258 ms | 0.041 → 0.275 ms |
 | Page of 100, oldest first | 0.031 → 0.240 ms | 0.029 → 0.239 ms |
-| `GetLatest` | 0.002 → 0.235 ms | 0.002 → 0.209 ms |
-| Whole densest sensor | 49.6 → 31.2 ms | 2.1 → 3.5 ms |
-| `GetLastAndFirstValues`, all sensors | 9.7 → 39.5 ms | 9.0 → 49.2 ms |
-| Full week (`GetAll`) | 150 → 111 ms | 111 → 85 ms |
+| `GetLatest` | 0.002 → 0.241 ms | 0.002 → 0.214 ms |
+| Whole densest sensor | 48.8 → 31.3 ms | 2.1 → 3.6 ms |
+| History load of every sensor: `GetLatest` + `GetFirst` per sensor | 10.9 → 58.1 ms (36 → 194 µs per sensor) | 9.6 → 77.7 ms (20 → 158 µs per sensor) |
+| `GetLastAndFirstValues`, all sensors (no caller) | 10.1 → 34.3 ms | 8.9 → 35.2 ms |
+| Full week (`GetAll`) | 149 → 108 ms | 106 → 85 ms |
 
-A point read or a first page costs one chunk decode (about 0.2 ms) instead of microseconds; whole-week and dense-sensor reads get faster. `GetLastAndFirstValues` runs once per week at startup and decodes the last chunk of every sensor: about 40 ms more per sealed week of this size.
+A point read or a first page costs one chunk decode (about 0.2 ms) instead of microseconds; whole-week and dense-sensor reads get faster. What runs when a sensor's history loads (at its first use after a start) is `DatabaseCore.GetLatestValue` plus `GetFirstValue`. `GetLatestValue` walks the weeks newest first and stops at the first with a value, so a sealed week is reached only for a sensor without a value in any newer week; `GetFirstValue` walks the oldest week first, so it reaches a sealed week for every sensor whose oldest week is sealed. Each such sealed week costs about 0.1 to 0.2 ms per sensor instead of 20 to 40 µs (two chunk decodes). `GetLastAndFirstValues` has no caller in the server (its only caller is commented out in `TreeValuesCache`); it went from 49 to 35 ms on the production copy once a seek stopped reading the previous sensor's chunk header.
 
 ## UI / Operator Visibility
 
@@ -302,11 +331,13 @@ The sealed week store is tested in `src/tests/HSMDatabase.LevelDB.Tests/SealedWe
 
 - differential: the same rows in a plain week and in a week sealed by the test-only `WeekSealer`; every read of the interface (point reads at every probe key and its neighbours, range reads both ways with and without early stop, borders on chunk edges, ranges across sensors, empty and reversed ranges, first/last values with and without prefilled results, `FillLatestValues`, `GetAll`, counts) compared after late values, rewrites of sealed keys, range deletes (inside a chunk, across a chunk border, exactly one chunk, leaving one row of a chunk, a whole sensor, across sensors) and sensor-move merges, then after a reopen; once with the source rows deleted and once kept (the keep period, where no chunk row may come back); plus a randomized run with a fixed, logged seed;
 - the same at the `DatabaseCore` level: page reads both ways, latest/first values, `GetLatestValuesFromTo`, `MergeSensorValues`, `ClearSensorValues`, `RemoveSensorWithMetadata`, `CalculateSensorHistorySize`, `SensorHistoryDbSize`, the CSV export, the database list, a restart;
-- a corrupt chunk: reads that reach it throw and are counted, reads that do not reach it work, a delete with a border in it is refused and changes nothing, a delete that covers it removes it;
-- the signal: a chunk directory without `hsm-sealed` is not read and is not a week; the writer refuses a sealed week;
+- a corrupt chunk: range and point reads that reach it throw and are counted, reads that do not reach it work, reads and deletes of the next sensor never touch it, the history size does not throw and counts a lower bound, the batch point reads lose only its sensor, a delete with a border in it is refused and changes nothing, a delete that covers it removes it (also a retention delete to the end of the week, and a sensor removal ahead of UTC), one that ends inside the week does not; at the `DatabaseCore` level `GetLatestValue` and `GetFirstValue` throw instead of answering from another week; in `HSMServer.Core.Tests` (`SealedHistoryReadFailureTests`) a clear of an aggregating sensor still deletes when the bordering value cannot be read;
+- the signal: a chunk directory without `hsm-sealed` is not read and is not a week; the writer refuses a sealed week; a re-seal after an interrupted one keeps nothing of it;
 - File values stay rows and read back byte for byte;
 - concurrency, deterministically through two test seams: a reader started before a range delete sees the old week; a reader between the chunk rewrite and the overlay delete sees only rows the week held before; a whole delete landing between a read's two iterators never shows a chunk row the overlay hid (this test fails when the iterator order is swapped);
-- the compaction marker: chunk-only deletes clear it, empty deletes do not.
+- the compaction marker: chunk-only deletes clear it, empty deletes do not; the sizes written into it include the chunk directory.
+
+Seeded tests take every sensor id and value from their generator, so a failure replays from the logged seed; the randomized run fails if it deleted more than half of the week (it would compare almost nothing).
 
 ## Notes
 
