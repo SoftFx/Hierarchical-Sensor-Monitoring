@@ -195,6 +195,22 @@ public sealed class SealedWeekStoreTests
         pair.AssertSameReads(sensors.All, new Random(19), probesPerSensor: 3);
     }
 
+    // Sensor removal clears MinValue..MaxValue through ToUniversalTime(): on a host ahead of UTC the upper bound
+    // is MaxValue minus the offset, short of sensor|DateTime.MaxValue but past the end of every week.
+    [Fact]
+    public void CorruptLastChunk_IsDeletedBySensorRemovalOnAHostAheadOfUtc()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(22));
+
+        using var pair = WeekPair.Create(seed, beforeOpen: p => CorruptChunk(p, DenseChunks(p, sensors.Dense)[2]));
+
+        var refused = SealedHistoryDiagnostics.ChunkRewriteFailures;
+        pair.Remove(Min(sensors.Dense), Key(sensors.Dense, DateTime.MaxValue.Ticks - 3 * TimeSpan.TicksPerHour));
+
+        Assert.Equal(refused, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Empty(pair.Sealed.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)));
+    }
+
     [Fact]
     public void CorruptLastChunkOfOneSensor_DoesNotReachTheNextSensor()
     {
