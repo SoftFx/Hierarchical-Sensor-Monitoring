@@ -27,7 +27,7 @@ namespace HSMDatabase.LevelDB.Sealed
 
         // The chunk under the iterator; its rows once decoded.
         private byte[] _chunkKey;
-        private byte[] _chunk;
+        private byte[] _chunk; // fetched from the iterator only when the header or the rows are needed
         private ChunkHeader _header;
         private bool _headerRead;
         private List<HistoryRow> _rows;
@@ -223,18 +223,22 @@ namespace HSMDatabase.LevelDB.Sealed
         private void AtChunk()
         {
             _chunkKey = _iterator.Key();
-            _chunk = _iterator.Value();
+            _chunk = null;
             _rows = null;
             _headerRead = false;
             _key = null;
         }
+
+        // The bytes of the chunk under the iterator. The iterator stays on the current chunk until the cursor moves
+        // to another one (which calls AtChunk), so they are taken from it on first need.
+        private byte[] Chunk() => _chunk ??= _iterator.Value();
 
         // The verified header of the chunk under the iterator, read once.
         private ChunkHeader Header()
         {
             if (!_headerRead)
             {
-                _header = _reader.ReadHeader(_chunkKey, _chunk);
+                _header = _reader.ReadHeader(_chunkKey, Chunk());
                 _headerRead = true;
             }
 
@@ -269,7 +273,7 @@ namespace HSMDatabase.LevelDB.Sealed
             }
             else
             {
-                _rows = _reader.Decode(_chunkKey, _chunk);
+                _rows = _reader.Decode(_chunkKey, Chunk());
                 _decodedKey = _chunkKey;
                 _decodedRows = _rows;
             }
