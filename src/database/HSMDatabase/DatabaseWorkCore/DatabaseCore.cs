@@ -1455,7 +1455,12 @@ namespace HSMDatabase.DatabaseWorkCore
             DateTime utcNow, HistorySealingSettings settings)
         {
             var to = shard.To;
-            var status = SealedWeekStages.Read(shard.Path, _settings.GetPathToSealedSensorValueDatabase(shard.From, to));
+            var sealedPath = _settings.GetPathToSealedSensorValueDatabase(shard.From, to);
+
+            // A seal whose tail a crash interrupted is finished first (#1804 review U1): file operations only.
+            WeekSealingJob.CompleteSealTail(sealedPath, shard.Path);
+
+            var status = SealedWeekStages.Read(shard.Path, sealedPath);
 
             if (status.Attention is not null)
                 NoteAttention(_stageAttention, shard.Path, status.Attention);

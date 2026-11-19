@@ -66,16 +66,17 @@ public sealed partial class HistorySealingJobTests
 
     public static IEnumerable<object[]> LostMarkerStates() =>
     [
-        ["sealed, keeping the source rows", false, false],
-        ["sealed, source rows removed", true, false],
-        ["being unsealed, the copy not finished", true, true],
+        ["sealed, keeping the source rows", false, false, false],
+        ["sealed, source rows removed", true, false, false],
+        ["being unsealed, the copy not finished", true, true, false],
+        ["source-row removal half done", false, false, true],
     ];
 
     // The sealed marker of a week is lost: the week opens as rows, the job must neither seal it again nor delete the
     // chunks (after source-row removal they are the only copy). Putting the marker back restores the week.
     [Theory]
     [MemberData(nameof(LostMarkerStates))]
-    public void ALostSealedMarker_LeavesTheChunksUntouched_ReportsTheWeek_AndPuttingItBackRestoresIt(string state, bool removeSources, bool startUnseal)
+    public void ALostSealedMarker_LeavesTheChunksUntouched_ReportsTheWeek_AndPuttingItBackRestoresIt(string state, bool removeSources, bool startUnseal, bool interruptRemoval)
     {
         _output.WriteLine(state);
         Start(41);
@@ -83,6 +84,15 @@ public sealed partial class HistorySealingJobTests
 
         if (removeSources)
             RemoveBothSourceRows();
+
+        // U1: some of the week's source rows are gone, hsm-source-rows-removed is not written yet.
+        if (interruptRemoval)
+        {
+            Assert.Equal(HistorySealingAction.RemoveSourceRows, Pass(AfterKeep).Action); // the older week
+            CrashAt(SealingCheckpoints.RemoveBatch, 2);
+            Assert.Equal(HistorySealingOutcome.Failed, Pass(AfterKeep).Outcome);
+            Assert.False(File.Exists(Path.Combine(SealedPath(), SealedWeekStages.SourceRowsRemovedFileName)));
+        }
 
         if (startUnseal)
         {
@@ -117,6 +127,104 @@ public sealed partial class HistorySealingJobTests
             Assert.Equal(HistorySealingOutcome.Done, _core.UnsealHistoryWeek(WeekName(), AfterKeep).Outcome);
 
         AssertSameHistory($"{state}: marker restored");
+    }
+
+    #endregion
+
+    #region U1: the tail of a seal is finished before any overlay row is deleted
+
+    // With hsm-sealed present the tail states read as a sealed week (the keep time from the marker's line); they never
+    // allow the chunk directory to be deleted. Without hsm-sealed, S + K reads as needing attention (truth table above).
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void WithHsmSealed_TheTailStatesAreASealedWeek(bool sealing, bool keepFile)
+    {
+        var rows = Path.Combine(_root, "tail", "SensorValuesV2_1_2");
+        var chunks = Path.Combine(_root, "tail", $"{SealedWeekMarker.DirectoryPrefix}_1_2");
+        var until = new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        Directory.CreateDirectory(rows);
+        Directory.CreateDirectory(chunks);
+        File.WriteAllLines(Path.Combine(chunks, SealedWeekMarker.FileName), ["Sealed", $"{SealedWeekStages.KeepLinePrefix}{until:O}"]);
+
+        if (sealing)
+            File.WriteAllText(Path.Combine(chunks, SealedWeekStages.SealingFileName), "x");
+        if (keepFile)
+            File.WriteAllLines(Path.Combine(chunks, SealedWeekStages.KeepSourceRowsUntilFileName), [$"{until:O}"]);
+
+        var status = SealedWeekStages.Read(rows, chunks);
+        Assert.Equal((SealedWeekStage.SealedKeepingSourceRows, until, false), (status.Stage, status.KeepSourceRowsUntilUtc, status.MayDeleteChunkDirectory));
+
+        Assert.True(WeekSealingJob.CompleteSealTail(chunks, rows));
+        Assert.False(File.Exists(Path.Combine(chunks, SealedWeekStages.SealingFileName)));
+        Assert.Equal(until, SealedWeekStages.ReadKeepUntil(chunks).until);
+        Assert.True(File.Exists(Path.Combine(chunks, SealedWeekStages.KeepSourceRowsUntilFileName)));
+
+        // Lost after the tail: needs attention, never an interrupted seal.
+        File.Delete(Path.Combine(chunks, SealedWeekMarker.FileName));
+        Assert.Equal(SealedWeekStage.NeedsAttention, SealedWeekStages.Read(rows, chunks).Stage);
+    }
+
+    // A crash right after the swap leaves hsm-sealing and no keep file: the next pass finishes the tail.
+    [Fact]
+    public void AnInterruptedSealTail_IsFinishedByTheNextPass()
+    {
+        Start(81);
+        SealOlderWeek();
+
+        CrashAt(SealingCheckpoints.SealBeforeTail, 1);
+        Assert.Equal(HistorySealingOutcome.Failed, Pass(SealTime).Outcome);
+        Restart();
+
+        Assert.True(File.Exists(Path.Combine(SealedPath(), SealedWeekStages.SealingFileName)));
+        Assert.False(File.Exists(Path.Combine(SealedPath(), SealedWeekStages.KeepSourceRowsUntilFileName)));
+        Assert.Equal(SealedWeekStage.SealedKeepingSourceRows, Stage());
+        Assert.True(Week().IsSealed);
+
+        Pass(SealTime);
+
+        Assert.False(File.Exists(Path.Combine(SealedPath(), SealedWeekStages.SealingFileName)));
+        Assert.Equal(SealTime + Settings.KeepSourceRows, SealedWeekStages.ReadKeepUntil(SealedPath()).until);
+        Assert.True(File.Exists(Path.Combine(SealedPath(), SealedWeekStages.KeepSourceRowsUntilFileName)));
+
+        RemoveBothSourceRows();
+        AssertSameHistory("removed after the finished tail");
+    }
+
+    // A tail that cannot be finished (hsm-sealing cannot be deleted): no overlay row of the week is deleted, the week is
+    // reported. Fails if the guard before each overlay-delete step is removed.
+    [Fact]
+    public void AnUnfinishableSealTail_RefusesEveryOverlayDelete()
+    {
+        Start(82);
+        SealOlderWeek();
+
+        CrashAt(SealingCheckpoints.SealBeforeTail, 1);
+        Assert.Equal(HistorySealingOutcome.Failed, Pass(SealTime).Outcome);
+
+        var sealing = Path.Combine(SealedPath(), SealedWeekStages.SealingFileName);
+
+        Restart(() => File.SetAttributes(sealing, FileAttributes.ReadOnly));
+
+        try
+        {
+            var overlay = OverlayRows();
+
+            Assert.Equal(HistorySealingAction.RemoveSourceRows, Pass(AfterKeep).Action); // the older week
+
+            var removal = Pass(AfterKeep);
+            Assert.Equal((HistorySealingAction.RemoveSourceRows, HistorySealingOutcome.Failed), (removal.Action, removal.Outcome));
+            Assert.True(removal.WeeksNeedingAttention.ContainsKey(WeekName()));
+            Assert.Equal(overlay, OverlayRows());
+            Assert.True(File.Exists(sealing));
+            AssertSameHistory("an unfinishable seal tail");
+        }
+        finally
+        {
+            File.SetAttributes(sealing, FileAttributes.Normal);
+        }
     }
 
     #endregion

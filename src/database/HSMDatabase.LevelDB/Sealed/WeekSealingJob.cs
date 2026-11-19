@@ -20,6 +20,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public const string SealSensorWritten = "seal/sensor-written";
         public const string SealEncoded = "seal/encoded";
         public const string SealMarked = "seal/marked";
+        public const string SealBeforeTail = "seal/before-tail";
         public const string SealSwapped = "seal/swapped";
 
         public const string RemoveBatch = "remove/batch";
@@ -192,14 +193,12 @@ namespace HSMDatabase.LevelDB.Sealed
                     }
                 }
 
-                // After the marker: an interrupted seal never has it. Until it is written the keep time is read from the
-                // marker's own keep line.
-                DurableFile.WriteAtomic(Path.Combine(SealedPath, SealedWeekStages.KeepSourceRowsUntilFileName),
-                    $"{keepSourceRowsUntilUtc:O}{Environment.NewLine}" +
-                    $"The source rows of this week stay in {Path.GetFileName(RowPath)} until this UTC time; then the sealing job (#1804) " +
-                    $"removes those that still equal their chunk rows. Change the first line to keep them longer.{Environment.NewLine}");
+                _checkpoint(SealingCheckpoints.SealBeforeTail);
 
-                TryDelete(Path.Combine(SealedPath, SealedWeekStages.SealingFileName));
+                // The tail: the keep file (until it exists the keep time is read from the marker's own keep line), then
+                // hsm-sealing goes. Whatever is not done here is done by the next pass, and nothing deletes an overlay row
+                // before it is done (see CompleteSealTail).
+                CompleteSealTail(SealedPath, RowPath);
 
                 _checkpoint(SealingCheckpoints.SealSwapped);
 
@@ -267,6 +266,8 @@ namespace HSMDatabase.LevelDB.Sealed
             if (!SealedWeekMarker.ExistsIn(SealedPath))
                 throw new InvalidOperationException($"{SealedPath} has no {SealedWeekMarker.FileName}; no source row is removed");
 
+            CompleteSealTail(SealedPath, RowPath);
+
             var (completed, everyChunkRead) = RemoveOverlayRowsEqualToChunks(store, null, SealingCheckpoints.RemoveBatch);
 
             if (!completed)
@@ -297,6 +298,9 @@ namespace HSMDatabase.LevelDB.Sealed
             {
                 if (_shouldStop())
                     return (false, everyChunkRead);
+
+                // Checked from disk before every step that deletes overlay rows (#1804 review U1).
+                EnsureNotAnInterruptedSeal();
 
                 var finished = Exclusive(sensorId is null ? "source-row removal step" : "fold overlay delete step", () =>
                 {
@@ -447,6 +451,8 @@ namespace HSMDatabase.LevelDB.Sealed
         public bool Fold(IReadOnlyList<Guid> sensors)
         {
             var store = SealedStore();
+
+            CompleteSealTail(SealedPath, RowPath);
             var rowsLeft = RowsLeftRecord.Read(SealedPath);
             var log = _week.OpenDeleteLog();
             var completed = true;
@@ -625,6 +631,9 @@ namespace HSMDatabase.LevelDB.Sealed
 
             if (_week.Current is not SealedSensorValuesDatabase)
                 throw new InvalidOperationException($"{SealedPath} is marked sealed but the week is served as rows; restart the server and unseal again");
+
+            // hsm-sealing must be gone before hsm-unsealing appears (a directory with both is never an unsealed leftover).
+            CompleteSealTail(SealedPath, RowPath);
 
             var unsealingMarker = Path.Combine(SealedPath, SealedWeekStages.UnsealingFileName);
 
@@ -1106,19 +1115,63 @@ namespace HSMDatabase.LevelDB.Sealed
             chunks.Write(batch, _syncWrite);
         }
 
-        private SealedSensorValuesDatabase SealedStore() =>
-            _week.Current as SealedSensorValuesDatabase ?? throw new InvalidOperationException($"{RowPath} is not served as a sealed week");
-
-        private static void TryDelete(string path)
+        /// <summary>
+        /// Finishes the tail of a seal (#1804 review U1): a sealed week whose chunk directory still has <c>hsm-sealing</c> or
+        /// lacks the keep file (a crash or a failed delete right after the swap) gets the keep file, from the keep line of
+        /// <c>hsm-sealed</c>, and loses <c>hsm-sealing</c>, both made durable. Until then the directory would read as an
+        /// interrupted seal the moment <c>hsm-sealed</c> were lost. Never throws: a tail that cannot be finished is logged
+        /// and the guard of every overlay delete (<see cref="EnsureNotAnInterruptedSeal"/>) refuses to go on.
+        /// </summary>
+        public static bool CompleteSealTail(string sealedPath, string rowPath)
         {
+            var sealing = Path.Combine(sealedPath, SealedWeekStages.SealingFileName);
+            var keep = Path.Combine(sealedPath, SealedWeekStages.KeepSourceRowsUntilFileName);
+
+            if (!SealedWeekMarker.ExistsIn(sealedPath) || !File.Exists(sealing) && File.Exists(keep))
+                return true;
+
             try
             {
-                File.Delete(path);
+                if (!File.Exists(keep))
+                {
+                    var (until, problem) = SealedWeekStages.ReadKeepUntil(sealedPath);
+
+                    if (until is not { } time)
+                    {
+                        _logger.Error($"Cannot finish the seal of {sealedPath}: {problem}");
+                        return false;
+                    }
+
+                    DurableFile.WriteAtomic(keep,
+                        $"{time:O}{Environment.NewLine}" +
+                        $"The source rows of this week stay in {Path.GetFileName(rowPath)} until this UTC time; then the sealing job (#1804) " +
+                        $"removes those that still equal their chunk rows. Change the first line to keep them longer.{Environment.NewLine}", strict: true);
+                }
+
+                if (File.Exists(sealing))
+                    DurableFile.Delete(sealing, strict: true);
+
+                return true;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                _logger.Warn($"Could not delete {path}: {e.Message}");
+                _logger.Error(e, $"Cannot finish the seal of {sealedPath}; no overlay row of the week is deleted until it is finished");
+                return false;
             }
         }
+
+        // No overlay row of a sealed week is deleted while its chunk directory could still read as an interrupted seal
+        // should hsm-sealed be lost: hsm-sealing must be gone and the keep file present, on disk, now.
+        private void EnsureNotAnInterruptedSeal()
+        {
+            if (File.Exists(Path.Combine(SealedPath, SealedWeekStages.SealingFileName)) ||
+                !File.Exists(Path.Combine(SealedPath, SealedWeekStages.KeepSourceRowsUntilFileName)))
+                throw new WeekNeedsAttentionException(RowPath,
+                    $"{SealedPath} still has {SealedWeekStages.SealingFileName} or lacks {SealedWeekStages.KeepSourceRowsUntilFileName}, and the seal's tail " +
+                    "could not be finished (see the error before this one); no overlay row of the week is deleted until it is");
+        }
+
+        private SealedSensorValuesDatabase SealedStore() =>
+            _week.Current as SealedSensorValuesDatabase ?? throw new InvalidOperationException($"{RowPath} is not served as a sealed week");
     }
 }
