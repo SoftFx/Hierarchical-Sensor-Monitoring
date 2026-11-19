@@ -38,9 +38,8 @@ public sealed class SealedWeekStoreTests
         Assert.Throws<SealedChunkReadException>(() => store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)).ToList());
         Assert.Throws<SealedChunkReadException>(() => store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToList());
         Assert.Throws<SealedChunkReadException>(() => store.GetAll().ToList());
-        Assert.Throws<SealedChunkReadException>(() => store.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense)));
-        Assert.Equal(4, store.ChunkReadFailures);
-        Assert.True(SealedHistoryDiagnostics.ChunkReadFailures >= globalBefore + 4);
+        Assert.Equal(3, store.ChunkReadFailures);
+        Assert.True(SealedHistoryDiagnostics.ChunkReadFailures >= globalBefore + 3);
 
         // The newest page lies in the last chunk and reads; going on into the corrupt chunk throws.
         var newestFirst = store.GetValuesTo(Min(sensors.Dense), Max(sensors.Dense)).GetEnumerator();
@@ -60,6 +59,17 @@ public sealed class SealedWeekStoreTests
         Assert.Throws<SealedChunkReadException>(() => store.GetFirst(Key(sensors.Dense, corrupt.FirstTick + 1), prefix));
         Assert.Throws<SealedChunkReadException>(() => store.Get(Key(sensors.Dense, corrupt.FirstTick + 1), prefix));
         Assert.Equal(failures + 3, store.ChunkReadFailures);
+
+        // The history size is informational: it does not throw. The unreadable chunk adds its stored bytes but no
+        // rows (its header is unreadable too), so the count is a lower bound. A late value inside the unreadable
+        // chunk's span is an overlay row and counts.
+        store.PutSensorValue(Key(sensors.Dense, corrupt.FirstTick + 1), TestValues.Bytes(SensorType.Double, corrupt.FirstTick + 1, new Random(1)));
+
+        var (count, keyBytes, valueBytes) = store.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense));
+        Assert.Equal(chunks[0].Rows + chunks[2].Rows + 1, count);
+        Assert.Equal(4 * 24, keyBytes);
+        Assert.True(valueBytes > 0);
+        Assert.True(store.ChunkReadFailures > failures + 3);
     }
 
     [Fact]

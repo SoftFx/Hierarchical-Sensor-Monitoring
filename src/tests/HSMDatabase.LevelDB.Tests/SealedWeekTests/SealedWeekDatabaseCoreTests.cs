@@ -26,6 +26,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
     private DatabaseCore _plain;
     private DatabaseCore _sealed;
     private FidelityComparer _compare;
+    private List<SealedChunk> _sealedChunks = [];
 
     private readonly Guid _dense = Guid.NewGuid();
     private readonly Guid _bar = Guid.NewGuid();
@@ -161,6 +162,13 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
         Assert.ThrowsAny<SealedChunkReadException>(() => _sealed.GetLatestValue(_dense, SealedWeekDay.AddMinutes(30).Ticks));
         Assert.True(SealedHistoryDiagnostics.ChunkReadFailures > before);
 
+        // The history size of the sensor does not throw: the two unreadable chunks count no rows (a lower bound).
+        var sealedChunks = _sealedChunks.Where(c => c.SensorId == _dense).OrderBy(c => c.FirstTick).ToList();
+        var plainSize = _plain.CalculateSensorHistorySize(_dense);
+        var sealedSize = _sealed.CalculateSensorHistorySize(_dense);
+        Assert.Equal(plainSize.dateCnt - sealedChunks[0].Rows - sealedChunks[^1].Rows, sealedSize.dateCnt);
+        Assert.True(sealedSize.valueSize > 0);
+
         // A sensor without a corrupt chunk reads as before.
         _compare.Value(_plain.GetLatestValue(_sparse, DateTime.MaxValue.Ticks), _sealed.GetLatestValue(_sparse, DateTime.MaxValue.Ticks), "latest of another sensor");
         _compare.Value(_plain.GetFirstValue(_sparse), _sealed.GetFirstValue(_sparse), "first of another sensor");
@@ -251,6 +259,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
         Assert.Equal(1, seal.RefusedSensors); // File
 
         _compare = new FidelityComparer(seal.SealedOriginals);
+        _sealedChunks = seal.Chunks;
         beforeOpen?.Invoke(settings.GetPathToSealedSensorValueDatabase(from, to), seal);
         _sealed = Open(_sealedSettings);
     }

@@ -370,13 +370,24 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Size and maintenance
 
+        // Informational (the history size of a sensor or node in the UI, the delete preview): it never throws for
+        // an unreadable chunk. That chunk adds its stored bytes, and the count falls back to a lower bound; the
+        // failure is logged and counted where it is found.
         public (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to)
         {
             long count = 0, keyBytes = 0, valueBytes = 0;
 
-            using (var cursor = OpenCursor())
+            try
+            {
+                using var cursor = OpenCursor();
+
                 for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
                     count++;
+            }
+            catch (SealedChunkReadException)
+            {
+                count = LowerBoundCount(from, to);
+            }
 
             foreach (var (key, value) in _openedDb.GetValueKeyPairFromTo(from, to))
             {
@@ -386,13 +397,102 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             using var chunks = _chunks.Native.CreateIterator(_readOptions);
 
-            foreach (var (key, chunk, _) in ChunksTouching(chunks, from, to))
+            foreach (var (key, chunk, _) in ChunkEntries(chunks, from, to))
             {
                 keyBytes += key.Length;
                 valueBytes += chunk.Length;
             }
 
             return (count, keyBytes, valueBytes);
+        }
+
+        // The rows in [from, to] when some chunk cannot be read: every overlay row, the rows of the readable chunks
+        // that no overlay row hides, and for an unreadable chunk wholly in the range with a readable header its row
+        // count less the overlay rows in its span (each could hide one of its rows). An unreadable chunk without a
+        // readable header counts nothing. Never more than a read would return.
+        private long LowerBoundCount(byte[] from, byte[] to)
+        {
+            var overlay = new List<byte[]>();
+
+            foreach (var (key, _) in _openedDb.GetValueKeyPairFromTo(from, to))
+                overlay.Add(key);
+
+            var hidden = overlay.Select(Convert.ToHexString).ToHashSet();
+            long count = overlay.Count;
+
+            using var chunks = _chunks.Native.CreateIterator(_readOptions);
+
+            foreach (var (key, chunk, header) in ChunkEntries(chunks, from, to))
+            {
+                if (header is not { } read)
+                    continue;
+
+                try
+                {
+                    foreach (var row in _reader.Decode(key, chunk))
+                    {
+                        var rowKey = KeyOrder.RowKey(key, row.Key);
+
+                        if (InRange(rowKey, from, to) && !hidden.Contains(Convert.ToHexString(rowKey)))
+                            count++;
+                    }
+                }
+                catch (SealedChunkReadException)
+                {
+                    var lastRow = KeyOrder.RowKey(key, read.LastKey);
+
+                    if (KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(lastRow, to) <= 0)
+                        count += Math.Max(0, read.RowCount - overlay.Count(k => KeyOrder.Compare(k, key) >= 0 && KeyOrder.Compare(k, lastRow) <= 0));
+                }
+            }
+
+            return count;
+        }
+
+        // The chunks that may have a row in [from, to], in key order, never throwing: a readable one with its
+        // header (only if it does reach the range), an unreadable one with a null header if its key is in the range.
+        // An unreadable chunk before `from` cannot be placed and is left out.
+        private IEnumerable<(byte[] key, byte[] chunk, ChunkHeader? header)> ChunkEntries(Iterator iterator, byte[] from, byte[] to)
+        {
+            iterator.Seek(from);
+
+            if (iterator.IsValid)
+                iterator.Prev();
+            else
+                iterator.SeekToLast();
+
+            if (!iterator.IsValid)
+                iterator.SeekToFirst();
+
+            for (; iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (KeyOrder.Compare(key, to) > 0)
+                    yield break;
+
+                var before = KeyOrder.Compare(key, from) < 0;
+
+                if (before && from.Length >= KeyOrder.SensorIdLength &&
+                    !key.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(from.AsSpan(0, KeyOrder.SensorIdLength)))
+                    continue;
+
+                var chunk = iterator.Value();
+                ChunkHeader? header = null;
+
+                try
+                {
+                    header = _reader.ReadHeader(key, chunk);
+                }
+                catch (SealedChunkReadException)
+                {
+                }
+
+                if (header is { } read ? KeyOrder.Compare(KeyOrder.RowKey(key, read.LastKey), from) < 0 : before)
+                    continue;
+
+                yield return (key, chunk, header);
+            }
         }
 
         public void Compact()
