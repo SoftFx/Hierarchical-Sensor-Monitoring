@@ -1393,7 +1393,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (shard is null)
                     return new HistorySealingPassReport { RunUtc = utcNow, Action = HistorySealingAction.Unseal, Week = weekName, Outcome = HistorySealingOutcome.NotFound };
 
-                var sealedPath = _settings.GetPathToSealedSensorValueDatabase(shard.From, DateTimeMethods.GetEndOfWeekTicks(shard.From));
+                var sealedPath = _settings.GetPathToSealedSensorValueDatabase(shard.From, shard.To);
 
                 if (SealedWeekStages.Read(shard.Path, sealedPath).Stage is not (SealedWeekStage.SealedKeepingSourceRows or SealedWeekStage.SourceRowsRemoved or SealedWeekStage.Unsealing))
                     return Publish(new HistorySealingPassReport
@@ -1431,7 +1431,7 @@ namespace HSMDatabase.DatabaseWorkCore
         // its overlay counted, unless the count from an earlier pass still holds.
         private SealingWeekCandidate SealingCandidate(ValuesDatabaseDictionary<ISensorValuesDatabase>.Shard shard, Dictionary<string, SensorValuesWeek> weeks, DateTime utcNow)
         {
-            var to = DateTimeMethods.GetEndOfWeekTicks(shard.From);
+            var to = shard.To;
             var status = SealedWeekStages.Read(shard.Path, _settings.GetPathToSealedSensorValueDatabase(shard.From, to));
 
             _sealingRetryAfter.TryGetValue(shard.Path, out var retryAfter);
@@ -1524,7 +1524,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var count = 0;
 
             foreach (var shard in _sensorValuesDatabases.GetShards())
-                if (SealedWeekMarker.ExistsIn(_settings.GetPathToSealedSensorValueDatabase(shard.From, DateTimeMethods.GetEndOfWeekTicks(shard.From))))
+                if (SealedWeekMarker.ExistsIn(_settings.GetPathToSealedSensorValueDatabase(shard.From, shard.To)))
                     count++;
 
             return count;

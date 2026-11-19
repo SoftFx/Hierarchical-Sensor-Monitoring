@@ -81,7 +81,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var path = GetDbPath.Invoke(from, to);
 
-            return new Shard(from, path, new Lazy<T>(() => CreateDb.Invoke(path, from, to), LazyThreadSafetyMode.ExecutionAndPublication));
+            return new Shard(from, to, path, new Lazy<T>(() => CreateDb.Invoke(path, from, to), LazyThreadSafetyMode.ExecutionAndPublication));
         }
 
         protected virtual string[] GetSensorValuesDirectories()
@@ -124,9 +124,12 @@ namespace HSMDatabase.DatabaseWorkCore
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
-        internal sealed class Shard(long from, string path, Lazy<T> database)
+        internal sealed class Shard(long from, long to, string path, Lazy<T> database)
         {
             public long From { get; } = from;
+
+            /// <summary>End of the week, as the database it opens is given it (the sealed directory name of a history week uses it).</summary>
+            public long To { get; } = to;
 
             public string Path { get; } = path;
 

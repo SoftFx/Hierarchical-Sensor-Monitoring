@@ -27,7 +27,7 @@ namespace HSMServer.BackgroundServices.DatabaseServices
         public HistorySealingService(IDatabaseCore database, IServerConfig config)
         {
             _database = database;
-            _settings = config.HistorySealing.Settings;
+            _settings = (config.HistorySealing ?? new HistorySealingConfig()).Settings;
 
             _logger.Info(_settings.Enabled
                 ? $"History sealing is on: weeks are sealed {_settings.SealAfter.TotalDays:F0} days after they close, source rows kept {_settings.KeepSourceRows.TotalDays:F0} days"
