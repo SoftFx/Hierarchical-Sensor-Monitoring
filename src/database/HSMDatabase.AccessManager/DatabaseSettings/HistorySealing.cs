@@ -52,6 +52,9 @@ namespace HSMServer.Core.DataLayer
 
         /// <summary>An operator's unseal.</summary>
         Unseal,
+
+        /// <summary>Delete the chunk directory a finished unseal left (a read held it then); lowest priority, never waited for.</summary>
+        DeleteLeftoverChunks,
     }
 
 
@@ -137,6 +140,15 @@ namespace HSMServer.Core.DataLayer
 
         public string Error { get; set; }
 
+        /// <summary>Something the operator may want to know that is not an error (a leftover directory still in use).</summary>
+        public string Note { get; set; }
+
+        /// <summary>The longest time each kind of exclusive step held a week's gate in this pass (writes to the week waited).</summary>
+        public Dictionary<string, TimeSpan> LongestExclusiveHold { get; } = [];
+
+        /// <summary>Weeks an operator has to look at, with the reason (lost marker, unreadable keep time, unreadable chunk).</summary>
+        public Dictionary<string, string> WeeksNeedingAttention { get; } = [];
+
 
         public int SensorsLeftAsRowsCount => SensorsLeftAsRows.Values.Sum();
 
@@ -169,6 +181,10 @@ namespace HSMServer.Core.DataLayer
                 text += $"; {UnreadableChunks} unreadable chunks";
             if (Error is not null)
                 text += $"; {Error}";
+            if (Note is not null)
+                text += $"; {Note}";
+            if (WeeksNeedingAttention.Count > 0)
+                text += $"; {WeeksNeedingAttention.Count} weeks need attention";
 
             return text;
         }

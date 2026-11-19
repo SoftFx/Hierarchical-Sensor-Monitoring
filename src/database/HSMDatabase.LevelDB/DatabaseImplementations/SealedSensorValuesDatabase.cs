@@ -50,7 +50,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
 
         // overlay: the open row database of the instance this one replaces in a live swap (#1804).
-        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to, LevelDBDatabaseAdapter overlay = null)
+        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to, LevelDBDatabaseAdapter overlay = null, LevelDBDatabaseAdapter chunks = null)
             : base(name, from, to, overlay)
         {
             SealedName = sealedName;
@@ -58,7 +58,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             try
             {
-                _chunks = new LevelDBDatabaseAdapter(sealedName);
+                _chunks = chunks ?? new LevelDBDatabaseAdapter(sealedName); // chunks: the open database of the seal that built it (#1804)
             }
             catch
             {

@@ -1307,24 +1307,43 @@ namespace HSMDatabase.DatabaseWorkCore
         // compaction state is Busy, like _compactionRetryAfter.
         private readonly Dictionary<string, DateTime> _sealingRetryAfter = [];
 
-        // What the job last counted to fold in a sealed week, keyed by the week: valid while the same instance serves
-        // it and its change counter has not moved. Touched only while the compaction state is Busy.
+        // What the job last counted to fold in a sealed week, keyed by the week. Touched only while the compaction state
+        // is Busy.
         private readonly Dictionary<string, FoldObservation> _foldObservations = [];
+
+        // Weeks an operator has to look at: from their marker files (refreshed every pass), and from an action that
+        // stopped on them (kept until an action on the week succeeds). Each reason is an error in the log once per process.
+        private readonly Dictionary<string, string> _stageAttention = [];
+        private readonly Dictionary<string, string> _actionAttention = [];
+        private readonly HashSet<string> _attentionLogged = [];
 
         private long _sealingSequence;
         private volatile HistorySealingPassReport _lastSealingPass;
 
-        private sealed record FoldObservation(object Instance, long ChangeCount, long FoldableRows, List<Guid> Sensors, DateTime UnchangedSinceUtc);
+        /// <summary>
+        /// The count of a week's foldable rows is redone at most this often while its change counter keeps moving (an
+        /// aggregated sensor rewrites its span row in the week the span began on every equal value, #1804 review S4), and
+        /// at once when the instance serving the week changed or nothing was counted yet.
+        /// </summary>
+        internal static TimeSpan FoldRecountInterval { get; set; } = TimeSpan.FromHours(1);
+
+        /// <summary>How long the job waits before it tries again to delete a chunk directory a read still uses.</summary>
+        internal static readonly TimeSpan LeftoverRetry = TimeSpan.FromHours(1);
+
+        // UnchangedSinceUtc: since when the number of foldable rows has been the same (a value rewritten in place does not
+        // change it), by the job's clock.
+        private sealed record FoldObservation(object Instance, long ChangeCount, long FoldableRows, List<Guid> Sensors, DateTime UnchangedSinceUtc, DateTime CountedAtUtc);
 
         public HistorySealingPassReport LastHistorySealingPass => _lastSealingPass;
+
+        /// <summary>How many times the job counted the foldable rows of a week (tests: the count must not run every pass).</summary>
+        internal int FoldCounts { get; private set; }
 
         // Test seam: runs at each SealingCheckpoints point of the job; a test throws from it to stand for a crash.
         internal Action<string> SealingCheckpoint { get; set; }
 
-        // Test seams: see WeekSealingJob.ChunksBeforeWrite and ReplacedInstanceWait.
+        // Test seam: see WeekSealingJob.ChunksBeforeWrite.
         internal Func<Guid, List<byte[]>, List<byte[]>> SealingChunksBeforeWrite { get; set; }
-
-        internal TimeSpan? UnsealReplacedInstanceWait { get; set; }
 
 
         public HistorySealingPassReport RunHistorySealingPass(DateTime utcNow, HistorySealingSettings settings)
@@ -1348,17 +1367,19 @@ namespace HSMDatabase.DatabaseWorkCore
                 var weeks = new Dictionary<string, SensorValuesWeek>();
                 var candidates = new List<SealingWeekCandidate>();
 
+                _stageAttention.Clear();
+
                 foreach (var shard in _sensorValuesDatabases.GetShards())
-                    candidates.Add(SealingCandidate(shard, weeks, utcNow));
+                    candidates.Add(SealingCandidate(shard, weeks, utcNow, settings));
 
                 if (HistorySealingPlanner.SelectNext(candidates, utcNow, settings) is not { } step)
-                    return Publish(new HistorySealingPassReport
+                    return Publish(WithAttention(new HistorySealingPassReport
                     {
                         Sequence = NextSealingSequence(),
                         RunUtc = utcNow,
                         Outcome = HistorySealingOutcome.NothingDue,
                         SealedWeeks = CountSealedWeeks(),
-                    });
+                    }));
 
                 var week = weeks.TryGetValue(step.Week.Name, out var opened) ? opened : OpenWeek(step.Week.Name);
 
@@ -1367,7 +1388,7 @@ namespace HSMDatabase.DatabaseWorkCore
             catch (Exception ex)
             {
                 _logger.Error(ex, "History sealing pass failed");
-                return Publish(new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Outcome = HistorySealingOutcome.Failed, Error = ex.Message });
+                return Publish(WithAttention(new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Outcome = HistorySealingOutcome.Failed, Error = ex.Message }));
             }
             finally
             {
@@ -1393,10 +1414,10 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (shard is null)
                     return new HistorySealingPassReport { RunUtc = utcNow, Action = HistorySealingAction.Unseal, Week = weekName, Outcome = HistorySealingOutcome.NotFound };
 
-                var sealedPath = _settings.GetPathToSealedSensorValueDatabase(shard.From, shard.To);
+                var status = SealedWeekStages.Read(shard.Path, _settings.GetPathToSealedSensorValueDatabase(shard.From, shard.To));
 
-                if (SealedWeekStages.Read(shard.Path, sealedPath).Stage is not (SealedWeekStage.SealedKeepingSourceRows or SealedWeekStage.SourceRowsRemoved or SealedWeekStage.Unsealing))
-                    return Publish(new HistorySealingPassReport
+                if (status.Stage is not (SealedWeekStage.SealedKeepingSourceRows or SealedWeekStage.SourceRowsRemoved or SealedWeekStage.Unsealing or SealedWeekStage.UnsealedLeftover))
+                    return Publish(WithAttention(new HistorySealingPassReport
                     {
                         Sequence = NextSealingSequence(),
                         RunUtc = utcNow,
@@ -1404,14 +1425,15 @@ namespace HSMDatabase.DatabaseWorkCore
                         Week = weekName,
                         Outcome = HistorySealingOutcome.NotSealed,
                         SealedWeeks = CountSealedWeeks(),
-                    });
+                        Error = status.Attention,
+                    }));
 
                 return RunSealingAction(HistorySealingAction.Unseal, (SensorValuesWeek)shard.Database, utcNow, null);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, $"Unseal of {weekName} failed");
-                return Publish(new HistorySealingPassReport
+                return Publish(WithAttention(new HistorySealingPassReport
                 {
                     Sequence = NextSealingSequence(),
                     RunUtc = utcNow,
@@ -1419,7 +1441,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     Week = weekName,
                     Outcome = HistorySealingOutcome.Failed,
                     Error = ex.Message,
-                });
+                }));
             }
             finally
             {
@@ -1427,12 +1449,16 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        // The state the planner needs, from the marker files; a sealed week whose source rows are gone is opened and
-        // its overlay counted, unless the count from an earlier pass still holds.
-        private SealingWeekCandidate SealingCandidate(ValuesDatabaseDictionary<ISensorValuesDatabase>.Shard shard, Dictionary<string, SensorValuesWeek> weeks, DateTime utcNow)
+        // The state the planner needs, from the marker files; a sealed week whose source rows are gone is opened and its
+        // overlay counted, unless a recent count still stands (FoldRecountInterval).
+        private SealingWeekCandidate SealingCandidate(ValuesDatabaseDictionary<ISensorValuesDatabase>.Shard shard, Dictionary<string, SensorValuesWeek> weeks,
+            DateTime utcNow, HistorySealingSettings settings)
         {
             var to = shard.To;
             var status = SealedWeekStages.Read(shard.Path, _settings.GetPathToSealedSensorValueDatabase(shard.From, to));
+
+            if (status.Attention is not null)
+                NoteAttention(_stageAttention, shard.Path, status.Attention);
 
             _sealingRetryAfter.TryGetValue(shard.Path, out var retryAfter);
             DateTime? retry = retryAfter == default ? null : retryAfter;
@@ -1444,18 +1470,32 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 weeks[shard.Path] = week;
 
-                if (!_foldObservations.TryGetValue(shard.Path, out var observation) ||
-                    !ReferenceEquals(observation.Instance, week.ServingInstance) || observation.ChangeCount != week.ChangeCount)
+                _foldObservations.TryGetValue(shard.Path, out var observation);
+
+                var sameInstance = observation is not null && ReferenceEquals(observation.Instance, week.ServingInstance);
+                var changed = !sameInstance || observation.ChangeCount != week.ChangeCount;
+
+                if (changed && (!sameInstance || utcNow - observation.CountedAtUtc >= FoldRecountInterval || utcNow < observation.CountedAtUtc))
                 {
                     var changeCount = week.ChangeCount;
-                    var (rows, sensors) = new WeekSealingJob(week, new HistorySealingPassReport(), null, null).CountFoldableRows();
 
-                    observation = new FoldObservation(week.ServingInstance, changeCount, rows, sensors, utcNow);
-                    _foldObservations[shard.Path] = observation;
+                    FoldCounts++;
+
+                    if (new WeekSealingJob(week, new HistorySealingPassReport(), () => IsDisposeStarted, null).CountFoldableRows() is { } count)
+                    {
+                        // Rows rewritten in place keep the count, so they do not restart the quiet period: a week whose few
+                        // aggregated rows change all the time is folded once per quiet period, not never and not every pass.
+                        var since = sameInstance && count.rows == observation.FoldableRows ? observation.UnchangedSinceUtc : utcNow;
+
+                        observation = new FoldObservation(week.ServingInstance, changeCount, count.rows, count.sensors, since, utcNow);
+                        _foldObservations[shard.Path] = observation;
+                    }
+                    else
+                        observation = null; // stopped for a shutdown
                 }
 
-                foldable = observation.FoldableRows;
-                unchangedSince = observation.UnchangedSinceUtc;
+                foldable = observation?.FoldableRows;
+                unchangedSince = observation?.UnchangedSinceUtc;
             }
 
             return new SealingWeekCandidate(shard.Path, shard.From, to, status, foldable, unchangedSince, retry);
@@ -1470,9 +1510,6 @@ namespace HSMDatabase.DatabaseWorkCore
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var job = new WeekSealingJob(week, report, () => IsDisposeStarted, SealingCheckpoint) { ChunksBeforeWrite = SealingChunksBeforeWrite };
 
-            if (UnsealReplacedInstanceWait is { } wait)
-                job.ReplacedInstanceWait = wait;
-
             _compactingDatabase = $"{week.Name} ({action})";
 
             HistorySealingOutcome outcome;
@@ -1485,11 +1522,17 @@ namespace HSMDatabase.DatabaseWorkCore
                     HistorySealingAction.RemoveSourceRows => job.RemoveSourceRows(utcNow),
                     HistorySealingAction.Fold => job.Fold(_foldObservations[week.Name].Sensors),
                     HistorySealingAction.FinishUnseal or HistorySealingAction.Unseal => job.Unseal(utcNow),
+                    HistorySealingAction.DeleteLeftoverChunks => job.DeleteLeftoverChunks(),
                     _ => throw new ArgumentOutOfRangeException(nameof(action)),
                 };
 
                 outcome = completed ? HistorySealingOutcome.Done : HistorySealingOutcome.Interrupted;
                 _sealingRetryAfter.Remove(week.Name);
+                _actionAttention.Remove(week.Name);
+
+                // A leftover directory still in use is checked again later, without holding anything back meanwhile.
+                if (!completed && action == HistorySealingAction.DeleteLeftoverChunks)
+                    _sealingRetryAfter[week.Name] = utcNow + LeftoverRetry;
             }
             catch (Exception ex)
             {
@@ -1499,6 +1542,11 @@ namespace HSMDatabase.DatabaseWorkCore
                 report.Error = ex.Message;
                 outcome = HistorySealingOutcome.Failed;
 
+                // Stopped on something an operator has to look at: a chunk directory that may hold the only copy of the week,
+                // a chunk that cannot be read.
+                if (ex is WeekNeedsAttentionException or SealedChunkReadException)
+                    NoteAttention(_actionAttention, week.Name, ex.Message);
+
                 _logger.Error(ex, $"History sealing failed: {action} of {week.Name}; next attempt not before {retryAfter:O}");
             }
 
@@ -1507,16 +1555,33 @@ namespace HSMDatabase.DatabaseWorkCore
 
             report.Duration = watch.Elapsed;
             report.SealedWeeks = CountSealedWeeks();
-
             report.Outcome = outcome;
-            var result = report;
+
+            WithAttention(report);
 
             if (outcome == HistorySealingOutcome.Failed)
-                _logger.Error($"History sealing: {result} in {result.Duration.TotalSeconds:F1} s");
+                _logger.Error($"History sealing: {report} in {report.Duration.TotalSeconds:F1} s");
             else
-                _logger.Info($"History sealing: {result} in {result.Duration.TotalSeconds:F1} s");
+                _logger.Info($"History sealing: {report} in {report.Duration.TotalSeconds:F1} s" +
+                             string.Concat(report.LongestExclusiveHold.Select(h => $"; {h.Key} held the gate up to {h.Value.TotalMilliseconds:F1} ms")));
 
-            return Publish(result);
+            return Publish(report);
+        }
+
+        private void NoteAttention(Dictionary<string, string> into, string week, string reason)
+        {
+            into[week] = reason;
+
+            if (_attentionLogged.Add($"{week}|{reason}"))
+                _logger.Error($"Sealed history: {week} needs attention: {reason}");
+        }
+
+        private HistorySealingPassReport WithAttention(HistorySealingPassReport report)
+        {
+            foreach (var (week, reason) in _stageAttention.Concat(_actionAttention))
+                report.WeeksNeedingAttention.TryAdd(week, reason);
+
+            return report;
         }
 
         private int CountSealedWeeks()

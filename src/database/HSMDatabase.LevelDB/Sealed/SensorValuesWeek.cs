@@ -31,7 +31,14 @@ namespace HSMDatabase.LevelDB.Sealed
     /// </summary>
     public sealed class SensorValuesWeek : ISensorValuesDatabase
     {
-        private readonly ReaderWriterLockSlim _gate = new(LockRecursionPolicy.SupportsRecursion);
+        // No recursion: nothing that holds the gate calls back into the handle (a write or a delete calls only its instance;
+        // the job's steps call only the instances and the files).
+        private readonly ReaderWriterLockSlim _gate = new(LockRecursionPolicy.NoRecursion);
+
+        private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
+
+        /// <summary>An exclusive step held longer than this is logged as a warning.</summary>
+        internal static readonly TimeSpan LongHold = TimeSpan.FromMilliseconds(100);
         private readonly List<DeleteLog> _deleteLogs = [];
         private readonly List<Lease> _replaced = [];
         private readonly object _replacedLock = new();
@@ -178,39 +185,41 @@ namespace HSMDatabase.LevelDB.Sealed
 
         #region The sealing job (#1804)
 
-        /// <summary>Runs <paramref name="action"/> with the gate held exclusively: no write or range delete runs meanwhile.</summary>
-        internal void Exclusive(Action action)
+        /// <summary>
+        /// Runs <paramref name="action"/> with the gate held exclusively: no write or range delete runs meanwhile. How long
+        /// the gate was held (from acquiring it) is returned and logged: Debug, and Warn above <see cref="LongHold"/>.
+        /// </summary>
+        internal T Exclusive<T>(string what, Func<T> action, out TimeSpan held)
         {
             _gate.EnterWriteLock();
-            try
-            {
-                action();
-            }
-            finally
-            {
-                _gate.ExitWriteLock();
-            }
-        }
+            var watch = System.Diagnostics.Stopwatch.StartNew();
 
-        internal T Exclusive<T>(Func<T> action)
-        {
-            _gate.EnterWriteLock();
             try
             {
                 return action();
             }
             finally
             {
+                held = watch.Elapsed;
                 _gate.ExitWriteLock();
+
+                if (held >= LongHold)
+                    _logger.Warn($"{what} held the gate of {Name} for {held.TotalMilliseconds:F1} ms: writes to the week waited");
+                else
+                    _logger.Debug($"{what} held the gate of {Name} for {held.TotalMilliseconds:F2} ms");
             }
         }
+
+        internal T Exclusive<T>(Func<T> action) => Exclusive("exclusive step", action, out _);
+
+        internal void Exclusive(Action action) => Exclusive("exclusive step", () => { action(); return 0; }, out _);
 
         /// <summary>
         /// Opens a delete log: every range delete that starts from now on is recorded in it. Taken under the exclusive
         /// gate, so a delete already running has finished and is not in the log; whatever the caller reads afterwards
         /// already reflects it.
         /// </summary>
-        internal DeleteLog OpenDeleteLog() => Exclusive(() =>
+        internal DeleteLog OpenDeleteLog() => Exclusive("delete log", () =>
         {
             var log = new DeleteLog();
 
@@ -218,7 +227,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 _deleteLogs.Add(log);
 
             return log;
-        });
+        }, out _);
 
         internal void CloseDeleteLog(DeleteLog log)
         {
@@ -247,22 +256,6 @@ namespace HSMDatabase.LevelDB.Sealed
 
             // Drops the reference the handle held; the instance is disposed when the last read on it ends.
             old.Release();
-        }
-
-        /// <summary>Waits until every replaced instance is disposed (no read uses one any more); false on a timeout.</summary>
-        internal bool WaitForReplacedInstances(TimeSpan timeout)
-        {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-
-            while (ReplacedInUse > 0)
-            {
-                if (watch.Elapsed >= timeout)
-                    return false;
-
-                Thread.Sleep(10);
-            }
-
-            return true;
         }
 
         #endregion

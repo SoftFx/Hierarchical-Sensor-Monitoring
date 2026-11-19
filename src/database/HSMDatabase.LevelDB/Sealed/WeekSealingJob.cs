@@ -49,8 +49,6 @@ namespace HSMDatabase.LevelDB.Sealed
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly WriteOptions _syncWrite = new() { Sync = true };
 
-        /// <summary>How long an unseal waits for reads still using the replaced sealed store before it leaves the directory to the next pass.</summary>
-        public TimeSpan ReplacedInstanceWait { get; set; } = TimeSpan.FromSeconds(30);
 
         // Test seam: changes the chunks of a sensor between encoding and writing, so a test can make a seal's verification fail.
         public Func<Guid, List<byte[]>, List<byte[]>> ChunksBeforeWrite { get; set; }
@@ -90,9 +88,8 @@ namespace HSMDatabase.LevelDB.Sealed
             if (_week.Current is not SensorValuesDatabaseWorker rows)
                 throw new InvalidOperationException($"{RowPath} is not served as rows; it cannot be sealed");
 
-            using var writer = SealedWeekWriter.Open(SealedPath);
-
-            DurableFile.WriteAtomic(Path.Combine(SealedPath, SealedWeekStages.SealingFileName),
+            // Refuses (untouched) a chunk directory that is not provably the remains of an interrupted seal.
+            using var writer = SealedWeekWriter.Open(SealedPath, RowPath,
                 $"Sealing started at {utcNow:O} by the sealing job (#1804).{Environment.NewLine}" +
                 $"Until {SealedWeekMarker.FileName} appears this directory is not read, and the next seal starts it again.{Environment.NewLine}");
 
@@ -125,60 +122,82 @@ namespace HSMDatabase.LevelDB.Sealed
                 if (_shouldStop())
                     return false;
 
-                _week.Exclusive(() =>
+                // Everything that does not have to be atomic with the delete-log check happens before the gate: the record of
+                // the sensors left as rows, and the sealed store, built over the writer's still open chunk database (it is
+                // not closed and opened again) and over the week's row database. Not current yet, so nobody reads it.
+                rowsLeft.Write(SealedPath);
+
+                var store = new SealedSensorValuesDatabase(RowPath, SealedPath, _week.From, _week.To, rows.RowDatabase, writer.DetachDatabase());
+                var swapped = false;
+                var marker = Path.Combine(SealedPath, SealedWeekMarker.FileName);
+
+                try
                 {
-                    // A delete that started after the log was opened may have removed rows these chunks hold: those
-                    // sensors stay rows (their rows are complete, the delete applied to them) and are retried later.
-                    var touched = sealedSensors.Keys.Where(log.Touches).ToList();
-
-                    if (touched.Count > 0)
+                    // Held only for what must be atomic with the check: the check (and the rare drop of the chunks a delete
+                    // touched), the marker, the swap.
+                    Exclusive("seal commit", () =>
                     {
-                        writer.DeleteChunks(touched);
+                        // A delete that started after the log was opened may have removed rows these chunks hold: those
+                        // sensors stay rows (their rows are complete, the delete applied to them) and are retried later.
+                        var touched = sealedSensors.Keys.Where(log.Touches).ToList();
 
-                        foreach (var sensorId in touched)
+                        if (touched.Count > 0)
                         {
-                            sealedSensors.Remove(sensorId);
-                            _report.LeaveAsRows(LeftAsRows.DeletedDuringSeal);
+                            DeleteChunksOf(store.ChunkDatabase.Native, touched);
+
+                            foreach (var sensorId in touched)
+                            {
+                                sealedSensors.Remove(sensorId);
+                                _report.LeaveAsRows(LeftAsRows.DeletedDuringSeal);
+                            }
                         }
-                    }
 
-                    foreach (var (_, stats) in sealedSensors)
-                    {
-                        _report.RowsSealed += stats.rows;
-                        _report.SourceBytes += stats.sourceBytes;
-                        _report.ChunkBytes += stats.chunkBytes;
-                        _report.SensorsSealed++;
-                    }
+                        foreach (var (_, stats) in sealedSensors)
+                        {
+                            _report.RowsSealed += stats.rows;
+                            _report.SourceBytes += stats.sourceBytes;
+                            _report.ChunkBytes += stats.chunkBytes;
+                            _report.SensorsSealed++;
+                        }
 
-                    rowsLeft.Write(SealedPath);
+                        try
+                        {
+                            writer.WriteMarker($"Sealed by the sealing job (#1804): {_report.RowsSealed} rows of {sealedSensors.Count} sensors " +
+                                               $"in {sealedSensors.Values.Sum(s => s.chunks)} chunks ({_report.SourceBytes} -> {_report.ChunkBytes} bytes); " +
+                                               $"{_report.SensorsLeftAsRowsCount} sensors left as rows.{Environment.NewLine}" +
+                                               $"{SealedWeekStages.KeepLinePrefix}{keepSourceRowsUntilUtc:O}");
+                        }
+                        catch
+                        {
+                            // A marker whose rename could not be made durable is taken back: the week stays rows, and the
+                            // directory (still with hsm-sealing) is an interrupted seal that the next attempt restarts.
+                            if (File.Exists(marker))
+                                File.Delete(marker);
 
-                    DurableFile.WriteAtomic(Path.Combine(SealedPath, SealedWeekStages.KeepSourceRowsUntilFileName),
-                        $"{keepSourceRowsUntilUtc:O}{Environment.NewLine}" +
-                        $"The source rows of this week stay in {Path.GetFileName(RowPath)} until this UTC time; then the sealing job (#1804) " +
-                        $"removes those that still equal their chunk rows. Change the first line to keep them longer.{Environment.NewLine}");
-
-                    writer.CloseDatabase();
-
-                    // Opened before the marker exists: a sealed store that cannot be opened leaves the week as it was.
-                    var store = new SealedSensorValuesDatabase(RowPath, SealedPath, _week.From, _week.To, rows.RowDatabase);
-
-                    try
-                    {
-                        writer.WriteMarker($"Sealed by the sealing job (#1804): {_report.RowsSealed} rows of {sealedSensors.Count} sensors " +
-                                           $"in {sealedSensors.Values.Sum(s => s.chunks)} chunks ({_report.SourceBytes} -> {_report.ChunkBytes} bytes); " +
-                                           $"{_report.SensorsLeftAsRowsCount} sensors left as rows; source rows kept until {keepSourceRowsUntilUtc:O}");
+                            throw;
+                        }
 
                         _checkpoint(SealingCheckpoints.SealMarked);
-                    }
-                    catch
+
+                        _week.Swap(_ => store);
+                        swapped = true;
+                    });
+                }
+                finally
+                {
+                    if (!swapped)
                     {
                         store.ReleaseRowDatabase();
                         store.Dispose();
-                        throw;
                     }
+                }
 
-                    _week.Swap(_ => store);
-                });
+                // After the marker: an interrupted seal never has it. Until it is written the keep time is read from the
+                // marker's own keep line.
+                DurableFile.WriteAtomic(Path.Combine(SealedPath, SealedWeekStages.KeepSourceRowsUntilFileName),
+                    $"{keepSourceRowsUntilUtc:O}{Environment.NewLine}" +
+                    $"The source rows of this week stay in {Path.GetFileName(RowPath)} until this UTC time; then the sealing job (#1804) " +
+                    $"removes those that still equal their chunk rows. Change the first line to keep them longer.{Environment.NewLine}");
 
                 TryDelete(Path.Combine(SealedPath, SealedWeekStages.SealingFileName));
 
@@ -254,7 +273,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 return false;
 
             if (!everyChunkRead)
-                throw new IOException($"{_report.UnreadableChunks} chunks of {SealedPath} could not be read; their source rows stay and the removal is retried");
+                throw new WeekNeedsAttentionException(RowPath, $"{_report.UnreadableChunks} chunks of {SealedPath} could not be read (see the chunk read errors in the log); their source rows stay and the removal is retried daily. Clear the history range of the sensor named in the error to remove the chunk.");
 
             DurableFile.WriteAtomic(Path.Combine(SealedPath, SealedWeekStages.SourceRowsRemovedFileName),
                 $"Source rows removed at {utcNow:O} by the sealing job (#1804): {_report.OverlayRowsRemoved} rows that equalled their chunk rows.{Environment.NewLine}");
@@ -279,7 +298,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 if (_shouldStop())
                     return (false, everyChunkRead);
 
-                var finished = _week.Exclusive(() =>
+                var finished = Exclusive(sensorId is null ? "source-row removal step" : "fold overlay delete step", () =>
                 {
                     using var options = new ReadOptions();
                     using var iterator = store.ChunkDatabase.Native.CreateIterator(options);
@@ -374,7 +393,7 @@ namespace HSMDatabase.LevelDB.Sealed
         /// that are not File sensors and not left as rows with the same rows as when they were left. Only after the
         /// source rows are gone; during the keep period the overlay holds every row anyway.
         /// </summary>
-        public (long rows, List<Guid> sensors) CountFoldableRows()
+        public (long rows, List<Guid> sensors)? CountFoldableRows()
         {
             var store = SealedStore();
             var rowsLeft = RowsLeftRecord.Read(SealedPath);
@@ -385,6 +404,10 @@ namespace HSMDatabase.LevelDB.Sealed
 
             foreach (var sensorId in Sensors(store.RowDatabase.Native, options))
             {
+                // A large overlay must not hold a shutdown: the count is then unknown and done again later.
+                if (_shouldStop())
+                    return null;
+
                 long count = 0;
                 var first = true;
                 var file = false;
@@ -518,7 +541,7 @@ namespace HSMDatabase.LevelDB.Sealed
             if (_shouldStop())
                 return false;
 
-            var committed = _week.Exclusive(() =>
+            var committed = Exclusive("fold commit", () =>
             {
                 // A delete that started on this sensor after the snapshot: the new chunks may hold rows it removed.
                 if (log.Touches(sensorId))
@@ -583,11 +606,26 @@ namespace HSMDatabase.LevelDB.Sealed
         /// chunk row the overlay does not hold into it (an overlay row wins), one chunk per step under the exclusive
         /// gate, synced; then, under the gate, mark the row directory as unsealed, delete <c>hsm-sealed</c> and swap
         /// the week to rows; last, delete the chunk directory once no read uses it. The marker goes before any chunk,
-        /// so a sealed marker never stands over a partly deleted chunk directory. False when stopped, or when the chunk
-        /// directory is still in use (the next pass deletes it).
+        /// so a sealed marker never stands over a partly deleted chunk directory. False only when stopped for a shutdown.
+        /// The unseal is done once the week is rows and <c>hsm-sealed</c> is gone; the chunk directory is then a leftover,
+        /// deleted here if no read still uses it, otherwise by <see cref="DeleteLeftoverChunks"/> later (never waited for).
         /// </summary>
         public bool Unseal(DateTime utcNow)
         {
+            var status = SealedWeekStages.Read(RowPath, SealedPath);
+
+            if (status.Stage == SealedWeekStage.UnsealedLeftover)
+            {
+                DeleteLeftoverChunks();
+                return true;
+            }
+
+            if (status.Stage is not (SealedWeekStage.SealedKeepingSourceRows or SealedWeekStage.SourceRowsRemoved or SealedWeekStage.Unsealing))
+                throw new WeekNeedsAttentionException(RowPath, status.Attention ?? $"{RowPath} is in stage {status.Stage}; there is nothing to unseal");
+
+            if (_week.Current is not SealedSensorValuesDatabase)
+                throw new InvalidOperationException($"{SealedPath} is marked sealed but the week is served as rows; restart the server and unseal again");
+
             var unsealingMarker = Path.Combine(SealedPath, SealedWeekStages.UnsealingFileName);
 
             if (!File.Exists(unsealingMarker))
@@ -599,37 +637,47 @@ namespace HSMDatabase.LevelDB.Sealed
                 _checkpoint(SealingCheckpoints.UnsealStarted);
             }
 
-            if (_week.Current is SealedSensorValuesDatabase store)
+            var store = (SealedSensorValuesDatabase)_week.Current;
+
+            if (!CopyChunkRowsToOverlay(store))
+                return false;
+
+            Exclusive("unseal commit", () =>
             {
-                if (!CopyChunkRowsToOverlay(store))
-                    return false;
-
-                _week.Exclusive(() =>
-                {
-                    WriteUnsealedMarker(utcNow);
-
-                    _checkpoint(SealingCheckpoints.UnsealMarked);
-
-                    DurableFile.Delete(Path.Combine(SealedPath, SealedWeekMarker.FileName));
-
-                    _week.Swap(rowDatabase => new SensorValuesDatabaseWorker(RowPath, _week.From, _week.To, rowDatabase));
-                });
-
-                _checkpoint(SealingCheckpoints.UnsealSwapped);
-            }
-            else
-            {
-                // Served as rows: the copy finished and the sealed marker went before a restart.
-                if (SealedWeekMarker.ExistsIn(SealedPath))
-                    throw new InvalidOperationException($"{SealedPath} is marked sealed but the week is served as rows; restart the server and unseal again");
-
+                // hsm-unsealed before hsm-sealed goes: together with hsm-unsealing it proves the copy finished, which is
+                // what lets the leftover directory be deleted (SealedWeekStatus.MayDeleteChunkDirectory).
                 WriteUnsealedMarker(utcNow);
-            }
 
-            if (!_week.WaitForReplacedInstances(ReplacedInstanceWait))
+                _checkpoint(SealingCheckpoints.UnsealMarked);
+
+                DurableFile.Delete(Path.Combine(SealedPath, SealedWeekMarker.FileName));
+
+                _week.Swap(rowDatabase => new SensorValuesDatabaseWorker(RowPath, _week.From, _week.To, rowDatabase));
+            });
+
+            _checkpoint(SealingCheckpoints.UnsealSwapped);
+
+            DeleteLeftoverChunks();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Deletes the chunk directory a finished unseal left, if the one rule allows it
+        /// (<see cref="SealedWeekStatus.MayDeleteChunkDirectory"/>) and no read uses the replaced sealed store any more.
+        /// Checks once and never waits: true when deleted, false when a read still holds it (the caller retries later).
+        /// </summary>
+        public bool DeleteLeftoverChunks()
+        {
+            var status = SealedWeekStages.Read(RowPath, SealedPath);
+
+            if (status.Stage != SealedWeekStage.UnsealedLeftover || !status.MayDeleteChunkDirectory)
+                throw new WeekNeedsAttentionException(RowPath, status.Attention ?? $"{SealedPath} is in stage {status.Stage}; it is not deleted");
+
+            if (_week.ReplacedInUse > 0)
             {
-                _report.Error = $"the week is rows again, but a read still uses its chunks: {Path.GetFileName(SealedPath)} is deleted by the next sealing pass or the next unseal";
-                _logger.Warn($"The unseal of {RowPath} is done, but a read still uses its chunks; {SealedPath} is deleted by the next sealing pass or the next unseal");
+                _report.Note = $"the week is rows again; {Path.GetFileName(SealedPath)} is still used by a read and is deleted by a later pass";
+                _logger.Info($"The unseal of {RowPath} is done; {SealedPath} is still used by a read and is deleted by a later pass");
                 return false;
             }
 
@@ -650,7 +698,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 if (_shouldStop())
                     return false;
 
-                var finished = _week.Exclusive(() =>
+                var finished = Exclusive("unseal copy step", () =>
                 {
                     using var options = new ReadOptions();
                     using var iterator = store.ChunkDatabase.Native.CreateIterator(options);
@@ -1033,6 +1081,30 @@ namespace HSMDatabase.LevelDB.Sealed
 
         #endregion
 
+
+        // A step under the week's exclusive gate; how long the gate was held goes into the report (longest per kind).
+        private void Exclusive(string what, Action action) => Exclusive(what, () => { action(); return 0; });
+
+        private T Exclusive<T>(string what, Func<T> action)
+        {
+            var result = _week.Exclusive(what, action, out var held);
+
+            if (!_report.LongestExclusiveHold.TryGetValue(what, out var longest) || held > longest)
+                _report.LongestExclusiveHold[what] = held;
+
+            return result;
+        }
+
+        private static void DeleteChunksOf(DB chunks, IReadOnlyCollection<Guid> sensors)
+        {
+            using var batch = new WriteBatch();
+
+            foreach (var sensorId in sensors)
+                foreach (var (key, _) in SensorRows(chunks, null, sensorId))
+                    batch.Delete(key);
+
+            chunks.Write(batch, _syncWrite);
+        }
 
         private SealedSensorValuesDatabase SealedStore() =>
             _week.Current as SealedSensorValuesDatabase ?? throw new InvalidOperationException($"{RowPath} is not served as a sealed week");

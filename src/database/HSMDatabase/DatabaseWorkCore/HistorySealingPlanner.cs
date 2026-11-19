@@ -26,7 +26,9 @@ namespace HSMDatabase.DatabaseWorkCore
     /// week states and the clock; nothing here touches the disk.
     ///
     /// One action per pass, in this order: finish an interrupted unseal; remove the source rows of a sealed week whose
-    /// keep period ended; seal a closed week; fold a sealed week's overlay. Within each kind the oldest week first. A
+    /// keep period ended; seal a closed week; fold a sealed week's overlay; delete the chunk directory a finished unseal
+    /// left. A week that needs attention (<see cref="SealedWeekStage.NeedsAttention"/>, an unreadable keep time) gets no
+    /// action at all. Within each kind the oldest week first. A
     /// week whose last action failed waits for <see cref="FailureBackoff"/> and does not hold back the others.
     /// </summary>
     public static class HistorySealingPlanner
@@ -78,6 +80,10 @@ namespace HSMDatabase.DatabaseWorkCore
             && (rows >= settings.FoldMinRows || week.UnchangedSinceUtc is { } since && utcNow - since >= settings.FoldQuietPeriod)
             && IsNotHeldBack(week, utcNow);
 
+        /// <summary>The chunk directory a finished unseal left: clean-up only, the lowest priority.</summary>
+        public static bool IsLeftoverDue(SealingWeekCandidate week, DateTime utcNow) =>
+            week.Status.Stage == SealedWeekStage.UnsealedLeftover && IsNotHeldBack(week, utcNow);
+
         public static SealingStep? SelectNext(IEnumerable<SealingWeekCandidate> weeks, DateTime utcNow, HistorySealingSettings settings)
         {
             SealingStep? best = null;
@@ -88,6 +94,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     : IsSourceRemovalDue(week, utcNow) ? HistorySealingAction.RemoveSourceRows
                     : IsSealDue(week, utcNow, settings) ? HistorySealingAction.Seal
                     : IsFoldDue(week, utcNow, settings) ? HistorySealingAction.Fold
+                    : IsLeftoverDue(week, utcNow) ? HistorySealingAction.DeleteLeftoverChunks
                     : HistorySealingAction.None;
 
                 if (action == HistorySealingAction.None)
@@ -110,6 +117,7 @@ namespace HSMDatabase.DatabaseWorkCore
             HistorySealingAction.RemoveSourceRows => 1,
             HistorySealingAction.Seal => 2,
             HistorySealingAction.Fold => 3,
+            HistorySealingAction.DeleteLeftoverChunks => 4,
             _ => int.MaxValue,
         };
     }
