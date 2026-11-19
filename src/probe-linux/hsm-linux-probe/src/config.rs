@@ -206,7 +206,7 @@ pub struct DockerConfig {
     #[serde(default = "default_docker_oom_latch_hours")]
     pub oom_latch_hours: u64,
     /// `project/service` patterns (`*` matches within one segment) whose services are not
-    /// monitored, e.g. `portainer/*`, `lumina-ci/janitor`.
+    /// monitored, e.g. `panelhost/*`, `lumina-ci/janitor`.
     #[serde(default)]
     pub exclude: Vec<String>,
 }
@@ -1113,11 +1113,11 @@ mod tests {
     #[test]
     fn docker_exclusions_parse_and_are_validated() {
         let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
-             "probe": { "docker": { "exclude": ["portainer/*", "lumina-ci/janitor"] } } }"#;
+             "probe": { "docker": { "exclude": ["panelhost/*", "lumina-ci/janitor"] } } }"#;
         let docker = Config::parse(text).expect("parse").probe.docker;
-        assert_eq!(docker.exclude, vec!["portainer/*", "lumina-ci/janitor"]);
+        assert_eq!(docker.exclude, vec!["panelhost/*", "lumina-ci/janitor"]);
         assert!(DockerConfig::default().exclude.is_empty());
-        for bad in ["portainer", "a/b/c", "/db", "gitea/", ""] {
+        for bad in ["panelhost", "a/b/c", "/db", "gitsrv/", ""] {
             let text = format!(
                 r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
                      "probe": {{ "docker": {{ "exclude": ["{bad}"] }} }} }}"#

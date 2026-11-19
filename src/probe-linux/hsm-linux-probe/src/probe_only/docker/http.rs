@@ -334,7 +334,7 @@ mod tests {
         let response = parse_response(CHUNKED, CAP).expect("parse");
         assert_eq!(response.status, 200);
         let json: serde_json::Value = serde_json::from_slice(&response.body).expect("json body");
-        assert_eq!(json["Name"], "/portainer-portainer-1");
+        assert_eq!(json["Name"], "/panelhost-panelhost-1");
     }
 
     #[test]

@@ -530,7 +530,7 @@ mod tests {
     fn the_demo_write_counters_are_cgroup_v2_lowercase_writes() {
         let t0 = demo_stats(STATS_T0);
         let t1 = demo_stats(STATS_T1);
-        // gitea/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
+        // gitsrv/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
         // (2_881_179_648) are not counted.
         let mut plain = Stacking::default();
         assert_eq!(
@@ -592,7 +592,7 @@ mod tests {
             None
         );
         assert!(!host_accounts_io);
-        // A sibling lists one (gitea/db): the host accounts block I/O per container.
+        // A sibling lists one (gitsrv/db): the host accounts block I/O per container.
         assert_eq!(
             written_bytes(
                 by_prefix(&t0, "abbd59dcacc8"),
