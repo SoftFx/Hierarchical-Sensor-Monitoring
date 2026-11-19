@@ -71,6 +71,49 @@ namespace HSMDatabase.LevelDB.Sealed
         }
 
         /// <summary>
+        /// The chunks stored for <paramref name="sensorId"/>, as they are on disk now, in key order: the sealing job
+        /// (#1804) reads back what it wrote and verifies it before the week is marked.
+        /// </summary>
+        public IEnumerable<(byte[] key, byte[] chunk)> ReadChunks(Guid sensorId)
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            var prefix = sensorId.ToByteArray();
+
+            using var options = new ReadOptions();
+            using var iterator = _database.Native.CreateIterator(options);
+
+            for (iterator.Seek(new DbKey(sensorId, 0L).ToBytes()); iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (key.Length < prefix.Length || !key.AsSpan(0, prefix.Length).SequenceEqual(prefix))
+                    yield break;
+
+                yield return (key, iterator.Value());
+            }
+        }
+
+        /// <summary>Removes every chunk of the sensors in <paramref name="sensorIds"/>, in one synced batch: they stay rows.</summary>
+        public void DeleteChunks(IEnumerable<Guid> sensorIds)
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            using var batch = new WriteBatch();
+            var any = false;
+
+            foreach (var sensorId in sensorIds)
+                foreach (var (key, _) in ReadChunks(sensorId))
+                {
+                    batch.Delete(key);
+                    any = true;
+                }
+
+            if (any)
+                _database.Native.Write(batch, _syncWrite);
+        }
+
+        /// <summary>
         /// Closes the chunk database and writes the marker that makes the directory a complete sealed week:
         /// a temporary file, flushed to disk, then renamed over nothing.
         /// </summary>
@@ -78,8 +121,26 @@ namespace HSMDatabase.LevelDB.Sealed
         {
             ObjectDisposedException.ThrowIf(_database is null, this);
 
-            _database.Dispose();
+            CloseDatabase();
+            WriteMarker(description);
+        }
+
+        /// <summary>
+        /// The first half of <see cref="Complete"/>: closes the chunk database (every batch is already synced). The
+        /// sealing job (#1804) opens the sealed store over it before it writes the marker, so a store that cannot be
+        /// opened leaves no marker behind.
+        /// </summary>
+        public void CloseDatabase()
+        {
+            _database?.Dispose();
             _database = null;
+        }
+
+        /// <summary>The second half of <see cref="Complete"/>: the marker, once the database is closed.</summary>
+        public void WriteMarker(string description)
+        {
+            if (_database is not null)
+                throw new InvalidOperationException("The chunk database must be closed before the marker is written");
 
             var marker = Path.Combine(_path, SealedWeekMarker.FileName);
             var temporary = marker + ".tmp";
@@ -93,6 +154,10 @@ namespace HSMDatabase.LevelDB.Sealed
             }
 
             File.Move(temporary, marker, overwrite: false);
+
+            // The rename and the directory itself must survive a power loss before any source row may go (#1804).
+            DurableFile.SyncDirectory(_path);
+            DurableFile.SyncDirectory(Path.GetDirectoryName(Path.GetFullPath(_path)));
         }
 
         public void Dispose()

@@ -361,6 +361,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod) =>
             _inner.CompactNextDueHistoryShard(utcNow, quietPeriod);
 
+        public HistorySealingPassReport RunHistorySealingPass(DateTime utcNow, HistorySealingSettings settings) =>
+            _inner.RunHistorySealingPass(utcNow, settings);
+
+        public HistorySealingPassReport UnsealHistoryWeek(string weekName, DateTime utcNow) => _inner.UnsealHistoryWeek(weekName, utcNow);
+
+        public HistorySealingPassReport LastHistorySealingPass => _inner.LastHistorySealingPass;
+
         public IEnumerable<(byte[], byte[])> GetAll() => _inner.GetAll();
 
         public void Dispose() => _inner.Dispose();

@@ -49,7 +49,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         internal Action BetweenReadIterators { get; set; }
 
 
-        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to) : base(name, from, to)
+        // overlay: the open row database of the instance this one replaces in a live swap (#1804).
+        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to, LevelDBDatabaseAdapter overlay = null)
+            : base(name, from, to, overlay)
         {
             SealedName = sealedName;
             _reader = new SealedChunkReader(sealedName);
@@ -60,12 +62,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch
             {
+                // A row database handed over by a live swap still belongs to the instance it came from.
+                if (overlay is not null)
+                    ReleaseRowDatabase();
+
                 base.Dispose();
                 throw;
             }
 
             _logger.Info($"Opened sealed week {sealedName} with its overlay {name}");
         }
+
+
+        #region The sealing job (#1804)
+
+        /// <summary>The chunk database, for the sealing job: source-row removal, folding, unsealing.</summary>
+        internal LevelDBDatabaseAdapter ChunkDatabase => _chunks;
+
+        internal SealedChunkReader ChunkReader => _reader;
+
+        /// <summary>Taken by every writer of the chunk database: range deletes here, folds in the sealing job.</summary>
+        internal object ChunkWriteLock => _chunkWriteLock;
+
+        #endregion
 
 
         #region Writes

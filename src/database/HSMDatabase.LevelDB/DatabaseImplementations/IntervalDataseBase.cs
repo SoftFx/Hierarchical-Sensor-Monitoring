@@ -51,11 +51,16 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
 
-        public IntervalDataseBase(string name, long from, long to)
+        // False once the row database was handed over to the instance that replaced this one in a live swap
+        // (#1804): the native database stays open for the new owner, and readers still on this instance keep working.
+        private volatile bool _ownsOpenedDb = true;
+
+
+        public IntervalDataseBase(string name, long from, long to, LevelDBDatabaseAdapter openedDb = null)
         {
             _logger.Info($"Start opening DB {name}");
 
-            _openedDb = new LevelDBDatabaseAdapter(name);
+            _openedDb = openedDb ?? new LevelDBDatabaseAdapter(name);
 
             Name = name;
             From = from;
@@ -114,7 +119,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public virtual void Dispose() => _openedDb.Dispose();
+        /// <summary>The week's row database, shared with the instance that replaces this one in a live swap (#1804).</summary>
+        internal LevelDBDatabaseAdapter RowDatabase => _openedDb;
+
+        /// <summary>Hands the row database to another instance: <see cref="Dispose"/> then leaves it open.</summary>
+        internal void ReleaseRowDatabase() => _ownsOpenedDb = false;
+
+        /// <summary>Counts a change made by the sealing job (#1804) like a write: the compaction marker goes first.</summary>
+        internal void MarkChanged() => OnBeforeChange();
+
+        public virtual void Dispose()
+        {
+            if (_ownsOpenedDb)
+                _openedDb.Dispose();
+        }
 
     }
 }

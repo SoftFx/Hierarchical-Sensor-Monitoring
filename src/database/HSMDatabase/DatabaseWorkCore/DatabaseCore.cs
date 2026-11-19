@@ -14,6 +14,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
+using HSMDatabase.LevelDB.Sealed;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
 using HSMServer.Core.DataLayer;
@@ -1299,6 +1300,245 @@ namespace HSMDatabase.DatabaseWorkCore
                 return HistoryShardCompactionOutcome.Failed;
             }
         }
+
+        #region Sealing job (#1804)
+
+        // Weeks whose last sealing action failed, and when they may be tried again. Touched only while the
+        // compaction state is Busy, like _compactionRetryAfter.
+        private readonly Dictionary<string, DateTime> _sealingRetryAfter = [];
+
+        // What the job last counted to fold in a sealed week, keyed by the week: valid while the same instance serves
+        // it and its change counter has not moved. Touched only while the compaction state is Busy.
+        private readonly Dictionary<string, FoldObservation> _foldObservations = [];
+
+        private long _sealingSequence;
+        private volatile HistorySealingPassReport _lastSealingPass;
+
+        private sealed record FoldObservation(object Instance, long ChangeCount, long FoldableRows, List<Guid> Sensors, DateTime UnchangedSinceUtc);
+
+        public HistorySealingPassReport LastHistorySealingPass => _lastSealingPass;
+
+        // Test seam: runs at each SealingCheckpoints point of the job; a test throws from it to stand for a crash.
+        internal Action<string> SealingCheckpoint { get; set; }
+
+        // Test seams: see WeekSealingJob.ChunksBeforeWrite and ReplacedInstanceWait.
+        internal Func<Guid, List<byte[]>, List<byte[]>> SealingChunksBeforeWrite { get; set; }
+
+        internal TimeSpan? UnsealReplacedInstanceWait { get; set; }
+
+
+        public HistorySealingPassReport RunHistorySealingPass(DateTime utcNow, HistorySealingSettings settings)
+        {
+            // Off: nothing is looked at, nothing is created, nothing is reported.
+            if (settings is not { Enabled: true })
+                return new HistorySealingPassReport { RunUtc = utcNow, Outcome = HistorySealingOutcome.Disabled };
+
+            if (!HistorySealingPlanner.IsWithinWorkingHours(utcNow, settings))
+                return Publish(new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Outcome = HistorySealingOutcome.OutsideWorkingHours });
+
+            if (!TryEnterCompact())
+                return new HistorySealingPassReport
+                {
+                    RunUtc = utcNow,
+                    Outcome = IsDisposeStarted ? HistorySealingOutcome.ShuttingDown : HistorySealingOutcome.Busy,
+                };
+
+            try
+            {
+                var weeks = new Dictionary<string, SensorValuesWeek>();
+                var candidates = new List<SealingWeekCandidate>();
+
+                foreach (var shard in _sensorValuesDatabases.GetShards())
+                    candidates.Add(SealingCandidate(shard, weeks, utcNow));
+
+                if (HistorySealingPlanner.SelectNext(candidates, utcNow, settings) is not { } step)
+                    return Publish(new HistorySealingPassReport
+                    {
+                        Sequence = NextSealingSequence(),
+                        RunUtc = utcNow,
+                        Outcome = HistorySealingOutcome.NothingDue,
+                        SealedWeeks = CountSealedWeeks(),
+                    });
+
+                var week = weeks.TryGetValue(step.Week.Name, out var opened) ? opened : OpenWeek(step.Week.Name);
+
+                return RunSealingAction(step.Action, week, utcNow, settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "History sealing pass failed");
+                return Publish(new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Outcome = HistorySealingOutcome.Failed, Error = ex.Message });
+            }
+            finally
+            {
+                ExitCompact();
+            }
+        }
+
+        public HistorySealingPassReport UnsealHistoryWeek(string weekName, DateTime utcNow)
+        {
+            if (!TryEnterCompact())
+                return new HistorySealingPassReport
+                {
+                    RunUtc = utcNow,
+                    Action = HistorySealingAction.Unseal,
+                    Week = weekName,
+                    Outcome = IsDisposeStarted ? HistorySealingOutcome.ShuttingDown : HistorySealingOutcome.Busy,
+                };
+
+            try
+            {
+                var shard = _sensorValuesDatabases.GetShards().FirstOrDefault(s => s.Path == weekName);
+
+                if (shard is null)
+                    return new HistorySealingPassReport { RunUtc = utcNow, Action = HistorySealingAction.Unseal, Week = weekName, Outcome = HistorySealingOutcome.NotFound };
+
+                var sealedPath = _settings.GetPathToSealedSensorValueDatabase(shard.From, DateTimeMethods.GetEndOfWeekTicks(shard.From));
+
+                if (SealedWeekStages.Read(shard.Path, sealedPath).Stage is not (SealedWeekStage.SealedKeepingSourceRows or SealedWeekStage.SourceRowsRemoved or SealedWeekStage.Unsealing))
+                    return Publish(new HistorySealingPassReport
+                    {
+                        Sequence = NextSealingSequence(),
+                        RunUtc = utcNow,
+                        Action = HistorySealingAction.Unseal,
+                        Week = weekName,
+                        Outcome = HistorySealingOutcome.NotSealed,
+                        SealedWeeks = CountSealedWeeks(),
+                    });
+
+                return RunSealingAction(HistorySealingAction.Unseal, (SensorValuesWeek)shard.Database, utcNow, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Unseal of {weekName} failed");
+                return Publish(new HistorySealingPassReport
+                {
+                    Sequence = NextSealingSequence(),
+                    RunUtc = utcNow,
+                    Action = HistorySealingAction.Unseal,
+                    Week = weekName,
+                    Outcome = HistorySealingOutcome.Failed,
+                    Error = ex.Message,
+                });
+            }
+            finally
+            {
+                ExitCompact();
+            }
+        }
+
+        // The state the planner needs, from the marker files; a sealed week whose source rows are gone is opened and
+        // its overlay counted, unless the count from an earlier pass still holds.
+        private SealingWeekCandidate SealingCandidate(ValuesDatabaseDictionary<ISensorValuesDatabase>.Shard shard, Dictionary<string, SensorValuesWeek> weeks, DateTime utcNow)
+        {
+            var to = DateTimeMethods.GetEndOfWeekTicks(shard.From);
+            var status = SealedWeekStages.Read(shard.Path, _settings.GetPathToSealedSensorValueDatabase(shard.From, to));
+
+            _sealingRetryAfter.TryGetValue(shard.Path, out var retryAfter);
+            DateTime? retry = retryAfter == default ? null : retryAfter;
+
+            long? foldable = null;
+            DateTime? unchangedSince = null;
+
+            if (status.Stage == SealedWeekStage.SourceRowsRemoved && (retry is null || utcNow >= retry) && shard.Database is SensorValuesWeek week && week.IsSealed)
+            {
+                weeks[shard.Path] = week;
+
+                if (!_foldObservations.TryGetValue(shard.Path, out var observation) ||
+                    !ReferenceEquals(observation.Instance, week.ServingInstance) || observation.ChangeCount != week.ChangeCount)
+                {
+                    var changeCount = week.ChangeCount;
+                    var (rows, sensors) = new WeekSealingJob(week, new HistorySealingPassReport(), null, null).CountFoldableRows();
+
+                    observation = new FoldObservation(week.ServingInstance, changeCount, rows, sensors, utcNow);
+                    _foldObservations[shard.Path] = observation;
+                }
+
+                foldable = observation.FoldableRows;
+                unchangedSince = observation.UnchangedSinceUtc;
+            }
+
+            return new SealingWeekCandidate(shard.Path, shard.From, to, status, foldable, unchangedSince, retry);
+        }
+
+        private SensorValuesWeek OpenWeek(string name) =>
+            (SensorValuesWeek)_sensorValuesDatabases.GetShards().First(s => s.Path == name).Database;
+
+        private HistorySealingPassReport RunSealingAction(HistorySealingAction action, SensorValuesWeek week, DateTime utcNow, HistorySealingSettings settings)
+        {
+            var report = new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Action = action, Week = week.Name };
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var job = new WeekSealingJob(week, report, () => IsDisposeStarted, SealingCheckpoint) { ChunksBeforeWrite = SealingChunksBeforeWrite };
+
+            if (UnsealReplacedInstanceWait is { } wait)
+                job.ReplacedInstanceWait = wait;
+
+            _compactingDatabase = $"{week.Name} ({action})";
+
+            HistorySealingOutcome outcome;
+
+            try
+            {
+                var completed = action switch
+                {
+                    HistorySealingAction.Seal => job.Seal(utcNow, utcNow + settings.KeepSourceRows),
+                    HistorySealingAction.RemoveSourceRows => job.RemoveSourceRows(utcNow),
+                    HistorySealingAction.Fold => job.Fold(_foldObservations[week.Name].Sensors),
+                    HistorySealingAction.FinishUnseal or HistorySealingAction.Unseal => job.Unseal(utcNow),
+                    _ => throw new ArgumentOutOfRangeException(nameof(action)),
+                };
+
+                outcome = completed ? HistorySealingOutcome.Done : HistorySealingOutcome.Interrupted;
+                _sealingRetryAfter.Remove(week.Name);
+            }
+            catch (Exception ex)
+            {
+                var retryAfter = utcNow + HistorySealingPlanner.FailureBackoff;
+                _sealingRetryAfter[week.Name] = retryAfter;
+
+                report.Error = ex.Message;
+                outcome = HistorySealingOutcome.Failed;
+
+                _logger.Error(ex, $"History sealing failed: {action} of {week.Name}; next attempt not before {retryAfter:O}");
+            }
+
+            // Recounted on the next pass: the action changed the week, or the instance serving it.
+            _foldObservations.Remove(week.Name);
+
+            report.Duration = watch.Elapsed;
+            report.SealedWeeks = CountSealedWeeks();
+
+            report.Outcome = outcome;
+            var result = report;
+
+            if (outcome == HistorySealingOutcome.Failed)
+                _logger.Error($"History sealing: {result} in {result.Duration.TotalSeconds:F1} s");
+            else
+                _logger.Info($"History sealing: {result} in {result.Duration.TotalSeconds:F1} s");
+
+            return Publish(result);
+        }
+
+        private int CountSealedWeeks()
+        {
+            var count = 0;
+
+            foreach (var shard in _sensorValuesDatabases.GetShards())
+                if (SealedWeekMarker.ExistsIn(_settings.GetPathToSealedSensorValueDatabase(shard.From, DateTimeMethods.GetEndOfWeekTicks(shard.From))))
+                    count++;
+
+            return count;
+        }
+
+        private long NextSealingSequence() => Interlocked.Increment(ref _sealingSequence);
+
+        private HistorySealingPassReport Publish(HistorySealingPassReport report)
+        {
+            _lastSealingPass = report;
+            return report;
+        }
+
+        #endregion
 
         public void ExportValuesDatabase(string name, Dictionary<Guid, string> sensors)
         {
