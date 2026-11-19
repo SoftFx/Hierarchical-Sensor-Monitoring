@@ -9,6 +9,7 @@ using MemoryPack;
 //
 //   SealedHistoryBench <shard-dir> [--limits 1024,4096,...] [--out <dir>]
 //   SealedHistoryBench --synthetic [--limits ...]
+//   SealedHistoryBench --store-synthetic <work-dir> | --store-shard <shard-copy> <work-dir>   (the sealed week store, #1803)
 //
 // <shard-dir> is a SensorValuesV2_* LevelDB directory. It is opened read-only; work on a copy anyway.
 // --out writes the chunks into a fresh LevelDB there (key sensorId | firstKey), compacts it and reports its size.
@@ -21,7 +22,10 @@ if (options.ShardPath is not null)
 if (options.Synthetic)
     SyntheticBench.Run(options);
 
-if (options.ShardPath is null && !options.Synthetic)
+if (options.StoreWorkPath is not null)
+    StoreBench.Run(options);
+
+if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null)
     Console.WriteLine("usage: SealedHistoryBench <shard-dir> [--limits 1024,4096] [--out <dir>] | --synthetic [--limits ...]");
 
 
@@ -30,6 +34,8 @@ internal sealed class Options
     public string ShardPath;
     public string OutPath;
     public bool Synthetic;
+    public string StoreShardPath;
+    public string StoreWorkPath;
     public int[] Limits = [ChunkCodec.MaxRowsPerChunk];
 
 
@@ -44,6 +50,8 @@ internal sealed class Options
                 case "--synthetic": o.Synthetic = true; break;
                 case "--limits": o.Limits = args[++i].Split(',').Select(int.Parse).ToArray(); break;
                 case "--out": o.OutPath = args[++i]; break;
+                case "--store-synthetic": o.StoreWorkPath = args[++i]; break;
+                case "--store-shard": o.StoreShardPath = args[++i]; o.StoreWorkPath = args[++i]; break;
                 default: o.ShardPath = args[i]; break;
             }
         }
