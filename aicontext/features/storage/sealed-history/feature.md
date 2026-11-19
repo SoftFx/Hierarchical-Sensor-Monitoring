@@ -258,6 +258,22 @@ A chunk that fails to decode, or does not fit its key (the header's first key di
 
 `Compact()` compacts the overlay and the chunk database. The marker logic is the row worker's: a write, or a range delete that changes the overlay or rewrites a chunk, removes `hsm-compacted` first and counts in `ChangeCount`; a delete that changes nothing leaves it.
 
+### Measured (2026-11-19, `SealedHistoryBench --store-synthetic` / `--store-shard`)
+
+Both weeks compacted, warm medians; the overlay holds only refused (File) sensors.
+
+| | Synthetic: 300 sensors, 791,716 rows, densest 259,199 | Production shard copy: 492 sensors, 531,480 rows, densest 10,061 |
+|---|---|---|
+| On disk, plain → sealed | 29.9 MB → 6.6 MB | 22.9 MB → 4.0 MB |
+| Page of 100, newest first | 0.041 → 0.258 ms | 0.041 → 0.275 ms |
+| Page of 100, oldest first | 0.031 → 0.240 ms | 0.029 → 0.239 ms |
+| `GetLatest` | 0.002 → 0.235 ms | 0.002 → 0.209 ms |
+| Whole densest sensor | 49.6 → 31.2 ms | 2.1 → 3.5 ms |
+| `GetLastAndFirstValues`, all sensors | 9.7 → 39.5 ms | 9.0 → 49.2 ms |
+| Full week (`GetAll`) | 150 → 111 ms | 111 → 85 ms |
+
+A point read or a first page costs one chunk decode (about 0.2 ms) instead of microseconds; whole-week and dense-sensor reads get faster. `GetLastAndFirstValues` runs once per week at startup and decodes the last chunk of every sensor: about 40 ms more per sealed week of this size.
+
 ## UI / Operator Visibility
 
 Not operator-visible. The benchmark reports refusals and mismatches for a shard.
