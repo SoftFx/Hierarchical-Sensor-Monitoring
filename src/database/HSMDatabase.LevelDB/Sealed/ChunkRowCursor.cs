@@ -82,6 +82,10 @@ namespace HSMDatabase.LevelDB.Sealed
             return KeyOrder.Compare(Key, other);
         }
 
+        // Every row key of a chunk is 24 bytes: against another length the row database's order is the length's.
+        public int CompareKeyAsRowDatabase(byte[] other) =>
+            other.Length != KeyOrder.KeyLength ? KeyOrder.KeyLength.CompareTo(other.Length) : CompareKey(other);
+
         public bool KeyStartsWith(byte[] prefix) => prefix.Length <= KeyOrder.SensorIdLength
             ? _chunkKey.AsSpan(0, prefix.Length).SequenceEqual(prefix)
             : Key.AsSpan().StartsWith(prefix);

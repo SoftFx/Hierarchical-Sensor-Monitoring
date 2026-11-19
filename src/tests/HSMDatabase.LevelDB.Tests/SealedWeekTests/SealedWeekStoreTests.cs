@@ -268,6 +268,65 @@ public sealed class SealedWeekStoreTests
         Assert.Equal(0, store.ChunkReadFailures);
     }
 
+    // A read of sensor B that lands backwards on the rows of the sensor A before it (B has no row at or before the
+    // target) must learn "this is not B's row" from the sensor prefix, without ordering A's overlay row against
+    // A's corrupt chunk. During the keep period every sealed sensor has overlay rows.
+    [Fact]
+    public void CorruptLastChunk_WithOverlayRows_DoesNotReachTheIdleSensorAfterIt()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(23));
+        var a = sensors.Dense;
+        var b = NextId(a);
+
+        using var pair = WeekPair.Create(seed, keepSourceRows: true, beforeOpen: p => CorruptChunk(p, DenseChunks(p, a)[^1]));
+
+        var store = pair.SealedStore;
+        var prefix = new DbKey(b, 0).ToPrefixBytes();
+
+        void SameAsPlain(long target, string what)
+        {
+            var targetKey = Key(b, target);
+
+            pair.Compare.Value(pair.Plain.GetLatest(targetKey, prefix), store.GetLatest(targetKey, prefix), $"{what}: GetLatest");
+            pair.Compare.Value(pair.Plain.GetFirst(Min(b), prefix), store.GetFirst(Min(b), prefix), $"{what}: GetFirst");
+            pair.Compare.Value(pair.Plain.Get(targetKey, prefix), store.Get(targetKey, prefix), $"{what}: Get");
+            pair.Compare.Values(pair.Plain.GetValuesFrom(Min(b), targetKey), store.GetValuesFrom(Min(b), targetKey), $"{what}: oldest first");
+            pair.Compare.Values(pair.Plain.GetValuesTo(Min(b), targetKey), store.GetValuesTo(Min(b), targetKey), $"{what}: newest first");
+            pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(b), targetKey), store.GetKeysValuesTo(Min(b), targetKey), $"{what}: keys newest first");
+
+            Dictionary<byte[], (long, byte[], byte[])> Request() => new() { [prefix] = (0L, targetKey, null) };
+            var plainFill = Request();
+            var sealedFill = Request();
+            pair.Plain.FillLatestValues(plainFill);
+            store.FillLatestValues(sealedFill);
+            pair.Compare.Value(plainFill[prefix].Item3, sealedFill[prefix].Item3, $"{what}: FillLatestValues");
+        }
+
+        // (i) B has no row in the week.
+        SameAsPlain(DateTime.MaxValue.Ticks, "no rows");
+        SameAsPlain(WeekPair.WeekFrom + TimeSpan.TicksPerHour, "no rows, inside the week");
+
+        // (ii) B has rows only after the target.
+        foreach (var tick in new[] { WeekPair.WeekTo - TimeSpan.TicksPerHour, WeekPair.WeekTo - TimeSpan.TicksPerMinute })
+            pair.Put(Key(b, tick), TestValues.Bytes(SensorType.Integer, tick, new Random(3)));
+
+        SameAsPlain(WeekPair.WeekFrom + TimeSpan.TicksPerHour, "rows after the target");
+
+        Assert.Equal(0, store.ChunkReadFailures);
+    }
+
+    // The id right after `id` in key order: no sensor of the seed sorts between them.
+    private static Guid NextId(Guid id)
+    {
+        var bytes = new DbKey(id, 0).ToPrefixBytes();
+
+        for (int i = bytes.Length - 1; i >= 0 && ++bytes[i] == 0; i--)
+        {
+        }
+
+        return new Guid(bytes);
+    }
+
     // Flips one payload byte of a chunk in the closed chunk database.
     private static SealedChunk CorruptChunk(WeekPair pair, SealedChunk chunk)
     {

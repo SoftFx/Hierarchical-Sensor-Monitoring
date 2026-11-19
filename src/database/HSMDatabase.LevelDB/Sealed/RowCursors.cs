@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 
 namespace HSMDatabase.LevelDB.Sealed
@@ -18,11 +19,17 @@ namespace HSMDatabase.LevelDB.Sealed
         byte[] Value { get; }
 
         /// <summary>
-        /// The current key compared bytewise with <paramref name="other"/>. A chunk cursor answers from the sensor
-        /// prefix alone when it differs, without reading the chunk: a corrupt chunk of one sensor must not fail
-        /// reads that only pass by it on their way to another sensor.
+        /// The current key compared bytewise with <paramref name="other"/> (the order LevelDB keeps keys in). A chunk
+        /// cursor answers from the sensor prefix alone when it differs, without reading the chunk: a corrupt chunk of
+        /// one sensor must not fail reads that only pass by it on their way to another sensor.
         /// </summary>
         int CompareKey(byte[] other);
+
+        /// <summary>
+        /// The current key compared with <paramref name="other"/> the way the row database's read algorithms compare
+        /// (ByteArrayExtensions: by length first, then bytewise). Answered from the prefix like <see cref="CompareKey"/>.
+        /// </summary>
+        int CompareKeyAsRowDatabase(byte[] other);
 
         /// <summary>Whether the current key starts with <paramref name="prefix"/> (the row database's StartsWith).</summary>
         bool KeyStartsWith(byte[] prefix);
@@ -77,7 +84,15 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public int CompareKey(byte[] other) => KeyOrder.Compare(Key, other);
 
-        public bool KeyStartsWith(byte[] prefix) => Key.AsSpan().StartsWith(prefix);
+        // Exactly the row database's comparisons, quirks included, for overlay rows.
+        public int CompareKeyAsRowDatabase(byte[] other)
+        {
+            var key = Key;
+
+            return key.Length != other.Length ? key.Length.CompareTo(other.Length) : KeyOrder.Compare(key, other);
+        }
+
+        public bool KeyStartsWith(byte[] prefix) => Key.StartsWith(prefix);
 
 
         public void Seek(byte[] target)
@@ -119,61 +134,72 @@ namespace HSMDatabase.LevelDB.Sealed
     /// key order. On an equal key the overlay row wins and the chunk row is skipped, in both directions.
     /// Each child is positioned like LevelDB's own merging iterator: moving forward, every child is at its
     /// first key at or after the current one; moving backward, at its last key at or before it.
+    ///
+    /// Which child holds the current row is decided only when something needs that row (its key, its value, or a
+    /// move). A question both children answer the same way (does the key start with this prefix, is it before
+    /// or after this key) is answered without deciding: a read that lands on another sensor's rows learns that
+    /// from their sensor prefix, without ordering that sensor's overlay row against its chunk, which would read
+    /// the chunk and could fail on it.
     /// </summary>
     internal sealed class MergedRowCursor(IRowCursor overlay, IRowCursor chunks) : IRowCursor
     {
         private IRowCursor _current;
+        private bool _resolved;
         private bool _forward = true;
 
 
-        public bool IsValid => _current is not null;
+        public bool IsValid => overlay.IsValid || chunks.IsValid;
 
-        public byte[] Key => _current.Key;
+        public byte[] Key => Current.Key;
 
-        public byte[] Value => _current.Value;
-
-        public int CompareKey(byte[] other) => _current.CompareKey(other);
-
-        public bool KeyStartsWith(byte[] prefix) => _current.KeyStartsWith(prefix);
+        public byte[] Value => Current.Value;
 
         /// <summary>True when the current row comes from a chunk, false when from the overlay.</summary>
-        public bool IsChunkRow => ReferenceEquals(_current, chunks);
+        public bool IsChunkRow => ReferenceEquals(Current, chunks);
+
+        public int CompareKey(byte[] other) => Agreed(child => child.CompareKey(other));
+
+        public int CompareKeyAsRowDatabase(byte[] other) => Agreed(child => child.CompareKeyAsRowDatabase(other));
+
+        public bool KeyStartsWith(byte[] prefix)
+        {
+            if (!overlay.IsValid || !chunks.IsValid)
+                return Current.KeyStartsWith(prefix);
+
+            var answer = overlay.KeyStartsWith(prefix);
+
+            return answer == chunks.KeyStartsWith(prefix) ? answer : Current.KeyStartsWith(prefix);
+        }
 
 
         public void Seek(byte[] target)
         {
             overlay.Seek(target);
             chunks.Seek(target);
-            _forward = true;
-            PickSmallest();
+            Moved(forward: true);
         }
 
         public void SeekToFirst()
         {
             overlay.SeekToFirst();
             chunks.SeekToFirst();
-            _forward = true;
-            PickSmallest();
+            Moved(forward: true);
         }
 
         public void SeekToLast()
         {
             overlay.SeekToLast();
             chunks.SeekToLast();
-            _forward = false;
-            PickLargest();
+            Moved(forward: false);
         }
 
         public void Next()
         {
-            var key = Key;
+            var current = Current;
+            var key = current.Key;
 
             if (!_forward)
-            {
-                var other = Other();
-                other.Seek(key);
-                _forward = true;
-            }
+                Other(current).Seek(key);
 
             // Steps past the current key in every child that holds it: the overlay row and the chunk row it hides.
             if (overlay.IsValid && overlay.CompareKey(key) == 0)
@@ -181,16 +207,17 @@ namespace HSMDatabase.LevelDB.Sealed
             if (chunks.IsValid && chunks.CompareKey(key) == 0)
                 chunks.Next();
 
-            PickSmallest();
+            Moved(forward: true);
         }
 
         public void Prev()
         {
-            var key = Key;
+            var current = Current;
+            var key = current.Key;
 
             if (_forward)
             {
-                var other = Other();
+                var other = Other(current);
                 other.Seek(key);
 
                 if (other.IsValid)
@@ -199,8 +226,7 @@ namespace HSMDatabase.LevelDB.Sealed
                     other.SeekToLast();
 
                 // The other child is now before the key, a hidden chunk row at the key included.
-                _current.Prev();
-                _forward = false;
+                current.Prev();
             }
             else
             {
@@ -210,7 +236,7 @@ namespace HSMDatabase.LevelDB.Sealed
                     chunks.Prev();
             }
 
-            PickLargest();
+            Moved(forward: false);
         }
 
         public void Dispose()
@@ -226,26 +252,56 @@ namespace HSMDatabase.LevelDB.Sealed
         }
 
 
-        private IRowCursor Other() => ReferenceEquals(_current, overlay) ? chunks : overlay;
+        private IRowCursor Other(IRowCursor current) => ReferenceEquals(current, overlay) ? chunks : overlay;
 
-        private void PickSmallest()
+        private void Moved(bool forward)
         {
-            if (!overlay.IsValid)
-                _current = chunks.IsValid ? chunks : null;
-            else if (!chunks.IsValid)
-                _current = overlay;
-            else
-                _current = chunks.CompareKey(overlay.Key) >= 0 ? overlay : chunks;
+            _forward = forward;
+            _resolved = false;
+            _current = null;
         }
 
-        private void PickLargest()
+        // A comparison both valid children agree on (strictly on the same side) is the current row's whatever it
+        // is; otherwise the current row is decided and asked.
+        private int Agreed(Func<IRowCursor, int> compare)
         {
-            if (!overlay.IsValid)
-                _current = chunks.IsValid ? chunks : null;
-            else if (!chunks.IsValid)
-                _current = overlay;
-            else
-                _current = chunks.CompareKey(overlay.Key) <= 0 ? overlay : chunks;
+            if (!overlay.IsValid || !chunks.IsValid)
+                return compare(Current);
+
+            var byOverlay = compare(overlay);
+
+            if (byOverlay != 0)
+            {
+                var byChunks = compare(chunks);
+
+                if (byChunks != 0 && byOverlay > 0 == byChunks > 0)
+                    return byOverlay;
+            }
+
+            return compare(Current);
+        }
+
+        // The child holding the current row: moving forward the smaller key, backward the larger; the overlay on a tie.
+        private IRowCursor Current
+        {
+            get
+            {
+                if (_resolved)
+                    return _current;
+
+                if (!overlay.IsValid)
+                    _current = chunks.IsValid ? chunks : null;
+                else if (!chunks.IsValid)
+                    _current = overlay;
+                else if (_forward)
+                    _current = chunks.CompareKey(overlay.Key) >= 0 ? overlay : chunks;
+                else
+                    _current = chunks.CompareKey(overlay.Key) <= 0 ? overlay : chunks;
+
+                _resolved = true;
+
+                return _current;
+            }
         }
     }
 }

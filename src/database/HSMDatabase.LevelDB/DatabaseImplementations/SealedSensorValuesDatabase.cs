@@ -725,21 +725,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return next is not null && KeyOrder.Compare(next, to) <= 0;
         }
 
-        // The row database's key checks (ByteArrayExtensions) on the merged cursor. Every key of a chunk is 24
-        // bytes, so against a 24-byte bound the length-first order is the bytewise one, which the chunk cursor
-        // answers from the sensor prefix when that settles it; any other case compares the full key as before.
-        private static bool UseFullKey(MergedRowCursor cursor, byte[] other) => !cursor.IsChunkRow || other.Length != KeyOrder.KeyLength;
+        // The row database's key checks (ByteArrayExtensions: StartsWith, and length-first order) on the merged
+        // cursor. They go through the cursor rather than its Key, so the cursor answers them without deciding which
+        // child holds the current row when both children agree (see MergedRowCursor); an overlay row is compared
+        // exactly as the row database compares it, quirks included.
+        private static bool StartsWith(MergedRowCursor cursor, byte[] prefix) => cursor.KeyStartsWith(prefix);
 
-        private static bool StartsWith(MergedRowCursor cursor, byte[] prefix) =>
-            cursor.IsChunkRow && prefix.Length <= KeyOrder.SensorIdLength ? cursor.KeyStartsWith(prefix) : cursor.Key.StartsWith(prefix);
+        private static bool Le(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) <= 0;
 
-        private static bool Le(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsSmallerOrEquals(other) : cursor.CompareKey(other) <= 0;
+        private static bool Lt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) < 0;
 
-        private static bool Lt(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsSmaller(other) : cursor.CompareKey(other) < 0;
+        private static bool Ge(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) >= 0;
 
-        private static bool Ge(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsGreaterOrEquals(other) : cursor.CompareKey(other) >= 0;
-
-        private static bool Gt(MergedRowCursor cursor, byte[] other) => UseFullKey(cursor, other) ? cursor.Key.IsGreater(other) : cursor.CompareKey(other) > 0;
+        private static bool Gt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) > 0;
 
         private static bool InRange(byte[] key, byte[] from, byte[] to) => KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(key, to) <= 0;
     }
