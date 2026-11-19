@@ -228,9 +228,12 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(201, result.StatusCode);
 
             // A product has no GET {id} of its own — the node endpoint serves
-            // the created tree node, so the Location header points there.
+            // the created tree node, so the Location header points there. The
+            // controller name is the class name minus "Controller" — "NodesApi":
+            // the wire test below pins the resolved URL against the routing
+            // table, this pin alone let the /Nodes/GetNode slip through.
             Assert.Equal(nameof(NodesApiController.GetNode), result.ActionName);
-            Assert.Equal("Nodes", result.ControllerName);
+            Assert.Equal("NodesApi", result.ControllerName);
             Assert.Equal(created.Id, result.RouteValues["id"]);
 
             var dto = Assert.IsType<ProductDto>(result.Value);
