@@ -82,8 +82,9 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 long size = 0;
 
+                // A sealed week (#1803) adds its chunk database; an incomplete one takes disk space too.
                 foreach (var db in _sensorValuesDatabases)
-                    size += db.Name.GetSize();
+                    size += db.Name.GetSize() + _settings.GetPathToSealedSensorValueDatabase(db.From, db.To).GetSize();
 
                 return size;
             }
@@ -346,13 +347,15 @@ namespace HSMDatabase.DatabaseWorkCore
             var totalKeySize = 0L;
             var totalValueSize = 0L;
 
+            // A sealed week (#1803) counts the values a read returns and the bytes of its overlay rows and chunks.
             foreach (var db in _sensorValuesDatabases)
-                foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromKey, toKey))
-                {
-                    totalKeySize += keyBytes.Length;
-                    totalValueSize += valueBytes.Length;
-                    totalDataCnt++;
-                }
+            {
+                var (count, keySize, valueSize) = db.CalculateHistorySize(fromKey, toKey);
+
+                totalDataCnt += count;
+                totalKeySize += keySize;
+                totalValueSize += valueSize;
+            }
 
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
@@ -1342,7 +1345,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public IEnumerable<(byte[], byte[])> MigrateDatabaseV2()
         {
             var settings = new DatabaseSettings() { SensorValuesDatabaseName = "SensorValues" };
-            var oldDbs = new SensorValuesDatabaseDictionary(settings);
+            var oldDbs = new SensorValuesDatabaseDictionary(settings, sealedWeeks: false);
 
             if (!Directory.Exists(Path.Combine(Environment.CurrentDirectory, settings.DatabaseFolder)))
                 yield break;

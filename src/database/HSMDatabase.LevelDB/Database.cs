@@ -33,6 +33,10 @@ namespace HSMDatabase.LevelDB
 
         private string _databaseName;
 
+        // The native database, for the sealed week store (#1803): its merged reads need
+        // their own iterators, and its chunk rewrites a synced write batch.
+        internal DB Native => _database;
+
         public LevelDBDatabaseAdapter(string name)
         {
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));

@@ -46,6 +46,9 @@ namespace HSMDatabase.AccessManager
 
         public string GetPathToSensorValueDatabase(long from, long to) => BuildWeeklyDbName(DatabaseFolder, SensorValuesDatabaseName, from, to);
 
+        // The chunk database of a sealed week (ADR-0020), next to the week's row database.
+        public string GetPathToSealedSensorValueDatabase(long from, long to) => BuildWeeklyDbName(DatabaseFolder, SealedWeekMarker.DirectoryPrefix, from, to);
+
 
         private static string BuildWeeklyDbName(string folder, string dbName, long from, long to) => Path.Combine(folder, $"{dbName}_{from}_{to}");
     }

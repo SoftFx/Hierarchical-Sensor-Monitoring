@@ -29,5 +29,12 @@ namespace HSMDatabase.AccessManager
         Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null);
 
         IEnumerable<(byte[] key, byte[] value)> GetAll();
+
+        /// <summary>
+        /// The history of the key range [<paramref name="from"/>, <paramref name="to"/>] as stored: the number of
+        /// values a read returns, and the bytes of the keys and values that hold them on disk. For a row database
+        /// that is the rows; a sealed week adds its chunks (key and chunk bytes) to its overlay rows.
+        /// </summary>
+        (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to);
     }
 }
