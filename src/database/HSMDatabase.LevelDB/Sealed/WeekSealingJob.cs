@@ -628,7 +628,8 @@ namespace HSMDatabase.LevelDB.Sealed
 
             if (!_week.WaitForReplacedInstances(ReplacedInstanceWait))
             {
-                _logger.Warn($"The unseal of {RowPath} is done, but a read still uses its chunks; {SealedPath} is deleted by the next pass");
+                _report.Error = $"the week is rows again, but a read still uses its chunks: {Path.GetFileName(SealedPath)} is deleted by the next sealing pass or the next unseal";
+                _logger.Warn($"The unseal of {RowPath} is done, but a read still uses its chunks; {SealedPath} is deleted by the next sealing pass or the next unseal");
                 return false;
             }
 
