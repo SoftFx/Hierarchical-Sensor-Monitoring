@@ -12,13 +12,24 @@ namespace HSMDatabase.SealedHistory
     /// <summary>
     /// Encodes the history rows of one sensor into chunks and decodes them back (ADR-0020). Pure functions:
     /// no storage, no shared mutable state, safe to call concurrently. The byte layout is specified in
-    /// <c>aicontext/features/storage/sealed-history/feature.md</c>; any change to the bytes written for the
-    /// same input requires a new <see cref="FormatVersion"/>, and old versions must keep decoding.
+    /// <c>aicontext/features/storage/sealed-history/feature.md</c>. A change that a reader of the current version
+    /// could not decode requires a new <see cref="FormatVersion"/>, and old versions must keep decoding; a change
+    /// to the bytes written for the same input that the current reader still decodes requires a new
+    /// <see cref="EncoderRevision"/>.
     /// </summary>
     public static class ChunkCodec
     {
         /// <summary>The format version this build writes. It reads this version only.</summary>
         public const byte FormatVersion = 1;
+
+        /// <summary>
+        /// The revision of the encoder in this build, written into header byte 5 of every chunk. Bump it whenever
+        /// the bytes <see cref="Encode(IReadOnlyList{HistoryRow})"/> writes for the same input change while a reader
+        /// of the same <see cref="FormatVersion"/> still decodes them (a better choice among the existing column
+        /// encodings, other parameters, a compressor upgrade that changes its output), and add a golden set for it.
+        /// Readers accept any value and never decode differently because of it.
+        /// </summary>
+        public const byte EncoderRevision = 1;
 
         /// <summary>The largest number of rows in one chunk; part of format version 1.</summary>
         public const int MaxRowsPerChunk = 4096;
@@ -41,6 +52,8 @@ namespace HSMDatabase.SealedHistory
 
         private const uint ZstdFrameMagic = 0xFD2FB528;
 
+        private const int EncoderRevisionOffset = 5;
+
         private const int ChecksumOffset = 36;
 
 
@@ -51,7 +64,7 @@ namespace HSMDatabase.SealedHistory
         /// </summary>
         public static ChunkEncodeResult Encode(IReadOnlyList<HistoryRow> rows) => Encode(rows, MaxRowsPerChunk);
 
-        /// <summary>Reads and verifies the header (magic, version, checksum, field ranges) without decompressing the payload.</summary>
+        /// <summary>Reads and verifies the header (magic, version, checksum, field ranges) without decompressing the payload. The encoder revision is returned as stored, whatever its value.</summary>
         public static ChunkHeader ReadHeader(ReadOnlySpan<byte> chunk) => ParseHeader(chunk, MaxRowsPerChunk).Header;
 
         /// <summary>
@@ -173,7 +186,8 @@ namespace HSMDatabase.SealedHistory
             span[2] = FormatVersion;
             span[3] = (byte)valueType;
             span[4] = compression;
-            // bytes 5..7 are reserved and stay zero
+            span[EncoderRevisionOffset] = EncoderRevision;
+            // bytes 6..7 are reserved and stay zero
             BinaryPrimitives.WriteInt32LittleEndian(span.Slice(8), rowCount);
             BinaryPrimitives.WriteInt32LittleEndian(span.Slice(12), payload.Length);
             BinaryPrimitives.WriteInt32LittleEndian(span.Slice(16), stored.Length);
@@ -236,7 +250,8 @@ namespace HSMDatabase.SealedHistory
                 throw Corrupt.Error($"value type {(byte)valueType} is not a sealed value type");
             if (compression != CompressionNone && compression != CompressionZstd)
                 throw Corrupt.Error($"unknown compression {compression}");
-            if (chunk[5] != 0 || chunk[6] != 0 || chunk[7] != 0)
+            // byte 5, the encoder revision, may hold any value and does not affect decoding
+            if (chunk[6] != 0 || chunk[7] != 0)
                 throw Corrupt.Error("reserved header bytes are not zero");
             if (rowCount < 1 || rowCount > maxRowsPerChunk)
                 throw Corrupt.Error($"row count {rowCount} outside 1..{maxRowsPerChunk}");
@@ -249,7 +264,7 @@ namespace HSMDatabase.SealedHistory
             if (compression == CompressionZstd)
                 ValidateZstdFrame(chunk.Slice(HeaderSize), payloadLength);
 
-            return (new ChunkHeader(FormatVersion, valueType, rowCount, firstKey, lastKey), compression, payloadLength);
+            return (new ChunkHeader(FormatVersion, valueType, rowCount, firstKey, lastKey, chunk[EncoderRevisionOffset]), compression, payloadLength);
         }
 
         /// <summary>
