@@ -32,6 +32,12 @@ namespace HSMDatabase.SealedHistory.Format
 
         public static byte BoolByte(bool value) => Unsafe.As<bool, byte>(ref value);
 
+        /// <summary>
+        /// The raw hasValue byte of a Nullable (its first byte). MemoryPack copies a Nullable as raw memory, so a stored
+        /// row can hold a byte other than 0 or 1 there; such a value is "present" but not equal to a canonical one.
+        /// </summary>
+        public static byte HasValueByte<T>(T? value) where T : struct => Unsafe.As<T?, byte>(ref value);
+
         public static ulong DoubleBits(double value) => (ulong)BitConverter.DoubleToInt64Bits(value);
 
         public static double ToDouble(ulong bits) => BitConverter.Int64BitsToDouble((long)bits);

@@ -80,8 +80,16 @@ namespace HSMDatabase.SealedHistory.Format
 
             c.ReceivingTicks = buffers.Longs(n);
             IntColumn.Read(ref reader, c.ReceivingTicks.AsSpan(0, n));
+            const long maxSteps = 1 + 3_155_378_975_999_999_999L / ChunkCodec.ReceivingTimeStepTicks; // DateTime.MaxValue.Ticks
             for (int i = 0; i < n; i++)
-                c.ReceivingTicks[i] = checked(c.TimeTicks[i] + c.ReceivingTicks[i] * ChunkCodec.ReceivingTimeStepTicks);
+            {
+                // |steps| is bounded first, so the arithmetic cannot overflow; the DateTime range check follows in Receiving().
+                long steps = c.ReceivingTicks[i];
+                if (steps < -maxSteps || steps > maxSteps)
+                    throw Corrupt.Error($"ReceivingTime steps {steps} out of range");
+
+                c.ReceivingTicks[i] = c.TimeTicks[i] + steps * ChunkCodec.ReceivingTimeStepTicks;
+            }
 
             c.ReceivingKinds = ReadInts(ref reader, n, buffers);
 

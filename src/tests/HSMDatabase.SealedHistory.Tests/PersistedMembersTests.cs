@@ -36,6 +36,21 @@ namespace HSMDatabase.SealedHistory.Tests
             Assert.Equal(Samples.SealedTypes.OrderBy(t => t), SealedRecords.Select(t => ((BaseValue)Activator.CreateInstance(t)).Type).OrderBy(t => t));
         }
 
+        /// <summary>
+        /// MemoryPack can also fill a get-only member through constructor parameters ([MemoryPackConstructor], or the
+        /// only constructor when there is no parameterless one). The member test above cannot see such a member, so a
+        /// sealed record must keep being built through a parameterless constructor and settable members.
+        /// </summary>
+        [Theory]
+        [MemberData(nameof(Records))]
+        public void No_member_is_filled_through_a_constructor(Type record)
+        {
+            var constructors = record.GetConstructors(Instance);
+
+            Assert.DoesNotContain(constructors, c => c.IsDefined(typeof(MemoryPackConstructorAttribute), true) && c.GetParameters().Length > 0);
+            Assert.Contains(constructors, c => c.IsPublic && c.GetParameters().Length == 0);
+        }
+
         [Theory]
         [MemberData(nameof(Records))]
         public void Every_persisted_member_round_trips(Type record)
@@ -56,8 +71,10 @@ namespace HSMDatabase.SealedHistory.Tests
 
                 SetValue(changed, member, sample);
 
-                bool persistedByMemoryPack = !MemoryPackSerializer.Serialize<BaseValue>(baseline).AsSpan()
-                    .SequenceEqual(MemoryPackSerializer.Serialize<BaseValue>(changed));
+                // Persisted = the sample survives a MemoryPack round trip. (Comparing the bytes of two values would be
+                // flaky: the JIT can leave stack leftovers in Nullable padding, and MemoryPack writes the padding.)
+                var reread = MemoryPackSerializer.Deserialize<BaseValue>(MemoryPackSerializer.Serialize<BaseValue>(changed));
+                bool persistedByMemoryPack = SameValue(GetValue(reread, member), sample);
 
                 Assert.Equal(IsPersistedByRule(member), persistedByMemoryPack);
 

@@ -24,15 +24,22 @@ namespace HSMDatabase.SealedHistory.Format
             if (value is null)
                 return true;
 
-            try
+            // A scan instead of GetByteCount: no exception path and no int overflow on very long strings.
+            for (int i = 0; i < value.Length; i++)
             {
-                StrictUtf8.GetByteCount(value);
-                return true;
+                char c = value[i];
+
+                if (char.IsHighSurrogate(c))
+                {
+                    if (i + 1 >= value.Length || !char.IsLowSurrogate(value[i + 1]))
+                        return false;
+                    i++;
+                }
+                else if (char.IsLowSurrogate(c))
+                    return false;
             }
-            catch (EncoderFallbackException)
-            {
-                return false;
-            }
+
+            return true;
         }
 
         public static void Write(ByteSink sink, ReadOnlySpan<string> values)
@@ -134,9 +141,14 @@ namespace HSMDatabase.SealedHistory.Format
                 return;
             }
 
-            var bytes = StrictUtf8.GetBytes(value);
-            sink.WriteVarUInt((ulong)bytes.Length + 1);
-            sink.WriteBytes(bytes);
+            // UTF-8 takes at least one byte per UTF-16 code unit: a longer string cannot fit, and checking first
+            // keeps GetByteCount away from int overflow.
+            sink.Ensure(value.Length);
+
+            int length = StrictUtf8.GetByteCount(value);
+            sink.WriteVarUInt((ulong)length + 1);
+            sink.Ensure(length);
+            sink.WriteBytes(StrictUtf8.GetBytes(value));
         }
 
         private static string ReadEntry(ref ByteReader reader)

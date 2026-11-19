@@ -39,6 +39,8 @@ namespace HSMDatabase.SealedHistory
 
         internal const int ZstdLevel = 3;
 
+        private const uint ZstdFrameMagic = 0xFD2FB528;
+
         private const int ChecksumOffset = 36;
 
 
@@ -73,7 +75,7 @@ namespace HSMDatabase.SealedHistory
             int baseSize = rows.Count / chunkCount, larger = rows.Count % chunkCount;
 
             var chunks = new List<byte[]>(chunkCount);
-            var payload = new ByteSink(Math.Min(rows.Count, maxRowsPerChunk) * 16);
+            var payload = new ByteSink(Math.Min(rows.Count, maxRowsPerChunk) * 16, MaxPayloadBytes);
             int start = 0;
 
             for (int c = 0; c < chunkCount; c++)
@@ -81,11 +83,16 @@ namespace HSMDatabase.SealedHistory
                 int count = baseSize + (c < larger ? 1 : 0);
 
                 payload.Clear();
-                PayloadWriter.Write(payload, rows, start, count, valueType);
 
-                if (payload.Length > MaxPayloadBytes)
+                try
+                {
+                    PayloadWriter.Write(payload, rows, start, count, valueType);
+                }
+                catch (PayloadTooLargeException ex)
+                {
                     return ChunkEncodeResult.Refuse(ChunkRefusalReason.ChunkTooLarge, start,
-                        $"the payload of rows {start}..{start + count - 1} is {payload.Length} bytes, above {MaxPayloadBytes}");
+                        $"rows {start}..{start + count - 1}: {ex.Message}");
+                }
 
                 chunks.Add(Assemble(payload.Written, valueType, count, rows[start].Key, rows[start + count - 1].Key));
                 start += count;
@@ -239,8 +246,32 @@ namespace HSMDatabase.SealedHistory
                 throw Corrupt.Error("an uncompressed payload must be stored as is");
             if (firstKey > lastKey || (rowCount == 1 && firstKey != lastKey))
                 throw Corrupt.Error("first and last key are inconsistent");
+            if (compression == CompressionZstd)
+                ValidateZstdFrame(chunk.Slice(HeaderSize), payloadLength);
 
             return (new ChunkHeader(FormatVersion, valueType, rowCount, firstKey, lastKey), compression, payloadLength);
+        }
+
+        /// <summary>
+        /// A zstd payload is exactly one zstd frame (not a skippable frame) that declares its content size, the
+        /// content size equals the header's payload length, and the frame spans every stored byte. Checked before
+        /// anything is allocated for decompression.
+        /// </summary>
+        private static unsafe void ValidateZstdFrame(ReadOnlySpan<byte> stored, int payloadLength)
+        {
+            if (stored.Length < 4 || BinaryPrimitives.ReadUInt32LittleEndian(stored) != ZstdFrameMagic)
+                throw Corrupt.Error("the stored payload does not start with a zstd frame");
+
+            fixed (byte* source = stored)
+            {
+                ulong contentSize = ZstdSharp.Unsafe.Methods.ZSTD_getFrameContentSize(source, (nuint)stored.Length);
+                if (contentSize != (ulong)payloadLength)
+                    throw Corrupt.Error($"the zstd frame does not declare a content size of {payloadLength} bytes");
+
+                nuint frameSize = ZstdSharp.Unsafe.Methods.ZSTD_findFrameCompressedSize(source, (nuint)stored.Length);
+                if (ZstdSharp.Unsafe.Methods.ZSTD_isError(frameSize) || frameSize != (nuint)stored.Length)
+                    throw Corrupt.Error("the stored payload is not exactly one zstd frame");
+            }
         }
 
         private static ReadOnlySpan<byte> Decompress(ReadOnlySpan<byte> stored, Span<byte> destination)

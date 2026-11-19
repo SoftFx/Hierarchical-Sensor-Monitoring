@@ -79,7 +79,7 @@ namespace HSMDatabase.SealedHistory
             if (a.Min != b.Min) return nameof(a.Min);
             if (a.Max != b.Max) return nameof(a.Max);
             if (a.Mean != b.Mean) return nameof(a.Mean);
-            if (a.FirstValue != b.FirstValue) return nameof(a.FirstValue);
+            if (!Same(a.FirstValue, b.FirstValue)) return nameof(a.FirstValue);
             if (a.LastValue != b.LastValue) return nameof(a.LastValue);
             if (!Same(a.StdDev, b.StdDev)) return nameof(a.StdDev);
             return null;
@@ -95,6 +95,9 @@ namespace HSMDatabase.SealedHistory
             if (!Same(a.StdDev, b.StdDev)) return nameof(a.StdDev);
             return null;
         }
+
+        // Not the lifted == / !=: those compare GetValueOrDefault(), which reads the hidden value of a null Nullable.
+        private static bool Same(int? a, int? b) => a.HasValue == b.HasValue && (!a.HasValue || a.Value == b.Value);
 
         private static bool Same(double a, double b) => RawBits.DoubleBits(a) == RawBits.DoubleBits(b);
 

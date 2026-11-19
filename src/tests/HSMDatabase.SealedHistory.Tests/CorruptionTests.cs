@@ -20,8 +20,8 @@ namespace HSMDatabase.SealedHistory.Tests
                 var damaged = (byte[])chunk.Clone();
                 damaged[bit / 8] ^= (byte)(1 << (bit % 8));
 
-                Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(damaged));
-                Assert.Throws<ChunkFormatException>(() => ChunkCodec.ReadHeader(damaged));
+                AssertCleanFailure(Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(damaged)));
+                AssertCleanFailure(Assert.Throws<ChunkFormatException>(() => ChunkCodec.ReadHeader(damaged)));
             }
         }
 
@@ -125,6 +125,9 @@ namespace HSMDatabase.SealedHistory.Tests
         [InlineData(SensorType.String)]
         [InlineData(SensorType.Version)]
         [InlineData(SensorType.Boolean)]
+        [InlineData(SensorType.Integer)]
+        [InlineData(SensorType.Enum)]
+        [InlineData(SensorType.TimeSpan)]
         public void Fuzzed_payloads_behind_a_valid_checksum_fail_cleanly(SensorType type)
         {
             var random = new Random(1802 + (int)type);
@@ -150,8 +153,9 @@ namespace HSMDatabase.SealedHistory.Tests
                         Assert.Equal(header.RowCount, decoded.Count);
                         Assert.All(decoded, r => Assert.NotNull(r.Value));
                     }
-                    catch (ChunkFormatException)
+                    catch (ChunkFormatException ex)
                     {
+                        AssertCleanFailure(ex);
                     }
                 }
             }
@@ -178,12 +182,98 @@ namespace HSMDatabase.SealedHistory.Tests
                 {
                     Assert.Equal(header.RowCount, ChunkCodec.Decode(damaged).Count);
                 }
-                catch (ChunkFormatException)
+                catch (ChunkFormatException ex)
                 {
+                    AssertCleanFailure(ex);
                 }
             }
         }
 
+
+        [Fact]
+        public void A_payload_length_the_zstd_frame_does_not_declare_is_corrupt()
+        {
+            var good = ChunkCodec.Encode(Samples.Ordinary(SensorType.DoubleBar, 300)).Chunks.Single();
+            Assert.Equal(ChunkCodec.CompressionZstd, good[4]);
+
+            var damaged = (byte[])good.Clone();
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(damaged.AsSpan(12), ChunkCodec.MaxPayloadBytes);
+            RecomputeChecksum(damaged);
+
+            var ex = Assert.Throws<ChunkFormatException>(() => ChunkCodec.ReadHeader(damaged));
+            Assert.Equal(ChunkFormatError.Corrupt, ex.Error);
+            Assert.Contains("content size", ex.Message);
+            AssertCleanFailure(Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(damaged)));
+        }
+
+        [Fact]
+        public void A_zstd_payload_must_be_exactly_one_frame_that_declares_its_size()
+        {
+            var good = ChunkCodec.Encode(Samples.Ordinary(SensorType.DoubleBar, 300)).Chunks.Single();
+            var header = ChunkCodec.ReadHeader(good);
+            var payload = ChunkCodec.ExtractPayload(good);
+            var frame = good.AsSpan(ChunkCodec.HeaderSize).ToArray();
+            int half = payload.Length / 2;
+
+            byte[] skippable = [0x50, 0x2A, 0x4D, 0x18, 4, 0, 0, 0, 1, 2, 3, 4];
+
+            byte[][] stored =
+            [
+                [.. Zstd(payload.AsSpan(0, half), contentSize: true), .. Zstd(payload.AsSpan(half), contentSize: true)], // two frames
+                [.. frame, .. skippable],                                                                                 // frame + skippable frame
+                [.. skippable, .. frame],                                                                                 // skippable frame first
+                Zstd(payload, contentSize: false),                                                                        // no declared content size
+                [.. frame, 0],                                                                                            // a trailing byte
+            ];
+
+            foreach (var bytes in stored)
+            {
+                var chunk = Chunk(bytes, header, payload.Length);
+                var ex = Assert.Throws<ChunkFormatException>(() => ChunkCodec.ReadHeader(chunk));
+                Assert.Equal(ChunkFormatError.Corrupt, ex.Error);
+                AssertCleanFailure(Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(chunk)));
+            }
+
+            // the same construction with the encoder's own frame decodes
+            Assert.Equal(header.RowCount, ChunkCodec.Decode(Chunk(Zstd(payload, contentSize: true), header, payload.Length)).Count);
+        }
+
+
+        /// <summary>
+        /// Decode turns every exception into ChunkFormatException(Corrupt), so the tests look inside: a failure must
+        /// come from the reader's own checks, from zstd or from UTF-8 decoding, never from a reader bug such as an
+        /// index out of range.
+        /// </summary>
+        internal static void AssertCleanFailure(ChunkFormatException ex)
+        {
+            Assert.True(ex.InnerException is null or ZstdSharp.ZstdException or System.Text.DecoderFallbackException,
+                $"unexpected inner exception: {ex.InnerException}");
+        }
+
+        private static byte[] Zstd(ReadOnlySpan<byte> data, bool contentSize)
+        {
+            using var compressor = new ZstdSharp.Compressor(ChunkCodec.ZstdLevel);
+            compressor.SetParameter(ZstdSharp.Unsafe.ZSTD_cParameter.ZSTD_c_contentSizeFlag, contentSize ? 1 : 0);
+            return compressor.Wrap(data).ToArray();
+        }
+
+        private static byte[] Chunk(byte[] stored, ChunkHeader header, int payloadLength)
+        {
+            var chunk = new byte[ChunkCodec.HeaderSize + stored.Length];
+            chunk[0] = ChunkCodec.Magic0;
+            chunk[1] = ChunkCodec.Magic1;
+            chunk[2] = ChunkCodec.FormatVersion;
+            chunk[3] = (byte)header.ValueType;
+            chunk[4] = ChunkCodec.CompressionZstd;
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(chunk.AsSpan(8), header.RowCount);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(chunk.AsSpan(12), payloadLength);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(chunk.AsSpan(16), stored.Length);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(chunk.AsSpan(20), header.FirstKey);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(chunk.AsSpan(28), header.LastKey);
+            stored.CopyTo(chunk.AsSpan(ChunkCodec.HeaderSize));
+            RecomputeChecksum(chunk);
+            return chunk;
+        }
 
         internal static void RecomputeChecksum(byte[] chunk)
         {

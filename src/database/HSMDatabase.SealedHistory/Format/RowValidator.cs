@@ -89,6 +89,12 @@ namespace HSMDatabase.SealedHistory.Format
             if (RawBits.KindBits(time) != UtcKindBits)
                 return Unrepresentable(index, $"Time has kind {time.Kind}, the format stores UTC only");
 
+            // MemoryPack reads a DateTime as raw bits, so a stored row can carry ticks above DateTime.MaxValue.
+            // The decoder rejects those; refuse them here so that whatever Encode accepts, Decode returns.
+            var badDateTime = InvalidDateTime(value);
+            if (badDateTime is not null)
+                return Unrepresentable(index, $"{badDateTime} has ticks outside the DateTime range");
+
             var steps = ReceivingTimeSteps(value.ReceivingTime.Ticks, time.Ticks);
             var rebuilt = time.Ticks + steps * ChunkCodec.ReceivingTimeStepTicks;
             if (!RawBits.IsValidTicks(rebuilt))
@@ -97,6 +103,10 @@ namespace HSMDatabase.SealedHistory.Format
 
             if (RawBits.BoolByte(value.IsTimeout) > 1)
                 return Unrepresentable(index, "IsTimeout is not a canonical bool");
+
+            var badNullable = NonCanonicalNullable(value);
+            if (badNullable is not null)
+                return Unrepresentable(index, $"{badNullable} has a hasValue byte other than 0 or 1");
 
             if (!StringColumn.IsRepresentable(value.Comment))
                 return ChunkEncodeResult.Refuse(ChunkRefusalReason.InvalidString, index, "Comment is not valid UTF-16");
@@ -111,6 +121,54 @@ namespace HSMDatabase.SealedHistory.Format
             }
 
             return null;
+        }
+
+        /// <summary>The name of the first DateTime member whose ticks lie outside <c>0 ..= DateTime.MaxValue.Ticks</c>, or null.</summary>
+        private static string InvalidDateTime(BaseValue value)
+        {
+            if (!RawBits.IsValidTicks(value.Time.Ticks))
+                return nameof(BaseValue.Time);
+            if (!RawBits.IsValidTicks(value.ReceivingTime.Ticks))
+                return nameof(BaseValue.ReceivingTime);
+            if (value.LastReceivingTime is DateTime last && !RawBits.IsValidTicks(last.Ticks))
+                return nameof(BaseValue.LastReceivingTime);
+
+            if (value is BarBaseValue bar)
+            {
+                if (!RawBits.IsValidTicks(bar.OpenTime.Ticks))
+                    return nameof(BarBaseValue.OpenTime);
+                if (!RawBits.IsValidTicks(bar.CloseTime.Ticks))
+                    return nameof(BarBaseValue.CloseTime);
+            }
+
+            return null;
+        }
+
+        /// <summary>The name of the first Nullable member whose hasValue byte is not 0 or 1, or null.</summary>
+        private static string NonCanonicalNullable(BaseValue value)
+        {
+            if (RawBits.HasValueByte(value.LastReceivingTime) > 1)
+                return nameof(BaseValue.LastReceivingTime);
+
+            if (value is BaseInstantValue instant && RawBits.HasValueByte(instant.EmaValue) > 1)
+                return nameof(BaseInstantValue.EmaValue);
+
+            if (value is BarBaseValue bar)
+            {
+                if (RawBits.HasValueByte(bar.EmaMin) > 1) return nameof(BarBaseValue.EmaMin);
+                if (RawBits.HasValueByte(bar.EmaMax) > 1) return nameof(BarBaseValue.EmaMax);
+                if (RawBits.HasValueByte(bar.EmaMean) > 1) return nameof(BarBaseValue.EmaMean);
+                if (RawBits.HasValueByte(bar.EmaCount) > 1) return nameof(BarBaseValue.EmaCount);
+            }
+
+            return value switch
+            {
+                IntegerBarValue ib when RawBits.HasValueByte(ib.FirstValue) > 1 => nameof(ib.FirstValue),
+                IntegerBarValue ib when RawBits.HasValueByte(ib.StdDev) > 1 => nameof(ib.StdDev),
+                DoubleBarValue db when RawBits.HasValueByte(db.FirstValue) > 1 => nameof(db.FirstValue),
+                DoubleBarValue db when RawBits.HasValueByte(db.StdDev) > 1 => nameof(db.StdDev),
+                _ => null,
+            };
         }
 
         private static ChunkEncodeResult Unrepresentable(int index, string message) =>

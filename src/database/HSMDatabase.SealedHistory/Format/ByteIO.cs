@@ -3,16 +3,21 @@ using System.Buffers.Binary;
 
 namespace HSMDatabase.SealedHistory.Format
 {
-    /// <summary>Growable little-endian byte buffer used on the encode path.</summary>
+    /// <summary>
+    /// Growable little-endian byte buffer used on the encode path. It never grows past its maximum length:
+    /// a write beyond it throws <see cref="PayloadTooLargeException"/>, which the encoder turns into a refusal.
+    /// </summary>
     internal sealed class ByteSink
     {
+        private readonly int _maxLength;
         private byte[] _buffer;
         private int _length;
 
 
-        public ByteSink(int capacity = 256)
+        public ByteSink(int capacity = 256, int maxLength = int.MaxValue)
         {
-            _buffer = new byte[Math.Max(16, capacity)];
+            _maxLength = Math.Min(maxLength, Array.MaxLength);
+            _buffer = new byte[Math.Clamp(capacity, 16, Math.Max(16, _maxLength))];
         }
 
 
@@ -45,7 +50,7 @@ namespace HSMDatabase.SealedHistory.Format
 
         public void WriteVarUInt(ulong value)
         {
-            Ensure(10);
+            Ensure(IntColumn.VarintLength(value));
             while (value >= 0x80)
             {
                 _buffer[_length++] = (byte)(value | 0x80);
@@ -57,19 +62,26 @@ namespace HSMDatabase.SealedHistory.Format
         public void WriteVarInt(long value) => WriteVarUInt(ZigZag.Encode(value));
 
 
-        private void Ensure(int extra)
+        /// <summary>Throws <see cref="PayloadTooLargeException"/> when <paramref name="extra"/> more bytes would pass the maximum.</summary>
+        public void Ensure(long extra)
         {
-            if (_length + extra <= _buffer.Length)
+            long needed = _length + extra;
+
+            if (extra < 0 || needed > _maxLength)
+                throw new PayloadTooLargeException(needed, _maxLength);
+
+            if (needed <= _buffer.Length)
                 return;
 
-            var size = Math.Max(_buffer.Length * 2L, (long)_length + extra);
-            if (size > Array.MaxLength)
-                size = Array.MaxLength;
-            if (size < (long)_length + extra)
-                throw new InvalidOperationException("Chunk payload buffer exceeds the maximum array length.");
-
-            Array.Resize(ref _buffer, (int)size);
+            Array.Resize(ref _buffer, (int)Math.Min(Math.Max(_buffer.Length * 2L, needed), _maxLength));
         }
+    }
+
+
+    /// <summary>The encoded payload would pass its maximum length; <see cref="ChunkCodec"/> refuses the input.</summary>
+    internal sealed class PayloadTooLargeException(long needed, int maxLength)
+        : Exception($"the payload needs {needed} bytes, above {maxLength}")
+    {
     }
 
 
