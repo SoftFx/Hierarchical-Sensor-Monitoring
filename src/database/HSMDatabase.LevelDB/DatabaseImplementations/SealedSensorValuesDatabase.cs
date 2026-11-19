@@ -1,0 +1,744 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.Formatters;
+using HSMDatabase.LevelDB.Extensions;
+using HSMDatabase.LevelDB.Sealed;
+using HSMDatabase.SealedHistory;
+using LevelDB;
+
+namespace HSMDatabase.LevelDB.DatabaseImplementations
+{
+    /// <summary>
+    /// A sealed week (ADR-0020, #1803): the week's row database, now its overlay, plus the sibling chunk
+    /// database <c>SensorValuesSealedV1_&lt;from&gt;_&lt;to&gt;</c>. Every read sees one stream in key order
+    /// merged from both, where an overlay row hides a chunk row with the same key; the read methods run the
+    /// algorithms of <see cref="LevelDBDatabaseAdapter"/> over that stream, so they answer exactly what a row
+    /// database holding the same rows would. Writes go to the overlay. A range delete rewrites the chunks it
+    /// touches in one synced batch and then deletes the overlay rows.
+    ///
+    /// Consistency without a read lock: a read opens the overlay iterator first and the chunk iterator second
+    /// (each reads the snapshot taken when it is created), and a range delete changes the chunks first and the
+    /// overlay second. A read therefore sees either the old chunks with the old overlay, or the new chunks with
+    /// an overlay the delete has partly or fully gone through: every row it returns is the row the week held
+    /// before the delete, or the delete has removed it. It never sees a chunk row an overlay row used to hide.
+    /// </summary>
+    internal sealed class SealedSensorValuesDatabase : IntervalDataseBase, ISensorValuesDatabase
+    {
+        private static readonly WriteOptions _syncWrite = new() { Sync = true };
+
+        private readonly ReadOptions _readOptions = new();
+        private readonly MemoryPackFormatter _formatter = new();
+        private readonly LevelDBDatabaseAdapter _chunks;
+        private readonly SealedChunkReader _reader;
+
+        // Serializes the writers of the chunk database: a range delete plans its rewrite from the chunks it reads.
+        private readonly object _chunkWriteLock = new();
+
+
+        public string SealedName { get; }
+
+        /// <summary>Chunks of this week that failed to read since it was opened.</summary>
+        public long ChunkReadFailures => _reader.Failures;
+
+        // Test seam: runs after a range delete has rewritten the chunks and before it deletes the overlay rows.
+        internal Action AfterChunkRewrite { get; set; }
+
+        // Test seam: runs when a read has opened its overlay iterator and not yet its chunk iterator.
+        internal Action BetweenReadIterators { get; set; }
+
+
+        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to) : base(name, from, to)
+        {
+            SealedName = sealedName;
+            _reader = new SealedChunkReader(sealedName);
+
+            try
+            {
+                _chunks = new LevelDBDatabaseAdapter(sealedName);
+            }
+            catch
+            {
+                base.Dispose();
+                throw;
+            }
+
+            _logger.Info($"Opened sealed week {sealedName} with its overlay {name}");
+        }
+
+
+        #region Writes
+
+        public void PutSensorValue(byte[] key, byte[] value)
+        {
+            try
+            {
+                OnBeforeChange();
+                _openedDb.Put(key, value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write data for {key.GetString()}");
+            }
+        }
+
+        public void PutSensorValueOrThrow(byte[] key, byte[] value)
+        {
+            OnBeforeChange();
+            _openedDb.Put(key, value);
+        }
+
+        // Chunks first, overlay second (see the class comment). A delete whose chunk rewrite fails changes
+        // nothing: the overlay rows stay, so no chunk row they hide comes back.
+        public void RemoveSensorValues(byte[] from, byte[] to)
+        {
+            try
+            {
+                if (!RewriteChunks(from, to))
+                    return;
+
+                _openedDb.DeleteValueFromTo(from, to, OnBeforeChange);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed removing values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Point reads (mirror LevelDBDatabaseAdapter and SensorValuesDatabaseWorker)
+
+        // Get, GetLatest and GetFirst let an unreadable chunk through as SealedChunkReadException instead of the
+        // row worker's "no value" fallback: DatabaseCore reads null as "this week has none" and would answer with
+        // another week's value. Any other failure keeps the row worker's fallback.
+
+        public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
+        {
+            MergedRowCursor cursor = null;
+
+            try
+            {
+                cursor = OpenCursor();
+
+                foreach (var (key, value) in keyValuePairs)
+                {
+                    var (from, toKey, latestValue) = value;
+
+                    if (latestValue != null || To < from)
+                        continue;
+
+                    byte[] latest = null;
+
+                    try
+                    {
+                        if (toKey.Length == KeyOrder.KeyLength && toKey.StartsWith(key))
+                        {
+                            // The row database walks every row from the sensor's first one up to toKey and keeps the
+                            // last; with toKey inside the sensor's key range that is the last row before toKey.
+                            cursor.Seek(toKey);
+
+                            if (cursor.IsValid)
+                                cursor.Prev();
+                            else
+                                cursor.SeekToLast();
+
+                            if (cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey))
+                                latest = cursor.Value;
+                        }
+                        else
+                        {
+                            for (cursor.Seek(key); cursor.IsValid && StartsWith(cursor, key) && Lt(cursor, toKey); cursor.Next())
+                                latest = cursor.Value;
+                        }
+                    }
+                    catch (SealedChunkReadException)
+                    {
+                        // Already logged and counted. Only this sensor goes without a value from this week; the
+                        // cursor may have stopped anywhere, so the next sensor gets a fresh one.
+                        cursor.Dispose();
+                        cursor = OpenCursor();
+                        continue;
+                    }
+
+                    if (latest is not null)
+                        keyValuePairs[key] = (from, toKey, latest);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to fill sensors latest values");
+            }
+            finally
+            {
+                cursor?.Dispose();
+            }
+        }
+
+        public byte[] Get(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                using var cursor = OpenCursor();
+
+                cursor.Seek(key);
+
+                return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
+            }
+            catch (Exception e) when (e is not SealedChunkReadException)
+            {
+                _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
+
+                return [];
+            }
+        }
+
+        public byte[] GetLatest(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                using var cursor = OpenCursor();
+
+                bool CheckValue() => cursor.IsValid && StartsWith(cursor, sensorId) && Le(cursor, key);
+
+                cursor.Seek(key);
+
+                if (CheckValue())
+                    return cursor.Value;
+
+                if (!cursor.IsValid)
+                    cursor.SeekToLast();
+                else
+                    cursor.Prev();
+
+                return CheckValue() ? cursor.Value : null;
+            }
+            catch (Exception e) when (e is not SealedChunkReadException)
+            {
+                _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
+
+                return null;
+            }
+        }
+
+        public byte[] GetFirst(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                using var cursor = OpenCursor();
+
+                cursor.Seek(key);
+
+                return cursor.IsValid && StartsWith(cursor, sensorId) ? cursor.Value : null;
+            }
+            catch (Exception e) when (e is not SealedChunkReadException)
+            {
+                _logger.Error($"Failed getting first value {key.GetString()} - {e.Message}");
+
+                return null;
+            }
+        }
+
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
+        {
+            results ??= new Dictionary<Guid, (byte[], byte[])>();
+            MergedRowCursor cursor = null;
+
+            try
+            {
+                if (!sensorIds.Any())
+                    return results;
+
+                cursor = OpenCursor();
+
+                foreach (var sensorId in sensorIds)
+                {
+                    byte[] currentFirstValue = null;
+                    byte[] currentLastValue = null;
+
+                    var minKey = new DbKey(sensorId, DateTime.MinValue);
+                    var maxKey = new DbKey(sensorId, DateTime.MaxValue.Ticks);
+                    var prefixBytes = minKey.ToPrefixBytes();
+
+                    var firstAlreadyKnown = results.TryGetValue(sensorId, out var existing) && existing.Item1 != null;
+
+                    try
+                    {
+                        if (!firstAlreadyKnown)
+                        {
+                            cursor.Seek(minKey.ToBytes());
+
+                            if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                                currentFirstValue = cursor.Value;
+                        }
+
+                        // As in the row database: a seek past the end finds no last value (it does not fall back to the last key).
+                        cursor.Seek(maxKey.ToBytes());
+
+                        if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                        {
+                            currentLastValue = cursor.Value;
+                        }
+                        else if (cursor.IsValid)
+                        {
+                            cursor.Prev();
+
+                            if (cursor.IsValid && StartsWith(cursor, prefixBytes))
+                                currentLastValue = cursor.Value;
+                        }
+                    }
+                    catch (SealedChunkReadException)
+                    {
+                        // Already logged and counted. This sensor keeps what the caller had for it; the others go on
+                        // with a fresh cursor.
+                        cursor.Dispose();
+                        cursor = OpenCursor();
+                        continue;
+                    }
+
+                    if (results.TryGetValue(sensorId, out existing))
+                        results[sensorId] = (existing.Item1 ?? currentFirstValue, currentLastValue ?? existing.Item2);
+                    else if (currentFirstValue != null || currentLastValue != null)
+                        results[sensorId] = (currentFirstValue ?? currentLastValue, currentLastValue ?? currentFirstValue);
+                }
+
+                return results;
+            }
+            catch (Exception e)
+            {
+                // Unlike the row worker, which returns an empty dictionary here: what the caller accumulated from
+                // other weeks is kept.
+                _logger.Error($"Failed getting latest values - {e.Message}");
+                return results;
+            }
+            finally
+            {
+                cursor?.Dispose();
+            }
+        }
+
+        #endregion
+
+        #region Range reads (lazy; a chunk that fails to read throws from the enumeration)
+
+        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to) => ValuesFromTo(from, to);
+
+        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to) => KeyValuesToFrom(from, to).Select(pair => pair.value);
+
+        public IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to) => KeyValuesToFrom(from, to);
+
+        public IEnumerable<(byte[] key, byte[] value)> GetAll()
+        {
+            using var cursor = OpenCursor();
+
+            for (cursor.SeekToFirst(); cursor.IsValid; cursor.Next())
+                yield return (cursor.Key, cursor.Value);
+        }
+
+        private IEnumerable<byte[]> ValuesFromTo(byte[] from, byte[] to)
+        {
+            using var cursor = OpenCursor();
+
+            for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
+                yield return cursor.Value;
+        }
+
+        // LevelDBDatabaseAdapter.GetValueKeyPairToFrom over the merged stream.
+        private IEnumerable<(byte[] key, byte[] value)> KeyValuesToFrom(byte[] from, byte[] to)
+        {
+            using var cursor = OpenCursor();
+
+            cursor.Seek(to);
+
+            if (!cursor.IsValid)
+                cursor.SeekToLast();
+
+            while (cursor.IsValid && Gt(cursor, to))
+            {
+                cursor.Prev();
+
+                if (!cursor.IsValid || Lt(cursor, from))
+                    yield break;
+            }
+
+            for (; cursor.IsValid && Ge(cursor, from); cursor.Prev())
+                yield return (cursor.Key, cursor.Value);
+        }
+
+        #endregion
+
+        #region Size and maintenance
+
+        // Informational (the history size of a sensor or node in the UI, the delete preview): it never throws for
+        // an unreadable chunk. That chunk adds its stored bytes, and the count falls back to a lower bound; the
+        // failure is logged and counted where it is found.
+        public (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to)
+        {
+            long count = 0, keyBytes = 0, valueBytes = 0;
+
+            try
+            {
+                using var cursor = OpenCursor();
+
+                for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
+                    count++;
+            }
+            catch (SealedChunkReadException)
+            {
+                count = LowerBoundCount(from, to);
+            }
+
+            foreach (var (key, value) in _openedDb.GetValueKeyPairFromTo(from, to))
+            {
+                keyBytes += key.Length;
+                valueBytes += value.Length;
+            }
+
+            using var chunks = _chunks.Native.CreateIterator(_readOptions);
+
+            foreach (var (key, chunk, _) in ChunkEntries(chunks, from, to))
+            {
+                keyBytes += key.Length;
+                valueBytes += chunk.Length;
+            }
+
+            return (count, keyBytes, valueBytes);
+        }
+
+        // The rows in [from, to] when some chunk cannot be read: every overlay row, the rows of the readable chunks
+        // that no overlay row hides, and for an unreadable chunk wholly in the range with a readable header its row
+        // count less the overlay rows in its span (each could hide one of its rows). An unreadable chunk without a
+        // readable header counts nothing. Never more than a read would return.
+        private long LowerBoundCount(byte[] from, byte[] to)
+        {
+            var overlay = new List<byte[]>();
+
+            foreach (var (key, _) in _openedDb.GetValueKeyPairFromTo(from, to))
+                overlay.Add(key);
+
+            var hidden = overlay.Select(Convert.ToHexString).ToHashSet();
+            long count = overlay.Count;
+
+            using var chunks = _chunks.Native.CreateIterator(_readOptions);
+
+            foreach (var (key, chunk, header) in ChunkEntries(chunks, from, to))
+            {
+                if (header is not { } read)
+                    continue;
+
+                try
+                {
+                    foreach (var row in _reader.Decode(key, chunk))
+                    {
+                        var rowKey = KeyOrder.RowKey(key, row.Key);
+
+                        if (InRange(rowKey, from, to) && !hidden.Contains(Convert.ToHexString(rowKey)))
+                            count++;
+                    }
+                }
+                catch (SealedChunkReadException)
+                {
+                    var lastRow = KeyOrder.RowKey(key, read.LastKey);
+
+                    if (KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(lastRow, to) <= 0)
+                        count += Math.Max(0, read.RowCount - overlay.Count(k => KeyOrder.Compare(k, key) >= 0 && KeyOrder.Compare(k, lastRow) <= 0));
+                }
+            }
+
+            return count;
+        }
+
+        // The chunks that may have a row in [from, to], in key order, never throwing: a readable one with its
+        // header (only if it does reach the range), an unreadable one with a null header if its key is in the range.
+        // An unreadable chunk before `from` cannot be placed and is left out.
+        private IEnumerable<(byte[] key, byte[] chunk, ChunkHeader? header)> ChunkEntries(Iterator iterator, byte[] from, byte[] to)
+        {
+            iterator.Seek(from);
+
+            if (iterator.IsValid)
+                iterator.Prev();
+            else
+                iterator.SeekToLast();
+
+            if (!iterator.IsValid)
+                iterator.SeekToFirst();
+
+            for (; iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (KeyOrder.Compare(key, to) > 0)
+                    yield break;
+
+                var before = KeyOrder.Compare(key, from) < 0;
+
+                if (before && from.Length >= KeyOrder.SensorIdLength &&
+                    !key.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(from.AsSpan(0, KeyOrder.SensorIdLength)))
+                    continue;
+
+                var chunk = iterator.Value();
+                ChunkHeader? header = null;
+
+                try
+                {
+                    header = _reader.ReadHeader(key, chunk);
+                }
+                catch (SealedChunkReadException)
+                {
+                }
+
+                if (header is { } read ? KeyOrder.Compare(KeyOrder.RowKey(key, read.LastKey), from) < 0 : before)
+                    continue;
+
+                yield return (key, chunk, header);
+            }
+        }
+
+        public void Compact()
+        {
+            _openedDb.Compact();
+            _chunks.Compact();
+        }
+
+        public override void Dispose()
+        {
+            try
+            {
+                _chunks?.Dispose();
+                _readOptions.Dispose();
+            }
+            finally
+            {
+                base.Dispose();
+            }
+        }
+
+        #endregion
+
+
+        // The overlay iterator first, the chunk iterator second: see the class comment.
+        private MergedRowCursor OpenCursor()
+        {
+            var overlay = _openedDb.Native.CreateIterator(_readOptions);
+            Iterator chunks = null;
+
+            try
+            {
+                BetweenReadIterators?.Invoke();
+
+                chunks = _chunks.Native.CreateIterator(_readOptions);
+
+                return new MergedRowCursor(new NativeRowCursor(overlay), new ChunkRowCursor(chunks, _reader, _formatter));
+            }
+            catch
+            {
+                chunks?.Dispose();
+                overlay.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Removes the chunk rows in [from, to]: chunks wholly inside are deleted, a chunk on a border is
+        /// re-encoded with the rows outside the range and stored under the key of its new first row. Everything
+        /// is one synced write batch, so a crash leaves either every chunk as it was or every chunk rewritten.
+        /// False, with the failure logged and counted, when a chunk on the border cannot be rewritten.
+        /// </summary>
+        private bool RewriteChunks(byte[] from, byte[] to)
+        {
+            if (KeyOrder.Compare(from, to) > 0)
+                return true;
+
+            lock (_chunkWriteLock)
+            {
+                var deletes = new List<byte[]>();
+                var puts = new List<(byte[] key, byte[] chunk)>();
+
+                try
+                {
+                    using var chunks = _chunks.Native.CreateIterator(_readOptions);
+
+                    foreach (var (key, chunk, header) in ChunksTouching(chunks, from, to))
+                    {
+                        if (header is not { } read)
+                        {
+                            // Unreadable, and every row it can hold is in the range: the delete removes it.
+                            _logger.Error($"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} removes an unreadable chunk {KeyOrder.Tick(key)} that lies wholly inside it");
+                            deletes.Add(key);
+                            continue;
+                        }
+
+                        var lastRow = KeyOrder.RowKey(key, read.LastKey);
+
+                        if (KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(lastRow, to) <= 0)
+                        {
+                            deletes.Add(key);
+                            continue;
+                        }
+
+                        var rows = _reader.Decode(key, chunk);
+                        var kept = rows.FindAll(row => !InRange(KeyOrder.RowKey(key, row.Key), from, to));
+
+                        if (kept.Count == rows.Count)
+                            continue;
+
+                        deletes.Add(key);
+
+                        if (kept.Count > 0)
+                            puts.AddRange(Reencode(key, kept));
+                    }
+                }
+                catch (Exception e)
+                {
+                    SealedHistoryDiagnostics.CountChunkRewriteFailure();
+                    _logger.Error(e, $"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} refused: a chunk on its border cannot be rewritten; nothing was deleted");
+                    return false;
+                }
+
+                if (deletes.Count > 0)
+                {
+                    OnBeforeChange();
+
+                    using var batch = new WriteBatch();
+
+                    // Deletes first: a re-encoded chunk can keep the key of the chunk it replaces.
+                    foreach (var key in deletes)
+                        batch.Delete(key);
+                    foreach (var (key, chunk) in puts)
+                        batch.Put(key, chunk);
+
+                    _chunks.Native.Write(batch, _syncWrite);
+                }
+            }
+
+            AfterChunkRewrite?.Invoke();
+
+            return true;
+        }
+
+        private List<(byte[] key, byte[] chunk)> Reencode(byte[] oldKey, List<HistoryRow> kept)
+        {
+            var encoded = ChunkCodec.Encode(kept);
+
+            if (!encoded.IsSuccess)
+                throw new InvalidOperationException($"re-encoding {kept.Count} rows of chunk {KeyOrder.Tick(oldKey)} refused: {encoded.Refusal}");
+
+            var result = new List<(byte[], byte[])>(encoded.Chunks.Count);
+            var verified = 0;
+
+            // Verified like a seal: the new chunks decode to exactly the rows they replace.
+            foreach (var chunk in encoded.Chunks)
+            {
+                var header = ChunkCodec.ReadHeader(chunk);
+                var decoded = ChunkCodec.Decode(chunk);
+
+                foreach (var row in decoded)
+                {
+                    var difference = verified < kept.Count ? RowFidelity.FindDifference(kept[verified], row) : "row count";
+
+                    if (difference is not null)
+                        throw new InvalidOperationException($"a re-encoded chunk of {KeyOrder.Tick(oldKey)} does not match its rows (row {verified}, {difference})");
+
+                    verified++;
+                }
+
+                result.Add((KeyOrder.RowKey(oldKey, header.FirstKey), chunk));
+            }
+
+            if (verified != kept.Count)
+                throw new InvalidOperationException($"re-encoded chunks of {KeyOrder.Tick(oldKey)} hold {verified} of {kept.Count} rows");
+
+            return result;
+        }
+
+        // The chunks with a row in [from, to], in key order, with their verified headers. A chunk that cannot be
+        // read comes with a null header when it lies wholly inside the range for sure (see ProvablyInside); any
+        // other unreadable chunk throws.
+        private IEnumerable<(byte[] key, byte[] chunk, ChunkHeader? header)> ChunksTouching(Iterator iterator, byte[] from, byte[] to)
+        {
+            // The chunk before `from` reaches into the range when its last row does.
+            iterator.Seek(from);
+
+            if (iterator.IsValid)
+                iterator.Prev();
+            else
+                iterator.SeekToLast();
+
+            if (!iterator.IsValid)
+                iterator.SeekToFirst();
+
+            for (; iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (KeyOrder.Compare(key, to) > 0)
+                    yield break;
+
+                // The chunk before `from` of another sensor: all its rows are below `from`, so it is not read.
+                if (KeyOrder.Compare(key, from) < 0 && from.Length >= KeyOrder.SensorIdLength &&
+                    !key.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(from.AsSpan(0, KeyOrder.SensorIdLength)))
+                    continue;
+
+                var chunk = iterator.Value();
+                ChunkHeader? header = null;
+
+                try
+                {
+                    header = _reader.ReadHeader(key, chunk);
+                }
+                catch (SealedChunkReadException) when (ProvablyInside(iterator, key, from, to))
+                {
+                }
+
+                if (header is { } read && KeyOrder.Compare(KeyOrder.RowKey(key, read.LastKey), from) < 0)
+                    continue;
+
+                yield return (key, chunk, header);
+            }
+        }
+
+        // Whether every row of the chunk under `key` lies in [from, to] without reading it: its rows start at its
+        // key, belong to the key's sensor, end before the next chunk's key (chunks never overlap), and lie in this
+        // week. The week bound is an invariant of the row database the chunks were sealed from: every row of a
+        // weekly database has From <= tick < To, where To is the next Monday 00:00 (DateTimeMethods.GetEndOfWeek),
+        // because DatabaseCore.AddSensorValue picks the week by GetDatabaseByTime(value.Time.Ticks) and keys the
+        // row with that same tick, and MergeSensorValues copies a row within its week under the same tick; no
+        // other code writes a weekly database. Leaves the iterator where it was.
+        private bool ProvablyInside(Iterator iterator, byte[] key, byte[] from, byte[] to)
+        {
+            if (key.Length != KeyOrder.KeyLength || KeyOrder.Compare(key, from) < 0)
+                return false;
+
+            if (To > 0 && KeyOrder.Compare(KeyOrder.RowKey(key, To - 1), to) <= 0)
+                return true;
+
+            iterator.Next();
+
+            var next = iterator.IsValid ? iterator.Key() : null;
+
+            if (iterator.IsValid)
+                iterator.Prev();
+            else
+                iterator.SeekToLast();
+
+            return next is not null && KeyOrder.Compare(next, to) <= 0;
+        }
+
+        // The row database's key checks (ByteArrayExtensions: StartsWith, and length-first order) on the merged
+        // cursor. They go through the cursor rather than its Key, so the cursor answers them without deciding which
+        // child holds the current row when both children agree (see MergedRowCursor); an overlay row is compared
+        // exactly as the row database compares it, quirks included.
+        private static bool StartsWith(MergedRowCursor cursor, byte[] prefix) => cursor.KeyStartsWith(prefix);
+
+        private static bool Le(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) <= 0;
+
+        private static bool Lt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) < 0;
+
+        private static bool Ge(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) >= 0;
+
+        private static bool Gt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) > 0;
+
+        private static bool InRange(byte[] key, byte[] from, byte[] to) => KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(key, to) <= 0;
+    }
+}

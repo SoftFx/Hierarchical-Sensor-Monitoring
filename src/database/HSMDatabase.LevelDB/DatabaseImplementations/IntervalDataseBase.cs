@@ -114,7 +114,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void Dispose() => _openedDb.Dispose();
+        public virtual void Dispose() => _openedDb.Dispose();
 
     }
 }

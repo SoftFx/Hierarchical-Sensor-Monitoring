@@ -1,5 +1,6 @@
 using HSMCommon.Model;
 using HSMDatabase.SealedHistory;
+using HSMDatabase.SealedHistory.Format;
 using Xunit;
 
 namespace HSMDatabase.SealedHistory.Tests
@@ -111,6 +112,25 @@ namespace HSMDatabase.SealedHistory.Tests
 
             foreach (var chunk in wrong)
                 Assert.Equal(ChunkFormatError.Corrupt, Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(chunk)).Error);
+        }
+
+        // The sealed week store relies on decoded keys being strictly ascending (#1803); the encoder never writes
+        // anything else, so a payload with keys out of order is built with the payload writer directly.
+        [Theory]
+        [InlineData(new long[] { 10, 30, 20 })]
+        [InlineData(new long[] { 10, 20, 20 })]
+        public void Keys_that_are_not_strictly_ascending_are_corrupt(long[] keys)
+        {
+            var rows = keys.Select(k => new HistoryRow(k, new IntegerValue { Time = new DateTime(k, DateTimeKind.Utc), Value = 1 })).ToList();
+            var sink = new ByteSink();
+            PayloadWriter.Write(sink, rows, 0, rows.Count, SensorType.Integer);
+
+            // Header first and last key match the payload's, so only the order check can catch it.
+            var chunk = ChunkCodec.Assemble(sink.Written, SensorType.Integer, rows.Count, keys[0], keys[^1]);
+
+            var error = Assert.Throws<ChunkFormatException>(() => ChunkCodec.Decode(chunk));
+            Assert.Equal(ChunkFormatError.Corrupt, error.Error);
+            Assert.Contains("ascending", error.Message);
         }
 
         /// <summary>

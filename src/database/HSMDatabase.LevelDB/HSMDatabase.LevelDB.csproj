@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <ProjectReference Include="..\HSMDatabase.SealedHistory\HSMDatabase.SealedHistory.csproj" />
   </ItemGroup>
 
 </Project>

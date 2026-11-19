@@ -1,3 +1,4 @@
+using HSMDatabase.AccessManager;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
@@ -577,7 +578,21 @@ namespace HSMServer.Core.Cache
                     // sensors, and a merge would mix them for good — a collector never causes
                     // that one, an operator still can. A net, not a proof: sensors with few
                     // values can slip through it.
-                    if (HaveValuesInTheSamePeriod(old, occupant))
+                    bool overlap;
+
+                    try
+                    {
+                        overlap = HaveValuesInTheSamePeriod(old, occupant);
+                    }
+                    catch (SealedChunkReadException ex)
+                    {
+                        // A sealed chunk of one of them cannot be read (#1803): the check cannot be made, and a merge
+                        // is for good, so the path is not applied.
+                        _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: the history of the sensor there or of the one at {target.Path} cannot be read ({ex.Message})");
+                        continue;
+                    }
+
+                    if (overlap)
                     {
                         _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: the sensor there and the one at {target.Path} " +
                                      "both have values in the same period, so they are not one sensor under two names. Merge them by hand if they are.");

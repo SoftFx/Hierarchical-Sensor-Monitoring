@@ -82,8 +82,9 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 long size = 0;
 
+                // A sealed week (#1803) adds its chunk database; an incomplete one takes disk space too.
                 foreach (var db in _sensorValuesDatabases)
-                    size += db.Name.GetSize();
+                    size += db.Name.GetSize() + _settings.GetPathToSealedSensorValueDatabase(db.From, db.To).GetSize();
 
                 return size;
             }
@@ -346,13 +347,15 @@ namespace HSMDatabase.DatabaseWorkCore
             var totalKeySize = 0L;
             var totalValueSize = 0L;
 
+            // A sealed week (#1803) counts the values a read returns and the bytes of its overlay rows and chunks.
             foreach (var db in _sensorValuesDatabases)
-                foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromKey, toKey))
-                {
-                    totalKeySize += keyBytes.Length;
-                    totalValueSize += valueBytes.Length;
-                    totalDataCnt++;
-                }
+            {
+                var (count, keySize, valueSize) = db.CalculateHistorySize(fromKey, toKey);
+
+                totalDataCnt += count;
+                totalKeySize += keySize;
+                totalValueSize += valueSize;
+            }
 
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
@@ -1105,12 +1108,12 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var db = open();
                 var changeCount = db.ChangeCount;
-                var sizeBefore = name.GetSize();
+                var sizeBefore = ShardSize(name, db);
 
                 CompactShard(db);
 
                 if (db.From < currentWeekStart)
-                    TryMarkCompacted(db, changeCount, sizeBefore, name.GetSize());
+                    TryMarkCompacted(db, changeCount, sizeBefore, ShardSize(name, db));
             }
             catch (Exception ex)
             {
@@ -1133,6 +1136,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return true;
         }
+
+        // A sensor history week counts its chunk directory too: Compact() of a sealed week compacts both (#1803).
+        private long ShardSize(string name, IIntervalDatabase db) =>
+            name.GetSize() + (db is ISensorValuesDatabase ? _settings.GetPathToSealedSensorValueDatabase(db.From, db.To).GetSize() : 0);
 
         private void CompactShard(IIntervalDatabase db)
         {
@@ -1264,13 +1271,13 @@ namespace HSMDatabase.DatabaseWorkCore
             try
             {
                 var db = open();
-                var sizeBefore = name.GetSize();
+                var sizeBefore = ShardSize(name, db);
                 var changeCount = db.ChangeCount;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
                 CompactShard(db);
 
-                var sizeAfter = name.GetSize();
+                var sizeAfter = ShardSize(name, db);
                 // A marker that cannot be written throws into the failure path below: the
                 // shard then waits for the backoff instead of being compacted every pass.
                 var marked = db.TryMarkCompacted(changeCount, CompactedMarkerContent(sizeBefore, sizeAfter));
@@ -1342,7 +1349,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public IEnumerable<(byte[], byte[])> MigrateDatabaseV2()
         {
             var settings = new DatabaseSettings() { SensorValuesDatabaseName = "SensorValues" };
-            var oldDbs = new SensorValuesDatabaseDictionary(settings);
+            var oldDbs = new SensorValuesDatabaseDictionary(settings, sealedWeeks: false);
 
             if (!Directory.Exists(Path.Combine(Environment.CurrentDirectory, settings.DatabaseFolder)))
                 yield break;

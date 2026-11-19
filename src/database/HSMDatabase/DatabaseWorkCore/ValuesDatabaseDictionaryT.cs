@@ -84,7 +84,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return new Shard(from, path, new Lazy<T>(() => CreateDb.Invoke(path, from, to), LazyThreadSafetyMode.ExecutionAndPublication));
         }
 
-        private string[] GetSensorValuesDirectories()
+        protected virtual string[] GetSensorValuesDirectories()
         {
             if (!Directory.Exists(_databaseFolder))
                 return [];

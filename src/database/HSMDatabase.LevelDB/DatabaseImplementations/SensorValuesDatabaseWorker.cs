@@ -172,6 +172,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        // The loop DatabaseCore.CalculateSensorHistorySize ran over GetKeysValuesTo before #1803.
+        public (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to)
+        {
+            long count = 0, keyBytes = 0, valueBytes = 0;
+
+            foreach (var (key, value) in _openedDb.GetValueKeyPairToFrom(from, to))
+            {
+                keyBytes += key.Length;
+                valueBytes += value.Length;
+                count++;
+            }
+
+            return (count, keyBytes, valueBytes);
+        }
+
         public void Compact()
         {
             _openedDb.Compact();
