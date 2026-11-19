@@ -127,6 +127,29 @@ public sealed class SealedWeekStoreTests
     }
 
     [Fact]
+    public void CorruptLastChunk_IsDeletedByARetentionDeleteThatReachesTheEndOfTheWeek()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(19));
+        SealedChunk corrupt = default;
+
+        using var pair = WeekPair.Create(seed, beforeOpen: p => corrupt = CorruptChunk(p, DenseChunks(p, sensors.Dense)[2]));
+
+        var store = pair.SealedStore;
+
+        // A cutoff inside the week, past every row of the chunk: its rows cannot be proven inside without reading it.
+        var refused = SealedHistoryDiagnostics.ChunkRewriteFailures;
+        store.RemoveSensorValues(Min(sensors.Dense), Key(sensors.Dense, corrupt.LastTick + 1));
+        Assert.Equal(refused + 1, SealedHistoryDiagnostics.ChunkRewriteFailures);
+
+        // A cutoff at the end of the week (retention of an older week passes a later one): every row of the week is before it.
+        pair.Remove(Min(sensors.Dense), Key(sensors.Dense, WeekPair.WeekTo));
+
+        Assert.Equal(refused + 1, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Empty(store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)));
+        pair.AssertSameReads(sensors.All, new Random(19), probesPerSensor: 3);
+    }
+
+    [Fact]
     public void CorruptLastChunkOfOneSensor_DoesNotReachTheNextSensor()
     {
         var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(18));

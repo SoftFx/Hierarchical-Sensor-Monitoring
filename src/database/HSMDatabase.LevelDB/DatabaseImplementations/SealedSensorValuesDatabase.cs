@@ -555,14 +555,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
         // Whether every row of the chunk under `key` lies in [from, to] without reading it: its rows start at its
-        // key, belong to the key's sensor, are DateTime ticks, and end before the next chunk's key (chunks never
-        // overlap). Leaves the iterator where it was.
-        private static bool ProvablyInside(Iterator iterator, byte[] key, byte[] from, byte[] to)
+        // key, belong to the key's sensor, end before the next chunk's key (chunks never overlap), and lie in this
+        // week. The week bound is an invariant of the row database the chunks were sealed from: every row of a
+        // weekly database has From <= tick < To, where To is the next Monday 00:00 (DateTimeMethods.GetEndOfWeek),
+        // because DatabaseCore.AddSensorValue picks the week by GetDatabaseByTime(value.Time.Ticks) and keys the
+        // row with that same tick, and MergeSensorValues copies a row within its week under the same tick; no
+        // other code writes a weekly database. Leaves the iterator where it was.
+        private bool ProvablyInside(Iterator iterator, byte[] key, byte[] from, byte[] to)
         {
             if (key.Length != KeyOrder.KeyLength || KeyOrder.Compare(key, from) < 0)
                 return false;
 
-            if (KeyOrder.Compare(KeyOrder.RowKey(key, DateTime.MaxValue.Ticks), to) <= 0)
+            if (To > 0 && KeyOrder.Compare(KeyOrder.RowKey(key, To - 1), to) <= 0)
                 return true;
 
             iterator.Next();
