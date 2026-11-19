@@ -1,3 +1,4 @@
+using HSMDatabase.AccessManager;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
@@ -583,7 +584,7 @@ namespace HSMServer.Core.Cache
                     {
                         overlap = HaveValuesInTheSamePeriod(old, occupant);
                     }
-                    catch (HSMDatabase.LevelDB.Sealed.SealedChunkReadException ex)
+                    catch (SealedChunkReadException ex)
                     {
                         // A sealed chunk of one of them cannot be read (#1803): the check cannot be made, and a merge
                         // is for good, so the path is not applied.

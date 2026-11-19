@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using HSMDatabase.AccessManager;
 using HSMDatabase.SealedHistory;
@@ -9,29 +8,6 @@ using NLog;
 
 namespace HSMDatabase.LevelDB.Sealed
 {
-    /// <summary>
-    /// A chunk of a sealed week that could not be read: a decode failure of the codec, or a chunk that does not
-    /// fit its key or its neighbours. Never caught to return fewer rows; see the sealed history feature doc.
-    /// </summary>
-    public sealed class SealedChunkReadException : IOException
-    {
-        public string Database { get; }
-
-        public Guid SensorId { get; }
-
-        public long FirstTick { get; }
-
-
-        public SealedChunkReadException(string database, Guid sensorId, long firstTick, string message, Exception inner = null)
-            : base($"Sealed chunk {sensorId}:{firstTick} in {database}: {message}", inner)
-        {
-            Database = database;
-            SensorId = sensorId;
-            FirstTick = firstTick;
-        }
-    }
-
-
     /// <summary>
     /// Reads the chunks of one sealed week with the checks the store relies on, and reports every failure
     /// once where it is found: an error in the log, the store's counter and <see cref="SealedHistoryDiagnostics"/>.

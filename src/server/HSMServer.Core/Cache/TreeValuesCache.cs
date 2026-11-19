@@ -1,4 +1,5 @@
-﻿using HSMCommon.Collections;
+﻿using HSMDatabase.AccessManager;
+using HSMCommon.Collections;
 using HSMCommon.Extensions;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
@@ -1451,7 +1452,7 @@ namespace HSMServer.Core.Cache
             {
                 bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev pointTicks value
             }
-            catch (HSMDatabase.LevelDB.Sealed.SealedChunkReadException ex)
+            catch (SealedChunkReadException ex)
             {
                 // The value is in a sealed chunk that cannot be read (#1803; logged and counted where it was found).
                 // Without it the range is not adjusted, and the delete goes on: a corrupt chunk must not block the
