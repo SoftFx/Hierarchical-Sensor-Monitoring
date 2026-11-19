@@ -30,11 +30,18 @@ namespace HSMDatabase.LevelDB.Sealed
         }
 
 
-        /// <summary>Opens (creating if needed) the sealed directory of a week that is not sealed yet.</summary>
+        /// <summary>
+        /// Starts the chunk database of a week that is not sealed yet, always empty. A directory without the marker
+        /// is what an interrupted seal left: not data (the source rows are still in the row database), and stale
+        /// if those rows changed since, so it is deleted first. A directory with the marker is refused.
+        /// </summary>
         public static SealedWeekWriter Open(string sealedPath)
         {
             if (SealedWeekMarker.ExistsIn(sealedPath))
                 throw new InvalidOperationException($"{sealedPath} is already a complete sealed week");
+
+            if (Directory.Exists(sealedPath))
+                Directory.Delete(sealedPath, recursive: true);
 
             return new SealedWeekWriter(sealedPath);
         }

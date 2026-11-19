@@ -290,6 +290,47 @@ public sealed class SealedWeekStoreTests
     }
 
     [Fact]
+    public void ReSeal_AfterAnInterruptedSeal_StartsFromAnEmptyChunkDatabase()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"hsm-1803-{Guid.NewGuid():N}");
+        var rowPath = Path.Combine(root, "SensorValuesV2_1_2");
+        var sealedPath = Path.Combine(root, $"{SealedWeekMarker.DirectoryPrefix}_1_2");
+
+        try
+        {
+            var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(21));
+
+            using (var rows = new LevelDBDatabaseAdapter(rowPath))
+                foreach (var (key, value) in seed)
+                    rows.Put(key, value);
+
+            // The first attempt wrote every chunk and stopped before its marker.
+            WeekSealer.Seal(rowPath, sealedPath, skipMarker: "crash");
+
+            // Between the attempts: one sensor's rows are deleted, another loses its first row (so its first chunk key moves).
+            var gone = seed.Where(r => DbKey.FromBytes(r.key).SensorId == sensors.IntegerBar).Select(r => r.key).ToList();
+            gone.Add(seed.First(r => DbKey.FromBytes(r.key).SensorId == sensors.String).key);
+            using (var rows = new LevelDBDatabaseAdapter(rowPath))
+                rows.PutBatch([], gone);
+
+            var goneKeys = gone.Select(Convert.ToHexString).ToHashSet();
+            var expected = seed.Select(r => Convert.ToHexString(r.key)).Where(k => !goneKeys.Contains(k)).ToList();
+
+            // The second attempt completes; its sealed rows leave the row database.
+            WeekSealer.Seal(rowPath, sealedPath);
+
+            using var db = LevelDBManager.GetSensorValuesDatabaseInstance(rowPath, sealedPath, 1, 2);
+
+            Assert.IsType<SealedSensorValuesDatabase>(db);
+            Assert.Equal(expected, db.GetAll().Select(r => Convert.ToHexString(r.key)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Writer_RefusesAWeekThatIsAlreadySealed()
     {
         var (seed, _) = SealedWeekDifferentialTests.Seed(new Random(12));
