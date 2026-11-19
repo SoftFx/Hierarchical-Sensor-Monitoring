@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -28,6 +29,8 @@ namespace HSMServer.BackgroundServices
         internal const string VerificationFailuresName = "Verification failures";
         internal const string ChunkReadFailuresName = "Chunk read failures";
         internal const string ChunkRewriteFailuresName = "Chunk rewrite failures";
+        internal const string AttentionName = "Weeks needing attention";
+        internal const string SyncFailuresName = "Chunk directory sync failures";
 
         private readonly IInstantValueSensor<string> _lastRun;
         private readonly IInstantValueSensor<int> _sealedWeeks;
@@ -38,10 +41,13 @@ namespace HSMServer.BackgroundServices
         private readonly IInstantValueSensor<int> _verificationFailures;
         private readonly IInstantValueSensor<int> _chunkReadFailures;
         private readonly IInstantValueSensor<int> _chunkRewriteFailures;
+        private readonly IInstantValueSensor<int> _attention;
+        private readonly IInstantValueSensor<int> _syncFailures;
 
         private long _postedSequence;
         private long? _postedReadFailures;
         private long? _postedRewriteFailures;
+        private long? _postedSyncFailures;
 
 
         public HistorySealingSensors(IDataCollector collector)
@@ -74,6 +80,15 @@ namespace HSMServer.BackgroundServices
 
             _chunkRewriteFailures = collector.CreateIntSensor($"{NodeName}/{ChunkRewriteFailuresName}", Options(
                 "Range deletes on sealed weeks refused since the server started because a border chunk could not be rewritten.", Unit.Count));
+
+            _attention = collector.CreateIntSensor($"{NodeName}/{AttentionName}", Options(
+                "Weeks the sealing job will not touch until an operator looks at them; the comment names each week and what to do. Causes: a chunk " +
+                "directory that lost its hsm-sealed marker (it may hold the only copy of the week), a keep time that cannot be read " +
+                "(hsm-keep-source-rows-until), a chunk that cannot be read during source-row removal or an unseal. Error status above 0.", Unit.Count));
+
+            _syncFailures = collector.CreateIntSensor($"{NodeName}/{SyncFailuresName}", Options(
+                "Directory syncs after a sealing marker that failed since the server started (Linux, macOS; Windows writes markers with write-through " +
+                "instead). A failure after hsm-sealed fails that seal; any other is logged once. Error status above 0.", Unit.Count));
         }
 
 
@@ -83,6 +98,14 @@ namespace HSMServer.BackgroundServices
             {
                 _postedSequence = pass.Sequence;
                 Post(pass);
+            }
+
+            var syncFailures = SealedHistoryDiagnostics.DirectorySyncFailures;
+
+            if (syncFailures != _postedSyncFailures && (_postedSequence > 0 || syncFailures > 0))
+            {
+                _postedSyncFailures = syncFailures;
+                _syncFailures.AddValue(Clamp(syncFailures), syncFailures > 0 ? SensorStatus.Error : SensorStatus.Ok);
             }
 
             var readFailures = SealedHistoryDiagnostics.ChunkReadFailures;
@@ -111,6 +134,10 @@ namespace HSMServer.BackgroundServices
 
             _lastRun.AddValue($"{pass.Action} {pass.Outcome}", failed ? SensorStatus.Error : SensorStatus.Ok, pass.ToString());
             _sealedWeeks.AddValue(pass.SealedWeeks);
+
+            var attention = pass.WeeksNeedingAttention;
+            _attention.AddValue(attention.Count, attention.Count > 0 ? SensorStatus.Error : SensorStatus.Ok,
+                string.Join(Environment.NewLine, attention.Select(a => $"{a.Key}: {a.Value}")));
 
             if (pass.Action is not (HistorySealingAction.Seal or HistorySealingAction.Fold))
                 return;

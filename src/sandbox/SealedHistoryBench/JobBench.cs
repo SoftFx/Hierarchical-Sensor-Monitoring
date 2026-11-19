@@ -145,7 +145,8 @@ internal static class JobBench
 
     private static string Describe(HistorySealingPassReport report) => report is null ? string.Empty
         : $"{report.Action} {report.Outcome}: {report.RowsSealed} rows sealed, {report.SourceBytes} -> {report.ChunkBytes} B, " +
-          $"{report.OverlayRowsRemoved} overlay rows removed, {report.RowsRestored} restored, {report.SensorsSealed} sensors, left as rows [{report.LeftAsRowsSummary()}]";
+          $"{report.OverlayRowsRemoved} overlay rows removed, {report.RowsRestored} restored, {report.SensorsSealed} sensors, left as rows [{report.LeftAsRowsSummary()}]" +
+          string.Concat(report.LongestExclusiveHold.Select(h => $"; longest '{h.Key}' {h.Value.TotalMilliseconds:F2} ms"));
 
     // A dense Double sensor (one value per second for two days) and 299 sensors of every type, one value every 1 to 20 minutes.
     private static void WriteSyntheticWeek(DatabaseCore core, DateTime monday, Random random)

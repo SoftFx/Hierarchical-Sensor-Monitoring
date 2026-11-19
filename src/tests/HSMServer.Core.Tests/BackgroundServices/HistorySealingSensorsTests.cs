@@ -87,6 +87,23 @@ public sealed class HistorySealingSensorsTests
     }
 
     [Fact]
+    public void WeeksNeedingAttention_ArePostedWithEveryPass_AsAnErrorNamingThem()
+    {
+        var sensors = new HistorySealingSensors(_collector.Object);
+        var pass = new HistorySealingPassReport { Sequence = 1, Action = HistorySealingAction.None, Outcome = HistorySealingOutcome.NothingDue };
+        pass.WeeksNeedingAttention["SensorValuesV2_1_2"] = "hsm-sealed is missing";
+
+        sensors.SendInfo(pass);
+        sensors.SendInfo(new HistorySealingPassReport { Sequence = 2, Action = HistorySealingAction.None, Outcome = HistorySealingOutcome.NothingDue });
+
+        var values = Values<int>(HistorySealingSensors.AttentionName);
+        Assert.Equal((1, SensorStatus.Error), (values[0].Value, values[0].Status));
+        Assert.Contains("SensorValuesV2_1_2: hsm-sealed is missing", values[0].Comment);
+        Assert.Equal((0, SensorStatus.Ok), (values[1].Value, values[1].Status));
+        Assert.NotEmpty(Values<int>(HistorySealingSensors.SyncFailuresName));
+    }
+
+    [Fact]
     public void BeforeAnyPass_NoPassSensorIsPosted()
     {
         var sensors = new HistorySealingSensors(_collector.Object);

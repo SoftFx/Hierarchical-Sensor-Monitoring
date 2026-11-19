@@ -20,7 +20,7 @@ internal sealed class SimulatedCrash(string checkpoint) : Exception($"simulated 
 // deletes; the job runs on one of them. At every stage, after every interruption and around every race, each read of
 // the job's database must equal the plain one by the fidelity rule (step 2's comparer): a sealed row may come back with
 // its ReceivingTime rounded to the millisecond, every other row byte for byte.
-public sealed class HistorySealingJobTests : IDisposable
+public sealed partial class HistorySealingJobTests : IDisposable
 {
     private static readonly DateTime WeekDay = new(2026, 11, 4, 0, 0, 0, DateTimeKind.Utc); // a Wednesday: week 2026-11-02 .. 11-09
     private static readonly DateTime OlderWeekDay = WeekDay.AddDays(-7);
@@ -40,7 +40,7 @@ public sealed class HistorySealingJobTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"hsm-1804-{Guid.NewGuid():N}");
     private readonly DatabaseSettings _plainSettings;
-    private readonly DatabaseSettings _jobSettings;
+    private DatabaseSettings _jobSettings;
     private readonly MemoryPackFormatter _formatter = new();
     private readonly HashSet<string> _sealable = [];
     private readonly List<(Guid id, SensorType type)> _sensors = [];
@@ -320,8 +320,10 @@ public sealed class HistorySealingJobTests : IDisposable
         // The job finishes it (an interrupted unseal goes first).
         if (Directory.Exists(SealedPath()))
         {
+            var stage = Stage();
             var finish = Pass(AfterKeep);
-            Assert.Equal((HistorySealingAction.FinishUnseal, HistorySealingOutcome.Done), (finish.Action, finish.Outcome));
+            Assert.Equal(HistorySealingOutcome.Done, finish.Outcome);
+            Assert.Equal(stage == SealedWeekStage.UnsealedLeftover ? HistorySealingAction.DeleteLeftoverChunks : HistorySealingAction.FinishUnseal, finish.Action);
         }
 
         Assert.False(Directory.Exists(SealedPath()));
@@ -484,14 +486,13 @@ public sealed class HistorySealingJobTests : IDisposable
         for (int i = 0; i < 10 && reader.MoveNext(); i++)
             read.Add(reader.Current);
 
-        _core.UnsealReplacedInstanceWait = TimeSpan.Zero;
-
         var unseal = _core.UnsealHistoryWeek(WeekName(), AfterKeep);
-        Assert.Equal(HistorySealingOutcome.Interrupted, unseal.Outcome); // done, but the chunk directory is still in use
+        Assert.Equal(HistorySealingOutcome.Done, unseal.Outcome); // done; the chunk directory is a leftover still in use
+        Assert.NotNull(unseal.Note);
         Assert.False(Week().IsSealed);
         Assert.False(SealedWeekMarker.ExistsIn(SealedPath()));
         Assert.True(Directory.Exists(SealedPath()));
-        Assert.Equal(SealedWeekStage.Unsealing, Stage());
+        Assert.Equal(SealedWeekStage.UnsealedLeftover, Stage());
         AssertSameHistory("unsealed while a read holds the chunks");
 
         while (reader.MoveNext()) // reads chunk rows from the replaced sealed store
@@ -501,9 +502,49 @@ public sealed class HistorySealingJobTests : IDisposable
         compare.Values(expected, read, "a read across the unseal swap");
 
         var finish = Pass(AfterKeep);
-        Assert.Equal((HistorySealingAction.FinishUnseal, HistorySealingOutcome.Done), (finish.Action, finish.Outcome));
+        Assert.Equal((HistorySealingAction.DeleteLeftoverChunks, HistorySealingOutcome.Done), (finish.Action, finish.Outcome));
         Assert.False(Directory.Exists(SealedPath()));
         AssertSameHistory("unsealed");
+    }
+
+    // S2: a range read that is never disposed (a history page the UI left open) holds the replaced sealed store forever.
+    // The unseal must not wait for it, and the leftover directory must not block the job: other weeks' actions run on the
+    // next passes, the clean-up is retried later and succeeds once the read ends. Fails with a waiting unseal.
+    [Fact]
+    public void AnAbandonedRead_DoesNotStallTheUnsealOrTheJob()
+    {
+        Start(36);
+        SealBothWeeks(); // both keep their source rows: the older week's removal is due at AfterKeep
+
+        var (from, to) = (new DbKey(_dense, 0L).ToBytes(), new DbKey(_dense, DateTime.MaxValue.Ticks).ToBytes());
+        var abandoned = Week().GetValuesFrom(from, to).GetEnumerator();
+        Assert.True(abandoned.MoveNext());
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var unseal = _core.UnsealHistoryWeek(WeekName(), SealTime);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"the unseal took {watch.Elapsed}");
+        Assert.Equal(HistorySealingOutcome.Done, unseal.Outcome);
+        Assert.Equal(SealedWeekStage.UnsealedLeftover, Stage());
+
+        // The older week's source-row removal is not held back by the leftover.
+        var removal = Pass(AfterKeep);
+        Assert.Equal((HistorySealingAction.RemoveSourceRows, HistorySealingOutcome.Done), (removal.Action, removal.Outcome));
+
+        watch.Restart();
+        var cleanUp = Pass(AfterKeep);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"the clean-up took {watch.Elapsed}");
+        Assert.Equal((HistorySealingAction.DeleteLeftoverChunks, HistorySealingOutcome.Interrupted), (cleanUp.Action, cleanUp.Outcome));
+        Assert.True(Directory.Exists(SealedPath()));
+
+        // Retried only after its backoff: until then nothing is due.
+        Assert.Equal(HistorySealingOutcome.NothingDue, Pass(AfterKeep.AddMinutes(30)).Outcome);
+
+        abandoned.Dispose();
+
+        var done = Pass(AfterKeep.AddHours(2));
+        Assert.Equal((HistorySealingAction.DeleteLeftoverChunks, HistorySealingOutcome.Done), (done.Action, done.Outcome));
+        Assert.False(Directory.Exists(SealedPath()));
+        AssertSameHistory("unsealed after the read ended");
     }
 
     #endregion
@@ -717,7 +758,7 @@ public sealed class HistorySealingJobTests : IDisposable
 
     private void Restart()
     {
-        _core.Dispose();
+        _core?.Dispose();
 
         // DatabaseCore.Dispose leaves the layout, change set and snapshot databases open: a restart in the same process
         // gives them new names, as step 2's tests do; the history weeks are the same directories.
@@ -813,7 +854,7 @@ public sealed class HistorySealingJobTests : IDisposable
     }
 
     // Every read of every week of both databases, and the DatabaseCore point reads of every sensor.
-    private void AssertSameHistory(string when)
+    private void AssertSameHistory(string when, Guid? except = null)
     {
         var compare = new FidelityComparer(_sealable);
 
@@ -824,9 +865,10 @@ public sealed class HistorySealingJobTests : IDisposable
 
         foreach (var (plain, job) in plainWeeks.Zip(jobWeeks))
         {
-            compare.Pairs(plain.GetAll(), job.GetAll(), $"{when}: GetAll {Path.GetFileName(plain.Name)}");
+            if (except is null)
+                compare.Pairs(plain.GetAll(), job.GetAll(), $"{when}: GetAll {Path.GetFileName(plain.Name)}");
 
-            foreach (var (id, _) in _sensors)
+            foreach (var (id, _) in _sensors.Where(s => s.id != except))
             {
                 var first = new DbKey(id, 0L).ToBytes();
                 var last = new DbKey(id, DateTime.MaxValue.Ticks).ToBytes();
@@ -851,7 +893,7 @@ public sealed class HistorySealingJobTests : IDisposable
             }
         }
 
-        foreach (var (id, _) in _sensors)
+        foreach (var (id, _) in _sensors.Where(s => s.id != except))
         {
             compare.Value(_plain.GetLatestValue(id, DateTime.MaxValue.Ticks), _core.GetLatestValue(id, DateTime.MaxValue.Ticks), $"{when}: GetLatestValue {id}");
             compare.Value(_plain.GetFirstValue(id), _core.GetFirstValue(id), $"{when}: GetFirstValue {id}");
