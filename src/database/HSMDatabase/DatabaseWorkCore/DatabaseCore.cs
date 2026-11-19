@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using NLog;
 using HSMCommon.Constants;
 using HSMCommon.Model;
@@ -40,7 +41,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public ISnapshotDatabase Snapshots { get; }
 
-        public bool IsCompactRunning { get; private set; }
+        // 1 while a compaction (the manual whole-database one or a background shard
+        // step, #1801) runs; taken with CompareExchange so two callers never both enter.
+        private int _compactRunning;
+
+        // Shards whose background compaction failed, and when they may be tried again.
+        // Touched only while _compactRunning is held.
+        private readonly Dictionary<string, DateTime> _compactionRetryAfter = [];
+
+        public bool IsCompactRunning => Volatile.Read(ref _compactRunning) == 1;
 
         public bool IsExportRunning { get; private set; }
 
@@ -1020,10 +1029,8 @@ namespace HSMDatabase.DatabaseWorkCore
         #endregion
         public void Compact()
         {
-            if (IsCompactRunning)
+            if (!TryEnterCompact())
                 return;
-
-            IsCompactRunning = true;
 
             string name = string.Empty;
 
@@ -1078,9 +1085,96 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             finally
             {
-                IsCompactRunning = false;
+                ExitCompact();
             }
 
+        }
+
+        private bool TryEnterCompact() => Interlocked.CompareExchange(ref _compactRunning, 1, 0) == 0;
+
+        private void ExitCompact() => Volatile.Write(ref _compactRunning, 0);
+
+        public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod)
+        {
+            if (!TryEnterCompact())
+                return HistoryShardCompactionOutcome.Busy;
+
+            try
+            {
+                var shards = new Dictionary<string, Func<IIntervalDatabase>>();
+                var candidates = new List<HistoryShardCandidate>();
+
+                // Sensor history first: on the same week the planner takes the first listed.
+                AddCompactionCandidates(_sensorValuesDatabases, shards, candidates);
+                AddCompactionCandidates(_journalValuesDatabases, shards, candidates);
+
+                if (HistoryShardCompactionPlanner.SelectNext(candidates, utcNow, quietPeriod) is not { } next)
+                    return HistoryShardCompactionOutcome.NothingDue;
+
+                return CompactHistoryShard(next.Name, shards[next.Name], utcNow);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "History shard compaction step failed");
+                return HistoryShardCompactionOutcome.Failed;
+            }
+            finally
+            {
+                ExitCompact();
+            }
+        }
+
+        // A shard not opened yet has not changed since the server started (every write
+        // opens it): its marker file is all there is to know, and reading it does not
+        // open the LevelDB database.
+        private void AddCompactionCandidates<T>(ValuesDatabaseDictionary<T> dictionary,
+            Dictionary<string, Func<IIntervalDatabase>> shards, List<HistoryShardCandidate> candidates)
+            where T : IIntervalDatabase
+        {
+            foreach (var shard in dictionary.GetShards())
+            {
+                if (!shards.TryAdd(shard.Path, () => shard.Database))
+                    continue;
+
+                _compactionRetryAfter.TryGetValue(shard.Path, out var retryAfter);
+                DateTime? retry = retryAfter == default ? null : retryAfter;
+
+                candidates.Add(shard.IsOpened
+                    ? new HistoryShardCandidate(shard.Path, shard.From, shard.Database.IsCompacted, shard.Database.LastChangeUtc, retry)
+                    : new HistoryShardCandidate(shard.Path, shard.From, CompactedShardMarker.ExistsIn(shard.Path), null, retry));
+            }
+        }
+
+        private HistoryShardCompactionOutcome CompactHistoryShard(string name, Func<IIntervalDatabase> open, DateTime utcNow)
+        {
+            try
+            {
+                var db = open();
+                var sizeBefore = name.GetSize();
+                var changeCount = db.ChangeCount;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                db.Compact();
+
+                var sizeAfter = name.GetSize();
+                var marked = db.TryMarkCompacted(changeCount, $"Compacted at {DateTime.UtcNow:O}: {sizeBefore} -> {sizeAfter} bytes{Environment.NewLine}");
+
+                _compactionRetryAfter.Remove(name);
+
+                _logger.Info($"History shard compacted: {name}: {sizeBefore} -> {sizeAfter} bytes in {watch.Elapsed.TotalSeconds:F1} s" +
+                    (marked ? string.Empty : "; it changed meanwhile and stays due"));
+
+                return HistoryShardCompactionOutcome.Compacted;
+            }
+            catch (Exception ex)
+            {
+                var retryAfter = utcNow + HistoryShardCompactionPlanner.FailureBackoff;
+                _compactionRetryAfter[name] = retryAfter;
+
+                _logger.Error(ex, $"History shard compaction failed: {name}; next attempt not before {retryAfter:O}");
+
+                return HistoryShardCompactionOutcome.Failed;
+            }
         }
 
         public void ExportValuesDatabase(string name, Dictionary<Guid, string> sensors)

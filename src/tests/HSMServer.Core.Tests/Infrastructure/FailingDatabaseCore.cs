@@ -354,6 +354,9 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public void Compact() => _inner.Compact();
 
+        public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod) =>
+            _inner.CompactNextDueHistoryShard(utcNow, quietPeriod);
+
         public IEnumerable<(byte[], byte[])> GetAll() => _inner.GetAll();
 
         public void Dispose() => _inner.Dispose();
