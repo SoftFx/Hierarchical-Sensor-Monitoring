@@ -1108,12 +1108,12 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var db = open();
                 var changeCount = db.ChangeCount;
-                var sizeBefore = name.GetSize();
+                var sizeBefore = ShardSize(name, db);
 
                 CompactShard(db);
 
                 if (db.From < currentWeekStart)
-                    TryMarkCompacted(db, changeCount, sizeBefore, name.GetSize());
+                    TryMarkCompacted(db, changeCount, sizeBefore, ShardSize(name, db));
             }
             catch (Exception ex)
             {
@@ -1136,6 +1136,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return true;
         }
+
+        // A sensor history week counts its chunk directory too: Compact() of a sealed week compacts both (#1803).
+        private long ShardSize(string name, IIntervalDatabase db) =>
+            name.GetSize() + (db is ISensorValuesDatabase ? _settings.GetPathToSealedSensorValueDatabase(db.From, db.To).GetSize() : 0);
 
         private void CompactShard(IIntervalDatabase db)
         {
@@ -1267,13 +1271,13 @@ namespace HSMDatabase.DatabaseWorkCore
             try
             {
                 var db = open();
-                var sizeBefore = name.GetSize();
+                var sizeBefore = ShardSize(name, db);
                 var changeCount = db.ChangeCount;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
                 CompactShard(db);
 
-                var sizeAfter = name.GetSize();
+                var sizeAfter = ShardSize(name, db);
                 // A marker that cannot be written throws into the failure path below: the
                 // shard then waits for the backoff instead of being compacted every pass.
                 var marked = db.TryMarkCompacted(changeCount, CompactedMarkerContent(sizeBefore, sizeAfter));

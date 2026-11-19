@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager;
 using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.LevelDB.DatabaseImplementations;
 using HSMDatabase.Settings;
+using HSMServer.Core.DataLayer;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -131,6 +132,41 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
         Assert.Empty(_sealed.SensorValuesDatabases);
     }
 
+
+    [Fact]
+    public void Compaction_OfASealedWeek_ReportsTheSizeOfBothDirectories()
+    {
+        _plain = Open(_plainSettings);
+        _sealed = Open(_sealedSettings);
+        Fill(_dense, SensorType.Double, SealedWeekDay, 9_000, TimeSpan.FromSeconds(20));
+        Fill(_file, SensorType.File, SealedWeekDay, 3, TimeSpan.FromHours(1));
+        SealTheWeek();
+
+        var settings = (IDatabaseSettings)_sealedSettings;
+        var from = DateTimeMethods.GetStartOfWeekTicks(SealedWeekDay.Ticks);
+        var to = DateTimeMethods.GetEndOfWeekTicks(SealedWeekDay.Ticks);
+        var rowPath = settings.GetPathToSensorValueDatabase(from, to);
+        var chunkSize = DirectorySize(settings.GetPathToSealedSensorValueDatabase(from, to));
+
+        (long before, long after) Reported()
+        {
+            var text = File.ReadAllText(Path.Combine(rowPath, CompactedShardMarker.FileName));
+            var sizes = text[(text.IndexOf(": ", StringComparison.Ordinal) + 2)..].Split(' ');
+            return (long.Parse(sizes[0]), long.Parse(sizes[2]));
+        }
+
+        // The background step.
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, _sealed.CompactNextDueHistoryShard(DateTime.UtcNow, TimeSpan.Zero));
+        var (before, after) = Reported();
+        _output.WriteLine($"background: {before} -> {after}; chunk directory {chunkSize}");
+        Assert.True(before >= chunkSize && after >= chunkSize / 2, $"{before} -> {after} does not include the {chunkSize} bytes of chunks");
+
+        // The manual path.
+        File.Delete(Path.Combine(rowPath, CompactedShardMarker.FileName));
+        _sealed.Compact();
+        (before, after) = Reported();
+        Assert.True(before >= chunkSize / 2 && after >= chunkSize / 2, $"{before} -> {after} does not include the chunks");
+    }
 
     private void Fill(Guid sensor, SensorType type, DateTime start, int count, TimeSpan step)
     {
