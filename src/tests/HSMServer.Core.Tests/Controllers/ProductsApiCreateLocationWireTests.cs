@@ -32,9 +32,10 @@ namespace HSMServer.Core.Tests.Controllers
     // {controller}/{action} route instead of /api/v1/nodes/{id}, and the
     // reviewer's manual GET on it came back 401. This test assembles the
     // production routing surface in a minimal in-memory host — the app's
-    // own controllers via MapControllers PLUS the same conventional routes
-    // Program.cs registers, because the phantom URL is only reachable
-    // through those — and then does what a client does: POST /api/v1/products,
+    // own controllers via MapControllers PLUS the {action}-bearing
+    // conventional routes Program.cs registers, because the phantom URL is
+    // only reachable through those — and then does what a client does: POST
+    // /api/v1/products,
     // read the Location of the 201, and GET it, expecting the management
     // API's node endpoint to answer 200. No Kestrel or LevelDB (the same
     // trade HsmMcpWireTests made); only routing, auth and the two real
@@ -146,12 +147,14 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         // The production routing surface and nothing more: the app's own
-        // controllers through MapControllers, plus the SAME conventional
-        // routes Program.cs registers — the {controller}/{action} pattern is
-        // what the pre-fix controller name resolved into, so leaving it out
-        // would test a routing table the real server never runs. The write
-        // path runs over the real administration service with mocked
-        // collaborators (HsmMcpWireTests' trade).
+        // controllers through MapControllers, plus the {action}-bearing
+        // conventional routes Program.cs registers (Account/Home — the
+        // patterns link generation resolves the pre-fix controller name
+        // into, so leaving them out would test a routing table the real
+        // server never runs; the Dashboard pattern has no {action} slot and
+        // cannot produce a phantom action URL). The write path runs over the
+        // real administration service with mocked collaborators
+        // (HsmMcpWireTests' trade).
         private IHost BuildHost()
         {
             return Host.CreateDefaultBuilder()
