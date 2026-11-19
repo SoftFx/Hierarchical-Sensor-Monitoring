@@ -79,7 +79,23 @@ internal static class StoreBench
         var middle = Middle(plain, min, max);
         Row("Get at a key in the middle", () => plain.Get(middle, prefix), () => sealedWeek.Get(middle, prefix));
         Row("whole densest sensor (GetValuesFrom)", () => plain.GetValuesFrom(min, max).Count(), () => sealedWeek.GetValuesFrom(min, max).Count(), runs: 5);
-        Row($"GetLastAndFirstValues, all {ids.Count} sensors", () => plain.GetLastAndFirstValues(ids), () => sealedWeek.GetLastAndFirstValues(ids), runs: 5);
+        // What a sensor's history load asks of each week (DatabaseCore.GetLatestValue and GetFirstValue).
+        var loadKeys = ids.Select(id => (Max: new DbKey(id, DateTime.MaxValue.Ticks).ToBytes(), Min: new DbKey(id, 0).ToBytes(), Prefix: new DbKey(id, 0).ToPrefixBytes())).ToList();
+        void Load(ISensorValuesDatabase db)
+        {
+            foreach (var (maxKey, minKey, sensorPrefix) in loadKeys)
+            {
+                db.GetLatest(maxKey, sensorPrefix);
+                db.GetFirst(minKey, sensorPrefix);
+            }
+        }
+
+        var loadPlain = Report.Time(() => Load(plain), 5);
+        var loadSealed = Report.Time(() => Load(sealedWeek), 5);
+        Report.Line($"{"history load, latest + first, all " + ids.Count + " sensors",-45} plain {loadPlain,10:F3} ms   sealed {loadSealed,10:F3} ms");
+        Report.Line($"{"  per sensor",-45} plain {loadPlain / ids.Count * 1000,10:F1} us   sealed {loadSealed / ids.Count * 1000,10:F1} us");
+
+        Row($"GetLastAndFirstValues, all {ids.Count} sensors (no caller)", () => plain.GetLastAndFirstValues(ids), () => sealedWeek.GetLastAndFirstValues(ids), runs: 5);
         Row("full week iteration (GetAll)", () => plain.GetAll().Count(), () => sealedWeek.GetAll().Count(), runs: 3);
     }
 
