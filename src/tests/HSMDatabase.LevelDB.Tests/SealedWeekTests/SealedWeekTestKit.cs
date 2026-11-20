@@ -36,7 +36,10 @@ internal static class WeekSealer
     private static readonly MemoryPackFormatter _formatter = new();
 
 
-    public static SealResult Seal(string rowPath, string sealedPath, bool keepSourceRows = false, string skipMarker = null)
+    /// <param name="overlayOnly">With <paramref name="keepSourceRows"/>: the week as a seal leaves it during its keep period
+    /// (a keep time far ahead, nothing deleted), so the store reads the overlay alone (#1805 follow-up). Otherwise a kept
+    /// week is marked as one whose source-row removal has begun (<c>hsm-source-rows-removing</c>), so it is read merged.</param>
+    public static SealResult Seal(string rowPath, string sealedPath, bool keepSourceRows = false, string skipMarker = null, bool overlayOnly = false)
     {
         var result = new SealResult();
         var sealedKeys = new List<byte[]>();
@@ -92,8 +95,25 @@ internal static class WeekSealer
                 rows.PutBatch([], sealedKeys);
         }
 
+        if (keepSourceRows && skipMarker is null)
+        {
+            File.WriteAllText(Path.Combine(sealedPath, SealedWeekStages.KeepSourceRowsUntilFileName), $"{FarKeepTime:O}{Environment.NewLine}");
+
+            if (!overlayOnly)
+                MarkRemovalBegun(sealedPath);
+        }
+        else
+            Assert.False(overlayOnly, "only a week that keeps its source rows can be read from the overlay alone");
+
         return result;
     }
+
+    /// <summary>A keep time no test clock reaches.</summary>
+    public static readonly DateTime FarKeepTime = new(2100, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>What source-row removal writes before its first overlay delete: the week is read merged from then on.</summary>
+    public static void MarkRemovalBegun(string sealedPath) =>
+        File.WriteAllText(Path.Combine(sealedPath, SealedWeekStages.SourceRowsRemovingFileName), "test: source-row removal begun" + Environment.NewLine);
 
     private static IEnumerable<(Guid, List<(byte[] key, byte[] value)>)> BySensor(IEnumerable<(byte[], byte[])> rows)
     {
@@ -277,7 +297,8 @@ internal sealed class WeekPair : IDisposable
 
 
     /// <summary>Writes the seed into both weeks, seals one of them and opens both through LevelDBManager.</summary>
-    public static WeekPair Create(IReadOnlyList<(byte[] key, byte[] value)> seed, bool keepSourceRows = false, Action<WeekPair> beforeOpen = null)
+    /// <param name="overlayOnly">See <see cref="WeekSealer.Seal"/>: a week in its keep period read from the overlay alone.</param>
+    public static WeekPair Create(IReadOnlyList<(byte[] key, byte[] value)> seed, bool keepSourceRows = false, Action<WeekPair> beforeOpen = null, bool overlayOnly = false)
     {
         var pair = new WeekPair();
 
@@ -287,7 +308,7 @@ internal sealed class WeekPair : IDisposable
                 foreach (var (key, value) in seed)
                     rows.Put(key, value);
 
-            pair.Seal = WeekSealer.Seal(pair.SealedRowPath, pair.SealedChunkPath, keepSourceRows);
+            pair.Seal = WeekSealer.Seal(pair.SealedRowPath, pair.SealedChunkPath, keepSourceRows, overlayOnly: overlayOnly);
             beforeOpen?.Invoke(pair);
 
             pair.Plain = LevelDBManager.GetSensorValuesDatabaseInstance(pair.PlainRowPath, pair.PlainChunkPath, WeekFrom, WeekTo);
@@ -297,6 +318,7 @@ internal sealed class WeekPair : IDisposable
             pair.Sealed = LevelDBManager.GetSensorValuesDatabaseInstance(pair.SealedRowPath, pair.SealedChunkPath, WeekFrom, WeekTo);
             Assert.IsType<SensorValuesDatabaseWorker>(pair.Plain);
             Assert.IsType<SealedSensorValuesDatabase>(pair.Sealed);
+            Assert.Equal(overlayOnly, pair.SealedStore.ReadsOverlayOnly);
 
             pair.Compare = new FidelityComparer(pair.Seal.SealedOriginals);
 
@@ -389,7 +411,8 @@ internal sealed class WeekPair : IDisposable
     }
 
     /// <summary>Every read of the interface on both weeks, over the probe keys and ranges.</summary>
-    public void AssertSameReads(IReadOnlyList<Guid> sensors, Random random, int probesPerSensor = 12)
+    /// <param name="sizes">Also <c>CalculateHistorySize</c>, which counts the stored chunk bytes and so opens the chunk database.</param>
+    public void AssertSameReads(IReadOnlyList<Guid> sensors, Random random, int probesPerSensor = 12, bool sizes = true)
     {
         var all = Plain.GetAll().ToList();
         Compare.Pairs(all, Sealed.GetAll(), "GetAll");
@@ -421,7 +444,8 @@ internal sealed class WeekPair : IDisposable
                 Compare.Values(Plain.GetValuesTo(from, to).Take(count), Sealed.GetValuesTo(from, to).Take(count), $"GetValuesTo {range} x{count}");
             }
 
-            Assert.Equal(Plain.CalculateHistorySize(from, to).count, Sealed.CalculateHistorySize(from, to).count);
+            if (sizes)
+                Assert.Equal(Plain.CalculateHistorySize(from, to).count, Sealed.CalculateHistorySize(from, to).count);
         }
 
         var unknown = new byte[16];

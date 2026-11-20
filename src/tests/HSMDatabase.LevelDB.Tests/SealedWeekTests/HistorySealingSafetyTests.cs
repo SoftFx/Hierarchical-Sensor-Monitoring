@@ -22,6 +22,8 @@ public sealed partial class HistorySealingJobTests
     [InlineData(new[] { "hsm-sealing", "hsm-rows-left" }, false, SealedWeekStage.IncompleteSeal)]
     [InlineData(new[] { "hsm-sealing", "hsm-keep-source-rows-until" }, false, SealedWeekStage.NeedsAttention)]
     [InlineData(new[] { "hsm-sealing", "hsm-source-rows-removed" }, false, SealedWeekStage.NeedsAttention)]
+    [InlineData(new[] { "hsm-sealing", "hsm-source-rows-removing" }, false, SealedWeekStage.NeedsAttention)] // #1805 follow-up
+    [InlineData(new[] { "hsm-keep-source-rows-until", "hsm-source-rows-removing" }, false, SealedWeekStage.NeedsAttention)]
     [InlineData(new[] { "hsm-sealing", "hsm-unsealing" }, false, SealedWeekStage.NeedsAttention)]
     [InlineData(new[] { "hsm-keep-source-rows-until" }, false, SealedWeekStage.NeedsAttention)]
     [InlineData(new[] { "hsm-keep-source-rows-until", "hsm-source-rows-removed" }, false, SealedWeekStage.NeedsAttention)]
@@ -547,6 +549,7 @@ public sealed partial class HistorySealingJobTests
         ["seal", SealingCheckpoints.SealCompacted, 1],
         ["seal", SealingCheckpoints.SealMarked, 1],
         ["seal", SealingCheckpoints.SealSwapped, 1],
+        ["remove", SealingCheckpoints.RemoveAnnounced, 1], // #1805 follow-up: the image must read merged
         ["remove", SealingCheckpoints.RemoveBatch, 1],
         ["fold", SealingCheckpoints.FoldCommitted, 1],
         ["fold", SealingCheckpoints.FoldBatch, 1],
@@ -600,7 +603,20 @@ public sealed partial class HistorySealingJobTests
         // The job's database is replaced by the image, as after a kill and a start.
         _core.Dispose();
         _jobSettings = _jobSettings with { DatabaseFolder = image };
+
+        // Right after the announcement nothing is deleted yet, but the image must read the announced (older) week merged,
+        // by its marker alone: the restart's clock still sees the keep time ahead (#1805 review R4b).
+        if (checkpoint == SealingCheckpoints.RemoveAnnounced)
+            _clock = SealTime.AddDays(1);
+
         Restart();
+
+        if (checkpoint == SealingCheckpoints.RemoveAnnounced)
+        {
+            Assert.True(File.Exists(Path.Combine(Week(OlderWeekDay).SealedName, SealedWeekStages.SourceRowsRemovingFileName)));
+            Assert.False(((SealedSensorValuesDatabase)Week(OlderWeekDay).Current).ReadsOverlayOnly);
+            Assert.True(((SealedSensorValuesDatabase)Week().Current).ReadsOverlayOnly); // ours: not announced
+        }
 
         AssertSameHistory($"crash image at {checkpoint}");
 

@@ -67,9 +67,10 @@ namespace HSMDatabase.AccessManager
 
     /// <summary>
     /// The marker files of the sealing job (#1804). Each is a small human-readable text file written atomically (a
-    /// temporary file flushed to disk, then renamed). <see cref="SealedWeekMarker.FileName"/> (step 2) stays the only
-    /// signal readers act on: present means the chunks are complete and the week is read merged with its overlay. The
-    /// others refine what the job still has to do and are never consulted by a read. LevelDB claims only CURRENT,
+    /// temporary file flushed to disk, then renamed). <see cref="SealedWeekMarker.FileName"/> (step 2) stays the signal
+    /// that makes a week sealed: present means the chunks are complete. When a sealed week is opened the store also asks
+    /// <see cref="OverlayHoldsEveryRow"/> whether its reads may use the overlay alone (#1805 follow-up); the other files
+    /// refine what the job still has to do and are never consulted by a read. LevelDB claims only CURRENT,
     /// LOCK, LOG*, MANIFEST-* and numbered files of a directory and ignores these.
     /// </summary>
     public static class SealedWeekStages
@@ -82,6 +83,13 @@ namespace HSMDatabase.AccessManager
 
         /// <summary>In the chunk directory: the source rows that equal their chunk rows have been removed from the overlay.</summary>
         public const string SourceRowsRemovedFileName = "hsm-source-rows-removed";
+
+        /// <summary>
+        /// In the chunk directory: overlay rows of this sealed week may have been deleted by the sealing job (source-row
+        /// removal, a fold), so the overlay no longer holds every row and reads merge it with the chunks (#1805 follow-up).
+        /// Written durably before the job deletes its first overlay row, and never removed.
+        /// </summary>
+        public const string SourceRowsRemovingFileName = "hsm-source-rows-removing";
 
         /// <summary>In the chunk directory: the sensors left as rows, with the reason and a fingerprint of their rows.</summary>
         public const string RowsLeftFileName = "hsm-rows-left";
@@ -112,7 +120,7 @@ namespace HSMDatabase.AccessManager
             {
                 // A seal writes hsm-sealing before its database, and the keep file only after hsm-sealed; an unseal writes
                 // hsm-unsealing first and hsm-unsealed (row directory) only after every chunk row is in the overlay.
-                if (Has(SealingFileName) && !Has(KeepSourceRowsUntilFileName) && !Has(SourceRowsRemovedFileName) && !unsealing)
+                if (Has(SealingFileName) && !Has(KeepSourceRowsUntilFileName) && !Has(SourceRowsRemovingFileName) && !Has(SourceRowsRemovedFileName) && !unsealing)
                     return new(SealedWeekStage.IncompleteSeal, null, false, unsealedByOperator);
 
                 if (unsealing && unsealedByOperator)
@@ -165,6 +173,63 @@ namespace HSMDatabase.AccessManager
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 return (null, $"{path} cannot be read ({e.Message}); the source rows are kept");
+            }
+        }
+
+        /// <summary>How far ahead the keep time must be for <see cref="OverlayHoldsEveryRow"/> to answer true (#1805 review R3).</summary>
+        public static readonly TimeSpan OverlayOnlyKeepMargin = TimeSpan.FromDays(1);
+
+        /// <summary>
+        /// Whether the overlay of a sealed week holds every row its chunks hold, by the files on disk (#1805 follow-up): then
+        /// the week is exactly its row database and a read needs no chunk. True only when all of these hold:
+        /// <list type="bullet">
+        /// <item><c>hsm-sealed</c> is there: the chunks are complete (a seal builds them from the overlay, and every later
+        /// change keeps "every live chunk row has an overlay row with its key": writes only add overlay rows, a range delete
+        /// changes the chunks before the overlay, an unseal adds overlay rows);</item>
+        /// <item>neither <see cref="SourceRowsRemovingFileName"/> nor <see cref="SourceRowsRemovedFileName"/> is there: the
+        /// only code that deletes overlay rows without deleting their chunk rows (source-row removal and a fold) writes the
+        /// first durably before its first delete;</item>
+        /// <item>the keep time is known and more than <see cref="OverlayOnlyKeepMargin"/> ahead of <paramref name="utcNow"/>, by
+        /// the keep file and by the keep line of <c>hsm-sealed</c> (the earlier one): a build from before the first marker
+        /// removed source rows without writing it, and only once the keep time had passed; the margin keeps a week whose
+        /// removal such a build began and did not finish merged also after a clock corrected backwards by up to a day.</item>
+        /// </list>
+        /// Any doubt answers false: merged reads are right in every state, overlay-only reads only in this one.
+        /// </summary>
+        public static bool OverlayHoldsEveryRow(string sealedPath, DateTime utcNow)
+        {
+            try
+            {
+                if (!SealedWeekMarker.ExistsIn(sealedPath) ||
+                    File.Exists(Path.Combine(sealedPath, SourceRowsRemovingFileName)) ||
+                    File.Exists(Path.Combine(sealedPath, SourceRowsRemovedFileName)))
+                    return false;
+
+                DateTime? earliest = null;
+                var keepFile = Path.Combine(sealedPath, KeepSourceRowsUntilFileName);
+
+                if (File.Exists(keepFile))
+                {
+                    if (!TryParse(File.ReadLines(keepFile).FirstOrDefaultLine(), out var fromFile))
+                        return false;
+
+                    earliest = fromFile;
+                }
+
+                foreach (var line in File.ReadLines(Path.Combine(sealedPath, SealedWeekMarker.FileName)))
+                    if (line.StartsWith(KeepLinePrefix, StringComparison.Ordinal) && TryParse(line[KeepLinePrefix.Length..], out var fromMarker))
+                    {
+                        if (earliest is null || fromMarker < earliest)
+                            earliest = fromMarker;
+
+                        break;
+                    }
+
+                return earliest is { } until && until - utcNow > OverlayOnlyKeepMargin;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return false;
             }
         }
 

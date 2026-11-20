@@ -51,6 +51,10 @@ public sealed partial class HistorySealingJobTests : IDisposable
 
     private Guid _dense, _bar, _file, _refused, _sparse;
 
+    // The job's clock: the time of the last pass. A week opened after a restart asks it whether its overlay still holds
+    // every row (#1805 follow-up), so the read mode does not depend on today's date.
+    private DateTime _clock = SealTime;
+
 
     public HistorySealingJobTests(ITestOutputHelper output)
     {
@@ -844,7 +848,7 @@ public sealed partial class HistorySealingJobTests : IDisposable
         _output.WriteLine($"seed {seed}");
 
         _plain = new DatabaseCore(_plainSettings);
-        _core = new DatabaseCore(_jobSettings);
+        _core = new DatabaseCore(_jobSettings) { Clock = () => _clock };
 
         _dense = NewSensor(SensorType.Double);
         _bar = NewSensor(SensorType.DoubleBar);
@@ -935,7 +939,11 @@ public sealed partial class HistorySealingJobTests : IDisposable
         PlainWeek().GetKeysValuesTo(new DbKey(id, 0L).ToBytes(), new DbKey(id, DateTime.MaxValue.Ticks).ToBytes())
             .Select(kv => DbKey.FromBytes(kv.key).Timestamp).OrderBy(t => t).ElementAt(index);
 
-    private HistorySealingPassReport Pass(DateTime now) => _core.RunHistorySealingPass(now, Settings);
+    private HistorySealingPassReport Pass(DateTime now)
+    {
+        _clock = now;
+        return _core.RunHistorySealingPass(now, Settings);
+    }
 
     private void SealOlderWeek() => Assert.Equal(_core.SensorValuesDatabases.Single(db => db.Contains(OlderWeekDay.Ticks)).Name, Pass(SealTime).Week);
 
@@ -989,7 +997,8 @@ public sealed partial class HistorySealingJobTests : IDisposable
             ServerLayoutDatabaseName = $"ServerLayout{restart}",
             ChangeSetsDatabaseName = $"ChangeSets{restart}",
             SnaphotsDatabaseName = $"Snapshots{restart}",
-        });
+        })
+        { Clock = () => _clock };
     }
 
     private SensorValuesWeek Week(DateTime? day = null) => (SensorValuesWeek)_core.SensorValuesDatabases.Single(db => db.Contains((day ?? WeekDay).Ticks));

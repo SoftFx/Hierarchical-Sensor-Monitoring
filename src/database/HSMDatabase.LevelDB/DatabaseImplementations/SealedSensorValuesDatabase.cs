@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.Formatters;
 using HSMDatabase.LevelDB.Extensions;
@@ -26,6 +27,13 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     /// an overlay the delete has partly or fully gone through: every row it returns is the row the week held
     /// before the delete, or the delete has removed it. It never sees a chunk row an overlay row used to hide.
     /// The watermarks are read from the same snapshot as the chunks, so a prefix delete is seen whole or not at all.
+    ///
+    /// <para><b>Overlay-only reads</b> (#1805 follow-up). While the overlay holds every row the chunks hold (the keep period
+    /// of a seal, <see cref="SealedWeekStages.OverlayHoldsEveryRow"/>), the merged stream is exactly the overlay: every live
+    /// chunk row has an overlay row with its key, and the overlay row wins. Reads then use the overlay alone, as the row
+    /// worker does; the chunk database stays open for the deletes, which must change the chunks too. The sealing job ends this state with <see cref="StopOverlayOnlyReads"/> before it
+    /// deletes its first overlay row. A read decides once, after it has created its overlay iterator: if the state still
+    /// held then, the iterator's snapshot was taken before that first delete and holds every row.</para>
     /// </summary>
     internal sealed class SealedSensorValuesDatabase : IntervalDataseBase, ISensorValuesDatabase
     {
@@ -33,8 +41,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         private readonly ReadOptions _readOptions = new();
         private readonly MemoryPackFormatter _formatter = new();
-        private readonly LevelDBDatabaseAdapter _chunks;
         private readonly SealedChunkReader _reader;
+
+        private readonly LevelDBDatabaseAdapter _chunks;
+
+        // 1 while the overlay holds every row (reads use it alone); set to 0 once, never back.
+        private int _overlayOnly;
 
         // Serializes the writers of the chunk database: a range delete plans its rewrite from the chunks it reads.
         private readonly object _chunkWriteLock = new();
@@ -45,19 +57,35 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         /// <summary>Chunks of this week that failed to read since it was opened.</summary>
         public long ChunkReadFailures => _reader.Failures;
 
+        /// <summary>Reads use the overlay alone: it holds every row the chunks hold (see the class comment).</summary>
+        internal bool ReadsOverlayOnly => Volatile.Read(ref _overlayOnly) == 1;
+
+        /// <summary>Chunk iterators the reads created since the week was opened (tests: an overlay-only read creates none).</summary>
+        internal long ChunkIteratorsOpened => Interlocked.Read(ref _chunkIteratorsOpened);
+
+        private long _chunkIteratorsOpened;
+
         // Test seam: runs after a range delete has rewritten the chunks and before it deletes the overlay rows.
         internal Action AfterChunkRewrite { get; set; }
 
-        // Test seam: runs when a read has opened its overlay iterator and not yet its chunk iterator.
+        // Test seam: runs when a read has opened its overlay iterator, before it decides whether it needs the chunks and
+        // before it opens its chunk iterator.
         internal Action BetweenReadIterators { get; set; }
 
 
-        // overlay: the open row database of the instance this one replaces in a live swap (#1804).
-        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to, LevelDBDatabaseAdapter overlay = null, LevelDBDatabaseAdapter chunks = null)
+        /// <param name="overlay">The open row database of the instance this one replaces in a live swap (#1804).</param>
+        /// <param name="chunks">The open chunk database of the seal that built the week (#1804).</param>
+        /// <param name="overlayHoldsEveryRow">Whether reads may use the overlay alone; null: as the files of the chunk
+        /// directory say (<see cref="SealedWeekStages.OverlayHoldsEveryRow"/>). A seal passes true: it built the chunks from
+        /// the overlay and deleted nothing.</param>
+        /// <param name="utcNow">The clock that question is asked with; null: the system clock (the database core passes its own).</param>
+        public SealedSensorValuesDatabase(string name, string sealedName, long from, long to, LevelDBDatabaseAdapter overlay = null,
+            LevelDBDatabaseAdapter chunks = null, bool? overlayHoldsEveryRow = null, DateTime? utcNow = null)
             : base(name, from, to, overlay)
         {
             SealedName = sealedName;
             _reader = new SealedChunkReader(sealedName);
+            _overlayOnly = overlayHoldsEveryRow ?? SealedWeekStages.OverlayHoldsEveryRow(sealedName, utcNow ?? DateTime.UtcNow) ? 1 : 0;
 
             try
             {
@@ -73,9 +101,27 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 throw;
             }
 
-            _logger.Info($"Opened sealed week {sealedName} with its overlay {name}");
+            _logger.Info(ReadsOverlayOnly
+                ? $"Opened sealed week {sealedName} with its overlay {name}; the overlay holds every row, so reads use it alone"
+                : $"Opened sealed week {sealedName} with its overlay {name}");
         }
 
+
+        /// <summary>
+        /// Ends overlay-only reads for good: from now on every read merges the overlay with the chunks. The sealing job calls
+        /// it before it deletes the first overlay row of the week, after it made <see cref="SealedWeekStages.SourceRowsRemovingFileName"/>
+        /// durable.
+        /// </summary>
+        internal void StopOverlayOnlyReads()
+        {
+            if (Interlocked.Exchange(ref _overlayOnly, 0) == 1)
+                _logger.Info($"Sealed week {SealedName}: overlay rows are about to be deleted, reads merge the overlay with the chunks from now on");
+
+            OverlayRowDeletesAnnounced = true;
+        }
+
+        /// <summary>Whether <see cref="StopOverlayOnlyReads"/> ran on this instance (the job then need not announce again).</summary>
+        internal bool OverlayRowDeletesAnnounced { get; private set; }
 
         #region The sealing job (#1804)
 
@@ -138,7 +184,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
         {
-            MergedRowCursor cursor = null;
+            IRowCursor cursor = null;
 
             try
             {
@@ -265,7 +311,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
         {
             results ??= new Dictionary<Guid, (byte[], byte[])>();
-            MergedRowCursor cursor = null;
+            IRowCursor cursor = null;
 
             try
             {
@@ -444,9 +490,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             // The chunks and the watermarks from one snapshot (#1805 review W3): a prefix delete or a fold in between
             // would otherwise pair chunk rows with a watermark that no longer applies to them.
-            using var snapshot = _chunks.Native.CreateSnapshot();
+            var db = _chunks.Native;
+
+            using var snapshot = db.CreateSnapshot();
             using var options = new ReadOptions { Snapshot = snapshot };
-            using var chunks = _chunks.Native.CreateIterator(options);
+            using var chunks = db.CreateIterator(options);
 
             foreach (var (key, chunk, header) in ChunkEntries(chunks, from, to))
             {
@@ -459,7 +507,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 try
                 {
-                    watermark = _reader.ReadWatermark(_chunks.Native, options, key);
+                    watermark = _reader.ReadWatermark(db, options, key);
                 }
                 catch (SealedChunkReadException)
                 {
@@ -561,8 +609,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         #endregion
 
 
-        // The overlay iterator first, the chunk iterator second: see the class comment.
-        private MergedRowCursor OpenCursor()
+        // The overlay iterator first, then the decision, then the chunk iterator: see the class comment. The decision must
+        // follow the overlay iterator: the job ends overlay-only reads before its first overlay delete, so a read that still
+        // finds them on has an overlay snapshot from before that delete, which holds every row. (LevelDB creates an
+        // iterator and applies a write under its database mutex, so the order is a happens-before order.)
+        private IRowCursor OpenCursor()
         {
             var overlay = _openedDb.Native.CreateIterator(_readOptions);
             Iterator chunks = null;
@@ -574,12 +625,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 BetweenReadIterators?.Invoke();
 
-                // One explicit snapshot for the chunk iterator and the watermark lookups of the cursor (#1805).
-                snapshot = _chunks.Native.CreateSnapshot();
-                options = new ReadOptions { Snapshot = snapshot };
-                chunks = _chunks.Native.CreateIterator(options);
+                if (ReadsOverlayOnly)
+                    return new NativeRowCursor(overlay);
 
-                return new MergedRowCursor(new NativeRowCursor(overlay), new ChunkRowCursor(chunks, _chunks.Native, options, snapshot, _reader, _formatter));
+                var db = _chunks.Native;
+
+                // One explicit snapshot for the chunk iterator and the watermark lookups of the cursor (#1805).
+                snapshot = db.CreateSnapshot();
+                options = new ReadOptions { Snapshot = snapshot };
+                chunks = db.CreateIterator(options);
+                Interlocked.Increment(ref _chunkIteratorsOpened);
+
+                return new MergedRowCursor(new NativeRowCursor(overlay), new ChunkRowCursor(chunks, db, options, snapshot, _reader, _formatter));
             }
             catch
             {
@@ -1026,15 +1083,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // cursor. They go through the cursor rather than its Key, so the cursor answers them without deciding which
         // child holds the current row when both children agree (see MergedRowCursor); an overlay row is compared
         // exactly as the row database compares it, quirks included.
-        private static bool StartsWith(MergedRowCursor cursor, byte[] prefix) => cursor.KeyStartsWith(prefix);
+        private static bool StartsWith(IRowCursor cursor, byte[] prefix) => cursor.KeyStartsWith(prefix);
 
-        private static bool Le(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) <= 0;
+        private static bool Le(IRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) <= 0;
 
-        private static bool Lt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) < 0;
+        private static bool Lt(IRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) < 0;
 
-        private static bool Ge(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) >= 0;
+        private static bool Ge(IRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) >= 0;
 
-        private static bool Gt(MergedRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) > 0;
+        private static bool Gt(IRowCursor cursor, byte[] other) => cursor.CompareKeyAsRowDatabase(other) > 0;
 
         private static bool InRange(byte[] key, byte[] from, byte[] to) => KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(key, to) <= 0;
     }

@@ -675,6 +675,21 @@ namespace HSMDatabase.LevelDB
             _database.Compact();
         }
 
+        // A key below every 24-byte key of a history database (it is shorter than the all-zero key and a prefix of it).
+        private static readonly byte[] BelowEveryRowKey = [0];
+
+        /// <summary>
+        /// Writes the memtables (the current one and one still waiting to be flushed) into table files and returns once
+        /// they are there, so no row of the database depends on a write-ahead log any more (#1805 follow-up, review R1).
+        /// LevelDB's CompactRange first flushes the memtables and waits for that, then compacts the tables that overlap
+        /// the range; the range here, the single key <c>[0x00]</c>, overlaps no table of a history database, so no existing
+        /// table is rewritten. Pinned against the bundled native builds, Windows and Linux, by <c>MemTableFlushTests</c>:
+        /// after it every row survives the loss of every write-ahead log, and the tables written before stay as they were.
+        /// That a new table file and the MANIFEST reach the disk is LevelDB's own guarantee (stock LevelDB syncs both when it
+        /// writes them); a test without a power loss cannot show it.
+        /// </summary>
+        internal void FlushMemTablesToTables() => _database.CompactRange(BelowEveryRowKey, BelowEveryRowKey);
+
 
         public IEnumerable<(byte[], byte[])> GetAll()
         {
