@@ -184,6 +184,82 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         pair.AssertSameReads(sensors.All, random);
     }
 
+    // Review W4: cutoffs one tick before a chunk's first and last keys, on a multi-chunk sensor that is the last sensor of
+    // the database (no key after its chunks), and on a one-chunk sensor with no next key whose cutoff is inside the week
+    // (the end-of-week shortcut does not apply, the verified header decides).
+    [Fact]
+    public void PrefixDeletes_OneTickBeforeChunkEdges_AndOnTheLastSensor()
+    {
+        var random = new Random(18053);
+        var lastId = new Guid(Enumerable.Repeat((byte)0xFF, 16).ToArray());
+        var other = new Guid(Enumerable.Repeat((byte)0x11, 16).ToArray());
+        var seed = new List<(byte[] key, byte[] value)>();
+
+        var tick = WeekPair.WeekFrom + TimeSpan.TicksPerMinute;
+        for (int i = 0; i < DenseRows; i++, tick += TimeSpan.TicksPerSecond + random.NextInt64(0, 1000))
+            seed.Add((Key(lastId, tick), TestValues.Bytes(SensorType.Double, tick, random)));
+
+        for (int i = 0; i < 200; i++)
+        {
+            var t = WeekPair.WeekFrom + i * TimeSpan.TicksPerMinute;
+            seed.Add((Key(other, t), TestValues.Bytes(SensorType.Integer, t, random)));
+        }
+
+        seed.Sort((x, y) => ByteOrder.Instance.Compare(x.key, y.key));
+
+        using (var pair = WeekPair.Create(seed))
+        {
+            var chunks = pair.Seal.Chunks.Where(c => c.SensorId == lastId).OrderBy(c => c.FirstTick).ToList();
+            Assert.Equal(3, chunks.Count);
+
+            long previous = 0;
+
+            foreach (var (cutoff, what) in new[]
+            {
+                (chunks[0].FirstTick - 1, "one tick before the first chunk's first key"),
+                (chunks[0].LastTick - 1, "one tick before the first chunk's last key"),
+                (chunks[1].FirstTick - 1, "one tick before the second chunk's first key"),
+                (chunks[1].LastTick - 1, "one tick before the second chunk's last key"),
+                (chunks[2].LastTick - 1, "one tick before the last chunk's last key"),
+                (chunks[2].LastTick, "the last chunk's last key"),
+            })
+            {
+                var prefixDeletes = pair.SealedStore.PrefixDeletes;
+
+                Remove(pair, lastId, previous, cutoff);
+                previous = cutoff;
+
+                Assert.True(pair.SealedStore.PrefixDeletes == prefixDeletes + 1, $"{what}: not a prefix delete");
+                pair.AssertSameReads([lastId, other], random, probesPerSensor: 6);
+            }
+
+            Assert.Empty(ChunkKeys(pair, lastId));
+            pair.Reopen();
+            pair.AssertSameReads([lastId, other], random);
+        }
+
+        // A one-chunk sensor with no key after it: the cutoff inside its chunk, one tick before its last key, at it.
+        var (standard, sensors) = Seed(new Random(18054));
+
+        using (var pair = WeekPair.Create(standard))
+        {
+            var chunk = pair.Seal.Chunks.Single(c => c.SensorId == sensors.Last);
+            var mid = Mid(pair, sensors.Last);
+
+            Remove(pair, sensors.Last, 0, mid);
+            Assert.Equal([chunk.FirstTick], ChunkKeys(pair, sensors.Last));
+            pair.AssertSameReads(sensors.All, random, probesPerSensor: 4);
+
+            Remove(pair, sensors.Last, mid, chunk.LastTick - 1);
+            Assert.Equal([chunk.FirstTick], ChunkKeys(pair, sensors.Last)); // its last row is still live
+            pair.AssertSameReads(sensors.All, random, probesPerSensor: 4);
+
+            Remove(pair, sensors.Last, chunk.LastTick - 1, chunk.LastTick);
+            Assert.Empty(ChunkKeys(pair, sensors.Last));
+            pair.AssertSameReads(sensors.All, random, probesPerSensor: 4);
+        }
+    }
+
     // #1805: a week trimmed hour by hour by retention writes a few bytes per sensor and pass, and stays on disk within its
     // sealed size: a deleted chunk's bytes go at the next compaction, nothing is re-encoded meanwhile.
     [Fact]
