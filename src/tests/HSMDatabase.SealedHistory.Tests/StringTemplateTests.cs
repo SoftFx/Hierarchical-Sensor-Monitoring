@@ -278,6 +278,116 @@ namespace HSMDatabase.SealedHistory.Tests
             }
         }
 
+        // ------------------------------------------------------------------ the limits, exactly at and one past them
+
+        [Fact]
+        public void The_encoder_qualifies_exactly_up_to_the_slot_value_limit()
+        {
+            const int rows = ChunkCodec.MaxRowsPerChunk, perRow = StringTemplate.MaxSlotValues / rows; // 64
+            Assert.Equal(StringTemplate.MaxSlotValues, rows * perRow);
+
+            string Row(int i, int slots) => string.Join(" ", Enumerable.Range(i, slots));
+
+            var at = Enumerable.Range(0, rows).Select(i => Row(i, perRow)).ToArray();
+            var above = at.Select((s, i) => i == 0 ? Row(i, perRow + 1) : s).ToArray();
+
+            Assert.True(StringTemplate.TryWrite(new ByteSink(), at));
+            Assert.False(StringTemplate.TryWrite(new ByteSink(), above));
+            Assert.Equal(StringColumn.ModeDictionary, StringColumn.ChooseMode(above));
+            AssertColumnRoundTrips(at);
+            AssertColumnRoundTrips(above);
+        }
+
+        [Fact]
+        public void The_encoder_qualifies_exactly_up_to_the_column_character_limit()
+        {
+            const int rows = 1024, length = StringTemplate.MaxColumnChars / rows; // 4,096 characters each
+            Assert.Equal(StringTemplate.MaxColumnChars, rows * length);
+
+            var at = Enumerable.Range(0, rows).Select(i => new string('a', length - 4) + (1000 + i)).ToArray();
+            var above = at.Select((s, i) => i == 0 ? s + "b" : s).ToArray();
+
+            Assert.Equal(StringTemplate.MaxColumnChars, at.Sum(s => (long)s.Length));
+            Assert.True(StringTemplate.TryWrite(new ByteSink(), at));
+            Assert.False(StringTemplate.TryWrite(new ByteSink(), above));
+            Assert.Equal(StringColumn.ModeDictionary, StringColumn.ChooseMode(above));
+            AssertColumnRoundTrips(at);
+            AssertColumnRoundTrips(above);
+        }
+
+        [Fact]
+        public void The_decoder_accepts_exactly_up_to_the_slot_value_limit()
+        {
+            const int rows = ChunkCodec.MaxRowsPerChunk, perRow = StringTemplate.MaxSlotValues / rows;
+
+            // one template of 64 slots used by every row: 262,144 slot values
+            var at = Bytes(s =>
+            {
+                s.WriteVarUInt(1);
+                Template(s, Enumerable.Repeat(" ", perRow + 1).ToArray());
+                Ints(s, new long[rows]);
+                for (int c = 0; c < perRow * 3; c++)
+                    Ints(s, Enumerable.Repeat(c % 3 == 0 ? 7L : 0L, rows).ToArray());
+            });
+
+            // 4,095 rows of that template and one of a 65-slot template: 262,145
+            var above = Bytes(s =>
+            {
+                s.WriteVarUInt(2);
+                Template(s, Enumerable.Repeat(" ", perRow + 1).ToArray());
+                Template(s, Enumerable.Repeat(" ", perRow + 2).ToArray());
+                Ints(s, Enumerable.Range(0, rows).Select(i => i == rows - 1 ? 1L : 0L).ToArray());
+                for (int c = 0; c < perRow * 3; c++)
+                    Ints(s, Enumerable.Repeat(c % 3 == 0 ? 7L : 0L, rows - 1).ToArray());
+                for (int c = 0; c < (perRow + 1) * 3; c++)
+                    Ints(s, c % 3 == 0 ? 7L : 0L);
+            });
+
+            var back = new string[rows];
+            var reader = new ByteReader(at);
+            StringColumn.Read(ref reader, back);
+            Assert.Equal(0, reader.Remaining);
+            Assert.All(back, v => Assert.Equal(" " + string.Join(" ", Enumerable.Repeat("7", perRow)) + " ", v));
+
+            AssertCorruptWithin(above, rows, 2 * 1024 * 1024, "slot values");
+        }
+
+        [Fact]
+        public void The_decoder_accepts_exactly_up_to_the_column_character_limit()
+        {
+            const int rows = 1024, length = StringTemplate.MaxColumnChars / rows;
+
+            byte[] Column(long lastMantissa) => Bytes(s =>
+            {
+                s.WriteVarUInt(1);
+                Template(s, new string('a', length - 1), "");
+                Ints(s, new long[rows]);
+                Ints(s, Enumerable.Range(0, rows).Select(i => i == rows - 1 ? lastMantissa : 1L).ToArray());
+                Ints(s, new long[rows]);
+                Ints(s, new long[rows]);
+            });
+
+            var back = new string[rows];
+            var reader = new ByteReader(Column(1));                 // every row 4,096 characters: 4,194,304 in all
+            StringColumn.Read(ref reader, back);
+            Assert.Equal(0, reader.Remaining);
+            Assert.Equal(StringTemplate.MaxColumnChars, back.Sum(v => (long)v.Length));
+
+            AssertCorruptWithin(Column(10), rows, 2 * 1024 * 1024, "characters"); // the last row one longer: 4,194,305
+        }
+
+        private static void AssertColumnRoundTrips(string[] column)
+        {
+            var sink = new ByteSink();
+            StringColumn.Write(sink, column);
+            var back = new string[column.Length];
+            var reader = new ByteReader(sink.Written);
+            StringColumn.Read(ref reader, back);
+            Assert.Equal(0, reader.Remaining);
+            Assert.Equal(column, back);
+        }
+
+
         // ------------------------------------------------------------------ the encoder's choice (encoder revision 1)
 
         public static IEnumerable<object[]> ChoiceCases()
