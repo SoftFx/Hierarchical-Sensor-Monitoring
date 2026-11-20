@@ -391,6 +391,105 @@ public sealed partial class HistorySealingJobTests : IDisposable
 
     #endregion
 
+    #region Retention through a sealed week (#1805)
+
+    // Retention moving through a sealed week marks watermarks; every stage of the job respects them: the source-row
+    // removal does not take an overlay row for a source row because it equals a deleted chunk row, a fold drops the
+    // deleted rows for good, an unseal copies only live rows. Reads equal the plain database at every step.
+    [Fact]
+    public void RetentionThroughASealedWeek_MarksWatermarks_AndEveryStageOfTheJobRespectsThem()
+    {
+        Start(1857, extraSensors: 20);
+        SealBothWeeks();
+
+        var start = DateTimeMethods.GetStartOfWeek(WeekDay);
+        var cutoff = start;
+
+        void Retain(TimeSpan by, string what, bool fromTheStart = false)
+        {
+            var from = fromTheStart ? DateTime.MinValue : cutoff;
+            cutoff += by;
+
+            foreach (var (id, _) in _sensors)
+                Clear(id, from, cutoff);
+
+            AssertSameHistory(what);
+        }
+
+        SealedSensorValuesDatabase Store() => (SealedSensorValuesDatabase)Week().Current;
+
+        long? WatermarkOf(Guid id) => Store().ChunkReader.ReadWatermark(Store().ChunkDatabase.Native, null, id.ToByteArray());
+
+        // A dense row the retention below deletes, as it is stored.
+        var againTick = TickOf(_dense, 5);
+        var originalBytes = PlainWeek().Get(new DbKey(_dense, againTick).ToBytes(), _dense.ToByteArray());
+
+        // Hour by hour into the week, during the keep period (the overlay still holds every source row).
+        for (int hour = 0; hour < 6; hour++)
+            Retain(TimeSpan.FromHours(hour == 0 ? 52 : 1), $"retention to {cutoff:O} during the keep period");
+
+        Assert.True(Store().PrefixDeletes > 0);
+        Assert.Equal(cutoff.Ticks, WatermarkOf(_dense));
+
+        // A deleted dense row written again, with exactly the bytes of its chunk row: a late value, not a source row.
+        Assert.True(againTick <= cutoff.Ticks);
+        Add(_dense, _formatter.Deserialize(originalBytes));
+        Assert.Equal(originalBytes, PlainWeek().Get(new DbKey(_dense, againTick).ToBytes(), _dense.ToByteArray()));
+        AssertSameHistory("a deleted row written again");
+
+        RemoveBothSourceRows();
+        Assert.True(OverlayRowsOf(_dense) >= 1);
+        AssertSameHistory("source rows removed; the row written again stays");
+
+        Retain(TimeSpan.FromHours(1), "retention after the source rows are gone");
+
+        AddLateRows(1_200);
+        Assert.Contains(DrainFolds(AfterKeep), r => r.Action == HistorySealingAction.Fold && r.Outcome == HistorySealingOutcome.Done);
+        Assert.Null(WatermarkOf(_dense)); // the fold dropped the deleted rows and the watermark with them
+        AssertSameHistory("folded");
+
+        // The folded chunks hold the late values below the old cutoff: a retention from the old cutoff is a middle range
+        // there (rewritten); from the sensor's oldest row, as after a restart, it is a prefix again.
+        Retain(TimeSpan.FromMinutes(30), "retention after the fold", fromTheStart: true);
+        Assert.NotNull(WatermarkOf(_dense));
+
+        Restart();
+        AssertSameHistory("after a restart");
+
+        Assert.Equal(HistorySealingOutcome.Done, _core.UnsealHistoryWeek(WeekName(), AfterKeep).Outcome);
+        AssertSameHistory("unsealed");
+    }
+
+    // A prefix delete that lands while a fold is between reading and committing goes through the delete log like any
+    // range delete: the fold's commit for that sensor is skipped, and nothing the delete removed comes back.
+    [Fact]
+    public void PrefixDeleteDuringFold_DoesNotComeBack()
+    {
+        Start(1858);
+        SealBothWeeks();
+        RemoveBothSourceRows();
+        AddLateRows(1_200);
+
+        _core.SealingCheckpoint = point =>
+        {
+            if (point == SealingCheckpoints.FoldEncoded)
+            {
+                _core.SealingCheckpoint = null;
+                Clear(_dense, DateTime.MinValue, new DateTime(DenseTick(2_000), DateTimeKind.Utc));
+            }
+        };
+
+        var fold = Pass(AfterKeep);
+        Assert.Equal((HistorySealingAction.Fold, HistorySealingOutcome.Done), (fold.Action, fold.Outcome));
+        AssertSameHistory("a prefix delete during a fold");
+        Assert.Equal(1, fold.SensorsLeftAsRows.GetValueOrDefault(WeekSealingJob.LeftAsRows.DeletedDuringFold));
+
+        DrainFolds(AfterKeep);
+        AssertSameHistory("folded after the prefix delete");
+    }
+
+    #endregion
+
     #region Races
 
     // C: a range delete while the week is being encoded removes rows from the row database only. The commit drops the
@@ -912,7 +1011,7 @@ public sealed partial class HistorySealingJobTests : IDisposable
         var store = (SealedSensorValuesDatabase)Week().Current;
         var prefix = id.ToByteArray();
 
-        return store.ChunkDatabase.GetAll().Count(kv => kv.Item1.AsSpan(0, 16).SequenceEqual(prefix));
+        return store.ChunkDatabase.GetAll().Count(kv => kv.Item1.Length == KeyOrder.KeyLength && kv.Item1.AsSpan(0, 16).SequenceEqual(prefix));
     }
 
     private long OverlayRows() => ((IntervalDataseBase)Week().Current).RowDatabase.GetAll().Count();

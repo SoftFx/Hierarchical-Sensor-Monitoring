@@ -34,6 +34,14 @@ namespace HSMDatabase.LevelDB.Sealed
         /// <summary>Whether the current key starts with <paramref name="prefix"/> (the row database's StartsWith).</summary>
         bool KeyStartsWith(byte[] prefix);
 
+        /// <summary>
+        /// A key at or below the current row's key above which this cursor has no row before the current one: what the
+        /// merged cursor positions the other child before when it steps back from this row. <see cref="Key"/>, except
+        /// for a chunk cursor on the first row of a chunk it has not read (#1805): the chunk's own key, which needs
+        /// neither the chunk nor its sensor's watermark.
+        /// </summary>
+        byte[] BoundaryKey => Key;
+
         void Seek(byte[] target);
 
         void SeekToFirst();
@@ -213,10 +221,14 @@ namespace HSMDatabase.LevelDB.Sealed
         public void Prev()
         {
             var current = Current;
-            var key = current.Key;
 
             if (_forward)
             {
+                // The boundary key, not the key: stepping back from the first row of a chunk it has not read, the chunk
+                // cursor answers without its sensor's watermark (#1805), so a read that only passes by that sensor
+                // never reads it. The other child has no row between the two keys: one there would have been compared
+                // with this row (same sensor), which reads the chunk and leaves its first-row position.
+                var key = current.BoundaryKey;
                 var other = Other(current);
                 other.Seek(key);
 
@@ -230,6 +242,8 @@ namespace HSMDatabase.LevelDB.Sealed
             }
             else
             {
+                var key = current.Key;
+
                 if (overlay.IsValid && overlay.CompareKey(key) == 0)
                     overlay.Prev();
                 if (chunks.IsValid && chunks.CompareKey(key) == 0)

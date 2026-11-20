@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using HSMDatabase.AccessManager;
 using HSMDatabase.SealedHistory;
+using LevelDB;
 using NLog;
 
 namespace HSMDatabase.LevelDB.Sealed
@@ -21,9 +22,13 @@ namespace HSMDatabase.LevelDB.Sealed
         private static readonly ConcurrentDictionary<string, byte> _loggedChunks = new();
 
         private long _failures;
+        private long _decodes;
 
 
         public long Failures => Interlocked.Read(ref _failures);
+
+        /// <summary>Chunks decoded since the week was opened (tests: a prefix delete decodes none).</summary>
+        public long Decodes => Interlocked.Read(ref _decodes);
 
 
         public ChunkHeader ReadHeader(byte[] chunkKey, byte[] chunk)
@@ -53,6 +58,8 @@ namespace HSMDatabase.LevelDB.Sealed
 
             List<HistoryRow> rows;
 
+            Interlocked.Increment(ref _decodes);
+
             try
             {
                 rows = ChunkCodec.Decode(chunk);
@@ -77,11 +84,11 @@ namespace HSMDatabase.LevelDB.Sealed
             Guid sensorId = Guid.Empty;
             long firstTick = 0;
 
-            if (chunkKey is { Length: KeyOrder.KeyLength })
-            {
+            if (chunkKey is { Length: >= KeyOrder.SensorIdLength })
                 sensorId = new Guid(chunkKey.AsSpan(0, KeyOrder.SensorIdLength));
+
+            if (chunkKey is { Length: KeyOrder.KeyLength })
                 firstTick = KeyOrder.Tick(chunkKey);
-            }
 
             var exception = new SealedChunkReadException(database, sensorId, firstTick, message, inner);
 
@@ -99,6 +106,25 @@ namespace HSMDatabase.LevelDB.Sealed
             return exception;
         }
 
+
+        /// <summary>
+        /// The delete watermark of the sensor of <paramref name="sensorKey"/> (#1805), as <paramref name="options"/> see
+        /// the chunk database: null when there is none. An unreadable one throws <see cref="SealedChunkReadException"/>
+        /// (logged and counted like an unreadable chunk): the sensor's chunk rows cannot be told live or deleted.
+        /// </summary>
+        public long? ReadWatermark(DB chunks, ReadOptions options, ReadOnlySpan<byte> sensorKey)
+        {
+            var key = SensorWatermark.Key(sensorKey);
+            var value = options is null ? chunks.Get(key) : chunks.Get(key, options);
+
+            if (value is null)
+                return null;
+
+            if (!SensorWatermark.TryDecode(key, value, out var tick))
+                throw Fail(key, $"the delete watermark of the sensor cannot be read ({value.Length} bytes, version {(value.Length > 0 ? value[0] : -1)})", null);
+
+            return tick;
+        }
 
         public void CheckKey(byte[] chunkKey)
         {
