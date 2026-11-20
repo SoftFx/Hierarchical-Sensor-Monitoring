@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="HSMDatabase.LevelDB.Tests" />
+    <InternalsVisibleTo Include="SealedHistoryBench" />
   </ItemGroup>
 
   <ItemGroup>

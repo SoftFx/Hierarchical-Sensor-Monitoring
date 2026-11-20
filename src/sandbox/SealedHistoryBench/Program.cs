@@ -13,6 +13,7 @@ using MemoryPack;
 //   SealedHistoryBench --seal-shard <shard-copy> [--max-sensor-rows N]   (streamed: memory bounded by one sensor)
 //   SealedHistoryBench --job-synthetic <work-dir> | --job-shard <shard-copy> <work-dir>       (the sealing job, #1804)
 //   SealedHistoryBench --put-bench <work-dir>                                                  (writes through the week handle, #1804)
+//   SealedHistoryBench --keep-period <work-dir> build|reads|memory|hours [key=value ...]          (sealed weeks in their keep period; see KeepPeriodBench)
 //
 // <shard-dir> is a SensorValuesV2_* LevelDB directory. It is opened read-only; work on a copy anyway.
 // --out writes the chunks into a fresh LevelDB there (key sensorId | firstKey), compacts it and reports its size.
@@ -37,7 +38,10 @@ if (options.JobWorkPath is not null)
 if (options.PutWorkPath is not null)
     PutBench.Run(options);
 
-if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null && options.SealShardPath is null && options.JobWorkPath is null && options.PutWorkPath is null)
+if (options.KeepPeriodWorkPath is not null)
+    KeepPeriodBench.Run(options.KeepPeriodWorkPath, options.KeepPeriodPhase, options.KeepPeriodArgs);
+
+if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null && options.SealShardPath is null && options.JobWorkPath is null && options.PutWorkPath is null && options.KeepPeriodWorkPath is null)
     Console.WriteLine("usage: SealedHistoryBench <shard-dir> [--limits 1024,4096] [--out <dir>] | --synthetic [--limits ...]");
 
 
@@ -51,6 +55,9 @@ internal sealed class Options
     public string JobShardPath;
     public string JobWorkPath;
     public string PutWorkPath;
+    public string KeepPeriodWorkPath;
+    public string KeepPeriodPhase;
+    public Dictionary<string, string> KeepPeriodArgs = [];
     public int[] Limits = [ChunkCodec.MaxRowsPerChunk];
     public string SealShardPath;
     public int MaxSensorRows = 1_000_000;
@@ -74,6 +81,15 @@ internal sealed class Options
                 case "--job-synthetic": o.JobWorkPath = args[++i]; break;
                 case "--job-shard": o.JobShardPath = args[++i]; o.JobWorkPath = args[++i]; break;
                 case "--put-bench": o.PutWorkPath = args[++i]; break;
+                case "--keep-period":
+                    o.KeepPeriodWorkPath = args[++i];
+                    o.KeepPeriodPhase = args[++i];
+                    for (; i + 1 < args.Length && args[i + 1].Contains('='); i++)
+                    {
+                        var pair = args[i + 1].Split('=', 2);
+                        o.KeepPeriodArgs[pair[0]] = pair[1];
+                    }
+                    break;
                 default: o.ShardPath = args[i]; break;
             }
         }
