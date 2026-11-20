@@ -78,14 +78,16 @@ namespace HSMDatabase.LevelDB.Sealed
         internal Action InsideRangeDelete { get; set; }
 
 
-        public SensorValuesWeek(string name, string sealedName, long from, long to)
+        /// <param name="utcNow">The clock of the database core (null: the system clock): a sealed week opened here asks it
+        /// whether its overlay still holds every row (#1805 follow-up).</param>
+        public SensorValuesWeek(string name, string sealedName, long from, long to, Func<DateTime> utcNow = null)
         {
             Name = name;
             SealedName = sealedName;
             From = from;
             To = to;
 
-            _current = new Lease(LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to), OnReplacedDrained);
+            _current = new Lease(LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to, utcNow?.Invoke()), OnReplacedDrained);
         }
 
 

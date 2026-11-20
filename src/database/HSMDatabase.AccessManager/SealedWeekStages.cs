@@ -176,6 +176,9 @@ namespace HSMDatabase.AccessManager
             }
         }
 
+        /// <summary>How far ahead the keep time must be for <see cref="OverlayHoldsEveryRow"/> to answer true (#1805 review R3).</summary>
+        public static readonly TimeSpan OverlayOnlyKeepMargin = TimeSpan.FromDays(1);
+
         /// <summary>
         /// Whether the overlay of a sealed week holds every row its chunks hold, by the files on disk (#1805 follow-up): then
         /// the week is exactly its row database and a read needs no chunk. True only when all of these hold:
@@ -186,9 +189,10 @@ namespace HSMDatabase.AccessManager
         /// <item>neither <see cref="SourceRowsRemovingFileName"/> nor <see cref="SourceRowsRemovedFileName"/> is there: the
         /// only code that deletes overlay rows without deleting their chunk rows (source-row removal and a fold) writes the
         /// first durably before its first delete;</item>
-        /// <item>the keep time is known and still ahead of <paramref name="utcNow"/>, by the keep file and by the keep line of
-        /// <c>hsm-sealed</c> (the earlier one): a build from before the first marker removed source rows without writing it,
-        /// and always only after the keep time.</item>
+        /// <item>the keep time is known and more than <see cref="OverlayOnlyKeepMargin"/> ahead of <paramref name="utcNow"/>, by
+        /// the keep file and by the keep line of <c>hsm-sealed</c> (the earlier one): a build from before the first marker
+        /// removed source rows without writing it, and only once the keep time had passed; the margin keeps a week whose
+        /// removal such a build began and did not finish merged also after a clock corrected backwards by up to a day.</item>
         /// </list>
         /// Any doubt answers false: merged reads are right in every state, overlay-only reads only in this one.
         /// </summary>
@@ -221,7 +225,7 @@ namespace HSMDatabase.AccessManager
                         break;
                     }
 
-                return earliest is { } until && utcNow < until;
+                return earliest is { } until && until - utcNow > OverlayOnlyKeepMargin;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {

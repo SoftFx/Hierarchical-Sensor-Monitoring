@@ -139,12 +139,13 @@ namespace HSMDatabase.LevelDB.Sealed
                 // not closed and opened again) and over the week's row database. Not current yet, so nobody reads it.
                 rowsLeft.Write(SealedPath);
 
-                // Every row the chunks were built from is made durable in the overlay before the marker (#1805 follow-up): a
-                // value written shortly before the snapshot may still be only in the overlay's unsynced log, and a power loss
-                // must not leave a chunk row without its overlay row while reads use the overlay alone. A synced write syncs
-                // the log, and with it every earlier write.
-                using (var empty = new WriteBatch())
-                    rows.RowDatabase.Native.Write(empty, _syncWrite);
+                // Every row the chunks were built from is made independent of the overlay's write-ahead logs before the marker
+                // (#1805 follow-up, review R1): rows written without sync before the snapshot may sit in the current memtable
+                // or in one waiting to be flushed, whose logs a power loss can take back, and a chunk row must not outlive its
+                // overlay row while reads use the overlay alone. The flush writes both memtables into table files (which
+                // LevelDB syncs) and returns when they are there; it rewrites no existing table. (A synced empty write would
+                // sync only the current log, not the one of a memtable waiting to be flushed.)
+                rows.RowDatabase.FlushMemTablesToTables();
 
                 // Built from the overlay, nothing deleted: until the job deletes an overlay row, reads use the overlay alone.
                 var store = new SealedSensorValuesDatabase(RowPath, SealedPath, _week.From, _week.To, rows.RowDatabase, writer.DetachDatabase(), overlayHoldsEveryRow: true);
@@ -431,9 +432,6 @@ namespace HSMDatabase.LevelDB.Sealed
             // this once per sensor. (After a restart the first step syncs the marker once more.)
             if (store.OverlayRowDeletesAnnounced)
                 return;
-
-            // The chunk database first: StopOverlayOnlyReads opens it, and a week whose chunks cannot be opened stays as it is.
-            _ = store.ChunkDatabase;
 
             if (File.Exists(marker))
                 DurableFile.SyncDirectory(SealedPath, strict: true); // an earlier attempt may have failed to make it durable

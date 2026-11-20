@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.DatabaseImplementations;
 using NLog;
@@ -21,10 +22,11 @@ namespace HSMDatabase.LevelDB
         /// sealed database (<see cref="SealedWeekMarker"/>), otherwise the row database alone. A sealed directory
         /// without the marker is an interrupted or running seal and is not read.
         /// </summary>
-        public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(string name, string sealedName, long from, long to)
+        // utcNow: the clock a sealed week asks whether its overlay holds every row (#1805 follow-up); null: the system clock.
+        public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(string name, string sealedName, long from, long to, DateTime? utcNow = null)
         {
             if (SealedWeekMarker.ExistsIn(sealedName))
-                return new SealedSensorValuesDatabase(name, sealedName, from, to);
+                return new SealedSensorValuesDatabase(name, sealedName, from, to, utcNow: utcNow);
 
             if (Directory.Exists(sealedName))
                 _logger.Warn($"{sealedName} has no {SealedWeekMarker.FileName} marker: an incomplete seal, not read; the week is served from {name} alone");

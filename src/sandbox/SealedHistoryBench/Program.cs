@@ -13,7 +13,7 @@ using MemoryPack;
 //   SealedHistoryBench --seal-shard <shard-copy> [--max-sensor-rows N]   (streamed: memory bounded by one sensor)
 //   SealedHistoryBench --job-synthetic <work-dir> | --job-shard <shard-copy> <work-dir>       (the sealing job, #1804)
 //   SealedHistoryBench --put-bench <work-dir>                                                  (writes through the week handle, #1804)
-//   SealedHistoryBench --keep-period <work-dir> build|reads|memory|hours [key=value ...]          (sealed weeks in their keep period; see KeepPeriodBench)
+//   SealedHistoryBench --keep-period <work-dir> build|prepare|reads|memory|hours|compression|flush [key=value ...] (sealed weeks in their keep period; see KeepPeriodBench)
 //
 // <shard-dir> is a SensorValuesV2_* LevelDB directory. It is opened read-only; work on a copy anyway.
 // --out writes the chunks into a fresh LevelDB there (key sensorId | firstKey), compacts it and reports its size.

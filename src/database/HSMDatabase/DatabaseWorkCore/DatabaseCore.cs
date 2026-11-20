@@ -106,13 +106,19 @@ namespace HSMDatabase.DatabaseWorkCore
         private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);
 
 
+        /// <summary>
+        /// The clock a sealed week asks, when it is opened, whether its overlay still holds every row (#1805 follow-up). Test
+        /// seam: the sealing job's tests set it to their own clock, so the read mode after a restart does not depend on today.
+        /// </summary>
+        internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
             _logger.Info($"{nameof(DatabaseCore)} is initializing");
 
             _settings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
-            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
+            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings, utcNow: () => Clock());
             _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
 
             Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);

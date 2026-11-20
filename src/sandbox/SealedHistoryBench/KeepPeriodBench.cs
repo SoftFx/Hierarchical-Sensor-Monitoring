@@ -17,13 +17,20 @@ using HSMServer.Core.DataLayer;
 //       and still in their keep period (every source row is in the overlay).
 //   SealedHistoryBench --keep-period <work-dir> reads
 //       H1: time, managed allocations, GC counts and chunk decodes of each read, plain against sealed.
-//   SealedHistoryBench --keep-period <work-dir> memory plain|sealed [rounds=3]
+//   SealedHistoryBench --keep-period <work-dir> memory [variant=plain|sealed] [rounds=3] [fresh=0|1]
 //       H2: process memory after the start, after the history load of every sensor and after rounds of page reads.
-//   SealedHistoryBench --keep-period <work-dir> hours plain|sealed [hours=200] [every=20]
+//   SealedHistoryBench --keep-period <work-dir> hours [variant=plain|sealed] [hours=200] [every=20] [fresh=0|1]
 //       H3: hours of server life (reads, writes, hourly retention, sealing and compaction passes); the managed heap after
 //       full collections, undisposed finalizable objects, leases, open files.
+//   SealedHistoryBench --keep-period <work-dir> prepare [variant=plain|sealed]
+//       Makes the copy a later memory or hours run with fresh=0 uses (run it in another container: its page cache is then
+//       not charged to the measured one).
+//   SealedHistoryBench --keep-period <work-dir> compression
+//       Whether this platform's native LevelDB compresses blocks.
+//   SealedHistoryBench --keep-period <work-dir> flush [rows=20000]
+//       What the seal's flush of the overlay's memtables costs on a copy of a plain week.
 //
-// Every phase but build works on a copy of the folder it names (the copy is replaced on every run).
+// reads, memory and hours work on a copy of the folder they name (replaced on every run unless fresh=0).
 internal static class KeepPeriodBench
 {
     private static readonly HistorySealingSettings Sealing = new()
@@ -49,6 +56,7 @@ internal static class KeepPeriodBench
             case "reads": Reads(work, Int(args, "runs", 15)); break;
             case "memory": Memory(work, args.GetValueOrDefault("variant", "sealed"), Int(args, "rounds", 3)); break;
             case "compression": Compression(work); break;
+            case "flush": Flush(work, Int(args, "rows", 20_000)); break;
             case "hours": Hours(work, args.GetValueOrDefault("variant", "sealed"), Int(args, "hours", 200), Int(args, "every", 20)); break;
             default: throw new ArgumentException($"unknown phase {phase}");
         }
@@ -203,6 +211,54 @@ internal static class KeepPeriodBench
         var tables = new DirectoryInfo(path).GetFiles("*.ldb").Sum(f => f.Length);
         Report.Line($"20,000 values of 1 KB of zeros (20.0 MB) after compaction: tables {Mb(tables)} -> {(tables < 5 << 20 ? "blocks are compressed" : "blocks are NOT compressed")}");
         Directory.Delete(path, recursive: true);
+    }
+
+    // What the seal's flush of the overlay's memtables costs (#1805 review R1): on a copy of the oldest plain week, with an
+    // empty memtable, then after `rows` late values written without sync; the table files before and after.
+    private static void Flush(string work, int rows)
+    {
+        var source = Directory.GetDirectories(Path.Combine(work, "plain"), "SensorValuesV2_*").Order().First();
+        var path = Path.Combine(work, "flush-probe", Path.GetFileName(source));
+
+        if (Directory.Exists(Path.GetDirectoryName(path)))
+            Directory.Delete(Path.GetDirectoryName(path), recursive: true);
+
+        CopyDirectory(source, path);
+
+        Dictionary<string, long> Tables() => new DirectoryInfo(path).GetFiles("*.ldb").ToDictionary(f => f.Name, f => f.Length);
+        string Describe(Dictionary<string, long> before, Dictionary<string, long> after) =>
+            $"tables {before.Count} -> {after.Count} ({before.Count(t => !after.TryGetValue(t.Key, out var s) || s != t.Value)} rewritten or deleted, " +
+            $"{after.Keys.Except(before.Keys).Count()} new, {after.Keys.Except(before.Keys).Sum(k => after[k]) / 1024} KB new)";
+
+        using var db = new LevelDBDatabaseAdapter(path);
+        var sensors = SensorIds(670);
+        var random = new Random(1805);
+
+        Report.Line($"{Path.GetFileName(path)}: {Mb(Size(path))}");
+
+        var before = Tables();
+        var watch = Stopwatch.StartNew();
+        db.FlushMemTablesToTables();
+        Report.Line($"flush, empty memtable: {watch.Elapsed.TotalMilliseconds:F1} ms; {Describe(before, Tables())}");
+
+        var from = long.Parse(Path.GetFileName(path).Split('_')[1]);
+        var formatter = new HSMDatabase.AccessManager.Formatters.MemoryPackFormatter();
+
+        for (int i = 0; i < rows; i++)
+        {
+            var tick = from + random.NextInt64(7 * TimeSpan.TicksPerDay);
+            db.Put(new DbKey(sensors[random.Next(sensors.Count)], tick).ToBytes(), formatter.Serialize(Value(SensorType.Double, tick, i % 100, random)));
+        }
+
+        before = Tables();
+        watch.Restart();
+        db.FlushMemTablesToTables();
+        Report.Line($"flush after {rows:N0} unsynced late values: {watch.Elapsed.TotalMilliseconds:F1} ms; {Describe(before, Tables())}");
+
+        before = Tables();
+        watch.Restart();
+        db.FlushMemTablesToTables();
+        Report.Line($"flush again, nothing written since: {watch.Elapsed.TotalMilliseconds:F1} ms; {Describe(before, Tables())}");
     }
 
     #region H1: reads

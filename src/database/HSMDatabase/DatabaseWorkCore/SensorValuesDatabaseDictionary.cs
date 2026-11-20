@@ -10,17 +10,19 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     // sealedWeeks: false for the dictionary of the pre-V2 databases that MigrateDatabaseV2 reads; sealed
     // weeks (ADR-0020, #1803) belong to the current row databases only.
-    internal sealed class SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings, bool sealedWeeks = true)
+    // utcNow: the clock a sealed week is opened with (#1805 follow-up); null: the system clock.
+    internal sealed class SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings, bool sealedWeeks = true, Func<DateTime> utcNow = null)
         : ValuesDatabaseDictionary<ISensorValuesDatabase>(dbSettings)
     {
         // A field initializer: it runs before the base constructor, which lists the directories.
         private readonly bool _sealedWeeks = sealedWeeks;
+        private readonly Func<DateTime> _utcNow = utcNow;
 
 
         // A week is sealed when its sibling chunk database is complete. Each week sits behind a handle the sealing job
         // (#1804) can swap from rows to sealed and back while the server runs.
         protected override Func<string, long, long, ISensorValuesDatabase> CreateDb => _sealedWeeks
-            ? (path, from, to) => new SensorValuesWeek(path, _dbSettings.GetPathToSealedSensorValueDatabase(from, to), from, to)
+            ? (path, from, to) => new SensorValuesWeek(path, _dbSettings.GetPathToSealedSensorValueDatabase(from, to), from, to, _utcNow)
             : LevelDBManager.GetSensorValuesDatabaseInstance;
 
         protected override Func<long, long, string> GetDbPath => _dbSettings.GetPathToSensorValueDatabase;
