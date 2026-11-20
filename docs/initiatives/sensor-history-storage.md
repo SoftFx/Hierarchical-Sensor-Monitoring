@@ -203,7 +203,7 @@ The store keeps LevelDB and replaces one row per value with one chunk per sensor
 | Integer value | 7.1 | — | 3.6 |
 | Bar open / close | 40.0 | — | 1.5 |
 
-- When a double changes, 47–53 of its 52 mantissa bits change, so XOR with the previous value saves little.
+- When a double changes, almost all of its 52 mantissa bits change, so XOR with the previous value saves little.
 - Where the stored values are rounded decimals (bars, Double, EMA fields), scaling to an integer and coding the difference takes single-digit bits. The integer coder picks raw values, the first difference or the second difference (delta-of-delta) per chunk: the second difference wins for bar open times and EMA, the first for bar counts and means.
 - Rate values are computed ratios such as `0.29124565993142887`. They do not scale to integers, and Rate is 61% of all rows.
 - Predicting a field from another field of the same row adds little: a bar's `min` equals the previous `min` in 65% of rows and the `mean` of the same row in 41%. The useful cross-field relations are structural: a bar's open equals the previous close in 99.4% of rows, and the bar length is constant.
@@ -332,12 +332,12 @@ Keep LevelDB and add a codec of our own for closed periods. Decided on 2026-11-1
 
 Published float codecs since Gorilla (Chimp, Elf, DeXOR, ALP and others) mostly win by recovering the decimal a double came from, which the chunk codec's decimal mode already does. A literature review, [time-series-compression-literature.md](time-series-compression-literature.md), lists what the papers have and the codec does not. These are examples to measure, not planned work:
 
-- Strings, 65.5% of sealed bytes on SoftFx production: template extraction plus numbers kept as typed integer or decimal columns, not digit text (CLP, Denum, LogReducer).
+- Strings, 65.5% of sealed bytes on one SoftFx production week measured during #1802 (0.02% in the garage shard measured here): template extraction plus numbers kept as typed integer or decimal columns, not digit text (CLP, Denum, LogReducer).
 - Doubles: values that do not round-trip stored aside as exceptions, so one such value no longer pushes the whole chunk out of decimal mode (ALP).
 - Integer columns, timestamps included: bucket widths fitted per chunk or entropy-coded residuals instead of the fixed bucket code (Pcodec, BOS, Parquet miniblocks).
 - Small chunks: a shared trained zstd dictionary.
 
-Rate values are not on the list: the collector divides by an elapsed time the server never sees, so their mantissa is noise for any lossless coder. Only rounding, or sending the sum and the elapsed time separately, would change that.
+Rate values gain little: the managed collector divides by an elapsed time the server never sees, so their mantissa is noise for any lossless coder. A general compressor already takes about 20% off; a byte-split mode might add a little (item 5 of the review's shortlist). Only rounding, or sending the sum and the elapsed time separately, would change the picture.
 
 ## Work Breakdown
 
