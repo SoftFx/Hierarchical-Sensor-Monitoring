@@ -1,7 +1,8 @@
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Attributes;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
@@ -1094,11 +1095,24 @@ namespace HSMServer.Controllers
         public JsonResult Compact()
         {
             if (_database.IsCompactRunning)
-                return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "Compact already running" }));
+                return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "A compaction or a history sealing step is already running" }));
 
             _database.Compact();
 
             return Json(JsonSerializer.Serialize(new { Status = "Ok", Result = Math.Round(_database.TotalDbSize / (double)(1 << 20), 2, MidpointRounding.AwayFromZero) }));
+        }
+
+        // Turns a sealed week back into rows (#1804, ADR-0020 decision 10); the work and its rules are the database core's.
+        [HttpPost]
+        [AuthorizeIsAdmin]
+        [ValidateAntiForgeryToken]
+        public JsonResult Unseal(string name)
+        {
+            var report = _database.UnsealHistoryWeek(name, DateTime.UtcNow);
+
+            return report.Outcome == HistorySealingOutcome.Done
+                ? Json(JsonSerializer.Serialize(new { Status = "Ok", Result = report.ToString() }))
+                : Json(JsonSerializer.Serialize(new { Status = "Error", Error = report.ToString() }));
         }
 
         [HttpGet]

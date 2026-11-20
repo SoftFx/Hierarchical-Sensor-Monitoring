@@ -70,7 +70,7 @@ public sealed class SealedWeekDatabaseCoreTests : IDisposable
         SealTheWeek();
 
         var week = _sealed.SensorValuesDatabases.Single(db => db.Contains(SealedWeekDay.Ticks));
-        Assert.IsType<SealedSensorValuesDatabase>(week);
+        Assert.IsType<SealedSensorValuesDatabase>(((SensorValuesWeek)week).Current); // each week sits behind a swappable handle (#1804)
         Assert.Equal(_plain.SensorValuesDatabases.Select(db => Path.GetFileName(db.Name)), _sealed.SensorValuesDatabases.Select(db => Path.GetFileName(db.Name)));
 
         AssertSameHistory("after sealing");

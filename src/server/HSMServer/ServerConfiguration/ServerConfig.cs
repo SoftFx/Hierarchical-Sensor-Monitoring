@@ -87,6 +87,8 @@ namespace HSMServer.ServerConfiguration
 
         public CollectorSessionsConfig CollectorSessions { get; }
 
+        public HistorySealingConfig HistorySealing { get; }
+
 
         static ServerConfig()
         {
@@ -122,6 +124,7 @@ namespace HSMServer.ServerConfiguration
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
             CollectorSessions = Register<CollectorSessionsConfig>(nameof(CollectorSessions));
+            HistorySealing = Register<HistorySealingConfig>(nameof(HistorySealing));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
@@ -138,6 +141,7 @@ namespace HSMServer.ServerConfiguration
             ApiTokens.Validate();
             Kestrel.Validate();
             CollectorSessions.Validate();
+            HistorySealing.Validate();
 
             ResaveSettings();
 

@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
+using HSMDatabase.LevelDB.Sealed;
 using System;
 using System.IO;
 using System.Linq;
@@ -16,9 +17,10 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly bool _sealedWeeks = sealedWeeks;
 
 
-        // A week is sealed when its sibling chunk database is complete.
+        // A week is sealed when its sibling chunk database is complete. Each week sits behind a handle the sealing job
+        // (#1804) can swap from rows to sealed and back while the server runs.
         protected override Func<string, long, long, ISensorValuesDatabase> CreateDb => _sealedWeeks
-            ? (path, from, to) => LevelDBManager.GetSensorValuesDatabaseInstance(path, _dbSettings.GetPathToSealedSensorValueDatabase(from, to), from, to)
+            ? (path, from, to) => new SensorValuesWeek(path, _dbSettings.GetPathToSealedSensorValueDatabase(from, to), from, to)
             : LevelDBManager.GetSensorValuesDatabaseInstance;
 
         protected override Func<long, long, string> GetDbPath => _dbSettings.GetPathToSensorValueDatabase;

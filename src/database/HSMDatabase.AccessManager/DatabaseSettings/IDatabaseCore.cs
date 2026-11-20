@@ -283,6 +283,24 @@ namespace HSMServer.Core.DataLayer
         /// </summary>
         HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod);
 
+        /// <summary>
+        /// One pass of the sealing job of sensor history (ADR-0020, #1804): at most one action on one week (finish an
+        /// unseal, remove source rows after the keep period, seal a closed week, fold a sealed week's overlay). Shares
+        /// the compaction state with <see cref="Compact"/> and <see cref="CompactNextDueHistoryShard"/>, so no two of
+        /// them ever work at the same time; answers Busy when another one runs. Does nothing when
+        /// <see cref="HistorySealingSettings.Enabled"/> is false.
+        /// </summary>
+        HistorySealingPassReport RunHistorySealingPass(DateTime utcNow, HistorySealingSettings settings);
+
+        /// <summary>
+        /// Turns a sealed week back into rows (the operator's unseal, #1804) and keeps the job from sealing it again.
+        /// <paramref name="weekName"/> is the row database name, as <see cref="SensorValuesDatabases"/> lists it.
+        /// </summary>
+        HistorySealingPassReport UnsealHistoryWeek(string weekName, DateTime utcNow);
+
+        /// <summary>The last pass of the sealing job or unseal in this process; null before the first.</summary>
+        HistorySealingPassReport LastHistorySealingPass { get; }
+
 
         IEnumerable<(byte[], byte[])> GetAll();
 

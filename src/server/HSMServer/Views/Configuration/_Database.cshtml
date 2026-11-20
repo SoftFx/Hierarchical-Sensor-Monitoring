@@ -35,6 +35,14 @@
             <span id="dbExportButtonName">Export</span>
         </button>
     </div>
+    <div class="col-auto">
+        @Html.AntiForgeryToken()
+        <button id="dbUnsealButton" class="btn btn-outline-secondary" type="button" style="width: 15em" onclick="unsealFunc()"
+                title="Turns the selected week back into rows if it is sealed (sealed sensor history, #1804). The sealing job then leaves it as rows.">
+            <span id="dbUnsealSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+            <span id="dbUnsealButtonName">Unseal</span>
+        </button>
+    </div>
     <div class="col">
         <span id="dbExportError" class="text-danger text-start"></span>
     </div>
@@ -62,6 +70,40 @@
                $('#dbButtonName').text('Compact');
                $('#dbButton').prop('disabled', false);
                $('#dbSpinner').removeClass('d-none').addClass('d-none');
+           }
+       });
+    }
+
+    function unsealFunc() {
+        const name = $('#databases').val();
+        if (!confirm(`Turn the sealed week ${name} back into rows? The sealing job will not seal it again until the hsm-unsealed file is removed from its directory.`))
+            return;
+
+        $('#dbUnsealButtonName').text('Unsealing...');
+        $('#dbUnsealButton').prop('disabled', true);
+        $('#dbUnsealSpinner').removeClass('d-none');
+        $('#dbExportError').text('');
+        $.ajax({
+           type: 'POST',
+           url: '@Url.Action(nameof(HomeController.Unseal), ViewConstants.HomeController)',
+           data: { name: name },
+           headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').first().val() },
+           cache: false,
+           async: true,
+           success: function (data) {
+               var json = JSON.parse(data);
+
+               $('#dbExportError').text(json.Status === "Error" ? json.Error : json.Result);
+
+               $('#dbUnsealButtonName').text('Unseal');
+               $('#dbUnsealButton').prop('disabled', false);
+               $('#dbUnsealSpinner').removeClass('d-none').addClass('d-none');
+           },
+           error: function () {
+               $('#dbExportError').text('The unseal request failed');
+               $('#dbUnsealButtonName').text('Unseal');
+               $('#dbUnsealButton').prop('disabled', false);
+               $('#dbUnsealSpinner').removeClass('d-none').addClass('d-none');
            }
        });
     }

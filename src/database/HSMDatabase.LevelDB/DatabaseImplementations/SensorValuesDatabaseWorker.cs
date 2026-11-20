@@ -11,7 +11,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     internal sealed class SensorValuesDatabaseWorker : IntervalDataseBase, ISensorValuesDatabase
     {
 
-        public SensorValuesDatabaseWorker(string name, long from, long to) : base(name, from, to)
+        // rowDatabase: the open row database of the instance this one replaces in a live swap (#1804).
+        public SensorValuesDatabaseWorker(string name, long from, long to, LevelDBDatabaseAdapter rowDatabase = null) : base(name, from, to, rowDatabase)
         {
         }
 

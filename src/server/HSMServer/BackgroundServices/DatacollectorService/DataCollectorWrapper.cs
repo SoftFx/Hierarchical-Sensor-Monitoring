@@ -70,6 +70,11 @@ namespace HSMServer.BackgroundServices
 
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
+        // The sealing job of sensor history (#1804) and the sealed week store's counters.
+        internal HistorySealingSensors HistorySealingSensors { get; }
+
+        private readonly IDatabaseCore _database;
+
         internal BackupSensors BackupSensors { get; }
 
         internal TreeValueChacheStatistics TreeValueCacheStatistics { get; } 
@@ -115,6 +120,8 @@ namespace HSMServer.BackgroundServices
 
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
+            _database = db;
+            HistorySealingSensors = new HistorySealingSensors(_collector);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             _openSessions = _collector.CreateIntSensor($"Clients/{ClientStatisticsSensors.TotalGroup}/{OpenSessionsSensorName}", new InstantSensorOptions
             {
@@ -221,6 +228,8 @@ namespace HSMServer.BackgroundServices
             }
 
             DbStatisticsSensors.SendInfo();
+
+            HistorySealingSensors.SendInfo(_database.LastHistorySealingPass);
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
 

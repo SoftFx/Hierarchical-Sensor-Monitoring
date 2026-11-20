@@ -23,19 +23,27 @@ namespace HSMDatabase.LevelDB.Sealed
         private LevelDBDatabaseAdapter _database;
 
 
-        private SealedWeekWriter(string path)
+        private SealedWeekWriter(string path, string sealingNote)
         {
             _path = path;
+
+            // hsm-sealing goes in before the database exists: a chunk directory without it was not left by a seal and is
+            // never deleted by the next one (#1804, SealedWeekStatus.MayDeleteChunkDirectory).
+            Directory.CreateDirectory(path);
+            DurableFile.WriteAtomic(Path.Combine(path, SealedWeekStages.SealingFileName), sealingNote, strict: true);
+            DurableFile.SyncDirectory(Path.GetDirectoryName(Path.GetFullPath(path)), strict: true);
+
             _database = new LevelDBDatabaseAdapter(path);
         }
 
 
         /// <summary>
-        /// Starts the chunk database of a week that is not sealed yet, always empty. A directory without the marker
-        /// is what an interrupted seal left: not data (the source rows are still in the row database), and stale
-        /// if those rows changed since, so it is deleted first. A directory with the marker is refused.
+        /// Starts the chunk database of a week that is not sealed yet, always empty. An existing directory is deleted
+        /// only when it is provably the remains of an interrupted seal (<see cref="SealedWeekStatus.MayDeleteChunkDirectory"/>:
+        /// the source rows are still in the row database, and the leftover is stale if they changed since). Any other
+        /// existing directory is refused untouched: it may hold the only copy of the week (#1804, review S1).
         /// </summary>
-        public static SealedWeekWriter Open(string sealedPath)
+        public static SealedWeekWriter Open(string sealedPath, string rowPath = null, string sealingNote = null)
         {
             // Open deletes the directory it is given: anything but a sealed week's chunk directory is refused before
             // it is touched (the week's row database, the database folder).
@@ -47,9 +55,16 @@ namespace HSMDatabase.LevelDB.Sealed
                 throw new InvalidOperationException($"{sealedPath} is already a complete sealed week");
 
             if (Directory.Exists(sealedPath))
-                Directory.Delete(sealedPath, recursive: true);
+            {
+                var status = SealedWeekStages.Read(rowPath ?? string.Empty, sealedPath);
 
-            return new SealedWeekWriter(sealedPath);
+                if (status.Stage != SealedWeekStage.IncompleteSeal || !status.MayDeleteChunkDirectory)
+                    throw new WeekNeedsAttentionException(sealedPath, status.Attention ?? $"{sealedPath} is in stage {status.Stage}; it is not deleted");
+
+                Directory.Delete(sealedPath, recursive: true);
+            }
+
+            return new SealedWeekWriter(sealedPath, sealingNote ?? $"Sealing started at {DateTime.UtcNow:O}.{Environment.NewLine}");
         }
 
 
@@ -71,6 +86,49 @@ namespace HSMDatabase.LevelDB.Sealed
         }
 
         /// <summary>
+        /// The chunks stored for <paramref name="sensorId"/>, as they are on disk now, in key order: the sealing job
+        /// (#1804) reads back what it wrote and verifies it before the week is marked.
+        /// </summary>
+        public IEnumerable<(byte[] key, byte[] chunk)> ReadChunks(Guid sensorId)
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            var prefix = sensorId.ToByteArray();
+
+            using var options = new ReadOptions();
+            using var iterator = _database.Native.CreateIterator(options);
+
+            for (iterator.Seek(new DbKey(sensorId, 0L).ToBytes()); iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (key.Length < prefix.Length || !key.AsSpan(0, prefix.Length).SequenceEqual(prefix))
+                    yield break;
+
+                yield return (key, iterator.Value());
+            }
+        }
+
+        /// <summary>Removes every chunk of the sensors in <paramref name="sensorIds"/>, in one synced batch: they stay rows.</summary>
+        public void DeleteChunks(IEnumerable<Guid> sensorIds)
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            using var batch = new WriteBatch();
+            var any = false;
+
+            foreach (var sensorId in sensorIds)
+                foreach (var (key, _) in ReadChunks(sensorId))
+                {
+                    batch.Delete(key);
+                    any = true;
+                }
+
+            if (any)
+                _database.Native.Write(batch, _syncWrite);
+        }
+
+        /// <summary>
         /// Closes the chunk database and writes the marker that makes the directory a complete sealed week:
         /// a temporary file, flushed to disk, then renamed over nothing.
         /// </summary>
@@ -78,21 +136,44 @@ namespace HSMDatabase.LevelDB.Sealed
         {
             ObjectDisposedException.ThrowIf(_database is null, this);
 
-            _database.Dispose();
+            CloseDatabase();
+            WriteMarker(description);
+        }
+
+        /// <summary>Closes the chunk database (every batch is already synced).</summary>
+        public void CloseDatabase()
+        {
+            _database?.Dispose();
+            _database = null;
+        }
+
+        /// <summary>
+        /// Hands the open chunk database over (the sealing job gives it to the sealed store, #1804, so the database is not
+        /// closed and opened again inside the swap); the writer no longer uses or disposes it.
+        /// </summary>
+        public LevelDBDatabaseAdapter DetachDatabase()
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            var database = _database;
             _database = null;
 
-            var marker = Path.Combine(_path, SealedWeekMarker.FileName);
-            var temporary = marker + ".tmp";
+            return database;
+        }
 
-            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(stream))
-            {
-                writer.Write($"Sealed chunk format v{ChunkCodec.FormatVersion} at {DateTime.UtcNow:O}{Environment.NewLine}{description}{Environment.NewLine}");
-                writer.Flush();
-                stream.Flush(flushToDisk: true);
-            }
+        /// <summary>
+        /// The marker, once the database is closed or handed over: a temporary file flushed to disk, renamed over nothing
+        /// (with write-through on Windows) and the directory synced (Linux, macOS). Throws if the rename cannot be made
+        /// durable: the caller then removes the marker again and the week stays rows.
+        /// </summary>
+        public void WriteMarker(string description)
+        {
+            if (_database is not null)
+                throw new InvalidOperationException("The chunk database must be closed or handed over before the marker is written");
 
-            File.Move(temporary, marker, overwrite: false);
+            DurableFile.WriteAtomic(Path.Combine(_path, SealedWeekMarker.FileName),
+                $"Sealed chunk format v{ChunkCodec.FormatVersion}, encoder r{ChunkCodec.EncoderRevision} at {DateTime.UtcNow:O}{Environment.NewLine}{description}{Environment.NewLine}",
+                strict: true, overwrite: false);
         }
 
         public void Dispose()
