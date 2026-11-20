@@ -93,6 +93,33 @@ History sealing is on: weeks are sealed 7 days after they close, source rows kep
 
 Until that time nothing else about the job is logged, and that is expected. Each pass does at most one thing to one week, so a backlog of closed weeks is sealed one week per pass, oldest first.
 
+### History compaction: needed to free the space
+
+Sealing alone does not make a week smaller on disk. When the keep period ends the job removes the week's original rows, but the files shrink only when the **background compaction** of history weeks runs over the week. That compaction has its own section, and it is **off by default** too:
+
+```json
+"HistoryCompaction": {
+  "Enabled": false,
+  "WorkingHoursStartUtc": "00:00",
+  "WorkingHoursEndUtc": "00:00"
+}
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Enabled` | `false` | Turns the background compaction on. It compacts one closed week (sensor history or journal) every 10 minutes, a week that has not changed for 3 hours and was not compacted since its last change. While it is off nothing is compacted in the background. |
+| `WorkingHoursStartUtc`, `WorkingHoursEndUtc` | `"00:00"`, `"00:00"` | The daily UTC window it works in, `HH:mm`, as for `HistorySealing`. Equal values mean all day; `"22:00"` to `"06:00"` wraps past midnight. A compaction that is running when the window ends is finished, not stopped, so the work can overrun the window by one week. |
+
+With `HistorySealing.Enabled` true and `HistoryCompaction.Enabled` false, the server logs a warning at start that sealed weeks will not get smaller on disk until history compaction is enabled. When it is on, the log says when its first pass runs:
+
+```
+History compaction is on: one closed history shard per pass, working 22:00-06:00 UTC; first pass at 2026-11-20 10:20 UTC, then every 10 minutes
+```
+
+The **Compact** button on the Configuration page and the compaction a seal does of its own new chunks do not depend on this section.
+
+**On a large deployment, switch it on with a night window** (for example `"22:00"` to `"06:00"`): the first start after enabling it finds every closed week not yet compacted, and working through more than a hundred weeks of several GB each keeps the disk busy for many hours.
+
 ---
 
 ## Watching it
@@ -142,7 +169,7 @@ Under **HSM Server Monitoring → Database → Sealed history**, posted with the
 
 ## The keep period
 
-After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. Reads of such a week use its rows alone, exactly as before the seal: the chunks are not read (retention still deletes from them). When the period ends, the job writes `hsm-source-rows-removing` (from then on reads combine rows and chunks), removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory once the week has been quiet for 3 hours.
+After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. Reads of such a week use its rows alone, exactly as before the seal: the chunks are not read (retention still deletes from them). When the period ends, the job writes `hsm-source-rows-removing` (from then on reads combine rows and chunks), removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory once the week has been quiet for 3 hours, if `HistoryCompaction.Enabled` is true (see "History compaction: needed to free the space" above).
 
 **To keep one week's rows longer**, edit the first line of `SensorValuesSealedV1_<from>_<to>/hsm-keep-source-rows-until` to a later UTC time in the same format (`2027-01-15T00:00:00.0000000Z`). The job reads it at every pass; no restart is needed. Leave the rest of the file as it is.
 

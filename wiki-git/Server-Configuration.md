@@ -213,6 +213,25 @@ To cancel an unseal that cannot finish (a damaged chunk), delete the file `hsm-u
 
 The job reports itself under **HSM Server Monitoring → Database → Sealed history** (last run, sealed weeks, weeks needing attention, rows and bytes sealed, sensors left as rows, verification failures, chunk read, rewrite and directory sync failures). **Weeks needing attention** above 0 means the job has stopped touching a week until you act; its comment says which week and what to do. Never delete a `SensorValuesSealedV1_*` directory by hand unless that comment says its rows are complete: after the keep period it holds the only copy of the week.
 
+### History Compaction
+
+```json
+"HistoryCompaction": {
+  "Enabled": false,
+  "WorkingHoursStartUtc": "00:00",
+  "WorkingHoursEndUtc": "00:00"
+}
+```
+
+A background step compacts one closed week of sensor history or journal every 10 minutes (a week unchanged for 3 hours and not compacted since its last change). It is **off by default**. Sealed weeks get smaller on disk only through it, after their original rows are removed: with `HistorySealing.Enabled` on and this one off, the server logs a warning at start.
+
+| Setting | Default | Description |
+|---|---|---|
+| `Enabled` | `false` | Turns the background compaction on. When off nothing is compacted in the background. |
+| `WorkingHoursStartUtc`, `WorkingHoursEndUtc` | `00:00`, `00:00` | The daily UTC window it works in, `HH:mm`, as above. A compaction running when the window ends is finished, not stopped. |
+
+On a large deployment enable it with a night window: the first start after that finds every closed week due. The **Compact** button under **Configuration → Database** does not depend on this section.
+
 ---
 
 ## Docker Volume Mounts
