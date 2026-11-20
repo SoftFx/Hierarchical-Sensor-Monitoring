@@ -10,6 +10,7 @@ using MemoryPack;
 //   SealedHistoryBench <shard-dir> [--limits 1024,4096,...] [--out <dir>]
 //   SealedHistoryBench --synthetic [--limits ...]
 //   SealedHistoryBench --store-synthetic <work-dir> | --store-shard <shard-copy> <work-dir>   (the sealed week store, #1803)
+//   SealedHistoryBench --seal-shard <shard-copy> [--max-sensor-rows N]   (streamed: memory bounded by one sensor)
 //   SealedHistoryBench --job-synthetic <work-dir> | --job-shard <shard-copy> <work-dir>       (the sealing job, #1804)
 //   SealedHistoryBench --put-bench <work-dir>                                                  (writes through the week handle, #1804)
 //
@@ -27,13 +28,16 @@ if (options.Synthetic)
 if (options.StoreWorkPath is not null)
     StoreBench.Run(options);
 
+if (options.SealShardPath is not null)
+    SealedHistoryBench.Strings.SealShardBench.Run(options.SealShardPath, options.MaxSensorRows);
+
 if (options.JobWorkPath is not null)
     JobBench.Run(options);
 
 if (options.PutWorkPath is not null)
     PutBench.Run(options);
 
-if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null && options.JobWorkPath is null && options.PutWorkPath is null)
+if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null && options.SealShardPath is null && options.JobWorkPath is null && options.PutWorkPath is null)
     Console.WriteLine("usage: SealedHistoryBench <shard-dir> [--limits 1024,4096] [--out <dir>] | --synthetic [--limits ...]");
 
 
@@ -48,6 +52,8 @@ internal sealed class Options
     public string JobWorkPath;
     public string PutWorkPath;
     public int[] Limits = [ChunkCodec.MaxRowsPerChunk];
+    public string SealShardPath;
+    public int MaxSensorRows = 1_000_000;
 
 
     public static Options Parse(string[] args)
@@ -63,6 +69,8 @@ internal sealed class Options
                 case "--out": o.OutPath = args[++i]; break;
                 case "--store-synthetic": o.StoreWorkPath = args[++i]; break;
                 case "--store-shard": o.StoreShardPath = args[++i]; o.StoreWorkPath = args[++i]; break;
+                case "--seal-shard": o.SealShardPath = args[++i]; break;
+                case "--max-sensor-rows": o.MaxSensorRows = int.Parse(args[++i]); break;
                 case "--job-synthetic": o.JobWorkPath = args[++i]; break;
                 case "--job-shard": o.JobShardPath = args[++i]; o.JobWorkPath = args[++i]; break;
                 case "--put-bench": o.PutWorkPath = args[++i]; break;

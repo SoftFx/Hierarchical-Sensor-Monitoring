@@ -298,6 +298,35 @@ Hypertable on the integer tick dimension, weekly chunks, unique index on `(senso
 - Size before and after `Compact()` on a large production database.
 - Native Windows builds of the external servers.
 
+### Production data (2026-11-20)
+
+Two measurement rounds on one week of a production deployment (11.9 M rows, 3,990 sensors, 1.34 GB of MemoryPack values), with `src/sandbox/SealedHistoryBench`. Counts, sizes and shapes only.
+
+**Where the bytes go.** String sensors were 65.5% of the sealed week under the first codec (dictionary-only strings, zstd 3: 125,812,706 B, 10.58 B/row), against 0.02% on the first measured deployment (two String sensors, 20 rows). Most String sensors write one message whose only variable parts are numbers: with every digit run replaced by a placeholder the median sensor has one template, the 90th percentile two; 94% of the 35.3 M digit runs have no leading zero, and 28.2 M of them are halves of decimals (`12.34`). Per column, measured as leave-one-out at zstd 3 (approximate, zstd shares context): the String value column 4.6 B/row of the week (7.3 per String row), the key 3.3 B/row and `ReceivingTime` 1.6 B/row: **timestamps are 47% of the week**. The 4.4 B/row a String sensor spends outside its string column is its timestamps; TimeSpan sensors cost 22 B/row mostly through their comments; DoubleBar 11.5 B/row is five double columns (4.9) plus timestamps (4.8).
+
+**Variants** (whole week, stored bytes; "best of" = per chunk the smaller of the variant and the dictionary):
+
+| Variant | zstd 3 | zstd 15 | zstd 19 |
+|---|---|---|---|
+| Dictionary strings (first codec) | 125.8 MB | 105.1 MB | 103.7 MB |
+| Template, integer slots, leading zeros literal | 102.2 MB | | 95.6 MB |
+| Template, zero-padded runs and signs as slots | 99.4 MB | 93.4 MB | 93.0 MB |
+| **Template, a decimal as one slot (chosen)** | **97.8 MB** | **91.8 MB** | **91.4 MB** |
+
+The level curve of the chosen template flattens at 15: 97.8 (3), 95.4 (6), 95.3 (9), 94.3 (12), 91.8 (15), 91.4 (19) MB; compressing the whole week took 0.3, 0.6, 0.7, 1.4, 3.7 and 7.8 s; decompressing it 0.07-0.10 s at every level. In the chosen variant every decimal slot column had a constant fraction-digit count, and the mantissas were encoded as first differences: they behave like slowly varying gauge values.
+
+**Chosen and implemented** (#1802, encoder revision 1, format 1): string column mode 2 with decimal slots, the encoder choosing the smaller encoding before compression (within 464 B, 0.001%, of the best choice after zstd), zstd level 15, 4,096 rows per chunk. Sealing the week with the production codec: **91,807,609 B, 7.72 B/row, 27.0% less**, every row decoded and compared, 0 mismatches; encode 0.81 µs/row, decode 0.17 µs/row, one String chunk about 0.4 ms median and 0.54 ms at the 95th percentile.
+
+**Rejected, and the number that says why:**
+
+- zstd 19 instead of 15: 0.43 MB (0.5%) more saved for 2.1 times the compress time.
+- 8,192 / 16,384 rows per chunk or one chunk per sensor: 1.1% / 2.0% / 2.0% smaller, but the 95th-percentile decode of one String chunk grows from 0.54 to 1.3-1.6 ms and the largest decode allocation from 2 to 5 MB.
+- A zstd dictionary trained on the week: -2.4% at zstd 3 and -0.36% at zstd 19 on held-out chunks, dictionary not counted, and a format change.
+- Folding two slots that are equal on every row: 0.1% of the slot values.
+- Extended template without decimal slots: 1.6 MB a week more than with them.
+
+**Next target:** the key and `ReceivingTime` columns, about half of what remains (about 5 B/row). No string change touches them.
+
 ## Findings
 
 1. A closed week shrinks 2.8 times by compaction alone. Nothing triggers that compaction today.

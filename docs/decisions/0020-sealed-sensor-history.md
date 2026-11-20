@@ -28,7 +28,7 @@ Constraints that shape the decision:
 
 1. **Current data does not change.** The current and recent weeks stay one row per value in `SensorValuesV2_<from>_<to>`.
 2. **A closed week is sealed.** The rows of each sensor are encoded into chunks and stored in a sibling LevelDB database `SensorValuesSealedV1_<from>_<to>` under the key `sensorId | firstTick`. A chunk holds a bounded number of rows of one sensor and starts with a header: format version, encoder revision, value type, row count, first and last tick, checksum.
-3. **The codec is ours; the compressor is not.** Columns are encoded separately (delta-of-delta for ticks, decimal-scaled integers with a per-chunk choice of raw, first or second difference for doubles, with a fallback to XOR with the previous value) and the result is compressed with zstd from a library.
+3. **The codec is ours; the compressor is not.** Columns are encoded separately (delta-of-delta for ticks, decimal-scaled integers with a per-chunk choice of raw, first or second difference for doubles, with a fallback to XOR with the previous value). Strings are a dictionary per column, or a template per distinct shape with every number in them (an ASCII digit run, optionally with one `.` and a sign) stored in integer columns. The result is compressed with zstd from a library.
 4. **Sealed data is exact except for `ReceivingTime`.** It is stored as the difference from `Time` rounded to a millisecond; `Time`, which is part of the key, and every other field are bit-exact. Values are not rounded.
 5. **The row database of a sealed week stays as its overlay.** Anything written to that week after sealing — a late value, an edit, the result of a sensor-move merge — is an ordinary row there. A read merges chunks and overlay in key order; on an equal key the overlay row wins.
 6. **A range delete rewrites.** It removes the overlay rows, removes the chunks that lie wholly inside the range and re-encodes the chunks on its boundary.
@@ -44,6 +44,7 @@ Independently of all of the above, closed weekly shards are compacted automatica
 ## Consequences
 
 - History of closed weeks shrinks from 122 to about 7.5 bytes per value on the measured data, and a one-sensor read of such a week gets faster, not slower.
+- Strings that are numbers printed as text are stored as numbers: on a production week where String sensors held two thirds of the sealed bytes, the template encoding took the whole week from 10.6 to 7.7 bytes per value (with zstd level 15). The decoder must bound what such a column expands to, because template rows are built, not shared.
 - HSM owns a storage format. It needs golden-file tests that pin the bytes, a test that fails when a value type gains a field the codec does not cover, and a format-version bump for every change a reader of the current version could not decode.
 - An encoder improvement ships without a format bump: it bumps the encoder revision and adds a golden set beside the old ones, and chunks written by an older encoder can be found by their header for re-encoding.
 - Adding a persisted field to a value type now means changing the codec in the same change; until then sensors that use the field stay unsealed.

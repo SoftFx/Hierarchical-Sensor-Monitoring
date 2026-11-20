@@ -72,6 +72,61 @@ namespace HSMDatabase.SealedHistory.Tests
             Assert.Contains(chunks, c => c[4] == ChunkCodec.CompressionNone);
         }
 
+        /// <summary>
+        /// Every case has a seed constant of its own, and no two share one: a case's input never depends on the
+        /// other cases or on their order. Building a case twice, and building it after the list is reordered, gives
+        /// the same rows.
+        /// </summary>
+        [Fact]
+        public void Every_golden_case_has_its_own_fixed_seed()
+        {
+            Assert.Equal(GoldenInputs.Names.Order(), GoldenInputs.Seeds.Keys.Order());
+            Assert.Equal(GoldenInputs.Seeds.Count, GoldenInputs.Seeds.Values.Distinct().Count());
+
+            foreach (var name in GoldenInputs.Names.Reverse())
+            {
+                var first = GoldenInputs.Build(name);
+                var second = GoldenInputs.Build(name);
+                Assert.Equal(first.Select(r => r.Key), second.Select(r => r.Key));
+                Assert.Equal(first.Select(r => Convert.ToHexString(Fidelity.Bytes(r.Value))), second.Select(r => Convert.ToHexString(Fidelity.Bytes(r.Value))));
+            }
+        }
+
+        /// <summary>
+        /// The zstd level is part of the encoder: a different level writes different bytes for most inputs, which
+        /// the encode test above catches only for inputs where the two levels differ (14 against 15 differs on one
+        /// golden case). Pin it, so that changing it is a deliberate encoder change with a new golden set.
+        /// </summary>
+        [Fact]
+        public void The_zstd_level_is_the_one_the_golden_set_was_written_with()
+        {
+            Assert.True(ChunkCodec.ZstdLevel == 15,
+                $"zstd level {ChunkCodec.ZstdLevel}: the current golden set was written at level 15; a new level is a new encoder revision with its own golden set");
+        }
+
+        /// <summary>
+        /// The encoder's string column choice on the golden inputs, pinned: every template case is written in
+        /// mode 2, and the set as a whole holds all three string column modes.
+        /// </summary>
+        [Fact]
+        public void The_golden_inputs_pin_the_string_column_modes()
+        {
+            var modes = new HashSet<byte>();
+
+            foreach (var name in GoldenInputs.Names)
+            {
+                var rows = GoldenInputs.Build(name);
+                modes.Add(StringColumn.ChooseMode(rows.Select(r => r.Value.Comment).ToArray()));
+                if (rows[0].Value is StringValue)
+                    modes.Add(StringColumn.ChooseMode(rows.Select(r => ((StringValue)r.Value).Value).ToArray()));
+
+                if (GoldenInputs.IsTemplateCase(name))
+                    Assert.Equal(StringColumn.ModeTemplate, StringColumn.ChooseMode(GoldenInputs.TemplateColumn(name)));
+            }
+
+            Assert.Equal(new byte[] { StringColumn.ModeConstant, StringColumn.ModeDictionary, StringColumn.ModeTemplate }, modes.Order());
+        }
+
         [Fact]
         public void The_golden_directory_holds_only_sets_of_known_cases()
         {
@@ -144,13 +199,77 @@ namespace HSMDatabase.SealedHistory.Tests
     /// </summary>
     internal static class GoldenInputs
     {
-        public static readonly string[] Names =
+        // A property, not a field: it reads TemplateCases, which is initialised below it.
+        public static string[] Names =>
         [
             .. Samples.SealedTypes.Select(t => t.ToString()),
             "Integer-single-row",
+            .. TemplateCases.Keys,
         ];
 
+        /// <summary>
+        /// The generator seed of every case, a constant stored with the case: never derived from a case's position
+        /// or from anything else, so adding or reordering cases cannot change an existing case's input. A new case
+        /// takes a new, unused constant. ("Integer-single-row" uses no generator; its seed is reserved.)
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, ulong> Seeds = new Dictionary<string, ulong>
+        {
+            ["Boolean"] = 1,
+            ["Integer"] = 2,
+            ["Double"] = 3,
+            ["String"] = 4,
+            ["IntegerBar"] = 5,
+            ["DoubleBar"] = 6,
+            ["TimeSpan"] = 8,
+            ["Version"] = 9,
+            ["Rate"] = 10,
+            ["Enum"] = 11,
+            ["Integer-single-row"] = 12,
+            ["String-decimals"] = 1001,
+            ["String-zero-padded"] = 1002,
+            ["String-signs"] = 1003,
+            ["String-mixed-templates"] = 1004,
+            ["String-nulls-and-empties"] = 1005,
+            ["Integer-template-comments"] = 1006,
+        };
+
         private static readonly DateTime Start = new(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
+
+        private static readonly System.Globalization.CultureInfo Invariant = System.Globalization.CultureInfo.InvariantCulture;
+
+        /// <summary>
+        /// String column template cases (string column mode 2): the string of row i, or the comment of an Integer
+        /// row for the Comment case. All texts are made up.
+        /// </summary>
+        private static readonly Dictionary<string, Func<int, Generator, string>> TemplateCases = new()
+        {
+            ["String-decimals"] = (i, g) =>
+                string.Create(Invariant, $"temp {20 + i % 37 * 0.25:F2} C, load {g.Below(4000) / 1000.0:F3}, ratio {i * 0.5:F1}"),
+            ["String-zero-padded"] = (i, g) =>
+                string.Create(Invariant, $"at {i / 60 % 24:D2}:{i % 60:D2}:{g.Below(60):D2} batch {g.Below(1_000_000):D6} id 000{i}"),
+            ["String-signs"] = (i, g) =>
+                string.Create(Invariant, $"delta {(i % 2 == 0 ? -1 : 1) * (i % 9)} offset -{i % 3}.{i % 10:D2} x--{i} +{i} -000.{i % 7} -0.0 range {i}-{i + 1}"),
+            ["String-mixed-templates"] = (i, g) => (i % 9) switch
+            {
+                0 => "ok",
+                1 => string.Create(Invariant, $"queue {g.Below(500)} of {500}, oldest {g.Below(100_000) / 100.0:F2} s"),
+                2 => string.Create(Invariant, $"version 1.2.{i} build 10.0.0.{i % 255}"),
+                3 => string.Create(Invariant, $"edge .5 1. 1..2 --3 +5 {i}"),
+                4 => string.Create(Invariant, $"id {12345678901234567890UL + (ulong)i} and {9223372036854775800L + i % 8}"),
+                5 => $"arabic ١٢٣ fullwidth １２ {i} 東京 \U0001F600",
+                6 => string.Create(Invariant, $"precise 0.{g.Below(1_000_000_000):D9}{g.Below(1_000_000_000):D9}1 and {i}.000000000000000000001"),
+                7 => string.Create(Invariant, $"retry {i}"),
+                _ => "",
+            },
+            ["String-nulls-and-empties"] = (i, g) => (i % 5) switch
+            {
+                0 => null,
+                1 => "",
+                2 => "plain",
+                _ => string.Create(Invariant, $"retry {i} after {g.Below(90)} s"),
+            },
+            ["Integer-template-comments"] = (i, g) => i % 4 == 0 ? null : string.Create(Invariant, $"restarted after {i * 7} s, queue {g.Below(13)}, cpu {g.Below(10_000) / 100.0:F2}%"),
+        };
 
         private static readonly double[] Specials =
         [
@@ -168,8 +287,11 @@ namespace HSMDatabase.SealedHistory.Tests
                 return [new HistoryRow(Start.Ticks, single)];
             }
 
+            if (TemplateCases.TryGetValue(name, out var text))
+                return TemplateRows(name, text);
+
             var type = Enum.Parse<SensorType>(name);
-            var g = new Generator((ulong)type + 1);
+            var g = new Generator(Seeds[name]);
             var rows = new List<HistoryRow>();
             var time = Start;
 
@@ -194,6 +316,40 @@ namespace HSMDatabase.SealedHistory.Tests
                 }
 
                 rows.Add(new HistoryRow(time.Ticks + (i == 105 ? 1 : 0), value));
+            }
+
+            return rows;
+        }
+
+        /// <summary>The template case values: the String values whose texts the case defines, or the comments of Integer rows.</summary>
+        public static string[] TemplateColumn(string name)
+        {
+            var rows = Build(name);
+            return name.StartsWith("String-")
+                ? rows.Select(r => ((StringValue)r.Value).Value).ToArray()
+                : rows.Select(r => r.Value.Comment).ToArray();
+        }
+
+        public static bool IsTemplateCase(string name) => TemplateCases.ContainsKey(name);
+
+        private static List<HistoryRow> TemplateRows(string name, Func<int, Generator, string> text)
+        {
+            var g = new Generator(Seeds[name]);
+            var rows = new List<HistoryRow>();
+            var time = Start;
+
+            for (int i = 0; i < 200; i++)
+            {
+                time = time.AddTicks(TimeSpan.TicksPerSecond * 15 + (long)g.Below(20_000) - 10_000);
+                string s = text(i, g);
+
+                BaseValue value = name.StartsWith("String-")
+                    ? new StringValue { Value = s, Comment = i % 50 == 0 ? "restart" : null }
+                    : new IntegerValue { Value = i, Comment = s };
+
+                value = value with { ReceivingTime = time.AddTicks((long)g.Below(30_000_000)) };
+                value.Time = time;
+                rows.Add(new HistoryRow(time.Ticks, value));
             }
 
             return rows;
