@@ -18,6 +18,19 @@ namespace HSMDatabase.LevelDB
     {
         private const int OpenDbMaxAttempts = 10;
 
+        // How the blocks this server writes are compressed. Reading does not depend on it:
+        // LevelDB records the compression of every block, so a block written by any version
+        // reads back, as long as the native library knows the codec.
+        //
+        // Not Windows: no compression yet, on purpose (#1815). Up to SoftFX.LevelDB.Standard
+        // 1.2.1 the Linux library had no Snappy, so every database written on Linux is
+        // uncompressed and a server on that package cannot read a Snappy block. Writing
+        // uncompressed in the first release on 1.2.2 keeps a rollback to the release before it
+        // possible; the next release switches Linux to Snappy, the second step of #1815.
+        // Windows has always written Snappy.
+        internal static readonly CompressionLevel WriteCompression =
+            OperatingSystem.IsWindows() ? CompressionLevel.SnappyCompression : CompressionLevel.NoCompression;
+
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly DB _database;
@@ -26,7 +39,7 @@ namespace HSMDatabase.LevelDB
         {
             CreateIfMissing = true,
             MaxOpenFiles = 100000,
-            CompressionLevel = CompressionLevel.SnappyCompression,
+            CompressionLevel = WriteCompression,
             BlockSize = 200 * 1024,
             WriteBufferSize = 8 * 1024 * 1024,
         };
@@ -72,7 +85,7 @@ namespace HSMDatabase.LevelDB
             {
                 CreateIfMissing = false,
                 MaxOpenFiles = 100000,
-                CompressionLevel = CompressionLevel.SnappyCompression,
+                CompressionLevel = WriteCompression,
                 BlockSize = 200 * 1024,
                 WriteBufferSize = 8 * 1024 * 1024,
             };
