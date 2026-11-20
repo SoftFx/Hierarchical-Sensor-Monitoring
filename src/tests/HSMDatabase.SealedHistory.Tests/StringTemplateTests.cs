@@ -238,6 +238,46 @@ namespace HSMDatabase.SealedHistory.Tests
         }
 
 
+        /// <summary>
+        /// A string longer than 65,536 characters, with digits in it, among rows with slots: the encoder keeps the
+        /// template mode and stores the long string as one literal segment (a zero-slot template). End to end, for a
+        /// String value column and for a Comment column.
+        /// </summary>
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void A_string_above_the_length_limit_rides_along_as_a_literal_template(bool stringSensor)
+        {
+            var longText = string.Concat(Enumerable.Range(0, 7000).Select(k => $"r{k} ")); // about 48,000 characters
+            string[] longStrings =
+            [
+                longText + longText,                                                         // above the limit, digits inside
+                new string('z', StringTemplate.MaxStringChars - 5) + "12.50",               // exactly at the limit: slots
+                new string('y', StringTemplate.MaxStringChars - 4) + "12.50",               // one above: literal
+            ];
+            Assert.True(longStrings[0].Length > StringTemplate.MaxStringChars);
+            Assert.Equal(StringTemplate.MaxStringChars, longStrings[1].Length);
+            Assert.Equal(StringTemplate.MaxStringChars + 1, longStrings[2].Length);
+
+            var column = Enumerable.Range(0, 300).Select(i => i % 100 == 7 ? longStrings[i / 100] : $"queue {i * 13} load {i % 17}.{i % 10}").ToArray();
+            Assert.Equal(StringColumn.ModeTemplate, StringColumn.ChooseMode(column));
+            Assert.Single(StringTemplate.Tokenize(longStrings[0]).Segments);
+            Assert.Single(StringTemplate.Tokenize(longStrings[2]).Segments);
+            Assert.Equal(2, StringTemplate.Tokenize(longStrings[1]).Segments.Length);
+
+            var rows = column.Select((s, i) => RoundTripTests.Row(i, stringSensor
+                ? new StringValue { Value = s, Comment = i % 2 == 0 ? null : "c" }
+                : new IntegerValue { Value = i, Comment = s })).ToList();
+
+            var decoded = ChunkCodec.Decode(ChunkCodec.Encode(rows).Chunks.Single());
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                Assert.Null(RowFidelity.FindDifference(rows[i], decoded[i]));
+                Assert.Equal(column[i], stringSensor ? ((StringValue)decoded[i].Value).Value : decoded[i].Value.Comment);
+            }
+        }
+
         // ------------------------------------------------------------------ the encoder's choice (encoder revision 1)
 
         public static IEnumerable<object[]> ChoiceCases()
