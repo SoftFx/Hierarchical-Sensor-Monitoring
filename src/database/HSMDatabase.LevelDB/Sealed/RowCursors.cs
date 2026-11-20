@@ -212,24 +212,22 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public void Prev()
         {
-            var current = Current;
-            var key = current.Key;
-
             if (_forward)
             {
-                var other = Other(current);
-                other.Seek(key);
-
-                if (other.IsValid)
-                    other.Prev();
-                else
-                    other.SeekToLast();
-
-                // The other child is now before the key, a hidden chunk row at the key included.
-                current.Prev();
+                // Invariant of the forward direction: each child is at its first row at or after the current row (an
+                // exhausted child has no row at or after it). So neither child has a row between its position and the
+                // current row, and the row before the current one is the larger of the two rows the children step back
+                // to: each steps back once, and neither the current row nor its key is needed. This keeps a read that
+                // only passes by a sensor (its rows were landed on and found to be another sensor's by their prefix)
+                // from deciding which child holds that sensor's row, which would read the sensor's chunk and its delete
+                // watermark (#1805) and fail on them if they are damaged.
+                StepBack(overlay);
+                StepBack(chunks);
             }
             else
             {
+                var key = Current.Key;
+
                 if (overlay.IsValid && overlay.CompareKey(key) == 0)
                     overlay.Prev();
                 if (chunks.IsValid && chunks.CompareKey(key) == 0)
@@ -253,6 +251,14 @@ namespace HSMDatabase.LevelDB.Sealed
 
 
         private IRowCursor Other(IRowCursor current) => ReferenceEquals(current, overlay) ? chunks : overlay;
+
+        private static void StepBack(IRowCursor child)
+        {
+            if (child.IsValid)
+                child.Prev();
+            else
+                child.SeekToLast();
+        }
 
         private void Moved(bool forward)
         {

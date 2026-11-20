@@ -62,6 +62,9 @@ namespace HSMDatabase.LevelDB.Sealed
         /// <summary>Served by the sealed store (merged reads) rather than the row worker.</summary>
         public bool IsSealed => Current is SealedSensorValuesDatabase;
 
+        /// <summary>Why deletes of this sealed week are being refused and what to do (#1805 review W2); null when none are.</summary>
+        public string DeleteRefusal => (Current as SealedSensorValuesDatabase)?.DeleteRefusal;
+
         /// <summary>Identifies the instance serving the week: it changes with every swap.</summary>
         public object ServingInstance => Current;
 

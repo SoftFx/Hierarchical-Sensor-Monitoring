@@ -19,6 +19,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public const string SealOpened = "seal/opened";
         public const string SealSensorWritten = "seal/sensor-written";
         public const string SealEncoded = "seal/encoded";
+        public const string SealCompacted = "seal/compacted";
         public const string SealMarked = "seal/marked";
         public const string SealBeforeTail = "seal/before-tail";
         public const string SealSwapped = "seal/swapped";
@@ -79,7 +80,7 @@ namespace HSMDatabase.LevelDB.Sealed
 
         /// <summary>
         /// Seals a week served as rows: per sensor, encode its rows from one snapshot, write the chunks, read them back
-        /// and compare them field by field with the source rows. Then, under the week's exclusive gate, drop the
+        /// and compare them field by field with the source rows; compact the chunk database. Then, under the week's exclusive gate, drop the
         /// chunks of every sensor a range delete touched meanwhile, write the markers (the keep period, the sensors left
         /// as rows, finally <c>hsm-sealed</c>) and swap the week to the sealed store. False when stopped for a shutdown
         /// (the chunk directory is then incomplete: never read, started again by the next seal).
@@ -119,6 +120,15 @@ namespace HSMDatabase.LevelDB.Sealed
                 }
 
                 _checkpoint(SealingCheckpoints.SealEncoded);
+
+                if (_shouldStop())
+                    return false;
+
+                // The chunk directory is left compact (#1805): outside the gate, before the marker. Nothing else compacts
+                // it until the keep period ends, and until then its write-ahead log and unmerged tables would stay on disk.
+                writer.Compact();
+
+                _checkpoint(SealingCheckpoints.SealCompacted);
 
                 if (_shouldStop())
                     return false;
@@ -319,6 +329,10 @@ namespace HSMDatabase.LevelDB.Sealed
                     else
                         iterator.SeekToFirst();
 
+                    // Delete watermarks (#1805) are not chunks.
+                    while (iterator.IsValid && SensorWatermark.IsKey(iterator.Key()))
+                        iterator.Next();
+
                     if (!iterator.IsValid)
                         return true;
 
@@ -333,7 +347,9 @@ namespace HSMDatabase.LevelDB.Sealed
 
                     try
                     {
-                        chunkRows = store.ChunkReader.Decode(key, iterator.Value());
+                        // Only the live rows: an overlay row equal to a row below the watermark is a later write
+                        // (the delete that set the watermark removed the overlay rows up to it) and stays.
+                        chunkRows = LiveRows(store, options, key, store.ChunkReader.Decode(key, iterator.Value()));
                     }
                     catch (SealedChunkReadException)
                     {
@@ -494,6 +510,8 @@ namespace HSMDatabase.LevelDB.Sealed
             var chunkDb = store.ChunkDatabase.Native;
 
             var oldChunks = SensorRows(chunkDb, chunkOptions, sensorId).ToList();
+            var watermarkKey = SensorWatermark.Key(sensorId.ToByteArray());
+            var oldWatermark = chunkDb.Get(watermarkKey, chunkOptions);
             long estimate = 0, oldBytes = 0;
 
             try
@@ -555,14 +573,16 @@ namespace HSMDatabase.LevelDB.Sealed
 
                 lock (store.ChunkWriteLock)
                 {
-                    Replace(chunkDb, oldChunks, newChunks);
+                    // The new chunks hold no row below the sensor's delete watermark (#1805): it goes in the same batch.
+                    // No prefix delete ran since the snapshot (the delete log says so), so it is still the one read.
+                    Replace(chunkDb, oldChunks, newChunks, watermarkKey, putWatermark: null, removeWatermark: oldWatermark is not null);
 
                     var readBack = SensorRows(chunkDb, null, sensorId).ToList();
 
                     if (readBack.Count != newChunks.Count || readBack.Where((c, i) => !c.key.AsSpan().SequenceEqual(newChunks[i].key) || !c.value.AsSpan().SequenceEqual(newChunks[i].chunk)).Any())
                     {
-                        // Put the old chunks back: the overlay rows are still all there.
-                        Replace(chunkDb, readBack, oldChunks);
+                        // Put the old chunks back, and the watermark: the overlay rows are still all there.
+                        Replace(chunkDb, readBack, oldChunks, watermarkKey, putWatermark: oldWatermark, removeWatermark: false);
                         throw new IOException($"the folded chunks of {sensorId} in {SealedPath} read back different; the old chunks were restored");
                     }
 
@@ -590,7 +610,8 @@ namespace HSMDatabase.LevelDB.Sealed
             return RemoveOverlayRowsEqualToChunks(store, sensorId, SealingCheckpoints.FoldBatch).completed;
         }
 
-        private static void Replace(DB chunks, IEnumerable<(byte[] key, byte[] chunk)> remove, IEnumerable<(byte[] key, byte[] chunk)> put)
+        private static void Replace(DB chunks, IEnumerable<(byte[] key, byte[] chunk)> remove, IEnumerable<(byte[] key, byte[] chunk)> put,
+            byte[] watermarkKey, byte[] putWatermark, bool removeWatermark)
         {
             using var batch = new WriteBatch();
 
@@ -599,6 +620,11 @@ namespace HSMDatabase.LevelDB.Sealed
                 batch.Delete(key);
             foreach (var (key, chunk) in put)
                 batch.Put(key, chunk);
+
+            if (putWatermark is not null)
+                batch.Put(watermarkKey, putWatermark);
+            else if (removeWatermark)
+                batch.Delete(watermarkKey);
 
             chunks.Write(batch, _syncWrite);
         }
@@ -722,6 +748,10 @@ namespace HSMDatabase.LevelDB.Sealed
                             iterator.Next();
                     }
 
+                    // Delete watermarks (#1805) are not chunks.
+                    while (iterator.IsValid && SensorWatermark.IsKey(iterator.Key()))
+                        iterator.Next();
+
                     if (!iterator.IsValid)
                         return true;
 
@@ -729,7 +759,22 @@ namespace HSMDatabase.LevelDB.Sealed
                     last = key;
 
                     // An unreadable chunk stops the unseal: its rows exist nowhere else.
-                    var rows = store.ChunkReader.Decode(key, iterator.Value());
+                    var decoded = store.ChunkReader.Decode(key, iterator.Value());
+                    List<HistoryRow> rows;
+                    var lostWatermark = false;
+
+                    try
+                    {
+                        rows = LiveRows(store, options, key, decoded);
+                    }
+                    catch (SealedChunkReadException)
+                    {
+                        // An unreadable delete watermark (#1805 review W2): which rows it hid is unknown. The unseal is the
+                        // way out of that state, so it keeps rows rather than drops them: every decodable row comes back.
+                        // A few rows retention or clear history had deleted may return; no live row is lost.
+                        rows = decoded;
+                        lostWatermark = true;
+                    }
 
                     using var batch = new WriteBatch();
                     long restored = 0;
@@ -750,6 +795,14 @@ namespace HSMDatabase.LevelDB.Sealed
                         store.MarkChanged();
                         store.RowDatabase.Native.Write(batch, _syncWrite);
                         _report.RowsRestored += restored;
+                    }
+
+                    if (lostWatermark)
+                    {
+                        _report.RowsRestoredPastLostWatermark += restored;
+                        _logger.Warn($"Unsealing {RowPath}: the delete watermark of sensor {new Guid(key.AsSpan(0, KeyOrder.SensorIdLength))} cannot be read; " +
+                                     $"all {rows.Count} rows of its chunk {KeyOrder.Tick(key)} were restored ({restored} written), so rows the lost watermark hid " +
+                                     "(deleted by retention or clear history) may be back");
                     }
 
                     return false;
@@ -993,11 +1046,22 @@ namespace HSMDatabase.LevelDB.Sealed
             }
         }
 
+        // The live chunk rows of one sensor: those above its delete watermark (#1805), which a fold drops for good.
         private static IEnumerable<SourceRow> ChunkRows(SealedSensorValuesDatabase store, ReadOptions options, Guid sensorId)
         {
             foreach (var (key, chunk) in SensorRows(store.ChunkDatabase.Native, options, sensorId))
-                foreach (var row in store.ChunkReader.Decode(key, chunk))
+                foreach (var row in LiveRows(store, options, key, store.ChunkReader.Decode(key, chunk)))
                     yield return new SourceRow(null, row.Key, row.Value, 0);
+        }
+
+        // The decoded rows of the chunk under `chunkKey` without those at or below its sensor's delete watermark
+        // (#1805), as `options` see the chunk database. An unreadable watermark throws SealedChunkReadException.
+        private static List<HistoryRow> LiveRows(SealedSensorValuesDatabase store, ReadOptions options, byte[] chunkKey, List<HistoryRow> rows)
+        {
+            if (store.ChunkReader.ReadWatermark(store.ChunkDatabase.Native, options, chunkKey) is not { } watermark || rows[0].Key > watermark)
+                return rows;
+
+            return rows.FindAll(row => row.Key > watermark);
         }
 
         // Every sensor with a key in the database, in key order: each id once, from the first 16 bytes of its keys.

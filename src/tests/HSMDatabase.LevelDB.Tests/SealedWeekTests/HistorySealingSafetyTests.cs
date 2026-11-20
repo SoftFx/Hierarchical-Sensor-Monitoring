@@ -544,6 +544,7 @@ public sealed partial class HistorySealingJobTests
     public static IEnumerable<object[]> ImageCheckpoints() =>
     [
         ["seal", SealingCheckpoints.SealSensorWritten, 2],
+        ["seal", SealingCheckpoints.SealCompacted, 1],
         ["seal", SealingCheckpoints.SealMarked, 1],
         ["seal", SealingCheckpoints.SealSwapped, 1],
         ["remove", SealingCheckpoints.RemoveBatch, 1],
@@ -652,7 +653,7 @@ public sealed partial class HistorySealingJobTests
     {
         var store = (SealedSensorValuesDatabase)Week().Current;
         var prefix = sensor.ToByteArray();
-        var (key, chunk) = store.ChunkDatabase.GetAll().Where(kv => kv.Item1.AsSpan(0, 16).SequenceEqual(prefix)).ElementAt(index);
+        var (key, chunk) = store.ChunkDatabase.GetAll().Where(kv => kv.Item1.Length == KeyOrder.KeyLength && kv.Item1.AsSpan(0, 16).SequenceEqual(prefix)).ElementAt(index);
         var rows = ChunkCodec.ReadHeader(chunk).RowCount;
 
         chunk[^1] ^= 0xFF;
@@ -666,7 +667,7 @@ public sealed partial class HistorySealingJobTests
         var store = (SealedSensorValuesDatabase)Week().Current;
         var prefix = sensor.ToByteArray();
 
-        return [.. store.ChunkDatabase.GetAll().Where(kv => kv.Item1.AsSpan(0, 16).SequenceEqual(prefix)).Select(kv => Convert.ToHexString(kv.Item1) + Convert.ToHexString(kv.Item2))];
+        return [.. store.ChunkDatabase.GetAll().Where(kv => kv.Item1.Length == KeyOrder.KeyLength && kv.Item1.AsSpan(0, 16).SequenceEqual(prefix)).Select(kv => Convert.ToHexString(kv.Item1) + Convert.ToHexString(kv.Item2))];
     }
 
     private static List<string> Files(string directory) =>

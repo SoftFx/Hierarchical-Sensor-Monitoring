@@ -196,14 +196,18 @@ public sealed class SealedWeekStoreTests
         var store = pair.SealedStore;
 
         // A cutoff inside the week, past every row of the chunk: its rows cannot be proven inside without reading it.
+        // A prefix delete (#1805) is not refused for it: the chunks before it go, the watermark covers the cutoff, and
+        // the unreadable chunk stays, failing the sensor's reads that reach it as before.
         var refused = SealedHistoryDiagnostics.ChunkRewriteFailures;
         store.RemoveSensorValues(Min(sensors.Dense), Key(sensors.Dense, corrupt.LastTick + 1));
-        Assert.Equal(refused + 1, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Equal(refused, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Equal(1, store.PrefixDeletes);
+        Assert.Throws<SealedChunkReadException>(() => store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)).ToList());
 
         // A cutoff at the end of the week (retention of an older week passes a later one): every row of the week is before it.
         pair.Remove(Min(sensors.Dense), Key(sensors.Dense, WeekPair.WeekTo));
 
-        Assert.Equal(refused + 1, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Equal(refused, SealedHistoryDiagnostics.ChunkRewriteFailures);
         Assert.Empty(store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)));
         pair.AssertSameReads(sensors.All, new Random(19), probesPerSensor: 3);
     }
@@ -601,6 +605,395 @@ public sealed class SealedWeekStoreTests
 
         Assert.Contains(read, r => r.key.AsSpan().SequenceEqual(edited));
         Assert.Empty(store.GetValuesFrom(from, to));
+    }
+
+    #endregion
+
+    #region Prefix deletes and the delete watermark (#1805)
+
+    // A prefix of the dense sensor up to inside its second chunk: the first chunk goes, the second gets the watermark.
+    private static (byte[] from, byte[] to) Prefix(Guid dense, List<SealedChunk> chunks) => (Min(dense), Key(dense, chunks[1].FirstTick + 100 * TimeSpan.TicksPerSecond));
+
+    private static byte[] WatermarkKey(Guid sensor) => sensor.ToByteArray();
+
+    [Fact]
+    public void ReaderStartedBeforeAPrefixDelete_SeesTheWeekAsItWasBefore()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1851));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var (from, to) = Prefix(sensors.Dense, DenseChunks(pair, sensors.Dense));
+        var before = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToList();
+
+        // One reader oldest first, in the first chunk; one newest first, in the last chunk.
+        using var oldest = store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)).GetEnumerator();
+        using var newest = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).GetEnumerator();
+        var seenOldest = new List<byte[]>();
+        var seenNewest = new List<(byte[] key, byte[] value)>();
+
+        for (int i = 0; i < 10; i++)
+        {
+            Assert.True(oldest.MoveNext() && newest.MoveNext());
+            seenOldest.Add(oldest.Current);
+            seenNewest.Add(newest.Current);
+        }
+
+        pair.Remove(from, to);
+        Assert.Equal(1, store.PrefixDeletes);
+
+        while (oldest.MoveNext())
+            seenOldest.Add(oldest.Current);
+        while (newest.MoveNext())
+            seenNewest.Add(newest.Current);
+
+        Assert.Equal(before.Select(r => r.key), seenNewest.Select(r => r.key));
+        Assert.Equal(before.Select(r => r.value), seenNewest.Select(r => r.value));
+        Assert.Equal(before.Select(r => r.value).Reverse(), seenOldest);
+
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)),
+            store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)), "after the prefix delete");
+    }
+
+    [Fact]
+    public void ReaderBetweenTheWatermarkAndTheOverlayDelete_SeesOnlyRowsTheWeekHeldBefore()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1852));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var chunks = DenseChunks(pair, sensors.Dense);
+        var (from, to) = Prefix(sensors.Dense, chunks);
+
+        // In the range: a sealed row hidden by an overlay edit, and a late value only in the overlay.
+        var edited = Key(sensors.Dense, chunks[1].FirstTick + 10 * TimeSpan.TicksPerSecond);
+        var late = Key(sensors.Dense, chunks[0].FirstTick + 1);
+        pair.Put(edited, TestValues.Bytes(SensorType.Double, DbKey.FromBytes(edited).Timestamp, new Random(3)));
+        pair.Put(late, TestValues.Bytes(SensorType.Double, chunks[0].FirstTick + 1, new Random(4)));
+
+        var before = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToDictionary(r => Convert.ToHexString(r.key), r => r.value);
+        List<(byte[] key, byte[] value)> newestFirst = null;
+        List<byte[]> oldestFirst = null;
+
+        store.AfterChunkRewrite = () =>
+        {
+            newestFirst = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToList();
+            oldestFirst = store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)).ToList();
+        };
+
+        pair.Remove(from, to);
+        store.AfterChunkRewrite = null;
+
+        Assert.NotNull(newestFirst);
+        Assert.Equal(1, store.PrefixDeletes);
+
+        var keys = newestFirst.Select(r => Convert.ToHexString(r.key)).ToList();
+        Assert.Equal(keys.Count, keys.Distinct().Count());
+        Assert.Equal(newestFirst.Select(r => r.value).Reverse(), oldestFirst);
+        foreach (var (key, value) in newestFirst)
+            Assert.Equal(before[Convert.ToHexString(key)], value);
+
+        // Outside the range every row; inside only the overlay rows the delete has not reached yet.
+        bool InRange(string hex) => ByteOrder.Instance.Compare(Convert.FromHexString(hex), from) >= 0 && ByteOrder.Instance.Compare(Convert.FromHexString(hex), to) <= 0;
+        Assert.Equal(before.Keys.Where(k => !InRange(k)).OrderBy(k => k), keys.Where(k => !InRange(k)).OrderBy(k => k));
+        Assert.Equal(new[] { Convert.ToHexString(edited), Convert.ToHexString(late) }.OrderBy(k => k), keys.Where(InRange).OrderBy(k => k));
+
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)),
+            store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)), "after the prefix delete");
+    }
+
+    [Fact]
+    public void PrefixDeleteBetweenTheTwoIteratorsOfARead_NeverShowsARowTwice_OrOneTheWeekDidNotHold()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1853));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var chunks = DenseChunks(pair, sensors.Dense);
+        var (from, to) = Prefix(sensors.Dense, chunks);
+        var edited = store.GetKeysValuesTo(Key(sensors.Dense, chunks[1].FirstTick), to).Reverse().ElementAt(20).key;
+        store.PutSensorValue(edited, TestValues.Bytes(SensorType.Double, DbKey.FromBytes(edited).Timestamp, new Random(6)));
+
+        var before = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToDictionary(r => Convert.ToHexString(r.key), r => r.value);
+
+        store.BetweenReadIterators = () =>
+        {
+            store.BetweenReadIterators = null;
+            store.RemoveSensorValues(from, to);
+        };
+
+        var read = store.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToList();
+
+        Assert.Null(store.BetweenReadIterators);
+        Assert.Equal(1, store.PrefixDeletes);
+        Assert.Equal(read.Count, read.Select(r => Convert.ToHexString(r.key)).Distinct().Count());
+        foreach (var (key, value) in read)
+            Assert.Equal(before[Convert.ToHexString(key)], value);
+
+        Assert.Contains(read, r => r.key.AsSpan().SequenceEqual(edited)); // the overlay view predates the delete
+        Assert.Empty(store.GetValuesFrom(from, to));
+    }
+
+    // A crash between the chunk batch and the overlay delete (the seam's exception is swallowed by the delete, as any
+    // failure of it is): after a reopen every row read is one the week held before, every row the delete keeps is
+    // there, and repeating the delete (retention runs again) finishes it.
+    [Fact]
+    public void APrefixDeleteInterruptedAfterItsWatermark_ReadsCorrect_AndIsFinishedByTheNextDelete()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1854));
+
+        using var pair = WeekPair.Create(seed);
+
+        var (from, to) = Prefix(sensors.Dense, DenseChunks(pair, sensors.Dense));
+        var before = pair.Sealed.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToDictionary(r => Convert.ToHexString(r.key), r => r.value);
+
+        pair.SealedStore.AfterChunkRewrite = () => throw new IOException("simulated crash after the watermark");
+        pair.Remove(from, to);
+        pair.Reopen();
+
+        var after = pair.Plain.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).Select(r => Convert.ToHexString(r.key)).ToHashSet();
+        var read = pair.Sealed.GetKeysValuesTo(Min(sensors.Dense), Max(sensors.Dense)).ToList();
+
+        foreach (var (key, value) in read)
+            Assert.Equal(before[Convert.ToHexString(key)], value);
+        Assert.Superset(after, read.Select(r => Convert.ToHexString(r.key)).ToHashSet());
+
+        pair.Remove(from, to);
+        pair.AssertSameReads(sensors.All, new Random(1854), probesPerSensor: 4);
+    }
+
+    [Theory]
+    [InlineData("checksum")]
+    [InlineData("version")]
+    [InlineData("length")]
+    public void AnUnreadableWatermark_FailsOnlyItsSensor_IsCounted_AndSensorRemovalClearsIt(string damage)
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1855));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var chunks = DenseChunks(pair, sensors.Dense);
+        var (from, to) = Prefix(sensors.Dense, chunks);
+        pair.Remove(from, to);
+
+        var key = WatermarkKey(sensors.Dense);
+        var value = store.ChunkDatabase.Native.Get(key);
+        Assert.Equal(SensorWatermark.ValueLength, value.Length);
+
+        switch (damage)
+        {
+            case "checksum": value[3] ^= 0x01; break;
+            case "version": value[0] = 2; break;
+            default: value = value[..^1]; break;
+        }
+
+        store.ChunkDatabase.Put(key, value);
+
+        // The sensor's reads that need its chunk rows fail and are counted; they never return rows below the watermark.
+        var failures = SealedHistoryDiagnostics.ChunkReadFailures;
+        Assert.Throws<SealedChunkReadException>(() => store.GetValuesFrom(Min(sensors.Dense), Max(sensors.Dense)).ToList());
+        Assert.Throws<SealedChunkReadException>(() => store.GetFirst(Min(sensors.Dense), sensors.Dense.ToByteArray()));
+        Assert.True(SealedHistoryDiagnostics.ChunkReadFailures > failures);
+
+        // Every other sensor reads as before, also the reads that pass by the dense sensor's chunks.
+        var others = sensors.All.Where(s => s != sensors.Dense).ToList();
+        var random = new Random(1855);
+        foreach (var sensor in others)
+        {
+            var prefix = sensor.ToByteArray();
+
+            pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(sensor), Max(sensor)), store.GetKeysValuesTo(Min(sensor), Max(sensor)), $"newest first {sensor}");
+            pair.Compare.Values(pair.Plain.GetValuesFrom(Min(sensor), Max(sensor)), store.GetValuesFrom(Min(sensor), Max(sensor)), $"oldest first {sensor}");
+            pair.Compare.Value(pair.Plain.GetLatest(Max(sensor), prefix), store.GetLatest(Max(sensor), prefix), $"latest {sensor}");
+            pair.Compare.Value(pair.Plain.GetFirst(Min(sensor), prefix), store.GetFirst(Min(sensor), prefix), $"first {sensor}");
+        }
+
+        // A delete that would have to raise it is refused, and changes nothing.
+        var refused = SealedHistoryDiagnostics.ChunkRewriteFailures;
+        store.RemoveSensorValues(to, Key(sensors.Dense, chunks[1].FirstTick + 200 * TimeSpan.TicksPerSecond));
+        Assert.Equal(refused + 1, SealedHistoryDiagnostics.ChunkRewriteFailures);
+        Assert.Equal(value, store.ChunkDatabase.Native.Get(key));
+
+        // Sensor removal deletes every chunk of the sensor, and the watermark with them.
+        pair.Remove(Min(sensors.Dense), Max(sensors.Dense));
+        Assert.Null(store.ChunkDatabase.Native.Get(key));
+        pair.AssertSameReads(sensors.All, random, probesPerSensor: 4);
+    }
+
+    // Review W1: a read of sensor S lands on the rows of the next sensor T and learns from their prefix that they are not
+    // S's. It must not decide which of T's rows comes first (T's overlay row or its chunk row), which reads T's delete
+    // watermark and decodes T's partly deleted chunk: on healthy data that is a decode per latest-value read, on damaged
+    // data a failure of S's reads. The overlay is not empty (the keep period), as on a server: T has overlay rows and a
+    // chunk under a watermark, the normal state of a week retention is trimming.
+    [Theory]
+    [InlineData("healthy")]
+    [InlineData("watermark")]
+    [InlineData("chunk")]
+    public void ReadsOfASensor_NeverReadTheNextSensorsWatermarkOrChunk(string damage)
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1861));
+
+        using var pair = WeekPair.Create(seed, keepSourceRows: true);
+
+        var store = pair.SealedStore;
+        var byKey = sensors.All.OrderBy(id => id.ToByteArray(), ByteOrder.Instance).ToList();
+        var withRows = byKey.Where(id => pair.Plain.GetValuesFrom(Min(id), Max(id)).Any()).ToList();
+
+        // T: a sealed sensor with another sensor with rows before it; S: that sensor.
+        var t = withRows.Skip(1).First(id => pair.Seal.Chunks.Any(c => c.SensorId == id));
+        var s = withRows[withRows.IndexOf(t) - 1];
+        var tChunk = pair.Seal.Chunks.Where(c => c.SensorId == t).OrderBy(c => c.FirstTick).First();
+        var tTicks = pair.Plain.GetValuesFrom(Min(t), Key(t, tChunk.LastTick)).Count();
+
+        // A prefix of T into its first chunk: the chunk straddles the cutoff, T's overlay keeps the rows after it.
+        var cutoff = pair.Plain.GetKeysValuesTo(Min(t), Key(t, tChunk.LastTick)).Reverse().ElementAt(tTicks / 3).key;
+        pair.Remove(Min(t), cutoff);
+        Assert.Equal(DbKey.FromBytes(cutoff).Timestamp, store.ChunkReader.ReadWatermark(store.ChunkDatabase.Native, null, t.ToByteArray()));
+        Assert.NotEmpty(((IntervalDataseBase)store).RowDatabase.GetValueKeyPairFromTo(Min(t), Max(t)));
+
+        if (damage == "watermark")
+        {
+            var value = store.ChunkDatabase.Native.Get(WatermarkKey(t));
+            value[5] ^= 0x10;
+            store.ChunkDatabase.Native.Put(WatermarkKey(t), value);
+        }
+        else if (damage == "chunk")
+        {
+            var key = Key(t, tChunk.FirstTick);
+            var chunk = store.ChunkDatabase.Native.Get(key);
+            chunk[^1] ^= 0xFF;
+            store.ChunkDatabase.Native.Put(key, chunk);
+        }
+
+        var touchedT = new List<string>();
+        var tPrefix = t.ToByteArray();
+        store.ChunkReader.OnDecode = key => { if (key.AsSpan(0, 16).SequenceEqual(tPrefix)) touchedT.Add("decode"); };
+        store.ChunkReader.OnWatermarkRead = key => { if (key.AsSpan().SequenceEqual(tPrefix)) touchedT.Add("watermark"); };
+        var failures = store.ChunkReadFailures;
+
+        var sPrefix = s.ToByteArray();
+        var sTicks = pair.Plain.GetKeysValuesTo(Min(s), Max(s)).Select(kv => DbKey.FromBytes(kv.key).Timestamp).Reverse().ToList();
+        var probes = new List<byte[]> { Min(s), Max(s), Key(s, WeekPair.WeekTo), Key(s, sTicks[0] + 1), Key(s, sTicks[^1] + 1), Key(s, sTicks[sTicks.Count / 2]) };
+
+        foreach (var probe in probes)
+        {
+            var at = DbKey.FromBytes(probe).ToString();
+            pair.Compare.Value(pair.Plain.GetLatest(probe, sPrefix), store.GetLatest(probe, sPrefix), $"GetLatest {at}");
+            pair.Compare.Value(pair.Plain.GetFirst(probe, sPrefix), store.GetFirst(probe, sPrefix), $"GetFirst {at}");
+            pair.Compare.Value(pair.Plain.Get(probe, sPrefix), store.Get(probe, sPrefix), $"Get {at}");
+        }
+
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(s), Max(s)), store.GetKeysValuesTo(Min(s), Max(s)), "newest first");
+        pair.Compare.Values(pair.Plain.GetValuesFrom(Min(s), Max(s)), store.GetValuesFrom(Min(s), Max(s)), "oldest first");
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(s), Key(s, WeekPair.WeekTo)).Take(5), store.GetKeysValuesTo(Min(s), Key(s, WeekPair.WeekTo)).Take(5), "a page newest first");
+
+        var plainLastFirst = pair.Plain.GetLastAndFirstValues([s]);
+        var sealedLastFirst = store.GetLastAndFirstValues([s]);
+        pair.Compare.Value(plainLastFirst[s].Item1, sealedLastFirst[s].Item1, "GetLastAndFirstValues first");
+        pair.Compare.Value(plainLastFirst[s].Item2, sealedLastFirst[s].Item2, "GetLastAndFirstValues last");
+
+        foreach (var toTick in new[] { DateTime.MaxValue.Ticks, WeekPair.WeekTo, sTicks[^1] })
+        {
+            Dictionary<byte[], (long, byte[], byte[])> Request() => new() { [new DbKey(s, 0).ToPrefixBytes()] = (0L, Key(s, toTick), null) };
+            var plainFill = Request();
+            var sealedFill = Request();
+            pair.Plain.FillLatestValues(plainFill);
+            store.FillLatestValues(sealedFill);
+            pair.Compare.Value(plainFill.Single().Value.Item3, sealedFill.Single().Value.Item3, $"FillLatestValues to {toTick}");
+        }
+
+        Assert.Equal(failures, store.ChunkReadFailures);
+        Assert.Empty(touchedT);
+    }
+
+    // Review W3: the history size with an unreadable chunk falls back to a lower bound, which must not count the rows
+    // below a watermark: neither the deleted rows of a readable partly deleted chunk, nor anything of an unreadable one.
+    [Theory]
+    [InlineData("the last chunk")]
+    [InlineData("the partly deleted chunk")]
+    public void TheHistorySizeWithAnUnreadableChunk_CountsNoRowBelowTheWatermark(string corrupt)
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1863));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var chunks = DenseChunks(pair, sensors.Dense);
+        var (from, to) = Prefix(sensors.Dense, chunks);
+        pair.Remove(from, to);
+
+        var damaged = corrupt == "the last chunk" ? chunks[2] : chunks[1];
+        var key = Key(sensors.Dense, damaged.FirstTick);
+        var chunk = store.ChunkDatabase.Native.Get(key);
+        chunk[^1] ^= 0xFF;
+        store.ChunkDatabase.Native.Put(key, chunk);
+
+        // What a lower bound may count: the rows of the readable chunk, live part only (the overlay is empty).
+        var readable = corrupt == "the last chunk" ? chunks[1] : chunks[2];
+        var expected = pair.Plain.CalculateHistorySize(Key(sensors.Dense, readable.FirstTick), Key(sensors.Dense, readable.LastTick)).count;
+
+        Assert.Equal(expected, store.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense)).count);
+        Assert.True(expected < pair.Plain.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense)).count);
+    }
+
+    // Crash images, as in the sealing job's tests (Linux only: on Windows an open LevelDB cannot be copied): the week's
+    // directories copied file by file right after the watermark batch, then opened as a week of their own.
+    [NotOnWindowsFact]
+    public void ACrashImageAfterThePrefixDeleteBatch_OpensCorrect_AndTheNextDeleteFinishesIt()
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1856));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var (from, to) = Prefix(sensors.Dense, DenseChunks(pair, sensors.Dense));
+        var before = store.GetAll().ToDictionary(r => Convert.ToHexString(r.key), r => r.value);
+        var image = Path.Combine(Path.GetDirectoryName(pair.SealedRowPath), "..", "image");
+        var imageRows = Path.Combine(image, Path.GetFileName(pair.SealedRowPath));
+        var imageChunks = Path.Combine(image, Path.GetFileName(pair.SealedChunkPath));
+
+        store.AfterChunkRewrite = () =>
+        {
+            CopyDirectory(pair.SealedRowPath, imageRows);
+            CopyDirectory(pair.SealedChunkPath, imageChunks);
+        };
+
+        pair.Remove(from, to);
+
+        var after = pair.Plain.GetAll().Select(r => Convert.ToHexString(r.key)).ToHashSet();
+
+        using var copy = LevelDBManager.GetSensorValuesDatabaseInstance(imageRows, imageChunks, WeekPair.WeekFrom, WeekPair.WeekTo);
+        Assert.IsType<SealedSensorValuesDatabase>(copy);
+
+        var read = copy.GetAll().ToList();
+        foreach (var (key, value) in read)
+            Assert.Equal(before[Convert.ToHexString(key)], value);
+        Assert.Superset(after, read.Select(r => Convert.ToHexString(r.key)).ToHashSet());
+
+        copy.RemoveSensorValues(from, to);
+        pair.Compare.Pairs(pair.Plain.GetAll(), copy.GetAll(), "the crash image after the repeated delete");
+    }
+
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+
+        foreach (var file in Directory.GetFiles(from))
+            if (Path.GetFileName(file) != "LOCK")
+                File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
+    }
+
+    private sealed class NotOnWindowsFactAttribute : FactAttribute
+    {
+        public NotOnWindowsFactAttribute()
+        {
+            if (OperatingSystem.IsWindows())
+                Skip = "LevelDB on Windows opens its log and MANIFEST without read sharing (ERROR_SHARING_VIOLATION): an open database cannot be copied";
+        }
     }
 
     #endregion

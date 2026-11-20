@@ -129,13 +129,28 @@ namespace HSMDatabase.LevelDB.Sealed
         }
 
         /// <summary>
-        /// Closes the chunk database and writes the marker that makes the directory a complete sealed week:
-        /// a temporary file, flushed to disk, then renamed over nothing.
+        /// Compacts the chunk database (#1805): the write-ahead log the chunk batches went through is flushed into a
+        /// table file and the tables are merged, so the directory is about the size of its chunks. A sealed week's chunk
+        /// directory is then read-only for a long time, and the background compaction does not visit it before its
+        /// source rows are removed (the week's row database keeps its compaction marker: a seal changes no row). Changes
+        /// no chunk: a seal stopped during or after it is restarted from scratch like any interrupted seal.
+        /// </summary>
+        public void Compact()
+        {
+            ObjectDisposedException.ThrowIf(_database is null, this);
+
+            _database.Compact();
+        }
+
+        /// <summary>
+        /// Compacts and closes the chunk database and writes the marker that makes the directory a complete sealed
+        /// week: a temporary file, flushed to disk, then renamed over nothing.
         /// </summary>
         public void Complete(string description)
         {
             ObjectDisposedException.ThrowIf(_database is null, this);
 
+            Compact();
             CloseDatabase();
             WriteMarker(description);
         }

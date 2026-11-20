@@ -69,6 +69,15 @@ internal static class JobBench
 
         Report.Line($"after sealing (source rows kept): {Mb(core.SensorHistoryDbSize)}");
 
+        // Each chunk directory right after its seal (#1805): its files on disk, and how much of that is write-ahead log.
+        foreach (var db in core.SensorValuesDatabases)
+        {
+            var files = new DirectoryInfo(((IDatabaseSettings)settings).GetPathToSealedSensorValueDatabase(db.From, db.To)).GetFiles();
+            var log = files.Where(f => f.Name.EndsWith(".log", StringComparison.Ordinal) && f.Name[..^4].All(char.IsAsciiDigit)).Sum(f => f.Length);
+
+            Report.Line($"  {Path.GetFileName(db.Name)}: chunk directory {files.Sum(f => f.Length):N0} B, of which write-ahead log {log:N0} B");
+        }
+
         now += Settings.KeepSourceRows;
 
         foreach (var _ in weeks)

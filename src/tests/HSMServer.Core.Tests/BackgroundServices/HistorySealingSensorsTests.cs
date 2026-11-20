@@ -144,6 +144,36 @@ public sealed class HistorySealingSensorsTests
         database.VerifyNoOtherCalls();
     }
 
+    // #1805: an operator who has just switched the job on sees when its first pass runs; a skipped pass names the reason
+    // at Info, a pass with nothing to do is only a Debug line (it comes every 7 minutes).
+    [Fact]
+    public void TheServiceLog_SaysWhenTheFirstPassRuns_AndWhyAPassWasSkipped()
+    {
+        var config = new Mock<IServerConfig>();
+        config.SetupGet(c => c.HistorySealing).Returns(new HistorySealingConfig { Enabled = true });
+        var service = new HistorySealingService(new Mock<IDatabaseCore>().Object, config.Object);
+
+        // 15 minutes after the start, rounded up to the 7-minute grid.
+        var start = new DateTime(2026, 11, 20, 10, 0, 0, DateTimeKind.Utc);
+        var first = service.FirstRunUtc(start);
+        Assert.InRange(first - start, TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(22));
+        Assert.Equal(0, first.Ticks % TimeSpan.FromMinutes(7).Ticks);
+
+        var settings = new HistorySealingConfig { Enabled = true, KeepSourceRowsWeeks = 1 }.Settings;
+        Assert.Equal("History sealing is on: weeks are sealed 7 days after they close, source rows kept 7 days; first pass at 2026-11-20 10:21 UTC, then every 7 minutes",
+                     HistorySealingService.StartLine(settings, new DateTime(2026, 11, 20, 10, 21, 0, DateTimeKind.Utc), TimeSpan.FromMinutes(7)));
+        Assert.Contains(", working 22:00-05:00 UTC;", HistorySealingService.StartLine(
+            new HistorySealingConfig { Enabled = true, WorkingHoursStartUtc = "22:00", WorkingHoursEndUtc = "05:00" }.Settings, first, TimeSpan.FromMinutes(7)));
+
+        var next = new DateTime(2026, 11, 20, 2, 7, 0, DateTimeKind.Utc);
+        var busy = HistorySealingService.PassLine(new HistorySealingPassReport { Outcome = HistorySealingOutcome.Busy, Note = "the history shard compaction step was running (SensorValuesV2_1_2)" }, next);
+        Assert.Equal((NLog.LogLevel.Info, "History sealing pass skipped: the history shard compaction step was running (SensorValuesV2_1_2); next pass at 02:07 UTC"), busy);
+
+        Assert.Equal(NLog.LogLevel.Debug, HistorySealingService.PassLine(new HistorySealingPassReport { Outcome = HistorySealingOutcome.NothingDue }, next)?.level);
+        Assert.Equal(NLog.LogLevel.Debug, HistorySealingService.PassLine(new HistorySealingPassReport { Outcome = HistorySealingOutcome.OutsideWorkingHours }, next)?.level);
+        Assert.Null(HistorySealingService.PassLine(new HistorySealingPassReport { Action = HistorySealingAction.Seal, Outcome = HistorySealingOutcome.Done }, next)); // logged by the database core
+    }
+
     [Fact]
     public void Configuration_DefaultsAreOff_AndInvalidValuesAreRefusedAtStartup()
     {

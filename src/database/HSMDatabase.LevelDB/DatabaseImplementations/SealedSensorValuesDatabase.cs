@@ -15,14 +15,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     /// database <c>SensorValuesSealedV1_&lt;from&gt;_&lt;to&gt;</c>. Every read sees one stream in key order
     /// merged from both, where an overlay row hides a chunk row with the same key; the read methods run the
     /// algorithms of <see cref="LevelDBDatabaseAdapter"/> over that stream, so they answer exactly what a row
-    /// database holding the same rows would. Writes go to the overlay. A range delete rewrites the chunks it
-    /// touches in one synced batch and then deletes the overlay rows.
+    /// database holding the same rows would. Writes go to the overlay. A range delete changes the chunks in one
+    /// synced batch and then deletes the overlay rows: a prefix of one sensor (retention, clear history, sensor
+    /// removal) deletes the chunks below its cutoff and raises the sensor's delete watermark (<see cref="SensorWatermark"/>,
+    /// #1805), any other range rewrites the chunks it touches.
     ///
     /// Consistency without a read lock: a read opens the overlay iterator first and the chunk iterator second
     /// (each reads the snapshot taken when it is created), and a range delete changes the chunks first and the
     /// overlay second. A read therefore sees either the old chunks with the old overlay, or the new chunks with
     /// an overlay the delete has partly or fully gone through: every row it returns is the row the week held
     /// before the delete, or the delete has removed it. It never sees a chunk row an overlay row used to hide.
+    /// The watermarks are read from the same snapshot as the chunks, so a prefix delete is seen whole or not at all.
     /// </summary>
     internal sealed class SealedSensorValuesDatabase : IntervalDataseBase, ISensorValuesDatabase
     {
@@ -439,12 +442,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             var hidden = overlay.Select(Convert.ToHexString).ToHashSet();
             long count = overlay.Count;
 
-            using var chunks = _chunks.Native.CreateIterator(_readOptions);
+            // The chunks and the watermarks from one snapshot (#1805 review W3): a prefix delete or a fold in between
+            // would otherwise pair chunk rows with a watermark that no longer applies to them.
+            using var snapshot = _chunks.Native.CreateSnapshot();
+            using var options = new ReadOptions { Snapshot = snapshot };
+            using var chunks = _chunks.Native.CreateIterator(options);
 
             foreach (var (key, chunk, header) in ChunkEntries(chunks, from, to))
             {
                 if (header is not { } read)
                     continue;
+
+                // Rows at or below the sensor's watermark do not count; a sensor whose watermark cannot be read counts
+                // none of its chunk rows.
+                long? watermark;
+
+                try
+                {
+                    watermark = _reader.ReadWatermark(_chunks.Native, options, key);
+                }
+                catch (SealedChunkReadException)
+                {
+                    continue;
+                }
 
                 try
                 {
@@ -452,7 +472,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     {
                         var rowKey = KeyOrder.RowKey(key, row.Key);
 
-                        if (InRange(rowKey, from, to) && !hidden.Contains(Convert.ToHexString(rowKey)))
+                        if (InRange(rowKey, from, to) && !hidden.Contains(Convert.ToHexString(rowKey)) && (watermark is not { } w || row.Key > w))
                             count++;
                     }
                 }
@@ -460,7 +480,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 {
                     var lastRow = KeyOrder.RowKey(key, read.LastKey);
 
-                    if (KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(lastRow, to) <= 0)
+                    // The header's row count includes the rows below the watermark of a chunk that reaches below it.
+                    if (KeyOrder.Compare(key, from) >= 0 && KeyOrder.Compare(lastRow, to) <= 0 && (watermark is not { } w || KeyOrder.Tick(key) > w))
                         count += Math.Max(0, read.RowCount - overlay.Count(k => KeyOrder.Compare(k, key) >= 0 && KeyOrder.Compare(k, lastRow) <= 0));
                 }
             }
@@ -486,6 +507,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             for (; iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
+
+                // A delete watermark (#1805) is not a chunk; its few bytes are not counted.
+                if (SensorWatermark.IsKey(key))
+                    continue;
 
                 if (KeyOrder.Compare(key, to) > 0)
                     yield break;
@@ -542,26 +567,35 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             var overlay = _openedDb.Native.CreateIterator(_readOptions);
             Iterator chunks = null;
 
+            SnapShot snapshot = null;
+            ReadOptions options = null;
+
             try
             {
                 BetweenReadIterators?.Invoke();
 
-                chunks = _chunks.Native.CreateIterator(_readOptions);
+                // One explicit snapshot for the chunk iterator and the watermark lookups of the cursor (#1805).
+                snapshot = _chunks.Native.CreateSnapshot();
+                options = new ReadOptions { Snapshot = snapshot };
+                chunks = _chunks.Native.CreateIterator(options);
 
-                return new MergedRowCursor(new NativeRowCursor(overlay), new ChunkRowCursor(chunks, _reader, _formatter));
+                return new MergedRowCursor(new NativeRowCursor(overlay), new ChunkRowCursor(chunks, _chunks.Native, options, snapshot, _reader, _formatter));
             }
             catch
             {
                 chunks?.Dispose();
+                options?.Dispose();
+                snapshot?.Dispose();
                 overlay.Dispose();
                 throw;
             }
         }
 
         /// <summary>
-        /// Removes the chunk rows in [from, to]: chunks wholly inside are deleted, a chunk on a border is
-        /// re-encoded with the rows outside the range and stored under the key of its new first row. Everything
-        /// is one synced write batch, so a crash leaves either every chunk as it was or every chunk rewritten.
+        /// Removes the chunk rows in [from, to]. A prefix of one sensor is marked (<see cref="TryPrefixDelete"/>, #1805).
+        /// Otherwise chunks wholly inside are deleted, a chunk on a border is re-encoded with the rows outside the range
+        /// (and above its sensor's watermark) and stored under the key of its new first row. Everything is one synced
+        /// write batch, so a crash leaves either every chunk as it was or every chunk rewritten.
         /// False, with the failure logged and counted, when a chunk on the border cannot be rewritten.
         /// </summary>
         private bool RewriteChunks(byte[] from, byte[] to)
@@ -571,8 +605,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             lock (_chunkWriteLock)
             {
+                // A prefix of one sensor (retention, clear history, sensor removal): marked, nothing re-encoded.
+                if (TryPrefixDelete(from, to) is { } done)
+                {
+                    if (done)
+                        AfterChunkRewrite?.Invoke();
+
+                    return done;
+                }
+
                 var deletes = new List<byte[]>();
                 var puts = new List<(byte[] key, byte[] chunk)>();
+                byte[] unreadableWatermarkOf = null;
 
                 try
                 {
@@ -597,7 +641,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                         }
 
                         var rows = _reader.Decode(key, chunk);
-                        var kept = rows.FindAll(row => !InRange(KeyOrder.RowKey(key, row.Key), from, to));
+
+                        // Rows at or below the sensor's watermark are already deleted: a rewrite drops them for good,
+                        // so no chunk ever lies wholly below the watermark. An unreadable watermark refuses the delete.
+                        long? watermark;
+
+                        try
+                        {
+                            watermark = _reader.ReadWatermark(_chunks.Native, null, key);
+                        }
+                        catch (SealedChunkReadException)
+                        {
+                            unreadableWatermarkOf = key;
+                            break;
+                        }
+
+                        var kept = rows.FindAll(row => !InRange(KeyOrder.RowKey(key, row.Key), from, to) && (watermark is not { } w || row.Key > w));
 
                         if (kept.Count == rows.Count)
                             continue;
@@ -615,6 +674,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     return false;
                 }
 
+                if (unreadableWatermarkOf is not null)
+                {
+                    RefuseForUnreadableWatermark(unreadableWatermarkOf, from, to);
+                    return false;
+                }
+
                 if (deletes.Count > 0)
                 {
                     OnBeforeChange();
@@ -625,7 +690,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     foreach (var key in deletes)
                         batch.Delete(key);
                     foreach (var (key, chunk) in puts)
+                    {
                         batch.Put(key, chunk);
+                        CountChunkWrite(key, chunk);
+                    }
 
                     _chunks.Native.Write(batch, _syncWrite);
                 }
@@ -634,6 +702,213 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             AfterChunkRewrite?.Invoke();
 
             return true;
+        }
+
+        /// <summary>
+        /// A delete of a prefix of one sensor's history in this week (#1805): <paramref name="from"/> and
+        /// <paramref name="to"/> are keys of the same sensor and no live chunk row of it lies below <paramref name="from"/>.
+        /// That is what retention, clear history and sensor removal send (<c>DatabaseCore.ClearSensorValues</c> with the
+        /// sensor's <c>From</c>, which is the previous cutoff or the oldest row, or <c>DateTime.MinValue</c>). Nothing is
+        /// decoded or re-encoded: in one synced batch the chunks that lie wholly at or below <paramref name="to"/> are
+        /// deleted and, if a chunk still straddles <paramref name="to"/>, the sensor's watermark is raised to it (never
+        /// lowered); a watermark no chunk reaches below any more is deleted. Null when the range is not such a prefix
+        /// (the caller rewrites); false when refused (an unreadable watermark under a straddling chunk), logged and counted.
+        /// Runs under the chunk write lock.
+        /// </summary>
+        private bool? TryPrefixDelete(byte[] from, byte[] to)
+        {
+            if (from.Length != KeyOrder.KeyLength || to.Length != KeyOrder.KeyLength ||
+                !from.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(to.AsSpan(0, KeyOrder.SensorIdLength)))
+                return null;
+
+            var db = _chunks.Native;
+            var watermarkKey = SensorWatermark.Key(from);
+            var toTick = KeyOrder.Tick(to);
+
+            long? watermark;
+            var unreadableWatermark = false;
+
+            try
+            {
+                watermark = _reader.ReadWatermark(db, null, from);
+            }
+            catch (SealedChunkReadException)
+            {
+                watermark = null;
+                unreadableWatermark = true;
+            }
+
+            // The sensor's chunk keys, in order (the keys alone: no chunk is read here).
+            var chunks = new List<byte[]>();
+
+            using (var iterator = db.CreateIterator(_readOptions))
+            {
+                for (iterator.Seek(KeyOrder.RowKey(from, 0)); iterator.IsValid; iterator.Next())
+                {
+                    var key = iterator.Key();
+
+                    if (key.Length != KeyOrder.KeyLength || !key.AsSpan(0, KeyOrder.SensorIdLength).SequenceEqual(watermarkKey))
+                        break;
+
+                    chunks.Add(key);
+
+                    // One chunk past `to` is enough: it bounds the rows of the last chunk at or below `to`.
+                    if (KeyOrder.Compare(key, to) > 0)
+                        break;
+                }
+            }
+
+            // No live chunk row below `from`: the first chunk starts at or after it, or it reaches below the watermark
+            // and `from` is at most one tick above the watermark (its live rows all are). With an unreadable watermark
+            // only the first rule can tell.
+            if (chunks.Count > 0)
+            {
+                var first = chunks[0];
+                var firstLiveAtOrAfterFrom = watermark is { } w && KeyOrder.Tick(first) <= w
+                    ? KeyOrder.Tick(from) <= w + 1
+                    : KeyOrder.Compare(first, from) >= 0;
+
+                if (!firstLiveAtOrAfterFrom)
+                    return null;
+            }
+
+            PrefixDeletes++;
+
+            var deletes = new List<byte[]>();
+            var straddler = false;
+
+            for (int i = 0; i < chunks.Count && KeyOrder.Compare(chunks[i], to) <= 0; i++)
+            {
+                var key = chunks[i];
+                var next = i + 1 < chunks.Count ? chunks[i + 1] : null;
+
+                // The rows of a chunk lie below the next chunk's key, and in this week (see ProvablyInside).
+                if (next is not null && KeyOrder.Compare(next, to) <= 0 || To > 0 && To - 1 <= toTick)
+                {
+                    deletes.Add(key);
+                    continue;
+                }
+
+                // The last chunk at or below `to`: its verified header says whether its last row is too.
+                ChunkHeader? header = null;
+
+                try
+                {
+                    header = _reader.ReadHeader(key, db.Get(key, _readOptions));
+                }
+                catch (SealedChunkReadException)
+                {
+                    // Unreadable: kept, and the watermark covers whatever of it the delete reaches.
+                }
+
+                if (header is { } read && read.LastKey <= toTick)
+                    deletes.Add(key);
+                else
+                    straddler = true;
+            }
+
+            // The list ends with the first chunk past `to` if there is one, so an empty rest means no chunk is left.
+            var remaining = chunks.Where(key => !deletes.Contains(key)).ToList();
+            byte[] newWatermark = null;
+            var deleteWatermark = false;
+
+            if (unreadableWatermark)
+            {
+                // No chunk of the sensor left to hide rows of: the unreadable watermark goes with them. Otherwise it
+                // stays (it may hide rows of the remaining chunks), and a chunk straddling the cutoff refuses the delete.
+                if (remaining.Count == 0)
+                    deleteWatermark = true;
+                else if (straddler)
+                {
+                    RefuseForUnreadableWatermark(from, from, to);
+                    return false;
+                }
+            }
+            else if (straddler)
+            {
+                var raised = Math.Max(watermark ?? toTick, toTick);
+
+                if (raised != watermark)
+                    newWatermark = SensorWatermark.Encode(watermarkKey, raised);
+            }
+            else if (watermark is { } current && !remaining.Any(key => KeyOrder.Tick(key) <= current))
+            {
+                deleteWatermark = true; // no chunk reaches below it any more
+            }
+
+            if (deletes.Count == 0 && newWatermark is null && !deleteWatermark)
+                return true;
+
+            OnBeforeChange();
+
+            using var batch = new WriteBatch();
+
+            foreach (var key in deletes)
+                batch.Delete(key);
+
+            if (newWatermark is not null)
+            {
+                batch.Put(watermarkKey, newWatermark);
+                CountChunkWrite(watermarkKey, newWatermark);
+            }
+            else if (deleteWatermark)
+                batch.Delete(watermarkKey);
+
+            db.Write(batch, _syncWrite);
+
+            return true;
+        }
+
+        // The sensors whose deletes were refused for an unreadable watermark, for the log (once each) and the attention line.
+        private readonly SortedSet<Guid> _refusedSensors = [];
+        private volatile string _deleteRefusal;
+
+        /// <summary>
+        /// Set once a delete of this week was refused because a sensor's delete watermark cannot be read (#1805 review W2):
+        /// what an operator has to do, for the sealing job's "weeks needing attention". Null otherwise.
+        /// </summary>
+        internal string DeleteRefusal => _deleteRefusal;
+
+        // Refusing is the safe default: which rows of the sensor's partly deleted chunk are live is unknown. Every refusal
+        // is counted; the error is logged once per sensor and opened week, later ones at Debug. The exit is an unseal,
+        // which restores every row of the sensor's chunks (WeekSealingJob.CopyChunkRowsToOverlay).
+        private void RefuseForUnreadableWatermark(byte[] sensorKey, byte[] from, byte[] to)
+        {
+            SealedHistoryDiagnostics.CountChunkRewriteFailure();
+
+            var sensor = new Guid(sensorKey.AsSpan(0, KeyOrder.SensorIdLength));
+            bool first;
+            string sensors;
+
+            lock (_refusedSensors)
+            {
+                first = _refusedSensors.Add(sensor);
+                sensors = string.Join(", ", _refusedSensors);
+            }
+
+            var message = $"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} refused: the delete watermark of sensor {sensor} cannot be read, so which of its chunk rows are deleted is unknown; nothing was deleted";
+
+            if (first)
+                _logger.Error(message + " (logged once per sensor; every refusal is counted in the chunk rewrite failures)");
+            else
+                _logger.Debug(message);
+
+            _deleteRefusal = $"the delete watermark of sensor(s) {sensors} cannot be read: retention and clear history of those sensors in this week are refused and their rows stay. " +
+                             "Unseal this week: the unseal restores every row of their chunks (also rows the lost watermark hid), and the deletes then go through.";
+        }
+
+        /// <summary>Prefix deletes taken by the watermark path since the week was opened (tests).</summary>
+        internal long PrefixDeletes { get; private set; }
+
+        /// <summary>Puts into the chunk database by range deletes since the week was opened, and their bytes (tests).</summary>
+        internal long ChunkPuts { get; private set; }
+
+        internal long ChunkBytesWritten { get; private set; }
+
+        private void CountChunkWrite(byte[] key, byte[] value)
+        {
+            ChunkPuts++;
+            ChunkBytesWritten += key.Length + value.Length;
         }
 
         private List<(byte[] key, byte[] chunk)> Reencode(byte[] oldKey, List<HistoryRow> kept)
@@ -690,6 +965,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             for (; iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
+
+                if (SensorWatermark.IsKey(key))
+                    continue;
 
                 if (KeyOrder.Compare(key, to) > 0)
                     yield break;

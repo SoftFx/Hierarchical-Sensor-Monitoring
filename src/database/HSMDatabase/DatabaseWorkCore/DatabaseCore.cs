@@ -55,6 +55,9 @@ namespace HSMDatabase.DatabaseWorkCore
         private int _disposeStarted;
         private volatile string _compactingDatabase;
 
+        // What holds the compaction state (set when it is taken): a pass refused as Busy names it (#1805).
+        private volatile string _compactOwner;
+
         // Shards whose background compaction failed, and when they may be tried again.
         // Touched only while the compaction state is Busy.
         private readonly Dictionary<string, DateTime> _compactionRetryAfter = [];
@@ -1048,7 +1051,7 @@ namespace HSMDatabase.DatabaseWorkCore
         #endregion
         public void Compact()
         {
-            if (!TryEnterCompact())
+            if (!TryEnterCompact("the manual database compaction"))
             {
                 if (IsDisposeStarted)
                     _logger.Info("CompactDB refused: the database is shutting down");
@@ -1169,7 +1172,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private static string CompactedMarkerContent(long sizeBefore, long sizeAfter) =>
             $"Compacted at {DateTime.UtcNow:O}: {sizeBefore} -> {sizeAfter} bytes{Environment.NewLine}";
 
-        private bool TryEnterCompact()
+        private bool TryEnterCompact(string owner)
         {
             if (IsDisposeStarted || Interlocked.CompareExchange(ref _compactState, CompactBusy, CompactIdle) != CompactIdle)
                 return false;
@@ -1182,11 +1185,27 @@ namespace HSMDatabase.DatabaseWorkCore
                 return false;
             }
 
+            _compactOwner = owner;
+
             return true;
+        }
+
+        // Why the compaction state was busy, for a pass refused because of it: what holds it and, when known, the
+        // database it works on. Read without a lock: the holder may finish meanwhile, and the text is only for the log.
+        private string BusyReason()
+        {
+            var owner = _compactOwner;
+            var database = _compactingDatabase;
+
+            if (owner is null)
+                return "another compaction or sealing step was running";
+
+            return database is null ? $"{owner} was running" : $"{owner} was running ({database})";
         }
 
         private void ExitCompact()
         {
+            _compactOwner = null;
             _compactingDatabase = null;
             Interlocked.CompareExchange(ref _compactState, CompactIdle, CompactBusy);
         }
@@ -1218,7 +1237,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod)
         {
-            if (!TryEnterCompact())
+            if (!TryEnterCompact("the history shard compaction step"))
                 return IsDisposeStarted ? HistoryShardCompactionOutcome.ShuttingDown : HistoryShardCompactionOutcome.Busy;
 
             try
@@ -1355,11 +1374,14 @@ namespace HSMDatabase.DatabaseWorkCore
             if (!HistorySealingPlanner.IsWithinWorkingHours(utcNow, settings))
                 return Publish(new HistorySealingPassReport { Sequence = NextSealingSequence(), RunUtc = utcNow, Outcome = HistorySealingOutcome.OutsideWorkingHours });
 
-            if (!TryEnterCompact())
+            // A refused pass is not published: the attention lists belong to the step that holds the state, and the
+            // self-monitoring keeps showing the last pass that ran. The service logs it with the reason.
+            if (!TryEnterCompact("a history sealing pass"))
                 return new HistorySealingPassReport
                 {
                     RunUtc = utcNow,
                     Outcome = IsDisposeStarted ? HistorySealingOutcome.ShuttingDown : HistorySealingOutcome.Busy,
+                    Note = IsDisposeStarted ? null : BusyReason(),
                 };
 
             try
@@ -1398,13 +1420,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public HistorySealingPassReport UnsealHistoryWeek(string weekName, DateTime utcNow)
         {
-            if (!TryEnterCompact())
+            if (!TryEnterCompact($"the unseal of {weekName}"))
                 return new HistorySealingPassReport
                 {
                     RunUtc = utcNow,
                     Action = HistorySealingAction.Unseal,
                     Week = weekName,
                     Outcome = IsDisposeStarted ? HistorySealingOutcome.ShuttingDown : HistorySealingOutcome.Busy,
+                    Note = IsDisposeStarted ? null : BusyReason(),
                 };
 
             try
@@ -1464,6 +1487,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
             if (status.Attention is not null)
                 NoteAttention(_stageAttention, shard.Path, status.Attention);
+
+            // A week whose deletes are refused (an unreadable delete watermark, #1805 review W2) is reported; its stage is
+            // unchanged and the job goes on with it. Only an opened week can have refused a delete.
+            if (shard.IsOpened && shard.Database is SensorValuesWeek opened && opened.DeleteRefusal is { } refusal)
+                NoteAttention(_stageAttention, shard.Path, refusal);
 
             _sealingRetryAfter.TryGetValue(shard.Path, out var retryAfter);
             DateTime? retry = retryAfter == default ? null : retryAfter;
