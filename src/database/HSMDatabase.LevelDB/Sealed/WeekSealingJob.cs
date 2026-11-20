@@ -24,6 +24,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public const string SealBeforeTail = "seal/before-tail";
         public const string SealSwapped = "seal/swapped";
 
+        public const string RemoveAnnounced = "remove/announced";
         public const string RemoveBatch = "remove/batch";
         public const string RemoveMarked = "remove/marked";
 
@@ -138,7 +139,15 @@ namespace HSMDatabase.LevelDB.Sealed
                 // not closed and opened again) and over the week's row database. Not current yet, so nobody reads it.
                 rowsLeft.Write(SealedPath);
 
-                var store = new SealedSensorValuesDatabase(RowPath, SealedPath, _week.From, _week.To, rows.RowDatabase, writer.DetachDatabase());
+                // Every row the chunks were built from is made durable in the overlay before the marker (#1805 follow-up): a
+                // value written shortly before the snapshot may still be only in the overlay's unsynced log, and a power loss
+                // must not leave a chunk row without its overlay row while reads use the overlay alone. A synced write syncs
+                // the log, and with it every earlier write.
+                using (var empty = new WriteBatch())
+                    rows.RowDatabase.Native.Write(empty, _syncWrite);
+
+                // Built from the overlay, nothing deleted: until the job deletes an overlay row, reads use the overlay alone.
+                var store = new SealedSensorValuesDatabase(RowPath, SealedPath, _week.From, _week.To, rows.RowDatabase, writer.DetachDatabase(), overlayHoldsEveryRow: true);
                 var swapped = false;
                 var marker = Path.Combine(SealedPath, SealedWeekMarker.FileName);
 
@@ -304,6 +313,9 @@ namespace HSMDatabase.LevelDB.Sealed
             var prefix = sensorId?.ToByteArray();
             var everyChunkRead = true;
 
+            EnsureNotAnInterruptedSeal();
+            AnnounceOverlayRowDeletes(store);
+
             while (true)
             {
                 if (_shouldStop())
@@ -402,6 +414,37 @@ namespace HSMDatabase.LevelDB.Sealed
 
                 _checkpoint(checkpoint);
             }
+        }
+
+        /// <summary>
+        /// Before the first overlay row of the week is deleted (#1805 follow-up): from then on the overlay no longer holds
+        /// every row, so reads must merge it with the chunks. <c>hsm-source-rows-removing</c> is made durable first (written,
+        /// or synced again if an earlier attempt wrote it; a failed sync throws and nothing is deleted), so a restart reads
+        /// merged; then the store stops its overlay-only reads, so a read that starts after this reads merged. A read that
+        /// started before keeps its overlay snapshot, taken before any delete: it holds every row.
+        /// </summary>
+        private void AnnounceOverlayRowDeletes(SealedSensorValuesDatabase store)
+        {
+            var marker = Path.Combine(SealedPath, SealedWeekStages.SourceRowsRemovingFileName);
+
+            // Done already on this instance: the marker was made durable before overlay-only reads were stopped. A fold calls
+            // this once per sensor. (After a restart the first step syncs the marker once more.)
+            if (store.OverlayRowDeletesAnnounced)
+                return;
+
+            // The chunk database first: StopOverlayOnlyReads opens it, and a week whose chunks cannot be opened stays as it is.
+            _ = store.ChunkDatabase;
+
+            if (File.Exists(marker))
+                DurableFile.SyncDirectory(SealedPath, strict: true); // an earlier attempt may have failed to make it durable
+            else
+                DurableFile.WriteAtomic(marker,
+                    $"Overlay rows deleted from {DateTime.UtcNow:O} by the sealing job (#1805): the overlay no longer holds every row of the week, " +
+                    $"so reads merge it with the chunks. Never remove this file while {SealedWeekMarker.FileName} is here.{Environment.NewLine}", strict: true);
+
+            _checkpoint(SealingCheckpoints.RemoveAnnounced);
+
+            store.StopOverlayOnlyReads();
         }
 
         #endregion

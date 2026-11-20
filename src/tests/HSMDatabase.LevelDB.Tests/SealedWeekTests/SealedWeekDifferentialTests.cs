@@ -15,14 +15,15 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
 
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)] // the keep period: the overlay still holds every sealed row
-    public void ScriptedOperations_GiveTheSameReads(bool keepSourceRows)
+    [InlineData(false, false)]
+    [InlineData(true, false)] // the keep period once removal has begun: the overlay still holds every sealed row, reads merge
+    [InlineData(true, true)]  // the keep period as a seal leaves it: reads use the overlay alone (#1805 follow-up)
+    public void ScriptedOperations_GiveTheSameReads(bool keepSourceRows, bool overlayOnly)
     {
         var random = new Random(1803);
         var (seed, sensors) = Seed(random);
 
-        using var pair = WeekPair.Create(seed, keepSourceRows);
+        using var pair = WeekPair.Create(seed, keepSourceRows, overlayOnly: overlayOnly);
 
         var dense = sensors.Dense;
         var denseChunks = pair.Seal.Chunks.Where(c => c.SensorId == dense).OrderBy(c => c.FirstTick).ToList();
@@ -97,20 +98,48 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
             Assert.Equal(0, pair.Compare.FidelityMatches);
         else
             Assert.True(pair.Compare.FidelityMatches > 0);
+
+        AssertReadMode(pair, overlayOnly);
+        AssertMergedReadsAgree(pair, [.. sensors.All, target], random, overlayOnly);
+    }
+
+    // Overlay-only: still so after every operation and reopen above, and no read created a chunk iterator. Merged: every
+    // read did.
+    internal static void AssertReadMode(WeekPair pair, bool overlayOnly)
+    {
+        Assert.Equal(overlayOnly, pair.SealedStore.ReadsOverlayOnly);
+
+        if (overlayOnly)
+            Assert.Equal(0, pair.SealedStore.ChunkIteratorsOpened);
+        else
+            Assert.True(pair.SealedStore.ChunkIteratorsOpened > 0);
+    }
+
+    // After an overlay-only run: the chunks kept up with every change (deletes went to them too), so the same week read
+    // merged, as it will be once source-row removal begins, gives the same answers.
+    private static void AssertMergedReadsAgree(WeekPair pair, IReadOnlyList<Guid> sensors, Random random, bool overlayOnly)
+    {
+        if (!overlayOnly)
+            return;
+
+        pair.SealedStore.StopOverlayOnlyReads();
+        pair.AssertSameReads(sensors, random);
+        Assert.True(pair.SealedStore.ChunkIteratorsOpened > 0);
     }
 
     // #1805: retention, clear history and sensor removal delete a prefix of a sensor's history. On a sealed week such a
     // delete marks a watermark instead of re-encoding the chunk its cutoff falls into; every read must still equal the
     // plain week's, with late writes below and above the watermark, rewrites, middle-range deletes and reopens between.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void PrefixDeletes_MarkAWatermark_AndGiveTheSameReads(bool keepSourceRows)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void PrefixDeletes_MarkAWatermark_AndGiveTheSameReads(bool keepSourceRows, bool overlayOnly)
     {
         var random = new Random(1805);
         var (seed, sensors) = Seed(random);
 
-        using var pair = WeekPair.Create(seed, keepSourceRows);
+        using var pair = WeekPair.Create(seed, keepSourceRows, overlayOnly: overlayOnly);
 
         var dense = sensors.Dense;
         var chunks = pair.Seal.Chunks.Where(c => c.SensorId == dense).OrderBy(c => c.FirstTick).ToList();
@@ -182,6 +211,8 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
 
         pair.Reopen();
         pair.AssertSameReads(sensors.All, random);
+        AssertReadMode(pair, overlayOnly);
+        AssertMergedReadsAgree(pair, sensors.All, random, overlayOnly);
     }
 
     // Review W4: cutoffs one tick before a chunk's first and last keys, on a multi-chunk sensor that is the last sensor of
@@ -322,8 +353,11 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         Assert.True(largest <= 2 * sealedSize + (64 << 10), $"{largest} bytes on disk against {sealedSize} sealed");
     }
 
-    [Fact]
-    public void RandomOperations_GiveTheSameReads()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RandomOperations_GiveTheSameReads(bool keepSourceRows, bool overlayOnly)
     {
         const int seed = 18030;
         const int steps = 400;
@@ -336,7 +370,7 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         var all = sensors.All.Append(extra).ToList();
         var types = new Dictionary<Guid, SensorType>(sensors.Types) { [extra] = SensorType.Integer };
 
-        using var pair = WeekPair.Create(data);
+        using var pair = WeekPair.Create(data, keepSourceRows, overlayOnly: overlayOnly);
         output.WriteLine($"sealed {pair.Seal.SealedRows} rows into {pair.Seal.Chunks.Count} chunks; {pair.Seal.RefusedSensors} sensor(s) refused");
 
         var cutoffs = new Dictionary<Guid, long>();
@@ -413,7 +447,15 @@ public sealed class SealedWeekDifferentialTests(ITestOutputHelper output)
         var remaining = pair.Plain.GetAll().Count();
         output.WriteLine($"{remaining} rows remain; fidelity matches: {pair.Compare.FidelityMatches}");
         Assert.True(remaining > data.Count / 2, $"only {remaining} of {data.Count} rows remain");
-        Assert.True(pair.Compare.FidelityMatches > 0);
+
+        // While the source rows are kept, every sealed row is hidden by its overlay row.
+        if (keepSourceRows)
+            Assert.Equal(0, pair.Compare.FidelityMatches);
+        else
+            Assert.True(pair.Compare.FidelityMatches > 0);
+
+        AssertReadMode(pair, overlayOnly);
+        AssertMergedReadsAgree(pair, all, random, overlayOnly);
     }
 
 
