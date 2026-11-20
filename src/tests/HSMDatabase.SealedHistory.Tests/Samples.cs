@@ -211,13 +211,14 @@ namespace HSMDatabase.SealedHistory.Tests
 
         private static double? RandomNullableDouble(Random random) => random.Next(3) == 0 ? null : RandomDouble(random);
 
-        private static string RandomString(Random random) => random.Next(6) switch
+        private static string RandomString(Random random) => random.Next(9) switch
         {
             0 => null,
             1 => "",
             2 => new string('x', random.Next(1000, 5000)),
             3 => "Ошибка 東京 \U0001F600 \0 tab\t",
-            _ => $"value {random.Next(5)}",
+            4 or 5 => $"value {random.Next(5)}",
+            _ => StringShapes.Random(random), // template shapes: numbers, decimals, signs, zero-padded and limit runs
         };
 
         private static Version RandomVersion(Random random) => random.Next(5) switch

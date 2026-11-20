@@ -48,7 +48,7 @@ namespace HSMDatabase.SealedHistory
         internal const byte CompressionNone = 0;
         internal const byte CompressionZstd = 1;
 
-        internal const int ZstdLevel = 3;
+        internal const int ZstdLevel = 15;
 
         private const uint ZstdFrameMagic = 0xFD2FB528;
 

@@ -6,7 +6,8 @@ namespace HSMDatabase.SealedHistory.Format
 {
     /// <summary>
     /// A column of n &gt;= 1 nullable strings. Mode 0 = one entry for the whole column; mode 1 = a dictionary
-    /// of the distinct entries in order of first appearance, then an integer column of entry indices.
+    /// of the distinct entries in order of first appearance, then an integer column of entry indices; mode 2 =
+    /// templates with numeric slots (<see cref="StringTemplate"/>).
     /// An entry is a varint (0 = null, otherwise UTF-8 byte length + 1) followed by the UTF-8 bytes, so null
     /// and the empty string stay distinct.
     /// </summary>
@@ -14,6 +15,7 @@ namespace HSMDatabase.SealedHistory.Format
     {
         internal const byte ModeConstant = 0;
         internal const byte ModeDictionary = 1;
+        internal const byte ModeTemplate = 2;
 
         internal static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -58,6 +60,44 @@ namespace HSMDatabase.SealedHistory.Format
                 return;
             }
 
+            // Encoder revision 1: build the dictionary and, when the column qualifies, the template encoding;
+            // write the one with fewer bytes before compression, the dictionary on a tie.
+            ByteSink template = new(values.Length * 4, sink.Remaining);
+            bool hasTemplate;
+            try
+            {
+                hasTemplate = StringTemplate.TryWrite(template, values);
+            }
+            catch (PayloadTooLargeException)
+            {
+                hasTemplate = false;
+            }
+
+            ByteSink dictionary = new(values.Length * 4, sink.Remaining);
+            try
+            {
+                WriteDictionary(dictionary, values);
+            }
+            catch (PayloadTooLargeException) when (hasTemplate)
+            {
+                sink.WriteBytes(template.Written);
+                return;
+            }
+
+            sink.WriteBytes(hasTemplate && template.Length < dictionary.Length ? template.Written : dictionary.Written);
+        }
+
+        /// <summary>The mode <see cref="Write"/> chooses for a column (encoder revision 1).</summary>
+        internal static byte ChooseMode(ReadOnlySpan<string> values)
+        {
+            var sink = new ByteSink(values.Length * 4);
+            Write(sink, values);
+            return sink.Written[0];
+        }
+
+        /// <summary>Writes mode 1 (a dictionary), whatever the column holds.</summary>
+        internal static void WriteDictionary(ByteSink sink, ReadOnlySpan<string> values)
+        {
             var dictionary = new List<string>();
             var lookup = new Dictionary<string, int>(StringComparer.Ordinal);
             int nullIndex = -1;
@@ -100,7 +140,16 @@ namespace HSMDatabase.SealedHistory.Format
             if (destination.Length == 0)
                 throw new InvalidOperationException("A string column holds at least one value.");
 
-            byte mode = reader.ReadByte();
+            var peek = reader;
+            byte mode = peek.ReadByte();
+
+            if (mode == ModeTemplate)
+            {
+                StringTemplate.Read(ref reader, destination);
+                return;
+            }
+
+            reader.ReadByte();
 
             if (mode == ModeConstant)
             {

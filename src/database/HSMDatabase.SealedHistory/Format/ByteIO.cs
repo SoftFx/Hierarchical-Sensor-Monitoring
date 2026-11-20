@@ -23,6 +23,9 @@ namespace HSMDatabase.SealedHistory.Format
 
         public int Length => _length;
 
+        /// <summary>How many more bytes may be written before the maximum length.</summary>
+        public int Remaining => _maxLength - _length;
+
         public ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _length);
 
 
