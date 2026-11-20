@@ -612,6 +612,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 var deletes = new List<byte[]>();
                 var puts = new List<(byte[] key, byte[] chunk)>();
+                byte[] unreadableWatermarkOf = null;
 
                 try
                 {
@@ -639,7 +640,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                         // Rows at or below the sensor's watermark are already deleted: a rewrite drops them for good,
                         // so no chunk ever lies wholly below the watermark. An unreadable watermark refuses the delete.
-                        var watermark = _reader.ReadWatermark(_chunks.Native, null, key);
+                        long? watermark;
+
+                        try
+                        {
+                            watermark = _reader.ReadWatermark(_chunks.Native, null, key);
+                        }
+                        catch (SealedChunkReadException)
+                        {
+                            unreadableWatermarkOf = key;
+                            break;
+                        }
+
                         var kept = rows.FindAll(row => !InRange(KeyOrder.RowKey(key, row.Key), from, to) && (watermark is not { } w || row.Key > w));
 
                         if (kept.Count == rows.Count)
@@ -655,6 +667,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 {
                     SealedHistoryDiagnostics.CountChunkRewriteFailure();
                     _logger.Error(e, $"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} refused: a chunk on its border cannot be rewritten; nothing was deleted");
+                    return false;
+                }
+
+                if (unreadableWatermarkOf is not null)
+                {
+                    RefuseForUnreadableWatermark(unreadableWatermarkOf, from, to);
                     return false;
                 }
 
@@ -798,8 +816,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     deleteWatermark = true;
                 else if (straddler)
                 {
-                    SealedHistoryDiagnostics.CountChunkRewriteFailure();
-                    _logger.Error($"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} refused: the sensor's delete watermark cannot be read and a chunk straddles the cutoff; nothing was deleted");
+                    RefuseForUnreadableWatermark(from, from, to);
                     return false;
                 }
             }
@@ -836,6 +853,44 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             db.Write(batch, _syncWrite);
 
             return true;
+        }
+
+        // The sensors whose deletes were refused for an unreadable watermark, for the log (once each) and the attention line.
+        private readonly SortedSet<Guid> _refusedSensors = [];
+        private volatile string _deleteRefusal;
+
+        /// <summary>
+        /// Set once a delete of this week was refused because a sensor's delete watermark cannot be read (#1805 review W2):
+        /// what an operator has to do, for the sealing job's "weeks needing attention". Null otherwise.
+        /// </summary>
+        internal string DeleteRefusal => _deleteRefusal;
+
+        // Refusing is the safe default: which rows of the sensor's partly deleted chunk are live is unknown. Every refusal
+        // is counted; the error is logged once per sensor and opened week, later ones at Debug. The exit is an unseal,
+        // which restores every row of the sensor's chunks (WeekSealingJob.CopyChunkRowsToOverlay).
+        private void RefuseForUnreadableWatermark(byte[] sensorKey, byte[] from, byte[] to)
+        {
+            SealedHistoryDiagnostics.CountChunkRewriteFailure();
+
+            var sensor = new Guid(sensorKey.AsSpan(0, KeyOrder.SensorIdLength));
+            bool first;
+            string sensors;
+
+            lock (_refusedSensors)
+            {
+                first = _refusedSensors.Add(sensor);
+                sensors = string.Join(", ", _refusedSensors);
+            }
+
+            var message = $"Range delete [{from.GetString()}, {to.GetString()}] on sealed week {SealedName} refused: the delete watermark of sensor {sensor} cannot be read, so which of its chunk rows are deleted is unknown; nothing was deleted";
+
+            if (first)
+                _logger.Error(message + " (logged once per sensor; every refusal is counted in the chunk rewrite failures)");
+            else
+                _logger.Debug(message);
+
+            _deleteRefusal = $"the delete watermark of sensor(s) {sensors} cannot be read: retention and clear history of those sensors in this week are refused and their rows stay. " +
+                             "Unseal this week: the unseal restores every row of their chunks (also rows the lost watermark hid), and the deletes then go through.";
         }
 
         /// <summary>Prefix deletes taken by the watermark path since the week was opened (tests).</summary>

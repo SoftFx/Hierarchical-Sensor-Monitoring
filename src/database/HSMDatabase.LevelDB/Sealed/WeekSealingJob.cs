@@ -758,9 +758,23 @@ namespace HSMDatabase.LevelDB.Sealed
                     var key = iterator.Key();
                     last = key;
 
-                    // An unreadable chunk stops the unseal: its rows exist nowhere else. So does an unreadable delete
-                    // watermark: rows below it are deleted and must not come back as rows.
-                    var rows = LiveRows(store, options, key, store.ChunkReader.Decode(key, iterator.Value()));
+                    // An unreadable chunk stops the unseal: its rows exist nowhere else.
+                    var decoded = store.ChunkReader.Decode(key, iterator.Value());
+                    List<HistoryRow> rows;
+                    var lostWatermark = false;
+
+                    try
+                    {
+                        rows = LiveRows(store, options, key, decoded);
+                    }
+                    catch (SealedChunkReadException)
+                    {
+                        // An unreadable delete watermark (#1805 review W2): which rows it hid is unknown. The unseal is the
+                        // way out of that state, so it keeps rows rather than drops them: every decodable row comes back.
+                        // A few rows retention or clear history had deleted may return; no live row is lost.
+                        rows = decoded;
+                        lostWatermark = true;
+                    }
 
                     using var batch = new WriteBatch();
                     long restored = 0;
@@ -781,6 +795,14 @@ namespace HSMDatabase.LevelDB.Sealed
                         store.MarkChanged();
                         store.RowDatabase.Native.Write(batch, _syncWrite);
                         _report.RowsRestored += restored;
+                    }
+
+                    if (lostWatermark)
+                    {
+                        _report.RowsRestoredPastLostWatermark += restored;
+                        _logger.Warn($"Unsealing {RowPath}: the delete watermark of sensor {new Guid(key.AsSpan(0, KeyOrder.SensorIdLength))} cannot be read; " +
+                                     $"all {rows.Count} rows of its chunk {KeyOrder.Tick(key)} were restored ({restored} written), so rows the lost watermark hid " +
+                                     "(deleted by retention or clear history) may be back");
                     }
 
                     return false;

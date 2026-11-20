@@ -122,6 +122,12 @@ namespace HSMServer.Core.DataLayer
         /// <summary>Rows an unseal wrote back into the overlay.</summary>
         public long RowsRestored { get; set; }
 
+        /// <summary>
+        /// Of <see cref="RowsRestored"/>, the rows of sensors whose delete watermark could not be read (#1805 review W2): every
+        /// decodable row of their chunks was restored, so rows retention or clear history had deleted may be back.
+        /// </summary>
+        public long RowsRestoredPastLostWatermark { get; set; }
+
         public int SensorsSealed { get; set; }
 
         /// <summary>Sensors left as rows in this pass, by reason (File sensors are skipped silently and not counted).</summary>
@@ -173,6 +179,8 @@ namespace HSMServer.Core.DataLayer
                 text += $"; {OverlayRowsRemoved} overlay rows removed";
             if (RowsRestored > 0)
                 text += $"; {RowsRestored} rows restored";
+            if (RowsRestoredPastLostWatermark > 0)
+                text += $" ({RowsRestoredPastLostWatermark} of them past an unreadable delete watermark)";
             if (SensorsLeftAsRows.Count > 0)
                 text += $"; left as rows: {LeftAsRowsSummary()}";
             if (VerificationFailures > 0)

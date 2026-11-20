@@ -1488,6 +1488,11 @@ namespace HSMDatabase.DatabaseWorkCore
             if (status.Attention is not null)
                 NoteAttention(_stageAttention, shard.Path, status.Attention);
 
+            // A week whose deletes are refused (an unreadable delete watermark, #1805 review W2) is reported; its stage is
+            // unchanged and the job goes on with it. Only an opened week can have refused a delete.
+            if (shard.IsOpened && shard.Database is SensorValuesWeek opened && opened.DeleteRefusal is { } refusal)
+                NoteAttention(_stageAttention, shard.Path, refusal);
+
             _sealingRetryAfter.TryGetValue(shard.Path, out var retryAfter);
             DateTime? retry = retryAfter == default ? null : retryAfter;
 

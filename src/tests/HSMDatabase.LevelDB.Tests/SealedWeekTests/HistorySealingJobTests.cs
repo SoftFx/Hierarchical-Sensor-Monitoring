@@ -460,6 +460,70 @@ public sealed partial class HistorySealingJobTests : IDisposable
         AssertSameHistory("unsealed");
     }
 
+    // Review W2: with an unreadable delete watermark the sensor's live chunk rows are unknown, so retention and clear
+    // history of it are refused (through both paths a delete can take), the overlay stays untouched and the week is
+    // reported with the way out. The unseal is that way out: it restores every row of the sensor's chunks, the rows
+    // the lost watermark hid included, and completes.
+    [Fact]
+    public void AnUnreadableWatermark_RefusesDeletesOfItsSensor_ReportsTheWeek_AndAnUnsealRestoresEveryRow()
+    {
+        Start(1862);
+        SealBothWeeks();
+
+        var store = (SealedSensorValuesDatabase)Week().Current;
+        var cutoff = new DateTime(DenseTick(1_000), DateTimeKind.Utc);
+
+        // A prefix of the dense sensor into its first chunk, on both databases: the chunk straddles the cutoff.
+        Clear(_dense, DateTimeMethods.GetStartOfWeek(WeekDay), cutoff);
+        Assert.Equal(cutoff.Ticks, store.ChunkReader.ReadWatermark(store.ChunkDatabase.Native, null, _dense.ToByteArray()));
+
+        // The rows the watermark hides: those of the straddling chunk at or below the cutoff.
+        var (chunkKey, chunk) = store.ChunkDatabase.GetAll().First(kv => kv.Item1.Length == KeyOrder.KeyLength && new Guid(kv.Item1.AsSpan(0, 16)) == _dense);
+        var hidden = ChunkCodec.Decode(chunk).Where(r => r.Key <= cutoff.Ticks).Select(r => r.Key).ToList();
+        Assert.NotEmpty(hidden);
+
+        var watermark = store.ChunkDatabase.Native.Get(_dense.ToByteArray());
+        watermark[5] ^= 0x10;
+        store.ChunkDatabase.Native.Put(_dense.ToByteArray(), watermark);
+
+        var overlay = OverlayRowsOf(_dense);
+        var refusals = SealedHistoryDiagnostics.ChunkRewriteFailures;
+        var prefixDeletes = store.PrefixDeletes;
+
+        // Retention from the previous cutoff takes the rewrite path (the first chunk starts below it); a clear from the
+        // start takes the prefix path. On the job's database only: the plain one would delete.
+        _core.ClearSensorValues(_dense, cutoff, cutoff.AddHours(1));
+        Assert.Equal(prefixDeletes, store.PrefixDeletes);
+        _core.ClearSensorValues(_dense, DateTime.MinValue, cutoff.AddHours(2));
+        Assert.Equal(prefixDeletes + 1, store.PrefixDeletes);
+
+        Assert.Equal(overlay, OverlayRowsOf(_dense));
+        Assert.True(SealedHistoryDiagnostics.ChunkRewriteFailures >= refusals + 2);
+        Assert.Contains("Unseal this week", Week().DeleteRefusal);
+
+        var pass = Pass(SealTime);
+        Assert.Contains("Unseal this week", pass.WeeksNeedingAttention.GetValueOrDefault(WeekName()));
+
+        // The unseal completes and brings back every row the plain week has, plus exactly the hidden ones.
+        var unseal = _core.UnsealHistoryWeek(WeekName(), SealTime);
+        Assert.Equal(HistorySealingOutcome.Done, unseal.Outcome);
+        Assert.Equal(hidden.Count, unseal.RowsRestoredPastLostWatermark);
+        Assert.False(Week().IsSealed);
+        Assert.Null(Week().DeleteRefusal);
+
+        var plainRows = PlainWeek().GetAll().ToDictionary(kv => Convert.ToHexString(kv.key), kv => kv.value);
+        var jobRows = Week().GetAll().ToDictionary(kv => Convert.ToHexString(kv.key), kv => kv.value);
+        var expected = plainRows.Keys.Concat(hidden.Select(tick => Convert.ToHexString(new DbKey(_dense, tick).ToBytes()))).Order().ToList();
+
+        Assert.Equal(expected, jobRows.Keys.Order().ToList());
+
+        var compare = new FidelityComparer(_sealable);
+        foreach (var (key, value) in plainRows)
+            compare.Value(value, jobRows[key], $"row {key}");
+
+        Assert.DoesNotContain(WeekName(), Pass(SealTime).WeeksNeedingAttention.Keys);
+    }
+
     // A prefix delete that lands while a fold is between reading and committing goes through the delete log like any
     // range delete: the fold's commit for that sensor is skipped, and nothing the delete removed comes back.
     [Fact]
