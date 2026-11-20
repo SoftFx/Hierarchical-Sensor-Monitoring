@@ -34,14 +34,6 @@ namespace HSMDatabase.LevelDB.Sealed
         /// <summary>Whether the current key starts with <paramref name="prefix"/> (the row database's StartsWith).</summary>
         bool KeyStartsWith(byte[] prefix);
 
-        /// <summary>
-        /// A key at or below the current row's key above which this cursor has no row before the current one: what the
-        /// merged cursor positions the other child before when it steps back from this row. <see cref="Key"/>, except
-        /// for a chunk cursor on the first row of a chunk it has not read (#1805): the chunk's own key, which needs
-        /// neither the chunk nor its sensor's watermark.
-        /// </summary>
-        byte[] BoundaryKey => Key;
-
         void Seek(byte[] target);
 
         void SeekToFirst();
@@ -220,29 +212,21 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public void Prev()
         {
-            var current = Current;
-
             if (_forward)
             {
-                // The boundary key, not the key: stepping back from the first row of a chunk it has not read, the chunk
-                // cursor answers without its sensor's watermark (#1805), so a read that only passes by that sensor
-                // never reads it. The other child has no row between the two keys: one there would have been compared
-                // with this row (same sensor), which reads the chunk and leaves its first-row position.
-                var key = current.BoundaryKey;
-                var other = Other(current);
-                other.Seek(key);
-
-                if (other.IsValid)
-                    other.Prev();
-                else
-                    other.SeekToLast();
-
-                // The other child is now before the key, a hidden chunk row at the key included.
-                current.Prev();
+                // Invariant of the forward direction: each child is at its first row at or after the current row (an
+                // exhausted child has no row at or after it). So neither child has a row between its position and the
+                // current row, and the row before the current one is the larger of the two rows the children step back
+                // to: each steps back once, and neither the current row nor its key is needed. This keeps a read that
+                // only passes by a sensor (its rows were landed on and found to be another sensor's by their prefix)
+                // from deciding which child holds that sensor's row, which would read the sensor's chunk and its delete
+                // watermark (#1805) and fail on them if they are damaged.
+                StepBack(overlay);
+                StepBack(chunks);
             }
             else
             {
-                var key = current.Key;
+                var key = Current.Key;
 
                 if (overlay.IsValid && overlay.CompareKey(key) == 0)
                     overlay.Prev();
@@ -267,6 +251,14 @@ namespace HSMDatabase.LevelDB.Sealed
 
 
         private IRowCursor Other(IRowCursor current) => ReferenceEquals(current, overlay) ? chunks : overlay;
+
+        private static void StepBack(IRowCursor child)
+        {
+            if (child.IsValid)
+                child.Prev();
+            else
+                child.SeekToLast();
+        }
 
         private void Moved(bool forward)
         {

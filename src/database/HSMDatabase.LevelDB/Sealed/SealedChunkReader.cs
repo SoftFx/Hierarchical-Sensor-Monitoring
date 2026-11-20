@@ -30,6 +30,11 @@ namespace HSMDatabase.LevelDB.Sealed
         /// <summary>Chunks decoded since the week was opened (tests: a prefix delete decodes none).</summary>
         public long Decodes => Interlocked.Read(ref _decodes);
 
+        // Test seam: told the key of every chunk decoded, and of every watermark looked up (#1805).
+        internal Action<byte[]> OnDecode { get; set; }
+
+        internal Action<byte[]> OnWatermarkRead { get; set; }
+
 
         public ChunkHeader ReadHeader(byte[] chunkKey, byte[] chunk)
         {
@@ -59,6 +64,7 @@ namespace HSMDatabase.LevelDB.Sealed
             List<HistoryRow> rows;
 
             Interlocked.Increment(ref _decodes);
+            OnDecode?.Invoke(chunkKey);
 
             try
             {
@@ -115,6 +121,8 @@ namespace HSMDatabase.LevelDB.Sealed
         public long? ReadWatermark(DB chunks, ReadOptions options, ReadOnlySpan<byte> sensorKey)
         {
             var key = SensorWatermark.Key(sensorKey);
+            OnWatermarkRead?.Invoke(key);
+
             var value = options is null ? chunks.Get(key) : chunks.Get(key, options);
 
             if (value is null)

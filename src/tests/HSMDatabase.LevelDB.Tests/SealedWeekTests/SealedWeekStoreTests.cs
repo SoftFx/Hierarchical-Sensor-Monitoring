@@ -824,6 +824,92 @@ public sealed class SealedWeekStoreTests
         pair.AssertSameReads(sensors.All, random, probesPerSensor: 4);
     }
 
+    // Review W1: a read of sensor S lands on the rows of the next sensor T and learns from their prefix that they are not
+    // S's. It must not decide which of T's rows comes first (T's overlay row or its chunk row), which reads T's delete
+    // watermark and decodes T's partly deleted chunk: on healthy data that is a decode per latest-value read, on damaged
+    // data a failure of S's reads. The overlay is not empty (the keep period), as on a server: T has overlay rows and a
+    // chunk under a watermark, the normal state of a week retention is trimming.
+    [Theory]
+    [InlineData("healthy")]
+    [InlineData("watermark")]
+    [InlineData("chunk")]
+    public void ReadsOfASensor_NeverReadTheNextSensorsWatermarkOrChunk(string damage)
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1861));
+
+        using var pair = WeekPair.Create(seed, keepSourceRows: true);
+
+        var store = pair.SealedStore;
+        var byKey = sensors.All.OrderBy(id => id.ToByteArray(), ByteOrder.Instance).ToList();
+        var withRows = byKey.Where(id => pair.Plain.GetValuesFrom(Min(id), Max(id)).Any()).ToList();
+
+        // T: a sealed sensor with another sensor with rows before it; S: that sensor.
+        var t = withRows.Skip(1).First(id => pair.Seal.Chunks.Any(c => c.SensorId == id));
+        var s = withRows[withRows.IndexOf(t) - 1];
+        var tChunk = pair.Seal.Chunks.Where(c => c.SensorId == t).OrderBy(c => c.FirstTick).First();
+        var tTicks = pair.Plain.GetValuesFrom(Min(t), Key(t, tChunk.LastTick)).Count();
+
+        // A prefix of T into its first chunk: the chunk straddles the cutoff, T's overlay keeps the rows after it.
+        var cutoff = pair.Plain.GetKeysValuesTo(Min(t), Key(t, tChunk.LastTick)).Reverse().ElementAt(tTicks / 3).key;
+        pair.Remove(Min(t), cutoff);
+        Assert.Equal(DbKey.FromBytes(cutoff).Timestamp, store.ChunkReader.ReadWatermark(store.ChunkDatabase.Native, null, t.ToByteArray()));
+        Assert.NotEmpty(((IntervalDataseBase)store).RowDatabase.GetValueKeyPairFromTo(Min(t), Max(t)));
+
+        if (damage == "watermark")
+        {
+            var value = store.ChunkDatabase.Native.Get(WatermarkKey(t));
+            value[5] ^= 0x10;
+            store.ChunkDatabase.Native.Put(WatermarkKey(t), value);
+        }
+        else if (damage == "chunk")
+        {
+            var key = Key(t, tChunk.FirstTick);
+            var chunk = store.ChunkDatabase.Native.Get(key);
+            chunk[^1] ^= 0xFF;
+            store.ChunkDatabase.Native.Put(key, chunk);
+        }
+
+        var touchedT = new List<string>();
+        var tPrefix = t.ToByteArray();
+        store.ChunkReader.OnDecode = key => { if (key.AsSpan(0, 16).SequenceEqual(tPrefix)) touchedT.Add("decode"); };
+        store.ChunkReader.OnWatermarkRead = key => { if (key.AsSpan().SequenceEqual(tPrefix)) touchedT.Add("watermark"); };
+        var failures = store.ChunkReadFailures;
+
+        var sPrefix = s.ToByteArray();
+        var sTicks = pair.Plain.GetKeysValuesTo(Min(s), Max(s)).Select(kv => DbKey.FromBytes(kv.key).Timestamp).Reverse().ToList();
+        var probes = new List<byte[]> { Min(s), Max(s), Key(s, WeekPair.WeekTo), Key(s, sTicks[0] + 1), Key(s, sTicks[^1] + 1), Key(s, sTicks[sTicks.Count / 2]) };
+
+        foreach (var probe in probes)
+        {
+            var at = DbKey.FromBytes(probe).ToString();
+            pair.Compare.Value(pair.Plain.GetLatest(probe, sPrefix), store.GetLatest(probe, sPrefix), $"GetLatest {at}");
+            pair.Compare.Value(pair.Plain.GetFirst(probe, sPrefix), store.GetFirst(probe, sPrefix), $"GetFirst {at}");
+            pair.Compare.Value(pair.Plain.Get(probe, sPrefix), store.Get(probe, sPrefix), $"Get {at}");
+        }
+
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(s), Max(s)), store.GetKeysValuesTo(Min(s), Max(s)), "newest first");
+        pair.Compare.Values(pair.Plain.GetValuesFrom(Min(s), Max(s)), store.GetValuesFrom(Min(s), Max(s)), "oldest first");
+        pair.Compare.Pairs(pair.Plain.GetKeysValuesTo(Min(s), Key(s, WeekPair.WeekTo)).Take(5), store.GetKeysValuesTo(Min(s), Key(s, WeekPair.WeekTo)).Take(5), "a page newest first");
+
+        var plainLastFirst = pair.Plain.GetLastAndFirstValues([s]);
+        var sealedLastFirst = store.GetLastAndFirstValues([s]);
+        pair.Compare.Value(plainLastFirst[s].Item1, sealedLastFirst[s].Item1, "GetLastAndFirstValues first");
+        pair.Compare.Value(plainLastFirst[s].Item2, sealedLastFirst[s].Item2, "GetLastAndFirstValues last");
+
+        foreach (var toTick in new[] { DateTime.MaxValue.Ticks, WeekPair.WeekTo, sTicks[^1] })
+        {
+            Dictionary<byte[], (long, byte[], byte[])> Request() => new() { [new DbKey(s, 0).ToPrefixBytes()] = (0L, Key(s, toTick), null) };
+            var plainFill = Request();
+            var sealedFill = Request();
+            pair.Plain.FillLatestValues(plainFill);
+            store.FillLatestValues(sealedFill);
+            pair.Compare.Value(plainFill.Single().Value.Item3, sealedFill.Single().Value.Item3, $"FillLatestValues to {toTick}");
+        }
+
+        Assert.Equal(failures, store.ChunkReadFailures);
+        Assert.Empty(touchedT);
+    }
+
     // Crash images, as in the sealing job's tests (Linux only: on Windows an open LevelDB cannot be copied): the week's
     // directories copied file by file right after the watermark batch, then opened as a week of their own.
     [NotOnWindowsFact]

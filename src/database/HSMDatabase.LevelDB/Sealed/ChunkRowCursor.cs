@@ -96,10 +96,6 @@ namespace HSMDatabase.LevelDB.Sealed
             }
         }
 
-        // On the first row of a chunk not read yet: the chunk's own key, at or below its first live row, with no row of
-        // this stream between them (the rows below the first live one are deleted, the chunk before ends below the key).
-        public byte[] BoundaryKey => _position == Position.FirstRow && _key is null ? _chunkKey : Key;
-
         public byte[] Value
         {
             get
