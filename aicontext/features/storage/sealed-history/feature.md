@@ -65,11 +65,11 @@ All integers in the header are little-endian.
 | 36 | 4 | CRC-32C (Castagnoli: reflected polynomial `0x82F63B78`, initial value and final XOR `0xFFFFFFFF`; `"123456789"` gives `0xE3069283`) over bytes 0..35 followed by bytes 40..end. |
 | 40 | stored length | The stored payload. |
 
-A reader checks, in this order: at least 3 bytes (else `Truncated`), magic (`NotAChunk`), version (`UnknownVersion`), at least 40 bytes and the stored length against the actual length (`Truncated` when shorter, `Corrupt` when longer), the checksum (`ChecksumMismatch`), then the field ranges above (`Corrupt`). With compression 1 it then checks, before allocating anything for decompression, that the stored bytes start with the zstd frame magic `0xFD2FB528` (a skippable frame is rejected), that the frame header declares a content size equal to the payload length, and that the frame spans exactly the stored bytes (concatenated frames, a trailing skippable frame or trailing bytes are rejected); all `Corrupt`. After decompression the payload must be exactly the declared length, must be consumed exactly, and its first and last keys must equal the header's. The encoder revision (byte 5) is covered by the checksum like every other header byte but is not range-checked. The zstd compressed bytes for a given payload are those of the pinned `ZstdSharp.Port` version at level 3; a library upgrade that changes them is not a format change, since any valid single frame decodes, but it is a new encoder revision.
+A reader checks, in this order: at least 3 bytes (else `Truncated`), magic (`NotAChunk`), version (`UnknownVersion`), at least 40 bytes and the stored length against the actual length (`Truncated` when shorter, `Corrupt` when longer), the checksum (`ChecksumMismatch`), then the field ranges above (`Corrupt`). With compression 1 it then checks, before allocating anything for decompression, that the stored bytes start with the zstd frame magic `0xFD2FB528` (a skippable frame is rejected), that the frame header declares a content size equal to the payload length, and that the frame spans exactly the stored bytes (concatenated frames, a trailing skippable frame or trailing bytes are rejected); all `Corrupt`. After decompression the payload must be exactly the declared length, must be consumed exactly, and its first and last keys must equal the header's. The encoder revision (byte 5) is covered by the checksum like every other header byte but is not range-checked. The zstd compressed bytes for a given payload are those of the pinned `ZstdSharp.Port` version at level 15 (encoder revision 1; level 3 until the pre-release golden set was regenerated on 2026-11-20); a library upgrade that changes them is not a format change, since any valid single frame decodes, but it is a new encoder revision.
 
 ### Versioning
 
-Two numbers, with different rules. The **format version** (byte 2) changes only when a reader of the current version could not decode the new chunks correctly: a new column encoding, a changed layout, a changed meaning of a field. A reader refuses a format version it does not know (`UnknownVersion`), and every reader keeps decoding every older format version forever. The **encoder revision** (byte 5) changes whenever the bytes the encoder writes for the same input change while a reader of the same format version still decodes them: a better choice among the existing column encodings, other parameters, a compressor upgrade that changes its output. It records which encoder wrote a chunk (to find chunks worth re-encoding, to trace a bad chunk to its encoder); readers ignore it. Golden chunks are kept per encoder in `Golden/format{F}-encoder{R}/`: every set of a released encoder revision stays in the repository as a decode test forever, and only the set of the current format version and encoder revision is also an encode test ("the encoder writes exactly these bytes"). Until the first release there is one set, `format1-encoder1`.
+Two numbers, with different rules. The **format version** (byte 2) changes only when a reader of the current version could not decode the new chunks correctly: a new column encoding, a changed layout, a changed meaning of a field. A reader refuses a format version it does not know (`UnknownVersion`), and every reader keeps decoding every older format version forever. The **encoder revision** (byte 5) changes whenever the bytes the encoder writes for the same input change while a reader of the same format version still decodes them: a better choice among the existing column encodings, other parameters, a compressor upgrade that changes its output. It records which encoder wrote a chunk (to find chunks worth re-encoding, to trace a bad chunk to its encoder); readers ignore it. Golden chunks are kept per encoder in `Golden/format{F}-encoder{R}/`: every set of a released encoder revision stays in the repository as a decode test forever, and only the set of the current format version and encoder revision is also an encode test ("the encoder writes exactly these bytes"). Until the first release there is one set, `format1-encoder1` (ADR-0020 point 12). It was regenerated deliberately on 2026-11-20, when encoder revision 1 gained the string template mode and zstd level 15: nothing had ever been sealed with format 1, so no stored chunk carries the old bytes, and the format version and encoder revision stayed 1/1. After the first release a set is never regenerated.
 
 ### Payload primitives
 
@@ -105,10 +105,50 @@ Encoder choice (encoder revision 1): constant if all bits are equal. Otherwise t
 
 ### String column (n >= 1 nullable strings)
 
+First byte = mode.
+
 - `0` constant: one entry for every row.
 - `1` dictionary: varint count c (1 <= c <= n), c entries in order of first appearance, then an integer column of n indices (< c).
+- `2` template: strings as literal segments around numeric slots, below.
 
-Entry: varint h; `h = 0` is null, otherwise h - 1 bytes of UTF-8 follow (strict: invalid UTF-8 is `Corrupt`). A dictionary with duplicate entries or entries no index uses is accepted (the encoder writes neither); a count of 0 or above n, or an index `>= c`, is rejected.
+Entry: varint h; `h = 0` is null, otherwise h - 1 bytes of UTF-8 follow (strict: invalid UTF-8 is `Corrupt`). A dictionary with duplicate entries or entries no index uses is accepted (the encoder writes neither); a count of 0 or above n, or an index `>= c`, is rejected. Modes 0 and 1 produce at most one string per entry, and every row of an entry shares that instance, so what they allocate is bounded by the payload (64 MiB) in UTF-8 bytes.
+
+#### Mode 2, template
+
+Layout, in order:
+
+1. varint template count c, `1 <= c <= n`;
+2. c templates. Each is a varint k: `k = 0` is the null template (the row is null); otherwise `1 <= k <= 256` and k segments follow, each a varint byte length and that many bytes of strict UTF-8 (a segment may be empty). A template of k segments has k - 1 slots, between consecutive segments;
+3. an integer column of n template indices (< c);
+4. for every template t in dictionary order that has at least one slot and at least one row (u_t rows use it), for every slot s of t in order: three integer columns of u_t values each, over the rows that use t in row order: `M` (signed mantissa), `F` (fraction digits), `Z` (extra leading zeros).
+
+Restoration of a row: the null template gives null; a template of one segment gives that segment (every row of the template shares one string instance); otherwise segment 0, then for each slot its text followed by the next segment. The text of a slot `(M, F, Z)`:
+
+1. `'-'` if `M < 0`;
+2. Z characters `'0'`;
+3. the decimal digits of `|M|` (ASCII, no sign, no leading zeros, `"0"` for 0);
+4. when `F > 0`: those digits left-padded with `'0'` to at least F + 1 digits, and a `'.'` inserted before the last F of them (`M = 50, F = 2` is `0.50`; `M = 5, F = 3` is `0.005`; `M = -50, F = 2` is `-0.50`).
+
+Bounds (each violation is `Corrupt`, checked before the memory it guards is allocated): `1 <= c <= n`; `k <= 256`; a segment length within the remaining payload; an index `< c`; the sum over templates of `u_t * (k_t - 1)` (slot values) at most 262,144, checked before any slot column is read; every M not `-2^63`, every F and every Z in `0..64`; then, before any string is built, every row's restored length (computed from the segment lengths and the slot texts) at most 65,536 UTF-16 code units, and the sum of the restored lengths of the rows that use a template with slots at most 4,194,304 (4 Mi) code units. A column is read exactly: missing values, extra bytes and slot columns of the wrong length end as `Corrupt` (the payload must also be consumed exactly). A template that no index uses, or a duplicate template, is accepted (the encoder writes neither); a template with slots that no row uses has no slot columns. A row with M < 0 and Z > 0 is restored as written (`'-'`, then the zeros), though the encoder never writes one.
+
+Why these limits. Template rows are new strings, unlike dictionary rows: without a limit a few bytes (one long segment and a slot used by 4,096 rows, or a huge Z) would make a decoder allocate gigabytes. 4 Mi code units (8 MiB) per column is about 1,000 characters for each of 4,096 rows; a production deployment's week holds strings of at most about 800 characters, typically 30. 65,536 per string keeps one row far below that. 262,144 slot values (6 MiB of mantissa, fraction and zero arrays) is 64 per row at 4,096 rows; the production week has at most about 15 per row. 64 fraction digits and 64 leading zeros are far above any number someone formats, and keep the slot text at most 131 characters. 256 segments (255 slots) bounds the per-template arrays. The encoder respects every limit by construction (below) and writes a dictionary for a column that would pass the column limits.
+
+#### Tokenizing (encoder revision 1)
+
+A string longer than 65,536 code units is one literal segment (a zero-slot template, stored once, shared like a dictionary entry). Otherwise it is scanned left to right; only ASCII `'0'..'9'` form digit runs, every other character (any other Unicode digit, `'+'`, `','`, `'e'`, a lone `'.'`) is literal text and is copied as UTF-16 code units. Strings with a lone surrogate never reach the tokenizer (`InvalidString` refusal); the split points are ASCII characters, so a surrogate pair is never cut. For each maximal run A, while the string has fewer than 255 slots:
+
+1. **Decimal**: if A is followed by `'.'` and another digit run B: Z = the leading `'0'`s of A except its last digit, N = A without them, F = length of B. It is one slot when `F <= 64`, `Z <= 64` and N followed by B has at most 18 significant digits; M is their integer value (`"007.250"` is `M = 7250, F = 3, Z = 2`; `"0.50"` is `M = 50, F = 2, Z = 0`). The scan continues after B.
+2. **Integer** otherwise: Z = the leading `'0'`s of A except its last digit; it is a slot when `Z <= 64` and the rest fits in an int64 (at most 19 digits, at most `2^63 - 1`), with `F = 0`. A decimal that failed rule 1 is A as an integer slot, then `'.'` as literal, then B scanned as a new run.
+3. Otherwise A stays literal; runs after the 255th slot stay literal too.
+4. **Sign**: a `'-'` that is the last literal character before the slot folds into it (M becomes -M) when `Z = 0` and `M != 0`. So `"-5"` is one slot `-5`; `"-0"`, `"-0.0"` and `"-000.1"` keep a literal `'-'`; `"--3"` is `"-"` and the slot `-3`; `"+5"` keeps `'+'`.
+
+Examples: `"1."` is a slot and `"."`; `".5"` is `"."` and a slot; `"1..2"` two slots around `".."`; `"1.2.3"` is the slot `1.2` (`M = 12, F = 1`), `"."`, the slot `3`; `"10.0.0.1"` is `10.0`, `"."`, `0.1`; a 20-digit run stays literal; `"12345678901234567.8"` (18 significant digits) is one slot, `"123456789012345678.9"` (19) is two slots around `"."`.
+
+Restoring the tokens gives back the string exactly (tested on every shape the tests generate, and on every row of a production week). Templates are collected in order of first appearance; a template is identified by its segment list.
+
+#### Encoder choice (encoder revision 1)
+
+Constant when all rows are equal (ordinal, null equal to null). Otherwise the dictionary encoding is built, and the template encoding when the column qualifies: at least one string has a slot, at most 262,144 slot values, and the strings that use a template with slots at most 4 Mi code units together. The one with fewer bytes is written (before compression); on a tie, or when the template does not qualify, the dictionary. No choice compresses anything. On a production deployment's week (11.9 M rows, 3,990 sensors) this stored 464 B (0.001%) more than the best per-column choice made after zstd, in 42 of 5,423 chunks.
 
 ### Presence (nullable members)
 
@@ -183,17 +223,37 @@ Synthetic dense sensor, one value per second for a week (604,800 rows):
 
 Above 4,096 the gain in size is under 0.5% while a single-chunk decode doubles with each step, and from 8,192 rows the decoded list and arrays exceed the 85 KB large-object threshold, which made a whole-week decode 2.5 times slower.
 
+The figures above were measured with the zstd level 3 encoder and before the string template mode. On a production deployment's week (11.9 M rows, 3,990 sensors) with the template mode, 8,192 / 16,384 rows per chunk or one chunk per sensor saved 1.1% / 2.0% / 2.0% while the 95th-percentile decode of one String chunk grew from 0.54 ms to 1.3-1.6 ms and the largest decode allocation from 2 to 5 MB; 4,096 stays.
+
+## Measured (2026-11-20, `SealedHistoryBench --seal-shard`)
+
+A production deployment's week: 11.9 M rows, 3,990 sensors (4 File sensors, 28 rows, refused). Encoder revision 1 as specified here (templates, zstd 15), every chunk decoded with `ChunkCodec.Decode` and every row compared by `RowFidelity`, Comment and String values included: 0 mismatches.
+
+| Value type | Sensors | Rows | Stored B | B/row | Share |
+|---|---|---|---|---|---|
+| String | 1,784 | 7,053,334 | 50,342,545 | 7.14 | 54.8% |
+| DoubleBar | 539 | 1,858,502 | 20,912,852 | 11.25 | 22.8% |
+| Integer | 432 | 1,328,759 | 7,818,604 | 5.88 | 8.5% |
+| IntegerBar | 481 | 700,360 | 5,213,303 | 7.44 | 5.7% |
+| Rate | 147 | 483,969 | 2,864,828 | 5.92 | 3.1% |
+| TimeSpan | 61 | 146,004 | 2,603,148 | 17.83 | 2.8% |
+| Double | 361 | 315,938 | 2,030,876 | 6.43 | 2.2% |
+| Boolean, Version, Enum | 181 | 445 | 21,453 | 48.2 | 0.0% |
+| **Week** | 3,986 | 11,887,311 | **91,807,609** | **7.72** | |
+
+Against 125,812,706 B (10.58 B/row) with dictionary-only strings and zstd 3, 27.0% less. The source MemoryPack values were 1,335,914,490 B. String value columns: 2,432 chunks template, 50 dictionary, 89 constant; Comment columns: 192 template, 224 dictionary, 5,007 constant. Encode 0.81 µs per row (both string encodings built, zstd 15), decode 0.17 µs per row; decoding one String chunk takes about 0.4 ms (median), 0.54 ms (95th percentile). Remaining bytes: the key and `ReceivingTime` columns are about half of the week (see `docs/initiatives/sensor-history-storage.md`).
+
 ## Key Files
 
 | File | Purpose |
 |---|---|
 | `src/database/HSMDatabase.SealedHistory/ChunkCodec.cs` | Public API, header, checksum, zstd, chunking. |
 | `src/database/HSMDatabase.SealedHistory/Format/PayloadWriter.cs`, `PayloadReader.cs` | Column order per value type. |
-| `src/database/HSMDatabase.SealedHistory/Format/IntColumn.cs`, `DoubleColumn.cs`, `StringColumn.cs` | Column encodings, presence. |
+| `src/database/HSMDatabase.SealedHistory/Format/IntColumn.cs`, `DoubleColumn.cs`, `StringColumn.cs`, `StringTemplate.cs` | Column encodings, presence; the string template mode (tokenizing, restoration, bounds). |
 | `src/database/HSMDatabase.SealedHistory/Format/RowValidator.cs` | Refusals; the `ReceivingTime` rounding. |
 | `src/database/HSMDatabase.SealedHistory/RowFidelity.cs` | The fidelity rule as a comparison. |
 | `src/tests/HSMDatabase.SealedHistory.Tests/` | Round trips, persisted-member guard, golden chunks, corruption, refusals. |
-| `src/sandbox/SealedHistoryBench/` | Measures a shard: bytes per row, timings, mismatches. |
+| `src/sandbox/SealedHistoryBench/` | Measures a shard: bytes per row, timings, mismatches; `--seal-shard` streams a whole week through the codec with memory bounded by one sensor. |
 | `src/database/HSMDatabase.LevelDB/DatabaseImplementations/SealedSensorValuesDatabase.cs` | The sealed week store: merged reads, writes, range-delete rewrite. |
 | `src/database/HSMDatabase.LevelDB/Sealed/` | `MergedRowCursor`, `ChunkRowCursor`, `SealedChunkReader` (checks, errors, counters), `SealedWeekWriter` (chunks, then the marker). |
 | `src/database/HSMDatabase.AccessManager/SealedWeekMarker.cs`, `SealedHistoryDiagnostics.cs` | The sealed-and-complete signal; process-wide counters. |
@@ -201,7 +261,7 @@ Above 4,096 the gain in size is under 0.5% while a single-chunk decode doubles w
 
 ## Data Flow
 
-Rows of one sensor (key order) → validation of the whole input → split into chunks of at most 4,096 rows → per chunk: column streams → zstd level 3 when it makes the payload smaller → header and CRC-32C. Decode reverses it after the header checks.
+Rows of one sensor (key order) → validation of the whole input → split into chunks of at most 4,096 rows → per chunk: column streams → zstd level 15 when it makes the payload smaller → header and CRC-32C. Decode reverses it after the header checks.
 
 ## Storage / Persistence
 
@@ -330,7 +390,9 @@ Not operator-visible. The benchmark reports refusals and mismatches for a shard.
 - every refusal reason, including a stored DateTime beyond the range for every DateTime member found by reflection, and a payload above 64 MiB;
 - "whatever `Encode` accepts, `Decode` returns": 3,000 randomized inputs of every type, a third of the rows re-read from randomly patched MemoryPack bytes; either a refusal or a decode that `RowFidelity` cannot fault;
 - failures caught by `Decode` must come from its own checks, zstd or UTF-8 decoding, never from a reader bug (the inner exception is checked);
-- zstd payloads that are not exactly one frame with a declared content size are rejected before decompression.
+- zstd payloads that are not exactly one frame with a declared content size are rejected before decompression;
+- string template mode (`StringTemplateTests`): every restoration rule and every tokenizing rule table-driven; tokenize-then-restore is the identity on 50,000 generated shapes; the caps leave runs literal; "whatever `Encode` accepts, `Decode` returns" for 1,500 String and Integer inputs whose values and comments come from templates and numeric shapes (leading zeros, "-0", "-0.0", "-000.1", "1.", ".5", "1..2", "1.2.3", "10.0.0.1", "--3", "+5", runs of 17 to 20 digits, F and Z at and beyond their caps, strings at and beyond 65,536 characters, non-ASCII digits, null against empty, zero-slot strings, a different template on every row; seeded, the seed logged, `HSM_STRING_TEST_SEED` replays another); the encoder choice pinned per column kind and against both encodings built directly; every decoder bound violated one at a time is `Corrupt`, the slot and character limits before the guarded memory is allocated (allocation measured); payload fuzzing behind a valid checksum fails cleanly and never allocates 32 MB in one decode; every bit flip and truncation of a template chunk is detected; bit flips with the checksum recomputed never crash the parser (some decode to other valid strings: the checksum is what catches those);
+- the golden set pins the string column choice (every template case is mode 2, the set holds modes 0, 1 and 2) and the zstd level (`ChunkCodec.ZstdLevel` is 15; the encode test catches a level change only where the two levels write different bytes, 14 against 15 on one case).
 
 To change the encoder's output: bump `ChunkCodec.EncoderRevision` (or `FormatVersion`, keeping the old decoder and dispatching on byte 2, when a current reader could not decode the new bytes), run `GoldenChunkTests` with `HSM_WRITE_GOLDEN_CHUNKS=1` to write the new set next to the old ones (the writer refuses an existing directory), and commit it. The old sets stay as decode tests. Never change the input of an existing golden case; add a case instead.
 
@@ -349,8 +411,8 @@ Seeded tests take every sensor id and value from their generator, so a failure r
 
 ## Notes
 
-- Departures from the measured prototype: residual orders are the plain first and second difference for every integer column (the prototype hard-wired delta-of-delta for time); the decimal mantissas use a full integer column (byte or bit level), not always the bit level; the double column picks the smallest of XOR bytes, decimal and Gorilla; `CloseTime` is stored relative to `OpenTime`; the key and `Time` are separate columns, so a `Time` that differs from the key round-trips; strings are a dictionary per column with indices in an integer column; powers of ten are literals, not `Math.Pow`.
-- Encoding costs about 0.6 µs per row and decoding about 0.25 µs per row on the measured shard; the densest real sensor (10,061 Rate rows, 3 chunks) decodes in about 0.7 ms.
+- Departures from the measured prototype: residual orders are the plain first and second difference for every integer column (the prototype hard-wired delta-of-delta for time); the decimal mantissas use a full integer column (byte or bit level), not always the bit level; the double column picks the smallest of XOR bytes, decimal and Gorilla; `CloseTime` is stored relative to `OpenTime`; the key and `Time` are separate columns, so a `Time` that differs from the key round-trips; strings are a dictionary per column with indices in an integer column, or templates with numeric slots (mode 2, added 2026-11-20 from two measurement rounds on a production week, `docs/initiatives/sensor-history-storage.md`); powers of ten are literals, not `Math.Pow`.
+- Encoding costs about 0.8 µs per row and decoding about 0.17 µs per row on a production deployment's week (see Measured).
 
 ## Known Issues / Limitations
 
