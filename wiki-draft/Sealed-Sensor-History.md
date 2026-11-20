@@ -49,6 +49,7 @@ Both directories also hold small text files whose names start with `hsm-`. They 
 | `hsm-rows-left` | chunks | The sensors the job left as rows, with the reason. |
 | `hsm-sealed` | chunks | **The week is sealed**: the chunks are complete and verified. |
 | `hsm-keep-source-rows-until` | chunks | First line: the UTC time until which the original rows are kept. |
+| `hsm-source-rows-removing` | chunks | The job has begun to remove the original rows: from now on the week is read from rows and chunks together. |
 | `hsm-source-rows-removed` | chunks | The original rows are gone. |
 | `hsm-unsealing` | chunks | An unseal is in progress. |
 | `hsm-unsealed` | rows | An operator unsealed the week; the job leaves it as rows. |
@@ -141,7 +142,7 @@ Under **HSM Server Monitoring → Database → Sealed history**, posted with the
 
 ## The keep period
 
-After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. When the period ends, the job removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory once the week has been quiet for 3 hours.
+After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. Reads of such a week use its rows alone, exactly as before the seal: the chunks are not read, and after a restart their database is not even opened until retention, a compaction or the job needs it. When the period ends, the job writes `hsm-source-rows-removing` (from then on reads combine rows and chunks), removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory once the week has been quiet for 3 hours.
 
 **To keep one week's rows longer**, edit the first line of `SensorValuesSealedV1_<from>_<to>/hsm-keep-source-rows-until` to a later UTC time in the same format (`2027-01-15T00:00:00.0000000Z`). The job reads it at every pass; no restart is needed. Leave the rest of the file as it is.
 
@@ -186,5 +187,7 @@ To keep a copy of sensor history, copy the database folder yourself, with the se
 - **Retention.** Retention on a sealed week costs almost nothing: it deletes the chunks that lie wholly before its cutoff and records, per sensor, up to where the remaining chunk counts as deleted (a few dozen bytes); nothing is re-encoded. The values before the cutoff stay on disk inside that one chunk per sensor until a later retention pass or a fold removes it. (The first test deployment ran a build that re-encoded that chunk at every hourly pass; its week being trimmed took 16 MB for 2.5 MB of chunks.)
 - **Rolling back to an earlier build of this feature.** Builds from before that change read the per-sensor retention records as damaged chunks. Unseal first if you have to go back to one.
 - **Writes.** New values are never written to a sealed week's chunks; they go to the rows directory as before. Writes to an old week wait while the job commits a step; on the test deployment the longest wait was 9.8 ms.
-- **Reads.** A read that needs a sealed value decodes one chunk: about 0.2 ms instead of a few microseconds for the first value or a point read. Reading a whole week of a sensor gets faster. Loading a sensor's history at its first use after a start costs about 0.1 to 0.2 ms more per sealed week it reaches.
+- **Reads during the keep period: nothing.** The week is read from its rows alone, as if it were not sealed. (The first test deployment ran builds that also read the chunks during the keep period and threw the result away: on a test set of 7 such weeks, reading a page of 100 values of every sensor in every week took 4 times as long and allocated 8 times as much memory as on the same weeks unsealed.)
+- **Reads after the keep period.** A read that needs a sealed value decodes one chunk: about 0.2 ms instead of a few microseconds for the first value or a point read. Reading a whole week of a sensor gets faster. Loading a sensor's history at its first use after a start costs about 0.1 to 0.2 ms more per sealed week it reaches.
+- **Memory.** A sealed week's chunk database is a second LevelDB database next to the week's rows. Open and idle it costs about 0.2 MB and four file handles; its chunks are read through memory-mapped files, which count as file-backed memory of the process (reclaimable, like the rows' files). During the keep period it is not opened after a restart until retention or the job needs it. A 300-hour test run of hourly retention, late values, page reads and job passes on 7 sealed weeks showed no growth of managed memory.
 - **Disk, temporarily.** A sealed week takes more space than before until its keep period ends (rows and chunks), then far less.
