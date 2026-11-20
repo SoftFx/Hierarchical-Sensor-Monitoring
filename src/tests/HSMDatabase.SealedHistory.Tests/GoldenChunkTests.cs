@@ -73,6 +73,26 @@ namespace HSMDatabase.SealedHistory.Tests
         }
 
         /// <summary>
+        /// Every case has a seed constant of its own, and no two share one: a case's input never depends on the
+        /// other cases or on their order. Building a case twice, and building it after the list is reordered, gives
+        /// the same rows.
+        /// </summary>
+        [Fact]
+        public void Every_golden_case_has_its_own_fixed_seed()
+        {
+            Assert.Equal(GoldenInputs.Names.Order(), GoldenInputs.Seeds.Keys.Order());
+            Assert.Equal(GoldenInputs.Seeds.Count, GoldenInputs.Seeds.Values.Distinct().Count());
+
+            foreach (var name in GoldenInputs.Names.Reverse())
+            {
+                var first = GoldenInputs.Build(name);
+                var second = GoldenInputs.Build(name);
+                Assert.Equal(first.Select(r => r.Key), second.Select(r => r.Key));
+                Assert.Equal(first.Select(r => Convert.ToHexString(Fidelity.Bytes(r.Value))), second.Select(r => Convert.ToHexString(Fidelity.Bytes(r.Value))));
+            }
+        }
+
+        /// <summary>
         /// The zstd level is part of the encoder: a different level writes different bytes for most inputs, which
         /// the encode test above catches only for inputs where the two levels differ (14 against 15 differs on one
         /// golden case). Pin it, so that changing it is a deliberate encoder change with a new golden set.
@@ -187,6 +207,32 @@ namespace HSMDatabase.SealedHistory.Tests
             .. TemplateCases.Keys,
         ];
 
+        /// <summary>
+        /// The generator seed of every case, a constant stored with the case: never derived from a case's position
+        /// or from anything else, so adding or reordering cases cannot change an existing case's input. A new case
+        /// takes a new, unused constant. ("Integer-single-row" uses no generator; its seed is reserved.)
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, ulong> Seeds = new Dictionary<string, ulong>
+        {
+            ["Boolean"] = 1,
+            ["Integer"] = 2,
+            ["Double"] = 3,
+            ["String"] = 4,
+            ["IntegerBar"] = 5,
+            ["DoubleBar"] = 6,
+            ["TimeSpan"] = 8,
+            ["Version"] = 9,
+            ["Rate"] = 10,
+            ["Enum"] = 11,
+            ["Integer-single-row"] = 12,
+            ["String-decimals"] = 1001,
+            ["String-zero-padded"] = 1002,
+            ["String-signs"] = 1003,
+            ["String-mixed-templates"] = 1004,
+            ["String-nulls-and-empties"] = 1005,
+            ["Integer-template-comments"] = 1006,
+        };
+
         private static readonly DateTime Start = new(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
 
         private static readonly System.Globalization.CultureInfo Invariant = System.Globalization.CultureInfo.InvariantCulture;
@@ -245,7 +291,7 @@ namespace HSMDatabase.SealedHistory.Tests
                 return TemplateRows(name, text);
 
             var type = Enum.Parse<SensorType>(name);
-            var g = new Generator((ulong)type + 1);
+            var g = new Generator(Seeds[name]);
             var rows = new List<HistoryRow>();
             var time = Start;
 
@@ -288,7 +334,7 @@ namespace HSMDatabase.SealedHistory.Tests
 
         private static List<HistoryRow> TemplateRows(string name, Func<int, Generator, string> text)
         {
-            var g = new Generator((ulong)Array.IndexOf(Names, name) + 100);
+            var g = new Generator(Seeds[name]);
             var rows = new List<HistoryRow>();
             var time = Start;
 
