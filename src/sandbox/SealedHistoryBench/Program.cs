@@ -10,6 +10,7 @@ using MemoryPack;
 //   SealedHistoryBench <shard-dir> [--limits 1024,4096,...] [--out <dir>]
 //   SealedHistoryBench --synthetic [--limits ...]
 //   SealedHistoryBench --store-synthetic <work-dir> | --store-shard <shard-copy> <work-dir>   (the sealed week store, #1803)
+//   SealedHistoryBench --seal-shard <shard-copy> [--max-sensor-rows N]   (streamed: memory bounded by one sensor)
 //
 // <shard-dir> is a SensorValuesV2_* LevelDB directory. It is opened read-only; work on a copy anyway.
 // --out writes the chunks into a fresh LevelDB there (key sensorId | firstKey), compacts it and reports its size.
@@ -25,7 +26,10 @@ if (options.Synthetic)
 if (options.StoreWorkPath is not null)
     StoreBench.Run(options);
 
-if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null)
+if (options.SealShardPath is not null)
+    SealedHistoryBench.Strings.SealShardBench.Run(options.SealShardPath, options.MaxSensorRows);
+
+if (options.ShardPath is null && !options.Synthetic && options.StoreWorkPath is null && options.SealShardPath is null)
     Console.WriteLine("usage: SealedHistoryBench <shard-dir> [--limits 1024,4096] [--out <dir>] | --synthetic [--limits ...]");
 
 
@@ -37,6 +41,8 @@ internal sealed class Options
     public string StoreShardPath;
     public string StoreWorkPath;
     public int[] Limits = [ChunkCodec.MaxRowsPerChunk];
+    public string SealShardPath;
+    public int MaxSensorRows = 1_000_000;
 
 
     public static Options Parse(string[] args)
@@ -52,6 +58,8 @@ internal sealed class Options
                 case "--out": o.OutPath = args[++i]; break;
                 case "--store-synthetic": o.StoreWorkPath = args[++i]; break;
                 case "--store-shard": o.StoreShardPath = args[++i]; o.StoreWorkPath = args[++i]; break;
+                case "--seal-shard": o.SealShardPath = args[++i]; break;
+                case "--max-sensor-rows": o.MaxSensorRows = int.Parse(args[++i]); break;
                 default: o.ShardPath = args[i]; break;
             }
         }
