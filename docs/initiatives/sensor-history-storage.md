@@ -357,18 +357,47 @@ Keep LevelDB and add a codec of our own for closed periods. Decided on 2026-11-1
 3. Values are not rounded in the first version. Whether they may be, and if so per sensor rather than globally, is a separate decision.
 4. DuckDB, VictoriaMetrics, ClickHouse, TimescaleDB, QuestDB and Parquet are not adopted as the history store.
 
+## First rollout (2026-11-20)
+
+Step 4 (#1805), first stage: the sealing job switched on for a test deployment with `SealAfterDays` 7 and `KeepSourceRowsWeeks` 1. It sealed the seven closed weeks in seven passes, oldest first.
+
+| Week | Rows sealed | Logical bytes before → chunks | Sensors | Seal time | Longest gate hold |
+|---|---|---|---|---|---|
+| 1 (oldest, mostly emptied by retention) | 72 | 7,829 → 1,765 | 8 | 0.2 s | 9.8 ms |
+| 2 | 103 | 10,676 → 4,615 | 34 | 0.1 s | 2.1 ms |
+| 3 | 133 | 14,902 → 3,409 | 17 | 0.1 s | 1.8 ms |
+| 4 | 95 | 10,080 → 2,836 | 17 | 0.0 s | 1.9 ms |
+| 5 | 375,569 | 47,874,427 → 2,528,898 | 293 | 2.2 s | 1.8 ms |
+| 6 | 499,551 | 63,655,209 → 3,339,107 | 302 | 2.7 s | 1.8 ms |
+| 7 | 523,514 | 66,665,479 → 3,592,023 | 395 | 2.6 s | 2.1 ms |
+
+Totals: **1,399,037 rows; 178.2 MB of keys and values → 9.47 MB of chunks** (18.8 times smaller; 127.4 → 6.8 bytes per row). "Logical bytes" are the keys and values of the rows the seal encoded, not the size of the row directory on disk.
+
+**Verified:** no pass failed and no error was logged; no sensor was left as rows; every read through the Sensor API returns the same number of values for each sealed week as before the seal.
+
+**Observations and what was done (#1805):**
+
+1. *The chunk directory of a freshly sealed week was not compacted.* On disk the chunk directories of weeks 5, 6 and 7 took 16, 4 and 4 MB for 2.5, 3.3 and 3.6 MB of chunks, and the 16 MB had not shrunk nine hours later. In the code: the seal changes no row, so the week's row database keeps its `hsm-compacted` marker and the background compaction (step 0) does not visit the week; the store's `Compact()`, which compacts both databases, runs only once the source-row removal clears the marker. Done: the seal compacts the chunk database itself, after verification and before the commit, outside the week's gate (`SealedWeekWriter.Compact`, checkpoint `seal/compacted` in the interruption and crash-image tests). Not by clearing the marker: step 0 would then recompact the unchanged row database of every sealed week, and only after a 3-hour quiet period. Measured on a synthetic week (4.8 MB of chunks, Windows and Linux alike): before, 4.8 MB on disk of which 4.8 MB write-ahead log; after, 4.8 MB in one sorted table and an empty log. zstd chunks do not shrink further, so a freshly sealed week gains little space from it (weeks 6 and 7: the log's overhead); what it removes is the log and its replay at every open.
+   The 16 MB of week 5 has another cause, found while measuring: week 5 is the oldest week the hourly retention pass is trimming, and a retention delete whose cutoff falls inside a chunk re-encodes that chunk. With about one chunk per sensor per week, every hourly pass rewrites nearly the whole week's chunks, and the chunk directory carries the rewrites as log and level-0 tables (a test week of 0.73 MB of chunks trimmed hour by hour took up to 9.0 MB on disk over four days). Step 0 does not compact it either, since the trimming keeps resetting its 3-hour quiet period. Data is unaffected; the cost is disk space on that one week and a re-encode of its border chunks per pass. Not addressed in this step; the options (a smaller write buffer for chunk databases, compacting the chunk database after rewrites, retention aligned to chunk boundaries on sealed weeks) need a decision.
+2. *The first pass came late and nothing said so.* The service starts 15 minutes after the server and rounds up to its 7-minute grid, so the first pass can come 22 minutes after the start, and the only line until then was "History sealing is on". Done: the start line names the UTC time of the first pass; a pass with nothing to do logs one Debug line. `Last run` among the self-monitoring sensors is posted after such a pass too (`None NothingDue`; covered by tests), so the sensor shows the job is alive.
+3. *A pass skipped because the compaction step was running* left a 14-minute gap (passes at 01:53 and 02:07, none at 02:00). By design: the two share the maintenance state. Done: the Info line for it now names what held the state (`History sealing pass skipped: the history shard compaction step was running (<shard>); next pass at 02:07 UTC`), and the operator page explains it.
+
+The operator page is `wiki-draft/Sealed-Sensor-History.md` (not published yet).
+
+**Still to come on this deployment:** the source rows of these weeks are removed after the one-week keep period; then step 0 compacts the row databases; the size on disk is to be measured again after that, per week and in total, together with the chunk directory of the week retention is trimming. Then the production rollout and the decision on the default.
+
 ## Work Breakdown
 
-Epic #1800, one PR per step.
+Epic #1800, one PR per step. The steps merge into the integration branch `feature/1800-sealed-history`, and into `master` together at the end.
 
-| Step | Issue | Scope |
-|---|---|---|
-| 0 | #1801 | Compact closed weekly shards automatically. Independent of the rest; includes the size check on a production database |
-| 1 | #1802 | Chunk codec library: all value types, round-trip and golden-file tests, chunk size fixed |
-| 2 | #1803 | Sealed week store and merged reads behind `ISensorValuesDatabase`; differential tests against a plain week |
-| 3 | #1804 | Sealing job: verification, keep period, delete and compact, configuration switch, self-monitoring sensors, unseal |
-| 4 | #1805 | Rollout on a test deployment, then production; decide the default |
-| — | not planned | Rounding by kind of sensor: needs the missing measurement and an owner decision |
+| Step | Issue | Scope | Status (2026-11-20) |
+|---|---|---|---|
+| 0 | #1801 | Compact closed weekly shards automatically. Independent of the rest; includes the size check on a production database | Done (in the integration branch) |
+| 1 | #1802 | Chunk codec library: all value types, round-trip and golden-file tests, chunk size fixed | Done, string templates and zstd 15 included |
+| 2 | #1803 | Sealed week store and merged reads behind `ISensorValuesDatabase`; differential tests against a plain week | Done |
+| 3 | #1804 | Sealing job: verification, keep period, delete and compact, configuration switch, self-monitoring sensors, unseal | Done |
+| 4 | #1805 | Rollout on a test deployment, then production; decide the default | In progress: test deployment sealed (see "First rollout"), follow-ups done; source-row removal and the size measurement after it, then production and the default, to come |
+| — | not planned | Rounding by kind of sensor: needs the missing measurement and an owner decision | Not planned |
 
 ## Risks
 
