@@ -442,7 +442,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             var hidden = overlay.Select(Convert.ToHexString).ToHashSet();
             long count = overlay.Count;
 
-            using var chunks = _chunks.Native.CreateIterator(_readOptions);
+            // The chunks and the watermarks from one snapshot (#1805 review W3): a prefix delete or a fold in between
+            // would otherwise pair chunk rows with a watermark that no longer applies to them.
+            using var snapshot = _chunks.Native.CreateSnapshot();
+            using var options = new ReadOptions { Snapshot = snapshot };
+            using var chunks = _chunks.Native.CreateIterator(options);
 
             foreach (var (key, chunk, header) in ChunkEntries(chunks, from, to))
             {
@@ -455,7 +459,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 try
                 {
-                    watermark = _reader.ReadWatermark(_chunks.Native, null, key);
+                    watermark = _reader.ReadWatermark(_chunks.Native, options, key);
                 }
                 catch (SealedChunkReadException)
                 {

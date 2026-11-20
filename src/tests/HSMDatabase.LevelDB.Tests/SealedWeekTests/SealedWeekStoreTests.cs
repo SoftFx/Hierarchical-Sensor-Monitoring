@@ -910,6 +910,36 @@ public sealed class SealedWeekStoreTests
         Assert.Empty(touchedT);
     }
 
+    // Review W3: the history size with an unreadable chunk falls back to a lower bound, which must not count the rows
+    // below a watermark: neither the deleted rows of a readable partly deleted chunk, nor anything of an unreadable one.
+    [Theory]
+    [InlineData("the last chunk")]
+    [InlineData("the partly deleted chunk")]
+    public void TheHistorySizeWithAnUnreadableChunk_CountsNoRowBelowTheWatermark(string corrupt)
+    {
+        var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(1863));
+
+        using var pair = WeekPair.Create(seed);
+
+        var store = pair.SealedStore;
+        var chunks = DenseChunks(pair, sensors.Dense);
+        var (from, to) = Prefix(sensors.Dense, chunks);
+        pair.Remove(from, to);
+
+        var damaged = corrupt == "the last chunk" ? chunks[2] : chunks[1];
+        var key = Key(sensors.Dense, damaged.FirstTick);
+        var chunk = store.ChunkDatabase.Native.Get(key);
+        chunk[^1] ^= 0xFF;
+        store.ChunkDatabase.Native.Put(key, chunk);
+
+        // What a lower bound may count: the rows of the readable chunk, live part only (the overlay is empty).
+        var readable = corrupt == "the last chunk" ? chunks[1] : chunks[2];
+        var expected = pair.Plain.CalculateHistorySize(Key(sensors.Dense, readable.FirstTick), Key(sensors.Dense, readable.LastTick)).count;
+
+        Assert.Equal(expected, store.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense)).count);
+        Assert.True(expected < pair.Plain.CalculateHistorySize(Min(sensors.Dense), Max(sensors.Dense)).count);
+    }
+
     // Crash images, as in the sealing job's tests (Linux only: on Windows an open LevelDB cannot be copied): the week's
     // directories copied file by file right after the watermark batch, then opened as a week of their own.
     [NotOnWindowsFact]
