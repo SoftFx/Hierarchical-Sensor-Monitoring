@@ -180,6 +180,41 @@ For the full Telegram setup guide, see [Telegram Setup](Telegram-Setup).
 
 ---
 
+## Sealed Sensor History
+
+```json
+"HistorySealing": {
+  "Enabled": false,
+  "SealAfterDays": 7,
+  "KeepSourceRowsWeeks": 4,
+  "WorkingHoursStartUtc": "00:00",
+  "WorkingHoursEndUtc": "00:00",
+  "FoldMinRows": 10000,
+  "FoldQuietHours": 24
+}
+```
+
+A background job can store closed weeks of sensor history in a compact form (about 7.5 bytes per value instead of about 43 after compaction), while every read keeps returning the same values (`ReceivingTime` is kept to the millisecond). It is **off by default**. Sensor history is not part of the backups, so the job verifies everything it writes and keeps the original rows for a while.
+
+| Setting | Default | Description |
+|---|---|---|
+| `Enabled` | `false` | Turns the job on. When off it does nothing; weeks already sealed stay readable. |
+| `SealAfterDays` | `7` | A week (Monday to Monday, UTC) is sealed this many days after it ended (1 to 3650). |
+| `KeepSourceRowsWeeks` | `4` | After a verified seal, the original rows stay this many weeks before they are removed (1 to 520). The week takes more space until then. The time is fixed per week when it is sealed. |
+| `WorkingHoursStartUtc`, `WorkingHoursEndUtc` | `00:00`, `00:00` | The daily UTC window the job works in, `HH:mm`. Equal values mean all day; `22:00` to `06:00` wraps past midnight. |
+| `FoldMinRows` | `10000` | Values written into an already sealed week (late values, edits) are folded into it once this many have collected... |
+| `FoldQuietHours` | `24` | ...or once the week has had no new write for this many hours. |
+
+The settings are read when the server starts. An invalid value stops the start with an error naming the key.
+
+**Unseal.** **Configuration → Database**, select a week in *Values Database* and press **Unseal** (administrators only) to turn a sealed week back into ordinary rows. The job then leaves that week alone until the file `hsm-unsealed` is deleted from the week's `SensorValuesV2_*` directory. Unseal every sealed week before rolling the server back to a version without sealed history: an older server cannot see sealed weeks.
+
+To cancel an unseal that cannot finish (a damaged chunk), delete the file `hsm-unsealing` from the week's `SensorValuesSealedV1_*` directory.
+
+The job reports itself under **HSM Server Monitoring → Database → Sealed history** (last run, sealed weeks, weeks needing attention, rows and bytes sealed, sensors left as rows, verification failures, chunk read, rewrite and directory sync failures). **Weeks needing attention** above 0 means the job has stopped touching a week until you act; its comment says which week and what to do. Never delete a `SensorValuesSealedV1_*` directory by hand unless that comment says its rows are complete: after the keep period it holds the only copy of the week.
+
+---
+
 ## Docker Volume Mounts
 
 Always mount these directories to preserve data across container restarts and updates:

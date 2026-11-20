@@ -244,6 +244,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<BackgroundServices.DatabaseServices.RestoreTempCleanupService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.ApiTokenRetentionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistoryCompactionService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.HistorySealingService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

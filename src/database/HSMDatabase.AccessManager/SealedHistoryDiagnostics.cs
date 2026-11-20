@@ -19,6 +19,13 @@ namespace HSMDatabase.AccessManager
         public static long ChunkRewriteFailures => Interlocked.Read(ref _chunkRewriteFailures);
 
 
+        private static long _directorySyncFailures;
+
+        /// <summary>Directory syncs after a sealing marker that failed (Linux, macOS), since the process started (#1804).</summary>
+        public static long DirectorySyncFailures => Interlocked.Read(ref _directorySyncFailures);
+
+        public static void CountDirectorySyncFailure() => Interlocked.Increment(ref _directorySyncFailures);
+
         public static void CountChunkReadFailure() => Interlocked.Increment(ref _chunkReadFailures);
 
         public static void CountChunkRewriteFailure() => Interlocked.Increment(ref _chunkRewriteFailures);

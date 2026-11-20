@@ -18,6 +18,8 @@
 
         CollectorSessionsConfig CollectorSessions { get; }
 
+        HistorySealingConfig HistorySealing { get; }
+
 
         void ResaveSettings();
     }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\database\HSMDatabase.SealedHistory\HSMDatabase.SealedHistory.csproj" />
     <ProjectReference Include="..\..\database\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />
+    <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
   </ItemGroup>
 
 </Project>
