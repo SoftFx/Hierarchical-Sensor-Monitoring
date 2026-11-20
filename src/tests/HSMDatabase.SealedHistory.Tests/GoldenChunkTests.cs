@@ -73,6 +73,18 @@ namespace HSMDatabase.SealedHistory.Tests
         }
 
         /// <summary>
+        /// The zstd level is part of the encoder: a different level writes different bytes for most inputs, which
+        /// the encode test above catches only for inputs where the two levels differ (14 against 15 differs on one
+        /// golden case). Pin it, so that changing it is a deliberate encoder change with a new golden set.
+        /// </summary>
+        [Fact]
+        public void The_zstd_level_is_the_one_the_golden_set_was_written_with()
+        {
+            Assert.True(ChunkCodec.ZstdLevel == 15,
+                $"zstd level {ChunkCodec.ZstdLevel}: the current golden set was written at level 15; a new level is a new encoder revision with its own golden set");
+        }
+
+        /// <summary>
         /// The encoder's string column choice on the golden inputs, pinned: every template case is written in
         /// mode 2, and the set as a whole holds all three string column modes.
         /// </summary>
