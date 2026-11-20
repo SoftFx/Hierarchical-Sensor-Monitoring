@@ -135,6 +135,7 @@ Under **HSM Server Monitoring → Database → Sealed history**, posted with the
 | `hsm-keep-source-rows-until` cannot be read | The original rows are kept until it is fixed. | Write a UTC time on its first line, for example `2026-12-01T00:00:00.0000000Z`. |
 | A chunk cannot be read during source-row removal | The rows of that chunk stay; the rest of the week went on. The removal is retried daily. Nothing is lost. | Clear the history of the sensor named in the chunk read error over that week, or leave it. |
 | A chunk cannot be read during an unseal | The unseal stopped before anything irreversible and is retried daily. | Cancel the unseal (delete `hsm-unsealing`), or clear the history of that sensor over that week and press Unseal again. |
+| The delete record (watermark) of a sensor cannot be read | Retention and clear history of that sensor in that week are refused, so its old values there stay, and reading that sensor's values in that week fails. | Unseal this week. The unseal restores every value of the sensor's chunks, also values retention had already deleted (the log names the sensor); retention then removes them again. |
 
 ---
 

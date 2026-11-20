@@ -386,6 +386,20 @@ The operator page is `wiki-draft/Sealed-Sensor-History.md` (not published yet).
 
 **Still to come on this deployment:** the source rows of these weeks are removed after the one-week keep period; then step 0 compacts the row databases; the size on disk is to be measured again after that, per week and in total, together with the chunk directory of the week retention is trimming. Then the production rollout and the decision on the default.
 
+## Timestamps (2026-11-20)
+
+A separate experiment on the same production week as the string work above, with the codec of encoder revision 1 (91.8 MB, 7.72 bytes per row) as the baseline. Counts and sizes only; the experiment code is not in the repository's branches.
+
+**Where the bytes go.** Timestamps are 60% of the sealed week: the key 3.1 and `ReceivingTime` 1.6 bytes per row of 7.72. Keys are 100 ns ticks on a jittery grid with no common divisor, so nothing can be divided out losslessly.
+
+**Within one sensor.** Recoding the timestamps of each sensor as the first difference minus the chunk's median period, with per-column bucket widths and GCD scaling as a guard, reaches 84.4 MB against 91.8 MB (−8.1%), and needs a new format version. The only gain a current reader can still decode is −1.0% (varints for the `ReceivingTime` steps).
+
+**Across sensors.** 83% of rows carry a tick that another sensor also has: the sensors of one collector post in the same ticks, each with its own gaps. Storing a week's tick sequence once ("timelines": sensors grouped greedily by co-occurrence; a chunk references a timeline with a membership bitmap plus exceptions; key column only) reaches 64.5 MB, 5.42 bytes per row (−29.8%); a cold one-chunk decode takes 0.56 ms against 0.35 ms. It needs format version 2, timeline records in the sealed week store and a two-pass sealing job, and one unreadable timeline would affect every sensor that references it (up to several hundred).
+
+**Rejected variants:** one global timeline per week (7.5 ms per decode); references to ranges of a timeline only (worse than nothing); content-addressed identical key columns (−2.6%); `ReceivingTime` flags (receive instants are mostly not shared per tick).
+
+**Status:** not adopted. Recorded as the candidate content of a future format version 2.
+
 ## Work Breakdown
 
 Epic #1800, one PR per step. The steps merge into the integration branch `feature/1800-sealed-history`, and into `master` together at the end.
