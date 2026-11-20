@@ -328,6 +328,17 @@ Keep LevelDB and add a codec of our own for closed periods. Decided on 2026-11-1
 3. Values are not rounded in the first version. Whether they may be, and if so per sensor rather than globally, is a separate decision.
 4. DuckDB, VictoriaMetrics, ClickHouse, TimescaleDB, QuestDB and Parquet are not adopted as the history store.
 
+### Where more can still be gained
+
+Published float codecs since Gorilla (Chimp, Elf, DeXOR, ALP and others) mostly win by recovering the decimal a double came from, which the chunk codec's decimal mode already does. A literature review, [time-series-compression-literature.md](time-series-compression-literature.md), lists what the papers have and the codec does not. These are examples to measure, not planned work:
+
+- Strings, 65.5% of sealed bytes on SoftFx production: template extraction plus numbers kept as typed integer or decimal columns, not digit text (CLP, Denum, LogReducer).
+- Doubles: values that do not round-trip stored aside as exceptions, so one such value no longer pushes the whole chunk out of decimal mode (ALP).
+- Integer columns, timestamps included: bucket widths fitted per chunk or entropy-coded residuals instead of the fixed bucket code (Pcodec, BOS, Parquet miniblocks).
+- Small chunks: a shared trained zstd dictionary.
+
+Rate values are not on the list: the collector divides by an elapsed time the server never sees, so their mantissa is noise for any lossless coder. Only rounding, or sending the sum and the elapsed time separately, would change that.
+
 ## Work Breakdown
 
 Epic #1800, one PR per step.
