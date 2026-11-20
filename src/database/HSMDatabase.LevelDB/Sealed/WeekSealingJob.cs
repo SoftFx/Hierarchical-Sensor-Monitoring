@@ -19,6 +19,7 @@ namespace HSMDatabase.LevelDB.Sealed
         public const string SealOpened = "seal/opened";
         public const string SealSensorWritten = "seal/sensor-written";
         public const string SealEncoded = "seal/encoded";
+        public const string SealCompacted = "seal/compacted";
         public const string SealMarked = "seal/marked";
         public const string SealBeforeTail = "seal/before-tail";
         public const string SealSwapped = "seal/swapped";
@@ -79,7 +80,7 @@ namespace HSMDatabase.LevelDB.Sealed
 
         /// <summary>
         /// Seals a week served as rows: per sensor, encode its rows from one snapshot, write the chunks, read them back
-        /// and compare them field by field with the source rows. Then, under the week's exclusive gate, drop the
+        /// and compare them field by field with the source rows; compact the chunk database. Then, under the week's exclusive gate, drop the
         /// chunks of every sensor a range delete touched meanwhile, write the markers (the keep period, the sensors left
         /// as rows, finally <c>hsm-sealed</c>) and swap the week to the sealed store. False when stopped for a shutdown
         /// (the chunk directory is then incomplete: never read, started again by the next seal).
@@ -119,6 +120,15 @@ namespace HSMDatabase.LevelDB.Sealed
                 }
 
                 _checkpoint(SealingCheckpoints.SealEncoded);
+
+                if (_shouldStop())
+                    return false;
+
+                // The chunk directory is left compact (#1805): outside the gate, before the marker. Nothing else compacts
+                // it until the keep period ends, and until then its write-ahead log and unmerged tables would stay on disk.
+                writer.Compact();
+
+                _checkpoint(SealingCheckpoints.SealCompacted);
 
                 if (_shouldStop())
                     return false;

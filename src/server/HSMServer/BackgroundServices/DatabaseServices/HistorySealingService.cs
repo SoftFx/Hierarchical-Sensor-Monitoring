@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMCommon.Extensions;
 using HSMServer.Core.DataLayer;
 using HSMServer.ServerConfiguration;
+using NLog;
 
 namespace HSMServer.BackgroundServices.DatabaseServices
 {
@@ -29,18 +31,53 @@ namespace HSMServer.BackgroundServices.DatabaseServices
             _database = database;
             _settings = (config.HistorySealing ?? new HistorySealingConfig()).Settings;
 
-            _logger.Info(_settings.Enabled
-                ? $"History sealing is on: weeks are sealed {_settings.SealAfter.TotalDays:F0} days after they close, source rows kept {_settings.KeepSourceRows.TotalDays:F0} days"
-                : "History sealing is off (HistorySealing.Enabled)");
+            if (!_settings.Enabled)
+                _logger.Info("History sealing is off (HistorySealing.Enabled)");
         }
 
+
+        // The start line says when the first pass runs (#1805): until then nothing else is logged, and an operator who has
+        // just switched the job on must be able to tell a waiting job from a broken one.
+        protected override void OnScheduled(DateTime firstRunUtc)
+        {
+            if (_settings.Enabled)
+                _logger.Info(StartLine(_settings, firstRunUtc, Delay));
+        }
 
         protected override Task ServiceActionAsync(CancellationToken token = default)
         {
-            if (_settings.Enabled && _database.RunHistorySealingPass(DateTime.UtcNow, _settings) is { Outcome: HistorySealingOutcome.Busy })
-                _logger.Info("Another compaction or sealing step is running; the history sealing pass is skipped");
+            if (!_settings.Enabled)
+                return Task.CompletedTask;
+
+            var now = DateTime.UtcNow;
+            var report = _database.RunHistorySealingPass(now, _settings);
+
+            // A pass that did something is logged by the database core; the others here.
+            if (PassLine(report, now.Ceil(Delay)) is { } line)
+                _logger.Log(line.level, line.text);
 
             return Task.CompletedTask;
         }
+
+
+        internal static string StartLine(HistorySealingSettings settings, DateTime firstRunUtc, TimeSpan delay)
+        {
+            var window = settings.WorkingHoursStartUtc == settings.WorkingHoursEndUtc
+                ? string.Empty
+                : $", working {settings.WorkingHoursStartUtc:hh\\:mm}-{settings.WorkingHoursEndUtc:hh\\:mm} UTC";
+
+            return $"History sealing is on: weeks are sealed {settings.SealAfter.TotalDays:F0} days after they close, source rows kept " +
+                   $"{settings.KeepSourceRows.TotalDays:F0} days{window}; first pass at {firstRunUtc:yyyy-MM-dd HH:mm} UTC, then every {delay.TotalMinutes:F0} minutes";
+        }
+
+        // The line for a pass the database core does not log: Info for a pass skipped because another maintenance step held
+        // the database (the next chance is one Delay later), Debug for a pass with nothing to do (every Delay).
+        internal static (LogLevel level, string text)? PassLine(HistorySealingPassReport report, DateTime nextPassUtc) => report?.Outcome switch
+        {
+            HistorySealingOutcome.Busy => (LogLevel.Info, $"History sealing pass skipped: {report.Note ?? "another compaction or sealing step was running"}; next pass at {nextPassUtc:HH:mm} UTC"),
+            HistorySealingOutcome.NothingDue => (LogLevel.Debug, $"History sealing pass: no week needs work ({report.SealedWeeks} sealed weeks)"),
+            HistorySealingOutcome.OutsideWorkingHours => (LogLevel.Debug, "History sealing pass: outside the working hours (HistorySealing.WorkingHoursStartUtc/EndUtc)"),
+            _ => null,
+        };
     }
 }

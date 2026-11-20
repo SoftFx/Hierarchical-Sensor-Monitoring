@@ -32,12 +32,22 @@ namespace HSMServer.BackgroundServices
         protected override Task ExecuteAsync(CancellationToken token)
         {
             var now = DateTime.UtcNow;
+            var firstRun = FirstRunUtc(now);
+
+            OnScheduled(firstRun);
+
             // The logger is load-bearing: PeriodicTask.Run swallows action throws into
             // logger?.Error, so without it a throw out of ServiceActionAsync (e.g. a failed
             // RemoveSensorAsync aborting the self-destroy sweep mid-loop) skips every remaining
             // sensor for that tick with zero output.
-            return PeriodicTask.Run(() => ServiceActionAsync(token), (now + StartDelay).Ceil(Delay) - now, Delay, token, _logger);
+            return PeriodicTask.Run(() => ServiceActionAsync(token), firstRun - now, Delay, token, _logger);
         }
+
+        /// <summary>The first run of a service started at <paramref name="utcNow"/>: after the start delay, on the next point of the Delay grid.</summary>
+        internal DateTime FirstRunUtc(DateTime utcNow) => (utcNow + StartDelay).Ceil(Delay);
+
+        /// <summary>Called once when the service starts, with the UTC time of its first run.</summary>
+        protected virtual void OnScheduled(DateTime firstRunUtc) { }
 
         protected virtual void RunAction(Action action)
         {

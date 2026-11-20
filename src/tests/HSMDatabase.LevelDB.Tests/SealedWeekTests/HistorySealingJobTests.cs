@@ -206,6 +206,62 @@ public sealed partial class HistorySealingJobTests : IDisposable
         AssertSameHistory("the failed sensor folded");
     }
 
+    // #1805: a seal leaves its chunk directory compact. Nothing else compacts it during the keep period (the week's row
+    // database keeps its compaction marker, a seal changes no row), so the write-ahead log the chunk batches went through
+    // would otherwise stay on disk next to them.
+    [Fact]
+    public void ASeal_LeavesItsChunkDirectoryCompact()
+    {
+        Start(1805, extraSensors: 60);
+
+        foreach (var _ in new[] { OlderWeekDay, WeekDay })
+        {
+            var seal = Pass(SealTime);
+            Assert.Equal((HistorySealingAction.Seal, HistorySealingOutcome.Done), (seal.Action, seal.Outcome));
+
+            var directory = ((SensorValuesWeek)_core.SensorValuesDatabases.Single(db => db.Name == seal.Week)).SealedName;
+            var (log, total) = LevelDbFileBytes(directory);
+
+            _output.WriteLine($"{Path.GetFileName(directory)}: {seal.ChunkBytes} chunk bytes, {total} bytes of LevelDB files, {log} bytes of write-ahead log");
+
+            // An uncompacted directory holds every chunk in its log (far below the 8 MB write buffer here); a compacted one
+            // holds them in tables, with a fresh empty log.
+            Assert.True(log <= 4 << 10, $"{log} bytes of write-ahead log left in {directory}");
+            Assert.True(total <= 2 * seal.ChunkBytes + (64 << 10), $"{total} bytes on disk for {seal.ChunkBytes} chunk bytes in {directory}");
+        }
+
+        AssertSameHistory("sealed and compacted");
+
+        // A pass with nothing to do is still published: 'Last run' shows the job is alive.
+        var idle = Pass(SealTime);
+        Assert.Equal(HistorySealingOutcome.NothingDue, idle.Outcome);
+        Assert.Same(idle, _core.LastHistorySealingPass);
+        Assert.Equal(2, idle.SealedWeeks);
+    }
+
+    // #1805: a pass refused because the compaction step holds the database says so; it is not published.
+    [Fact]
+    public void APassDuringTheCompactionStep_IsBusy_AndNamesIt()
+    {
+        Start(18051);
+
+        var published = Pass(SealTime);
+        HistorySealingPassReport busy = null;
+
+        _core.CompactShardHook = (db, compact) =>
+        {
+            busy = Pass(SealTime);
+            compact();
+        };
+
+        // The real clock: the writes of the test count as changes made now, and the shard must be quiet.
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, _core.CompactNextDueHistoryShard(DateTime.UtcNow.AddMinutes(1), TimeSpan.Zero));
+
+        Assert.Equal(HistorySealingOutcome.Busy, busy.Outcome);
+        Assert.StartsWith("the history shard compaction step was running (", busy.Note);
+        Assert.Same(published, _core.LastHistorySealingPass);
+    }
+
     #endregion
 
     #region Interruptions: a crash after each stage, a restart, the job completes
@@ -215,6 +271,7 @@ public sealed partial class HistorySealingJobTests : IDisposable
         [SealingCheckpoints.SealOpened, 1],
         [SealingCheckpoints.SealSensorWritten, 2],
         [SealingCheckpoints.SealEncoded, 1],
+        [SealingCheckpoints.SealCompacted, 1],
         [SealingCheckpoints.SealMarked, 1],
         [SealingCheckpoints.SealSwapped, 1],
     ];
@@ -826,6 +883,28 @@ public sealed partial class HistorySealingJobTests : IDisposable
 
         Assert.Equal(2, idle);
         return reports;
+    }
+
+    // The bytes of a LevelDB directory's own files (tables, write-ahead logs, MANIFEST, CURRENT; not the info log LOG
+    // and not the job's hsm-* files), and of its write-ahead logs (NNNNNN.log) alone.
+    private static (long log, long total) LevelDbFileBytes(string directory)
+    {
+        long log = 0, total = 0;
+
+        foreach (var file in new DirectoryInfo(directory).GetFiles())
+        {
+            var name = file.Name;
+
+            if (name.EndsWith(".log", StringComparison.Ordinal) && name[..^4].All(char.IsAsciiDigit))
+                log += file.Length;
+            else if (!(name.EndsWith(".ldb", StringComparison.Ordinal) || name.EndsWith(".sst", StringComparison.Ordinal) ||
+                       name.StartsWith("MANIFEST-", StringComparison.Ordinal) || name == "CURRENT"))
+                continue;
+
+            total += file.Length;
+        }
+
+        return (log, total);
     }
 
     private int ChunksOf(Guid id)

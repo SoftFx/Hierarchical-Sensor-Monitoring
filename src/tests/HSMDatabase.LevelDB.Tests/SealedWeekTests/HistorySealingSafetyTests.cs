@@ -544,6 +544,7 @@ public sealed partial class HistorySealingJobTests
     public static IEnumerable<object[]> ImageCheckpoints() =>
     [
         ["seal", SealingCheckpoints.SealSensorWritten, 2],
+        ["seal", SealingCheckpoints.SealCompacted, 1],
         ["seal", SealingCheckpoints.SealMarked, 1],
         ["seal", SealingCheckpoints.SealSwapped, 1],
         ["remove", SealingCheckpoints.RemoveBatch, 1],
