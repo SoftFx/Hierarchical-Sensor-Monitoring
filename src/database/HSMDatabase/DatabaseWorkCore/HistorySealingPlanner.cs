@@ -38,17 +38,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
         /// <summary>Within the daily UTC window; a window whose start equals its end is the whole day, and one may wrap past midnight.</summary>
-        public static bool IsWithinWorkingHours(DateTime utcNow, HistorySealingSettings settings)
-        {
-            var start = settings.WorkingHoursStartUtc;
-            var end = settings.WorkingHoursEndUtc;
-            var time = utcNow.TimeOfDay;
-
-            if (start == end)
-                return true;
-
-            return start < end ? time >= start && time < end : time >= start || time < end;
-        }
+        public static bool IsWithinWorkingHours(DateTime utcNow, HistorySealingSettings settings) =>
+            settings.WorkingHours.Contains(utcNow);
 
         public static bool IsUnsealToFinish(SealingWeekCandidate week, DateTime utcNow) =>
             week.Status.Stage == SealedWeekStage.Unsealing && IsNotHeldBack(week, utcNow);

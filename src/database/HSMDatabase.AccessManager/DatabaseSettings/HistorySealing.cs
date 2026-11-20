@@ -25,6 +25,8 @@ namespace HSMServer.Core.DataLayer
         /// <summary>End of the daily UTC window (exclusive); a window may wrap past midnight.</summary>
         public TimeSpan WorkingHoursEndUtc { get; init; }
 
+        public DailyUtcWindow WorkingHours => new(WorkingHoursStartUtc, WorkingHoursEndUtc);
+
         /// <summary>A sealed week whose overlay holds at least this many rows to fold is folded at once.</summary>
         public int FoldMinRows { get; init; } = 10_000;
 

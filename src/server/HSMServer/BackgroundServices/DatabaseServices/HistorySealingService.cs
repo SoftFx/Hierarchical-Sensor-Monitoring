@@ -62,9 +62,7 @@ namespace HSMServer.BackgroundServices.DatabaseServices
 
         internal static string StartLine(HistorySealingSettings settings, DateTime firstRunUtc, TimeSpan delay)
         {
-            var window = settings.WorkingHoursStartUtc == settings.WorkingHoursEndUtc
-                ? string.Empty
-                : $", working {settings.WorkingHoursStartUtc:hh\\:mm}-{settings.WorkingHoursEndUtc:hh\\:mm} UTC";
+            var window = settings.WorkingHours.IsAllDay ? string.Empty : $", working {settings.WorkingHours} UTC";
 
             return $"History sealing is on: weeks are sealed {settings.SealAfter.TotalDays:F0} days after they close, source rows kept " +
                    $"{settings.KeepSourceRows.TotalDays:F0} days{window}; first pass at {firstRunUtc:yyyy-MM-dd HH:mm} UTC, then every {delay.TotalMinutes:F0} minutes";
