@@ -309,12 +309,12 @@ namespace HSMDataCollector.Tests
         public async Task Prediction_matches_the_hour_scale_drain_of_the_reported_host()
         {
             using (var probe = await PredictionProbe.CreateAsync(
-                calibrationRequests: 3, freeSpace: GarageFreeSpace))
+                calibrationRequests: 3, freeSpace: DemoFreeSpace))
             {
                 // The series from the #1445 report: 51 GB free, losing ~1.3 GB/h. The true answer is
                 // "about a day and a half", and the sensor must say so as soon as calibration ends -
                 // three measurements, i.e. 30 minutes after Start.
-                probe.Drain(3, GarageDrainPerInterval);
+                probe.Drain(3, DemoDrainPerInterval);
 
                 var firstEstimate = probe.Post();
 
@@ -325,7 +325,7 @@ namespace HSMDataCollector.Tests
                 // Four more hours of the same drain: the rate is unchanged, so the estimate is just
                 // the countdown of the free space that is actually gone. The old minute-scale window
                 // swung by 4x between adjacent posts on this host.
-                probe.Drain(21, GarageDrainPerInterval);
+                probe.Drain(21, DemoDrainPerInterval);
 
                 var later = probe.Post();
 
@@ -341,15 +341,15 @@ namespace HSMDataCollector.Tests
 
         /// <summary>The drain rate the posted horizon implies, after <paramref name="intervals"/> drains.</summary>
         private static double ImpliedRate(Post post, int intervals) =>
-            (GarageFreeSpace - intervals * GarageDrainPerInterval) / post.Value.TotalSeconds;
+            (DemoFreeSpace - intervals * DemoDrainPerInterval) / post.Value.TotalSeconds;
 
         [Fact]
         public async Task A_ten_minute_write_burst_barely_moves_the_estimate()
         {
             using (var probe = await PredictionProbe.CreateAsync(
-                calibrationRequests: 3, freeSpace: GarageFreeSpace))
+                calibrationRequests: 3, freeSpace: DemoFreeSpace))
             {
-                probe.Drain(24, GarageDrainPerInterval);
+                probe.Drain(24, DemoDrainPerInterval);
 
                 var steady = probe.Post();
 
@@ -357,7 +357,7 @@ namespace HSMDataCollector.Tests
                 // host showed between adjacent posts. A single sample can move the estimate by at
                 // most the smoothing factor (2.7 %) of the distance to what it just measured, so
                 // this costs under a tenth of the horizon instead of most of it.
-                probe.Drain(1, GarageDrainPerInterval * 4);
+                probe.Drain(1, DemoDrainPerInterval * 4);
 
                 var afterBurst = probe.Post();
 
@@ -433,8 +433,8 @@ namespace HSMDataCollector.Tests
         // The host from the #1445 report, in its own numbers: 51 GB free, draining ~1.3 GB/h. Used
         // by the two tests that check the retuned window against the real series rather than against
         // a convenient one, so these are decimal GB and the rate is not a round MiB figure.
-        private const long GarageFreeSpace = 51_000_000_000L;
-        private const long GarageDrainPerInterval = 216_666_666L; // per 10 min = 1.3 GB/h
+        private const long DemoFreeSpace = 51_000_000_000L;
+        private const long DemoDrainPerInterval = 216_666_666L; // per 10 min = 1.3 GB/h
 
         private sealed class PredictionProbe : IDisposable
         {

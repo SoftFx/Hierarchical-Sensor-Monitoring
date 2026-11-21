@@ -11,6 +11,9 @@
 //! Memory used is `usage − inactive_file` (the `docker stats` convention on cgroup v2; cgroup v1's
 //! `total_inactive_file` is honored too) over the limit. A container without a limit reports the
 //! host's memory as its limit; such a container is measured against the host's `MemTotal`.
+//!
+//! Own memory (#1818) is what the container's processes hold themselves, without page cache:
+//! cgroup v2 `anon + shmem`, cgroup v1 `total_rss` (+ `total_shmem`), from the same stats.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -152,6 +155,27 @@ pub fn memory_reading(
     })
 }
 
+/// `Own memory` of one container, bytes: what its processes hold themselves — cgroup v2 `anon` +
+/// `shmem`; cgroup v1 `total_rss` (+ `total_shmem` where the kernel reports it). Page cache,
+/// memory-mapped files included, is left out. The version is told by the `anon` key. `None` when
+/// the stats carry neither (a container that is not running).
+pub fn own_memory_bytes(stats: &ContainerStats) -> Option<u64> {
+    let counters = stats.memory_stats.stats.as_ref()?;
+    let get = |key: &str| counters.get(key).copied();
+    match get("anon") {
+        Some(anon) => Some(anon.saturating_add(get("shmem").unwrap_or(0))),
+        None => {
+            let rss = get("total_rss")?;
+            Some(rss.saturating_add(get("total_shmem").unwrap_or(0)))
+        }
+    }
+}
+
+/// Megabytes (MiB, as every Docker memory figure here) of a byte count.
+pub fn megabytes(bytes: u64) -> f64 {
+    bytes as f64 / contract::BYTES_PER_MB as f64
+}
+
 /// A service's memory: replicas summed; the summed limit is capped at the host's memory, since no
 /// set of containers can use more than the host has.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -208,7 +232,7 @@ mod tests {
     use super::*;
 
     const PERIOD: Duration = Duration::from_secs(5);
-    const GARAGE_MEM_TOTAL: u64 = 16_298_872 * 1024;
+    const DEMO_MEM_TOTAL: u64 = 16_298_872 * 1024;
 
     fn counters(container_ns: u64, system_ns: u64, at_ms: u64) -> CpuCounters {
         CpuCounters {
@@ -218,7 +242,7 @@ mod tests {
         }
     }
 
-    fn garage_stats(fixture: &str) -> HashMap<String, ContainerStats> {
+    fn demo_stats(fixture: &str) -> HashMap<String, ContainerStats> {
         serde_json::from_str(fixture).unwrap()
     }
 
@@ -245,9 +269,9 @@ mod tests {
     }
 
     #[test]
-    fn the_garage_gitea_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
-        let t0 = garage_stats(STATS_T0);
-        let t1 = garage_stats(STATS_T1);
+    fn the_demo_gitsrv_db_delta_is_what_docker_stats_shows_divided_by_the_cores() {
+        let t0 = demo_stats(STATS_T0);
+        let t1 = demo_stats(STATS_T1);
         let a = CpuCounters::from_stats(by_prefix(&t0, "abbd59dcacc8"), Duration::ZERO).unwrap();
         let b =
             CpuCounters::from_stats(by_prefix(&t1, "abbd59dcacc8"), Duration::from_millis(5_272))
@@ -346,22 +370,21 @@ mod tests {
 
     #[test]
     fn a_stopped_container_has_no_counters() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         let stopped = by_prefix(&t0, "3537ef2ee867");
         assert_eq!(CpuCounters::from_stats(stopped, Duration::ZERO), None);
-        assert_eq!(memory_reading(stopped, Some(GARAGE_MEM_TOTAL)), None);
+        assert_eq!(memory_reading(stopped, Some(DEMO_MEM_TOTAL)), None);
     }
 
     #[test]
     fn memory_subtracts_inactive_file_against_the_limit() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         // hsm app: 267_550_720 usage − 57_462_784 inactive_file over a 256 MiB limit.
-        let reading =
-            memory_reading(by_prefix(&t0, "c5abbadb3674"), Some(GARAGE_MEM_TOTAL)).unwrap();
+        let reading = memory_reading(by_prefix(&t0, "c5abbadb3674"), Some(DEMO_MEM_TOTAL)).unwrap();
         assert_eq!(reading.used, 267_550_720 - 57_462_784);
         assert_eq!(reading.limit, 268_435_456);
         assert!(!reading.unlimited);
-        let service = service_memory(&[reading], Some(GARAGE_MEM_TOTAL)).unwrap();
+        let service = service_memory(&[reading], Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(
             (service.used_percent - 78.265).abs() < 0.01,
             "{}",
@@ -380,10 +403,10 @@ mod tests {
             }
         }))
         .unwrap();
-        let reading = memory_reading(&stats, Some(GARAGE_MEM_TOTAL)).unwrap();
+        let reading = memory_reading(&stats, Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(reading.unlimited);
-        assert_eq!(reading.limit, GARAGE_MEM_TOTAL);
-        let service = service_memory(&[reading], Some(GARAGE_MEM_TOTAL)).unwrap();
+        assert_eq!(reading.limit, DEMO_MEM_TOTAL);
+        let service = service_memory(&[reading], Some(DEMO_MEM_TOTAL)).unwrap();
         assert!(service.unlimited);
         assert_eq!(limit_megabytes(service.limit_bytes), 15_916);
         assert!(
@@ -443,9 +466,62 @@ mod tests {
     }
 
     #[test]
+    fn own_memory_is_anon_plus_shmem_on_cgroup_v2() {
+        let t0 = demo_stats(STATS_T0);
+        // hsm/app: anon 122_687_488 + shmem 65_380_352; its 57 MB of inactive page cache is not.
+        let app = by_prefix(&t0, "c5abbadb3674");
+        assert_eq!(own_memory_bytes(app), Some(122_687_488 + 65_380_352));
+        assert!((megabytes(own_memory_bytes(app).unwrap()) - 179.355).abs() < 0.001);
+        // gitsrv/db: 8 MB of its own next to 742 MB of inactive file cache — Memory used % alone
+        // cannot tell them apart.
+        let db = by_prefix(&t0, "abbd59dcacc8");
+        assert_eq!(own_memory_bytes(db), Some(8_114_176 + 143_966_208));
+        // A stopped container has no memory counters.
+        assert_eq!(own_memory_bytes(by_prefix(&t0, "3537ef2ee867")), None);
+        // v2 without shmem (never seen, but not an error).
+        let anon_only: ContainerStats = serde_json::from_value(serde_json::json!({
+            "memory_stats": { "usage": 10u64, "limit": 100u64, "stats": { "anon": 7u64 } }
+        }))
+        .unwrap();
+        assert_eq!(own_memory_bytes(&anon_only), Some(7));
+    }
+
+    #[test]
+    fn own_memory_is_total_rss_on_cgroup_v1() {
+        // Docker Desktop (Engine 29.8.1, WSL2, cgroup v1), a container run with `--memory 64m`.
+        let desktop: ContainerStats = serde_json::from_str(
+            r#"{"memory_stats":{"usage":4562944,"max_usage":13639680,"stats":{"active_anon":4096,
+            "active_file":2469888,"cache":3989504,"dirty":0,"hierarchical_memory_limit":67108864,
+            "hierarchical_memsw_limit":134217728,"inactive_anon":94208,"inactive_file":1519616,
+            "mapped_file":1429504,"pgfault":2220,"pgmajfault":29,"pgpgin":3226,"pgpgout":2228,
+            "rss":98304,"rss_huge":0,"total_active_anon":4096,"total_active_file":2469888,
+            "total_cache":3989504,"total_dirty":0,"total_inactive_anon":94208,
+            "total_inactive_file":1519616,"total_mapped_file":1429504,"total_pgfault":2220,
+            "total_pgmajfault":29,"total_pgpgin":3226,"total_pgpgout":2228,"total_rss":98304,
+            "total_rss_huge":0,"total_unevictable":0,"total_writeback":0,"unevictable":0,
+            "writeback":0},"limit":67108864}}"#,
+        )
+        .unwrap();
+        assert_eq!(own_memory_bytes(&desktop), Some(98_304));
+        // A v1 kernel that reports shared memory adds it.
+        let with_shmem: ContainerStats = serde_json::from_value(serde_json::json!({
+            "memory_stats": { "stats": { "total_rss": 1000u64, "total_shmem": 24u64,
+                                         "rss": 5u64 } }
+        }))
+        .unwrap();
+        assert_eq!(own_memory_bytes(&with_shmem), Some(1_024));
+        // Neither shape: unknown, not 0.
+        let neither: ContainerStats = serde_json::from_value(serde_json::json!({
+            "memory_stats": { "stats": { "inactive_file": 5u64 } }
+        }))
+        .unwrap();
+        assert_eq!(own_memory_bytes(&neither), None);
+    }
+
+    #[test]
     fn mem_total_parses_from_meminfo() {
         let text = "MemTotal:       16298872 kB\nMemFree:          812344 kB\n";
-        assert_eq!(parse_mem_total(text), Some(GARAGE_MEM_TOTAL));
+        assert_eq!(parse_mem_total(text), Some(DEMO_MEM_TOTAL));
         assert_eq!(parse_mem_total("MemFree: 1 kB\n"), None);
         assert_eq!(parse_mem_total("MemTotal: lots kB\n"), None);
     }

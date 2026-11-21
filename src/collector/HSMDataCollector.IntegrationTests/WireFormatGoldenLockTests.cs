@@ -185,10 +185,10 @@ namespace HSMDataCollector.IntegrationTests
                 OriginalUnit = Unit.MB,
                 Statistics = StatisticsOptions.None,
                 DisplayUnit = 0,
-                PreviousPaths = new List<string> { "garage-server/System/CPU", "old/move" },
+                PreviousPaths = new List<string> { "demo-server/System/CPU", "old/move" },
             };
 
-            Assert.Equal("{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"garage-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}", WireCommand(registration));
+            Assert.Equal("{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"PreviousPaths\":[\"demo-server/System/CPU\",\"old/move\"],\"Key\":null,\"Path\":\"p/move\"}", WireCommand(registration));
         }
 
         [Fact]

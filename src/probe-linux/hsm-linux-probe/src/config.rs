@@ -206,7 +206,7 @@ pub struct DockerConfig {
     #[serde(default = "default_docker_oom_latch_hours")]
     pub oom_latch_hours: u64,
     /// `project/service` patterns (`*` matches within one segment) whose services are not
-    /// monitored, e.g. `portainer/*`, `lingua-ci/janitor`.
+    /// monitored, e.g. `panelhost/*`, `lumina-ci/janitor`.
     #[serde(default)]
     pub exclude: Vec<String>,
 }
@@ -680,10 +680,10 @@ mod tests {
 
     const FULL: &str = r#"{
         "hsm": {
-            "address": "https://garage.lan",
+            "address": "https://demo.lan",
             "port": 44330,
             "accessKeyFile": "/run/credentials/hsm-linux-probe.service/access-key",
-            "computerName": "garage-server",
+            "computerName": "demo-server",
             "module": "LinuxProbe",
             "packageCollectPeriodSec": 15,
             "requestTimeoutSec": 30
@@ -694,7 +694,7 @@ mod tests {
 
     const MINIMAL: &str = r#"{
         "hsm": {
-            "address": "https://garage.lan",
+            "address": "https://demo.lan",
             "port": 44330,
             "accessKeyFile": "/run/credentials/hsm-linux-probe.service/access-key"
         }
@@ -703,13 +703,13 @@ mod tests {
     #[test]
     fn full_config_maps_every_field() {
         let config = Config::parse(FULL).expect("parse");
-        assert_eq!(config.hsm.address, "https://garage.lan");
+        assert_eq!(config.hsm.address, "https://demo.lan");
         assert_eq!(config.hsm.port, 44330);
         assert_eq!(
             config.hsm.access_key_file,
             PathBuf::from("/run/credentials/hsm-linux-probe.service/access-key")
         );
-        assert_eq!(config.hsm.computer_name, "garage-server");
+        assert_eq!(config.hsm.computer_name, "demo-server");
         assert_eq!(config.hsm.module, "LinuxProbe");
         assert_eq!(
             config.logging.directory,
@@ -793,7 +793,7 @@ mod tests {
         // The `sampling` section configured probe-only sensors removed in the parity phase. A
         // deployed config that still carries it must keep loading, not stop the service.
         let old = r#"{
-            "hsm": { "address": "https://garage.lan", "port": 44330, "accessKeyFile": "access-key" },
+            "hsm": { "address": "https://demo.lan", "port": 44330, "accessKeyFile": "access-key" },
             "sampling": { "loadAveragePeriodSec": 60, "logicalCoresPeriodSec": 86400 },
             "shutdownTimeoutSec": 10
         }"#;
@@ -940,7 +940,7 @@ mod tests {
     #[test]
     fn config_carries_no_inline_secret_field() {
         // Guards the §4.3 contract: the key is referenced by path, never embedded.
-        let with_key = r#"{ "hsm": { "address": "https://garage.lan", "port": 44330,
+        let with_key = r#"{ "hsm": { "address": "https://demo.lan", "port": 44330,
             "accessKeyFile": "/run/credentials/key", "accessKey": "leaked-secret" } }"#;
         let config = Config::parse(with_key).expect("unknown fields are ignored");
         // The key field is not part of the schema, so it is dropped rather than used.
@@ -952,8 +952,8 @@ mod tests {
         for text in [
             r#"{}"#,
             r#"{ "hsm": {} }"#,
-            r#"{ "hsm": { "address": "https://garage.lan" } }"#,
-            r#"{ "hsm": { "address": "https://garage.lan", "port": 44330 } }"#,
+            r#"{ "hsm": { "address": "https://demo.lan" } }"#,
+            r#"{ "hsm": { "address": "https://demo.lan", "port": 44330 } }"#,
             r#"{ "hsm": { "port": 44330, "accessKeyFile": "/k" } }"#,
         ] {
             assert!(
@@ -966,12 +966,8 @@ mod tests {
     #[test]
     fn a_bare_host_is_accepted_and_left_to_the_collector() {
         // The collector defaults a scheme-less address to HTTPS, so this is not a plaintext hole.
-        let text =
-            r#"{ "hsm": { "address": "garage.lan", "port": 44330, "accessKeyFile": "/k" } }"#;
-        assert_eq!(
-            Config::parse(text).expect("parse").hsm.address,
-            "garage.lan"
-        );
+        let text = r#"{ "hsm": { "address": "demo.lan", "port": 44330, "accessKeyFile": "/k" } }"#;
+        assert_eq!(Config::parse(text).expect("parse").hsm.address, "demo.lan");
     }
 
     #[test]
@@ -979,12 +975,12 @@ mod tests {
         // The contract is "must be https", so the check is an allow-list: a rejected-prefix test
         // would pass while ftp:// or a typo sailed through to libcurl.
         for address in [
-            "http://garage.lan",
-            "HTTP://garage.lan",
-            "Http://garage.lan",
-            "ftp://garage.lan",
-            "ws://garage.lan",
-            "htps://garage.lan",
+            "http://demo.lan",
+            "HTTP://demo.lan",
+            "Http://demo.lan",
+            "ftp://demo.lan",
+            "ws://demo.lan",
+            "htps://demo.lan",
         ] {
             let text = format!(
                 r#"{{ "hsm": {{ "address": "{address}", "port": 44330, "accessKeyFile": "/k" }} }}"#
@@ -997,7 +993,7 @@ mod tests {
         }
         // Case does not matter for the accepted spelling either.
         let text =
-            r#"{ "hsm": { "address": "HTTPS://garage.lan", "port": 1, "accessKeyFile": "/k" } }"#;
+            r#"{ "hsm": { "address": "HTTPS://demo.lan", "port": 1, "accessKeyFile": "/k" } }"#;
         assert!(Config::parse(text).is_ok());
     }
 
@@ -1035,7 +1031,8 @@ mod tests {
 
     #[test]
     fn plaintext_address_is_rejected() {
-        let text = r#"{ "hsm": { "address": "http://garage.lan", "port": 44330, "accessKeyFile": "/k" } }"#;
+        let text =
+            r#"{ "hsm": { "address": "http://demo.lan", "port": 44330, "accessKeyFile": "/k" } }"#;
         let error = Config::parse(text).expect_err("plaintext must be rejected");
         assert!(matches!(error, ConfigError::Invalid(_)), "{error}");
         assert!(error.to_string().contains("https://"));
@@ -1116,11 +1113,11 @@ mod tests {
     #[test]
     fn docker_exclusions_parse_and_are_validated() {
         let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
-             "probe": { "docker": { "exclude": ["portainer/*", "lingua-ci/janitor"] } } }"#;
+             "probe": { "docker": { "exclude": ["panelhost/*", "lumina-ci/janitor"] } } }"#;
         let docker = Config::parse(text).expect("parse").probe.docker;
-        assert_eq!(docker.exclude, vec!["portainer/*", "lingua-ci/janitor"]);
+        assert_eq!(docker.exclude, vec!["panelhost/*", "lumina-ci/janitor"]);
         assert!(DockerConfig::default().exclude.is_empty());
-        for bad in ["portainer", "a/b/c", "/db", "gitea/", ""] {
+        for bad in ["panelhost", "a/b/c", "/db", "gitsrv/", ""] {
             let text = format!(
                 r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
                      "probe": {{ "docker": {{ "exclude": ["{bad}"] }} }} }}"#

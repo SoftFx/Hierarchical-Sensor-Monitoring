@@ -1,7 +1,7 @@
 # Feature: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-11-04 | Canonical: yes
-> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, access-grouping folders and sensor policies (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules, sensor muting (#1569), sensor deletion (#1637) and sensor move (#1721). REST stays the canonical surface; MCP is an adapter over the same implementations.
+> Owner: server | Last reviewed: 2026-11-18 | Canonical: yes
+> Scope: the Model Context Protocol surface at `/mcp` (#1391) — snake_case tools rendering the landed management-API surface for MCP-native agents (Claude, Cursor, …): the sensor tree, alert templates/schedules, notification chats, access-grouping folders and sensor policies (reads), plus the phase-2 WRITE tools for sensor policies, alert templates, alert schedules, sensor muting (#1569), sensor deletion (#1637), sensor move (#1721), root-product creation (#1786 — the first step of the agent-installation scenario), access-key reads (#1787 — the id source and the agent-connected signal of that scenario) and access-key writes (#1789 — the credential hand-over: issue, re-permission, block, remove) and the agent-installer link (#1788 — the one-time download hand-over for the target machine). REST stays the canonical surface; MCP is an adapter over the same implementations.
 
 ---
 
@@ -68,10 +68,31 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 
 ## API / Public Contracts
 
+**MCP↔REST parity** (the standing rule: REST is canonical, every tool wraps a REST twin through the
+shared service — never a second implementation). The agent-installation initiative's six tools and
+their twins: `create_product` → `POST /api/v1/products`; `list_access_keys` →
+`GET /api/v1/products/{id}/accessKeys`; `create_access_key` / `update_access_key` /
+`delete_access_key` → the POST/PATCH/DELETE on the same route; `get_agent_installer` →
+`POST /api/v1/products/{id}/agent-installer/link`. The deliberate REST-only items on this surface
+(all three by design, revisit only if an agent workflow proves otherwise):
+- the **product-scope aggregate policy endpoints** (`GET/POST/PATCH/DELETE /api/v1/products/{id}/policies`
+  and `…/ttl-policies`) — their reads aggregate every sensor's policies (an agent uses the per-sensor
+  tools after `find_sensors`) and their writes route to the owning sensor anyway;
+- **`GET /api/v1/products/{id}/accessKeys/{keyId}`** — the single-key read is covered by
+  `list_access_keys`;
+- the **raw bundle stream** `GET …/agent-installer` — replaced for agents by the one-time link
+  (`get_agent_installer` wraps the LINK endpoint; the stream stays the scripts' path).
+
 | Contract | Location | Notes |
 |---|---|---|
 | `POST /mcp` (Streamable HTTP, stateless) | `Program.cs` (`MapMcp`), SDK `StreamableHttpHandler` | JSON-RPC envelope per the MCP spec; the SDK validates protocol headers/versions; 401 through the HsmApiToken challenge before the handler on a bad credential |
 | `list_products(limit?, page?)` | `SensorTreeMcpTools.ListProducts` | `{products: ProductDto[], totalFound, limit, page, totalPages}` — REST DTO verbatim, name-ordered; `page` walks past the limit (products have no narrowing dimension, #1392 review r3); the envelope echoes the effective paging (#1392 r5) |
+| `create_product(name)` | `ProductsMcpTools.CreateProductAsync` | `ProductDto` — the created root product (#1786). Admission = any live read-write caller (the boundary-less write gate `AuthorizeProductCreate`; role-less owners included); the name follows the web form's rules and error strings (required/length-100/charset/unique among roots, keyed `name`); the same core `AddProductAsync` path the web UI drives (default access key + TreeCrud journal record), plus the creator's own ProductManager-role grant — the created product is immediately visible and manageable by the creating token (best-effort after the journaled creation, see the REST twin) |
+| `list_access_keys(productId, limit?, page?)` | `AccessKeysMcpTools.ListAccessKeys` | `{accessKeys: AccessKeyDto[], totalFound, limit, page, totalPages}` — one product's keys (#1787), name-then-id ordered; the id source for the key write tools (#1789) and the agent-connected signal (`lastUseTime`/`lastIp` per item). The key id IS the credential, exposed deliberately (web parity); master keys never appear; unknown/invisible products answer the same tool error. The effective-paging echo as on every list tool |
+| `create_access_key(productId, displayName, permissions?)` | `AccessKeysMcpTools.CreateAccessKey` | `AccessKeyDto` — the credential hand-over of the agent-installation scenario (#1789): the echoed key id IS the credential. Write needs the owner's ProductManager role; permissions default to the agent profile when omitted; the display name follows the web form's rules (the tool error text carries the same field-keyed strings) |
+| `update_access_key(productId, keyId, displayName?, permissions?, state?)` | `AccessKeysMcpTools.UpdateAccessKey` | `AccessKeyDto` — partial update (omit what stays unchanged): rename, re-permission, block/unblock (the kill-switch; unblocking an expired key lands on 'expired'). The response echoes the stored key |
+| `delete_access_key(productId, keyId)` | `AccessKeysMcpTools.DeleteAccessKey` | `{id}` — the credential stops being accepted on its next presentation |
+| `get_agent_installer(productId, os)` | `AgentInstallerMcpTools.GetAgentInstaller` | `AgentInstallerLinkDto` — a ONE-TIME short-lived (~10 min) download link `{url, expiresAt, fileName, size, sha256}` for the product's bundle (#1788): the url works WITHOUT an Authorization header (single use; the token inside it is the credential), so the orchestrator curls it on the TARGET MACHINE and verifies the bytes against `sha256`. Requires the owner's ProductManager role and a READ-WRITE token — `/mcp` is POST-only and the policy backstop denies read-only tokens before any tool runs (a read-only token can use only the REST `GET …/agent-installer` stream); a product without a usable send-data key answers a field-keyed error pointing at `create_access_key`; a not-staged binary answers the capacity-abort error. The url is host-absolute from the tool call's own request |
 | `get_node(nodeId, foldersPage?)` | `SensorTreeMcpTools.GetNode` | `NodeDto` verbatim (folders paginated × 200, sensors capped 200 — REST `get_node` shape; `foldersPage` keeps folder ids beyond page 1 reachable) |
 | `find_sensors(search?, searchMode?, productId?, type?, limit?, page?)` | `SensorTreeMcpTools.FindSensors` | `{sensors: McpSensorSummary[], totalFound, limit, page, totalPages}` — compact summaries ordered by path, mapped straight from the cache models (never through the full DTO — the compactness rule holds in the work, not only on the wire, #1392 r5); `searchMode` = `contains`\|`regex` with the REST bounds (100 ms per-match, 2 s scan budget — exhaustion is a tool error naming the remedy); `page` is the last resort past the cap — get_node's own sensors list caps at 200 unpaged and uniform names cannot be partitioned (#1392 r4) |
 | `get_sensor(sensorId)` | `SensorTreeMcpTools.GetSensor` | `SensorDto` verbatim — `lastValue` embedded |
@@ -104,6 +125,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/HsmMcp.cs` | Endpoint path + list-limit constants (`/mcp`, 20/200) |
 | `src/server/HSMServer/Mcp/HsmMcpServiceCollectionExtensions.cs` | `AddHsmMcpServer()` — server + tool registration in one testable place |
 | `src/server/HSMServer/Mcp/SensorTreeMcpTools.cs` | The five sensor-tree tools — rendering of `SensorTreeReadService` |
+| `src/server/HSMServer/Mcp/ProductsMcpTools.cs` | The create-product tool (#1786) — a delegation to `ProductAdministrationService`, the same engine the REST create endpoint runs on |
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — a thin rendering of `AlertReadService` (#1393) |
 | `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The two chat tools — a thin rendering of `ChatsReadService` (the #1393 pattern) |
 | `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |

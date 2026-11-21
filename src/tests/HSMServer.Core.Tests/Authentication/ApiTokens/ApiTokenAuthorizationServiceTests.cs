@@ -709,6 +709,66 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new Claim(HsmApiTokenClaims.TokenId, TokenId),
             ]));
 
+        // ---- product creation (the boundary-less write, #1786) -------------
+
+
+        [Fact]
+        public void ProductCreate_RolelessOwner_ReadWriteToken_Allowed()
+        {
+            // The web UI lets ANY authenticated user create a product — the
+            // mirror keeps that: there is no boundary to see or manage. The
+            // creation service grants the creator the ProductManager role on
+            // the new product, so a role-less owner's creation is
+            // immediately visible and manageable by them.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Allowed,
+                CreateService().AuthorizeProductCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ProductCreate_AdminOwner_ReadWriteToken_Allowed()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Allowed,
+                CreateService().AuthorizeProductCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ProductCreate_ReadOnlyToken_Forbidden()
+        {
+            // Even an admin's read-only credential cannot create: the flag
+            // constrains writes, boundary or not.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden,
+                CreateService().AuthorizeProductCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ProductCreate_RevokedToken_Forbidden_AndDeniedRecorded()
+        {
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+            _tokens.Setup(t => t.IsTokenLive(TokenId)).Returns(false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeProductCreate(Principal()));
+
+            // Caller-wide gate: the denial is AuthorizationDenied (the 403
+            // signal), never the enumeration-probe signal of per-target 404s.
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, Assert.Single(events).Kind);
+        }
+
+
         private static ApiTokenInfo BuildInfo(bool readOnly = false) => new()
         {
             EntityId = Guid.NewGuid(),

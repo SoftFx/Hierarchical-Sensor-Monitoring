@@ -11,12 +11,12 @@
 # - Order is kept (the server lets the first listed path win a merge).
 
 previous_paths_register_unprefixed_in_order|create_collector_with_identity|conformance-computer|conformance-module
-previous_paths_register_unprefixed_in_order|create_int_sensor_with_previous_paths|contract/move/cpu|garage-server/System/CPU;old/cpu
+previous_paths_register_unprefixed_in_order|create_int_sensor_with_previous_paths|contract/move/cpu|demo-server/System/CPU;old/cpu
 previous_paths_register_unprefixed_in_order|start
 previous_paths_register_unprefixed_in_order|stop
 previous_paths_register_unprefixed_in_order|expect_registration_count|1
 previous_paths_register_unprefixed_in_order|expect_registration_contains|0|conformance-computer/conformance-module/contract/move/cpu"
-previous_paths_register_unprefixed_in_order|expect_registration_contains|0|"DefaultAlertsOptions":0,"PreviousPaths":["garage-server/System/CPU","old/cpu"]}
+previous_paths_register_unprefixed_in_order|expect_registration_contains|0|"DefaultAlertsOptions":0,"PreviousPaths":["demo-server/System/CPU","old/cpu"]}
 
 blank_previous_paths_are_dropped|create_collector
 blank_previous_paths_are_dropped|create_int_sensor_with_previous_paths|contract/move/blank|token:blank;kept/path

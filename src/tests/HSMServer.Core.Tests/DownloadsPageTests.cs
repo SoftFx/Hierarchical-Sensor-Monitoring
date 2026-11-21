@@ -44,14 +44,14 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void DisplayName_ShowsTheFolder_OnlyWhenThereIsOne()
         {
-            Assert.Equal("Garage (Home)", new DownloadProductItem(Guid.NewGuid(), "Garage", "Home").DisplayName);
-            Assert.Equal("Garage", new DownloadProductItem(Guid.NewGuid(), "Garage", null).DisplayName);
+            Assert.Equal("Demo (Home)", new DownloadProductItem(Guid.NewGuid(), "Demo", "Home").DisplayName);
+            Assert.Equal("Demo", new DownloadProductItem(Guid.NewGuid(), "Demo", null).DisplayName);
         }
 
         [Fact]
         public void Build_KeepsTheSelectedProduct_OnlyWhenItIsListed()
         {
-            var product = new DownloadProductItem(Guid.NewGuid(), "Garage", null);
+            var product = new DownloadProductItem(Guid.NewGuid(), "Demo", null);
 
             Assert.Equal(product.Id, DownloadsPageBuilder.Build([product], null, Address, Port, product.Id).SelectedProductId);
             Assert.Null(DownloadsPageBuilder.Build([product], null, Address, Port, Guid.NewGuid()).SelectedProductId);
@@ -203,7 +203,7 @@ namespace HSMServer.Core.Tests
         public void Service_ListsRootProductsWithTheirFolder_AndResolvesTheConfiguredAddress()
         {
             var folder = new FolderModel(EntitiesFactory.BuildFolderEntity() with { DisplayName = "Home" });
-            var inFolder = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Garage", parent: null) with { FolderId = folder.Id.ToString() });
+            var inFolder = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Demo", parent: null) with { FolderId = folder.Id.ToString() });
             var loose = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Attic", parent: null));
             var nested = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Nested", parent: null));
             loose.AddSubProduct(nested);
@@ -213,7 +213,7 @@ namespace HSMServer.Core.Tests
             var model = service.Build(new User("admin") { IsAdmin = true }, "https", "page.example.com", requestHostPort: null);
 
             Assert.Equal(
-                [("Attic", (string)null), ("Garage", "Home")],
+                [("Attic", (string)null), ("Demo", "Home")],
                 model.Products.Select(p => (p.Name, p.FolderName)));
             Assert.Equal("https://agents.example.com", model.ServerAddress);
             Assert.Equal(8443, model.ServerPort);
@@ -233,7 +233,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void Service_ListsOnlyTheProductsTheUserSees()
         {
-            var product = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Garage", parent: null));
+            var product = new ProductModel(EntitiesFactory.BuildProductEntity(name: "Demo", parent: null));
 
             var service = CreateService([product], null, externalUrl: Address, out _);
 

@@ -389,11 +389,11 @@ impl EngineApi for Engine {
 pub(crate) mod tests {
     use super::*;
 
-    pub const VERSION: &str = include_str!("../../../fixtures/docker/garage/version.json");
-    pub const CONTAINERS: &str = include_str!("../../../fixtures/docker/garage/containers.json");
-    pub const INSPECT: &str = include_str!("../../../fixtures/docker/garage/inspect.json");
-    pub const STATS_T0: &str = include_str!("../../../fixtures/docker/garage/stats-t0.json");
-    pub const STATS_T1: &str = include_str!("../../../fixtures/docker/garage/stats-t1.json");
+    pub const VERSION: &str = include_str!("../../../fixtures/docker/demo/version.json");
+    pub const CONTAINERS: &str = include_str!("../../../fixtures/docker/demo/containers.json");
+    pub const INSPECT: &str = include_str!("../../../fixtures/docker/demo/inspect.json");
+    pub const STATS_T0: &str = include_str!("../../../fixtures/docker/demo/stats-t0.json");
+    pub const STATS_T1: &str = include_str!("../../../fixtures/docker/demo/stats-t1.json");
 
     #[test]
     fn only_read_only_endpoints_can_be_built() {
@@ -435,7 +435,7 @@ pub(crate) mod tests {
     #[test]
     fn the_api_version_is_negotiated_around_the_pin() {
         let v = |a, b| ApiVersion(a, b);
-        // garage: Docker 26.1 speaks 1.24..=1.45 -> the pin.
+        // demo: Docker 26.1 speaks 1.24..=1.45 -> the pin.
         assert_eq!(negotiate_api_version(v(1, 24), v(1, 45)).unwrap(), v(1, 45));
         // Docker Desktop 29: 1.40..=1.55 -> still the pin.
         assert_eq!(negotiate_api_version(v(1, 40), v(1, 55)).unwrap(), v(1, 45));
@@ -448,7 +448,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_garage_version_parses() {
+    fn the_demo_version_parses() {
         let version: VersionInfo = serde_json::from_str(VERSION).unwrap();
         assert_eq!(version.version, "26.1.5+dfsg1");
         assert_eq!(
@@ -462,29 +462,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_garage_container_list_parses() {
+    fn the_demo_container_list_parses() {
         let list: Vec<ContainerSummary> = serde_json::from_str(CONTAINERS).unwrap();
         assert_eq!(list.len(), 12);
-        let db = list.iter().find(|c| c.name() == "gitea-db-1").unwrap();
+        let db = list.iter().find(|c| c.name() == "gitsrv-db-1").unwrap();
         assert_eq!(db.state, "running");
-        assert_eq!(db.label("com.docker.compose.project"), Some("gitea"));
+        assert_eq!(db.label("com.docker.compose.project"), Some("gitsrv"));
         assert_eq!(db.label("com.docker.compose.service"), Some("db"));
         let ci = list
             .iter()
-            .find(|c| c.name() == "lingua-ci-ci-image-1")
+            .find(|c| c.name() == "lumina-ci-ci-image-1")
             .unwrap();
         assert_eq!(ci.state, "exited");
     }
 
     #[test]
-    fn the_garage_inspects_parse() {
+    fn the_demo_inspects_parse() {
         let inspects: Vec<ContainerInspect> = serde_json::from_str(INSPECT).unwrap();
         assert_eq!(inspects.len(), 12);
         let with_health: Vec<_> = inspects
             .iter()
             .filter(|i| i.state.health.is_some())
             .collect();
-        assert_eq!(with_health.len(), 4, "seaweedfs, mongo, gitea, db");
+        assert_eq!(with_health.len(), 4, "objstore, mdb, gitsrv, db");
         assert!(with_health
             .iter()
             .all(|i| i.state.health.as_ref().unwrap().status == "healthy"));

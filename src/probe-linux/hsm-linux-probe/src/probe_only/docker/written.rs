@@ -39,6 +39,10 @@
 //! counting (#1489). The record — the running hour and each container's
 //! baseline — lives in the state file, so a probe restart continues the hour, and the writes made
 //! while the probe was down count too when the container and its counter survived.
+//!
+//! **Memory limit hits per hour** (#1818) is the same machinery over another cumulative counter:
+//! [`WriteRecord`] accumulates the `max` line of the containers' cgroup v2 `memory.events` (the
+//! "bytes" are then hits), with the same baselines, restart detection, clock rules and posting.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -250,6 +254,12 @@ impl CompletedHour {
     /// Decimal megabytes (10⁶ bytes, the unit SSD endurance is rated in), two decimals.
     pub fn megabytes(&self) -> f64 {
         (self.bytes as f64 / contract::BYTES_PER_DECIMAL_MB * 100.0).round() / 100.0
+    }
+
+    /// The hour's total as a count (`Memory limit hits per hour`, whose accumulator counts limit
+    /// hits instead of bytes), saturating.
+    pub fn count(&self) -> i32 {
+        i32::try_from(self.bytes).unwrap_or(i32::MAX)
     }
 
     /// `13:00–14:00 UTC`, plus how much of the hour was measured when it was not all of it.
@@ -487,7 +497,7 @@ mod tests {
     const H13: i64 = 1_790_686_800_000;
     const MIN: i64 = 60_000;
 
-    fn garage_stats(fixture: &str) -> HashMap<String, ContainerStats> {
+    fn demo_stats(fixture: &str) -> HashMap<String, ContainerStats> {
         serde_json::from_str(fixture).unwrap()
     }
 
@@ -527,10 +537,10 @@ mod tests {
     }
 
     #[test]
-    fn the_garage_write_counters_are_cgroup_v2_lowercase_writes() {
-        let t0 = garage_stats(STATS_T0);
-        let t1 = garage_stats(STATS_T1);
-        // gitea/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
+    fn the_demo_write_counters_are_cgroup_v2_lowercase_writes() {
+        let t0 = demo_stats(STATS_T0);
+        let t1 = demo_stats(STATS_T1);
+        // gitsrv/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
         // (2_881_179_648) are not counted.
         let mut plain = Stacking::default();
         assert_eq!(
@@ -578,9 +588,9 @@ mod tests {
 
     #[test]
     fn a_running_container_without_a_write_counter_has_written_0_once_the_host_accounts_io() {
-        let t0 = garage_stats(STATS_T0);
+        let t0 = demo_stats(STATS_T0);
         let mut plain = Stacking::default();
-        // lingua-admin freshly recreated on cgroup v2: running, io.stat lists no device yet.
+        // lumina-admin freshly recreated on cgroup v2: running, io.stat lists no device yet.
         let fresh = running(serde_json::json!([]));
         let reads_only = running(serde_json::json!([
             { "major": 8, "minor": 0, "op": "read", "value": 24_576 }
@@ -592,7 +602,7 @@ mod tests {
             None
         );
         assert!(!host_accounts_io);
-        // A sibling lists one (gitea/db): the host accounts block I/O per container.
+        // A sibling lists one (gitsrv/db): the host accounts block I/O per container.
         assert_eq!(
             written_bytes(
                 by_prefix(&t0, "abbd59dcacc8"),
@@ -997,8 +1007,8 @@ mod tests {
 
     #[test]
     fn an_hour_in_which_a_container_stayed_idle_is_posted_as_0() {
-        // #1574: lingua-admin, recreated with its sibling, did no block I/O for hours; its hours
-        // are measured zeros, posted like lingua-api's `write 0`, not gaps.
+        // #1574: lumina-admin, recreated with its sibling, did no block I/O for hours; its hours
+        // are measured zeros, posted like lumina-api's `write 0`, not gaps.
         let period = Duration::from_secs(60);
         let mut record = WriteRecord::new(H13);
         let started = Some("2026-09-29T12:58:00Z");

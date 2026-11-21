@@ -402,6 +402,12 @@ namespace HSMServer.Core.Tests.Swagger
             // Forbidden arm; the search list answers 404 for an unknown/invisible
             // product filter and has no 403 path at all.
             [(typeof(ProductsApiController), nameof(ProductsApiController.GetProducts))] = [400, 401, 500],
+
+            // The product-creation write (#1786): the web-parity name
+            // validation (400), the create gate's 403 (defense-in-depth
+            // beyond the policy backstop that already rejects read-only
+            // tokens on POST), and the core's own add failure (409).
+            [(typeof(ProductsApiController), nameof(ProductsApiController.CreateProduct))] = [400, 401, 403, 409, 500],
             [(typeof(NodesApiController), nameof(NodesApiController.GetNode))] = [400, 401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
@@ -424,6 +430,29 @@ namespace HSMServer.Core.Tests.Swagger
             // sensor-tree item endpoints.
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicies))] = [400, 401, 403, 404, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.GetPolicy))] = [401, 403, 404, 500],
+
+            // The access-keys read surface (#1787): the nested pattern of the
+            // policy lists — the parent product's 404/403 admission on both
+            // arms, and the item's unknown/foreign/master key id is the same
+            // plain 404.
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKeys))] = [400, 401, 403, 404, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.GetProductAccessKey))] = [401, 403, 404, 500],
+
+            // The access-key write surface (#1789): the product's write
+            // admission (404/403), the web-parity name/permission
+            // validation (400), the core's own add/update/remove failure
+            // (409 — the honest-verification pattern; a key vanishing
+            // concurrently answers the plain 404).
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.CreateAccessKey))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.UpdateAccessKey))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AccessKeysApiController), nameof(AccessKeysApiController.DeleteAccessKey))] = [401, 403, 404, 409, 500],
+
+            // The agent-installer surface (#1788): the os/no-key/address
+            // validations (400), the PM admission (403) with the area 404,
+            // and the not-staged binary (503 — the capacity-abort arm, like
+            // the sensor search's evaluation budget).
+            [(typeof(AgentInstallerApiController), nameof(AgentInstallerApiController.GetInstaller))] = [400, 401, 403, 404, 500, 503],
+            [(typeof(AgentInstallerApiController), nameof(AgentInstallerApiController.IssueInstallerLink))] = [400, 401, 403, 404, 500, 503],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.CreatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.UpdatePolicy))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(SensorPoliciesApiController), nameof(SensorPoliciesApiController.DeletePolicy))] = [401, 403, 404, 409, 500],

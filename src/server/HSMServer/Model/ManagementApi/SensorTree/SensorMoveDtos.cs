@@ -23,11 +23,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public Guid Product { get; init; }
 
         /// <summary>Full new path of ONE sensor, relative to the product (may rename it).</summary>
-        [Description("Full new path of ONE sensor relative to the product, e.g. `garage/system/CPU` — the last segment is the sensor's new name. Exactly one of `path` and `node`.")]
+        [Description("Full new path of ONE sensor relative to the product, e.g. `demo/system/CPU` — the last segment is the sensor's new name. Exactly one of `path` and `node`.")]
         public string Path { get; init; }
 
         /// <summary>Destination node path, relative to the product; every sensor keeps its name.</summary>
-        [Description("Destination node path relative to the product, e.g. `garage/system`; each sensor keeps its name. Missing nodes are created. Exactly one of `path` and `node`.")]
+        [Description("Destination node path relative to the product, e.g. `demo/system`; each sensor keeps its name. Missing nodes are created. Exactly one of `path` and `node`.")]
         public string Node { get; init; }
 
         /// <summary>"fail" (default) or "merge".</summary>

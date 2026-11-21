@@ -24,6 +24,11 @@ pub const HEALTH: &str = "Health";
 pub const RESTART_COUNT: &str = "Restart count";
 pub const OOM_KILLED: &str = "OOM killed";
 pub const DISK_WRITTEN: &str = "Disk written per hour";
+// Memory sensors of #1818 (owner decision 2026-11-21); none carries an alert.
+pub const OWN_MEMORY: &str = "Own memory";
+pub const MEMORY_PRESSURE: &str = "Memory pressure %";
+pub const MEMORY_LIMIT_HITS: &str = "Memory limit hits per hour";
+pub const SWAP_USED: &str = "Swap used";
 
 // ---- Cadences ----------------------------------------------------------------------------------
 
@@ -98,10 +103,10 @@ pub const PINNED_API_VERSION: (u32, u32) = (1, 45);
 /// non-streaming stats call blocks for a second collecting a second sample.
 pub const OLDEST_API_VERSION: (u32, u32) = (1, 41);
 /// Per-request bound on connect + write + read. A hung daemon costs at most this per call; on
-/// garage a one-shot stats call takes ~2 ms (p95 2.5 ms). Kept under the probe's 2 s stop wait for
+/// demo a one-shot stats call takes ~2 ms (p95 2.5 ms). Kept under the probe's 2 s stop wait for
 /// its source threads, so a stop never finds this thread stuck in a call.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(1500);
-/// Largest response body accepted. The garage list is ~30 KB, an inspect ~8 KB; the cap keeps a
+/// Largest response body accepted. The demo list is ~30 KB, an inspect ~8 KB; the cap keeps a
 /// misbehaving peer from growing the probe towards its `MemoryMax=64M`.
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 /// Backoff after the Engine API fails: starts at the sample period, doubles, capped here (so at the
@@ -208,6 +213,15 @@ mod tests {
         assert_eq!(DISK_WRITTEN, "Disk written per hour");
         assert_eq!(UNIT_MB, 3);
         assert_eq!(BYTES_PER_DECIMAL_MB, 1e6);
+        // The memory sensors of #1818: Own memory and Swap used in MiB like the rest of the
+        // Docker memory figures, Memory pressure % in percent, limit hits as a count per hour.
+        assert_eq!(OWN_MEMORY, "Own memory");
+        assert_eq!(MEMORY_PRESSURE, "Memory pressure %");
+        assert_eq!(MEMORY_LIMIT_HITS, "Memory limit hits per hour");
+        assert_eq!(SWAP_USED, "Swap used");
+        assert_eq!(BYTES_PER_MB, 1_048_576);
+        assert_eq!(UNIT_PERCENTS, 100);
+        assert_eq!(UNIT_COUNT, 1100);
     }
 
     #[test]

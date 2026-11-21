@@ -75,12 +75,12 @@ The probe registers **two separately pinned sets**:
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 28 paths) by
-   `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
+   opened, listed or read. Pinned for demo-server (4 filesystems, 28 paths) by
+   `DISKS_DEMO_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.
-3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
-   service under `.probe/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — up to eleven sensors per
+   Compose service under `.probe/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
    of one sample a minute, `samplePeriodSec` — 5 s until the owner decision of 2026-10-05; CPU as
    % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
@@ -96,9 +96,26 @@ The probe registers **two separately pinned sets**:
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
-   container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
-   `DOCKER_GARAGE_SET`.
+   container Exited (0), restart policy `no`) is not monitored until it runs.
+   **Memory sensors (#1818, probe 0.14.0; no alerts):** `Own memory` (DoubleBar, MB = MiB, 5-minute
+   bars; cgroup v2 `anon + shmem`, cgroup v1 `total_rss` (+ `total_shmem`) from the same Engine API
+   stats, replicas summed; no page cache) registers with `CPU`. The others read the container's
+   cgroup v2 files (`/sys/fs/cgroup/system.slice/docker-<id>.scope/` or `…/docker/<id>/`, readable
+   under the unit's `ProtectControlGroups=yes`; no new privilege, no new Engine API call; only a hex
+   id from the daemon's list goes into the path) on the stats thread: `Memory pressure %`
+   (DoubleBar, Δ`memory.pressure` `some total` µs / Δt × 100, worst replica, CPU's skip rules;
+   registered when the file is readable), `Memory limit hits per hour` (Int count, Δ`memory.events`
+   `max` summed over replicas, the `Disk written per hour` accumulator — sent just after the UTC
+   hour, persisted, baselines on first sample / restart / recreate / reset; registered when
+   `memory.events` is readable **and** the service has a memory limit) and `Swap used` (DoubleBar
+   MB, `memory.swap.current` summed; registered once a replica has had swap in use — remembered in
+   the state file, so it re-registers after a restart and reports 0 too). `OOM killed` is also
+   latched when `memory.events` `oom_kill` grew between two samples of one container start (a kill
+   inside a running container); that baseline is in memory, so a kill while the probe is down is
+   seen only when it ended the container. cgroup v1 (Docker Desktop on WSL2), rootless Docker: no
+   cgroup directory → `Own memory` only, one INFO line per container. Pinned for demo-server's
+   captures (12 Compose containers, 11 monitored services; cgroup fixtures `demo/cgroup-t0|t1`,
+   101 paths) by `DOCKER_DEMO_SET`.
 4. **Top CPU processes** (#1479, part of the probe-only set; `probe_only/top_cpu/`) —
    `.computer/Top CPU processes/<name>`, the Windows agents' sensor family, **wire-identical** to
    `cpu_top.cpp`/`RunTopCpuLoop` and `WindowsTopCpuMonitor.cs` so alert templates carry over: Double,

@@ -323,15 +323,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var root = Unique();
             var start = DateTime.UtcNow.AddHours(-2);
-            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/garage-server/cpu", start, start.AddMinutes(1));
-            var fresh = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/garage/cpu", start.AddHours(1));
+            var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/demo-server/cpu", start, start.AddMinutes(1));
+            var fresh = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/demo/cpu", start.AddHours(1));
 
-            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/garage/cpu",
-                [$"{root}/garage-server/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
+            var result = await _valuesCache.ApplyPreviousPathsAsync(_fixture.KeyA, _fixture.ProductA, $"{root}/demo/cpu",
+                [$"{root}/demo-server/cpu"], SensorType.Integer, HSMServer.Core.TableOfChanges.InitiatorInfo.AsCollector("key", false));
 
             Assert.True(result.IsOk, result.Error);
             Assert.Null(_valuesCache.GetSensor(fresh.Id));
-            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/garage/cpu", out var survivor));
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductA, $"{root}/demo/cpu", out var survivor));
             Assert.Same(old, survivor);
             Assert.Equal(3, (await ReadHistoryAsync(old.Id)).Count);
         }

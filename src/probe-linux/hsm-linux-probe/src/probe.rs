@@ -422,7 +422,7 @@ mod tests {
 
     /// The registration JSON of every sensor the probe registers — the parity set, plus the
     /// probe-only set against a fake host (a coretemp package sensor, a mounted target, and a
-    /// Docker daemon serving the garage-server captures) when `with_probe_only` is set, so the
+    /// Docker daemon serving the demo-server captures) when `with_probe_only` is set, so the
     /// result does not depend on the machine running the test.
     fn registrations_with(config: &ProbeConfig, with_probe_only: bool) -> Vec<String> {
         let collector = test_collector(1);
@@ -466,17 +466,19 @@ mod tests {
             tree.file("sys/class/hwmon/hwmon0/name", "coretemp\n");
             tree.file("sys/class/hwmon/hwmon0/temp1_label", "Package id 0\n");
             tree.file("sys/class/hwmon/hwmon0/temp1_input", "43000\n");
-            // garage-server's mounts and block devices (captured 2026-09-29).
+            // demo-server's mounts and block devices (captured 2026-09-29).
             tree.file(
                 "mountinfo",
-                crate::probe_only::disks::mounts::tests::GARAGE_MOUNTINFO,
+                crate::probe_only::disks::mounts::tests::DEMO_MOUNTINFO,
             );
             tree.file(
                 "diskstats",
-                crate::probe_only::disks::diskstats::tests::GARAGE_DISKSTATS,
+                crate::probe_only::disks::diskstats::tests::DEMO_DISKSTATS,
             );
-            crate::probe_only::disks::diskstats::tests::garage_sysfs(&tree);
+            crate::probe_only::disks::diskstats::tests::demo_sysfs(&tree);
             crate::probe_only::network::tests::fake_host(&tree);
+            // The demo containers' cgroup v2 memory files (#1818), where the Docker source looks.
+            crate::probe_only::docker::cgroup::tests::demo_cgroups(&tree, "sys/fs/cgroup", 0);
             Self { tree }
         }
 
@@ -496,9 +498,7 @@ mod tests {
                     })
                 },
                 online_cpus: || Ok(4),
-                docker_engine: |_| {
-                    Box::new(crate::probe_only::docker::tests::FixtureEngine::garage())
-                },
+                docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::demo()),
                 docker_state: None,
                 disk_names: None,
                 disk_written: None,
@@ -517,38 +517,38 @@ mod tests {
     /// The per-interface speed bars register at runtime, so they are not in any pinned set.
     const NETWORK_SET: &[&str] = crate::probe_only::network::tests::TCP_SET;
 
-    /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
+    /// The disk sensors demo-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
     /// eleven mounts, named after the Windows per-drive pattern; seven sensors each (28 paths).
-    const DISKS_GARAGE_SET: &[&str] = &[
-        ".computer/Disks monitoring/Average disk read speed on mediacentr disk",
+    const DISKS_DEMO_SET: &[&str] = &[
+        ".computer/Disks monitoring/Average disk read speed on mediastore disk",
         ".computer/Disks monitoring/Average disk read speed on oldlinux disk",
         ".computer/Disks monitoring/Average disk read speed on root disk",
-        ".computer/Disks monitoring/Average disk read speed on wd4tb disk",
-        ".computer/Disks monitoring/Average disk write speed on mediacentr disk",
+        ".computer/Disks monitoring/Average disk read speed on wdisk disk",
+        ".computer/Disks monitoring/Average disk write speed on mediastore disk",
         ".computer/Disks monitoring/Average disk write speed on oldlinux disk",
         ".computer/Disks monitoring/Average disk write speed on root disk",
-        ".computer/Disks monitoring/Average disk write speed on wd4tb disk",
-        ".computer/Disks monitoring/Free inodes on mediacentr disk %",
+        ".computer/Disks monitoring/Average disk write speed on wdisk disk",
+        ".computer/Disks monitoring/Free inodes on mediastore disk %",
         ".computer/Disks monitoring/Free inodes on oldlinux disk %",
         ".computer/Disks monitoring/Free inodes on root disk %",
-        ".computer/Disks monitoring/Free inodes on wd4tb disk %",
-        ".computer/Disks monitoring/Free space on mediacentr disk",
-        ".computer/Disks monitoring/Free space on mediacentr disk %",
+        ".computer/Disks monitoring/Free inodes on wdisk disk %",
+        ".computer/Disks monitoring/Free space on mediastore disk",
+        ".computer/Disks monitoring/Free space on mediastore disk %",
         ".computer/Disks monitoring/Free space on oldlinux disk",
         ".computer/Disks monitoring/Free space on oldlinux disk %",
         ".computer/Disks monitoring/Free space on root disk",
         ".computer/Disks monitoring/Free space on root disk %",
-        ".computer/Disks monitoring/Free space on wd4tb disk",
-        ".computer/Disks monitoring/Free space on wd4tb disk %",
-        ".computer/Disks monitoring/Read per day on mediacentr disk",
+        ".computer/Disks monitoring/Free space on wdisk disk",
+        ".computer/Disks monitoring/Free space on wdisk disk %",
+        ".computer/Disks monitoring/Read per day on mediastore disk",
         ".computer/Disks monitoring/Read per day on oldlinux disk",
         ".computer/Disks monitoring/Read per day on root disk",
-        ".computer/Disks monitoring/Read per day on wd4tb disk",
-        ".computer/Disks monitoring/Written per day on mediacentr disk",
+        ".computer/Disks monitoring/Read per day on wdisk disk",
+        ".computer/Disks monitoring/Written per day on mediastore disk",
         ".computer/Disks monitoring/Written per day on oldlinux disk",
         ".computer/Disks monitoring/Written per day on root disk",
-        ".computer/Disks monitoring/Written per day on wd4tb disk",
+        ".computer/Disks monitoring/Written per day on wdisk disk",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
@@ -579,84 +579,119 @@ mod tests {
         ".probe/.module/Process process/Process thread count",
     ];
 
-    /// The Docker source (#1416) on garage-server: 12 Compose containers, 11 monitored services, all
+    /// The Docker source (#1416) on demo-server: 12 Compose containers, 11 monitored services, all
     /// registered before Start. Every service gets the three state sensors, the four with a
-    /// healthcheck (seaweedfs, mongo, gitea, db) `Health`, and all eleven (all running) `CPU`,
+    /// healthcheck (objstore, mdb, gitsrv, db) `Health`, and all eleven (all running) `CPU`,
     /// `Memory used %` (the memory limit is in that description, not a sensor of its own) and —
-    /// their stats carry a block-device write counter — `Disk written per hour`.
-    /// `lingua-ci/ci-image` — Exited (0) under restart policy `no` — is a completed one-shot job
-    /// and not monitored (owner decision). 70 paths, no empty nodes.
-    const DOCKER_GARAGE_SET: &[&str] = &[
-        ".probe/Docker/caddy/caddy/CPU",
-        ".probe/Docker/caddy/caddy/Disk written per hour",
-        ".probe/Docker/caddy/caddy/Memory used %",
-        ".probe/Docker/caddy/caddy/OOM killed",
-        ".probe/Docker/caddy/caddy/Restart count",
-        ".probe/Docker/caddy/caddy/Service status",
-        ".probe/Docker/gitea/db/CPU",
-        ".probe/Docker/gitea/db/Disk written per hour",
-        ".probe/Docker/gitea/db/Health",
-        ".probe/Docker/gitea/db/Memory used %",
-        ".probe/Docker/gitea/db/OOM killed",
-        ".probe/Docker/gitea/db/Restart count",
-        ".probe/Docker/gitea/db/Service status",
-        ".probe/Docker/gitea/gitea/CPU",
-        ".probe/Docker/gitea/gitea/Disk written per hour",
-        ".probe/Docker/gitea/gitea/Health",
-        ".probe/Docker/gitea/gitea/Memory used %",
-        ".probe/Docker/gitea/gitea/OOM killed",
-        ".probe/Docker/gitea/gitea/Restart count",
-        ".probe/Docker/gitea/gitea/Service status",
+    /// their stats carry a block-device write counter — `Disk written per hour`, plus `Own memory`
+    /// (#1818). From the cgroup v2 captures (`fixtures/docker/demo/cgroup-t0`): `Memory pressure %`
+    /// for the nine services with a readable `memory.pressure` (not panelhost, which has no cgroup
+    /// directory, nor mdb, which has no PSI), `Memory limit hits per hour` for the ten with
+    /// `memory.events` (all have a memory limit), `Swap used` for hsm/app, the one that swaps.
+    /// `lumina-ci/ci-image` — Exited (0) under restart policy `no` — is a completed one-shot job
+    /// and not monitored (owner decision). 101 paths, no empty nodes.
+    const DOCKER_DEMO_SET: &[&str] = &[
+        ".probe/Docker/cproxy/cproxy/CPU",
+        ".probe/Docker/cproxy/cproxy/Disk written per hour",
+        ".probe/Docker/cproxy/cproxy/Memory limit hits per hour",
+        ".probe/Docker/cproxy/cproxy/Memory pressure %",
+        ".probe/Docker/cproxy/cproxy/Memory used %",
+        ".probe/Docker/cproxy/cproxy/OOM killed",
+        ".probe/Docker/cproxy/cproxy/Own memory",
+        ".probe/Docker/cproxy/cproxy/Restart count",
+        ".probe/Docker/cproxy/cproxy/Service status",
+        ".probe/Docker/gitsrv/db/CPU",
+        ".probe/Docker/gitsrv/db/Disk written per hour",
+        ".probe/Docker/gitsrv/db/Health",
+        ".probe/Docker/gitsrv/db/Memory limit hits per hour",
+        ".probe/Docker/gitsrv/db/Memory pressure %",
+        ".probe/Docker/gitsrv/db/Memory used %",
+        ".probe/Docker/gitsrv/db/OOM killed",
+        ".probe/Docker/gitsrv/db/Own memory",
+        ".probe/Docker/gitsrv/db/Restart count",
+        ".probe/Docker/gitsrv/db/Service status",
+        ".probe/Docker/gitsrv/gitsrv/CPU",
+        ".probe/Docker/gitsrv/gitsrv/Disk written per hour",
+        ".probe/Docker/gitsrv/gitsrv/Health",
+        ".probe/Docker/gitsrv/gitsrv/Memory limit hits per hour",
+        ".probe/Docker/gitsrv/gitsrv/Memory pressure %",
+        ".probe/Docker/gitsrv/gitsrv/Memory used %",
+        ".probe/Docker/gitsrv/gitsrv/OOM killed",
+        ".probe/Docker/gitsrv/gitsrv/Own memory",
+        ".probe/Docker/gitsrv/gitsrv/Restart count",
+        ".probe/Docker/gitsrv/gitsrv/Service status",
         ".probe/Docker/hsm/app/CPU",
         ".probe/Docker/hsm/app/Disk written per hour",
+        ".probe/Docker/hsm/app/Memory limit hits per hour",
+        ".probe/Docker/hsm/app/Memory pressure %",
         ".probe/Docker/hsm/app/Memory used %",
         ".probe/Docker/hsm/app/OOM killed",
+        ".probe/Docker/hsm/app/Own memory",
         ".probe/Docker/hsm/app/Restart count",
         ".probe/Docker/hsm/app/Service status",
-        ".probe/Docker/lingua-ci/dind/CPU",
-        ".probe/Docker/lingua-ci/dind/Disk written per hour",
-        ".probe/Docker/lingua-ci/dind/Memory used %",
-        ".probe/Docker/lingua-ci/dind/OOM killed",
-        ".probe/Docker/lingua-ci/dind/Restart count",
-        ".probe/Docker/lingua-ci/dind/Service status",
-        ".probe/Docker/lingua-ci/janitor/CPU",
-        ".probe/Docker/lingua-ci/janitor/Disk written per hour",
-        ".probe/Docker/lingua-ci/janitor/Memory used %",
-        ".probe/Docker/lingua-ci/janitor/OOM killed",
-        ".probe/Docker/lingua-ci/janitor/Restart count",
-        ".probe/Docker/lingua-ci/janitor/Service status",
-        ".probe/Docker/lingua-ci/runner-heavy/CPU",
-        ".probe/Docker/lingua-ci/runner-heavy/Disk written per hour",
-        ".probe/Docker/lingua-ci/runner-heavy/Memory used %",
-        ".probe/Docker/lingua-ci/runner-heavy/OOM killed",
-        ".probe/Docker/lingua-ci/runner-heavy/Restart count",
-        ".probe/Docker/lingua-ci/runner-heavy/Service status",
-        ".probe/Docker/lingua-ci/runner-light/CPU",
-        ".probe/Docker/lingua-ci/runner-light/Disk written per hour",
-        ".probe/Docker/lingua-ci/runner-light/Memory used %",
-        ".probe/Docker/lingua-ci/runner-light/OOM killed",
-        ".probe/Docker/lingua-ci/runner-light/Restart count",
-        ".probe/Docker/lingua-ci/runner-light/Service status",
-        ".probe/Docker/lingua/mongo/CPU",
-        ".probe/Docker/lingua/mongo/Disk written per hour",
-        ".probe/Docker/lingua/mongo/Health",
-        ".probe/Docker/lingua/mongo/Memory used %",
-        ".probe/Docker/lingua/mongo/OOM killed",
-        ".probe/Docker/lingua/mongo/Restart count",
-        ".probe/Docker/lingua/mongo/Service status",
-        ".probe/Docker/lingua/seaweedfs/CPU",
-        ".probe/Docker/lingua/seaweedfs/Disk written per hour",
-        ".probe/Docker/lingua/seaweedfs/Health",
-        ".probe/Docker/lingua/seaweedfs/Memory used %",
-        ".probe/Docker/lingua/seaweedfs/OOM killed",
-        ".probe/Docker/lingua/seaweedfs/Restart count",
-        ".probe/Docker/lingua/seaweedfs/Service status",
-        ".probe/Docker/portainer/portainer/CPU",
-        ".probe/Docker/portainer/portainer/Disk written per hour",
-        ".probe/Docker/portainer/portainer/Memory used %",
-        ".probe/Docker/portainer/portainer/OOM killed",
-        ".probe/Docker/portainer/portainer/Restart count",
-        ".probe/Docker/portainer/portainer/Service status",
+        ".probe/Docker/hsm/app/Swap used",
+        ".probe/Docker/lumina-ci/dind/CPU",
+        ".probe/Docker/lumina-ci/dind/Disk written per hour",
+        ".probe/Docker/lumina-ci/dind/Memory limit hits per hour",
+        ".probe/Docker/lumina-ci/dind/Memory pressure %",
+        ".probe/Docker/lumina-ci/dind/Memory used %",
+        ".probe/Docker/lumina-ci/dind/OOM killed",
+        ".probe/Docker/lumina-ci/dind/Own memory",
+        ".probe/Docker/lumina-ci/dind/Restart count",
+        ".probe/Docker/lumina-ci/dind/Service status",
+        ".probe/Docker/lumina-ci/janitor/CPU",
+        ".probe/Docker/lumina-ci/janitor/Disk written per hour",
+        ".probe/Docker/lumina-ci/janitor/Memory limit hits per hour",
+        ".probe/Docker/lumina-ci/janitor/Memory pressure %",
+        ".probe/Docker/lumina-ci/janitor/Memory used %",
+        ".probe/Docker/lumina-ci/janitor/OOM killed",
+        ".probe/Docker/lumina-ci/janitor/Own memory",
+        ".probe/Docker/lumina-ci/janitor/Restart count",
+        ".probe/Docker/lumina-ci/janitor/Service status",
+        ".probe/Docker/lumina-ci/runner-heavy/CPU",
+        ".probe/Docker/lumina-ci/runner-heavy/Disk written per hour",
+        ".probe/Docker/lumina-ci/runner-heavy/Memory limit hits per hour",
+        ".probe/Docker/lumina-ci/runner-heavy/Memory pressure %",
+        ".probe/Docker/lumina-ci/runner-heavy/Memory used %",
+        ".probe/Docker/lumina-ci/runner-heavy/OOM killed",
+        ".probe/Docker/lumina-ci/runner-heavy/Own memory",
+        ".probe/Docker/lumina-ci/runner-heavy/Restart count",
+        ".probe/Docker/lumina-ci/runner-heavy/Service status",
+        ".probe/Docker/lumina-ci/runner-light/CPU",
+        ".probe/Docker/lumina-ci/runner-light/Disk written per hour",
+        ".probe/Docker/lumina-ci/runner-light/Memory limit hits per hour",
+        ".probe/Docker/lumina-ci/runner-light/Memory pressure %",
+        ".probe/Docker/lumina-ci/runner-light/Memory used %",
+        ".probe/Docker/lumina-ci/runner-light/OOM killed",
+        ".probe/Docker/lumina-ci/runner-light/Own memory",
+        ".probe/Docker/lumina-ci/runner-light/Restart count",
+        ".probe/Docker/lumina-ci/runner-light/Service status",
+        ".probe/Docker/lumina/mdb/CPU",
+        ".probe/Docker/lumina/mdb/Disk written per hour",
+        ".probe/Docker/lumina/mdb/Health",
+        ".probe/Docker/lumina/mdb/Memory limit hits per hour",
+        ".probe/Docker/lumina/mdb/Memory used %",
+        ".probe/Docker/lumina/mdb/OOM killed",
+        ".probe/Docker/lumina/mdb/Own memory",
+        ".probe/Docker/lumina/mdb/Restart count",
+        ".probe/Docker/lumina/mdb/Service status",
+        ".probe/Docker/lumina/objstore/CPU",
+        ".probe/Docker/lumina/objstore/Disk written per hour",
+        ".probe/Docker/lumina/objstore/Health",
+        ".probe/Docker/lumina/objstore/Memory limit hits per hour",
+        ".probe/Docker/lumina/objstore/Memory pressure %",
+        ".probe/Docker/lumina/objstore/Memory used %",
+        ".probe/Docker/lumina/objstore/OOM killed",
+        ".probe/Docker/lumina/objstore/Own memory",
+        ".probe/Docker/lumina/objstore/Restart count",
+        ".probe/Docker/lumina/objstore/Service status",
+        ".probe/Docker/panelhost/panelhost/CPU",
+        ".probe/Docker/panelhost/panelhost/Disk written per hour",
+        ".probe/Docker/panelhost/panelhost/Memory used %",
+        ".probe/Docker/panelhost/panelhost/OOM killed",
+        ".probe/Docker/panelhost/panelhost/Own memory",
+        ".probe/Docker/panelhost/panelhost/Restart count",
+        ".probe/Docker/panelhost/panelhost/Service status",
     ];
 
     #[test]
@@ -687,8 +722,8 @@ mod tests {
         // fails here — and so does a probe-only path that collides with the parity set.
         let mut expected = parity_set();
         expected.extend_from_slice(PROBE_ONLY_SET);
-        expected.extend_from_slice(DISKS_GARAGE_SET);
-        expected.extend_from_slice(DOCKER_GARAGE_SET);
+        expected.extend_from_slice(DISKS_DEMO_SET);
+        expected.extend_from_slice(DOCKER_DEMO_SET);
         expected.extend_from_slice(NETWORK_SET);
         expected.sort_unstable();
         let registered = registered_paths_with(&ProbeConfig::default(), true);
@@ -698,16 +733,16 @@ mod tests {
         assert!(
             PROBE_ONLY_SET
                 .iter()
-                .chain(DISKS_GARAGE_SET)
-                .chain(DOCKER_GARAGE_SET)
+                .chain(DISKS_DEMO_SET)
+                .chain(DOCKER_DEMO_SET)
                 .chain(NETWORK_SET)
                 .all(|path| !parity.contains(path)),
             "a probe-only sensor must never shadow a parity sensor"
         );
         // The literal list and the module's own path builders agree.
-        let mut built = crate::probe_only::disks::tests::garage_paths();
+        let mut built = crate::probe_only::disks::tests::demo_paths();
         built.sort_unstable();
-        assert_eq!(built, DISKS_GARAGE_SET);
+        assert_eq!(built, DISKS_DEMO_SET);
     }
 
     #[test]
@@ -766,7 +801,7 @@ mod tests {
         config.host_sensors.enabled = false;
         config.network.enabled = false;
         let mut expected = parity_set();
-        expected.extend_from_slice(DOCKER_GARAGE_SET);
+        expected.extend_from_slice(DOCKER_DEMO_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
 
@@ -833,7 +868,7 @@ mod tests {
         // alert (a fixed 20 GB threshold would hold a small /boot/efi in Error; the % sensor
         // carries the alerts).
         contains_all(
-            &find(".computer/Disks monitoring/Free space on wd4tb disk"),
+            &find(".computer/Disks monitoring/Free space on wdisk disk"),
             &[
                 "\"SensorType\":2,",
                 "\"TTLTicks\":[9000000000]",
@@ -845,7 +880,7 @@ mod tests {
         );
         // DoubleBar, MBytes_sec, EMA, 15 min TTL, no alert (the Windows row has none); the
         // description names the whole disk and the filesystem sharing it.
-        let write = find(".computer/Disks monitoring/Average disk write speed on mediacentr disk");
+        let write = find(".computer/Disks monitoring/Average disk write speed on mediastore disk");
         contains_all(
             &write,
             &[
@@ -950,7 +985,7 @@ mod tests {
     /// A config with the given extra `hsm` keys (`, "module": …`).
     fn config_with(hsm_keys: &str) -> Config {
         Config::parse(&format!(
-            r#"{{ "hsm": {{ "address": " https://garage.lan ", "port": 44330,
+            r#"{{ "hsm": {{ "address": " https://demo.lan ", "port": 44330,
                 "accessKeyFile": "access-key"{hsm_keys} }} }}"#
         ))
         .expect("parse")
@@ -976,7 +1011,7 @@ mod tests {
         let options = collector_options(&config_with(""), "unit-test-key");
         assert_eq!(options.module.as_deref(), Some(".probe"));
         assert_eq!(options.computer_name, None);
-        assert_eq!(options.server_address, "https://garage.lan");
+        assert_eq!(options.server_address, "https://demo.lan");
         assert_eq!(options.port, 44330);
         assert_eq!(
             options.package_collect_period,
@@ -1017,8 +1052,8 @@ mod tests {
     fn the_start_log_says_where_the_tree_sits() {
         assert_eq!(tree_root("", ".probe"), "'.probe/'");
         assert_eq!(
-            tree_root("garage-server", "LinuxProbe"),
-            "'garage-server/LinuxProbe/' (computerName/module changed from the defaults; not \
+            tree_root("demo-server", "LinuxProbe"),
+            "'demo-server/LinuxProbe/' (computerName/module changed from the defaults; not \
              recommended)"
         );
         assert_eq!(

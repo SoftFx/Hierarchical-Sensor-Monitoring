@@ -17,6 +17,67 @@
             </summary>
             <param name="user">User object (password field must be password hash).</param>
         </member>
+        <member name="T:HSMServer.Controllers.AccessKeysApiController">
+            <summary>
+            A product's access keys (#1787) — the id-discovery surface of the
+            agent-installation scenario: the listed key ids are the handles the
+            write surface (#1789) takes, and each item's lastUseTime/lastIp answer
+            "has the installed agent connected". Bearer-token authenticated only;
+            reads follow the owner's product sight (unknown and invisible products
+            answer the same 404; a key of another product is the same 404 too —
+            the key id space is global).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.GetProductAccessKeys(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            The product's access keys, ordered by display name then id, paginated.
+            The key id IS the credential and is returned deliberately (web parity —
+            the web UI shows it to users who can see the product's keys).
+            </summary>
+            <param name="productId">Product id (any visible node of the tree works — sight is resolved at the node's root product).</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.GetProductAccessKey(System.Guid,System.Guid)">
+            <summary>
+            One access key of the product by id. An unknown key id, a key of a
+            different product and a server-wide master key all answer the same 404.
+            </summary>
+            <param name="productId">Product id (any visible node of the tree works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.CreateAccessKey(System.Guid,HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto)">
+            <summary>
+            Issue an access key on the product — the credential hand-over step of the
+            agent-installation scenario. The write needs the owner's ProductManager role
+            and a read-write token (the web page's gate). The display name follows the
+            web form's rules; permissions default to the agent profile (send data, add
+            nodes, add sensors — no read-back) when omitted. The 201 echo carries the
+            key's GUID — the credential itself, like the read surface exposes it.
+            </summary>
+            <param name="productId">Product id (any visible node works — the key attaches to that node).</param>
+            <param name="request">The body: display name + optional permission names.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.UpdateAccessKey(System.Guid,System.Guid,HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto)">
+            <summary>
+            Modify one key of the product: rename, re-permission, block or unblock (the
+            kill-switch for a misbehaving agent). Every body field is optional — null
+            means leave unchanged. The write needs the owner's ProductManager role and a
+            read-write token.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+            <param name="request">The body: optional new display name, permission names, state.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AccessKeysApiController.DeleteAccessKey(System.Guid,System.Guid)">
+            <summary>
+            Remove one key of the product — the credential stops being accepted on its
+            next presentation. The write needs the owner's ProductManager role and a
+            read-write token.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="keyId">Key id.</param>
+        </member>
         <member name="T:HSMServer.Controllers.AgentController">
              <summary>
              Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
@@ -56,6 +117,42 @@
         <member name="M:HSMServer.Controllers.AgentController.ReadStagedVersion(System.String)">
             Read `wwwroot/agent/version.txt` (one-line version string staged by CI). Falls back to
             "0.0.0" so the manifest stays valid even when the version file was not staged yet.
+        </member>
+        <member name="T:HSMServer.Controllers.AgentInstallerApiController">
+            <summary>
+            The agent-installer download surface of the management API (#1788): the
+            bundle (zip for windows, tar.gz for linux) under the management bearer,
+            either streamed directly (scripts) or handed over as a ONE-TIME
+            short-lived download link (MCP-native orchestrators — the link needs no
+            Authorization header on the target machine). The bundle embeds the
+            product's existing send-data access key; it never generates one.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentInstallerApiController.GetInstaller(System.Guid,System.String)">
+            <summary>
+            Stream the product's agent-installer bundle: a signed-exe zip for
+            `os=windows`, a .deb tar.gz for `os=linux` — the same bundle the web
+            Downloads page serves, with the product's send-data key embedded in
+            the generated config. A read-only token suffices (the ProductManager
+            owner can already read the key).
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="os">'windows' or 'linux'.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentInstallerApiController.IssueInstallerLink(System.Guid,System.String)">
+            <summary>
+            Issue a ONE-TIME short-lived (~10 min) download link for the product's
+            bundle: `{url, expiresAt, fileName, size, sha256}`. The URL needs no
+            Authorization header — the token inside it is the credential, valid
+            for a single download — so an orchestrator can curl the bundle on the
+            target machine without the management bearer. The sha256 pins the
+            EXACT bytes the redemption serves.
+            </summary>
+            <param name="productId">Product id (any visible node works — sight is resolved at the node's root product).</param>
+            <param name="os">'windows' or 'linux'.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.AgentInstallerDownloadController">
+            already-redeemed token answers one plain 404 (the link must not become
         </member>
         <member name="T:HSMServer.Controllers.AlertSchedulesApiController">
             <summary>
@@ -422,6 +519,20 @@
             </summary>
             <param name="page">1-based page number; clamped into [1, totalPages].</param>
             <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductsApiController.CreateProduct(HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto)">
+            <summary>
+            Create a root product — the first step of the agent-installation
+            scenario. Any live read-write token may create one (the web UI's rule:
+            the creator becomes the product's author); this surface also grants
+            the creator the ProductManager role on the new product, so it is
+            immediately visible and manageable by the creating token. The name
+            follows the web form's rules (required, at most 100 chars of the
+            allowed charset, unique among root products); the product's default
+            access key and the tree-CRUD journal record are created by the same
+            core path the web UI drives.
+            </summary>
+            <param name="request">The body carrying the new product's name.</param>
         </member>
         <member name="M:HSMServer.Controllers.SensorHistoryController.NodeChartHistory(HSMServer.Model.Model.History.NodeChartRequest)">
             <summary>
@@ -893,6 +1004,23 @@
             answering false would cut the whole web UI off).
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.AccessKeysMcpTools">
+            <summary>
+            The access-key tools of the MCP surface (#1787/#1789): one product's
+            keys (the id-discovery list) and the credential-lifecycle writes —
+            thin renderings of <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService"/> and
+            <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService"/>, the same engines the
+            REST controller runs on (the #1393 pattern).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.AgentInstallerMcpTools">
+            <summary>
+            The agent-installer tool of the MCP surface (#1788): issue a ONE-TIME
+            short-lived download link for a product's installer bundle — a thin
+            rendering of <see cref="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService"/>, the
+            same engine the REST controller runs on (the #1393 pattern).
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
             The alert tools of the MCP surface — four reads (#1391) and, since the
@@ -1023,6 +1151,24 @@
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
             <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpAccessKeysResult">
+            <summary>Result of the list_access_keys tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.AccessKeys">
+            <summary>The product's access keys of the served page, ordered by display name then id.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.TotalFound">
+            <summary>The product's keys, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAccessKeysResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the product has no keys).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpChatsResult">
             <summary>Result of the list_chats tool.</summary>
@@ -1188,6 +1334,15 @@
             same engines the REST policy controllers run on.
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.ProductsMcpTools">
+            <summary>
+            The product tool of the MCP surface (#1786): create a root product —
+            the first step of the agent-installation scenario (the product is what
+            an HSM agent's access key belongs to). A thin delegation to
+            <see cref="T:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService"/>, the same engine the REST
+            create endpoint runs on.
+            </summary>
+        </member>
         <member name="T:HSMServer.Mcp.SensorDeletionMcpTools">
             <summary>
             The sensor deletion tool of the MCP surface (#1637): delete a sensor —
@@ -1302,6 +1457,27 @@
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildZip(System.Byte[],HSMServer.Model.Agent.AgentBundleOptions)">
             <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts + README.</summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.AgentInstallerDownloadLinks">
+            <summary>
+            The ONE-TIME download-link store of the agent-installer surface (#1788):
+            a bearer-authenticated caller issues a short-lived link, and the
+            redemption endpoint serves the bundle to whoever holds the link — no
+            Authorization header, no management token on the target machine (ADR
+            docs/adr/0001-provision-not-push.md: the orchestrator never needs the
+            raw bearer credential in its shell).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerDownloadLinks.Issue(HSMServer.Model.Agent.AgentInstallerDownloadLinks.Link)">
+            <summary>Issue a link for the given bundle; the token is the URL secret.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerDownloadLinks.TryRedeem(System.Guid)">
+            <summary>
+            Redeem a link: SINGLE USE — a successful redemption removes it, an
+            expired one is indistinguishable from an unknown token (the plain
+            not-found answer; the link must not become an enumeration or
+            reuse oracle).
+            </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.AgentKeySelector">
             <summary>
@@ -1668,6 +1844,204 @@
         </member>
         <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Operation">
             <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto">
+            <summary>
+            A product access key — the credential an HSM agent sends in the Key
+            header of every sensor-data request. This is the id-discovery surface
+            for the agent-installation scenario (#1787): the listed ids are the
+            handles the write surface (#1789) takes, and lastUseTime/lastIp answer
+            "has the installed agent connected" without any new endpoint.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.Id">
+            <summary>Key id — the credential itself (the value the agent sends in the Key header). Exposed deliberately: web parity.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.DisplayName">
+            <summary>The key's display name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.ProductId">
+            <summary>The owning product's id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.State">
+            <summary>Stored state: 'active', 'expired' or 'blocked' (an expiration that has passed still reads 'active' here until a validation marks it — read expirationTime for the effective picture).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.Permissions">
+            <summary>The key's permission flags as names: 'canSendSensorData', 'canAddNodes', 'canAddSensors', 'canReadSensorData' (empty when the key holds none).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.CreationTime">
+            <summary>Creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.ExpirationTime">
+            <summary>Expiration time (UTC); far future means the key never expires.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.LastUseTime">
+            <summary>When the key was last used by an agent (UTC); null when it never was.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.LastIp">
+            <summary>The IP address the key was last used from; null when it never was.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto.AuthorId">
+            <summary>The id of the user who created the key; null for keys created by the system (e.g. a product's default key).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDtoMapper">
+            <summary>
+            The shared AccessKeyModel → <see cref="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto"/> mapping of the
+            access-key surface — one mapping for the read service (#1787) and the
+            write service (#1789), so an echoed write and a read of the same key
+            can never diverge.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService">
+            <summary>
+            The access-key write engine (#1789): issue, modify and remove a
+            product's agent credentials — the token-side twin of the web UI's
+            access-keys page. Transport-agnostic: the REST controller and the MCP
+            write tools render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through the
+            shared envelopes.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.CreateAccessKey(System.Guid,HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Issue a key on the product: admission (the owner's ProductManager
+            role + a read-write token), the web form's display-name rules, the
+            permission names (the agent profile when omitted), then the core's
+            own add path. The result echoes the created key — the GUID in the
+            echo IS the credential, exactly like the read surface exposes it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.UpdateAccessKey(System.Guid,System.Guid,HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Modify one key of the product: rename, re-permission, block or
+            unblock (the kill-switch). Every field is optional — null means
+            leave unchanged. Unblocking a key whose expiration has passed
+            lands on 'expired', the web page's own guard.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysAdministrationService.DeleteAccessKey(System.Guid,System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>Remove one key of the product — the credential stops being accepted on its next presentation.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService">
+            <summary>
+            The access-key read implementation (#1787): one product's keys,
+            paginated, and one key by id — the id source for the write surface
+            (#1789) and the "has the installed agent connected" signal (the key's
+            lastUseTime/lastIp ride on the DTO; no new endpoint is needed).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService.ListProductAccessKeys(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Int32,System.Int32)">
+            <summary>
+            One product's access keys, ordered by display name then id, paginated.
+            An unknown and an invisible product answer the same 404.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AccessKeys.AccessKeysReadService.GetProductAccessKey(System.Security.Claims.ClaimsPrincipal,System.Guid,System.Guid)">
+            <summary>
+            One key of one product by id. Unknown product, invisible product, a
+            key of another product and a server-wide master key all answer the
+            same 404.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto">
+            <summary>
+            The create-access-key request body. Validation (the web form's display
+            name rules, the permission names) is owned by the administration
+            service, not by binding attributes — the REST and MCP transports share
+            one validation decision with the web UI's error strings.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto.DisplayName">
+            <summary>The new key's display name: 1..100 characters, no control
+            or bidirectional-override characters, unique among the product's
+            keys. Surrounding whitespace is trimmed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.CreateAccessKeyRequestDto.Permissions">
+            <summary>The key's permission names ('canSendSensorData', 'canAddNodes', 'canAddSensors', 'canReadSensorData'); at least one. Omitted or null = the agent profile ('canSendSensorData', 'canAddNodes', 'canAddSensors') — enough for an HSM agent, no read-back.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto">
+            <summary>
+            The update-access-key request body — a partial update: every field is
+            optional and null means "leave unchanged" (the PolicyDto "null means
+            omit" convention).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.DisplayName">
+            <summary>The key's new display name (same rules as on create: 1..100 characters, no control/bidi-override characters, unique among the product's keys). Null = leave unchanged.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.Permissions">
+            <summary>The key's new permission names (at least one). Null = leave unchanged.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AccessKeys.UpdateAccessKeyRequestDto.State">
+            <summary>The key's new stored state: 'active' (unblock) or 'blocked' (the kill-switch for a misbehaving agent; the agent's data keeps flowing, its key is refused). 'expired' is derived, not settable. Null = leave unchanged.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext">
+            <summary>
+            The request facts the bundle build and the link URL need — captured
+            once per call (REST controller or MCP tool) through <see cref="M:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.Of(System.Security.Claims.ClaimsPrincipal,Microsoft.AspNetCore.Http.HttpContext)"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.Host">
+            <summary>The request host WITHOUT port (the resolver's input).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.UrlAuthority">
+            <summary>The request host WITH port when non-default (the link URL's authority).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService">
+            <summary>
+            The agent-installer surface's engine (#1788): admission at the product
+            (the owner's ProductManager role — a read-only token suffices, the
+            initiative's decision #5: the bundle discloses a credential the PM can
+            already read), the bundle build (the SAME builders the web Downloads
+            page drives, embedding the product's existing send-data key — never
+            generating one), and the one-time link issuance for MCP-native
+            orchestrators. Transport-agnostic: the REST controller and the MCP
+            tool render its results through the shared envelopes.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.GetBundle(System.Guid,System.String,HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext)">
+            <summary>
+            Build the product's bundle and answer it for direct streaming
+            (the script path — the management bearer on every request).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.IssueLink(System.Guid,System.String,HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext)">
+            <summary>
+            Build the product's bundle and issue a ONE-TIME short-lived
+            download link for it — the MCP-native hand-over: the orchestrator
+            curls the link on the target machine without the management
+            bearer. The result carries the absolute URL, the expiry, the file
+            name, the size and the sha256 of the EXACT bytes the redemption
+            will serve.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.AgentInstallerBundleResult">
+            <summary>The built bundle: the bytes, the download file name, the content type.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService.AgentInstallerBundleResult.#ctor(System.Byte[],System.String,System.String)">
+            <summary>The built bundle: the bytes, the download file name, the content type.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto">
+            <summary>
+            A one-time download link for a product's agent-installer bundle (#1788):
+            everything an orchestrator needs to fetch the bundle ON THE TARGET
+            MACHINE without the management bearer — the URL carries a single-use
+            short-lived token, and the sha256 lets it verify the bytes it curled.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Url">
+            <summary>The absolute download URL — single use, short-lived; works without an Authorization header.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.ExpiresAt">
+            <summary>When the link dies (UTC ISO 8601) whether or not it was redeemed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.FileName">
+            <summary>The bundle's file name (a .zip for windows, a .tar.gz for linux).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Size">
+            <summary>The bundle's size in bytes.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerLinkDto.Sha256">
+            <summary>The bundle's SHA-256 (lowercase hex) — verify the downloaded bytes against it.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleAdministrationService">
             <summary>
@@ -2966,6 +3340,19 @@
             ManagementApiErrorDetailsSchemaFilter); the three fields are always present.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto">
+            <summary>
+            The create-product request body: the new root product's name. Validation
+            (required, length, charset, root-name uniqueness) is owned by the
+            administration service, not by binding attributes — the REST and MCP
+            transports share one validation decision with the web UI's error strings.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.CreateProductRequestDto.Name">
+            <summary>The new product's name: 1..100 characters from
+            '0-9a-zA-Z .,_-=#:;%&amp;*()', unique among root products. Surrounding
+            whitespace is trimmed before validation and storage.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto">
             <summary>
             Minimal reference to a tree node (product or folder): enough for an agent to
@@ -3057,6 +3444,25 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.TotalSensors">
             <summary>Total number of direct child sensors (the list above may be capped).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService">
+            <summary>
+            The product-creation write engine (#1786): the first step of the
+            agent-installation scenario — the token-side twin of the web UI's
+            add-product modal. Transport-agnostic: the REST controller and the MCP
+            tool render its <see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult`1"/> through the shared
+            envelopes every other administration service uses.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.ProductAdministrationService.CreateProductAsync(System.String,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Create a root product: admission first (any live read-write
+            caller), then the name rules of the web view model, then the core's
+            own add path (which also writes the TreeCrud journal record and
+            creates the product's default access key), then the ProductManager
+            role grant that makes the product visible and manageable by its
+            creator. The result echoes the created product.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductDto">
             <summary>

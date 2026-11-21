@@ -63,6 +63,19 @@ namespace HSMServer.Authentication
         // FolderRoleFilterByFolderId, ProductManager). Same properties:
         // role-only (reads never consult the write flag) and audit-silent.
         bool CanSeeFolderDetail(ClaimsPrincipal principal, Guid folderId);
+
+        // Decision for creating a root product — the one management write
+        // with NO boundary to authorize against (the product does not exist
+        // yet). Mirrors the web UI's rule that any authenticated user may
+        // create a product and become its author: any LIVE caller with a
+        // read-write token is allowed, role-less owners included (the
+        // creation service then grants the creator the ProductManager role
+        // on the new product, so what a role-less owner creates is
+        // immediately visible and manageable by them). A denial is recorded
+        // ONCE, as AuthorizationDenied — like the caller-wide gate above it
+        // answers 403 and discloses nothing about any concrete target, so it
+        // must not feed the enumeration-probe signal of per-target 404s.
+        ApiTokenAuthorization AuthorizeProductCreate(ClaimsPrincipal principal);
     }
 
 
@@ -114,6 +127,20 @@ namespace HSMServer.Authentication
         public bool CanSeeFolderDetail(ClaimsPrincipal principal, Guid folderId) =>
             TryResolveCaller(principal, out var owner, out _)
             && owner.IsFolderManager(folderId);
+
+        public ApiTokenAuthorization AuthorizeProductCreate(ClaimsPrincipal principal)
+        {
+            // The write-side rule of the token mirror minus the boundary half:
+            // a live caller with a read-write token. The read-write arm is
+            // defense-in-depth — the management policy already rejects
+            // read-only tokens on unsafe methods — so every transport (REST,
+            // MCP) gets the same decision from this one place.
+            if (TryResolveCaller(principal, out _, out var readOnly) && !readOnly)
+                return ApiTokenAuthorization.Allowed;
+
+            Record(principal, write: true, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+            return ApiTokenAuthorization.Forbidden;
+        }
 
         private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)
         {

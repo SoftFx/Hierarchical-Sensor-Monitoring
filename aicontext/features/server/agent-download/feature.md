@@ -1,9 +1,11 @@
 # Feature: Per-product HSM Agent download (server side)
 
-> Owner: server | Last reviewed: 2026-10-14 | Canonical: yes
-> Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
-> bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
-> The Linux sibling (**Download Linux probe**, `.tar.gz` + `install.sh`, #1424) is `../linux-probe-download/feature.md`.
+> Owner: server | Last reviewed: 2026-11-19 | Canonical: yes
+> Scope: The server endpoints + UI that hand an operator or an orchestrator a ready-to-run, per-product
+> HSM Agent bundle (epic #1167 W6/W7 — the admin cookie flow; #1788 — the management-API/`MCP` flow of the
+> agent-installation initiative, incl. the one-time download link). The agent product itself (the C++
+> Windows service) is `agent/feature.md`. The Linux sibling (**Download Linux probe**, `.tar.gz` +
+> `install.sh`, #1424) is `../linux-probe-download/feature.md`.
 
 ---
 
@@ -25,9 +27,18 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 - **Signed-exe invariant.** The bundled `hsm-agent.exe` is served **byte-identical** to the published,
   signed binary. Only `config.json` is generated per product — the PE is never patched (Authenticode).
   Pinned by `AgentInstallerBundleTests.Zip_KeepsExeByteIdentical`.
-- **Admin-only.** `[AuthorizeIsAdmin]` on the endpoint; the UI button renders only for `User.IsAdmin`, and the
+- **Admin-only (the cookie flow).** `[AuthorizeIsAdmin]` on the endpoint; the UI button renders only for `User.IsAdmin`, and the
   **Downloads** menu entry and page are admin-only too (`UserRoleHelper.IsDownloadsPageAllowed`, `[AuthorizeIsAdmin]`
   on `DownloadsController`).
+- **The management-API flow (#1788)** — same bundle, different gate and hand-over: `GET /api/v1/products/{id}/agent-installer?os=windows|linux`
+  streams it under the management bearer to the owner holding the ProductManager role (a read-only token suffices — the
+  bundle discloses a credential that level can already read); `POST …/agent-installer/link` answers a ONE-TIME
+  short-lived (~10 min) download link `{url, expiresAt, fileName, size, sha256}` whose redemption endpoint
+  (`GET /api/agent/installer-download?token=…`, anonymous — the token in the URL is the single-use credential) needs no
+  Authorization header, so an MCP orchestrator curls the bundle on the target machine without the management bearer
+  (ADR `docs/adr/0001-provision-not-push.md`). The link carries the BUILT bytes: the sha256 pins exactly what the
+  redemption serves. The link URL is host-absolute from the API caller's own request, never the agent
+  `ExternalConnectionUrl`. See `../management-api/feature.md` and `../mcp/feature.md` (`get_agent_installer`).
 - **Never cacheable.** The zip carries the product access key, so `Installer` (like the Linux probe's
   `LinuxInstaller`, #1424) is `[ResponseCache(NoStore = true, Location = None)]` — the `ProductController`
   convention. The self-update endpoints (`version`, `exe`) stay cacheable: they carry no credential.

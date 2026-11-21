@@ -87,11 +87,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         {
             var sensor = AddSensor("cpu");
 
-            var result = await Service().MoveSensorsAsync(Request([sensor.Id], path: "garage/system/CPU"), Principal());
+            var result = await Service().MoveSensorsAsync(Request([sensor.Id], path: "demo/system/CPU"), Principal());
 
             Assert.True(result.Success);
             var move = Assert.Single(_moves);
-            Assert.Equal((sensor.Id, _destination.Id, "garage/system/CPU", SensorMoveConflict.Fail), (move.SensorId, move.Product, move.Path, move.OnConflict));
+            Assert.Equal((sensor.Id, _destination.Id, "demo/system/CPU", SensorMoveConflict.Fail), (move.SensorId, move.Product, move.Path, move.OnConflict));
             Assert.Equal("api-owner", move.Initiator.Info);
 
             var item = Assert.Single(result.Value.Results);
@@ -106,10 +106,10 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var a = AddSensor("a");
             var b = AddSensor("b");
 
-            var result = await Service().MoveSensorsAsync(Request([a.Id, b.Id], node: "garage/system/", onConflict: "MERGE"), Principal());
+            var result = await Service().MoveSensorsAsync(Request([a.Id, b.Id], node: "demo/system/", onConflict: "MERGE"), Principal());
 
             Assert.True(result.Success);
-            Assert.Equal(["garage/system/a", "garage/system/b"], _moves.Select(m => m.Path));
+            Assert.Equal(["demo/system/a", "demo/system/b"], _moves.Select(m => m.Path));
             Assert.All(_moves, m => Assert.Equal(SensorMoveConflict.Merge, m.OnConflict));
         }
 

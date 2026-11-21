@@ -182,6 +182,31 @@ impl Tracker {
         }
     }
 
+    /// Latch `OOM killed` for a service whose container had a process OOM-killed while it kept
+    /// running (its cgroup `oom_kill` counter grew, #1818): the same latch as `State.OOMKilled`.
+    /// False when the service is not in the state (nothing to latch).
+    pub fn latch_oom(&mut self, key: &ServiceKey, now: i64, oom_latch: Duration) -> bool {
+        match self.state.services.get_mut(key) {
+            Some(record) => {
+                latch_oom(record, now, oom_latch, &mut self.dirty);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Remember that a container of the service has used swap (#1818); true when that is new.
+    pub fn mark_swap_seen(&mut self, key: &ServiceKey) -> bool {
+        match self.state.services.get_mut(key) {
+            Some(record) if !record.swap_seen => {
+                record.swap_seen = true;
+                self.dirty = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Advance every service by one poll. `services` is the complete listing, grouped.
     pub fn observe(
         &mut self,
@@ -230,6 +255,20 @@ impl Tracker {
         }
 
         outcome
+    }
+}
+
+/// Keep `OOM killed` true until `now + oom_latch`. The latch moves only in steps of the persist
+/// granularity, so a container that stays OOM-killed does not rewrite the state every minute.
+fn latch_oom(record: &mut ServiceRecord, now: i64, oom_latch: Duration, dirty: &mut bool) {
+    let latch = i64::try_from(oom_latch.as_secs()).unwrap_or(i64::MAX);
+    let until = now.saturating_add(latch);
+    let stale = record
+        .oom_latch_until
+        .is_none_or(|current| until - current >= PERSIST_GRANULARITY_SECS);
+    if stale {
+        record.oom_latch_until = Some(until);
+        *dirty = true;
     }
 }
 
@@ -306,17 +345,10 @@ fn observe_service(
         (record.restart_posted != Some(record.restart_total)).then_some(record.restart_total);
 
     // OOM: latched for `oom_latch` after the last poll that saw OOMKilled, surviving recreate
-    // (the latch is per service, on disk).
-    let latch = i64::try_from(oom_latch.as_secs()).unwrap_or(i64::MAX);
+    // (the latch is per service, on disk). The stats round latches it too, when a container's
+    // cgroup `oom_kill` counter grew ([`Tracker::latch_oom`]).
     if facts.iter().any(|(_, i)| i.oom_killed) {
-        let until = now.saturating_add(latch);
-        let stale = record
-            .oom_latch_until
-            .is_none_or(|current| until - current >= PERSIST_GRANULARITY_SECS);
-        if stale {
-            record.oom_latch_until = Some(until);
-            *dirty = true;
-        }
+        latch_oom(record, now, oom_latch, dirty);
     }
     if record.oom_latch_until.is_some_and(|until| now >= until) {
         record.oom_latch_until = None;
@@ -387,7 +419,7 @@ mod tests {
 
     #[test]
     fn a_completed_job_is_every_container_exited_zero_without_a_restart_policy() {
-        // garage's lingua-ci/ci-image: Exited (0), restart policy "no".
+        // demo's lumina-ci/ci-image: Exited (0), restart policy "no".
         assert_eq!(completed_job(&[exited("a", 0, "no")]), Some(true));
         assert_eq!(
             completed_job(&[exited("a", 0, "")]),
@@ -648,6 +680,58 @@ mod tests {
         // Still OOM-killed a day later: the latch was extended, not allowed to lapse.
         let outcome = poll(&mut tracker, 1_000 + DAY, vec![(key("db"), vec![killed])]);
         assert_eq!(outcome.reports[&key("db")].oom_killed, Some(true));
+    }
+
+    #[test]
+    fn an_oom_kill_inside_a_running_container_uses_the_same_latch() {
+        // #1818: the cgroup's `oom_kill` grew while the container kept running; State.OOMKilled
+        // stays false, yet the next polls report true for the latch period.
+        let mut tracker = Tracker::default();
+        let t0 = 1_000_000;
+        poll(
+            &mut tracker,
+            t0,
+            vec![(key("db"), vec![container("a", "running", 0)])],
+        );
+        tracker.take_dirty();
+        assert!(
+            !tracker.latch_oom(&key("other"), t0, LATCH),
+            "not in the state"
+        );
+        assert!(tracker.latch_oom(&key("db"), t0 + 30, LATCH));
+        assert!(tracker.take_dirty(), "the latch is persisted");
+        for now in [t0 + 60, t0 + 30 + DAY - 1] {
+            let outcome = poll(
+                &mut tracker,
+                now,
+                vec![(key("db"), vec![container("a", "running", 0)])],
+            );
+            assert_eq!(outcome.reports[&key("db")].oom_killed, Some(true), "{now}");
+        }
+        let outcome = poll(
+            &mut tracker,
+            t0 + 30 + DAY,
+            vec![(key("db"), vec![container("a", "running", 0)])],
+        );
+        assert_eq!(outcome.reports[&key("db")].oom_killed, Some(false));
+    }
+
+    #[test]
+    fn swap_seen_is_remembered_once() {
+        let mut tracker = Tracker::default();
+        assert!(!tracker.mark_swap_seen(&key("db")), "not in the state");
+        poll(
+            &mut tracker,
+            1_000,
+            vec![(key("db"), vec![container("a", "running", 0)])],
+        );
+        tracker.take_dirty();
+        assert!(tracker.mark_swap_seen(&key("db")));
+        assert!(tracker.take_dirty());
+        assert!(!tracker.mark_swap_seen(&key("db")));
+        assert!(!tracker.take_dirty(), "nothing new to write");
+        let restarted = Tracker::new(State::parse(&tracker.state.to_json()).unwrap());
+        assert!(restarted.state.services[&key("db")].swap_seen);
     }
 
     #[test]

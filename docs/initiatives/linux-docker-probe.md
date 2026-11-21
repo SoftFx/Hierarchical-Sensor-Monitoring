@@ -1,14 +1,14 @@
-# Linux host + Docker Compose probe (garage-server)
+# Linux host + Docker Compose probe (demo-server)
 
 > Status: **phase 1 delivered and verified on the real host** (2026-09-24). Epic: #1413.
-> The probe runs on garage-server reporting the managed Unix default set plus probe-only sensors
+> The probe runs on demo-server reporting the managed Unix default set plus probe-only sensors
 > agreed with the owner one by one (§4.2a): host (#1476), every mounted disk including the
 > archives (#1481) and Docker Compose (#1416). The backup contract (#1417) is **not** a probe
 > source by owner decision (§4.4). The `.deb` is built and install-smoked in CI and the `probe-v*`
 > release channel (#1418) shipped its first release, `probe-v0.8.1`, on 2026-10-06 (§4.5); operating the
 > probe is `src/probe-linux/RUNBOOK.md`.
 > See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
-> Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
+> Source task: demo_administration `hsm/TASK-linux-docker-monitoring.md`.
 > Scope: a Linux probe that reports Debian host metrics, Docker Compose service metrics,
 > SSD/archive-disk capacity and backup-contract signals into the existing HSM server.
 
@@ -77,7 +77,7 @@ seam: a Linux implementation behind `hsm_metric_source_factory_fn`
 
 | Option | Verdict | Rationale |
 |---|---|---|
-| **A. Native probe over the published native collector + Linux metric sources added to the shared collector** | **Chosen** | Stays on the product's native stack (agent/wrapper/aggregator precedent); no .NET runtime on the host; RSS ~5–20 MiB fits the 64 MiB budget with margin on the i5-2500. Sensor identity is guaranteed the same way the repo already guarantees it cross-collector: mirrored algorithm + same OS source + conformance lock (rules #9/#10, top-CPU precedent), not by trusting a probe author. The catalog gain (Unix default sensors in the vcpkg-published collector) benefits every native consumer, not just garage. Probe host language: **Rust over the C ABI** (see below). |
+| **A. Native probe over the published native collector + Linux metric sources added to the shared collector** | **Chosen** | Stays on the product's native stack (agent/wrapper/aggregator precedent); no .NET runtime on the host; RSS ~5–20 MiB fits the 64 MiB budget with margin on the i5-2500. Sensor identity is guaranteed the same way the repo already guarantees it cross-collector: mirrored algorithm + same OS source + conformance lock (rules #9/#10, top-CPU precedent), not by trusting a probe author. The catalog gain (Unix default sensors in the vcpkg-published collector) benefits every native consumer, not just demo. Probe host language: **Rust over the C ABI** (see below). |
 | B. .NET worker over the managed HSMDataCollector NuGet | Rejected (was draft v2) | Managed lib does ship Unix sensors today, but it drags a .NET runtime dependency onto the host, idles at 40–80 MiB against a 64 MiB target, and diverges from the C++ host-side direction. Its Unix sensors remain valuable **as the reference implementation** the native sources must mirror. |
 | C. Probe-local `/proc` parsers over the native collector's custom-sensor API | Rejected (was draft v1) | Fast, but every host sensor would be a second, unconformed implementation next to the managed one — exactly the divergence class this repo forbids. |
 | D. Port/refactor HsmAgent to Linux | Rejected | See §2; ~80% Windows plumbing, and the task forbids that refactor before an approved decision. |
@@ -114,7 +114,7 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
         │     ├── Linux default sensors (§4.1): Total CPU bar, Free RAM, Free disk (+prediction),
         │     │     process CPU/RSS/threads   ← InstallLinuxMetricSources()
         │     ├── module self-sensors: Collector Alive / Version / Errors, queue diagnostics
-        │     └── libcurl/OpenSSL → https://garage.lan:44330
+        │     └── libcurl/OpenSSL → https://demo.lan:44330
         │           (VERIFYPEER=1, VERIFYHOST=2; Debian system trust store via update-ca-certificates)
         ├── probe sources feeding the collector's public sensor API:
         │     ├── loadavg (60 s): /proc/loadavg — exists in no collector today
@@ -130,7 +130,7 @@ Key properties: one process; scheduling/queuing/batching/retry are the collector
 probe source is exception-isolated behind its own catch with a visible per-source status
 sensor (no silent loss); Docker timeout/partial data ⇒ skipped values + diagnostic, never
 zeros/`healthy`/re-stamped stale data; the archive HDDs are only ever `statvfs`'d (answered
-from the superblock — measured on garage-server not to wake them, §4.2a), never opened, listed
+from the superblock — measured on demo-server not to wake them, §4.2a), never opened, listed
 or read.
 
 ### 4.1 Collector workstream: Linux metric sources (shared, conformance-governed)
@@ -175,7 +175,7 @@ version. Windows-only sensors (event logs, service status, network speed, top-CP
 are explicitly **not** ported here (top-CPU later came to Linux as a probe-only source, #1479,
 not through the collector).
 
-TLS: libcurl/OpenSSL on Debian uses the system trust store, so installing the garage cert
+TLS: libcurl/OpenSSL on Debian uses the system trust store, so installing the demo cert
 via `update-ca-certificates` keeps peer+hostname verification on with **no collector
 change**. An explicit `CollectorOptions::ca_file` → `CURLOPT_CAINFO` knob (today the only
 lever is `allow_untrusted_server_certificate`, which disables both checks — banned by the
@@ -234,7 +234,7 @@ Windows agent behaves the same way.
 the owner agreed one by one, which by decision (2026-09-24) exist **only in the Linux probe** —
 never in the shared collector catalog, never on Windows; moving any of them into the catalog is a
 separate, later step. They are pinned by their own test (`PROBE_ONLY_SET`) next to the unchanged
-parity test, so the parity contract stays exactly the 15 paths above. On garage-server the probe
+parity test, so the parity contract stays exactly the 15 paths above. On demo-server the probe
 registers 97 sensors since 0.4.0 (2026-09-29): 15 + 2 host + 16 disk (four filesystems × 4) + 64
 Docker (12 Compose services × 5 + 4 `Health`) — the disk and Docker parts follow the host's mounts
 and services. The agreed host/disk rows are in §4.2a.
@@ -260,8 +260,8 @@ Rejected: load average (Total CPU is already a 5-minute bar with an EMA).
 **Disks — every mounted real filesystem, agreed 2026-09-29, built in #1481.** #1476 first
 reported only the filesystem holding `/srv/docker` and deferred the archive HDDs to a
 backup-snapshot file, on the assumption that polling would wake them. The owner measured it on
-garage-server (2026-09-29): `statvfs` on the sleeping FUSE-NTFS archives `/mnt/wd4tb` (sda2) and
-`/mnt/mediacentr` (sdb1) and on the ext4 `/mnt/oldlinux` (sdb5) left both disks in STANDBY
+demo-server (2026-09-29): `statvfs` on the sleeping FUSE-NTFS archives `/mnt/wdisk` (sda2) and
+`/mnt/mediastore` (sdb1) and on the ext4 `/mnt/oldlinux` (sdb5) left both disks in STANDBY
 (`smartctl -n standby`, before, 5 s and 35 s after). So the archives are polled directly, and the
 snapshot-file design is dropped; the probe only ever calls `statvfs` on a mount — it never opens,
 lists or reads anything under one — and reads `/proc/diskstats` (kernel memory).
@@ -280,14 +280,14 @@ Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-
 | `Read per day on <name> disk` | as `Written per day`, posted with it | — | its mirror for `/proc/diskstats` sectors read (the same line of the same 5 s reads, no new I/O), in the same ledger record with every rule shared. #1506; 1/day |
 
 Real filesystems are the block-backed types in `/proc/self/mountinfo`, deduplicated by source
-device (garage-server's 11 real-type mounts are 4 filesystems: `root`, `wd4tb`, `mediacentr`,
+device (demo-server's 11 real-type mounts are 4 filesystems: `root`, `wdisk`, `mediastore`,
 `oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 440 records/day per
 filesystem (the read-speed bar adds 288; `Written per day` and `Read per day` add 1 each), ≈ 5 770
-on garage-server. The two #1476 root-only percent sensors moved to
+on demo-server. The two #1476 root-only percent sensors moved to
 `Free space on root disk %` / `Free inodes on root disk %`; the managed-parity
 `Free space on disk` (+ prediction) is unchanged.
 
-**Docker Compose — agreed 2026-09-24, built in #1416** (garage_administration
+**Docker Compose — agreed 2026-09-24, built in #1416** (demo_administration
 `hsm/SENSORS-DECISIONS.md` §2). All under one node in the probe's module node (#1496):
 `.probe/Docker/<project>/<service>/<sensor>`. Every number lives in
 `hsm-linux-probe/src/probe_only/docker/contract.rs`, every alert in `…/docker/alerts.rs`; the
@@ -361,7 +361,7 @@ libcurls in one process" outcome the one-HTTP-stack argument was meant to preven
 `libz-sys`/`openssl-sys` on the link line, widening the package's `Depends`. The hand-rolled
 client adds no dependency, the process still links exactly one libcurl (the collector's, for
 HTTPS to HSM), and every framing path is unit-tested against raw bytes captured from the
-garage daemon. Read-only by construction: the client has only `GET`, and the request paths come
+demo daemon. Read-only by construction: the client has only `GET`, and the request paths come
 from a closed enum of the four endpoints with container ids validated as hex. The API version is
 pinned in the path (1.45, the fixtures'), negotiated down to an older daemon's own version
 (≥ 1.41 for one-shot stats) or up to a newer daemon's `MinAPIVersion`.
@@ -423,7 +423,7 @@ of other devices, never a disk's temperature input (a `drivetemp` read would wak
 Ship as a **`.deb` package published through a GitHub Release**, mirroring the repo's
 existing release channels (`agent-v*`, `wrapper-v*`): tag `probe-v<version>` → CI workflow
 (build in a container for the **oldest supported target release** — currently `debian:13`
-(trixie), which is what garage-server runs; building on a newer release than the target would
+(trixie), which is what demo-server runs; building on a newer release than the target would
 produce both a too-new glibc requirement and `Depends:` on packages that do not exist there —
 `cargo build --release`,
 package, tests) → Release with the `.deb` + its sha256, `--latest=false` as usual.
@@ -491,7 +491,7 @@ product and the client runs one command and is connected
   overwrite an existing config unless `--force-config` is passed. Ownership is therefore split by
   design — the bundle owns the live file, the package owns the skeleton — and the consequence is
   that a later package upgrade treated the config as a locally modified conffile — and on the
-  0.3.0~trial1 upgrade on garage dpkg stopped at the conffile prompt with the probe down. **Fixed
+  0.3.0~trial1 upgrade on demo dpkg stopped at the conffile prompt with the probe down. **Fixed
   in the #1416 follow-up (0.3.1):** the config is no longer a conffile. The package ships the skeleton as
   `/usr/share/hsm-linux-probe/config.example.json`; postinst seeds `/etc/hsm-linux-probe/config.json`
   from it only when absent; upgrades never touch the operator's file. A conffile-era file becomes an
@@ -514,7 +514,7 @@ product and the client runs one command and is connected
   data and add nodes and sensors) — registration needs add-node and add-sensor rights, so a
   strictly send-only key cannot register the sensor tree. It is
   product-scoped, not a master key. A dedicated, separately revocable per-download key is the
-  same follow-up already listed for Windows. For garage-server, the operator can still issue a
+  same follow-up already listed for Windows. For demo-server, the operator can still issue a
   send-only key and swap the file; the runbook documents this.
 - **Tests:** bundle contents and layout, a key that never appears in `config.json`,
   byte-identical `.deb`, a 503 with a clear message while no probe release is staged, the
@@ -522,7 +522,7 @@ product and the client runs one command and is connected
   container against a locally built `.deb`. The server pipeline guards (the Windows zip and the
   Docker image both contain the staged `.deb`) mirror the #1266 agent guards.
 
-## 5. Resource budget & retention — measured on garage-server
+## 5. Resource budget & retention — measured on demo-server
 
 Measured over 24 h on the real host (Debian 13, i5-2500), not estimated:
 
@@ -571,7 +571,7 @@ Integration (ubuntu CI + local Docker): fake-server capture (types/paths/units; 
 produced by the collector, no probe-side 5-min aggregation), test-CA chain accepted / wrong
 cert rejected, `Key` header present without value leakage, send failure visible in
 diagnostics not replaced by success; failure isolation; bounded timeouts.
-Manual acceptance on garage: HDD-standby proof, CPU formula under controlled 1- and 2-core
+Manual acceptance on demo: HDD-standby proof, CPU formula under controlled 1- and 2-core
 load, compose-service recreate keeps path/baseline, soak with churn + HSM outage within
 budget.
 
@@ -636,14 +636,14 @@ coverage in both drivers and an agent version bump:
 | probe 0.8.4 | version bump only: the probe links the native collector from the tree, so it picks up collector 0.11.1 (#1544) — payload doubles in the .NET Core layout (fixed notation below 1e17, #1528 item 7), the registration-recovery log line credits only retried registrations, heartbeat cadence pinned (#1443); release `probe-v0.8.4`, pinned in `probe-release.txt` | probe 0.8.4 |
 | #1547 PR | top disk I/O processes, probe-only: `.computer/Top disk writers/<name>` and `Top disk readers/<name>` (MB/s every 60 s, ≥ 1 MiB/s, top 10) and `Written per day by process/<name>` / `Read per day by process/<name>` (decimal GB, top 10 by the day's total, posted in the day's last 30 s like `Written per day on <disk>`, in memory only), from `/proc/<pid>/io` `write_bytes`/`read_bytes` over top CPU's process table and name rule; reaped children's counters taken back from the reaper (re-read after the scan, so a reap during the scan is not double-counted; `SigIgn` reapers skipped; known limits: unsampled short-lived children, orphans reaped by a subreaper/init, `SA_NOCLDWAIT`); top-level `topDiskIo` block, off by default, no server switch. **The probe keeps no capability** (owner decision): reading other users' `/proc/<pid>/io` needs `CAP_DAC_READ_SEARCH` + `CAP_SYS_PTRACE` (measured: the io file is 0400 and its read is ptrace-gated, so the issue's `CAP_SYS_PTRACE` alone reads `EACCES`), and a holder of both could read the whole host via `/proc/<pid>/root` — so a new root helper `hsm-linux-probe-io` (crate + `hsm-linux-probe-io.service` in the same `.deb`, disabled; only those two capabilities, no network, a narrow syscall filter) reads `/proc/<pid>/{stat,io}` every `periodMs` (+ once in the day's last 30 s) and writes `/run/hsm-linux-probe-io/snapshot` (`0640 root:hsm-probe`, versioned text format) which the probe consumes; a missing/stale snapshot is one WARN; `install.sh` enables and restarts the helper only from a host config that enables the block and disables it otherwise. Release and pin follow in a separate version PR | probe 0.9.0 |
 | probe 0.9.1 | same sensors as 0.9.0, top disk I/O unadvertised (owner request: not shown to customers until it matures): the `topDiskIo` block leaves the config skeleton (absent = off), the package description no longer names the helper, the probe logs the disabled source at debug, install.sh's step is one comment line, silent on hosts that never enabled the helper (one neutral line when it stops an enabled/running one; the old-package WARNING otherwise; uninstall.sh likewise); README and RUNBOOK move it under "Advanced, opt-in (not advertised)"; release `probe-v0.9.1`, pinned in `probe-release.txt` by the follow-up pin PR (#1551) | probe 0.9.1 |
-| #1572 + #1573 PR | found on garage with 0.9.1: (#1572) the bytes a reap moves into the reaper's counters are no longer credited to the reaper (night backups read as `Top disk writers/systemd`): the helper writes each process's reaped part (`io` minus its live threads' `task/<tid>/io`) and `cminflt` (grows only with a reap), and the probe credits the growth to the names of the vanished processes a snapshot saw (shared by their last interval), else to `children of <reaper>`; exited threads stay the process's own. (#1573) a 15-byte `comm` is extended to the executable's full name when the candidate starts with it and is no interpreter — the helper from the `exe` link, top CPU from the helper's name for the same process, else the `exe` link, else argv[0] (now relative too; the arguments are still never read) — `valheim_server.` → `valheim_server.x86_64`; a rename is logged once per name. Snapshot format 2 (the probe still reads 1; `postinst` restarts a running helper); (#1574) an idle container's `Disk written per hour` posts 0 instead of a gap once the host has shown a write counter. Released as probe 0.10.0, pinned by #1577 | probe 0.10.0 |
+| #1572 + #1573 PR | found on demo with 0.9.1: (#1572) the bytes a reap moves into the reaper's counters are no longer credited to the reaper (night backups read as `Top disk writers/systemd`): the helper writes each process's reaped part (`io` minus its live threads' `task/<tid>/io`) and `cminflt` (grows only with a reap), and the probe credits the growth to the names of the vanished processes a snapshot saw (shared by their last interval), else to `children of <reaper>`; exited threads stay the process's own. (#1573) a 15-byte `comm` is extended to the executable's full name when the candidate starts with it and is no interpreter — the helper from the `exe` link, top CPU from the helper's name for the same process, else the `exe` link, else argv[0] (now relative too; the arguments are still never read) — `valheim_server.` → `valheim_server.x86_64`; a rename is logged once per name. Snapshot format 2 (the probe still reads 1; `postinst` restarts a running helper); (#1574) an idle container's `Disk written per hour` posts 0 instead of a gap once the host has shown a write counter. Released as probe 0.10.0, pinned by #1577 | probe 0.10.0 |
 | #1711 PR | network sensors, group 1: the Windows `.computer/Network/…` sensors on the same paths: `Connections Established Count` / `Connection Failures Count` / `Connections Reset Count` (the collector's catalog rows, registered through `hsm_collector_add_default_sensor` and fed from `/proc/net/snmp` `Tcp:` `CurrEstab` / `AttemptFails` / `EstabResets`; deltas as on Windows) and per-interface `Received` / `Sent MB,sec` 1-minute bars of 10 s samples from `/proc/net/dev`, physical interfaces only (`probe.network.interfaces` patterns replace that rule); `probe.network.enabled`. Groups 2–3 (owner agreed in #1711): per-interface `Link up` / `Carrier changes` / `Errors` / `Drops` from sysfs and `/proc/net/dev`, and Wi-Fi `Signal dBm` bars from `/proc/net/wireless` (no nl80211; `Link quality` dropped by #1731: it repeated the signal). Group 4 (opt-in, off by default): `Reachability/<Gateway|Internet>/Connect time ms` and `Connect failures` from a TCP connect every 5 s to the default gateway (`:53`) and `1.1.1.1:443` | probe 0.11.0 |
 
-**Verified live on garage-server**, not only in CI: installed through the server-generated
+**Verified live on demo-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
 the host (CPU, `MemAvailable`, `df`, process RSS and thread count all matched), one 5-minute bar
 per window instead of twenty, `Stop:` markers delivered across a restart, both archive HDDs
-still in standby before and after (checked with `smartctl -n standby -i`, since garage has no
+still in standby before and after (checked with `smartctl -n standby -i`, since demo has no
 `hdparm`), 3.9–6.7 MB by systemd's cgroup accounting and 17–19 MB RSS
 including shared pages, both against a 64 MB cap (§5), and no errors in the journal or on
 `.module/Collector errors` over 24 h.
@@ -658,7 +658,7 @@ divergence fixed in the same release: bar and rate sensors created with options 
 §4.2a on its own threads, and the `.deb` is now built by `src/probe-linux/packaging/build-deb.sh`
 in a `debian:13` container instead of by hand; an upgrade restarts a running probe.
 
-Trial on garage-server, 2026-09-28, `0.1.0~trial3` → `0.2.0~trial1` → `0.2.0~trial2` with the
+Trial on demo-server, 2026-09-28, `0.1.0~trial3` → `0.2.0~trial1` → `0.2.0~trial2` with the
 existing config and credential untouched: `Registered 19 sensor(s) on connect` (15 + 4); `Logical
 cores` = 4 (`nproc` 4); `CPU temperature` read from hwmon coretemp `Package id 0`, full 5-minute
 bars of **60 samples** (12:00–12:05 UTC: mean 39.7 °C, min 32, max 50; the sensor read 43 °C at
@@ -671,11 +671,11 @@ before and after. The server's Sensor API history shows a closed bar only once t
 arrives (it keeps the newest bar in memory as the partial "last value") — a server behavior, the
 UI shows the latest bar at once.
 
-**All mounted disks (#1481, probe 0.4.0, collector 0.10.0).** Trial on garage-server, 2026-09-29,
+**All mounted disks (#1481, probe 0.4.0, collector 0.10.0).** Trial on demo-server, 2026-09-29,
 `0.3.0~trial2` → `0.4.0~trial1`, installed non-interactively with the config and credential
 byte-identical before and after: `Registered 97 sensor(s) on connect` (15 + 2 host + 16 disk +
-64 Docker). Four filesystems from eleven mounts — `root` (`/`, sdc1), `wd4tb` (sda2),
-`mediacentr` (sdb1), `oldlinux` (sdb5). Every value matched `df -P` / `df -Pi` / `stat -f` at the
+64 Docker). Four filesystems from eleven mounts — `root` (`/`, sdc1), `wdisk` (sda2),
+`mediastore` (sdb1), `oldlinux` (sdb5). Every value matched `df -P` / `df -Pi` / `stat -f` at the
 same time: free MB 39 821 / 324 970 / 221 836 / 2 407 676 (floor of `f_bavail × f_frsize`, `/`
 exact to the MB against `stat -f` one second before the sample), free % 37.44 / 71.04 / 90.27 /
 63.11, free inodes % 82.89 / 99.95 / 96.27 / 99.99. The `root` write-speed bar holds **60
@@ -723,7 +723,7 @@ tooling posts to HSM itself; archive capacity is the ordinary disk sensors (§4.
 #1437, #1459, #1460); the Windows `DiskRead` fractional-MB divergence; the managed
 `InitAsync`/`StartAsync` calibration race.
 
-**Operational note from the trial, unrelated to the probe:** garage-server's SSD was draining
-about 1.3 GB/h, driven by the `lingua-ci` docker-in-docker volume; at that rate the disk would
+**Operational note from the trial, unrelated to the probe:** demo-server's SSD was draining
+about 1.3 GB/h, driven by the `lumina-ci` docker-in-docker volume; at that rate the disk would
 have filled in under two days. It was found by reading the probe's own free-space history —
 which is, after all, the point of the exercise.

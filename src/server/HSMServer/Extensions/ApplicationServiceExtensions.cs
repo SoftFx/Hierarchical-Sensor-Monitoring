@@ -31,6 +31,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
 using HSMServer.SensorApi.Sessions;
 using HSMServer.Migrations;
+using HSMServer.Model.ManagementApi.AccessKeys;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -94,6 +95,27 @@ namespace HSMServer.ServiceExtensions
             // both the REST alert controllers and the MCP alert tools.
             services.AddScoped<AlertReadService>();
 
+            // The shared access-key read implementation (#1787) — same shape:
+            // behind both the REST access-keys controller and the MCP list
+            // tool. The id source for the write surface (#1789) and the
+            // "has the installed agent connected" signal.
+            services.AddScoped<AccessKeysReadService>();
+
+            // The shared access-key write engine (#1789): create/update/delete
+            // rendered through the core's own key entries (the web page's
+            // path), with the informational TreeCrud audit trail. Scoped for
+            // the same reason as the read twin.
+            services.AddScoped<AccessKeysAdministrationService>();
+
+            // The one-time installer-download links (#1788): Singleton —
+            // in-memory, cross-request (the RestoreService session-store
+            // pattern: ConcurrentDictionary + timer sweep).
+            services.AddSingleton<HSMServer.Model.Agent.AgentInstallerDownloadLinks>();
+
+            // The agent-installer engine (#1788): admission + bundle build +
+            // link issuance, shared by the REST controller and the MCP tool.
+            services.AddScoped<HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService>();
+
             // The shared chat read implementation — same shape as the two above:
             // behind both the REST chat controller and the MCP chat tools. The
             // id source the alert/template write endpoints validate
@@ -150,6 +172,13 @@ namespace HSMServer.ServiceExtensions
             // engines: stateless over singletons — a single-field update with
             // no read-merge-write window needs no per-node gate.
             services.AddScoped<SensorMuteAdministrationService>();
+
+            // The product-creation write engine (#1786): create rendered through
+            // the core's own AddProductAsync entry (the web UI's add-product
+            // path — default access key and TreeCrud journal record included).
+            // Scoped for the same reason as the mute engine: a boundary-less
+            // write with no read-merge-write window.
+            services.AddScoped<ProductAdministrationService>();
 
             // The sensor-deletion write engine (#1637): delete rendered through
             // the core's own RemoveSensorAsync entry (the web UI's remove-node

@@ -224,7 +224,7 @@ namespace HSMServer.Core.Tests
                 var result = Assert.IsType<FileContentResult>(CreateController(webRoot, out var productId).LinuxInstaller(productId));
 
                 Assert.Equal("application/gzip", result.ContentType);
-                Assert.Equal("hsm-linux-probe-Garage_server.tar.gz", result.FileDownloadName);
+                Assert.Equal("hsm-linux-probe-Demo_server.tar.gz", result.FileDownloadName);
 
                 using var gzip = new GZipStream(new MemoryStream(result.FileContents), CompressionMode.Decompress);
                 using var reader = new TarReader(gzip);
@@ -232,9 +232,9 @@ namespace HSMServer.Core.Tests
                 while (reader.GetNextEntry() is { } entry)
                     names.Add(entry.Name);
 
-                Assert.Contains("hsm-linux-probe-Garage_server/hsm-linux-probe_0.1.0_amd64.deb", names);
-                Assert.Contains("hsm-linux-probe-Garage_server/access-key", names);
-                Assert.DoesNotContain("hsm-linux-probe-Garage_server/server-ca.pem", names); // no TLS handshake on this (test) connection
+                Assert.Contains("hsm-linux-probe-Demo_server/hsm-linux-probe_0.1.0_amd64.deb", names);
+                Assert.Contains("hsm-linux-probe-Demo_server/access-key", names);
+                Assert.DoesNotContain("hsm-linux-probe-Demo_server/server-ca.pem", names); // no TLS handshake on this (test) connection
             }
             finally
             {
@@ -385,7 +385,7 @@ namespace HSMServer.Core.Tests
         private static AgentController CreateController(string webRoot, out Guid productId, string externalUrl = "https://hsm.example.com",
                                                         ServerCertificateConfig certificate = null, bool tls = false, bool behindTrustedProxy = false)
         {
-            var product = new ProductModel("Garage server");
+            var product = new ProductModel("Demo server");
             var key = AccessKeyModel.BuildDefault(product);
             product.AccessKeys.TryAdd(key.Id, key);
             productId = product.Id;
