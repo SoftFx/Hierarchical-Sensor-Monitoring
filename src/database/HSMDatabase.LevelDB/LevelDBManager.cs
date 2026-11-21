@@ -34,8 +34,9 @@ namespace HSMDatabase.LevelDB
             return new SensorValuesDatabaseWorker(name, from, to);
         }
 
-        public static IJournalValuesDatabase GetJournalValuesDatabaseInstance(string name, long from, long to) =>
-            new JournalValuesDatabaseWorker(name, from, to);
+        // utcNow: the clock the shard records its last reclaimable change by (#1801); null: the system clock.
+        public static IJournalValuesDatabase GetJournalValuesDatabaseInstance(string name, long from, long to, Func<DateTime> utcNow = null) =>
+            new JournalValuesDatabaseWorker(name, from, to) { Clock = utcNow };
 
 
         public static IEntityDatabase GetEntityDatabase(string name) =>

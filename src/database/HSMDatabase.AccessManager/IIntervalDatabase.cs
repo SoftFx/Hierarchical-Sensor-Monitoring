@@ -23,18 +23,25 @@ namespace HSMDatabase.AccessManager
         void Compact();
 
         // Compaction bookkeeping of a weekly shard (#1801). IsCompacted mirrors the
-        // CompactedShardMarker file in the shard directory; any write or delete that
-        // changes the shard removes it and counts in ChangeCount (since open).
+        // CompactedShardMarker file in the shard directory. Only a reclaimable change
+        // removes it: a delete, or a change made of deletes (a range delete, a chunk
+        // rewrite, the sealing job's removal, fold and unseal). A plain put does not: a
+        // new key leaves no garbage, and the one stale version an overwrite leaves (the
+        // row an aggregated sensor rewrites under its first key) is dropped by LevelDB's
+        // own compaction; what piles up in the bottom levels of a closed week comes from
+        // deletes.
         bool IsCompacted { get; }
 
-        long ChangeCount { get; }
+        /// <summary>Reclaimable changes since the shard was opened.</summary>
+        long ReclaimableChangeCount { get; }
 
-        DateTime? LastChangeUtc { get; }
+        /// <summary>The last reclaimable change since the shard was opened, by the database core's clock; null when none.</summary>
+        DateTime? LastReclaimableChangeUtc { get; }
 
         /// <summary>
-        /// Writes the compaction marker unless the shard changed after
-        /// <paramref name="changeCountBeforeCompaction"/> was read; false when it did.
+        /// Writes the compaction marker unless a reclaimable change happened after
+        /// <paramref name="reclaimableChangeCountBeforeCompaction"/> was read; false when one did.
         /// </summary>
-        bool TryMarkCompacted(long changeCountBeforeCompaction, string content);
+        bool TryMarkCompacted(long reclaimableChangeCountBeforeCompaction, string content);
     }
 }

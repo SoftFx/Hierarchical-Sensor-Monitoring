@@ -223,7 +223,7 @@ The job reports itself under **HSM Server Monitoring → Database → Sealed his
 }
 ```
 
-A background step compacts one closed week of sensor history or journal every 10 minutes (a week unchanged for 3 hours and not compacted since its last change). It is **off by default**. Sealed weeks get smaller on disk only through it, after their original rows are removed: with `HistorySealing.Enabled` on and this one off, the server logs a warning at start.
+A background step compacts one closed week of sensor history or journal every 10 minutes (a week nothing was deleted from for 3 hours, counted from the server start at the earliest, and not compacted since its last delete; new values written into an old week, such as the row an aggregated sensor keeps rewriting, do not count). It is **off by default**. Sealed weeks get smaller on disk only through it, after their original rows are removed: with `HistorySealing.Enabled` on and this one off, the server logs a warning at start.
 
 | Setting | Default | Description |
 |---|---|---|

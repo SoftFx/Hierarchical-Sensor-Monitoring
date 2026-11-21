@@ -33,7 +33,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                OnBeforeChange();
+                OnBeforePut();
                 _openedDb.Put(key, value);
             }
             catch (Exception e)
@@ -46,7 +46,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // (the sensor-move merge deletes the source rows afterwards, #1720).
         public void PutSensorValueOrThrow(byte[] key, byte[] value)
         {
-            OnBeforeChange();
+            OnBeforePut();
             _openedDb.Put(key, value);
         }
 
@@ -54,7 +54,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                _openedDb.DeleteValueFromTo(from, to, OnBeforeChange);
+                _openedDb.DeleteValueFromTo(from, to, OnBeforeDelete);
             }
             catch (Exception e)
             {

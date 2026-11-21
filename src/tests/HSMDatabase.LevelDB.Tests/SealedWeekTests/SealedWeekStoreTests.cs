@@ -86,14 +86,14 @@ public sealed class SealedWeekStoreTests
         store.PutSensorValue(overlayKey, overlayValue);
 
         var refusedBefore = SealedHistoryDiagnostics.ChunkRewriteFailures;
-        var changes = store.ChangeCount;
+        var changes = store.ReclaimableChangeCount;
 
         // From inside the first chunk to inside the corrupt one: the corrupt chunk would have to be re-encoded.
         var first = DenseChunks(pair, sensors.Dense)[0];
         store.RemoveSensorValues(Key(sensors.Dense, first.FirstTick + 1), Key(sensors.Dense, corrupt.FirstTick + 10 * TimeSpan.TicksPerSecond));
 
         Assert.True(SealedHistoryDiagnostics.ChunkRewriteFailures > refusedBefore);
-        Assert.Equal(changes, store.ChangeCount);
+        Assert.Equal(changes, store.ReclaimableChangeCount);
         Assert.Equal(first.Rows, store.GetValuesFrom(Key(sensors.Dense, first.FirstTick), Key(sensors.Dense, first.LastTick)).Count());
 
         // On disk: every chunk as sealed, and the overlay row in the range still there.
@@ -1001,7 +1001,7 @@ public sealed class SealedWeekStoreTests
     #region The compaction marker (#1801)
 
     [Fact]
-    public void ChunkOnlyDelete_ClearsTheCompactionMarker_AndAnEmptyOneDoesNot()
+    public void ChunkOnlyDelete_ClearsTheCompactionMarker_AndAnEmptyOneAndAPutDoNot()
     {
         var (seed, sensors) = SealedWeekDifferentialTests.Seed(new Random(16));
 
@@ -1011,7 +1011,7 @@ public sealed class SealedWeekStoreTests
         var chunk = DenseChunks(pair, sensors.Dense)[1];
 
         store.Compact();
-        Assert.True(store.TryMarkCompacted(store.ChangeCount, "test"));
+        Assert.True(store.TryMarkCompacted(store.ReclaimableChangeCount, "test"));
         Assert.True(CompactedShardMarker.ExistsIn(pair.SealedRowPath));
 
         // Nothing in the range: nothing changes.
@@ -1019,19 +1019,19 @@ public sealed class SealedWeekStoreTests
         Assert.True(store.IsCompacted);
 
         // Rows only in chunks (the overlay holds none of them): the week changed.
-        var changes = store.ChangeCount;
+        var changes = store.ReclaimableChangeCount;
         store.RemoveSensorValues(Key(sensors.Dense, chunk.FirstTick), Key(sensors.Dense, chunk.FirstTick + TimeSpan.TicksPerMinute));
         Assert.False(store.IsCompacted);
         Assert.False(CompactedShardMarker.ExistsIn(pair.SealedRowPath));
-        Assert.True(store.ChangeCount > changes);
+        Assert.True(store.ReclaimableChangeCount > changes);
 
-        // A write to the overlay clears it as before.
-        Assert.True(store.TryMarkCompacted(store.ChangeCount, "test"));
+        // A put to the overlay leaves a compaction nothing to reclaim: the marker stays (#1801).
+        Assert.True(store.TryMarkCompacted(store.ReclaimableChangeCount, "test"));
         store.PutSensorValue(Key(sensors.Dense, chunk.FirstTick), TestValues.Bytes(SensorType.Double, chunk.FirstTick, new Random(5)));
-        Assert.False(store.IsCompacted);
+        Assert.True(store.IsCompacted);
+        Assert.True(CompactedShardMarker.ExistsIn(pair.SealedRowPath));
 
         // A reopened week keeps the marker state of its row directory.
-        Assert.True(store.TryMarkCompacted(store.ChangeCount, "test"));
         pair.Reopen();
         Assert.True(pair.Sealed.IsCompacted);
     }

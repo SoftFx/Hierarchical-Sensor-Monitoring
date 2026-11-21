@@ -107,10 +107,17 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
         /// <summary>
-        /// The clock a sealed week asks, when it is opened, whether its overlay still holds every row (#1805 follow-up). Test
-        /// seam: the sealing job's tests set it to their own clock, so the read mode after a restart does not depend on today.
+        /// The clock a sealed week asks, when it is opened, whether its overlay still holds every row (#1805 follow-up), and
+        /// the one every history and journal shard records its last reclaimable change by (#1801). Test seam: the sealing
+        /// job's tests set it to their own clock, so the read mode after a restart does not depend on today.
         /// </summary>
         internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
+        /// <summary>
+        /// When this database core was created. The background compaction counts a shard's quiet period from it when the
+        /// shard has had no reclaimable change since (#1801): what changed before the start is not known. Test seam.
+        /// </summary>
+        internal DateTime StartedUtc { get; set; }
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
@@ -118,8 +125,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             _settings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
+            StartedUtc = Clock();
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings, utcNow: () => Clock());
-            _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
+            _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings, utcNow: () => Clock());
 
             Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
             ChangeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
@@ -1110,14 +1118,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         // The manual path compacts every shard as before, and marks the closed ones so the
         // background step does not compact them again (#1801). The current week is not
-        // marked: its next write would remove the marker anyway. A shard that fails (to
-        // open or to compact) is logged with its name and the next shard goes on.
+        // marked: it is still being written, and the background step compacts it once it
+        // has closed. A shard that fails (to open or to compact) is logged with its name
+        // and the next shard goes on.
         private void CompactAndMarkClosed(string name, Func<IIntervalDatabase> open, long currentWeekStart)
         {
             try
             {
                 var db = open();
-                var changeCount = db.ChangeCount;
+                var changeCount = db.ReclaimableChangeCount;
                 var sizeBefore = ShardSize(name, db);
 
                 CompactShard(db);
@@ -1255,7 +1264,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 AddCompactionCandidates(_sensorValuesDatabases, shards, candidates);
                 AddCompactionCandidates(_journalValuesDatabases, shards, candidates);
 
-                if (HistoryShardCompactionPlanner.SelectNext(candidates, utcNow, quietPeriod) is not { } next)
+                if (HistoryShardCompactionPlanner.SelectNext(candidates, utcNow, quietPeriod, StartedUtc) is not { } next)
                     return HistoryShardCompactionOutcome.NothingDue;
 
                 return CompactHistoryShard(next.Name, shards[next.Name], utcNow);
@@ -1273,7 +1282,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         // A shard not opened yet has not changed since the server started (every write
         // opens it): its marker file is all there is to know, and reading it does not
-        // open the LevelDB database.
+        // open the LevelDB database. Its quiet period counts from the start, as does the
+        // one of an opened shard with no reclaimable change since (the planner's rule).
         private void AddCompactionCandidates<T>(ValuesDatabaseDictionary<T> dictionary,
             Dictionary<string, Func<IIntervalDatabase>> shards, List<HistoryShardCandidate> candidates)
             where T : IIntervalDatabase
@@ -1287,7 +1297,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 DateTime? retry = retryAfter == default ? null : retryAfter;
 
                 candidates.Add(shard.IsOpened
-                    ? new HistoryShardCandidate(shard.Path, shard.From, shard.Database.IsCompacted, shard.Database.LastChangeUtc, retry)
+                    ? new HistoryShardCandidate(shard.Path, shard.From, shard.Database.IsCompacted, shard.Database.LastReclaimableChangeUtc, retry)
                     : new HistoryShardCandidate(shard.Path, shard.From, CompactedShardMarker.ExistsIn(shard.Path), null, retry));
             }
         }
@@ -1298,7 +1308,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var db = open();
                 var sizeBefore = ShardSize(name, db);
-                var changeCount = db.ChangeCount;
+                var changeCount = db.ReclaimableChangeCount;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
                 CompactShard(db);
@@ -1346,7 +1356,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private volatile HistorySealingPassReport _lastSealingPass;
 
         /// <summary>
-        /// The count of a week's foldable rows is redone at most this often while its change counter keeps moving (an
+        /// The count of a week's foldable rows is redone at most this often while its write counter keeps moving (an
         /// aggregated sensor rewrites its span row in the week the span began on every equal value, #1804 review S4), and
         /// at once when the instance serving the week changed or nothing was counted yet.
         /// </summary>
@@ -1357,7 +1367,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         // UnchangedSinceUtc: since when the number of foldable rows has been the same (a value rewritten in place does not
         // change it), by the job's clock.
-        private sealed record FoldObservation(object Instance, long ChangeCount, long FoldableRows, List<Guid> Sensors, DateTime UnchangedSinceUtc, DateTime CountedAtUtc);
+        private sealed record FoldObservation(object Instance, long WriteCount, long FoldableRows, List<Guid> Sensors, DateTime UnchangedSinceUtc, DateTime CountedAtUtc);
 
         public HistorySealingPassReport LastHistorySealingPass => _lastSealingPass;
 
@@ -1512,11 +1522,11 @@ namespace HSMDatabase.DatabaseWorkCore
                 _foldObservations.TryGetValue(shard.Path, out var observation);
 
                 var sameInstance = observation is not null && ReferenceEquals(observation.Instance, week.ServingInstance);
-                var changed = !sameInstance || observation.ChangeCount != week.ChangeCount;
+                var changed = !sameInstance || observation.WriteCount != week.WriteCount;
 
                 if (changed && (!sameInstance || utcNow - observation.CountedAtUtc >= FoldRecountInterval || utcNow < observation.CountedAtUtc))
                 {
-                    var changeCount = week.ChangeCount;
+                    var writeCount = week.WriteCount;
 
                     FoldCounts++;
 
@@ -1526,7 +1536,7 @@ namespace HSMDatabase.DatabaseWorkCore
                         // aggregated rows change all the time is folded once per quiet period, not never and not every pass.
                         var since = sameInstance && count.rows == observation.FoldableRows ? observation.UnchangedSinceUtc : utcNow;
 
-                        observation = new FoldObservation(week.ServingInstance, changeCount, count.rows, count.sensors, since, utcNow);
+                        observation = new FoldObservation(week.ServingInstance, writeCount, count.rows, count.sensors, since, utcNow);
                         _foldObservations[shard.Path] = observation;
                     }
                     else

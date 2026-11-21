@@ -14,6 +14,13 @@ namespace HSMDatabase.AccessManager
 
         void RemoveSensorValues(byte[] from, byte[] to);
 
+        /// <summary>
+        /// Every put and every delete since the week was opened. The sealing job watches it to know when to count a
+        /// sealed week's foldable rows again (#1804); the compaction bookkeeping does not use it (see
+        /// <see cref="IIntervalDatabase.ReclaimableChangeCount"/>).
+        /// </summary>
+        long WriteCount { get; }
+
         byte[] Get(byte[] key, byte[] sensorId);
 
         byte[] GetLatest(byte[] to, byte[] sensorId);
