@@ -22,6 +22,8 @@
 
         HistoryCompactionConfig HistoryCompaction { get; }
 
+        OidcConfig Oidc { get; }
+
 
         void ResaveSettings();
     }

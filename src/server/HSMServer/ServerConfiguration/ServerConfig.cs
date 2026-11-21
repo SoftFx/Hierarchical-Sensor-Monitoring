@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
 using NLog;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -91,6 +92,17 @@ namespace HSMServer.ServerConfiguration
 
         public HistoryCompactionConfig HistoryCompaction { get; }
 
+        public OidcConfig Oidc { get; }
+
+        // A client secret found in the settings file (#1782): ignored, dropped by the resave,
+        // reported once at startup without its value.
+        [JsonIgnore]
+        public bool OidcClientSecretIgnoredInSettingsFile { get; }
+
+        // Why the Oidc section is not used (empty when it is off and well-formed, or complete).
+        [JsonIgnore]
+        public IReadOnlyList<string> OidcErrors { get; }
+
 
         static ServerConfig()
         {
@@ -128,11 +140,16 @@ namespace HSMServer.ServerConfiguration
             CollectorSessions = Register<CollectorSessionsConfig>(nameof(CollectorSessions));
             HistorySealing = Register<HistorySealingConfig>(nameof(HistorySealing));
             HistoryCompaction = Register<HistoryCompactionConfig>(nameof(HistoryCompaction));
+            Oidc = OidcConfig.Bind(configuration.GetSection(OidcConfig.SectionName));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
             TrustedProxiesIgnoredInSettingsFile = KestrelConfig.FindTrustedProxiesInSettingsFile(configuration);
             LegacyKestrelPortKeysIgnored = KestrelConfig.FindLegacyPortKeysInSettingsFile(configuration);
+
+            // The OIDC client secret is environment only (#1782), like TrustedProxies.
+            Oidc.ClientSecret = OidcConfig.ReadClientSecret(new ConfigurationBuilder().AddEnvironmentVariables().Build());
+            OidcClientSecretIgnoredInSettingsFile = OidcConfig.HasClientSecretInSettingsFile(configuration);
 
             var apiTokensSection = configuration.GetSection(nameof(ApiTokens));
             LegacyApiTokensKillSwitchIgnored = apiTokensSection["Enabled"] is { } legacy
@@ -146,6 +163,7 @@ namespace HSMServer.ServerConfiguration
             CollectorSessions.Validate();
             HistorySealing.Validate();
             HistoryCompaction.Validate();
+            OidcErrors = Oidc.Validate();
 
             ResaveSettings();
 

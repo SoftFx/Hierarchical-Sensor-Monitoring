@@ -71,7 +71,13 @@ Each background compaction logs the shard path and its size before and after. Th
 
 ## Native Libraries
 
-LevelDB native binaries are shipped per-platform in `src/lib/runtimes/`:
-- `win-x64/`, `win-x86/` — Windows
-- `linux-arm/` — Linux ARM
-- `osx/` — macOS
+The LevelDB native libraries come inside the NuGet package `SoftFX.LevelDB.Standard` (repository `SoftFx/leveldb.net`), embedded in its managed DLL and extracted at run time: Windows x64, Windows x86 and Linux x64. There is no Linux ARM or macOS library. (`src/lib/runtimes/` holds LMDB binaries, not LevelDB, and nothing in the build uses them.)
+
+## Block Compression (#1815)
+
+Every database is opened through `LevelDBDatabaseAdapter`, which sets the compression of the blocks it writes in one place, `LevelDBDatabaseAdapter.WriteCompression`. LevelDB records the compression of each block, so reading never depends on that setting, only on whether the native library knows the codec.
+
+- **Up to package 1.2.1** the Linux library had no Snappy. Every database a Linux server wrote is uncompressed (sensor rows about 137 B/row against 54 B/row on Windows), and a database written on Windows could not be opened on Linux (`Corruption: corrupted compressed block contents`).
+- **Package 1.2.2** has Snappy on Linux, so the server reads Snappy blocks on every platform.
+- **Writing, step 1 (the first release on 1.2.2):** Windows writes Snappy, as it always did. Everything else writes uncompressed, so a rollback to a release on 1.2.1 can still read all the data this release wrote. `LevelDBCompressionTests` pins both halves.
+- **Writing, step 2 (the next release):** Linux writes Snappy. After it, a rollback past the step-1 release cannot read the new blocks. Old uncompressed blocks shrink only when a compaction rewrites them; `Compact()` does not rewrite an already compacted database.

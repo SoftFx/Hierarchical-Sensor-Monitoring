@@ -24,6 +24,11 @@ pub const HEALTH: &str = "Health";
 pub const RESTART_COUNT: &str = "Restart count";
 pub const OOM_KILLED: &str = "OOM killed";
 pub const DISK_WRITTEN: &str = "Disk written per hour";
+// Memory sensors of #1818 (owner decision 2026-11-21); none carries an alert.
+pub const OWN_MEMORY: &str = "Own memory";
+pub const MEMORY_PRESSURE: &str = "Memory pressure %";
+pub const MEMORY_LIMIT_HITS: &str = "Memory limit hits per hour";
+pub const SWAP_USED: &str = "Swap used";
 
 // ---- Cadences ----------------------------------------------------------------------------------
 
@@ -208,6 +213,15 @@ mod tests {
         assert_eq!(DISK_WRITTEN, "Disk written per hour");
         assert_eq!(UNIT_MB, 3);
         assert_eq!(BYTES_PER_DECIMAL_MB, 1e6);
+        // The memory sensors of #1818: Own memory and Swap used in MiB like the rest of the
+        // Docker memory figures, Memory pressure % in percent, limit hits as a count per hour.
+        assert_eq!(OWN_MEMORY, "Own memory");
+        assert_eq!(MEMORY_PRESSURE, "Memory pressure %");
+        assert_eq!(MEMORY_LIMIT_HITS, "Memory limit hits per hour");
+        assert_eq!(SWAP_USED, "Swap used");
+        assert_eq!(BYTES_PER_MB, 1_048_576);
+        assert_eq!(UNIT_PERCENTS, 100);
+        assert_eq!(UNIT_COUNT, 1100);
     }
 
     #[test]

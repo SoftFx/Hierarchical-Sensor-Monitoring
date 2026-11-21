@@ -3,8 +3,8 @@
 //! Under systemd this is `$STATE_DIRECTORY/docker-state.json` (`StateDirectory=hsm-linux-probe` →
 //! `/var/lib/hsm-linux-probe`, the unit's only writable path besides its logs). Per service it
 //! holds what must survive a probe restart or a container recreate: the restart-count baseline, the
-//! last posted restart count, the OOM latch, when the service was last seen, and the running hour
-//! of `Disk written per hour`.
+//! last posted restart count, the OOM latch, when the service was last seen, the running hours of
+//! `Disk written per hour` and `Memory limit hits per hour`, and whether it has ever used swap.
 //!
 //! Writes are atomic (temp file + fsync + rename), so a crash mid-write leaves the previous file. A
 //! missing file is a fresh start; a corrupt or unreadable one is too, logged once — losing the
@@ -53,6 +53,19 @@ pub struct ServiceRecord {
     /// file written by a probe before 0.5.0 (read as "no hour running yet").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub written: Option<WriteRecord>,
+    /// The running `Memory limit hits per hour` accumulator (#1818): the same hourly machinery as
+    /// `written`, over the `max` counter of the containers' `memory.events`. Absent before 0.14.0
+    /// and for a service never measured (no limit, or no cgroup v2 files).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit_hits: Option<WriteRecord>,
+    /// A container of the service has used swap at some point (#1818): `Swap used` is registered
+    /// for it from then on, also after a probe restart, and reports 0 as well.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub swap_seen: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl ServiceRecord {
@@ -203,6 +216,18 @@ mod tests {
             .ok();
         written.cover(5_000, 1_790_686_805_000);
         record.written = Some(written);
+        let mut limit_hits = WriteRecord::new(1_790_686_800_000);
+        limit_hits
+            .sample(
+                "abbd59dcacc8",
+                957,
+                1_790_686_805_000,
+                std::time::Duration::from_secs(60),
+                None,
+            )
+            .ok();
+        record.limit_hits = Some(limit_hits);
+        record.swap_seen = true;
         let mut state = State::default();
         state.services.insert(key, record);
         state
@@ -230,7 +255,12 @@ mod tests {
         let record = &state.services[&ServiceKey::new("gitsrv", "db")];
         assert_eq!(record.restart_total, 5);
         assert_eq!(record.written, None);
-        assert!(!state.to_json().contains("written"), "absent stays absent");
+        assert_eq!(record.limit_hits, None);
+        assert!(!record.swap_seen);
+        let json = state.to_json();
+        for absent in ["written", "limitHits", "swapSeen"] {
+            assert!(!json.contains(absent), "absent stays absent: {absent}");
+        }
     }
 
     #[test]

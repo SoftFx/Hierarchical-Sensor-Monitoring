@@ -1,6 +1,7 @@
 ﻿using HSMCommon;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using HSMServer.Authentication.Sso;
 using HSMServer.Constants;
 using HSMServer.Extensions;
 using HSMServer.Filters;
@@ -8,14 +9,15 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -25,11 +27,15 @@ namespace HSMServer.Controllers
     public class AccountController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
+        private readonly OidcConfig _oidc;
+        private readonly ILogger<AccountController> _logger;
 
 
-        public AccountController(IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public AccountController(IUserManager userManager, TreeViewModel treeViewModel, OidcConfig oidc, ILogger<AccountController> logger) : base(userManager)
         {
             _treeViewModel = treeViewModel;
+            _oidc = oidc;
+            _logger = logger;
         }
 
 
@@ -38,9 +44,40 @@ namespace HSMServer.Controllers
         [AllowAnonymous]
         [UnauthorizedAccessOnlyFilter]
         [ActionName(nameof(Index))]
-        public IActionResult Index()
+        public IActionResult Index([FromQuery(Name = HsmOidcDefaults.ErrorQueryKey)] SsoSignInError ssoError = SsoSignInError.None)
         {
-            return View(new LoginViewModel());
+            return View(new LoginViewModel
+            {
+                SsoDisplayName = _oidc.IsActive ? _oidc.DisplayName : null,
+                SsoError = HsmOidcDefaults.Describe(ssoError),
+            });
+        }
+
+        // Starts the OIDC sign-in (#1782); 404 when SSO is off, so the route reveals nothing.
+        // The challenge runs here rather than as a ChallengeResult: it reads the provider's
+        // discovery document first, and a provider that cannot be reached must send the
+        // person back to the password form, not to the error page.
+        [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
+        [HttpGet]
+        public async Task<IActionResult> Sso()
+        {
+            if (!_oidc.IsActive)
+                return NotFound();
+
+            try
+            {
+                await HttpContext.ChallengeAsync(HsmOidcDefaults.AuthenticationScheme,
+                    new AuthenticationProperties { RedirectUri = HsmOidcDefaults.AfterSignInPath });
+
+                return new EmptyResult();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "SSO sign-in could not start (provider {Authority}).", _oidc.Authority);
+
+                return Redirect(HsmOidcDefaults.LoginErrorPath(SsoSignInError.ProviderUnavailable));
+            }
         }
 
         [AllowAnonymous]
@@ -71,6 +108,9 @@ namespace HSMServer.Controllers
         public IActionResult Registration([FromQuery(Name = "Cipher")] string cipher,
             [FromQuery(Name = "Tag")] string tag, [FromQuery(Name = "Nonce")] string nonce)
         {
+            if (_oidc.IsActive)
+                return NotFound();
+
             var model = new RegistrationViewModel();
 
             //if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
@@ -109,6 +149,12 @@ namespace HSMServer.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
+            // With SSO on, anonymous self-registration is off (#1782): an outsider could
+            // otherwise create the login of a future SSO user first, with a password of their
+            // own, and inherit everything SSO later grants it (AdminGroup included).
+            if (_oidc.IsActive)
+                return NotFound();
+
             RegistrationValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
@@ -150,10 +196,16 @@ namespace HSMServer.Controllers
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
+        // The user administration posts are admin-only like the Users page that calls them
+        // (#1782 review): with only the controller's [Authorize], any signed-in user (and
+        // with SSO on, every auto-created one) could make itself admin, set another user's
+        // password or delete users.
         [HttpPost]
+        [AuthorizeIsAdmin]
         public Task RemoveUser(Guid id) => _userManager.TryRemove(new(id, CurrentInitiator));
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public async Task CreateUser([FromBody] UserViewModel model)
         {
             NewUserValidator validator = new(_userManager);
@@ -166,6 +218,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
             var validator = new EditUserValidator();
@@ -203,12 +256,8 @@ namespace HSMServer.Controllers
 
         private Task Authenticate(string login, bool keepLoggedIn)
         {
-            var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
-            ClaimsIdentity id = new(claims, "ApplicationCookie",
-                ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
             AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
-            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
+            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, HsmCookiePrincipal.Create(login), properties);
         }
     }
 }
