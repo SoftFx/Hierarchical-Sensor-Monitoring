@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Text.Json.Serialization;
 using HSMServer.Core.DataLayer;
 
@@ -84,12 +83,6 @@ namespace HSMServer.ServerConfiguration
         };
 
 
-        private static TimeSpan ParseTime(string value, string name)
-        {
-            if (TimeSpan.TryParseExact(value?.Trim(), @"hh\:mm", CultureInfo.InvariantCulture, out var time) && time < TimeSpan.FromDays(1))
-                return time;
-
-            throw new InvalidOperationException($"{nameof(IServerConfig.HistorySealing)}.{name} = '{value}' is invalid: expected a UTC time of day as HH:mm.");
-        }
+        private static TimeSpan ParseTime(string value, string name) => UtcTimeOfDay.Parse(value, nameof(IServerConfig.HistorySealing), name);
     }
 }

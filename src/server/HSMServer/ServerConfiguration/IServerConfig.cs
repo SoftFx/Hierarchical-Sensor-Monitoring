@@ -20,6 +20,8 @@
 
         HistorySealingConfig HistorySealing { get; }
 
+        HistoryCompactionConfig HistoryCompaction { get; }
+
 
         void ResaveSettings();
     }
