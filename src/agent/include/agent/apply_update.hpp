@@ -18,6 +18,14 @@
 
 namespace hsm::agent
 {
+    /// Whether the service's configured binary is a given exe.
+    enum class ServiceBinaryMatch
+    {
+        Same,      ///< the service runs this very file
+        Different, ///< the service runs another file
+        Unknown,   ///< could not tell (SCM query or file access failed)
+    };
+
     /// The few service-control calls the swap needs: the seam that lets the swap, the health gate and
     /// the rollback run against a temp directory in tests, without a real SCM.
     class ServiceControl
@@ -34,16 +42,17 @@ namespace hsm::agent
         /// Wait until the service reports RUNNING. False on timeout or when it stopped instead.
         virtual bool WaitUntilRunning(unsigned timeout_ms) = 0;
 
-        /// Ask the service to stop and wait up to `timeout_ms` for it to stop; a process that refuses
-        /// (hung in START_PENDING) is ended. True when the service stopped.
+        /// Ask the service to stop and wait up to `timeout_ms` for it to stop; a process still hung in
+        /// START_PENDING then is ended, one in STOP_PENDING gets more time. True when it stopped.
         virtual bool Stop(unsigned timeout_ms) = 0;
 
-        /// True when the service's configured binary is the file at `exe_path`.
-        virtual bool RunsExe(const std::wstring& exe_path) = 0;
+        /// Whether the service's configured binary is the file at `exe_path`.
+        virtual ServiceBinaryMatch RunsExe(const std::wstring& exe_path) = 0;
     };
 
     /// The exe path of a service command line (QUERY_SERVICE_CONFIG lpBinaryPathName): the quoted
-    /// part, or for an unquoted one everything up to and including the first ".exe". Pure.
+    /// part, or for an unquoted one everything up to and including the first ".exe" that ends a word.
+    /// Environment variables are not expanded here. Pure.
     std::wstring ServiceCommandExePath(const std::wstring& command);
 
     /// True when both paths name the same existing file (same volume and file index).
@@ -54,10 +63,11 @@ namespace hsm::agent
 
     /// The swap itself, on `files` and `service`. Returns 0 when the new binary runs and passed the
     /// health gate (the attempt record at `state_path` is then removed); non-zero otherwise. Swaps only
-    /// when the service runs `files.exe`. Every failure after the service stopped ends with the old
-    /// binary back in place and the service started again (several start attempts); a service that
-    /// never stopped is left running, and a new binary that cannot be stopped keeps running until the
-    /// next service start (logged).
+    /// when the service runs `files.exe`; when it runs another file the helper was not spawned by the
+    /// service, and it leaves the service alone. Every failure after the service stopped ends with the
+    /// old binary back in place and the service started again (several start attempts); a service
+    /// that never stopped is left running, and a new binary that cannot be stopped keeps running
+    /// until the next service start (logged).
     int ApplyStagedUpdate(const UpdateFiles& files, ServiceControl& service, const std::filesystem::path& state_path,
                           const ApplyLogFn& log);
 

@@ -1424,7 +1424,8 @@ namespace
         std::vector<bool> start_answers{ true };
         std::vector<bool> running_answers{ true };
         bool stop_answer = true;
-        bool runs_this_exe = true;
+        std::vector<hsm::agent::ServiceBinaryMatch> binary_answers{ hsm::agent::ServiceBinaryMatch::Same };
+        int runs_exe_calls = 0;
 
         int wait_stopped_calls = 0, start_calls = 0, wait_running_calls = 0, stop_calls = 0;
         std::vector<std::string> started_on; // content of the exe at each Start()
@@ -1441,7 +1442,11 @@ namespace
             ++stop_calls;
             return stop_answer;
         }
-        bool RunsExe(const std::wstring&) override { return runs_this_exe; }
+        hsm::agent::ServiceBinaryMatch RunsExe(const std::wstring&) override
+        {
+            const std::size_t i = static_cast<std::size_t>(runs_exe_calls++);
+            return binary_answers[i < binary_answers.size() ? i : binary_answers.size() - 1];
+        }
 
     private:
         static bool Next(const std::vector<bool>& answers, int index)
@@ -1597,16 +1602,42 @@ namespace
     {
         // A copy of the exe outside the service's folder (a --console run, say) must not swap its own
         // folder and report the service updated.
-        ApplyFixture fx;
-        FakeService service(fx.files.exe);
-        service.runs_this_exe = false;
-        Check(fx.Apply(service) != 0, "refused");
-        CheckEq(fx.Exe(), std::string("old"), "binary untouched");
-        Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
-        Check(!fx.Has(fx.files.old_exe), "no rename happened");
-        CheckEq(service.start_calls, 1, "the service is started again");
-        Check(fx.RecordKept(), "attempt stays recorded");
-        Check(std::filesystem::exists(fx.state), "the record is not cleared");
+        // That run was not the service, so the service is neither waited for nor started.
+        using hsm::agent::ServiceBinaryMatch;
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Different };
+            Check(fx.Apply(service) != 0, "refused");
+            CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+            Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+            Check(!fx.Has(fx.files.old_exe), "no rename happened");
+            CheckEq(service.wait_stopped_calls, 0, "does not wait for a stop nobody asked for");
+            CheckEq(service.start_calls, 0, "does not start a service it did not stop");
+            Check(fx.RecordKept(), "attempt stays recorded");
+        }
+
+        // Could not tell at first, then confirmed: the update goes ahead.
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Unknown, ServiceBinaryMatch::Same };
+            CheckEq(fx.Apply(service), 0, "applied after the second check");
+            CheckEq(fx.Exe(), std::string("new"), "new binary in place");
+        }
+
+        // Still cannot tell after the stop: no swap, and the stopped service is started again.
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Unknown };
+            Check(fx.Apply(service) != 0, "not applied");
+            CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+            Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+            CheckEq(service.wait_stopped_calls, 1, "waited for the stop");
+            CheckEq(service.start_calls, 1, "the stopped service is started again");
+            CheckEq(service.started_on.front(), std::string("old"), "on the old binary");
+        }
     }
 
     void ApplyUpdateUnstoppableNewBinaryIsNotReportedAsRolledBack()
@@ -1633,6 +1664,8 @@ namespace
                   L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe", "quoted");
         Check(ServiceCommandExePath(L"  \"C:\\A B\\hsm-agent.exe\" --service") == L"C:\\A B\\hsm-agent.exe", "quoted with args");
         Check(ServiceCommandExePath(L"C:\\A B\\hsm-agent.EXE --service") == L"C:\\A B\\hsm-agent.EXE", "unquoted with spaces");
+        Check(ServiceCommandExePath(L"C:\\tools\\agent.exec\\hsm-agent.exe --service") == L"C:\\tools\\agent.exec\\hsm-agent.exe",
+              "a folder named *.exec is not the exe");
         Check(ServiceCommandExePath(L"C:\\x\\agent") == L"C:\\x\\agent", "no .exe: first word");
         Check(ServiceCommandExePath(L"\"C:\\broken").empty(), "unterminated quote");
         Check(ServiceCommandExePath(L"   ").empty(), "blank");

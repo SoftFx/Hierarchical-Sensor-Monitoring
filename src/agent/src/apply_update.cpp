@@ -134,6 +134,8 @@ namespace
             scm_ = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
             if (scm_ != nullptr)
                 svc_ = OpenServiceW(scm_, kServiceName, SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG | SERVICE_START | SERVICE_STOP);
+            if (svc_ == nullptr)
+                open_error_ = GetLastError();
             // Remember the process that runs the service now (the agent that spawned this helper):
             // after STOPPED it still holds the single-instance mutex until it exits, and a start in
             // that window would fail the health gate.
@@ -155,6 +157,7 @@ namespace
         ScmServiceControl& operator=(const ScmServiceControl&) = delete;
 
         bool Valid() const { return svc_ != nullptr; }
+        DWORD OpenError() const { return open_error_; }
 
         bool WaitUntilStopped(unsigned timeout_ms) override
         {
@@ -192,29 +195,67 @@ namespace
                 return true;
             }
 
-            // A binary that hangs in START_PENDING refuses the stop control. It failed the health
-            // gate, so end its process; the SCM then reports the service stopped.
-            if (process_ == nullptr || !TerminateProcess(process_, ERROR_SERVICE_REQUEST_TIMEOUT))
+            SERVICE_STATUS_PROCESS status = {};
+            if (!QueryStatus(status))
                 return false;
-            const ULONGLONG kill_deadline = GetTickCount64() + kKillWaitMs;
-            if (!WaitForState(SERVICE_STOPPED, kill_deadline))
+            const ULONGLONG more = GetTickCount64() + kExtraStopWaitMs;
+
+            // A graceful stop in progress (the collector drains its queue) gets more time, not a kill.
+            if (status.dwCurrentState == SERVICE_STOP_PENDING)
+            {
+                if (!WaitForState(SERVICE_STOPPED, more))
+                    return false;
+                WaitForProcessExit(more);
+                return true;
+            }
+
+            // A binary hung in START_PENDING refuses the stop control. It failed the health gate,
+            // so end its process; the SCM then reports the service stopped.
+            if (status.dwCurrentState != SERVICE_START_PENDING || process_ == nullptr ||
+                !TerminateProcess(process_, ERROR_SERVICE_REQUEST_TIMEOUT))
                 return false;
-            WaitForProcessExit(kill_deadline);
+            if (!WaitForState(SERVICE_STOPPED, more))
+                return false;
+            WaitForProcessExit(more);
             return true;
         }
 
-        bool RunsExe(const std::wstring& exe_path) override
+        hsm::agent::ServiceBinaryMatch RunsExe(const std::wstring& exe_path) override
         {
-            // The service's configured command line, e.g. "\"C:\\...\\hsm-agent.exe\"".
-            DWORD needed = 0;
-            QueryServiceConfigW(svc_, nullptr, 0, &needed);
-            if (needed == 0)
-                return false;
-            std::vector<BYTE> buffer(needed);
-            auto* config = reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data());
-            if (!QueryServiceConfigW(svc_, config, needed, &needed) || config->lpBinaryPathName == nullptr)
-                return false;
-            return hsm::agent::SameFile(hsm::agent::ServiceCommandExePath(config->lpBinaryPathName), exe_path);
+            using hsm::agent::ServiceBinaryMatch;
+
+            // The service's configured command line, e.g. "\"C:\\...\\hsm-agent.exe\"". The size can
+            // change between the two calls (a reconfiguration), so retry on a short buffer.
+            std::vector<BYTE> buffer;
+            QUERY_SERVICE_CONFIGW* config = nullptr;
+            for (int attempt = 0; attempt < 3 && config == nullptr; ++attempt)
+            {
+                DWORD needed = 0;
+                if (!QueryServiceConfigW(svc_, buffer.empty() ? nullptr : reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data()),
+                                         static_cast<DWORD>(buffer.size()), &needed))
+                {
+                    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || needed == 0)
+                        return ServiceBinaryMatch::Unknown;
+                    buffer.assign(needed, 0);
+                    continue;
+                }
+                config = reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data());
+            }
+            if (config == nullptr || config->lpBinaryPathName == nullptr)
+                return ServiceBinaryMatch::Unknown;
+
+            // An ImagePath may be REG_EXPAND_SZ ("%ProgramFiles%\..."), so expand it before opening.
+            const std::wstring configured = hsm::agent::ServiceCommandExePath(config->lpBinaryPathName);
+            const DWORD expanded_len = ExpandEnvironmentStringsW(configured.c_str(), nullptr, 0);
+            if (expanded_len == 0)
+                return ServiceBinaryMatch::Unknown;
+            std::wstring expanded(expanded_len, L'\0');
+            ExpandEnvironmentStringsW(configured.c_str(), expanded.data(), expanded_len);
+            expanded.resize(expanded_len - 1);
+
+            if (!Exists(expanded) || !Exists(exe_path))
+                return ServiceBinaryMatch::Unknown;
+            return hsm::agent::SameFile(expanded, exe_path) ? ServiceBinaryMatch::Same : ServiceBinaryMatch::Different;
         }
 
     private:
@@ -267,15 +308,17 @@ namespace
             {
                 CloseHandle(process_);
                 process_ = nullptr;
+                process_id_ = 0; // the id may be reused by the next service process
             }
         }
 
-        static constexpr DWORD kKillWaitMs = 10000;
+        static constexpr DWORD kExtraStopWaitMs = 30000; // after the regular stop timeout
 
         SC_HANDLE scm_ = nullptr;
         SC_HANDLE svc_ = nullptr;
         HANDLE process_ = nullptr;
         DWORD process_id_ = 0;
+        DWORD open_error_ = 0;
     };
 } // namespace
 
@@ -314,13 +357,17 @@ namespace hsm::agent
             return end == std::wstring::npos ? std::wstring{} : command.substr(begin + 1, end - begin - 1);
         }
 
-        // Unquoted: everything up to and including the first ".exe" (the path may contain spaces).
+        // Unquoted: everything up to and including the first ".exe" that ends a word (the path may
+        // contain spaces, and a folder may be named "x.exec").
         std::wstring lower = command.substr(begin);
         for (auto& c : lower)
             c = static_cast<wchar_t>(std::towlower(c));
-        const std::size_t exe = lower.find(L".exe");
-        if (exe != std::wstring::npos)
-            return command.substr(begin, exe + 4);
+        for (std::size_t exe = lower.find(L".exe"); exe != std::wstring::npos; exe = lower.find(L".exe", exe + 1))
+        {
+            const std::size_t after = exe + 4;
+            if (after == lower.size() || std::iswspace(lower[after]))
+                return command.substr(begin, after);
+        }
         const std::size_t space = command.find(L' ', begin);
         return command.substr(begin, space == std::wstring::npos ? std::wstring::npos : space - begin);
     }
@@ -365,6 +412,16 @@ namespace hsm::agent
             return 1;
         }
 
+        // A copy of the exe run from another folder (a --console run, say) was not stopped for this
+        // update, and the service it would restart is not the one it swapped: leave the service alone.
+        ServiceBinaryMatch match = service.RunsExe(files.exe);
+        if (match == ServiceBinaryMatch::Different)
+        {
+            error("the HSMAgent service does not run " + Narrow(files.exe) + "; no update applied, the service is left as it is");
+            DeleteFileW(files.new_exe.c_str());
+            return 1;
+        }
+
         info("waiting for HSMAgent to stop (up to 60 s)...");
         if (!service.WaitUntilStopped(kStopTimeoutMs))
         {
@@ -382,11 +439,14 @@ namespace hsm::agent
             return 1;
         }
 
-        // Swap only the binary the service runs: a copy of the exe run from another folder (a
-        // --console run, say) must not swap its own folder and then report the service updated.
-        if (!service.RunsExe(files.exe))
+        // Swap only the binary the service runs. The first check could not tell (a transient SCM or
+        // file error): ask again now; still no answer means no swap, and the stopped service is
+        // started again.
+        if (match == ServiceBinaryMatch::Unknown)
+            match = service.RunsExe(files.exe);
+        if (match != ServiceBinaryMatch::Same)
         {
-            error("the HSMAgent service does not run " + Narrow(files.exe) + "; no update applied");
+            error("cannot confirm that the HSMAgent service runs " + Narrow(files.exe) + "; no update applied");
             DeleteFileW(files.new_exe.c_str());
             start_again();
             return 1;
@@ -430,15 +490,19 @@ namespace hsm::agent
                 if (moved_out)
                     Move(files.new_exe, files.exe); // some binary is better than none
             }
-            DeleteFileW(files.new_exe.c_str());
+            const bool deleted = !Exists(files.new_exe) || DeleteFileW(files.new_exe.c_str()) != FALSE;
 
             if (!stopped)
             {
                 // A start now would be a no-op on the new process and claim the old version runs.
                 error("the new version could not be stopped and is still running; the previous binary is back in "
-                      "place and runs from the next service start (Restart-Service HSMAgent)");
+                      "place and runs from the next service start (Restart-Service HSMAgent)" +
+                      std::string(deleted ? "" : "; the failed binary stays as hsm-agent.new.exe until then, and "
+                                                 "staging a later update fails while it is in use"));
                 return 1;
             }
+            if (!deleted)
+                error("could not delete the failed binary " + Narrow(files.new_exe) + " (error " + LastError() + ")");
             start_again();
             return 1;
         }
@@ -461,11 +525,17 @@ namespace hsm::agent
             service = std::make_unique<ScmServiceControl>();
             if (service->Valid())
                 break;
-            const std::string err = LastError();
+            const DWORD err = service->OpenError();
+            if (err == ERROR_SERVICE_DOES_NOT_EXIST || err == ERROR_ACCESS_DENIED)
+            {
+                // Permanent: no service to update, or this account may not control it.
+                LogErr("cannot open the HSMAgent service (error " + std::to_string(err) + "); no update applied");
+                return 1;
+            }
             if (attempt == kOpenAttempts)
             {
-                LogErr("cannot open the HSMAgent service (error " + err + "); no update applied and the service may be "
-                       "stopped: start it by hand (Start-Service HSMAgent)");
+                LogErr("cannot open the HSMAgent service (error " + std::to_string(err) + "); no update applied and the "
+                       "service may be stopped: start it by hand (Start-Service HSMAgent)");
                 return 1;
             }
             Sleep(kOpenRetryMs);
