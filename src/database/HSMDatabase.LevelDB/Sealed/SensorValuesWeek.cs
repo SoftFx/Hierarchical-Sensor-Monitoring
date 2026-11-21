@@ -46,6 +46,9 @@ namespace HSMDatabase.LevelDB.Sealed
         private volatile Lease _current;
         private volatile bool _disposed;
 
+        // The database core's clock: the instances serving the week record their last reclaimable change by it (#1801).
+        private readonly Func<DateTime> _utcNow;
+
 
         public string Name { get; }
 
@@ -79,7 +82,8 @@ namespace HSMDatabase.LevelDB.Sealed
 
 
         /// <param name="utcNow">The clock of the database core (null: the system clock): a sealed week opened here asks it
-        /// whether its overlay still holds every row (#1805 follow-up).</param>
+        /// whether its overlay still holds every row (#1805 follow-up), and every instance serving the week records its last
+        /// reclaimable change by it (#1801).</param>
         public SensorValuesWeek(string name, string sealedName, long from, long to, Func<DateTime> utcNow = null)
         {
             Name = name;
@@ -87,7 +91,16 @@ namespace HSMDatabase.LevelDB.Sealed
             From = from;
             To = to;
 
-            _current = new Lease(LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to, utcNow?.Invoke()), OnReplacedDrained);
+            _utcNow = utcNow;
+            _current = new Lease(WithClock(LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to, utcNow?.Invoke())), OnReplacedDrained);
+        }
+
+        private ISensorValuesDatabase WithClock(ISensorValuesDatabase instance)
+        {
+            if (_utcNow is not null)
+                ((IntervalDataseBase)instance).Clock = _utcNow;
+
+            return instance;
         }
 
 
@@ -179,12 +192,14 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public bool IsCompacted => _current.Database.IsCompacted;
 
-        public long ChangeCount => _current.Database.ChangeCount;
+        public long ReclaimableChangeCount => _current.Database.ReclaimableChangeCount;
 
-        public DateTime? LastChangeUtc => _current.Database.LastChangeUtc;
+        public DateTime? LastReclaimableChangeUtc => _current.Database.LastReclaimableChangeUtc;
 
-        public bool TryMarkCompacted(long changeCountBeforeCompaction, string content) =>
-            _current.Database.TryMarkCompacted(changeCountBeforeCompaction, content);
+        public bool TryMarkCompacted(long reclaimableChangeCountBeforeCompaction, string content) =>
+            _current.Database.TryMarkCompacted(reclaimableChangeCountBeforeCompaction, content);
+
+        public long WriteCount => _current.Database.WriteCount;
 
         #endregion
 
@@ -250,7 +265,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 throw new InvalidOperationException("A week is swapped only under its exclusive gate");
 
             var old = _current;
-            var replacement = create(((IntervalDataseBase)old.Database).RowDatabase);
+            var replacement = WithClock(create(((IntervalDataseBase)old.Database).RowDatabase));
 
             ((IntervalDataseBase)old.Database).ReleaseRowDatabase();
 

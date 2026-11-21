@@ -22,7 +22,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             try
             {
                 var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
-                OnBeforeChange();
+                OnBeforePut();
                 _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
@@ -35,7 +35,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                OnBeforeChange();
+                OnBeforePut();
                 _openedDb.Put(key, value);
             }
             catch (Exception e)
@@ -48,7 +48,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                _openedDb.DeleteValueFromTo(from, to, OnBeforeChange);
+                _openedDb.DeleteValueFromTo(from, to, OnBeforeDelete);
             }
             catch (Exception e)
             {

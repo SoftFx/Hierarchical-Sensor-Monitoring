@@ -142,7 +142,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                OnBeforeChange();
+                OnBeforePut();
                 _openedDb.Put(key, value);
             }
             catch (Exception e)
@@ -153,7 +153,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void PutSensorValueOrThrow(byte[] key, byte[] value)
         {
-            OnBeforeChange();
+            OnBeforePut();
             _openedDb.Put(key, value);
         }
 
@@ -166,7 +166,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (!RewriteChunks(from, to))
                     return;
 
-                _openedDb.DeleteValueFromTo(from, to, OnBeforeChange);
+                _openedDb.DeleteValueFromTo(from, to, OnBeforeDelete);
             }
             catch (Exception e)
             {
@@ -739,7 +739,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 if (deletes.Count > 0)
                 {
-                    OnBeforeChange();
+                    OnBeforeDelete();
 
                     using var batch = new WriteBatch();
 
@@ -896,7 +896,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             if (deletes.Count == 0 && newWatermark is null && !deleteWatermark)
                 return true;
 
-            OnBeforeChange();
+            OnBeforeDelete();
 
             using var batch = new WriteBatch();
 

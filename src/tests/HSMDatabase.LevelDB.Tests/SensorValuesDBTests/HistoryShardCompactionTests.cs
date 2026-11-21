@@ -60,12 +60,13 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
     [Fact]
-    public void LateWrite_MakesACompactedShardDueAgain_EvenAfterARestart()
+    public void LateDelete_MakesACompactedShardDueAgain_EvenAfterARestart()
     {
         Add(_lastWeek, 1);
+        Add(_lastWeek.AddMinutes(1), 2);
         Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
 
-        Add(_lastWeek.AddMinutes(1), 2);
+        _core.ClearSensorValues(_sensor, _lastWeek.AddSeconds(30), _lastWeek.AddMinutes(2));
         Assert.False(HasMarker(_lastWeek));
 
         Restart();
@@ -95,9 +96,16 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
     [Fact]
-    public void ChangedShard_WaitsForTheQuietPeriod()
+    public void ShardWithADelete_WaitsForTheQuietPeriod_AndPutsDoNotMakeItWait()
     {
+        _core.StartedUtc = DateTime.UtcNow.AddDays(-1);
+
+        // Puts only: quiet since the start.
         Add(_lastWeek, 1);
+        Add(_lastWeek.AddMinutes(1), 2);
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step(TimeSpan.FromHours(1)));
+
+        _core.ClearSensorValues(_sensor, _lastWeek.AddSeconds(30), _lastWeek.AddMinutes(2));
 
         Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step(TimeSpan.FromHours(1)));
         Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step(TimeSpan.FromHours(1), DateTime.UtcNow.AddHours(1)));
@@ -117,18 +125,77 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
     [Fact]
-    public void ChangeDuringTheCompaction_KeepsTheMarkerOff()
+    public void DeleteDuringTheCompaction_KeepsTheMarkerOff()
     {
         Add(_lastWeek, 1);
         var shard = Shard(_lastWeek);
 
-        var changeCount = shard.ChangeCount;
-        shard.PutSensorValue(new DbKey(_sensor, _lastWeek.AddMinutes(1).Ticks).ToBytes(), [1]);
+        var changeCount = shard.ReclaimableChangeCount;
+        shard.RemoveSensorValues(new DbKey(_sensor, _lastWeek.Ticks).ToBytes(), new DbKey(_sensor, _lastWeek.AddMinutes(1).Ticks).ToBytes());
 
         Assert.False(shard.TryMarkCompacted(changeCount, "test"));
         Assert.False(shard.IsCompacted);
-        Assert.True(shard.TryMarkCompacted(shard.ChangeCount, "test"));
+        Assert.True(shard.TryMarkCompacted(shard.ReclaimableChangeCount, "test"));
         Assert.True(shard.IsCompacted);
+    }
+
+    // A put leaves a compaction nothing to reclaim: a new key is no garbage, and the older version
+    // an overwrite leaves (the row of an aggregated sensor) is dropped by LevelDB's own compaction.
+    [Fact]
+    public void LateWrite_KeepsTheMarker_OnDiskAndInMemory_AndADeleteClearsIt()
+    {
+        Add(_lastWeek, 1);
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
+
+        Add(_lastWeek.AddMinutes(1), 2); // a new key
+        Add(_lastWeek, 3);               // an overwrite, as an aggregated sensor does
+
+        Assert.True(HasMarker(_lastWeek));
+        Assert.True(Shard(_lastWeek).IsCompacted);
+        Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step());
+
+        _core.ClearSensorValues(_sensor, _lastWeek.AddSeconds(30), _lastWeek.AddMinutes(2));
+
+        Assert.False(HasMarker(_lastWeek));
+        Assert.False(Shard(_lastWeek).IsCompacted);
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
+    }
+
+    [Fact]
+    public void PutDuringTheCompaction_DoesNotKeepTheMarkerOff()
+    {
+        Add(_lastWeek, 1);
+        var shard = Shard(_lastWeek);
+
+        var changeCount = shard.ReclaimableChangeCount;
+        shard.PutSensorValue(new DbKey(_sensor, _lastWeek.AddMinutes(1).Ticks).ToBytes(), [1]);
+
+        Assert.True(shard.TryMarkCompacted(changeCount, "test"));
+        Assert.True(shard.IsCompacted);
+    }
+
+    // After a restart nothing is known of the changes before it: the quiet period counts from the
+    // start, for a shard not opened since (marker file only) and for one opened by a put.
+    [Fact]
+    public void AfterARestart_NoShardIsDue_BeforeTheQuietPeriodSinceTheStart()
+    {
+        var quiet = TimeSpan.FromHours(3);
+        var twoWeeksAgo = _lastWeek.AddDays(-7);
+
+        Add(twoWeeksAgo, 1);
+        Add(_lastWeek, 2);
+
+        Restart();
+        var started = DateTime.UtcNow;
+
+        Add(_lastWeek.AddMinutes(1), 3); // opens the newer week; the older one stays unopened
+
+        Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step(quiet, started.AddMinutes(16)));
+        Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step(quiet, started + quiet - TimeSpan.FromMinutes(1)));
+
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step(quiet, started + quiet + TimeSpan.FromMinutes(1)));
+        Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step(quiet, started + quiet + TimeSpan.FromMinutes(1)));
+        Assert.Equal(HistoryShardCompactionOutcome.NothingDue, Step(quiet, started + quiet + TimeSpan.FromMinutes(1)));
     }
 
     [Fact]
@@ -159,9 +226,10 @@ public sealed class HistoryShardCompactionTests : IDisposable
     }
 
     [Fact]
-    public void FailedMarkerDelete_IsNotRetriedOnEveryWrite()
+    public void FailedMarkerDelete_IsNotRetriedOnEveryDelete()
     {
-        Add(_lastWeek, 1);
+        for (int minute = 0; minute <= 3; minute++)
+            Add(_lastWeek.AddMinutes(minute), minute);
         Assert.Equal(HistoryShardCompactionOutcome.Compacted, Step());
 
         var marker = Path.Combine(Shard(_lastWeek).Name, CompactedShardMarker.FileName);
@@ -182,9 +250,8 @@ public sealed class HistoryShardCompactionTests : IDisposable
 
         try
         {
-            Add(_lastWeek.AddMinutes(1), 2);
-            Add(_lastWeek.AddMinutes(2), 3);
-            Add(_lastWeek.AddMinutes(3), 4);
+            for (int minute = 1; minute <= 3; minute++)
+                _core.ClearSensorValues(_sensor, _lastWeek.AddMinutes(minute).AddSeconds(-1), _lastWeek.AddMinutes(minute).AddSeconds(1));
         }
         finally
         {

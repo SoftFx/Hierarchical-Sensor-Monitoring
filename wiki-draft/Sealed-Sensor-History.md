@@ -44,7 +44,7 @@ Both directories also hold small text files whose names start with `hsm-`. They 
 
 | File | Directory | Meaning |
 |---|---|---|
-| `hsm-compacted` | rows | The week was compacted and has not changed since (written by the background compaction). |
+| `hsm-compacted` | rows | The week was compacted and nothing was deleted from it since (written by the background compaction; new values do not remove it). |
 | `hsm-sealing` | chunks | A seal is running or was interrupted. Removed when the seal is done. |
 | `hsm-rows-left` | chunks | The sensors the job left as rows, with the reason. |
 | `hsm-sealed` | chunks | **The week is sealed**: the chunks are complete and verified. |
@@ -107,7 +107,7 @@ Sealing alone does not make a week smaller on disk. When the keep period ends th
 
 | Key | Default | Meaning |
 |---|---|---|
-| `Enabled` | `false` | Turns the background compaction on. It compacts one closed week (sensor history or journal) every 10 minutes, a week that has not changed for 3 hours and was not compacted since its last change. While it is off nothing is compacted in the background. |
+| `Enabled` | `false` | Turns the background compaction on. It compacts one closed week (sensor history or journal) every 10 minutes: a week nothing was deleted from for 3 hours (and for 3 hours since the server started) and that was not compacted since the last delete. New values written into a closed week do not count: a sensor with **Aggregate values** on keeps rewriting the row of its first equal value, possibly in a week months old, and that leaves nothing for a compaction to free. While it is off nothing is compacted in the background. |
 | `WorkingHoursStartUtc`, `WorkingHoursEndUtc` | `"00:00"`, `"00:00"` | The daily UTC window it works in, `HH:mm`, as for `HistorySealing`. Equal values mean all day; `"22:00"` to `"06:00"` wraps past midnight. A compaction that is running when the window ends is finished, not stopped, so the work can overrun the window by one week. |
 
 With `HistorySealing.Enabled` true and `HistoryCompaction.Enabled` false, the server logs a warning at start that sealed weeks will not get smaller on disk until history compaction is enabled. When it is on, the log says when its first pass runs:
@@ -169,7 +169,7 @@ Under **HSM Server Monitoring → Database → Sealed history**, posted with the
 
 ## The keep period
 
-After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. Reads of such a week use its rows alone, exactly as before the seal: the chunks are not read (retention still deletes from them). When the period ends, the job writes `hsm-source-rows-removing` (from then on reads combine rows and chunks), removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory once the week has been quiet for 3 hours, if `HistoryCompaction.Enabled` is true (see "History compaction: needed to free the space" above).
+After a week is sealed and every chunk verified, its original rows stay in `SensorValuesV2_*` for `KeepSourceRowsWeeks` weeks. While they are there, everything the job did can be undone without loss, and the week takes more space than before. Reads of such a week use its rows alone, exactly as before the seal: the chunks are not read (retention still deletes from them). When the period ends, the job writes `hsm-source-rows-removing` (from then on reads combine rows and chunks), removes every original row that still equals its value in the chunks (a value rewritten after the seal stays), writes `hsm-source-rows-removed`, and the background compaction shrinks the row directory 3 hours after the removal (values still written into the week do not delay it), if `HistoryCompaction.Enabled` is true (see "History compaction: needed to free the space" above).
 
 **To keep one week's rows longer**, edit the first line of `SensorValuesSealedV1_<from>_<to>/hsm-keep-source-rows-until` to a later UTC time in the same format (`2027-01-15T00:00:00.0000000Z`). The job reads it at every pass; no restart is needed. Leave the rest of the file as it is.
 
