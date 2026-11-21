@@ -66,7 +66,7 @@ namespace HSMServer.Authentication.Sso
 
             // The built-in admin of a fresh database has the password "default": a provider
             // account that happens to be named so must not inherit it.
-            if (login == UserManager.DefaultUserUsername)
+            if (string.Equals(login, UserManager.DefaultUserUsername, StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogWarning("SSO sign-in rejected: '{Login}' is the built-in HSM admin and can sign in only with its password.", login);
                 return SsoSignInResult.Fail(SsoSignInError.ReservedUsername);
@@ -119,6 +119,18 @@ namespace HSMServer.Authentication.Sso
         {
             if (isAdmin is not { } admin || user.IsAdmin == admin)
                 return;
+
+            // AdminGroup grants admin only to users without a password (the ones SSO created).
+            // A password user may have been created by someone else under this login (open
+            // self-registration before SSO was on): granting it admin would hand the rights to
+            // whoever knows that password, and password sign-ins never re-sync them. Such
+            // users get admin from an HSM admin; revoking still applies.
+            if (admin && !string.IsNullOrEmpty(user.Password))
+            {
+                logger.LogWarning("SSO sign-in of '{Login}': member of '{Group}', but admin rights are not granted to a user with a password; " +
+                                  "grant them on the Users page.", user.Name, config.AdminGroup);
+                return;
+            }
 
             if (await userManager.TryUpdate(new UserUpdate { Id = user.Id, IsAdmin = admin }))
                 logger.LogWarning("SSO sign-in {Change} admin rights of '{Login}' (group '{Group}').",

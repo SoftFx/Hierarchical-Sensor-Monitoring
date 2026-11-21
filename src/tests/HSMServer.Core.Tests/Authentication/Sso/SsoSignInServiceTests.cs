@@ -135,6 +135,17 @@ namespace HSMServer.Core.Tests.Authentication.Sso
             Assert.Empty(_updates);
         }
 
+        [Theory]
+        [InlineData("Default")]
+        [InlineData("DEFAULT")]
+        public async Task BuiltInDefaultAdmin_ReservationIgnoresCase(string username)
+        {
+            var result = await Service().ResolveUser(External(username));
+
+            Assert.Equal(SsoSignInError.ReservedUsername, result.Error);
+            Assert.Empty(_added);
+        }
+
         [Fact]
         public async Task BuiltInDefaultAdmin_IsNotCreatedEither()
         {
@@ -210,13 +221,39 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         [Fact]
         public async Task AdminGroup_GrantsAdminToAMember()
         {
-            var user = AddExisting("ivanov");
+            var user = AddExisting("ivanov", password: null);     // an SSO-created user
             _config.AdminGroup = "hsm-admins";
 
             await Service().ResolveUser(External("ivanov", "logs-readers", "hsm-admins"));
 
             Assert.True(user.IsAdmin);
             Assert.Equal(true, Assert.Single(_updates).IsAdmin);
+        }
+
+        [Fact]
+        public async Task AdminGroup_NeverGrantsAdminToAPasswordUser()
+        {
+            // The login may have been registered by someone else before SSO was on: granting
+            // admin would hand it to whoever knows the password.
+            var user = AddExisting("alice", password: "outsider-hash");
+            _config.AdminGroup = "hsm-admins";
+
+            var result = await Service().ResolveUser(External("alice", "hsm-admins"));
+
+            Assert.True(result.Succeeded);
+            Assert.False(user.IsAdmin);
+            Assert.Empty(_updates);
+        }
+
+        [Fact]
+        public async Task AdminGroup_StillRevokesAdminFromAPasswordUser()
+        {
+            var user = AddExisting("ivanov", isAdmin: true, password: "hash");
+            _config.AdminGroup = "hsm-admins";
+
+            await Service().ResolveUser(External("ivanov", "logs-readers"));
+
+            Assert.False(user.IsAdmin);
         }
 
         [Fact]
@@ -284,7 +321,7 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         [Fact]
         public async Task AdminGroup_ComparesNamesIgnoringCase()
         {
-            var user = AddExisting("ivanov");
+            var user = AddExisting("ivanov", password: null);
             _config.AdminGroup = "HSM-Admins";
 
             await Service().ResolveUser(External("ivanov", "hsm-admins"));
@@ -327,7 +364,7 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         [Fact]
         public async Task AdminGroup_GroupsClaimIsConfigurable()
         {
-            var user = AddExisting("ivanov");
+            var user = AddExisting("ivanov", password: null);
             _config.AdminGroup = "hsm-admins";
             _config.GroupsClaim = "roles";
 
