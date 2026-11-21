@@ -16,7 +16,8 @@ namespace HSMServer.Authentication
 {
     public sealed class UserManager : ConcurrentStorageNames<User, UserEntity, UserUpdate>, IUserManager
     {
-        private const string DefaultUserUsername = "default";
+        // The admin a fresh database starts with (password = login). Never reachable by SSO.
+        public const string DefaultUserUsername = "default";
 
         private readonly IDatabaseCore _databaseCore;
         private readonly ITreeValuesCache _treeValuesCache;

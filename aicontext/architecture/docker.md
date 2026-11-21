@@ -140,6 +140,15 @@ What deliberately stays: the startup warning for `Kestrel.SensorPort`/`Kestrel.S
 
 A recreate of the `app` container (image upgrade, compose change, host rebuild) keeps everything on the mounted volumes: databases, settings, logs, Caddy state — and, since #1633, the **Data Protection key ring** at `Config/DataProtection-Keys/`, which the auth cookie and antiforgery tokens are protected with. Before #1633 the ring lived in the container filesystem and every recreate silently invalidated all cookie sessions (forced re-login) and every form opened before the restart; the tell was `CryptographicException: The key {...} was not found in the key ring` in `Logs/HSM-error-log.txt`. Upgrading **to** the version that introduces persistence forces one final re-login (the first key in the new location is generated on first start); key files are not encrypted at rest — the same volume already holds the TLS certificate and the databases. The keys-at-rest trade-off, the pinned application name, and why the folder must never be "cleaned up" are in `aicontext/features/server/authentication/feature.md`.
 
+## SSO sign-in (#1782)
+
+Optional and off by default; the full rules are in `aicontext/features/server/sso-login/feature.md`. To turn it on:
+
+1. Create the provider side (Authentik: OAuth2/OpenID provider + application, confidential client, redirect URI `https://<HSM_DOMAIN>/signin-oidc`).
+2. Put the client secret into `.env` as `HSM_OIDC_CLIENT_SECRET=...`. Both compose files pass it to `app` as `Oidc__ClientSecret`; empty means unused. The server reads the secret **from the environment only** and never writes it to `Config/appsettings.json` (a copy in the file is ignored, removed by the next start's resave and reported at `Error` level without its value). A non-Docker install sets `Oidc__ClientSecret` for the service.
+3. In `Config/appsettings.json`, section `Oidc`: `Enabled: true`, `Authority` (Authentik: `https://<authentik host>/application/o/<slug>/`), `ClientId`, optionally `AdminGroup`, `DisplayName`, `SessionLifetime`.
+4. Recreate `app` (`docker compose up -d`) so the new environment applies. The start logs `SSO sign-in is ON: ...`, or one `Error` line saying why it stays OFF. An incomplete section never stops the server; password login keeps working.
+
 ## TLS
 
 Kestrel continues to serve HTTPS on the single port with `Config/<ServerCertificate.Name>` (PFX, optional `Key` password) or, when absent, the bundled self-signed `default.server.pfx`. The direct compose file and standalone `docker run` continue to present that PFX certificate to clients. In the bundled compose setup, only Caddy sees the HSM certificate and presents the selected HTTP-ACME, DNS-ACME, internal, or custom PEM certificate to clients. The existing PFX workflow is unchanged.

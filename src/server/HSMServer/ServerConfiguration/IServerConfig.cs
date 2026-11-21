@@ -18,6 +18,8 @@
 
         CollectorSessionsConfig CollectorSessions { get; }
 
+        OidcConfig Oidc { get; }
+
 
         void ResaveSettings();
     }
