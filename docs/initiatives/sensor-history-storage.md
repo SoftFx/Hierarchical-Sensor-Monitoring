@@ -25,7 +25,7 @@ This document records what was measured, what follows from it, and the direction
 ## Current Behavior
 
 - Key: `sensorId (16 bytes) | ticks (8 bytes, big-endian)` — `src/database/HSMDatabase.AccessManager/DbKey.cs`.
-- One LevelDB database per week (`SensorValuesV2_<from>_<to>`), Snappy compression, 200 KB blocks — `src/database/HSMDatabase.LevelDB/Database.cs`, `src/database/HSMDatabase/DatabaseWorkCore/ValuesDatabaseDictionaryT.cs`.
+- One LevelDB database per week (`SensorValuesV2_<from>_<to>`), Snappy compression on Windows (uncompressed on Linux until #1815 step 2), 200 KB blocks — `src/database/HSMDatabase.LevelDB/Database.cs`, `src/database/HSMDatabase/DatabaseWorkCore/ValuesDatabaseDictionaryT.cs`.
 - Value: one MemoryPack-serialized `BaseValue` per row, 11 value types — `src/server/HSMCommon/SensorValues/`.
 - Write: a synchronous `Put` per value (`DatabaseCore.AddSensorValue`). The same key is rewritten when a value is aggregated into the previous one, when a bar is updated, and when two values share a tick (last write wins).
 - Read: almost always one sensor — a forward or backward range scan of up to 50,000 values, the latest and the first value at start-up, a point lookup. The database does no aggregation.

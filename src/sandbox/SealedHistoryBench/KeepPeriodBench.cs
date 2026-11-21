@@ -123,8 +123,9 @@ internal static class KeepPeriodBench
         var to = monday.AddDays(7).Ticks;
         long rows = 0;
 
-        // A comment repeated on every value, when given. Note: the Linux build of the native LevelDB has no Snappy (its
-        // tables are stored uncompressed, about 110 B per row here against 35 on Windows), so on Linux row blocks are
+        // A comment repeated on every value, when given. Note: on Linux the server writes LevelDB tables uncompressed
+        // (LevelDBDatabaseAdapter.WriteCompression, #1815 step 1; package 1.2.1 had no Snappy on Linux at all), about
+        // 110 B per row here against 35 on Windows, so on Linux row blocks are
         // never in LevelDB's block cache: they are read through the memory-mapped table files.
         void Sensor(Guid id, SensorType type, long step, long until, string comment)
         {
