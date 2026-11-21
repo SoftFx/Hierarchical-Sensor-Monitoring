@@ -328,14 +328,36 @@ Everything lives under one node in the probe's module node:
 | `Service status` | Enum (the Windows `ServiceControllerStatus` options) | poll every 60 s, AggregateData | running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last seen. A service first seen as a **completed one-shot job** — every container Exited (0) under restart policy `no` — is not monitored at all (see below) | `IfValue NotEqual Running`, confirmation 5 min, notification repeated hourly — the Windows `ServiceStatusPrototype` alert byte for byte (test-pinned) | ~0 |
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
-| `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`probe.docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
+| `OOM killed` | Bool | poll every 60 s, AggregateData; also set from the stats round | `State.OOMKilled` (a kill that ended the container), **or** the `oom_kill` line of the container's cgroup v2 `memory.events` grew between two stats samples of the same container start (a process killed inside a container that keeps running, #1818); latched true for 24 h (`probe.docker.oomLatchHours`), across recreates. The `oom_kill` baseline is in memory: a kill while the probe was not running is seen only if it ended the container | true → Error + notification | ~0 |
 | `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the stats samples (one a minute by default). The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. A running container that has not written yet (its list names no device) is measured as 0 written, so its idle hour posts `0` like a neighbour's (#1574). Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
+| `Own memory` (#1818) | DoubleBar · MB (MiB) | as CPU | what the containers' processes hold themselves, replicas summed: cgroup v2 `anon` + `shmem`; cgroup v1 `total_rss` (+ `total_shmem` where reported) — from the same Engine API stats. **No page cache**, memory-mapped files included: what `Memory used %` holds beyond it is mostly reclaimable cache. Swapped-out memory is not in it (see `Swap used`) | none | 288 |
+| `Memory pressure %` (#1818) | DoubleBar · % | as CPU | share of time some task of the container stalled waiting for memory: Δ`some total` (µs) / Δt × 100 of the container's cgroup v2 `memory.pressure` (PSI) between two samples, clamped 0…100; the **worst replica**. Skipped like CPU (first sample, counter backwards or a restart, interval outside ½…3× the period; a skipped replica skips the sample), never 0 for lack of data | none | 288 |
+| `Memory limit hits per hour` (#1818) | Int · count | one value per clock hour (UTC), **sent just after the hour** — exactly as `Disk written per hour` | Δ of the `max` line of the containers' cgroup v2 `memory.events` (an allocation met `memory.max` and forced reclaim — not necessarily an OOM kill), replicas summed. Same accumulator, state-file persistence, window comment, partial-hour note and baselines (first sample / restart / recreate / counter reset) as `Disk written per hour`; an hour is posted once | none | 24 |
+| `Swap used` (#1818) | DoubleBar · MB (MiB) | as CPU | cgroup v2 `memory.swap.current`, replicas summed; 0 included once registered | none | 288 |
 
-Cost: ≈ **604 records/day per service** (two bars, 24 hourly write totals and a handful of state
-changes), ≈ 4 830/day for eight services — within the owner's budget. The stats sensors register
+Cost: ≈ **1 204 records/day per service** on a cgroup v2 host (four bars, two sets of 24 hourly
+values and a handful of state changes; 604 before #1818), + 288 for a service that has swapped;
+≈ 9 630/day for eight services. The stats sensors (`CPU`, `Memory used %`, `Own memory`) register
 only for a service that has run, `Disk written per hour` only once its containers report a write
 counter (or, on a host that accounts block I/O, run without having written yet: 0), `Health` only
-where a healthcheck is defined: no empty nodes.
+where a healthcheck is defined, and the cgroup sensors only where their file is there (below): no
+empty nodes.
+
+**Memory sensors from the cgroup files (#1818).** `Memory pressure %`, `Memory limit hits per
+hour`, `Swap used` and the in-container part of `OOM killed` read the container's own cgroup v2
+files, `memory.pressure`, `memory.events` and `memory.swap.current`, on the stats thread in the
+same round as the stats (three small sysfs reads per container). The directory is
+`/sys/fs/cgroup/system.slice/docker-<id>.scope/` (systemd cgroup driver) or
+`/sys/fs/cgroup/docker/<id>/` (cgroupfs driver); only a hex container id from the daemon's own
+list goes into the path. The files are world-readable and the unit's `ProtectControlGroups=yes`
+keeps `/sys/fs/cgroup` readable (read-only), so this needs no privilege and no Engine API call
+beyond the four GETs. Registration follows the files: `Memory pressure %` once `memory.pressure`
+can be read (a kernel with PSI); `Memory limit hits per hour` once `memory.events` can be read
+**and** the service has a memory limit; `Swap used` once some container of the service has had
+swap in use — remembered in the state file, so it registers again after a probe restart and then
+reports 0 too, while a host that never swaps gets no node. A container without a cgroup v2
+directory — **cgroup v1, Docker Desktop (WSL2 is cgroup v1), rootless Docker** — gets `Own memory`
+only (from the stats), with one INFO line per container naming the missing directory.
 
 **Disk written per hour — who wears the disk.** The disks' `Average disk write speed` says how
 much a disk is written, not by whom; this sensor splits it by Compose service. Each stats sample
@@ -418,7 +440,8 @@ Behavior at the edges:
   values (logged once per container) without touching the other services, and never posts a
   guess. A panic in a tick is caught and logged.
 - **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes,
-  the running `Disk written per hour` accumulator) is one JSON file,
+  the running `Disk written per hour` and `Memory limit hits per hour` accumulators, whether a
+  service has used swap) is one JSON file,
   `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only when
   something changed (at most hourly for last-seen; at most every 5 minutes, at each posted hour and
   on stop for the write accumulator). A missing or corrupt file means a fresh start, logged once.
@@ -448,7 +471,11 @@ daemon-reload && sudo systemctl restart hsm-linux-probe`.
 **Tests** run on captures from demo-server (Docker 26.1.5, API 1.45, 12 containers in 6 Compose
 projects) under `hsm-linux-probe/fixtures/docker/`: the listing, the inspects (trimmed to the
 fields the probe reads — `Config.Env` and mounts dropped), two stats rounds 5.3 s apart, and three
-raw HTTP responses (chunked, `Content-Length`, 404) byte for byte.
+raw HTTP responses (chunked, `Content-Length`, 404) byte for byte. The cgroup v2 memory files of the
+same containers at the two rounds (`demo/cgroup-t0/`, `demo/cgroup-t1/`, one directory per container
+id, the real files' format) cover a service that swaps and hits its limit, one whose process is
+OOM-killed while it keeps running, one without PSI, one without any cgroup directory (the cgroup v1
+shape) and the cgroupfs driver's layout.
 
 ### Top CPU processes (#1479)
 
