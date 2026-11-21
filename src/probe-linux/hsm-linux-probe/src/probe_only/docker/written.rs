@@ -39,6 +39,10 @@
 //! counting (#1489). The record — the running hour and each container's
 //! baseline — lives in the state file, so a probe restart continues the hour, and the writes made
 //! while the probe was down count too when the container and its counter survived.
+//!
+//! **Memory limit hits per hour** (#1818) is the same machinery over another cumulative counter:
+//! [`WriteRecord`] accumulates the `max` line of the containers' cgroup v2 `memory.events` (the
+//! "bytes" are then hits), with the same baselines, restart detection, clock rules and posting.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -250,6 +254,12 @@ impl CompletedHour {
     /// Decimal megabytes (10⁶ bytes, the unit SSD endurance is rated in), two decimals.
     pub fn megabytes(&self) -> f64 {
         (self.bytes as f64 / contract::BYTES_PER_DECIMAL_MB * 100.0).round() / 100.0
+    }
+
+    /// The hour's total as a count (`Memory limit hits per hour`, whose accumulator counts limit
+    /// hits instead of bytes), saturating.
+    pub fn count(&self) -> i32 {
+        i32::try_from(self.bytes).unwrap_or(i32::MAX)
     }
 
     /// `13:00–14:00 UTC`, plus how much of the hour was measured when it was not all of it.

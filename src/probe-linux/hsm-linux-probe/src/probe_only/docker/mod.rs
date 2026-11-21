@@ -1,13 +1,16 @@
 //! The Docker Compose source (#1416): per-service CPU, memory, status, health, restarts, OOM
 //! kills and block-device writes per hour under `<module>/Docker/<project>/<service>/…`, read from
-//! the Docker Engine API over its Unix socket.
+//! the Docker Engine API over its Unix socket, plus the memory sensors of #1818 (own memory,
+//! pressure, limit hits per hour, swap, in-container OOM kills) from the containers' cgroup v2
+//! files ([`cgroup`]).
 //!
 //! A probe-only [`Source`] on a thread of its own with two cadences: stats every
 //! `probe.docker.samplePeriodSec`, 60 s by default (CPU and memory samples into 5-minute bars,
-//! write counters into the running hour — [`written`]) and, on the first tick and every 60 s
-//! after, a state poll
+//! write and limit-hit counters into the running hour — [`written`]; the cgroup files are read in
+//! the same round) and, on the first tick and every 60 s after, a state poll
 //! (listing + inspect: status, health, restart count, OOM). Every tick first closes a clock hour
-//! that has ended and posts its `Disk written per hour`, whether or not the daemon answers.
+//! that has ended and posts its `Disk written per hour` and `Memory limit hits per hour`, whether
+//! or not the daemon answers.
 //! [`register`] primes the source before the collector starts: every service already running is
 //! registered in the Start batch, alerts included; a service that appears later is registered at
 //! runtime (the collector posts it, alerts included, from 0.9.1). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
@@ -20,6 +23,7 @@
 //! rather than posting 0, `false` or a stale state.
 
 pub mod alerts;
+pub mod cgroup;
 pub mod contract;
 pub mod engine;
 pub mod http;
@@ -40,13 +44,14 @@ use crate::config::DockerConfig;
 use crate::logging::{Level, Logger};
 use crate::probe_only::Source;
 
+use cgroup::{CgroupFs, CgroupMemory, OomKillTracker, PressureCounter, PressureTracker};
 use engine::{ApiVersion, EngineApi, EngineError};
 use identity::{Membership, Naming, ServiceKey};
-use sensors::ServiceSensors;
-use state::{LoadOutcome, State};
+use sensors::{CgroupSensors, ServiceSensors};
+use state::{LoadOutcome, ServiceRecord, State};
 use stats::{CpuCounters, CpuTracker};
 use tracker::{ContainerObservation, InspectFacts, Tracker};
-use written::WriteRecord;
+use written::{CompletedHour, WriteRecord};
 
 pub use engine::Engine;
 
@@ -122,7 +127,8 @@ pub struct DockerSource<'c, E: EngineApi> {
     /// While the daemon is unreachable: no call before this.
     unavailable_until: Option<Instant>,
     backoff: Duration,
-    /// A `Disk written per hour` accumulator changed since the state file was last written.
+    /// A `Disk written per hour` or `Memory limit hits per hour` accumulator changed since the
+    /// state file was last written.
     written_dirty: bool,
     /// When the state file was last written: the start of the tick that wrote it.
     saved_at: Instant,
@@ -142,6 +148,12 @@ pub struct DockerSource<'c, E: EngineApi> {
     /// the host accounts I/O per container, so a running container without one has written 0 so
     /// far (#1574). Never set on a host that lists none (Docker Desktop).
     counters_seen: bool,
+    /// The containers' cgroup v2 directories (#1818): `/sys/fs/cgroup` in production.
+    cgroups: CgroupFs,
+    /// The last `memory.pressure` counter of every sampled container.
+    pressure: PressureTracker,
+    /// The last `memory.events` `oom_kill` count of every sampled container (in memory only).
+    oom_kills: OomKillTracker,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -237,6 +249,9 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             stacking: written::Stacking::default(),
             started_at: std::collections::HashMap::new(),
             counters_seen: false,
+            cgroups: CgroupFs::default(),
+            pressure: PressureTracker::default(),
+            oom_kills: OomKillTracker::default(),
         }
     }
 
@@ -247,7 +262,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let now = Instant::now();
         self.tick_started = now;
         // Hours close on the wall clock, whether or not the daemon answers.
-        self.roll_written_hours(logger);
+        self.roll_hourly(logger);
         if self.unavailable_until.is_some_and(|until| now < until) {
             return;
         }
@@ -347,19 +362,22 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let collector = self.collector;
         let mut registered = 0;
         for (key, (has_health, has_run)) in &present {
-            // One stats read per running container, so `Memory used %` registers stating its limit
-            // and `Disk written per hour` registers when the containers report writes.
-            let (limit, writes) = if *has_run {
+            // One stats read per running container, so `Memory used %` registers stating its limit,
+            // `Disk written per hour` registers when the containers report writes, and the cgroup
+            // memory sensors register where their files are.
+            let first = if *has_run {
                 roster
                     .get(key)
-                    .map_or((None, false), |ids| self.first_stats_of(key, ids, logger))
+                    .map(|ids| self.first_stats_of(key, ids, logger))
+                    .unwrap_or_default()
             } else {
-                (None, false)
+                FirstStats::default()
             };
             let sensors = self.sensors_of(key);
             let mut problems = sensors.ensure_state_sensors(collector, true, *has_health);
             if *has_run {
-                problems.extend(sensors.ensure_stats_sensors(collector, limit, writes));
+                problems.extend(sensors.ensure_stats_sensors(collector, first.limit, first.writes));
+                problems.extend(sensors.ensure_cgroup_sensors(collector, first.cgroup));
             }
             report_problems(logger, &mut self.log_once, &problems);
             registered += 1;
@@ -375,18 +393,16 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     }
 
     /// From one stats read of each container: the service's memory limit (MB, unlimited) — `None`
-    /// when a read fails (the first stats round then sets it) — and whether any container reports
-    /// a block-device write counter. A failed read is logged (#1507): the service then registers
-    /// without them, and they follow at the first stats round.
-    fn first_stats_of(
-        &mut self,
-        key: &ServiceKey,
-        ids: &[String],
-        logger: &Logger,
-    ) -> (Option<(i32, bool)>, bool) {
+    /// when a read fails (the first stats round then sets it) — whether any container reports a
+    /// block-device write counter, and which cgroup memory sensors its containers' files support.
+    /// A failed read is logged (#1507): the service then registers without them, and they follow
+    /// at the first stats round.
+    fn first_stats_of(&mut self, key: &ServiceKey, ids: &[String], logger: &Logger) -> FirstStats {
         let mut readings = Vec::with_capacity(ids.len());
         let mut complete = true;
         let mut writes = false;
+        let mut cgroup = CgroupSensors::default();
+        let swap_seen = self.swap_seen(key);
         for (index, id) in ids.iter().enumerate() {
             let stats = match self.engine.stats(id) {
                 Ok(stats) => stats,
@@ -405,91 +421,162 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             };
             writes |= written::written_bytes(&stats, &mut self.stacking, &mut self.counters_seen)
                 .is_some();
-            match stats::memory_reading(&stats, self.host_mem_total) {
+            let reading = stats::memory_reading(&stats, self.host_mem_total);
+            match reading {
                 Some(reading) => readings.push(reading),
                 None => complete = false,
+            }
+            if CpuCounters::from_stats(&stats, Duration::ZERO).is_some() {
+                if let Some(memory) = self.read_cgroup(key, id, logger) {
+                    let limited = reading.is_some_and(|reading| !reading.unlimited);
+                    cgroup = cgroup.or(cgroup_sensors(&memory, limited, swap_seen));
+                }
             }
         }
         let limit = complete
             .then(|| stats::service_memory(&readings, self.host_mem_total))
             .flatten()
             .map(|memory| (stats::limit_megabytes(memory.limit_bytes), memory.unlimited));
-        (limit, writes)
+        FirstStats {
+            limit,
+            writes,
+            cgroup,
+        }
     }
 
-    /// Close every service's `Disk written per hour` hour that has ended and post it. Only the hour
-    /// that just ended is posted; an older one (the probe was down when it ended) is dropped with a
-    /// log line — it would arrive hours late under the current time. The state file is written at
-    /// once, so a restart cannot post the same hour twice. Returns the hours handed to the collector.
-    fn roll_written_hours(&mut self, logger: &Logger) -> Vec<(ServiceKey, written::CompletedHour)> {
+    /// Whether the state remembers that a container of the service has used swap.
+    fn swap_seen(&self, key: &ServiceKey) -> bool {
+        self.tracker
+            .state
+            .services
+            .get(key)
+            .is_some_and(|record| record.swap_seen)
+    }
+
+    /// The memory files of a running container's cgroup, or `None` when it has no cgroup v2
+    /// directory (cgroup v1, rootless Docker, Docker Desktop) — logged once per container: it then
+    /// gets `Own memory` only.
+    fn read_cgroup(&mut self, key: &ServiceKey, id: &str, logger: &Logger) -> Option<CgroupMemory> {
+        let memory = self.cgroups.read(id);
+        let once = format!("cgroup:{id}");
+        match memory {
+            Some(_) => {
+                self.log_once.clear(&once);
+            }
+            None => {
+                if self.log_once.raise(&once) {
+                    logger.info(format!(
+                        "docker: {key} container {}: no cgroup v2 directory \
+                         (system.slice/docker-<id>.scope or docker/<id> under /sys/fs/cgroup; \
+                         cgroup v1, rootless Docker or Docker Desktop?); it reports Own memory \
+                         but no Memory pressure %, Memory limit hits per hour, Swap used or \
+                         in-container OOM kills",
+                        short_id(id)
+                    ));
+                }
+            }
+        }
+        memory
+    }
+
+    /// Close every service's `Disk written per hour` and `Memory limit hits per hour` hour that has
+    /// ended and post it. Only the hour that just ended is posted; an older one (the probe was down
+    /// when it ended) is dropped with a log line — it would arrive hours late under the current
+    /// time. The state file is written at once, so a restart cannot post the same hour twice.
+    /// Returns the hours handed to the collector: (disk written, limit hits).
+    fn roll_hourly(&mut self, logger: &Logger) -> (PostedHours, PostedHours) {
+        let mut rolled = false;
+        let written = self.roll_hours(logger, Hourly::DiskWritten, &mut rolled);
+        let limit_hits = self.roll_hours(logger, Hourly::LimitHits, &mut rolled);
+        if rolled {
+            self.written_dirty = true;
+            self.persist(logger);
+        }
+        (written, limit_hits)
+    }
+
+    #[cfg(test)]
+    fn roll_written_hours(&mut self, logger: &Logger) -> PostedHours {
+        self.roll_hourly(logger).0
+    }
+
+    /// [`DockerSource::roll_hourly`] for one of the two hourly sensors; `rolled` is set when an
+    /// accumulator moved to a new hour (the state must be written).
+    fn roll_hours(&mut self, logger: &Logger, kind: Hourly, rolled: &mut bool) -> PostedHours {
         let now_ms = (self.clock)();
         let current = written::hour_start(now_ms);
-        let mut rolled = false;
+        let name = kind.name();
         let mut posted = Vec::new();
         for (key, record) in self.tracker.state.services.iter_mut() {
-            let Some(accumulator) = record.written.as_mut() else {
+            let node = record.node.clone();
+            let Some(accumulator) = kind.accumulator(record) else {
                 continue;
             };
             if accumulator.hour_start >= current {
                 continue;
             }
-            rolled = true;
+            *rolled = true;
             let Some(done) = accumulator.roll(now_ms) else {
                 continue;
             };
-            let node = record.node.clone().unwrap_or_else(|| self.naming.node(key));
+            let node = node.unwrap_or_else(|| self.naming.node(key));
             if done.hour_start + 3600 != current {
                 logger.info(format!(
-                    "docker: {node}: Disk written per hour for {} not posted: it ended more \
-                     than an hour ago (the probe was not running at the next hour boundary); only \
-                     the hour that has just ended is posted after a restart",
+                    "docker: {node}: {name} for {} not posted: it ended more than an hour ago \
+                     (the probe was not running at the next hour boundary); only the hour that \
+                     has just ended is posted after a restart",
                     done.comment()
                 ));
                 continue;
             }
-            // A measured hour means the service reported writes, so its sensor exists on the
-            // server; it may just not be registered in this run yet (restarted while the daemon
-            // did not answer): register it now rather than drop the hour.
+            // A measured hour means the service fed this sensor, so it exists on the server; it
+            // may just not be registered in this run yet (restarted while the daemon did not
+            // answer): register it now rather than drop the hour.
             let sensors = self
                 .sensors
                 .entry(key.clone())
                 .or_insert_with(|| ServiceSensors::new(node.clone(), self.sample_period));
-            if let Some(problem) = sensors.ensure_disk_written(self.collector) {
+            let problem = match kind {
+                Hourly::DiskWritten => sensors.ensure_disk_written(self.collector),
+                Hourly::LimitHits => sensors.ensure_limit_hits(self.collector),
+            };
+            if let Some(problem) = problem {
                 if self.log_once.raise(&format!("register:{problem}")) {
                     logger.error(format!(
-                        "docker: sensor {problem}; Disk written per hour for {} is lost",
+                        "docker: sensor {problem}; {name} for {} is lost",
                         done.comment()
                     ));
                 }
                 continue;
             }
-            let Some(sensor) = sensors.disk_written.as_ref() else {
-                continue;
-            };
             let comment = done.comment();
-            match sensor.add_with(done.megabytes(), SensorStatus::Ok, Some(&comment)) {
-                Ok(()) => {
+            let (result, shown) = match kind {
+                Hourly::DiskWritten => (
+                    sensors.disk_written.as_ref().map(|sensor| {
+                        sensor.add_with(done.megabytes(), SensorStatus::Ok, Some(&comment))
+                    }),
+                    format!("{} MB", done.megabytes()),
+                ),
+                Hourly::LimitHits => (
+                    sensors.limit_hits.as_ref().map(|sensor| {
+                        sensor.add_with(done.count(), SensorStatus::Ok, Some(&comment))
+                    }),
+                    done.count().to_string(),
+                ),
+            };
+            match result {
+                Some(Ok(())) => {
                     logger.log(
                         Level::Debug,
-                        &format!(
-                            "docker: {node}: Disk written per hour {} MB ({comment})",
-                            done.megabytes()
-                        ),
+                        &format!("docker: {node}: {name} {shown} ({comment})"),
                     );
                     posted.push((key.clone(), done));
                 }
-                Err(error) => {
-                    if self.log_once.raise(&format!("post:{node}:written")) {
-                        logger.error(format!(
-                            "docker: {node}: value not posted: Disk written per hour: {error}"
-                        ));
-                    }
+                Some(Err(error)) if self.log_once.raise(&format!("post:{node}:{name}")) => {
+                    logger.error(format!("docker: {node}: value not posted: {name}: {error}"));
                 }
+                _ => {}
             }
-        }
-        if rolled {
-            self.written_dirty = true;
-            self.persist(logger);
         }
         posted
     }
@@ -743,9 +830,13 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         }
 
         for (key, record) in self.tracker.state.services.iter_mut() {
-            if let Some(accumulator) = record.written.as_mut() {
+            let ids = roster.get(key).map_or(&[][..], Vec::as_slice);
+            for accumulator in [record.written.as_mut(), record.limit_hits.as_mut()]
+                .into_iter()
+                .flatten()
+            {
                 let before = accumulator.baselines.len();
-                accumulator.retain(roster.get(key).map_or(&[][..], Vec::as_slice));
+                accumulator.retain(ids);
                 self.written_dirty |= accumulator.baselines.len() != before;
             }
         }
@@ -755,16 +846,20 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .any(|ids| ids.iter().any(|listed| listed == id))
         });
         self.roster = roster;
-        self.cpu.retain(|id| {
+        let sampled = |id: &str| {
             self.roster
                 .values()
                 .any(|ids| ids.iter().any(|listed| listed == id))
-        });
+        };
+        self.cpu.retain(sampled);
+        self.pressure.retain(sampled);
+        self.oom_kills.retain(sampled);
         self.persist_if_dirty(logger);
         Ok(())
     }
 
-    /// The stats tick: one one-shot stats call per sampled container, CPU and memory into bars.
+    /// The stats tick: one one-shot stats call per sampled container, CPU and memory into bars;
+    /// the cgroup memory files of each running container are read in the same round (#1818).
     pub fn sample_stats(
         &mut self,
         logger: &Logger,
@@ -786,6 +881,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             // write counter at all.
             let mut written_gap: Option<u64> = None;
             let mut any_writes = false;
+            let mut round = MemoryRound::new(self.swap_seen(key));
 
             for id in ids {
                 if should_stop() {
@@ -804,8 +900,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         // read still yields the bytes written meanwhile.
                         self.read_failure(logger, "stats", id, key, &error);
                         self.cpu.forget(id);
+                        self.pressure.forget(id);
                         cpu_valid = false;
                         memory_valid = false;
+                        round.unknown();
                         continue;
                     }
                 };
@@ -814,7 +912,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 // that it accounts block I/O per container (#1574); see `written_bytes`.
                 let counter =
                     written::written_bytes(&stats, &mut self.stacking, &mut self.counters_seen);
-                let started_at = self.started_at.get(id).map(String::as_str);
+                let started_at = self.started_at.get(id).cloned();
                 let mut restarted = false;
                 let mut discarded: Option<&str> = None;
                 if let Some(record) = self.tracker.state.services.get_mut(key) {
@@ -831,7 +929,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 counter,
                                 now_ms,
                                 self.sample_period,
-                                started_at,
+                                started_at.as_deref(),
                             ) {
                                 Ok((_, gap)) => {
                                     written_gap = Some(written_gap.unwrap_or(0).max(gap));
@@ -879,7 +977,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 if restarted
                     && self.log_once.raise(&format!(
                         "restarted:{id}:{}",
-                        started_at.unwrap_or_default()
+                        started_at.as_deref().unwrap_or_default()
                     ))
                 {
                     logger.info(format!(
@@ -891,40 +989,67 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 }
                 // Stamped per container, when its counters arrived: a slow call for one container
                 // must not skew the interval of the next.
-                match CpuCounters::from_stats(&stats, self.origin.elapsed()) {
+                let at = self.origin.elapsed();
+                let running = match CpuCounters::from_stats(&stats, at) {
                     Some(counters) => {
                         any_counters = true;
                         match self.cpu.sample(id, counters, self.sample_period) {
                             Ok(percent) => cpu_total += percent,
                             Err(_) => cpu_valid = false,
                         }
+                        true
                     }
                     None => {
                         // Stopped between the poll and now; the next poll drops it.
                         self.cpu.forget(id);
                         cpu_valid = false;
+                        false
                     }
-                }
-                match stats::memory_reading(&stats, self.host_mem_total) {
+                };
+                let reading = stats::memory_reading(&stats, self.host_mem_total);
+                match reading {
                     Some(reading) => readings.push(reading),
                     None => memory_valid = false,
                 }
+                match stats::own_memory_bytes(&stats) {
+                    Some(bytes) => round.own_bytes = round.own_bytes.saturating_add(bytes),
+                    None => round.own_valid = false,
+                }
+                if running {
+                    let read = ContainerRead {
+                        id,
+                        started_at: started_at.as_deref(),
+                        limited: reading.is_some_and(|reading| !reading.unlimited),
+                        at,
+                        now_ms,
+                    };
+                    self.sample_cgroup(key, &read, &mut round, logger);
+                } else {
+                    self.pressure.forget(id);
+                    round.pressure_valid = false;
+                    round.swap_valid = false;
+                }
             }
 
-            if let Some(gap) = written_gap {
-                let now_ms = (self.clock)();
-                if let Some(accumulator) = self
-                    .tracker
-                    .state
-                    .services
-                    .get_mut(key)
-                    .and_then(|record| record.written.as_mut())
+            let now_ms = (self.clock)();
+            if let Some(record) = self.tracker.state.services.get_mut(key) {
+                if let (Some(gap), Some(accumulator)) = (written_gap, record.written.as_mut()) {
+                    accumulator.cover(gap, now_ms);
+                }
+                if let (Some(gap), Some(accumulator)) =
+                    (round.limit_gap, record.limit_hits.as_mut())
                 {
                     accumulator.cover(gap, now_ms);
                 }
             }
             if !any_counters {
                 continue;
+            }
+            if round.swap_in_use {
+                self.tracker.mark_swap_seen(key);
+            }
+            if round.oom_killed {
+                self.tracker.latch_oom(key, unix_now(), self.oom_latch);
             }
             let node = self.naming.node(key);
             let sensors = self
@@ -935,14 +1060,15 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
             let limit = memory.map(|m| (stats::limit_megabytes(m.limit_bytes), m.unlimited));
-            let problems = sensors.ensure_stats_sensors(self.collector, limit, any_writes);
+            let mut problems = sensors.ensure_stats_sensors(self.collector, limit, any_writes);
+            problems.extend(sensors.ensure_cgroup_sensors(self.collector, round.sensors));
             report_problems(logger, &mut self.log_once, &problems);
 
             let mut failures = Vec::new();
             logger.log(
                 Level::Debug,
                 &format!(
-                    "docker: {}: CPU {}, memory {}",
+                    "docker: {}: CPU {}, memory {}, {}",
                     sensors.node,
                     if cpu_valid {
                         format!("{:.2} % of the host", cpu_total.min(100.0))
@@ -957,7 +1083,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                             stats::limit_megabytes(m.limit_bytes),
                             if m.unlimited { " (no limit: host)" } else { "" }
                         )
-                    )
+                    ),
+                    round.describe()
                 ),
             );
             if cpu_valid {
@@ -979,6 +1106,42 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     }
                 }
             }
+            for (name, sensor, value) in [
+                (
+                    contract::OWN_MEMORY,
+                    &sensors.own_memory,
+                    round.own_valid.then(|| stats::megabytes(round.own_bytes)),
+                ),
+                (
+                    contract::MEMORY_PRESSURE,
+                    &sensors.memory_pressure,
+                    round.pressure_valid.then_some(round.pressure_max),
+                ),
+                (
+                    contract::SWAP_USED,
+                    &sensors.swap_used,
+                    round.swap_valid.then(|| stats::megabytes(round.swap_bytes)),
+                ),
+            ] {
+                if let (Some(sensor), Some(value)) = (sensor, value) {
+                    if let Err(error) = sensor.add(value) {
+                        failures.push(format!("{name}: {error}"));
+                    }
+                }
+            }
+            if round.oom_killed {
+                logger.info(format!(
+                    "docker: {}: a process of a running container was killed for running out of \
+                     memory (its cgroup's oom_kill grew); OOM killed is latched for {} h",
+                    sensors.node,
+                    self.oom_latch.as_secs() / 3600
+                ));
+                if let Some(sensor) = &sensors.oom_killed {
+                    if let Err(error) = sensor.add(true) {
+                        failures.push(format!("OOM killed: {error}"));
+                    }
+                }
+            }
             let node = sensors.node.clone();
             for failure in failures {
                 if self.log_once.raise(&format!("post:{node}:{failure}")) {
@@ -987,6 +1150,73 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             }
         }
         Ok(())
+    }
+
+    /// Fold one running container's cgroup memory files into the service's round (#1818):
+    /// pressure into the worst-replica percent, swap into the sum, `oom_kill` growth into the OOM
+    /// latch and `max` into the running `Memory limit hits per hour` (only while the container has
+    /// a memory limit). A container without a cgroup v2 directory leaves the pressure and swap of
+    /// this round unknown.
+    fn sample_cgroup(
+        &mut self,
+        key: &ServiceKey,
+        read: &ContainerRead<'_>,
+        round: &mut MemoryRound,
+        logger: &Logger,
+    ) {
+        let id = read.id;
+        let Some(memory) = self.read_cgroup(key, id, logger) else {
+            self.pressure.forget(id);
+            self.oom_kills.forget(id);
+            round.pressure_valid = false;
+            round.swap_valid = false;
+            return;
+        };
+        round.sensors = round
+            .sensors
+            .or(cgroup_sensors(&memory, read.limited, round.swap_seen));
+        match memory.pressure_some_us {
+            Some(total_us) => {
+                let counter = PressureCounter {
+                    total_us,
+                    at: read.at,
+                    started_at: read.started_at.map(str::to_string),
+                };
+                match self.pressure.sample(id, counter, self.sample_period) {
+                    Ok(percent) => round.pressure_max = round.pressure_max.max(percent),
+                    Err(_) => round.pressure_valid = false,
+                }
+            }
+            None => {
+                self.pressure.forget(id);
+                round.pressure_valid = false;
+            }
+        }
+        match memory.swap_bytes {
+            Some(bytes) => {
+                round.swap_bytes = round.swap_bytes.saturating_add(bytes);
+                round.swap_in_use |= bytes > 0;
+            }
+            None => round.swap_valid = false,
+        }
+        let events = memory.events.unwrap_or_default();
+        if let Some(kills) = events.oom_kill {
+            round.oom_killed |= self.oom_kills.grew(id, kills, read.started_at);
+        }
+        let (Some(hits), true) = (events.max, read.limited) else {
+            return;
+        };
+        if let Some(record) = self.tracker.state.services.get_mut(key) {
+            let accumulator = record
+                .limit_hits
+                .get_or_insert_with(|| WriteRecord::new(read.now_ms));
+            self.written_dirty = true;
+            if let Ok((_, gap)) =
+                accumulator.sample(id, hits, read.now_ms, self.sample_period, read.started_at)
+            {
+                round.limit_gap = Some(round.limit_gap.unwrap_or(0).max(gap));
+            }
+        }
     }
 
     fn read_failure(
@@ -1045,6 +1275,140 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     #[cfg(test)]
     pub(crate) fn tracker(&self) -> &Tracker {
         &self.tracker
+    }
+}
+
+/// What the priming stats read of a service's containers tells its registration.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct FirstStats {
+    /// The memory limit (MB, unlimited) for the `Memory used %` description.
+    limit: Option<(i32, bool)>,
+    /// A container reports a block-device write counter (`Disk written per hour`).
+    writes: bool,
+    /// The cgroup memory sensors its containers' files support.
+    cgroup: CgroupSensors,
+}
+
+/// The cgroup memory sensors one running container can feed (#1818), the registration rules in
+/// one place: `Memory pressure %` needs a readable `memory.pressure`; `Memory limit hits per hour`
+/// a readable `max` in `memory.events` **and** a memory limit; `Swap used` a readable
+/// `memory.swap.current` and swap in use now or at some point before (`swap_seen`, from the
+/// state). A container without a cgroup v2 directory feeds none of them.
+fn cgroup_sensors(memory: &CgroupMemory, limited: bool, swap_seen: bool) -> CgroupSensors {
+    CgroupSensors {
+        pressure: memory.pressure_some_us.is_some(),
+        limit_hits: limited && memory.events.is_some_and(|events| events.max.is_some()),
+        swap: memory
+            .swap_bytes
+            .is_some_and(|bytes| bytes > 0 || swap_seen),
+    }
+}
+
+/// One container of a stats round, as its cgroup sampling needs it.
+struct ContainerRead<'a> {
+    id: &'a str,
+    /// `State.StartedAt` from the last inspect.
+    started_at: Option<&'a str>,
+    /// The container has a memory limit of its own.
+    limited: bool,
+    /// Monotonic time of the read (the CPU stamp).
+    at: Duration,
+    /// Wall clock of the read, Unix ms (the hourly accumulators).
+    now_ms: i64,
+}
+
+/// A service's #1818 memory figures of one stats round, its replicas folded in as they are read.
+/// A figure some replica could not give is not posted this round (`*_valid`), never guessed.
+#[derive(Debug)]
+struct MemoryRound {
+    own_bytes: u64,
+    own_valid: bool,
+    /// The worst replica's `Memory pressure %`.
+    pressure_max: f64,
+    pressure_valid: bool,
+    swap_bytes: u64,
+    swap_valid: bool,
+    /// Some replica has swap in use now.
+    swap_in_use: bool,
+    /// The state remembers swap in use before.
+    swap_seen: bool,
+    /// The longest interval among this round's accepted limit-hit deltas.
+    limit_gap: Option<u64>,
+    /// Some replica's `oom_kill` grew.
+    oom_killed: bool,
+    /// The cgroup sensors the replicas' files support.
+    sensors: CgroupSensors,
+}
+
+impl MemoryRound {
+    fn new(swap_seen: bool) -> Self {
+        Self {
+            own_bytes: 0,
+            own_valid: true,
+            pressure_max: 0.0,
+            pressure_valid: true,
+            swap_bytes: 0,
+            swap_valid: true,
+            swap_in_use: false,
+            swap_seen,
+            limit_gap: None,
+            oom_killed: false,
+            sensors: CgroupSensors::default(),
+        }
+    }
+
+    /// A replica's stats could not be read: none of the round's memory figures is complete.
+    fn unknown(&mut self) {
+        self.own_valid = false;
+        self.pressure_valid = false;
+        self.swap_valid = false;
+    }
+
+    /// For the round's debug line.
+    fn describe(&self) -> String {
+        let figure = |valid: bool, text: String| if valid { text } else { "skipped".into() };
+        format!(
+            "own memory {}, pressure {}, swap {}",
+            figure(
+                self.own_valid,
+                format!("{:.2} MB", stats::megabytes(self.own_bytes))
+            ),
+            figure(
+                self.pressure_valid && self.sensors.pressure,
+                format!("{:.2} %", self.pressure_max)
+            ),
+            figure(
+                self.swap_valid,
+                format!("{:.2} MB", stats::megabytes(self.swap_bytes))
+            ),
+        )
+    }
+}
+
+/// The hours an hourly sensor handed to the collector, per service.
+type PostedHours = Vec<(ServiceKey, CompletedHour)>;
+
+/// The two hourly sensors: the same accumulator ([`WriteRecord`]) and posting rules over different
+/// counters.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Hourly {
+    DiskWritten,
+    LimitHits,
+}
+
+impl Hourly {
+    fn name(self) -> &'static str {
+        match self {
+            Hourly::DiskWritten => contract::DISK_WRITTEN,
+            Hourly::LimitHits => contract::MEMORY_LIMIT_HITS,
+        }
+    }
+
+    fn accumulator(self, record: &mut ServiceRecord) -> Option<&mut WriteRecord> {
+        match self {
+            Hourly::DiskWritten => record.written.as_mut(),
+            Hourly::LimitHits => record.limit_hits.as_mut(),
+        }
     }
 }
 
@@ -1115,7 +1479,7 @@ impl<E: EngineApi + Send> Source for DockerSource<'_, E> {
     }
 
     fn stop(&mut self, logger: &Logger) {
-        // The running hour's accumulator, so a restart continues it.
+        // The running hours' accumulators, so a restart continues them.
         if self.written_dirty {
             self.persist(logger);
         }
@@ -1144,6 +1508,8 @@ pub fn register<'c>(
         state_path,
         host_mem_total(),
     );
+    // The cgroup v2 mount, read-only under the unit's ProtectControlGroups=yes.
+    source.cgroups = CgroupFs::new(Some(sys_root.join("fs/cgroup")));
     source.stacking = written::Stacking::new(Some(sys_root));
     if let Some(note) = sample_period_note(config) {
         logger.info(note);
@@ -1323,6 +1689,18 @@ pub(crate) mod tests {
 
     const DEMO_MEM_TOTAL: u64 = 16_298_872 * 1024;
 
+    /// A fake cgroup v2 mount holding the demo containers' first-round cgroup files, which
+    /// `source` reads from now on; `cgroup::tests::demo_cgroups(&tree, "cgroup", 1)` moves it to
+    /// the second round. Keep the tree alive while the source samples.
+    fn demo_cgroup_mount(
+        source: &mut DockerSource<'_, FixtureEngine>,
+    ) -> crate::probe_only::host::tests::FakeTree {
+        let tree = crate::probe_only::host::tests::FakeTree::new("docker-cgroup");
+        cgroup::tests::demo_cgroups(&tree, "cgroup", 0);
+        source.cgroups = CgroupFs::new(Some(tree.0.join("cgroup")));
+        tree
+    }
+
     /// Drive the demo fixtures through one poll and two stats rounds, as the running source
     /// would over its first minute.
     pub(crate) fn drive_demo(collector: &Collector) {
@@ -1340,12 +1718,14 @@ pub(crate) mod tests {
             &DockerConfig::default(),
             None,
         );
+        let cgroups = demo_cgroup_mount(&mut source);
         let never = || false;
         source.poll(&quiet(), &never).expect("poll");
         source
             .sample_stats(&quiet(), &never)
             .expect("first stats round");
         source.engine.round = 1;
+        cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
         // One default sample period on the source's monotonic clock, so the CPU interval check
         // passes. The captures are really 5.3 s apart, but the percent is the ratio of the two
         // counters' deltas, whatever the interval.
@@ -1385,15 +1765,40 @@ pub(crate) mod tests {
             .iter()
             .filter(|p| p.starts_with(".probe/Docker/"))
             .collect();
-        // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors (CPU, Memory used %,
-        // Disk written per hour); the twelfth, lumina-ci/ci-image, is a completed one-shot job and
-        // not monitored at all.
-        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
+        // 11 services × 3 state sensors + 4 healthchecks + 11 × 4 stats sensors (CPU, Memory used %,
+        // Own memory, Disk written per hour) + the cgroup ones (#1818): Memory pressure % for the 9
+        // services with a readable memory.pressure (not panelhost: no cgroup directory; not mdb: no
+        // PSI), Memory limit hits per hour for the 10 with memory.events (all have a limit), Swap
+        // used for hsm/app only (the one that swaps). The twelfth container, lumina-ci/ci-image,
+        // is a completed one-shot job and not monitored at all.
+        assert_eq!(
+            docker.len(),
+            11 * 3 + 4 + 11 * 4 + 9 + 10 + 1,
+            "{docker:#?}"
+        );
         assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
         let has = |p: &str| paths.iter().any(|x| x == p);
         assert!(has(".probe/Docker/gitsrv/db/Service status"));
         assert!(has(".probe/Docker/gitsrv/db/Health"));
         assert!(has(".probe/Docker/gitsrv/db/CPU"));
+        // Own memory comes from the Engine API stats: every service has it, panelhost included.
+        assert!(has(".probe/Docker/panelhost/panelhost/Own memory"));
+        // No cgroup v2 directory: Own memory only.
+        for sensor in [
+            "Memory pressure %",
+            "Memory limit hits per hour",
+            "Swap used",
+        ] {
+            assert!(!has(&format!(".probe/Docker/panelhost/panelhost/{sensor}")));
+        }
+        // No PSI: no pressure node, the rest is there.
+        assert!(!has(".probe/Docker/lumina/mdb/Memory pressure %"));
+        assert!(has(".probe/Docker/lumina/mdb/Memory limit hits per hour"));
+        // Swap only where swap was used: hsm/app swaps, gitsrv/db (0 bytes) does not.
+        assert!(has(".probe/Docker/hsm/app/Swap used"));
+        assert!(!has(".probe/Docker/gitsrv/db/Swap used"));
+        // The cgroupfs driver's layout (cproxy) is found like the systemd one.
+        assert!(has(".probe/Docker/cproxy/cproxy/Memory pressure %"));
         // The exited one-shot image build (Exited (0), restart "no"): a completed job, no node.
         assert!(paths
             .iter()
@@ -1560,6 +1965,7 @@ pub(crate) mod tests {
             &DockerConfig::default(),
             None,
         );
+        let _cgroups = demo_cgroup_mount(&mut source);
         assert_eq!(source.prime(&quiet()).expect("prime"), 11);
         collector.start().expect("start");
         let registrations = collector.registrations();
@@ -1568,7 +1974,7 @@ pub(crate) mod tests {
             .iter()
             .filter(|j| j.contains("\"Path\":\".probe/Docker/"))
             .collect();
-        assert_eq!(docker.len(), 70);
+        assert_eq!(docker.len(), 101);
 
         let find = |path: &str| {
             registrations
@@ -1617,6 +2023,22 @@ pub(crate) mod tests {
             written.contains("sent just after the hour it covers"),
             "{written}"
         );
+        // The #1818 memory sensors: bars in MB or %, a per-hour count, and no alert on any.
+        for (path, unit) in [
+            ("hsm/app/Own memory", "\"OriginalUnit\":3"),
+            ("hsm/app/Memory pressure %", "\"OriginalUnit\":100"),
+            (
+                "hsm/app/Memory limit hits per hour",
+                "\"OriginalUnit\":1100",
+            ),
+            ("hsm/app/Swap used", "\"OriginalUnit\":3"),
+        ] {
+            let json = find(path);
+            assert!(json.contains(unit), "{path}: {json}");
+            assert!(!json.contains("\"Alerts\":[{"), "{path}: {json}");
+        }
+        assert!(find("hsm/app/Memory limit hits per hour").contains("sent just after the hour"));
+        assert!(find("hsm/app/OOM killed").contains("`oom_kill` counter"));
         // The state sensors store only changes on the server.
         for path in [
             "gitsrv/db/Service status",
@@ -2245,8 +2667,8 @@ pub(crate) mod tests {
         let logger = Logger::with_sink(Level::Debug, move |line: &str| {
             sink.lock().unwrap().push(line.to_string())
         });
-        let (limit, writes) = source.first_stats_of(&key, &[db.clone(), db.clone(), db], &logger);
-        assert_eq!((limit, writes), (None, false));
+        let first = source.first_stats_of(&key, &[db.clone(), db.clone(), db], &logger);
+        assert_eq!(first, FirstStats::default());
         assert_eq!(source.engine.stats_calls, 1);
         // The failure is in the journal, naming the service and the container (#1507).
         let lines = lines.lock().unwrap();
@@ -2407,5 +2829,495 @@ pub(crate) mod tests {
             baselines.keys().all(|id| !id.starts_with(GITSRV_DB)),
             "old id pruned"
         );
+    }
+
+    // ---- The memory sensors of #1818 -------------------------------------------------------
+
+    const HSM_APP: &str = "c5abbadb3674";
+    const JANITOR: &str = "e9d7ff6f1b1e";
+
+    /// A logger that keeps every line, Debug included.
+    fn capturing() -> (Logger, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&lines);
+        let logger = Logger::with_sink(Level::Debug, move |line: &str| {
+            sink.lock().unwrap().push(line.to_string())
+        });
+        (logger, lines)
+    }
+
+    /// The round's debug line of one service.
+    fn round_line(lines: &[String], node: &str) -> String {
+        lines
+            .iter()
+            .rev()
+            .find(|line| line.contains(&format!("docker: {node}: CPU")))
+            .unwrap_or_else(|| panic!("no round line for {node}: {lines:#?}"))
+            .clone()
+    }
+
+    /// Poll and two stats rounds over the cgroup captures, one sample period apart on the
+    /// monotonic clock and `apart_ms` on the wall clock from `at_ms`.
+    fn two_cgroup_rounds(
+        source: &mut DockerSource<'_, FixtureEngine>,
+        cgroups: &crate::probe_only::host::tests::FakeTree,
+        logger: &Logger,
+        at_ms: i64,
+        apart_ms: i64,
+    ) {
+        let never = || false;
+        set_clock(at_ms);
+        source.engine.round = 0;
+        cgroup::tests::demo_cgroups(cgroups, "cgroup", 0);
+        source.poll(logger, &never).expect("poll");
+        source.sample_stats(logger, &never).expect("round 0");
+        set_clock(at_ms + apart_ms);
+        source.engine.round = 1;
+        cgroup::tests::demo_cgroups(cgroups, "cgroup", 1);
+        source.origin = source
+            .origin
+            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
+            .expect("monotonic clock past one sample period");
+        source.sample_stats(logger, &never).expect("round 1");
+    }
+
+    fn cgroup_source(collector: &Collector) -> DockerSource<'_, FixtureEngine> {
+        let mut source = demo_source(
+            collector,
+            FixtureEngine::demo(),
+            &DockerConfig::default(),
+            None,
+        );
+        source.clock = test_clock;
+        source
+    }
+
+    #[test]
+    fn the_memory_figures_of_a_round_are_what_the_captures_say() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        let cgroups = demo_cgroup_mount(&mut source);
+        let (logger, lines) = capturing();
+        set_clock(H13 + 10 * 60_000);
+        source.engine.round = 0;
+        source.poll(&logger, &|| false).expect("poll");
+        source.sample_stats(&logger, &|| false).expect("round 0");
+        {
+            let lines = lines.lock().unwrap();
+            // The first sample of a pressure counter is a baseline: skipped, not 0.
+            let app = round_line(&lines, "Docker/hsm/app");
+            assert!(
+                app.contains("own memory 179.36 MB, pressure skipped, swap 1.59 MB"),
+                "{app}"
+            );
+        }
+        set_clock(H13 + 11 * 60_000);
+        source.engine.round = 1;
+        cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
+        source.origin = source
+            .origin
+            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
+            .expect("clock");
+        source.sample_stats(&logger, &|| false).expect("round 1");
+        collector.stop().expect("stop");
+        let lines = lines.lock().unwrap();
+        // hsm/app: anon + shmem 188_076_032 B; 1.8 s of stall in the 60 s between the samples;
+        // 1_671_168 B of swap.
+        let app = round_line(&lines, "Docker/hsm/app");
+        assert!(
+            app.contains("own memory 179.36 MB, pressure 3.00 %, swap 1.59 MB"),
+            "{app}"
+        );
+        // gitsrv/db: a real 0 of swap; 0.6 s of stall = 1 %.
+        let db = round_line(&lines, "Docker/gitsrv/db");
+        assert!(db.contains("pressure 1.00 %, swap 0.00 MB"), "{db}");
+        // lumina/mdb has no memory.pressure (no PSI): no pressure value at all.
+        let mdb = round_line(&lines, "Docker/lumina/mdb");
+        assert!(mdb.contains("pressure skipped, swap 0.00 MB"), "{mdb}");
+        // panelhost has no cgroup v2 directory: its own memory still comes from the stats.
+        let panelhost = round_line(&lines, "Docker/panelhost/panelhost");
+        assert!(
+            panelhost.contains("own memory 23.90 MB, pressure skipped, swap skipped"),
+            "{panelhost}"
+        );
+        // ... and that is said once, not every round.
+        let missing = lines
+            .iter()
+            .filter(|line| line.contains("7717692f78a8: no cgroup v2 directory"))
+            .count();
+        assert_eq!(missing, 1, "{lines:#?}");
+        drop(cgroups);
+    }
+
+    #[test]
+    fn pressure_takes_the_worst_replica_and_a_skipped_replica_skips_the_sample() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        let cgroups = demo_cgroup_mount(&mut source);
+        // gitsrv/db gets a second replica: janitor's container under db's service (5 % against
+        // db's 1 %).
+        let janitor = source
+            .engine
+            .list
+            .iter()
+            .position(|c| c.id.starts_with(JANITOR))
+            .unwrap();
+        let labels = source
+            .engine
+            .list
+            .iter()
+            .find(|c| c.id.starts_with(GITSRV_DB))
+            .unwrap()
+            .labels
+            .clone();
+        source.engine.list[janitor].labels = labels;
+        let (logger, lines) = capturing();
+        two_cgroup_rounds(&mut source, &cgroups, &logger, H13 + 10 * 60_000, 60_000);
+        let line = round_line(&lines.lock().unwrap(), "Docker/gitsrv/db");
+        assert!(line.contains("pressure 5.00 %"), "{line}");
+
+        // Now one replica's counter goes backwards: that replica is skipped, so is the service.
+        lines.lock().unwrap().clear();
+        let dir = format!(
+            "cgroup/system.slice/docker-{}.scope",
+            source.engine.list[janitor].id
+        );
+        cgroups.file(
+            &format!("{dir}/memory.pressure"),
+            "some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n",
+        );
+        source.origin = source
+            .origin
+            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
+            .unwrap();
+        source.sample_stats(&logger, &|| false).expect("round 2");
+        collector.stop().expect("stop");
+        let line = round_line(&lines.lock().unwrap(), "Docker/gitsrv/db");
+        assert!(line.contains("pressure skipped"), "{line}");
+    }
+
+    #[test]
+    fn an_oom_kill_inside_a_running_container_latches_oom_killed() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        let cgroups = demo_cgroup_mount(&mut source);
+        let (logger, lines) = capturing();
+        let janitor = key_of("lumina-ci", "janitor");
+        set_clock(H13);
+        source.poll(&logger, &|| false).expect("poll");
+        source.sample_stats(&logger, &|| false).expect("round 0");
+        // The first sample only sets the baseline.
+        assert_eq!(
+            source.tracker.state.services[&janitor].oom_latch_until,
+            None
+        );
+        // janitor's oom_kill goes 0 → 1 while State.OOMKilled stays false (it keeps running).
+        source.engine.round = 1;
+        cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
+        source.sample_stats(&logger, &|| false).expect("round 1");
+        collector.stop().expect("stop");
+        let until = source.tracker.state.services[&janitor]
+            .oom_latch_until
+            .expect("latched");
+        assert!(until >= unix_now() + 23 * 3600, "{until}");
+        assert!(lines.lock().unwrap().iter().any(|line| line.contains(
+            "docker: Docker/lumina-ci/janitor: a process of a running container was \
+                       killed"
+        )));
+        // Nobody else was killed.
+        assert_eq!(
+            source.tracker.state.services[&key_of("hsm", "app")].oom_latch_until,
+            None
+        );
+        // The next poll reports the latch like a State.OOMKilled one.
+        let outcome = source.tracker.observe(
+            &BTreeMap::from([(
+                janitor.clone(),
+                vec![ContainerObservation {
+                    id: "x".into(),
+                    state: "running".into(),
+                    inspect: Some(InspectFacts::default()),
+                }],
+            )]),
+            unix_now(),
+            source.oom_latch,
+        );
+        assert_eq!(outcome.reports[&janitor].oom_killed, Some(true));
+    }
+
+    #[test]
+    fn limit_hits_are_posted_once_per_hour_and_summed_over_the_hour() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        let cgroups = demo_cgroup_mount(&mut source);
+        two_cgroup_rounds(&mut source, &cgroups, &quiet(), H13 + 30 * 60_000, 60_000);
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let (written, hits) = source.roll_hourly(&quiet());
+        collector.stop().expect("stop");
+        assert_eq!(written.len(), 11);
+        // Every service with memory.events and a limit measured the hour (10: not panelhost).
+        assert_eq!(hits.len(), 10, "{hits:?}");
+        let count = |service: &(&str, &str)| {
+            hits.iter()
+                .find(|(key, _)| *key == key_of(service.0, service.1))
+                .map(|(_, hour)| hour.count())
+        };
+        // hsm/app's max went 957 → 960, janitor's 12 → 14; an idle limited service is a real 0.
+        assert_eq!(count(&("hsm", "app")), Some(3));
+        assert_eq!(count(&("lumina-ci", "janitor")), Some(2));
+        assert_eq!(count(&("gitsrv", "db")), Some(0));
+        assert_eq!(count(&("panelhost", "panelhost")), None);
+        let app = hits
+            .iter()
+            .find(|(key, _)| *key == key_of("hsm", "app"))
+            .unwrap()
+            .1;
+        assert_eq!(app.comment(), "13:00–14:00 UTC; measured 1 of 60 min");
+        // Posted once.
+        set_clock(H13 + 60 * 60_000 + 61_000);
+        assert!(source.roll_hourly(&quiet()).1.is_empty());
+    }
+
+    #[test]
+    fn a_restarted_container_only_sets_a_limit_hit_baseline() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        let cgroups = demo_cgroup_mount(&mut source);
+        let never = || false;
+        set_clock(H13 + 10 * 60_000);
+        source.poll(&quiet(), &never).expect("poll");
+        source.sample_stats(&quiet(), &never).expect("round 0");
+        // hsm/app restarts (same id, new StartedAt) before the next round; its new cgroup's max
+        // (960) is not 3 hits on top of the old one's 957.
+        let inspect = source
+            .engine
+            .inspects
+            .iter_mut()
+            .find(|(id, _)| id.starts_with(HSM_APP))
+            .unwrap()
+            .1;
+        inspect.state.started_at = "2026-09-29T13:10:30Z".into();
+        set_clock(H13 + 11 * 60_000);
+        source.poll(&quiet(), &never).expect("poll");
+        source.engine.round = 1;
+        cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
+        source.sample_stats(&quiet(), &never).expect("round 1");
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let (_, hits) = source.roll_hourly(&quiet());
+        collector.stop().expect("stop");
+        assert!(
+            hits.iter().all(|(key, _)| *key != key_of("hsm", "app")),
+            "no delta measured: nothing posted, {hits:?}"
+        );
+        let janitor = hits
+            .iter()
+            .find(|(key, _)| *key == key_of("lumina-ci", "janitor"))
+            .unwrap();
+        assert_eq!(janitor.1.count(), 2);
+    }
+
+    #[test]
+    fn limit_hits_continue_the_hour_across_a_probe_restart() {
+        let dir = std::env::temp_dir().join(format!(
+            "hsm-probe-docker-limit-hits-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut before = demo_source(
+                &collector,
+                FixtureEngine::demo(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            before.clock = test_clock;
+            let cgroups = demo_cgroup_mount(&mut before);
+            two_cgroup_rounds(&mut before, &cgroups, &quiet(), H13 + 30 * 60_000, 60_000);
+            Source::stop(&mut before, &quiet());
+            collector.stop().expect("stop");
+        }
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("\"limitHits\""));
+        // Back at 13:40; hsm/app hit its limit 4 more times while the probe was down.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut after = demo_source(
+            &collector,
+            FixtureEngine::demo(),
+            &DockerConfig::default(),
+            Some(path),
+        );
+        after.clock = test_clock;
+        let cgroups = demo_cgroup_mount(&mut after);
+        cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
+        let app_dir = format!(
+            "cgroup/system.slice/docker-{}.scope",
+            after
+                .engine
+                .list
+                .iter()
+                .find(|c| c.id.starts_with(HSM_APP))
+                .unwrap()
+                .id
+        );
+        cgroups.file(
+            &format!("{app_dir}/memory.events"),
+            "low 0\nhigh 0\nmax 964\noom 0\noom_kill 0\noom_group_kill 0\n",
+        );
+        set_clock(H13 + 40 * 60_000);
+        after.engine.round = 1;
+        after.poll(&quiet(), &|| false).expect("poll");
+        after.sample_stats(&quiet(), &|| false).expect("round");
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let (_, hits) = after.roll_hourly(&quiet());
+        collector.stop().expect("stop");
+        let app = hits
+            .iter()
+            .find(|(key, _)| *key == key_of("hsm", "app"))
+            .unwrap();
+        assert_eq!(app.1.count(), 3 + 4, "before the stop plus the downtime");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_service_without_a_memory_limit_gets_no_limit_hits() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = cgroup_source(&collector);
+        // hsm/app runs without mem_limit: Docker reports the host's memory as its limit.
+        for round in &mut source.engine.rounds {
+            for (id, stats) in round.iter_mut() {
+                if id.starts_with(HSM_APP) {
+                    stats.memory_stats.limit = Some(DEMO_MEM_TOTAL + 4096);
+                }
+            }
+        }
+        let cgroups = demo_cgroup_mount(&mut source);
+        two_cgroup_rounds(&mut source, &cgroups, &quiet(), H13 + 10 * 60_000, 60_000);
+        let paths = registered(&collector);
+        collector.stop().expect("stop");
+        let has = |p: &str| paths.iter().any(|x| x == p);
+        assert!(!has(".probe/Docker/hsm/app/Memory limit hits per hour"));
+        assert!(has(".probe/Docker/hsm/app/Memory pressure %"));
+        assert!(has(
+            ".probe/Docker/lumina-ci/janitor/Memory limit hits per hour"
+        ));
+        assert!(source.tracker.state.services[&key_of("hsm", "app")]
+            .limit_hits
+            .is_none());
+    }
+
+    #[test]
+    fn swap_used_registers_once_swap_was_seen_and_is_remembered() {
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-swap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut source = demo_source(
+                &collector,
+                FixtureEngine::demo(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            source.clock = test_clock;
+            let cgroups = demo_cgroup_mount(&mut source);
+            // gitsrv/db swaps once in the first round, nothing in the second.
+            let db_dir = format!(
+                "cgroup/system.slice/docker-{}.scope",
+                source
+                    .engine
+                    .list
+                    .iter()
+                    .find(|c| c.id.starts_with(GITSRV_DB))
+                    .unwrap()
+                    .id
+            );
+            set_clock(H13);
+            source.poll(&quiet(), &|| false).expect("poll");
+            cgroups.file(&format!("{db_dir}/memory.swap.current"), "4096\n");
+            source.sample_stats(&quiet(), &|| false).expect("round 0");
+            assert!(source.tracker.state.services[&key_of("gitsrv", "db")].swap_seen);
+            // The next poll writes it to the state file.
+            source.poll(&quiet(), &|| false).expect("poll");
+            Source::stop(&mut source, &quiet());
+            collector.stop().expect("stop");
+        }
+        // After an agent restart gitsrv/db swaps nothing, yet its Swap used registers (and reads
+        // 0) from the priming round on; a service that never swapped still has none.
+        let collector = test_collector();
+        let mut source = demo_source(
+            &collector,
+            FixtureEngine::demo(),
+            &DockerConfig::default(),
+            Some(path),
+        );
+        let _cgroups = demo_cgroup_mount(&mut source);
+        assert!(source.swap_seen(&key_of("gitsrv", "db")), "remembered");
+        source.prime(&quiet()).expect("prime");
+        collector.start().expect("start");
+        let paths = registered(&collector);
+        collector.stop().expect("stop");
+        assert!(
+            paths
+                .iter()
+                .any(|p| p == ".probe/Docker/gitsrv/db/Swap used"),
+            "{paths:#?}"
+        );
+        assert!(!paths
+            .iter()
+            .any(|p| p == ".probe/Docker/lumina/mdb/Swap used"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_cgroup_registration_rules() {
+        let memory = |pressure: Option<u64>, max: Option<u64>, swap: Option<u64>| CgroupMemory {
+            events: Some(cgroup::MemoryEvents {
+                max,
+                oom_kill: Some(0),
+            }),
+            pressure_some_us: pressure,
+            swap_bytes: swap,
+        };
+        let all = memory(Some(1), Some(0), Some(1));
+        assert_eq!(
+            cgroup_sensors(&all, true, false),
+            CgroupSensors {
+                pressure: true,
+                limit_hits: true,
+                swap: true
+            }
+        );
+        // No limit: no limit hits, whatever memory.events says.
+        assert!(!cgroup_sensors(&all, false, false).limit_hits);
+        // memory.events without a `max` line, or not readable at all.
+        assert!(!cgroup_sensors(&memory(Some(1), None, Some(0)), true, false).limit_hits);
+        let no_events = CgroupMemory {
+            events: None,
+            ..all.clone()
+        };
+        assert!(!cgroup_sensors(&no_events, true, false).limit_hits);
+        // Swap: 0 bytes registers nothing until swap was seen; then 0 registers too.
+        let no_swap = memory(Some(1), Some(0), Some(0));
+        assert!(!cgroup_sensors(&no_swap, true, false).swap);
+        assert!(cgroup_sensors(&no_swap, true, true).swap);
+        // No memory.swap.current (no swap accounting): never, remembered or not.
+        assert!(!cgroup_sensors(&memory(Some(1), Some(0), None), true, true).swap);
+        // No PSI: no pressure.
+        assert!(!cgroup_sensors(&memory(None, Some(0), Some(0)), true, false).pressure);
     }
 }
