@@ -1,6 +1,7 @@
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OAuth.Claims;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace HSMServer.Authentication.Sso
@@ -25,6 +27,12 @@ namespace HSMServer.Authentication.Sso
         public const string ErrorQueryKey = "ssoError";
 
         public const string AfterSignInPath = "/Home";
+
+        // Added to the provider principal when the userinfo response carries the groups key,
+        // even as an empty list: "in no groups" must revoke AdminGroup admin, while a missing
+        // key must not. A JSON array becomes one claim per element, so an empty list and a
+        // missing key look the same without this marker. Never reaches the HSM cookie.
+        public const string GroupsPresentClaim = "hsm:groups-present";
 
 
         public static string LoginErrorPath(SsoSignInError error) => $"{LoginPath}?{ErrorQueryKey}={error}";
@@ -104,6 +112,17 @@ namespace HSMServer.Authentication.Sso
         }
     }
 
+    // Records that the userinfo JSON has the groups key (HsmOidcDefaults.GroupsPresentClaim).
+    internal sealed class GroupsPresenceClaimAction(string groupsKey) : ClaimAction(HsmOidcDefaults.GroupsPresentClaim, ClaimValueTypes.Boolean)
+    {
+        public override void Run(JsonElement userData, ClaimsIdentity identity, string issuer)
+        {
+            if (userData.ValueKind == JsonValueKind.Object && userData.TryGetProperty(groupsKey, out _) &&
+                !identity.HasClaim(c => c.Type == HsmOidcDefaults.GroupsPresentClaim))
+                identity.AddClaim(new Claim(HsmOidcDefaults.GroupsPresentClaim, "true", ClaimValueTypes.Boolean, issuer));
+        }
+    }
+
     public static class HsmOidcServiceCollectionExtensions
     {
         // Registers the OIDC scheme only when the Oidc section is enabled and valid; otherwise
@@ -158,7 +177,10 @@ namespace HSMServer.Authentication.Sso
             options.ClaimActions.MapUniqueJsonKey(config.UsernameClaim, config.UsernameClaim);
 
             if (!string.IsNullOrWhiteSpace(config.GroupsClaim))
+            {
                 options.ClaimActions.MapJsonKey(config.GroupsClaim, config.GroupsClaim);
+                options.ClaimActions.Add(new GroupsPresenceClaimAction(config.GroupsClaim));
+            }
 
             options.EventsType = typeof(HsmOidcEvents);
         }

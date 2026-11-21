@@ -165,6 +165,32 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task EmptyGroupsList_RevokesAdmin_ThroughTheRealHandler()
+        {
+            // The provider sends "groups": [] in the id_token and userinfo: the handler turns
+            // that into zero claims, and only the presence marker tells it from a missing key.
+            var user = new User("ivanov") { IsAdmin = true };
+            _users.Add("ivanov", user);
+            _provider.Groups = [];
+
+            await SignIn();
+
+            Assert.False(user.IsAdmin);
+        }
+
+        [Fact]
+        public async Task MissingGroupsKey_LeavesAdminUnchanged_ThroughTheRealHandler()
+        {
+            var user = new User("ivanov") { IsAdmin = true };
+            _users.Add("ivanov", user);
+            _provider.Groups = null;
+
+            await SignIn();
+
+            Assert.True(user.IsAdmin);
+        }
+
+        [Fact]
         public async Task FrontChannelSignOutEndpoint_IsClosed()
         {
             // The handler's default /signout-oidc would clear the HSM cookie on any
@@ -288,8 +314,10 @@ namespace HSMServer.Core.Tests.Authentication.Sso
             {
                 ["sub"] = Subject,
                 ["nonce"] = _nonce,
-                ["groups"] = provider.Groups,
             };
+
+            if (provider.Groups is not null)
+                claims["groups"] = provider.Groups;
 
             if (provider.Username is not null)
                 claims["preferred_username"] = provider.Username;
@@ -342,7 +370,9 @@ namespace HSMServer.Core.Tests.Authentication.Sso
 
                 if (request.RequestUri.AbsolutePath.EndsWith("/userinfo/"))
                 {
-                    var userInfo = new Dictionary<string, object> { ["sub"] = Subject, ["groups"] = Groups };
+                    var userInfo = new Dictionary<string, object> { ["sub"] = Subject };
+                    if (Groups is not null)
+                        userInfo["groups"] = Groups;
                     if (Username is not null)
                         userInfo["preferred_username"] = Username;
 

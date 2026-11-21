@@ -151,7 +151,8 @@ namespace HSMServer.Authentication.Sso
 
             var groups = external.FindAll(config.GroupsClaim).ToList();
 
-            if (groups.Count == 0)
+            // Present with no values ("groups": []) = in no groups = not a member.
+            if (groups.Count == 0 && !external.HasClaim(c => c.Type == HsmOidcDefaults.GroupsPresentClaim))
             {
                 logger.LogWarning("SSO sign-in of '{Login}': the provider sent no '{Claim}' claim, admin rights are left unchanged.",
                                   login, config.GroupsClaim);

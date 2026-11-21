@@ -284,6 +284,23 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task AdminGroup_EmptyGroupsList_RevokesAdmin()
+        {
+            // "groups": [] — the key is there, the person is in no groups (marker set by the
+            // claim action): that is "not a member", unlike a missing key.
+            var user = AddExisting("ivanov", isAdmin: true);
+            _config.AdminGroup = "hsm-admins";
+
+            var external = new ClaimsPrincipal(new ClaimsIdentity([new Claim("preferred_username", "ivanov"),
+                                                                   new Claim(HsmOidcDefaults.GroupsPresentClaim, "true")], "Oidc"));
+
+            await Service().ResolveUser(external);
+
+            Assert.False(user.IsAdmin);
+            Assert.Equal(false, Assert.Single(_updates).IsAdmin);
+        }
+
+        [Fact]
         public async Task AdminGroup_NoGroupsClaim_CreatesANonAdmin()
         {
             _config.AdminGroup = "hsm-admins";
