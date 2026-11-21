@@ -34,17 +34,30 @@ namespace hsm::agent
         /// Wait until the service reports RUNNING. False on timeout or when it stopped instead.
         virtual bool WaitUntilRunning(unsigned timeout_ms) = 0;
 
-        /// Ask the service to stop and wait up to `timeout_ms` for it to stop.
-        virtual void Stop(unsigned timeout_ms) = 0;
+        /// Ask the service to stop and wait up to `timeout_ms` for it to stop; a process that refuses
+        /// (hung in START_PENDING) is ended. True when the service stopped.
+        virtual bool Stop(unsigned timeout_ms) = 0;
+
+        /// True when the service's configured binary is the file at `exe_path`.
+        virtual bool RunsExe(const std::wstring& exe_path) = 0;
     };
+
+    /// The exe path of a service command line (QUERY_SERVICE_CONFIG lpBinaryPathName): the quoted
+    /// part, or for an unquoted one everything up to and including the first ".exe". Pure.
+    std::wstring ServiceCommandExePath(const std::wstring& command);
+
+    /// True when both paths name the same existing file (same volume and file index).
+    bool SameFile(const std::wstring& a, const std::wstring& b);
 
     /// Log sink of the helper: `error` selects the Event Log type.
     using ApplyLogFn = std::function<void(bool error, const std::string& message)>;
 
     /// The swap itself, on `files` and `service`. Returns 0 when the new binary runs and passed the
-    /// health gate (the attempt record at `state_path` is then removed); non-zero otherwise. Every
-    /// failure after the service stopped ends with the old binary back in place and the service
-    /// started again (several start attempts); only a service that never stopped is left as it is.
+    /// health gate (the attempt record at `state_path` is then removed); non-zero otherwise. Swaps only
+    /// when the service runs `files.exe`. Every failure after the service stopped ends with the old
+    /// binary back in place and the service started again (several start attempts); a service that
+    /// never stopped is left running, and a new binary that cannot be stopped keeps running until the
+    /// next service start (logged).
     int ApplyStagedUpdate(const UpdateFiles& files, ServiceControl& service, const std::filesystem::path& state_path,
                           const ApplyLogFn& log);
 

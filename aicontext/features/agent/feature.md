@@ -235,22 +235,29 @@ Flow per poll:
 
 `--apply-update` (`src/agent/src/apply_update.cpp`, `ApplyStagedUpdate`) is the detached binary-swap
 helper. It works in the folder of its own exe:
+0. Open the service, retrying for about 30 s on a transient SCM error (nothing else could start it again).
 1. Wait up to 60 s for `HSMAgent` to reach `STOPPED` and its process to exit (the old process holds the
    single-instance mutex until it does).
 2. Nothing staged → start the service again, stop here.
-3. Rename dance: `hsm-agent.exe → hsm-agent.old.exe`; `hsm-agent.new.exe → hsm-agent.exe`. A failed
+3. The service's configured binary (`QueryServiceConfigW`, compared by file identity) is not the
+   helper's own exe (e.g. a `--console` run from another folder) → discard the staged file, start the
+   service again, stop here.
+4. Rename dance: `hsm-agent.exe → hsm-agent.old.exe`; `hsm-agent.new.exe → hsm-agent.exe`. A failed
    rename restores the old binary and starts the service again.
-4. `StartService(HSMAgent)` and health gate: wait 30 s for `SERVICE_RUNNING`.
-5. Start or gate failed → stop the new version, roll back (`hsm-agent.old.exe → hsm-agent.exe`, the
-   new binary deleted), start the old version (up to three start attempts, each waiting for RUNNING).
-   If even that fails, the Event Log says to start the service by hand.
-6. Success → remove the attempt record.
+5. `StartService(HSMAgent)` and health gate: wait 30 s for `SERVICE_RUNNING`.
+6. Start or gate failed → stop the new version (a process hung in `START_PENDING` refuses the stop
+   control and is terminated), roll back (`hsm-agent.old.exe → hsm-agent.exe`, the new binary
+   deleted), start the old version (up to three start attempts, each waiting for RUNNING). If even
+   that fails, the Event Log says to start the service by hand. If the new version could not be
+   stopped at all, the files are rolled back and the Event Log says so; no start is claimed.
+7. Success → remove the attempt record.
 
 Whatever fails after the service stopped, the helper ends with the service started (old version);
-only a service that never stopped is left as it is (a start request is a no-op on a running service).
-The steps run against the `ServiceControl` seam (wait stopped / start / wait running / stop), so the
-swap, rollback and restart paths are unit-tested on a temp folder with a fake service
-(`agent_apply_update_*`).
+a service that never stopped is left running (a start request is a no-op on a running service).
+The steps run against the `ServiceControl` seam (wait stopped / start / wait running / stop / runs
+exe), so the swap, rollback and restart paths are unit-tested on a temp folder with a fake service
+(`agent_apply_update_*`). The health gate is still "reached RUNNING once": a new binary that crashes
+after that is not rolled back (pre-existing, not part of #1812).
 
 **Attempt record and backoff (#1812).** `%ProgramData%\HSM Agent\update-state.txt`, three
 `key=value` lines: `version` (target), `attempts`, `last` (Unix seconds). The checker writes it before

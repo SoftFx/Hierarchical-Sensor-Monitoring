@@ -1423,6 +1423,8 @@ namespace
         std::vector<bool> stopped_answers{ true };
         std::vector<bool> start_answers{ true };
         std::vector<bool> running_answers{ true };
+        bool stop_answer = true;
+        bool runs_this_exe = true;
 
         int wait_stopped_calls = 0, start_calls = 0, wait_running_calls = 0, stop_calls = 0;
         std::vector<std::string> started_on; // content of the exe at each Start()
@@ -1434,7 +1436,12 @@ namespace
             return Next(start_answers, start_calls++);
         }
         bool WaitUntilRunning(unsigned) override { return Next(running_answers, wait_running_calls++); }
-        void Stop(unsigned) override { ++stop_calls; }
+        bool Stop(unsigned) override
+        {
+            ++stop_calls;
+            return stop_answer;
+        }
+        bool RunsExe(const std::wstring&) override { return runs_this_exe; }
 
     private:
         static bool Next(const std::vector<bool>& answers, int index)
@@ -1585,6 +1592,60 @@ namespace
             told = told || e.find("start it by hand") != std::string::npos;
         Check(told, "the operator is told to start the service by hand");
     }
+
+    void ApplyUpdateRefusesAnotherFolder()
+    {
+        // A copy of the exe outside the service's folder (a --console run, say) must not swap its own
+        // folder and report the service updated.
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.runs_this_exe = false;
+        Check(fx.Apply(service) != 0, "refused");
+        CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+        Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+        Check(!fx.Has(fx.files.old_exe), "no rename happened");
+        CheckEq(service.start_calls, 1, "the service is started again");
+        Check(fx.RecordKept(), "attempt stays recorded");
+        Check(std::filesystem::exists(fx.state), "the record is not cleared");
+    }
+
+    void ApplyUpdateUnstoppableNewBinaryIsNotReportedAsRolledBack()
+    {
+        // The new binary hangs in START_PENDING and cannot be stopped: the files are rolled back, but
+        // no start is attempted (it would be a no-op on the hung process and claim the old one runs).
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.running_answers = { false };
+        service.stop_answer = false;
+        Check(fx.Apply(service) != 0, "failure reported");
+        CheckEq(service.start_calls, 1, "only the new version was started");
+        CheckEq(fx.Exe(), std::string("old"), "the previous binary is back for the next start");
+        bool told = false;
+        for (const auto& e : fx.errors)
+            told = told || e.find("still running") != std::string::npos;
+        Check(told, "the log says the new version is still running");
+    }
+
+    void ApplyUpdateServiceCommandExePath()
+    {
+        using hsm::agent::ServiceCommandExePath;
+        Check(ServiceCommandExePath(L"\"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe\"") ==
+                  L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe", "quoted");
+        Check(ServiceCommandExePath(L"  \"C:\\A B\\hsm-agent.exe\" --service") == L"C:\\A B\\hsm-agent.exe", "quoted with args");
+        Check(ServiceCommandExePath(L"C:\\A B\\hsm-agent.EXE --service") == L"C:\\A B\\hsm-agent.EXE", "unquoted with spaces");
+        Check(ServiceCommandExePath(L"C:\\x\\agent") == L"C:\\x\\agent", "no .exe: first word");
+        Check(ServiceCommandExePath(L"\"C:\\broken").empty(), "unterminated quote");
+        Check(ServiceCommandExePath(L"   ").empty(), "blank");
+
+        ScratchDir dir("samefile");
+        const auto a = dir.path / "a.exe";
+        const auto b = dir.path / "b.exe";
+        WriteText(a, "x");
+        WriteText(b, "x");
+        Check(hsm::agent::SameFile(a.wstring(), (dir.path / "." / "A.EXE").wstring()), "same file, other spelling");
+        Check(!hsm::agent::SameFile(a.wstring(), b.wstring()), "different files with equal content");
+        Check(!hsm::agent::SameFile(a.wstring(), (dir.path / "missing.exe").wstring()), "missing file");
+    }
 #endif // _WIN32
 
     const std::map<std::string, std::function<void()>>& Tests()
@@ -1630,6 +1691,9 @@ namespace
             { "agent_apply_update_failed_start_rolls_back", ApplyUpdateFailedStartRollsBack },
             { "agent_apply_update_health_gate_rolls_back", ApplyUpdateHealthGateRollsBack },
             { "agent_apply_update_retries_start_after_rollback", ApplyUpdateRetriesStartAfterRollback },
+            { "agent_apply_update_refuses_another_folder", ApplyUpdateRefusesAnotherFolder },
+            { "agent_apply_update_unstoppable_new_binary_is_reported", ApplyUpdateUnstoppableNewBinaryIsNotReportedAsRolledBack },
+            { "agent_apply_update_service_command_exe_path", ApplyUpdateServiceCommandExePath },
 #endif
         };
         return tests;

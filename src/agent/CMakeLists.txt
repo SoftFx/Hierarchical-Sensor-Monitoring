@@ -135,7 +135,10 @@ if(HSM_AGENT_BUILD_TESTS)
                 agent_apply_update_rename_failure_starts_old_binary
                 agent_apply_update_failed_start_rolls_back
                 agent_apply_update_health_gate_rolls_back
-                agent_apply_update_retries_start_after_rollback)
+                agent_apply_update_retries_start_after_rollback
+                agent_apply_update_refuses_another_folder
+                agent_apply_update_unstoppable_new_binary_is_reported
+                agent_apply_update_service_command_exe_path)
             add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
         endforeach()
     endif()

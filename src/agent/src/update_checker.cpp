@@ -417,14 +417,15 @@ namespace hsm::agent
 
     static bool SpawnApplyUpdate(const UpdateChecker::LogFn& log)
     {
-        wchar_t exe_path[MAX_PATH] = {};
-        if (!GetModuleFileNameW(nullptr, exe_path, MAX_PATH))
+        // The same path the staged file was derived from (NewExePath), so the helper works in that folder.
+        const std::wstring exe_path = CurrentExePath();
+        if (exe_path.empty())
         {
             log(kLogError, "update: GetModuleFileName failed");
             return false;
         }
 
-        std::wstring cmd_line = std::wstring(L"\"") + exe_path + L"\" --apply-update";
+        std::wstring cmd_line = L"\"" + exe_path + L"\" --apply-update";
         STARTUPINFOW si = {};
         si.cb = sizeof(si);
         PROCESS_INFORMATION pi = {};
@@ -550,8 +551,8 @@ namespace hsm::agent
 
         // Never ignore certificate errors on the update channel (epic #1174): the checker does not run
         // at all for an agent that accepts an untrusted server certificate (SelfUpdateGateFor).
-        constexpr bool kValidateCertificate = false; // allow_untrusted = false
-        WinHttpSession sess(url.host, url.port, url.https, kValidateCertificate);
+        constexpr bool kAllowUntrustedCertificate = false;
+        WinHttpSession sess(url.host, url.port, url.https, kAllowUntrustedCertificate);
         if (!sess.Valid())
         {
             log_(kLogWarn, "update: WinHttp session failed");
