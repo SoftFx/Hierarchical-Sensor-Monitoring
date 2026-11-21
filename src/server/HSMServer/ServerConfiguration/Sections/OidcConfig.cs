@@ -92,7 +92,14 @@ namespace HSMServer.ServerConfiguration
                 var value = section[property.Name];
 
                 if (value is null)
+                {
+                    // An array or object where a scalar belongs ("Scopes": ["openid", ...]):
+                    // reported instead of silently replaced by the default on the resave.
+                    if (section.GetSection(property.Name).GetChildren().Any())
+                        config._bindErrors.Add($"{SectionName}.{property.Name} must be a single value, not a list or an object " +
+                                               $"(e.g. {property.GetValue(config) ?? "text"}); the default is used.");
                     continue;
+                }
 
                 try
                 {

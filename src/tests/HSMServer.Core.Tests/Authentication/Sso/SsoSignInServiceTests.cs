@@ -232,6 +232,56 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task AdminGroup_NoGroupsClaimAtAll_LeavesAdminUnchanged()
+        {
+            // A missing claim (scope not granted, mapping changed) is not "not a member":
+            // revoking here would strip every admin one sign-in at a time.
+            var user = AddExisting("ivanov", isAdmin: true);
+            _config.AdminGroup = "hsm-admins";
+
+            var result = await Service().ResolveUser(External("ivanov"));
+
+            Assert.True(result.Succeeded);
+            Assert.True(user.IsAdmin);
+            Assert.Empty(_updates);
+        }
+
+        [Fact]
+        public async Task AdminGroup_NoGroupsClaim_CreatesANonAdmin()
+        {
+            _config.AdminGroup = "hsm-admins";
+
+            await Service().ResolveUser(External("petrov"));
+
+            Assert.False(Assert.Single(_added).IsAdmin);
+        }
+
+        [Theory]
+        [InlineData("ivan ov")]
+        [InlineData("ivan/ov")]
+        [InlineData("иванов")]
+        [InlineData("a234567890123456789012345678901234567890123456789012345678901234x")]   // 65 characters
+        public async Task LoginOutsideTheUserFormRules_IsRejected(string username)
+        {
+            var result = await Service().ResolveUser(External(username));
+
+            Assert.Equal(SsoSignInError.InvalidUsername, result.Error);
+            Assert.Empty(_added);
+        }
+
+        [Theory]
+        [InlineData("ivanov")]
+        [InlineData("i.ivanov@example.test")]
+        [InlineData("ivan_ov-2+x")]
+        [InlineData("a23456789012345678901234567890123456789012345678901234567890123x")]    // 64 characters
+        public async Task LoginWithinTheUserFormRules_IsAccepted(string username)
+        {
+            var result = await Service().ResolveUser(External(username));
+
+            Assert.True(result.Succeeded);
+        }
+
+        [Fact]
         public async Task AdminGroup_ComparesNamesIgnoringCase()
         {
             var user = AddExisting("ivanov");

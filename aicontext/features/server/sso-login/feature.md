@@ -7,7 +7,7 @@
 
 ## Overview
 
-The web UI can sign people in through an external OpenID Connect provider (the company's Authentik at `https://sso.soft-fx.net` is the first one; nothing in code is Authentik-specific). It is **off by default**: without an enabled, complete `Oidc` section the server registers no OIDC scheme, the login page has no SSO button, and `/Account/Sso` answers 404 — the same behavior as before #1782.
+The web UI can sign people in through an external OpenID Connect provider (Authentik is the first one; nothing in code is Authentik-specific). It is **off by default**: without an enabled, complete `Oidc` section the server registers no OIDC scheme, the login page has no SSO button, and `/Account/Sso` answers 404 — the same behavior as before #1782.
 
 When on, the login page shows **Sign in with &lt;DisplayName&gt;** above the unchanged password form. Password login always stays available as the fallback.
 
@@ -15,11 +15,12 @@ When on, the login page shows **Sign in with &lt;DisplayName&gt;** above the unc
 
 1. **Identity mapping.** The value of the claim `Oidc.UsernameClaim` (default `preferred_username`) is the HSM login, compared exactly (case-sensitive, like password login) after trimming. The provider's `sub` is not stored; the storage format did not change. Renaming a person at the provider therefore means a different HSM user. **Trust assumption:** a provider account signs into the existing HSM user of the same login, password users included, so the provider must not let people choose or change their own username (Authentik: System → Settings → "Allow users to change username" stays off, the default). The one exception is the built-in admin `default` (created with password `default` on a fresh database): SSO never signs it in or creates it (`ReservedUsername`).
 2. **Auto-create.** A login with no HSM user is created on its first SSO sign-in when `Oidc.AutoCreateUsers` is true (default): no password, no product or folder roles, not admin unless rule 3 says so. It sees an empty tree until an admin grants roles. A user without a password cannot use password login (`UserManager.TryAuthenticate` rejects an empty hash) until an admin sets one. With `AutoCreateUsers` false an unknown login is rejected with a message on the login page.
-3. **Admin from a group.** When `Oidc.AdminGroup` is set, every SSO sign-in sets `IsAdmin` to membership in that group (claim `Oidc.GroupsClaim`, default `groups`; group names compared ignoring case) — it grants and it revokes. Empty `AdminGroup`: SSO never touches `IsAdmin`. Password sign-ins never touch it. Product and folder roles (Viewer/Manager) are always HSM's own and are granted in the UI.
-4. **Who may sign in** is decided at the provider (policy binding of the application, e.g. to a group). HSM has no group gate of its own.
+3. **Admin from a group.** When `Oidc.AdminGroup` is set, every SSO sign-in sets `IsAdmin` to membership in that group (claim `Oidc.GroupsClaim`, default `groups`; group names compared ignoring case) — it grants and it revokes. A token with **no** groups claim at all leaves `IsAdmin` unchanged (warning in the log): a missing claim is not "not a member". Empty `AdminGroup`: SSO never touches `IsAdmin`. Password sign-ins never touch it. Product and folder roles (Viewer/Manager) are always HSM's own and are granted in the UI.
+4. **Who may sign in** is decided at the provider (policy binding of the application, e.g. to a group). HSM has no group gate of its own. While SSO is on, anonymous self-registration (`/Account/Registration`, `/Account/Registrate`) answers 404 and its link is hidden: otherwise an outsider could create the login of a future SSO user first, with a password of their own. Admins still create users on the Users page.
+4a. **Login rules.** An SSO login must follow the rules of the user forms — at most 64 characters of `a-z A-Z 0-9 . _ @ + -` — or the sign-in is rejected (`InvalidUsername`).
 5. **Session lifetime.** An SSO sign-in issues the same auth cookie as a password sign-in (one name claim, resolved into the stored user per request), persistent, with an **absolute** lifetime `Oidc.SessionLifetime` (default 12h, allowed 5 min…30 days) and no sliding renewal (`AllowRefresh = false`). When it ends, the person goes through the provider again (usually without typing a password), which also re-applies rule 3. Deleting the HSM user ends the session at once (cookie validation finds no user). The provider's tokens are not kept.
 6. **Logout** is local: the HSM cookie is removed; the provider session (shared with Grafana and the log servers) stays.
-7. **Failures** return to the login page with `?ssoError=<code>` and a fixed message: `MissingUsername`, `ReservedUsername`, `UnknownUser`, `CreateFailed`, `ProviderFailure` (the provider answered with an error, or the callback failed validation), `ProviderUnavailable` (the discovery document could not be fetched when the sign-in started). Nothing is signed in.
+7. **Failures** return to the login page with `?ssoError=<code>` and a fixed message: `MissingUsername`, `ReservedUsername`, `InvalidUsername`, `UnknownUser`, `CreateFailed` (also a storage error while creating or updating the user), `ProviderFailure` (the provider answered with an error, or the callback failed validation), `ProviderUnavailable` (the challenge could not start, typically the discovery document is unreachable; the exception is logged). Nothing is signed in.
 8. **Logout is local only, also at the protocol level:** the handler's front-channel sign-out endpoint (`/signout-oidc`) is switched off, otherwise any site could clear the HSM cookie with a GET.
 
 ## Configuration
@@ -29,7 +30,7 @@ The `Oidc` section of `Config/appsettings.json` (written with defaults by the st
 | Key | Default | Meaning |
 |---|---|---|
 | `Enabled` | `false` | Turns SSO on. |
-| `Authority` | — | Issuer URL, absolute `https`. Discovery: `<Authority>/.well-known/openid-configuration`. Authentik: `https://sso.soft-fx.net/application/o/<application slug>/`. |
+| `Authority` | — | Issuer URL, absolute `https`. Discovery: `<Authority>/.well-known/openid-configuration`. Authentik: `https://<authentik host>/application/o/<application slug>/`. |
 | `ClientId` | — | Client ID of the HSM application at the provider. |
 | `Scopes` | `openid profile` | Space-separated; must contain `openid`. |
 | `UsernameClaim` | `preferred_username` | Claim holding the HSM login. |
@@ -41,7 +42,7 @@ The `Oidc` section of `Config/appsettings.json` (written with defaults by the st
 
 **Client secret — environment only:** `Oidc__ClientSecret` (compose passes `HSM_OIDC_CLIENT_SECRET` from `.env`). `ServerConfig` rewrites the settings file on every start and the file is registered after the environment provider, so the secret is `[JsonIgnore]` and read with `OidcConfig.ReadClientSecret` from the environment, the same discipline as `Kestrel.TrustedProxies`. A secret found in the file is ignored, removed by the same start's resave and reported at `Error` level **without its value**.
 
-**Invalid section = SSO off, server up.** The section is bound key by key (`OidcConfig.Bind`), so a value of the wrong type (`"SessionLifetime": "12h"`, `"Enabled": "yes"`) keeps its default, is reported, and switches SSO off instead of failing startup; the valid values survive the resave. `OidcConfig.Validate` does not throw either: an enabled section with a missing secret, a non-https authority, scopes without `openid`, an empty client ID or username claim, `AdminGroup` without `GroupsClaim`, or a lifetime out of range logs one `Error` line listing every problem and leaves SSO off; password login keeps working. A valid section logs `SSO sign-in is ON: provider …, client …`.
+**Invalid section = SSO off, server up.** The section is bound key by key (`OidcConfig.Bind`), so a value of the wrong type (`"SessionLifetime": "12h"`, `"Enabled": "yes"`, a list where one value belongs) keeps its default, is reported, and switches SSO off instead of failing startup; the valid values survive the resave. `OidcConfig.Validate` does not throw either: an enabled section with a missing secret, a non-https authority, scopes without `openid`, an empty client ID or username claim, `AdminGroup` without `GroupsClaim`, or a lifetime out of range logs one `Error` line listing every problem and leaves SSO off; password login keeps working. A valid section logs `SSO sign-in is ON: provider …, client …`.
 
 ## Provider Setup (Authentik)
 

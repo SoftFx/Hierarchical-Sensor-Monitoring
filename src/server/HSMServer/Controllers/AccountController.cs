@@ -74,7 +74,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogError(ex, "SSO sign-in could not start: the identity provider at {Authority} is unavailable.", _oidc.Authority);
+                _logger.LogError(ex, "SSO sign-in could not start (provider {Authority}).", _oidc.Authority);
 
                 return Redirect(HsmOidcDefaults.LoginErrorPath(SsoSignInError.ProviderUnavailable));
             }
@@ -108,6 +108,9 @@ namespace HSMServer.Controllers
         public IActionResult Registration([FromQuery(Name = "Cipher")] string cipher,
             [FromQuery(Name = "Tag")] string tag, [FromQuery(Name = "Nonce")] string nonce)
         {
+            if (_oidc.IsActive)
+                return NotFound();
+
             var model = new RegistrationViewModel();
 
             //if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
@@ -146,6 +149,12 @@ namespace HSMServer.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
+            // With SSO on, anonymous self-registration is off (#1782): an outsider could
+            // otherwise create the login of a future SSO user first, with a password of their
+            // own, and inherit everything SSO later grants it (AdminGroup included).
+            if (_oidc.IsActive)
+                return NotFound();
+
             RegistrationValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)

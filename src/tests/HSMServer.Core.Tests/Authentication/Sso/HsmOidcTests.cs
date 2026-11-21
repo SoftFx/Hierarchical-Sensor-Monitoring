@@ -168,6 +168,40 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public async Task TicketReceived_StorageFailure_ReturnsToTheLoginPage()
+        {
+            var signIn = new Mock<ISsoSignInService>();
+            signIn.Setup(s => s.ResolveUser(It.IsAny<ClaimsPrincipal>())).ThrowsAsync(new System.IO.IOException("disk full"));
+
+            var events = new HsmOidcEvents(signIn.Object, Active(), NullLogger<HsmOidcEvents>.Instance, new FixedTime());
+            var ticket = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity("Oidc")), HsmOidcDefaults.AuthenticationScheme);
+            var context = new TicketReceivedContext(new DefaultHttpContext(), Scheme(), new OpenIdConnectOptions(), ticket);
+
+            await events.TicketReceived(context);
+
+            Assert.True(context.Result.Handled);
+            Assert.Equal("/Account/Index?ssoError=CreateFailed", context.Response.Headers.Location.ToString());
+        }
+
+        [Fact]
+        public async Task SelfRegistration_IsOff_WhileSsoIsOn()
+        {
+            var controller = Controller(Active());
+
+            Assert.IsType<NotFoundResult>(controller.Registration(null, null, null));
+            Assert.IsType<NotFoundResult>(await controller.Registrate(new RegistrationViewModel { Username = "alice", Password = "password1", SecondPassword = "password1" }));
+        }
+
+        [Fact]
+        public void SelfRegistration_IsUnchanged_WhileSsoIsOff()
+        {
+            var off = new OidcConfig();
+            off.Validate();
+
+            Assert.IsType<ViewResult>(Controller(off).Registration(null, null, null));
+        }
+
+        [Fact]
         public async Task RemoteFailure_ReturnsToTheLoginPage()
         {
             var config = Active();
@@ -235,7 +269,7 @@ namespace HSMServer.Core.Tests.Authentication.Sso
             var result = Assert.IsType<RedirectResult>(await Controller(Active(), authentication.Object).Sso());
 
             Assert.Equal("/Account/Index?ssoError=ProviderUnavailable", result.Url);
-            Assert.Contains("cannot be reached", HsmOidcDefaults.Describe(SsoSignInError.ProviderUnavailable));
+            Assert.Contains("may be unreachable", HsmOidcDefaults.Describe(SsoSignInError.ProviderUnavailable));
         }
 
 

@@ -32,11 +32,12 @@ namespace HSMServer.Authentication.Sso
         public static string Describe(SsoSignInError error) => error switch
         {
             SsoSignInError.MissingUsername => "SSO sign-in failed: the identity provider did not send a username.",
+            SsoSignInError.InvalidUsername => "SSO sign-in failed: your username is not a valid HSM login (at most 64 characters: letters, digits and . _ @ + -).",
             SsoSignInError.ReservedUsername => "SSO sign-in failed: this username is reserved for the built-in administrator.",
             SsoSignInError.UnknownUser => "SSO sign-in failed: there is no HSM user with your username. Ask an administrator to create it.",
             SsoSignInError.CreateFailed => "SSO sign-in failed: the HSM user could not be created.",
             SsoSignInError.ProviderFailure => "SSO sign-in failed: the identity provider did not complete the sign-in.",
-            SsoSignInError.ProviderUnavailable => "SSO sign-in is unavailable: the identity provider cannot be reached. Sign in with a password.",
+            SsoSignInError.ProviderUnavailable => "SSO sign-in could not start: the identity provider may be unreachable. Sign in with a password.",
             _ => null,
         };
     }
@@ -57,7 +58,19 @@ namespace HSMServer.Authentication.Sso
     {
         public override async Task TicketReceived(TicketReceivedContext context)
         {
-            var result = await signIn.ResolveUser(context.Principal);
+            SsoSignInResult result;
+
+            try
+            {
+                result = await signIn.ResolveUser(context.Principal);
+            }
+            catch (Exception ex)
+            {
+                // A storage failure while creating or updating the user: back to the login
+                // page, not to the error page (the remote handler does not catch here).
+                logger.LogError(ex, "SSO sign-in failed while resolving the HSM user.");
+                result = SsoSignInResult.Fail(SsoSignInError.CreateFailed);
+            }
 
             if (!result.Succeeded)
             {

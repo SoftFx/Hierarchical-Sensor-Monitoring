@@ -1,9 +1,11 @@
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Validators;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace HSMServer.Authentication.Sso
@@ -15,6 +17,8 @@ namespace HSMServer.Authentication.Sso
         MissingUsername,
         // The username is the built-in "default" admin, which SSO never signs in.
         ReservedUsername,
+        // The username breaks the rules every HSM login follows (length, characters).
+        InvalidUsername,
         // No HSM user has that login and Oidc.AutoCreateUsers is off.
         UnknownUser,
         // Creating the user failed (storage refused it).
@@ -45,6 +49,11 @@ namespace HSMServer.Authentication.Sso
     // handler so they can be tested without a provider.
     public sealed class SsoSignInService(IUserManager userManager, OidcConfig config, ILogger<SsoSignInService> logger) : ISsoSignInService
     {
+        // The rules of the user forms (BaseUserValidator), applied to the whole login.
+        private const int MaxUsernameLength = BaseUserValidator<object>.MaxUsernameLength;
+        private const string AllowedCharacters = "a-z A-Z 0-9 . _ @ + -";
+        private static readonly Regex UsernamePattern = new(@"^[a-zA-Z0-9._@+-]+$", RegexOptions.Compiled);
+
         public async Task<SsoSignInResult> ResolveUser(ClaimsPrincipal external)
         {
             var login = external?.FindFirst(config.UsernameClaim)?.Value?.Trim();
@@ -63,7 +72,14 @@ namespace HSMServer.Authentication.Sso
                 return SsoSignInResult.Fail(SsoSignInError.ReservedUsername);
             }
 
-            bool? isAdmin = string.IsNullOrWhiteSpace(config.AdminGroup) ? null : IsInGroup(external, config.AdminGroup.Trim());
+            if (login.Length > MaxUsernameLength || !UsernamePattern.IsMatch(login))
+            {
+                logger.LogWarning("SSO sign-in rejected: '{Login}' is not a valid HSM login (at most {Max} characters of {Allowed}).",
+                                  login, MaxUsernameLength, AllowedCharacters);
+                return SsoSignInResult.Fail(SsoSignInError.InvalidUsername);
+            }
+
+            var isAdmin = AdminFromGroups(external, login);
 
             var user = userManager[login];
 
@@ -111,9 +127,28 @@ namespace HSMServer.Authentication.Sso
                 logger.LogError("SSO sign-in could not {Change} admin rights of '{Login}'.", admin ? "grant" : "revoke", user.Name);
         }
 
+        // Null = leave IsAdmin as stored: AdminGroup is not set, or the provider sent no groups
+        // claim at all (scope not granted, mapping changed, userinfo failed). A missing claim
+        // is not the same as "not a member" and must not revoke every admin one by one.
         // Group names compare case-insensitively: the provider owns them, and a case slip in
-        // the HSM setting should not silently revoke every admin.
-        private bool IsInGroup(ClaimsPrincipal external, string group) =>
-            external.FindAll(config.GroupsClaim).Any(claim => string.Equals(claim.Value?.Trim(), group, StringComparison.OrdinalIgnoreCase));
+        // the HSM setting should not silently revoke every admin either.
+        private bool? AdminFromGroups(ClaimsPrincipal external, string login)
+        {
+            if (string.IsNullOrWhiteSpace(config.AdminGroup))
+                return null;
+
+            var groups = external.FindAll(config.GroupsClaim).ToList();
+
+            if (groups.Count == 0)
+            {
+                logger.LogWarning("SSO sign-in of '{Login}': the provider sent no '{Claim}' claim, admin rights are left unchanged.",
+                                  login, config.GroupsClaim);
+                return null;
+            }
+
+            var group = config.AdminGroup.Trim();
+
+            return groups.Any(claim => string.Equals(claim.Value?.Trim(), group, StringComparison.OrdinalIgnoreCase));
+        }
     }
 }

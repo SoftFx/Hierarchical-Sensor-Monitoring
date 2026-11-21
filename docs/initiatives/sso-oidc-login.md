@@ -6,7 +6,7 @@ Issue: #1782. Feature doc: `aicontext/features/server/sso-login/feature.md`.
 
 ## Problem
 
-The HSM web UI has only its own users and passwords. The company identity provider (Authentik at `https://sso.soft-fx.net`) already signs people into Grafana (OIDC) and the VictoriaLogs servers (forward auth). HSM is the odd one out: separate passwords, manual account creation, and no central off-boarding.
+The HSM web UI has only its own users and passwords. The company identity provider (Authentik) already signs people into Grafana (OIDC) and the VictoriaLogs servers (forward auth). HSM is the odd one out: separate passwords, manual account creation, and no central off-boarding.
 
 ## Goals
 

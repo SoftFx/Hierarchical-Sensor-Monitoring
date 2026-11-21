@@ -205,6 +205,17 @@ namespace HSMServer.Core.Tests.Authentication.Sso
         }
 
         [Fact]
+        public void Bind_ListWhereOneValueBelongs_IsReported()
+        {
+            // Without the error the default would replace the operator's list on the resave,
+            // silently dropping e.g. a "groups" scope.
+            var config = Bind("""{ "Oidc": { "Enabled": true, "Scopes": ["openid", "profile", "groups"] } }""");
+
+            Assert.Contains(config.Validate(), error => error.Contains("Oidc.Scopes must be a single value"));
+            Assert.False(config.IsActive);
+        }
+
+        [Fact]
         public void Bind_MissingSection_IsTheDefault()
         {
             var config = Bind("{}");

@@ -146,7 +146,7 @@ Optional and off by default; the full rules are in `aicontext/features/server/ss
 
 1. Create the provider side (Authentik: OAuth2/OpenID provider + application, confidential client, redirect URI `https://<HSM_DOMAIN>/signin-oidc`).
 2. Put the client secret into `.env` as `HSM_OIDC_CLIENT_SECRET=...`. Both compose files pass it to `app` as `Oidc__ClientSecret`; empty means unused. The server reads the secret **from the environment only** and never writes it to `Config/appsettings.json` (a copy in the file is ignored, removed by the next start's resave and reported at `Error` level without its value). A non-Docker install sets `Oidc__ClientSecret` for the service.
-3. In `Config/appsettings.json`, section `Oidc`: `Enabled: true`, `Authority` (Authentik: `https://sso.soft-fx.net/application/o/<slug>/`), `ClientId`, optionally `AdminGroup`, `DisplayName`, `SessionLifetime`.
+3. In `Config/appsettings.json`, section `Oidc`: `Enabled: true`, `Authority` (Authentik: `https://<authentik host>/application/o/<slug>/`), `ClientId`, optionally `AdminGroup`, `DisplayName`, `SessionLifetime`.
 4. Recreate `app` (`docker compose up -d`) so the new environment applies. The start logs `SSO sign-in is ON: ...`, or one `Error` line saying why it stays OFF. An incomplete section never stops the server; password login keeps working.
 
 ## TLS
