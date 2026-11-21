@@ -196,10 +196,16 @@ namespace HSMServer.Controllers
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
+        // The user administration posts are admin-only like the Users page that calls them
+        // (#1782 review): with only the controller's [Authorize], any signed-in user (and
+        // with SSO on, every auto-created one) could make itself admin, set another user's
+        // password or delete users.
         [HttpPost]
+        [AuthorizeIsAdmin]
         public Task RemoveUser(Guid id) => _userManager.TryRemove(new(id, CurrentInitiator));
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public async Task CreateUser([FromBody] UserViewModel model)
         {
             NewUserValidator validator = new(_userManager);
@@ -212,6 +218,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
             var validator = new EditUserValidator();
