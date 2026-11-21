@@ -680,7 +680,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public async Task PreviousPath_IsNotMerged_IntoASensorThatWasLiveInTheSamePeriod(bool aggregated)
         {
             var root = Unique();
-            var start = DateTime.UtcNow.AddHours(-2);
+            var start = StorageWeekTestTime.WithinOneWeek(DateTime.UtcNow.AddHours(-2), TimeSpan.Zero, TimeSpan.FromMinutes(15));
             var old = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/old", (start, 1));
             var live = await CreateAsync(_fixture.ProductA, _fixture.KeyA, $"{root}/new", (start.AddMinutes(5), 1));
 

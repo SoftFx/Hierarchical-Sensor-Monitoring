@@ -264,7 +264,16 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             _inner.RemoveSensorWithMetadata(sensorId);
         }
-        public void AddSensorValue(Guid sensorId, BaseValue value) => _inner.AddSensorValue(sensorId, value);
+        // Set to observe every history write before it reaches the database. The
+        // cache folds into a value it already wrote, in place, so an observer that
+        // keeps the instance sees later folds: copy what it needs at the call.
+        internal Action<Guid, BaseValue> OnAddSensorValue { get; set; }
+
+        public void AddSensorValue(Guid sensorId, BaseValue value)
+        {
+            OnAddSensorValue?.Invoke(sensorId, value);
+            _inner.AddSensorValue(sensorId, value);
+        }
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
 
         // Sensor-move merge (#1720): set to make the history copy throw, as a
