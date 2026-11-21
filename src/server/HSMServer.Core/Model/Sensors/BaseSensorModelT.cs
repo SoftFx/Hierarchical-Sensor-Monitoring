@@ -136,7 +136,9 @@ namespace HSMServer.Core.Model
                 // equal-content older value folds into the cached newest value instead of
                 // becoming its own row. For a non-foldable older value, TryAggregateValue's
                 // internal AddValue drops it on the ordering guard — harmless, the direct
-                // write below is what persists it.
+                // write below is what persists it. Only within one storage week: an equal
+                // value from another week than the cached value's is not foldable, so a
+                // newer one starts a new row and an older one is written to its own week.
                 bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
 
                 if (!isNewValue)

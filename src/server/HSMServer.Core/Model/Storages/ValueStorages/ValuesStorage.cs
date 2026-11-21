@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Extensions;
 using HSMCommon.Model;
+using HSMDatabase.AccessManager;
 using HSMServer.Core.Extensions;
 
 
@@ -156,9 +157,14 @@ namespace HSMServer.Core.Model
             return false;
         }
 
+        // A folded run ends at the storage-week boundary: the value is folded into the last
+        // value only when both fall in the same week. The last value's row is re-saved under
+        // its own key time after every fold, so a run that crossed weeks would keep rewriting
+        // a week that has ended (and, on an upgraded server, one that began months ago).
+        // Across the boundary the value starts a new row, as a value that differs would.
         internal bool TryAggregateValue(T value)
         {
-            if (IsLastEmptyOrTimeout || !LastValue.TryAggregateValue(value))
+            if (IsLastEmptyOrTimeout || !StorageWeek.IsSame(LastValue.Time, value.Time) || !LastValue.TryAggregateValue(value))
             {
                 AddValue(value);
                 return false;

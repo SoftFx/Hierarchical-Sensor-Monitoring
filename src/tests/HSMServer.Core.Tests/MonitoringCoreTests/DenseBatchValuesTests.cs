@@ -12,6 +12,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using Xunit;
@@ -336,7 +337,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             // (no row of its own); only a non-foldable older value takes the
             // out-of-order direct write.
             var path = "denseBatch/aggregate";
-            var baseTime = DateTime.UtcNow.AddMinutes(-10);
+            var baseTime = StorageWeekTestTime.WithinOneWeek(DateTime.UtcNow.AddMinutes(-10), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1));
 
             var seed = new SensorValueBase[]
             {
@@ -387,7 +388,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             // row. Both are now probed, skipped and counted; a late value
             // outside any span keeps being stored directly.
             var path = "denseBatch/aggregateSpan";
-            var t0 = DateTime.UtcNow.AddMinutes(-30);
+            var t0 = StorageWeekTestTime.WithinOneWeek(DateTime.UtcNow.AddMinutes(-30), TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(11));
             var t1 = t0.AddMinutes(1);
             var t2 = t0.AddMinutes(2);
             var tMid = t0.AddSeconds(90); // strictly inside (t1, t2)

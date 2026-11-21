@@ -1,22 +1,18 @@
 ﻿using System;
+using HSMDatabase.AccessManager;
 
 namespace HSMDatabase
 {
     public static class DateTimeMethods
     {
-        public static DateTime GetStartOfWeek(DateTime dateTime)
-        {
-            int diff = dateTime.DayOfWeek - DayOfWeek.Monday;
-            if (diff < 0) diff += 7;
-
-            return dateTime.AddDays(-diff).Date;
-        }
+        // The week formula lives in StorageWeek, where HSMServer.Core can reach it too.
+        public static DateTime GetStartOfWeek(DateTime dateTime) => StorageWeek.GetStart(dateTime);
 
         public static DateTime GetEndOfWeek(DateTime dateTime) =>
             GetStartOfWeek(dateTime).AddDays(7);
 
         public static long GetStartOfWeekTicks(long ticks) =>
-            GetStartOfWeek(new DateTime(ticks)).Ticks;
+            StorageWeek.GetStartTicks(ticks);
 
         public static long GetEndOfWeekTicks(long ticks) =>
             GetEndOfWeek(new DateTime(ticks)).Ticks;
