@@ -1,14 +1,18 @@
-// HSM Agent — background self-update checker (epic #1174).
+// HSM Agent — background self-update checker (epic #1174, #1812).
 //
 // Flow per poll:
 //   1. GET /api/agent/version  → { version, sha256, updateEnabled }
 //   2. Compare with HSM_AGENT_VERSION (compile-time constant).
-//   3. If server version > current AND updateEnabled: download exe with Key auth,
-//      verify SHA-256, write to hsm-agent.new.exe, spawn --apply-update, RequestStop.
+//   3. If server version > current (and the server did not answer updateEnabled:false, which only
+//      servers before #1812 can), and no failed attempt of that version is still backing off
+//      (update_state.hpp): download exe with Key auth, verify SHA-256, write hsm-agent.new.exe next
+//      to the running exe, record the attempt, spawn --apply-update, RequestStop.
 //
-// HTTP: WinHTTP (built into Windows, no extra dep). TLS enforced; allow_untrusted_certificate
-// mirrors the sensor-data setting so a self-signed server works in eval setups.
-// SHA-256: Windows BCrypt (CNG).
+// The only switch is the local config: update.enabled. An agent with
+// server.allowUntrustedCertificate=true does not run this checker at all (SelfUpdateGateFor): the
+// update channel always validates the server certificate and never sets SECURITY_FLAG_IGNORE_*.
+//
+// HTTP: WinHTTP (built into Windows, no extra dep). SHA-256: Windows BCrypt (CNG).
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
@@ -23,8 +27,10 @@
 
 #include "agent/update_checker.hpp"
 #include "agent/paths.hpp"
+#include "agent/update_state.hpp"
 
 #include <array>
+#include <ctime>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -459,8 +465,14 @@ namespace hsm::agent
 
     void UpdateChecker::Start()
     {
-        if (!config_.update_enabled)
+        const SelfUpdateGate gate = SelfUpdateGateFor(config_);
+        if (gate != SelfUpdateGate::Enabled)
+        {
+            const std::string why = SelfUpdateGateMessage(gate);
+            if (!why.empty())
+                log_(kLogInfo, why); // once per service start
             return;
+        }
         if (stop_event_ == nullptr)
             return;
         ResetEvent(static_cast<HANDLE>(stop_event_));
@@ -488,7 +500,7 @@ namespace hsm::agent
 
     void UpdateChecker::Run()
     {
-        if (!config_.update_enabled)
+        if (SelfUpdateGateFor(config_) != SelfUpdateGate::Enabled)
             return;
 
         const DWORD period_ms = static_cast<DWORD>(config_.update_check_period_hours) * 3600000UL;
@@ -536,7 +548,10 @@ namespace hsm::agent
             return false;
         }
 
-        WinHttpSession sess(url.host, url.port, url.https, config_.allow_untrusted_certificate);
+        // Never ignore certificate errors on the update channel (epic #1174): the checker does not run
+        // at all for an agent that accepts an untrusted server certificate (SelfUpdateGateFor).
+        constexpr bool kValidateCertificate = false; // allow_untrusted = false
+        WinHttpSession sess(url.host, url.port, url.https, kValidateCertificate);
         if (!sess.Valid())
         {
             log_(kLogWarn, "update: WinHttp session failed");
@@ -555,10 +570,17 @@ namespace hsm::agent
         std::string manifest(manifest_body.begin(), manifest_body.end());
 
         std::string remote_version_str, remote_sha256;
-        bool update_enabled = false;
         if (!ExtractJsonString(manifest, "version", remote_version_str) ||
-            !ExtractJsonString(manifest, "sha256", remote_sha256) ||
-            !ExtractJsonBool(manifest, "updateEnabled", update_enabled))
+            !ExtractJsonString(manifest, "sha256", remote_sha256))
+        {
+            log_(kLogWarn, "update: cannot parse version manifest");
+            return false;
+        }
+
+        // Servers since #1812 always answer true (the client's update.enabled is the only switch);
+        // an older server may still answer false from its retired AutoUpdateEnabled setting.
+        bool update_enabled = true;
+        if (manifest.find("\"updateEnabled\"") != std::string::npos && !ExtractJsonBool(manifest, "updateEnabled", update_enabled))
         {
             log_(kLogWarn, "update: cannot parse version manifest");
             return false;
@@ -566,7 +588,7 @@ namespace hsm::agent
 
         if (!update_enabled)
         {
-            log_(kLogInfo, "update: server has auto-update disabled");
+            log_(kLogInfo, "update: this server does not offer updates (updateEnabled: false)");
             return false;
         }
 
@@ -575,6 +597,24 @@ namespace hsm::agent
         if (!IsNewer(remote, current))
         {
             log_(kLogInfo, "update: already up to date (" HSM_AGENT_VERSION ")");
+            return false;
+        }
+
+        // A version that failed to apply backs off across restarts (#1812): the record outlives the
+        // in-memory directive debounce. Said once per recorded attempt, not on every check.
+        const std::wstring state_path = UpdateStatePath();
+        const UpdateAttemptRecord record = LoadUpdateAttemptRecord(state_path);
+        const std::int64_t now_unix = static_cast<std::int64_t>(std::time(nullptr));
+        if (!UpdateAttemptDue(record, remote_version_str, now_unix))
+        {
+            const std::string notice = FormatUpdateAttemptRecord(record);
+            if (notice != backoff_noticed_)
+            {
+                backoff_noticed_ = notice;
+                const std::int64_t wait_left = record.last_unix + UpdateBackoffSeconds(record.attempts) - now_unix;
+                log_(kLogInfo, "update: " + remote_version_str + " did not apply (" + std::to_string(record.attempts) +
+                                   " attempt(s)); next attempt in about " + std::to_string((wait_left + 59) / 60) + " min");
+            }
             return false;
         }
 
@@ -592,8 +632,13 @@ namespace hsm::agent
             return false;
         }
 
-        // Step 3: write to hsm-agent.new.exe.
+        // Step 3: write to hsm-agent.new.exe next to the running exe (the folder --apply-update swaps in).
         const std::wstring new_path = NewExePath();
+        if (new_path.empty())
+        {
+            log_(kLogError, "update: cannot resolve the install directory of the running exe");
+            return false;
+        }
         {
             HANDLE hf = CreateFileW(new_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
             if (hf == INVALID_HANDLE_VALUE)
@@ -632,16 +677,23 @@ namespace hsm::agent
 
         log_(kLogInfo, "update: SHA-256 verified, staging update");
 
-        // Step 5: spawn --apply-update, then request stop of the current service run.
-        if (!SpawnApplyUpdate(log_))
+        // Step 5: record the attempt, spawn --apply-update, then request stop of the current service
+        // run. HandOffStagedUpdate stops nothing unless all three hold.
+        std::string handoff_error;
+        const bool handed_off = HandOffStagedUpdate(
+            std::filesystem::path(new_path), std::filesystem::path(state_path), remote_version_str, now_unix,
+            [this] { return SpawnApplyUpdate(log_); },
+            [this] {
+                log_(kLogInfo, "update: requesting service stop for restart");
+                if (request_stop_)
+                    request_stop_();
+            },
+            handoff_error);
+        if (!handed_off)
         {
-            DeleteFileW(new_path.c_str());
+            log_(kLogError, handoff_error);
             return false;
         }
-
-        log_(kLogInfo, "update: requesting service stop for restart");
-        if (request_stop_)
-            request_stop_();
 
         return true;
     }

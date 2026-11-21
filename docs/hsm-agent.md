@@ -68,7 +68,7 @@ are required; everything else has a default.
 | `server.address` | — (required) | HSM Sensor API base URL, e.g. `https://hsm.company.com` |
 | `server.port` | `443` | HSM server port (one port for everything since #1590; see "Retired ports" below for 44330/44333) |
 | `server.accessKey` | — (required) | per-product access key (GUID) |
-| `server.allowUntrustedCertificate` | `false` | accept a self-signed server certificate |
+| `server.allowUntrustedCertificate` | `false` | accept a self-signed server certificate for data. Since agent 0.6.1 it also turns self-update off: the agent installs a new binary only from a server whose certificate the machine trusts, and logs this once at start |
 | `server.transport` | `"session"` | `"session"` (the default since 0.6.0): one WebSocket to the server's collector session endpoint, nothing over the HTTP routes and no fallback to them; values, files and server directives all travel on it. Needs HSMServer 3.43.0 or later. `"http"`: a request per batch, for an older server or a proxy that does not pass WebSockets. Any other value refuses to start. The periodic update check runs either way |
 | `identity.computerName` | `"auto"` | `"auto"`/blank → the machine host name |
 | `identity.module` | `"HSM Agent"` | module segment for module sensors |
@@ -82,6 +82,13 @@ are required; everything else has a default.
 | `topCpu.minPercent` | `1.0` | skip processes below this %CPU (of the whole machine) |
 | `topCpu.count` | `10` | how many of the busiest exe names to post per tick |
 | `productVersion` | `"1.0.0.0"` | version reported by module sensors |
+| `update.enabled` | `true` | self-update from the server this agent reports to; the only switch (the server has none since #1812). `false` keeps this machine on its version |
+| `update.checkPeriodHours` | `24` | how often to ask the server for a newer agent (it also asks at every start and when the server says a newer one is staged) |
+
+Self-update works in the folder the service's `hsm-agent.exe` is in. If a new version fails to apply,
+the service is started again on the old one and the same version is tried again 1 h later, then after
+2, 4, 8, 16 and at most 24 h (`%ProgramData%\HSM Agent\update-state.txt` keeps the count across
+restarts).
 
 When `topCpu.enabled` is `true`, every `periodMs` the agent samples CPU usage of all processes,
 aggregates by **executable name** (all `chrome.exe` instances summed), and posts the CPU% of the

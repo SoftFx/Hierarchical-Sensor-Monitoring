@@ -4,9 +4,11 @@
 /// @brief Background agent self-update checker (epic #1174).
 ///
 /// UpdateChecker runs on a dedicated thread. It periodically polls GET /api/agent/version on the
-/// server. When a newer build is available AND the server's global switch (updateEnabled) is true,
-/// it downloads the exe, verifies its SHA-256, stages it as hsm-agent.new.exe, spawns itself with
-/// --apply-update, then requests a graceful stop of the current service run.
+/// server. When a newer build is available (and no failed attempt of it is still backing off), it
+/// downloads the exe, verifies its SHA-256, stages it as hsm-agent.new.exe next to the running exe,
+/// records the attempt, spawns itself with --apply-update, then requests a graceful stop of the
+/// current service run. It does not run when update.enabled is false or when
+/// server.allowUntrustedCertificate is true (SelfUpdateGateFor, update_state.hpp).
 
 #include "agent/config.hpp"
 #include "agent/retired_port.hpp"
@@ -58,6 +60,7 @@ namespace hsm::agent
         void* thread_handle_ = nullptr; // HANDLE, void* to avoid Win32 headers in this header
         void* stop_event_ = nullptr;    // HANDLE — signals thread exit
         void* check_event_ = nullptr;   // HANDLE — wakes the thread for an immediate check
+        std::string backoff_noticed_;   // the attempt record last reported as backing off (poll thread only)
     };
 
     /// True when an HSM Sensor API answers on `port` of the configured server host: a

@@ -257,7 +257,7 @@ namespace HSMServer.Core.Tests.SensorApi
             {
                 _valuesCache.UpdateDisabledSensorGroups(TestProductsManager.ProductId, ["network", "module"]);
 
-                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+                await using var host = await StartHost(webRoot: webRoot);
 
                 var overHttp = await HttpDirectivesAsync(host, "0.5.1");
 
@@ -382,7 +382,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             try
             {
-                await using var host = await StartHost(agent: new AgentConfig { AutoUpdateEnabled = true }, webRoot: webRoot);
+                await using var host = await StartHost(webRoot: webRoot);
                 using var socket = await OpenAgentSessionAsync(host, "0.5.1");
 
                 // The staged agent is the running one: no update.
@@ -1033,7 +1033,7 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.InRange(session.ConnectedAtUtc, before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
 
             // A session that states an agent version gets the directives of its product first
-            // (#1660 step 5): the six sensor groups, auto-update being off.
+            // (#1660 step 5): the six sensor groups (no agent is staged, so no update-available).
             await ReceiveDirectivesAsync(socket, 6);
 
             await Task.Delay(50);

@@ -24,11 +24,8 @@ public class AgentConfig
     /// </summary>
     public bool EnableTopCpuProcesses { get; set; }
 
-    /// <summary>
-    /// Global kill-switch for the agent self-update channel (epic #1174). When false the
-    /// <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
-    /// that polls it will stay on its current version regardless of its local config. Default false
-    /// (opt-in: enable when ready to roll out, disable to halt).
-    /// </summary>
-    public bool AutoUpdateEnabled { get; set; }
+    // There is no server-side switch for agent self-update (#1812): the client turns it off, with
+    // update.enabled in its config.json. A settings file that still carries the retired
+    // "AutoUpdateEnabled" key loads as before; the binder ignores keys without a property, and the
+    // next settings save drops it.
 }

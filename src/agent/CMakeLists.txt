@@ -3,11 +3,14 @@
 #
 # Target topology:
 #   hsm_agent_config  STATIC  the platform-agnostic config.json parser + the interactive-launch
-#                             message text (#1559). Built on EVERY platform so their unit tests run
-#                             in any CI lane (no collector / Win32 dep).
+#                             message text (#1559) + the self-update attempt record / backoff (#1812).
+#                             Built on EVERY platform so their unit tests run in any CI lane (no
+#                             collector / Win32 dep).
 #   hsm_agent_paths   STATIC  agent paths + the protected data-dir DACL (#1279; WIN32 only), shared
 #                             by the exe and the Windows-only ACL tests.
-#   hsm_agent_tests   EXE     name-dispatched config unit tests (+ the ACL tests on Windows).
+#   hsm_agent_update  STATIC  the --apply-update swap / health gate / rollback (#1812; WIN32 only),
+#                             shared by the exe and its tests.
+#   hsm_agent_tests   EXE     name-dispatched config unit tests (+ the ACL and swap tests on Windows).
 #   hsm-agent         EXE     the Windows service executable (WIN32 only). Pulls the collector with
 #                             the libcurl HTTP transport (HSM_COLLECTOR_HTTP).
 cmake_minimum_required(VERSION 3.21)
@@ -21,7 +24,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.6.0 LANGUAGES CXX)
+project(HsmAgent VERSION 0.6.1 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
@@ -49,7 +52,7 @@ endfunction()
 # --- Portable config layer + tests (every platform) ----------------------------------------------
 # cpu_top.cpp moved to the native collector (#1179): SelectTopN + WindowsCpuSampler now live in
 # src/native/collector/src/cpu_top.cpp and are exposed via hsm_collector_enable_top_cpu_sensors.
-add_library(hsm_agent_config STATIC src/config.cpp src/launch_hint.cpp src/retired_port.cpp)
+add_library(hsm_agent_config STATIC src/config.cpp src/launch_hint.cpp src/retired_port.cpp src/update_state.cpp)
 target_include_directories(hsm_agent_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(hsm_agent_config PUBLIC cxx_std_17)
 hsm_agent_set_warnings(hsm_agent_config)
@@ -62,6 +65,12 @@ if(WIN32)
     target_compile_features(hsm_agent_paths PUBLIC cxx_std_17)
     target_link_libraries(hsm_agent_paths PUBLIC advapi32)
     hsm_agent_set_warnings(hsm_agent_paths)
+
+    # The --apply-update swap / health gate / rollback (#1812), a library of its own so the tests drive
+    # the real ApplyStagedUpdate on a temp directory through the ServiceControl seam (no real SCM).
+    add_library(hsm_agent_update STATIC src/apply_update.cpp)
+    target_link_libraries(hsm_agent_update PUBLIC hsm_agent_paths hsm_agent_config advapi32)
+    hsm_agent_set_warnings(hsm_agent_update)
 endif()
 
 if(HSM_AGENT_BUILD_TESTS)
@@ -92,7 +101,12 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_retired_port_verdict_follows_the_probes
             agent_retired_port_notices_name_the_fix
             agent_retired_port_watcher_confirms_and_throttles
-            agent_retired_port_move_keeps_the_file_as_it_is_now)
+            agent_retired_port_move_keeps_the_file_as_it_is_now
+            agent_update_gate_blocks_untrusted_certificate
+            agent_update_backoff_schedule
+            agent_update_record_roundtrip_and_due
+            agent_update_record_backs_off_across_restart
+            agent_update_handoff_stops_only_when_staged_and_recorded)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 
@@ -108,6 +122,21 @@ if(HSM_AGENT_BUILD_TESTS)
                 agent_dir_acl_refuses_reparse_points)
             add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
             set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
+        endforeach()
+
+        # Self-update install dir + the --apply-update swap / health gate / rollback (#1812), on a temp
+        # directory with a fake ServiceControl: never touches a real service.
+        target_link_libraries(hsm_agent_tests PRIVATE hsm_agent_update)
+        foreach(name IN ITEMS
+                agent_update_paths_follow_running_exe
+                agent_apply_update_swaps_and_clears_record
+                agent_apply_update_nothing_staged_starts_service_again
+                agent_apply_update_service_not_stopped_keeps_binary
+                agent_apply_update_rename_failure_starts_old_binary
+                agent_apply_update_failed_start_rolls_back
+                agent_apply_update_health_gate_rolls_back
+                agent_apply_update_retries_start_after_rollback)
+            add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
         endforeach()
     endif()
 endif()
@@ -138,7 +167,6 @@ if(WIN32)
     add_executable(hsm-agent
         src/main.cpp
         src/agent_runtime.cpp
-        src/apply_update.cpp
         src/update_checker.cpp
         src/logging/file_logger.cpp
         src/logging/agent_logger.cpp
@@ -150,7 +178,7 @@ if(WIN32)
     add_dependencies(hsm-agent hsm_agent_timestamp)
     # winhttp: WinHTTP for self-update HTTP (epic #1174); bcrypt: SHA-256 via Windows CNG;
     # user32: the interactive-launch message box + window-station check (#1559)
-    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_agent_paths hsm_collector_cpp advapi32 winhttp bcrypt user32)
+    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_agent_paths hsm_agent_update hsm_collector_cpp advapi32 winhttp bcrypt user32)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")
     hsm_agent_set_warnings(hsm-agent)

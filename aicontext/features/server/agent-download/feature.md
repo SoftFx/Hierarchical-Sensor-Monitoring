@@ -64,7 +64,8 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
   "Run as administrator"), the service name `HSMAgent`, the config (`%ProgramData%\HSM Agent\config.json`)
   and log (`%ProgramData%\HSM Agent\logs\hsm-agent.log` + Application Event Log) locations, that the
   data dir is restricted to SYSTEM + Administrators (#1279), a `--console --config` troubleshooting run,
-  updating (automatic self-update when the server enables it; manual = rerun the install script, which
+  updating (automatic self-update unless the agent's `update.enabled` is false or it accepts an
+  untrusted certificate, #1812; manual = rerun the install script, which
   keeps the existing config), that `hsm-agent.exe` is identical for every product and only `config.json`
   differs, and the Downloads page. `Installer` passes the absolute Downloads URL with this product
   preselected (`AgentBundleOptions.DownloadsPageUrl`); without it only the menu hint is written. The
@@ -177,6 +178,16 @@ readers fall back to `0.0.0`.
 **Shipping a newer agent:** bump `project(HsmAgent VERSION …)` in the change PR (rule in
 `src/agent/CLAUDE.md`), push the matching `agent-v*` tag after merge, then bump `agent-release.txt`
 in a one-line PR. Server releases in between keep shipping the previous pin.
+
+**No server switch for self-update (#1812).** A server offers its staged agent to every agent that
+reports an older version: `GET /api/agent/version` answers `updateEnabled: true` always (the field
+stays for wire compatibility, agents up to 0.6.0 refuse a manifest without it) and the
+`update-available:<staged>` directive is sent whenever the staged agent is newer than the agent's
+`X-Agent-Version`. The former `Agent.AutoUpdateEnabled` setting is gone; a settings file that still
+has it loads as before (the binder ignores keys without a property) and the next settings save drops
+it. An agent opts out on its own side (`update.enabled: false`, or `allowUntrustedCertificate: true`,
+which disables self-update); see `../../agent/feature.md`. Staging a newer agent is therefore a
+rollout: every agent of this server that can update will.
 
 ## Out of scope (follow-up)
 

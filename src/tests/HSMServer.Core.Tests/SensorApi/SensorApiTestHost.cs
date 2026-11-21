@@ -297,7 +297,7 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
-        // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
+        // `agent` and `webRoot` are for the agent directives (#1660 step 5): the agent settings
         // setting and the folder whose agent/version.txt names the staged agent.
         public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null)
         {

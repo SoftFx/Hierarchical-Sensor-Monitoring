@@ -84,25 +84,59 @@ namespace hsm::agent
         return true;
     }
 
-    std::wstring ProgramFilesAgentDir()
+    std::wstring UpdateStatePath()
     {
-        const wchar_t* pf = _wgetenv(L"ProgramFiles");
-        std::wstring base = (pf != nullptr && pf[0] != L'\0') ? pf : L"C:\\Program Files";
-        return base + L"\\HSM Agent";
+        return ProgramDataAgentDir() + L"\\update-state.txt";
+    }
+
+    std::wstring CurrentExePath()
+    {
+        std::wstring path(MAX_PATH, L'\0');
+        for (;;)
+        {
+            const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+            if (length == 0)
+                return std::wstring{};
+            if (length < path.size())
+            {
+                path.resize(length);
+                return path;
+            }
+            path.resize(path.size() * 2); // truncated -> grow and retry
+        }
+    }
+
+    UpdateFiles UpdateFilesFor(const std::wstring& running_exe)
+    {
+        UpdateFiles files;
+        const std::size_t slash = running_exe.find_last_of(L"\\/");
+        if (slash == std::wstring::npos || slash == 0)
+            return files; // not a full path: no install directory to act on
+
+        files.dir = running_exe.substr(0, slash);
+        files.exe = running_exe;
+        files.new_exe = files.dir + L"\\hsm-agent.new.exe";
+        files.old_exe = files.dir + L"\\hsm-agent.old.exe";
+        return files;
+    }
+
+    UpdateFiles CurrentUpdateFiles()
+    {
+        return UpdateFilesFor(CurrentExePath());
     }
 
     std::wstring InstallExePath()
     {
-        return ProgramFilesAgentDir() + L"\\hsm-agent.exe";
+        return CurrentUpdateFiles().exe;
     }
 
     std::wstring NewExePath()
     {
-        return ProgramFilesAgentDir() + L"\\hsm-agent.new.exe";
+        return CurrentUpdateFiles().new_exe;
     }
 
     std::wstring OldExePath()
     {
-        return ProgramFilesAgentDir() + L"\\hsm-agent.old.exe";
+        return CurrentUpdateFiles().old_exe;
     }
 } // namespace hsm::agent

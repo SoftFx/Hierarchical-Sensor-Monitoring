@@ -61,9 +61,9 @@ namespace hsm::agent
         std::string product_version = "1.0.0.0";
 
         // update.* — agent self-update channel (epic #1174). The agent polls
-        // GET <server>/api/agent/version and self-updates when a newer build is available AND the
-        // server's global AutoUpdateEnabled flag is true. Set enabled=false in config to opt this
-        // machine out even when the server permits updates.
+        // GET <server>/api/agent/version and self-updates when a newer build is staged there. This is
+        // the only switch (#1812: the server has none); enabled=false opts this machine out. An agent
+        // with allow_untrusted_certificate=true never self-updates (SelfUpdateGateFor).
         bool update_enabled = true;
         int update_check_period_hours = 24; ///< poll interval; must be >= 1
 
