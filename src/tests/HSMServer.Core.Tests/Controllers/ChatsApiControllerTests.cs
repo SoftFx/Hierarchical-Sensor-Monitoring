@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -10,6 +11,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.Authentication;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
@@ -55,6 +57,13 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private static ClaimsPrincipal BuildPrincipalOf(Guid ownerId) =>
+            new(new ClaimsIdentity(
+            [
+                new Claim(HsmApiTokenClaims.OwnerUserId, ownerId.ToString()),
+                new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
+            ], HsmApiTokenDefaults.AuthenticationScheme));
+
         private static ClaimsPrincipal BuildPrincipal() =>
             new(new ClaimsIdentity(
             [
@@ -62,12 +71,18 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private ChatsApiController CreateController() =>
-            new(new ChatsReadService(_chats.Object, _authorization.Object))
+        private readonly Mock<IChatDelivery> _delivery = new();
+        private readonly Mock<IUserManager> _users = new();
+
+        private ChatsApiController CreateController() => CreateControllerWith(BuildPrincipal());
+
+        private ChatsApiController CreateControllerWith(ClaimsPrincipal principal) =>
+            new(new ChatsReadService(_chats.Object, _authorization.Object),
+                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object))
             {
                 ControllerContext = new ControllerContext
                 {
-                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
+                    HttpContext = new DefaultHttpContext { User = principal },
                 },
             };
 
@@ -446,6 +461,71 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.NotNull(page);
             var dto = Assert.Single(page.Items);
             Assert.Equal([visibleFolder], dto.Folders);
+        }
+
+
+        // #1826: the two POST actions render the verification service's envelope through the
+        // area's uniform contract; the service itself carries the semantics (ChatVerificationServiceTests).
+
+        [Fact]
+        public async Task PostTestMessage_AnswersTheDeliveryOutcome()
+        {
+            var chat = BuildChat("ops", e => e.SlackWebhookUrl = "https://hooks.slack.com/services/X");
+            _store.Add(chat);
+
+            _delivery.Setup(d => d.SendTestAsync(chat, ChatChannel.Slack))
+                .ReturnsAsync(ChatDeliveryResult.Fail("Slack POST to ops returned terminal status NotFound; giving up"));
+
+            var answer = await CreateController().PostTestMessage(chat.Id, new ChatTestMessageRequestDto { Channel = "slack" });
+
+            var ok = Assert.IsType<OkObjectResult>(answer);
+            var dto = Assert.IsType<ChatTestMessageResultDto>(ok.Value);
+            Assert.False(dto.Delivered);
+            Assert.Contains("terminal status NotFound", dto.Error);
+        }
+
+        [Fact]
+        public async Task PostTestMessage_UnknownChat_AnswersTheUniform404()
+        {
+            var answer = await CreateController().PostTestMessage(Guid.NewGuid(), new ChatTestMessageRequestDto { Channel = "slack" });
+
+            Assert.Equal(404, StatusCodeOf(answer));
+        }
+
+        [Fact]
+        public async Task PostTelegramInvitation_AnswersValueExpiryAndSteps()
+        {
+            var chat = BuildChat("ops", null);
+            _store.Add(chat);
+
+            _delivery.SetupGet(d => d.IsTelegramBotRunning).Returns(true);
+
+            var owner = new User("admin") { Id = Guid.NewGuid() };
+            _users.Setup(u => u[owner.Id]).Returns(owner);
+            _chats.Setup(c => c.GetChatInvitationLink(chat.Id, owner, ChatVerificationService.InvitationLifetime))
+                .Returns("https://t.me/hsm_alerts_bot?start=abc");
+
+            var principal = BuildPrincipalOf(owner.Id);
+            var answer = await CreateControllerWith(principal).PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
+
+            var ok = Assert.IsType<OkObjectResult>(answer);
+            var dto = Assert.IsType<ChatInvitationDto>(ok.Value);
+            Assert.Equal("direct", dto.Kind);
+            Assert.Equal("https://t.me/hsm_alerts_bot?start=abc", dto.Value);
+            Assert.NotEmpty(dto.NextSteps);
+        }
+
+        [Fact]
+        public async Task PostTelegramInvitation_BotNotRunning_Answers422WithTheRemedy()
+        {
+            var chat = BuildChat("ops", null);
+            _store.Add(chat);
+
+            _delivery.SetupGet(d => d.IsTelegramBotRunning).Returns(false);
+
+            var answer = await CreateController().PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
+
+            Assert.Equal(422, StatusCodeOf(answer));
         }
     }
 }

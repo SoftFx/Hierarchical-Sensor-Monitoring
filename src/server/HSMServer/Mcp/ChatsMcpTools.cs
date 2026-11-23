@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Security.Claims;
 using System.Threading;
 using HSMServer.Model.ManagementApi.Chats;
@@ -24,11 +25,13 @@ namespace HSMServer.Mcp
     public sealed class ChatsMcpTools
     {
         private readonly ChatsReadService _reader;
+        private readonly ChatVerificationService _verification;
         private readonly IHttpContextAccessor _http;
 
-        public ChatsMcpTools(ChatsReadService reader, IHttpContextAccessor http)
+        public ChatsMcpTools(ChatsReadService reader, ChatVerificationService verification, IHttpContextAccessor http)
         {
             _reader = reader;
+            _verification = verification;
             _http = http;
         }
 
@@ -59,6 +62,20 @@ namespace HSMServer.Mcp
         public ChatDto GetChat(
             [Description("Chat id.")] Guid chatId) =>
             McpToolErrors.Unwrap(_reader.GetChat(chatId, User));
+
+        [McpServerTool(Name = "send_chat_test_message", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Sends a test message to one of a chat's channels and answers the delivery outcome: `delivered`, or the error text the channel reported (never a response body) — the proof that a webhook or a Telegram binding works. The channel must be one the chat carries (see get_chat's flags).")]
+        public async Task<ChatTestMessageResultDto> SendChatTestMessage(
+            [Description("Chat id.")] Guid chatId,
+            [Description("The delivery channel to test: \"telegram\", \"slack\" or \"mattermost\".")] string channel) =>
+            McpToolWriteErrors.Unwrap(await _verification.SendTestMessageAsync(chatId, channel, User));
+
+        [McpServerTool(Name = "create_chat_telegram_invitation", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Issues a ONE-SHOT Telegram invitation for a chat, valid 10 minutes: the link for a direct chat or the /start@bot command for a group, plus the steps a PERSON performs inside Telegram — the orchestrator cannot press Start itself. The binding lands when that person completes it; read get_chat's telegramChatId afterwards. Requires the Telegram bot to be running (see update_telegram_bot).")]
+        public async Task<ChatInvitationDto> CreateChatTelegramInvitation(
+            [Description("Chat id.")] Guid chatId,
+            [Description("The invitation kind: \"direct\" (a link to open and press Start) or \"group\" (a command to post into the group after adding the bot with admin rights).")] string kind) =>
+            McpToolWriteErrors.Unwrap(await _verification.CreateInvitationAsync(chatId, kind, User));
 
 
         // The shared ambient-principal accessor (see McpToolContext); a property

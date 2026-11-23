@@ -126,6 +126,13 @@ namespace HSMServer.ServiceExtensions
             // flows now, behind the /api/v1 + MCP write surface (#1829) later.
             services.AddScoped<ChatAdministrationService>();
 
+            // The chat verification surface (#1826): the result-carrying test
+            // message and the Telegram invitation issuer, behind both the REST
+            // actions and the MCP tools. The delivery half adapts the concrete
+            // channels of NotificationsCenter (their types are sealed).
+            services.AddScoped<NotificationsCenterChatDelivery>();
+            services.AddScoped<ChatVerificationService>();
+
             // The shared folder read implementation — same shape: behind both
             // the REST folder controller and the MCP folder tools. The
             // folderId source of alert-template writes (the access-grouping

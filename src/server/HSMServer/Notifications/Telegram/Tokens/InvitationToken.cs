@@ -7,6 +7,8 @@ namespace HSMServer.Notifications.Telegram.Tokens
     {
         private const int TokenExpirationMinutes = 2;
 
+        private static TimeSpan DefaultExpirationMinutes => TimeSpan.FromMinutes(TokenExpirationMinutes);
+
         internal static InvitationToken Empty { get; } = new();
 
 
@@ -25,13 +27,17 @@ namespace HSMServer.Notifications.Telegram.Tokens
 
         internal InvitationToken(Guid folderId, User user) : this(null, folderId, user) { }
 
-        internal InvitationToken(Guid? chatId, Guid folderId, User user)
+        internal InvitationToken(Guid? chatId, Guid folderId, User user) : this(chatId, folderId, user, DefaultExpirationMinutes) { }
+
+        // The management-surface issuer (#1826) passes its longer relay lifetime; the web UI
+        // keeps the default (it issues at the moment of use).
+        internal InvitationToken(Guid? chatId, Guid folderId, User user, TimeSpan ttl)
         {
             User = user;
             ChatId = chatId;
             FolderId = folderId;
             Token = Guid.NewGuid();
-            ExpirationTime = DateTime.UtcNow.AddMinutes(TokenExpirationMinutes);
+            ExpirationTime = DateTime.UtcNow.Add(ttl);
         }
     }
 }
