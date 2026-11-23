@@ -3038,6 +3038,64 @@
             preview into the real, irreversible write.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService">
+            <summary>
+            The write engine behind the chat web flows (#1825): create (idempotent towards a row
+            pre-created by the Telegram /start flow), partial update with the explicit channel-clear
+            flags, webhook URL-shape validation in one place, and the chat-folder binding under the
+            "only folders the caller manages" rule. Every write carries the initiator. The web
+            controller delegates here; the /api/v1 + MCP surface (#1829) will call the same engine.
+            Transport-agnostic: it works with the storage managers and answers a result, never an
+            IActionResult.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.CreateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The AddChat POST flow: when the row already exists (created by /start against the
+            pre-allocated guid), the save becomes an update so it is idempotent w.r.t. the order
+            of "fill the name" and "click setup help".
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.UpdateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The EditChat POST flow: a partial update (an omitted field does not change; a channel
+            is removed only by its explicit clear flag), then the folder binding.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.ClearChannelAsync(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatChannel,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The per-channel Remove buttons of the edit form: one clear flag, nothing else.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatChannel">
+            <summary>The delivery channel of a chat the clear action targets.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFieldError">
+            <summary>One field-keyed rejection (the domain property name + the reason).</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFieldError.#ctor(System.String,System.String)">
+            <summary>One field-keyed rejection (the domain property name + the reason).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatWriteResult">
+            <summary>The outcome of a chat write: success, or the field-keyed rejections.</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatWriteResult.#ctor(System.Boolean,System.Collections.Generic.IReadOnlyList{HSMServer.Model.ManagementApi.Chats.ChatFieldError})">
+            <summary>The outcome of a chat write: success, or the field-keyed rejections.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding">
+            <summary>
+            The folder binding of a chat write: the folders the caller wants the chat bound to
+            (Desired) and the folders the caller manages (Managed). Add and remove touch only
+            Desired ∩ Managed — folders the caller cannot manage are never touched.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding.#ctor(System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid})">
+            <summary>
+            The folder binding of a chat write: the folders the caller wants the chat bound to
+            (Desired) and the folders the caller manages (Managed). Add and remove touch only
+            Desired ∩ Managed — folders the caller cannot manage are never touched.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
             <summary>
             A notification chat — the destination alert policies and alert templates

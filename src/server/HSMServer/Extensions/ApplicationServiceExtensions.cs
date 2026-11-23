@@ -122,6 +122,10 @@ namespace HSMServer.ServiceExtensions
             // destination.chats against.
             services.AddScoped<ChatsReadService>();
 
+            // The chat write engine (#1825): behind the web controller's chat
+            // flows now, behind the /api/v1 + MCP write surface (#1829) later.
+            services.AddScoped<ChatAdministrationService>();
+
             // The shared folder read implementation — same shape: behind both
             // the REST folder controller and the MCP folder tools. The
             // folderId source of alert-template writes (the access-grouping
