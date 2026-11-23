@@ -117,6 +117,20 @@ Reads at seven days, warm: one minute of all 1,029 instruments takes 0.19–0.25
 
 No LevelDB variant gives space back by itself within 60 s of a delete; the server has to call `Compact`, which is cheap only with the growing key.
 
+How a time limit on a batch changes the size (2026-11-24, the same sample, HSM coders + zstd 15, a batch closes at the end of its window or at 4,096 rows). "Stored" adds to the coded columns 40 bytes of header and 68 bytes of key and index record per batch; the earlier 2.60 and 5.22 are the coded columns alone, for batches that cover the whole 185 s:
+
+| Window | Batches | Rows per batch, median | Stored, three columns | Stored, five columns |
+|---|---|---|---|---|
+| 10 s | 18,127 | 14 | 8.67 B/row | 11.88 B/row |
+| 30 s | 6,987 | 32 | 5.06 | 7.99 |
+| 60 s | 3,999 | 51 | 4.03 | 6.82 |
+| 120 s | 2,057 | 114 | 3.33 | 6.02 |
+| 185 s (the whole sample) | 1,036 | 229 | 2.86 | 5.47 |
+
+A 60-second limit stores 25% more than the 185-second window with five columns and 41% more with three. At 60 seconds the loss comes mostly from busy tables losing their long batches, not from rare ones: rows in batches of 1,000 or more fall from 39% to 9%. The size was still falling at 185 s; longer windows cannot be measured on this sample. Cut into batches of exactly N rows, five columns cost 16.1 bytes per row at 8 rows, 10.9 at 16, 8.4 at 32, 7.0 at 64 and 6.2 at 128, header included; beyond 128 rows only the busiest tables have full batches, so the curve stops being comparable.
+
+A two-stage variant was measured as well: the collector sends 60-second batches with a cheap encoding (coders + zstd 3: 6.37 bytes per row on the wire with five columns) and the server decodes them and re-encodes each table into batches of up to 4,096 rows. The result is the same 5.47 bytes stored; the server spends about 0.5 µs per row, 133 CPU-seconds a day for 276 M rows on one core, and writes the data a second time.
+
 Client side, from package metadata and code reading: the last Parquet.Net release with a `netstandard2.0` target is 5.5.0 (later releases need net8.0) and it brings System.Text.Json 10 into net472 consumers; a C++ Parquet writer means Apache Arrow through vcpkg (OpenSSL, Thrift, Boost and more; no 32-bit x86), where the native collector depends only on curl today. The HSM integer and double coders are about 840 lines, need four trivial polyfills for net472, and ZstdSharp.Port supports net472; zstd itself is a single small vcpkg port.
 
 Not measured: more than three minutes of real data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay; whether LevelDB frees deleted space by itself after more than 60 s; batches that arrive hours late (the growing key takes them at the end by construction, which was reasoned and not run).
