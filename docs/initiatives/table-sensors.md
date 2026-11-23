@@ -163,8 +163,8 @@ Stored size is measured on the test sample; the row counts of the future product
 | 3 | #1845 Server: batch ingest route and range read API | DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
 | 4 | #1846 Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
 | 5 | #1847 Chart of a numeric column; feed sensors from batch headers | |
-| 7 | #1849 Rollout: a test deployment under the target volume, Linux, the disk decision | |
 | 6 | #1848 Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
+| 7 | #1849 Rollout: a test deployment under the target volume, Linux, the disk decision | |
 
 ## Risks
 
