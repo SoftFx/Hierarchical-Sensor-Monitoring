@@ -98,20 +98,28 @@ Bytes per row, one table per instrument (the layout the owner chose), batches of
 
 For comparison, the same rows are 58 bytes each as log text and 118 as JSON lines. Decoding costs 0.03–0.05 µs per row for the HSM coders. Batch size hardly matters above about 4,096 rows (5.31 bytes at 1,024 rows, 5.21 at any larger size); zstd 19 gains nothing over 15. Parquet wins only in a layout this feature will not use: one table with all instruments interleaved, encoded as a single batch of the whole sample (4.4 bytes against 7.4).
 
-Where the server keeps batches, on a scaled day (the sample repeated with shifted timestamps to 276 M rows; the mechanics are real, the compression is not the point):
+Where the server keeps batches, on scaled data: the sample repeated with shifted timestamps, 4,096-row batches of HSM coders + zstd 15. One day-equivalent is 276 M rows, 67,961 batches, 1.35 GB; seven are 1.93 billion rows, 472,232 batches, 9.46 GB. A batch reaches the store when its last row arrives, so the batches of different instruments interleave and half of them start before the previous one. This is the second run; the first fed batches instrument by instrument and its LevelDB figures (11.1× and 13.7×) are superseded.
 
-| | Batches as LevelDB values | Append-only file per hour + index |
-|---|---|---|
-| Size on disk | 1.37 GB | 1.37 GB |
-| Bytes written to disk | 15.2 GB (11.1× the data; 13.7× at seven days) | 1.37 GB (1.0×) |
-| Delete the oldest 6 hours | space returns only after `Compact` (3.5 s; 35 s at seven days) | 0.04 s, space returns at once |
-| Read one hour of one instrument | 0.5–6 ms | 2–7 ms |
-| Read one minute of all 1,029 instruments, 4,096-row batches | 0.19 s, 22 MB read | 0.19 s, 22 MB read |
-| The same with 65,536-row batches | 3.1 s, 346 MB read | 3.2 s, 346 MB read |
+The stored size is the same in every variant. They differ in how many bytes the disk takes during ingest, counted by the process write counter until the store is closed:
+
+| Store | Written during ingest, 1 day / 7 days | Real compactions in the LevelDB log, 7 days | Space after deleting the oldest 6 hours, 7 days |
+|---|---|---|---|
+| LevelDB, key `sensor, first time` | 7.3× / 14.4× | 12,458 (117 GB rewritten) | only after `Compact`: 42 s, 9.2 GB rewritten |
+| **LevelDB, key `arrival hour, sequence number`, plus a small index database `sensor, first time` → batch key** | **2.0× / 2.0×** | **0** (2,106 files moved down without rewriting) | only after `Compact`: 0.1 s, 14 MB rewritten |
+| LevelDB, key `hour, sensor, first time` | 4.1× / 5.6× | 2,783 (34 GB rewritten) | only after `Compact`: 0.1 s |
+| One LevelDB per hour | 2.0× / 1.9× | 2 | at once (the directory is removed) |
+| One LevelDB per day | 6.1× / 9.0× | 7,110 (66 GB rewritten) | nothing smaller than a day can go |
+| Append-only file per hour + index | 1.0× / 1.0× | — | at once (the file is removed) |
+
+Why the key decides it: LevelDB rewrites a file when its key range overlaps files already below it. Keys that start with the sensor arrive scattered over the whole range, so every new file overlaps. Keys that only grow never overlap, and LevelDB moves such a file down a level by changing metadata. What remains is the write-ahead log plus one table file, which is the 2.0×; LevelDB cannot do less. The index database is 0.12% of the data.
+
+Reads at seven days, warm: one minute of all 1,029 instruments takes 0.19–0.25 s and 22.6 MB in every variant except `hour, sensor, first time` (125 MB read) and one LevelDB per hour (0.49 s, 57 MB); one hour of one instrument takes 0.8–1.2 ms in the LevelDB variants and 3.5 ms from hour files (189 ms the first time after opening). One LevelDB per hour means 226 open databases, 904 handles and 4 s to open them. With 65,536-row batches a minute of all instruments costs 3.1 s and 346 MB (first run), so batches stay small.
+
+No LevelDB variant gives space back by itself within 60 s of a delete; the server has to call `Compact`, which is cheap only with the growing key.
 
 Client side, from package metadata and code reading: the last Parquet.Net release with a `netstandard2.0` target is 5.5.0 (later releases need net8.0) and it brings System.Text.Json 10 into net472 consumers; a C++ Parquet writer means Apache Arrow through vcpkg (OpenSSL, Thrift, Boost and more; no 32-bit x86), where the native collector depends only on curl today. The HSM integer and double coders are about 840 lines, need four trivial polyfills for net472, and ZstdSharp.Port supports net472; zstd itself is a single small vcpkg port.
 
-Not measured: more than three minutes of data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay.
+Not measured: more than three minutes of real data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay; whether LevelDB frees deleted space by itself after more than 60 s; batches that arrive hours late (the growing key takes them at the end by construction, which was reasoned and not run).
 
 ## Proposal after step 0
 
@@ -121,13 +129,14 @@ Waiting for the owner's decision; nothing below is built.
 |---|---|
 | Batch format | Own format: a header (magic, version, schema id, row count, first and last time, lengths, CRC-32C) followed by the columns coded with the sealed-history integer and double coders and compressed with zstd 15. Parquet is 50–110% larger in this layout and costs a heavy dependency in both collectors. |
 | Who compresses | The collector. The coders move into a `netstandard2.0` library shared by the server and the managed collector; the native collector gets a C++ port with byte-identical output locked by conformance scenarios. |
-| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first. The server appends batches to one file per hour and keeps an index record per batch. |
-| Deletion | Retention deletes whole hour files; no compaction, no rewriting. Removing one sensor drops its index records, and the bytes leave with their hour file. |
+| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first, and closes and sends every open batch at once when it stops. |
+| Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. |
+| Deletion | Retention deletes the batches whose arrival hour is older than the limit, with their index records, and then calls `Compact` on that key range (0.1 s, 14 MB at seven days). A batch that arrived late lives longer by its delay. Removing one sensor drops its index records at once; its bytes leave when their hours expire. |
 | Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Whether a collector on a session may send binary frames instead is a question for the ADR. |
-| Read API | A range request returns the stored batches that overlap the range, as stored. A CSV variant decodes on the server and is limited in rows. |
+| Read API | A range request returns the stored batches that overlap the range; the client library decodes them and hands the caller a matrix object. A CSV or JSON variant decodes on the server and is limited in rows, for clients without the library. |
 | Rendering | The server decodes the requested range of one column and reduces it to minimum and maximum per pixel column. Reading an hour of one instrument takes milliseconds, so this is cheap; it comes after ingest and read. |
 
-Open: per-sensor retention with shared hour files (one retention value per product is the simple first version); the session question above; the time limit of a batch.
+Open: per-sensor retention (batches of all sensors share the arrival-hour key range, so one retention value per product is the simple first version); whether the batch database is one or one per week or month; the session question above; the time limit of a batch; keeping unsent batches in a local file when the collector stops and the server is unreachable.
 
 ## Capacity
 
@@ -160,7 +169,7 @@ Stored size is measured on the test sample; the row counts of the future product
 - **Disk.** A year of ticks does not fit on the current production disk. Retention or more storage has to be decided before the feature is switched on.
 - **Compatibility.** A new sensor type reaches the shared DTOs and the public collector API. Older collectors and servers must ignore or refuse it cleanly.
 - **A second on-disk format.** Parquet next to the HSM chunk codec means two readers to keep working forever. Using one format for both is cleaner but ties ordinary sensors to a format that does not know their types.
-- **Large values in LevelDB.** Unmeasured; see the storage question above.
+- **Large values in LevelDB.** Measured in step 0: the cost depends on the key. A sensor-first key rewrites the data 14 times at seven days; a key that only grows writes it twice. The batch database must therefore never take keys out of order, and must not share a database with sensor values.
 - **Untrusted input.** A batch is client-supplied bytes that the server later decodes for charts and trimmed reads: limits on rows, columns, decoded size and nesting are part of the format rules, and the decoder must come from a maintained library, not be written here.
 - **Native collector.** A C++ Parquet writer is a heavy dependency for a library distributed through vcpkg.
 
