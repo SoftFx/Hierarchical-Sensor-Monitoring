@@ -143,7 +143,8 @@ Nothing below is built. The owner accepted this proposal on 2026-11-23; ADR-0021
 |---|---|
 | Batch format | Own format: a header (magic, version, schema id, row count, first and last time, lengths, CRC-32C) followed by the columns coded with the sealed-history integer and double coders and compressed with zstd 15. Parquet is 50–110% larger in this layout and costs a heavy dependency in both collectors. |
 | Who compresses | The collector. The coders move into a `netstandard2.0` library shared by the server and the managed collector; the native collector gets a C++ port with byte-identical output locked by conformance scenarios. |
-| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first, and closes and sends every open batch at once when it stops. |
+| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after 60 seconds, whichever comes first, and closes and sends every open batch at once when it stops. |
+| Merging | Decided by the owner on 2026-11-24, on the model of VictoriaLogs: when an arrival hour has closed, the server merges the small batches of each sensor in it into batches of up to 4,096 rows, once, into a second database with a growing key, verifies them and deletes the arrival batches. Stored size goes from 6.8 bytes per row (60-second batches) to 5.5 on the three-minute sample and is expected near 4.9 with full hours. |
 | Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. **Decided by the owner, 2026-11-23.** Also considered and rejected by him: batches in hour files with only their addresses in LevelDB (two stores to keep consistent), and SeaweedFS (a separate service; not measured). |
 | Deletion | Retention deletes the batches whose arrival hour is older than the limit, with their index records, and then calls `Compact` on that key range (0.1 s, 14 MB at seven days). A batch that arrived late lives longer by its delay. Removing one sensor drops its index records at once; its bytes leave when their hours expire. |
 | Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Batches do not go over the collector session. |
@@ -164,7 +165,7 @@ Stored size is measured on the test sample; the row counts of the future product
 | Test feed, every record of the ticks file (276 M rows a day) | 1.4 GB a day, 43 GB a month, 525 GB a year | row count measured on 2026-11-20, the heaviest day |
 | A sustained 10,000 rows a second | 4.5 GB a day, 135 GB a month, 1.6 TB a year | arithmetic |
 | Free disk on production | about 550 GB | checked 2026-11-19 |
-| Server work per batch | header and checksum check, one put of the batch and one of its index record | no per-row state; each byte reaches the disk twice (LevelDB log, then table) |
+| Server work per batch | on ingest: header and checksum check, one put of the batch and one of its index record; later one merge per closed hour | no per-row state on ingest; the merge costs about 0.5 µs per row; each row reaches the disk four times (twice on arrival, twice when merged) |
 
 ## Work Breakdown
 
@@ -178,6 +179,7 @@ Stored size is measured on the test sample; the row counts of the future product
 | 4 | #1846 Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
 | 5 | #1847 Chart of a numeric column; feed sensors from batch headers | |
 | 6 | #1848 Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
+| 8 | #1850 Server: merge of the small batches of a closed hour | Can follow step 2. Needs the same care as the sealing job of ADR-0020: verify before delete, safe at any crash point. |
 | 7 | #1849 Rollout: a test deployment under the target volume, Linux, the disk decision | |
 
 ## Risks
