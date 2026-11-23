@@ -17,6 +17,20 @@
             </summary>
             <param name="user">User object (password field must be password hash).</param>
         </member>
+        <member name="M:HSMServer.BackgroundServices.BaseDelayedBackgroundService.FirstRunUtc(System.DateTime)">
+            <summary>The first run of a service started at <paramref name="utcNow"/>: after the start delay, on the next point of the Delay grid.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.BaseDelayedBackgroundService.OnScheduled(System.DateTime)">
+            <summary>Called once when the service starts, with the UTC time of its first run.</summary>
+        </member>
+        <member name="T:HSMServer.BackgroundServices.HistorySealingSensors">
+            <summary>
+            Self-monitoring of the sealing job of sensor history (ADR-0020, #1804), next to the database size sensors:
+            each pass of the job is posted once (the self-monitoring samples every 5 minutes, the job runs every 7), and the
+            process-wide counters of the sealed week store when they change. While the job is off it has no pass to post; the
+            two counters are posted only once one of them is above zero (a sealed week is still read).
+            </summary>
+        </member>
         <member name="T:HSMServer.Controllers.AccessKeysApiController">
             <summary>
             A product's access keys (#1787) — the id-discovery surface of the

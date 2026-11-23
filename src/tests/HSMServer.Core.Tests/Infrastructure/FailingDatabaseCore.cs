@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
@@ -264,7 +264,16 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             _inner.RemoveSensorWithMetadata(sensorId);
         }
-        public void AddSensorValue(Guid sensorId, BaseValue value) => _inner.AddSensorValue(sensorId, value);
+        // Set to observe every history write before it reaches the database. The
+        // cache folds into a value it already wrote, in place, so an observer that
+        // keeps the instance sees later folds: copy what it needs at the call.
+        internal Action<Guid, BaseValue> OnAddSensorValue { get; set; }
+
+        public void AddSensorValue(Guid sensorId, BaseValue value)
+        {
+            OnAddSensorValue?.Invoke(sensorId, value);
+            _inner.AddSensorValue(sensorId, value);
+        }
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
 
         // Sensor-move merge (#1720): set to make the history copy throw, as a
@@ -288,7 +297,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return result;
         }
-        public byte[] GetLatestValue(Guid sensorId, long to) => _inner.GetLatestValue(sensorId, to);
+        // Throws instead of reading when set and true for the sensor: a history read that cannot be answered.
+        internal Func<Guid, Exception> FailGetLatestValue { get; set; }
+
+        public byte[] GetLatestValue(Guid sensorId, long to) =>
+            FailGetLatestValue?.Invoke(sensorId) is { } failure ? throw failure : _inner.GetLatestValue(sensorId, to);
         public byte[] GetFirstValue(Guid sensorId) => _inner.GetFirstValue(sensorId);
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);
         public Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors) => _inner.GetLatestValuesFromTo(sensors);
@@ -353,6 +366,16 @@ namespace HSMServer.Core.Tests.Infrastructure
         public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count) => _inner.GetJournalValuesPage(sensorId, from, to, types, count);
 
         public void Compact() => _inner.Compact();
+
+        public HistoryShardCompactionOutcome CompactNextDueHistoryShard(DateTime utcNow, TimeSpan quietPeriod) =>
+            _inner.CompactNextDueHistoryShard(utcNow, quietPeriod);
+
+        public HistorySealingPassReport RunHistorySealingPass(DateTime utcNow, HistorySealingSettings settings) =>
+            _inner.RunHistorySealingPass(utcNow, settings);
+
+        public HistorySealingPassReport UnsealHistoryWeek(string weekName, DateTime utcNow) => _inner.UnsealHistoryWeek(weekName, utcNow);
+
+        public HistorySealingPassReport LastHistorySealingPass => _inner.LastHistorySealingPass;
 
         public IEnumerable<(byte[], byte[])> GetAll() => _inner.GetAll();
 

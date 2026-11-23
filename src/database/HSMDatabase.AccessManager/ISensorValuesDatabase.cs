@@ -14,6 +14,13 @@ namespace HSMDatabase.AccessManager
 
         void RemoveSensorValues(byte[] from, byte[] to);
 
+        /// <summary>
+        /// Every put and every delete since the week was opened. The sealing job watches it to know when to count a
+        /// sealed week's foldable rows again (#1804); the compaction bookkeeping does not use it (see
+        /// <see cref="IIntervalDatabase.ReclaimableChangeCount"/>).
+        /// </summary>
+        long WriteCount { get; }
+
         byte[] Get(byte[] key, byte[] sensorId);
 
         byte[] GetLatest(byte[] to, byte[] sensorId);
@@ -26,10 +33,15 @@ namespace HSMDatabase.AccessManager
 
         IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to);
 
-        void Compact();
-
         Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null);
 
         IEnumerable<(byte[] key, byte[] value)> GetAll();
+
+        /// <summary>
+        /// The history of the key range [<paramref name="from"/>, <paramref name="to"/>] as stored: the number of
+        /// values a read returns, and the bytes of the keys and values that hold them on disk. For a row database
+        /// that is the rows; a sealed week adds its chunks (key and chunk bytes) to its overlay rows.
+        /// </summary>
+        (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to);
     }
 }

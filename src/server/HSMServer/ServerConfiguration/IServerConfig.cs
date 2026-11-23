@@ -18,6 +18,10 @@
 
         CollectorSessionsConfig CollectorSessions { get; }
 
+        HistorySealingConfig HistorySealing { get; }
+
+        HistoryCompactionConfig HistoryCompaction { get; }
+
         OidcConfig Oidc { get; }
 
 

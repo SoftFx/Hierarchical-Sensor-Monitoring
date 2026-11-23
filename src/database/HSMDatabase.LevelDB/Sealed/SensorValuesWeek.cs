@@ -1,0 +1,432 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB.DatabaseImplementations;
+
+namespace HSMDatabase.LevelDB.Sealed
+{
+    /// <summary>
+    /// One week of sensor history as the weekly shard dictionary holds it (#1804): the instance that serves the week
+    /// (the row worker, or the sealed store of ADR-0020) behind a handle that can replace it while the server runs.
+    /// The sealing job swaps a week from rows to sealed when it marks a seal, and back when it unseals; nothing else
+    /// swaps.
+    ///
+    /// <para><b>The gate.</b> Every write and every range delete holds the week's gate shared for its whole duration
+    /// (both phases of a sealed range delete included). The sealing job takes it exclusively for its short commit
+    /// steps: starting a delete log, writing a fold's chunks, a batch of compare-then-delete, a batch of an unseal's
+    /// copy, and the swap. So a commit never interleaves with a write or a delete, and a delete is never half done
+    /// when a commit looks at the week. Reads never take the gate.</para>
+    ///
+    /// <para><b>Delete logs.</b> While the job encodes rows outside the gate (a seal, a fold), it keeps a delete log:
+    /// every range delete that starts after the log is opened is recorded before it touches anything. The commit, under
+    /// the exclusive gate, drops the work of every sensor a recorded delete touched, so chunks built from rows a delete
+    /// has removed never become visible.</para>
+    ///
+    /// <para><b>The swap.</b> The replacement shares the native row database of the instance it replaces (LevelDB
+    /// allows one handle per directory), so the swap closes nothing a reader could still use: a read that started on
+    /// the old instance goes on with it. Reads hold a lease on the instance they started on; a replaced instance is
+    /// disposed when its last lease ends, and disposing it releases only what it does not share (the chunk database of
+    /// a sealed store after an unseal). The swap itself is a reference assignment under the exclusive gate.</para>
+    /// </summary>
+    public sealed class SensorValuesWeek : ISensorValuesDatabase
+    {
+        // No recursion: nothing that holds the gate calls back into the handle (a write or a delete calls only its instance;
+        // the job's steps call only the instances and the files).
+        private readonly ReaderWriterLockSlim _gate = new(LockRecursionPolicy.NoRecursion);
+
+        private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
+
+        /// <summary>An exclusive step held longer than this is logged as a warning.</summary>
+        internal static readonly TimeSpan LongHold = TimeSpan.FromMilliseconds(100);
+        private readonly List<DeleteLog> _deleteLogs = [];
+        private readonly List<Lease> _replaced = [];
+        private readonly object _replacedLock = new();
+
+        private volatile Lease _current;
+        private volatile bool _disposed;
+
+        // The database core's clock: the instances serving the week record their last reclaimable change by it (#1801).
+        private readonly Func<DateTime> _utcNow;
+
+
+        public string Name { get; }
+
+        public string SealedName { get; }
+
+        public long From { get; }
+
+        public long To { get; }
+
+
+        /// <summary>The instance serving the week now. Only the sealing job, which is the only one to swap, may keep it.</summary>
+        internal ISensorValuesDatabase Current => _current.Database;
+
+        /// <summary>Served by the sealed store (merged reads) rather than the row worker.</summary>
+        public bool IsSealed => Current is SealedSensorValuesDatabase;
+
+        /// <summary>Why deletes of this sealed week are being refused and what to do (#1805 review W2); null when none are.</summary>
+        public string DeleteRefusal => (Current as SealedSensorValuesDatabase)?.DeleteRefusal;
+
+        /// <summary>Identifies the instance serving the week: it changes with every swap.</summary>
+        public object ServingInstance => Current;
+
+        /// <summary>Replaced instances still used by a read.</summary>
+        internal int ReplacedInUse
+        {
+            get { lock (_replacedLock) return _replaced.Count; }
+        }
+
+        // Test seam: runs inside a range delete, under the shared gate, after it was logged and before it changes anything.
+        internal Action InsideRangeDelete { get; set; }
+
+
+        /// <param name="utcNow">The clock of the database core (null: the system clock): a sealed week opened here asks it
+        /// whether its overlay still holds every row (#1805 follow-up), and every instance serving the week records its last
+        /// reclaimable change by it (#1801).</param>
+        public SensorValuesWeek(string name, string sealedName, long from, long to, Func<DateTime> utcNow = null)
+        {
+            Name = name;
+            SealedName = sealedName;
+            From = from;
+            To = to;
+
+            _utcNow = utcNow;
+            _current = new Lease(WithClock(LevelDBManager.GetSensorValuesDatabaseInstance(name, sealedName, from, to, utcNow?.Invoke())), OnReplacedDrained);
+        }
+
+        private ISensorValuesDatabase WithClock(ISensorValuesDatabase instance)
+        {
+            if (_utcNow is not null)
+                ((IntervalDataseBase)instance).Clock = _utcNow;
+
+            return instance;
+        }
+
+
+        public bool Contains(long time) => From <= time && time < To;
+
+        public bool Overlaps(long from, long to) => From < to && To > from;
+
+
+        #region Writes (under the shared gate)
+
+        public void PutSensorValue(byte[] key, byte[] value)
+        {
+            _gate.EnterReadLock();
+            try
+            {
+                _current.Database.PutSensorValue(key, value);
+            }
+            finally
+            {
+                _gate.ExitReadLock();
+            }
+        }
+
+        public void PutSensorValueOrThrow(byte[] key, byte[] value)
+        {
+            _gate.EnterReadLock();
+            try
+            {
+                _current.Database.PutSensorValueOrThrow(key, value);
+            }
+            finally
+            {
+                _gate.ExitReadLock();
+            }
+        }
+
+        public void RemoveSensorValues(byte[] from, byte[] to)
+        {
+            _gate.EnterReadLock();
+            try
+            {
+                // Logged before anything changes: a commit that sees no entry knows no delete ran since its log opened.
+                lock (_deleteLogs)
+                    foreach (var log in _deleteLogs)
+                        log.Add(from, to);
+
+                InsideRangeDelete?.Invoke();
+
+                _current.Database.RemoveSensorValues(from, to);
+            }
+            finally
+            {
+                _gate.ExitReadLock();
+            }
+        }
+
+        #endregion
+
+        #region Reads (under a lease on the instance they start on)
+
+        public void FillLatestValues(Dictionary<byte[], (long from, byte[] toKey, byte[] latestValue)> keyValuePairs) =>
+            Leased(db => { db.FillLatestValues(keyValuePairs); return 0; });
+
+        public byte[] Get(byte[] key, byte[] sensorId) => Leased(db => db.Get(key, sensorId));
+
+        public byte[] GetLatest(byte[] to, byte[] sensorId) => Leased(db => db.GetLatest(to, sensorId));
+
+        public byte[] GetFirst(byte[] to, byte[] sensorId) => Leased(db => db.GetFirst(to, sensorId));
+
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null) =>
+            Leased(db => db.GetLastAndFirstValues(sensorIds, results));
+
+        public (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to) =>
+            Leased(db => db.CalculateHistorySize(from, to));
+
+        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to) => LeasedRange(db => db.GetValuesFrom(from, to));
+
+        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to) => LeasedRange(db => db.GetValuesTo(from, to));
+
+        public IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to) => LeasedRange(db => db.GetKeysValuesTo(from, to));
+
+        public IEnumerable<(byte[] key, byte[] value)> GetAll() => LeasedRange(db => db.GetAll());
+
+        #endregion
+
+        #region Compaction bookkeeping (#1801): the current instance's
+
+        public void Compact() => Leased(db => { db.Compact(); return 0; });
+
+        public bool IsCompacted => _current.Database.IsCompacted;
+
+        public long ReclaimableChangeCount => _current.Database.ReclaimableChangeCount;
+
+        public DateTime? LastReclaimableChangeUtc => _current.Database.LastReclaimableChangeUtc;
+
+        public bool TryMarkCompacted(long reclaimableChangeCountBeforeCompaction, string content) =>
+            _current.Database.TryMarkCompacted(reclaimableChangeCountBeforeCompaction, content);
+
+        public long WriteCount => _current.Database.WriteCount;
+
+        #endregion
+
+        #region The sealing job (#1804)
+
+        /// <summary>
+        /// Runs <paramref name="action"/> with the gate held exclusively: no write or range delete runs meanwhile. How long
+        /// the gate was held (from acquiring it) is returned and logged: Debug, and Warn above <see cref="LongHold"/>.
+        /// </summary>
+        internal T Exclusive<T>(string what, Func<T> action, out TimeSpan held)
+        {
+            _gate.EnterWriteLock();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                held = watch.Elapsed;
+                _gate.ExitWriteLock();
+
+                if (held >= LongHold)
+                    _logger.Warn($"{what} held the gate of {Name} for {held.TotalMilliseconds:F1} ms: writes to the week waited");
+                else
+                    _logger.Debug($"{what} held the gate of {Name} for {held.TotalMilliseconds:F2} ms");
+            }
+        }
+
+        internal T Exclusive<T>(Func<T> action) => Exclusive("exclusive step", action, out _);
+
+        internal void Exclusive(Action action) => Exclusive("exclusive step", () => { action(); return 0; }, out _);
+
+        /// <summary>
+        /// Opens a delete log: every range delete that starts from now on is recorded in it. Taken under the exclusive
+        /// gate, so a delete already running has finished and is not in the log; whatever the caller reads afterwards
+        /// already reflects it.
+        /// </summary>
+        internal DeleteLog OpenDeleteLog() => Exclusive("delete log", () =>
+        {
+            var log = new DeleteLog();
+
+            lock (_deleteLogs)
+                _deleteLogs.Add(log);
+
+            return log;
+        }, out _);
+
+        internal void CloseDeleteLog(DeleteLog log)
+        {
+            lock (_deleteLogs)
+                _deleteLogs.Remove(log);
+        }
+
+        /// <summary>
+        /// Replaces the instance serving the week by the one <paramref name="create"/> builds over the same open row
+        /// database. Must run under <see cref="Exclusive(Action)"/>. If <paramref name="create"/> throws, nothing changes.
+        /// </summary>
+        internal void Swap(Func<LevelDBDatabaseAdapter, ISensorValuesDatabase> create)
+        {
+            if (!_gate.IsWriteLockHeld)
+                throw new InvalidOperationException("A week is swapped only under its exclusive gate");
+
+            var old = _current;
+            var replacement = WithClock(create(((IntervalDataseBase)old.Database).RowDatabase));
+
+            ((IntervalDataseBase)old.Database).ReleaseRowDatabase();
+
+            lock (_replacedLock)
+                _replaced.Add(old);
+
+            _current = new Lease(replacement, OnReplacedDrained);
+
+            // Drops the reference the handle held; the instance is disposed when the last read on it ends.
+            old.Release();
+        }
+
+        #endregion
+
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+
+            _current.DisposeNow();
+
+            // At shutdown, like any database here: a read still running on a replaced instance loses it.
+            List<Lease> replaced;
+
+            lock (_replacedLock)
+                replaced = [.. _replaced];
+
+            foreach (var lease in replaced)
+                lease.DisposeNow();
+
+            // The gate is not disposed: a write that is still running at shutdown must be able to leave it.
+        }
+
+
+        private void OnReplacedDrained(Lease lease)
+        {
+            lock (_replacedLock)
+                _replaced.Remove(lease);
+        }
+
+        private Lease Acquire()
+        {
+            while (true)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
+                var lease = _current;
+
+                if (lease.TryAcquire())
+                    return lease;
+            }
+        }
+
+        private T Leased<T>(Func<ISensorValuesDatabase, T> read)
+        {
+            var lease = Acquire();
+
+            try
+            {
+                return read(lease.Database);
+            }
+            finally
+            {
+                lease.Release();
+            }
+        }
+
+        // The lease is taken when the enumeration starts and returned when it ends or is disposed.
+        private IEnumerable<T> LeasedRange<T>(Func<ISensorValuesDatabase, IEnumerable<T>> read)
+        {
+            var lease = Acquire();
+
+            try
+            {
+                foreach (var item in read(lease.Database))
+                    yield return item;
+            }
+            finally
+            {
+                lease.Release();
+            }
+        }
+
+
+        /// <summary>A reference-counted instance: the handle holds one reference while it is current, each read one more.</summary>
+        private sealed class Lease(ISensorValuesDatabase database, Action<Lease> onDisposed)
+        {
+            private int _references = 1;
+            private int _disposed;
+
+
+            public ISensorValuesDatabase Database { get; } = database;
+
+
+            public bool TryAcquire()
+            {
+                while (true)
+                {
+                    var references = Volatile.Read(ref _references);
+
+                    if (references == 0)
+                        return false;
+
+                    if (Interlocked.CompareExchange(ref _references, references + 1, references) == references)
+                        return true;
+                }
+            }
+
+            public void Release()
+            {
+                if (Interlocked.Decrement(ref _references) == 0)
+                    DisposeNow();
+            }
+
+            public void DisposeNow()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                    return;
+
+                Database.Dispose();
+                onDisposed(this);
+            }
+        }
+    }
+
+
+    /// <summary>The range deletes that started on a week while the sealing job encoded outside its gate.</summary>
+    internal sealed class DeleteLog
+    {
+        private readonly List<(byte[] from, byte[] to)> _ranges = [];
+
+
+        public int Count
+        {
+            get { lock (_ranges) return _ranges.Count; }
+        }
+
+
+        public void Add(byte[] from, byte[] to)
+        {
+            lock (_ranges)
+                _ranges.Add(((byte[])from.Clone(), (byte[])to.Clone()));
+        }
+
+        /// <summary>Whether a recorded delete can have removed a row of <paramref name="sensorId"/>.</summary>
+        public bool Touches(Guid sensorId)
+        {
+            var first = new DbKey(sensorId, 0L).ToBytes();
+            var last = first.AsSpan(0, KeyOrder.SensorIdLength).ToArray();
+            Array.Resize(ref last, KeyOrder.KeyLength);
+            last.AsSpan(KeyOrder.SensorIdLength).Fill(0xFF);
+
+            lock (_ranges)
+                foreach (var (from, to) in _ranges)
+                    if (KeyOrder.Compare(from, last) <= 0 && KeyOrder.Compare(to, first) >= 0)
+                        return true;
+
+            return false;
+        }
+    }
+}

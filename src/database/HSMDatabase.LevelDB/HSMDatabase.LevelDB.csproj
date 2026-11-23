@@ -15,8 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HSMDatabase.LevelDB.Tests" />
+    <InternalsVisibleTo Include="SealedHistoryBench" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <ProjectReference Include="..\HSMDatabase.SealedHistory\HSMDatabase.SealedHistory.csproj" />
   </ItemGroup>
 
 </Project>

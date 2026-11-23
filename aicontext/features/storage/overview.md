@@ -1,10 +1,16 @@
 # Storage Features Overview
 
-> Owner: storage | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: storage | Last reviewed: 2026-11-19 | Canonical: yes
 
 The storage area owns LevelDB/LMDB-backed persistence, key formats, value
 serialization, snapshots, journals, interval data, retention, and restart
 recovery behavior.
+
+## Feature Folders
+
+- [`sealed-history/`](sealed-history/feature.md) - chunk format of sealed sensor
+  history (ADR-0020): byte layout, fidelity rules, versioning, encoder refusals.
+- [`restore/`](restore/feature.md) - restore flow.
 
 ## Feature Folders To Add Here
 
@@ -15,3 +21,8 @@ recovery behavior.
 - `cache-recovery/` - restart/cache rebuild behavior.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.
+
+## Related
+
+- `docs/initiatives/sensor-history-storage.md` - measurement of alternative stores
+  and codecs for sensor history, and the proposed direction (not implemented).

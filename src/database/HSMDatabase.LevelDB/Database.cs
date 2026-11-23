@@ -46,6 +46,10 @@ namespace HSMDatabase.LevelDB
 
         private string _databaseName;
 
+        // The native database, for the sealed week store (#1803): its merged reads need
+        // their own iterators, and its chunk rewrites a synced write batch.
+        internal DB Native => _database;
+
         public LevelDBDatabaseAdapter(string name)
         {
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
@@ -124,13 +128,22 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void DeleteValueFromTo(byte[] from, byte[] to)
+        // beforeFirstDelete runs once, right before the first key of the range is deleted,
+        // and not at all when the range holds no key: a weekly shard uses it to drop its
+        // compaction marker only when the delete really changes it (#1801).
+        public void DeleteValueFromTo(byte[] from, byte[] to, Action beforeFirstDelete = null)
         {
             using var iterator = _database.CreateIterator(_iteratorOptions);
 
             iterator.Seek(from);
             while (iterator.IsValid && iterator.Key().IsSmallerOrEquals(to))
             {
+                if (beforeFirstDelete is not null)
+                {
+                    beforeFirstDelete();
+                    beforeFirstDelete = null;
+                }
+
                 _database.Delete(iterator.Key());
                 iterator.Next();
             }
@@ -674,6 +687,21 @@ namespace HSMDatabase.LevelDB
         {
             _database.Compact();
         }
+
+        // A key below every 24-byte key of a history database (it is shorter than the all-zero key and a prefix of it).
+        private static readonly byte[] BelowEveryRowKey = [0];
+
+        /// <summary>
+        /// Writes the memtables (the current one and one still waiting to be flushed) into table files and returns once
+        /// they are there, so no row of the database depends on a write-ahead log any more (#1805 follow-up, review R1).
+        /// LevelDB's CompactRange first flushes the memtables and waits for that, then compacts the tables that overlap
+        /// the range; the range here, the single key <c>[0x00]</c>, overlaps no table of a history database, so no existing
+        /// table is rewritten. Pinned against the bundled native builds, Windows and Linux, by <c>MemTableFlushTests</c>:
+        /// after it every row survives the loss of every write-ahead log, and the tables written before stay as they were.
+        /// That a new table file and the MANIFEST reach the disk is LevelDB's own guarantee (stock LevelDB syncs both when it
+        /// writes them); a test without a power loss cannot show it.
+        /// </summary>
+        internal void FlushMemTablesToTables() => _database.CompactRange(BelowEveryRowKey, BelowEveryRowKey);
 
 
         public IEnumerable<(byte[], byte[])> GetAll()

@@ -34,4 +34,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0017 | Accepted | [Collectors hold a persistent session with the server over WebSocket on 443](0017-collector-session-websocket.md) | 2026-11-10 |
 | 0018 | Accepted | [A moved sensor keeps its id; its old path becomes an alias](0018-sensor-move-keeps-id.md) | 2026-11-12 |
 | 0019 | Accepted | [The collector session is the collectors' default transport](0019-collector-session-default.md) | 2026-11-13 |
+| 0020 | Accepted | [Sensor history of closed weeks is sealed into chunks with a codec of our own, on top of LevelDB](0020-sealed-sensor-history.md) | 2026-11-19 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

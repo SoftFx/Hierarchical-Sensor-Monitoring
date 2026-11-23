@@ -11,7 +11,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     internal sealed class SensorValuesDatabaseWorker : IntervalDataseBase, ISensorValuesDatabase
     {
 
-        public SensorValuesDatabaseWorker(string name, long from, long to) : base(name, from, to)
+        // rowDatabase: the open row database of the instance this one replaces in a live swap (#1804).
+        public SensorValuesDatabaseWorker(string name, long from, long to, LevelDBDatabaseAdapter rowDatabase = null) : base(name, from, to, rowDatabase)
         {
         }
 
@@ -32,6 +33,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
+                OnBeforePut();
                 _openedDb.Put(key, value);
             }
             catch (Exception e)
@@ -42,13 +44,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         // For writers whose next step depends on the write having happened
         // (the sensor-move merge deletes the source rows afterwards, #1720).
-        public void PutSensorValueOrThrow(byte[] key, byte[] value) => _openedDb.Put(key, value);
+        public void PutSensorValueOrThrow(byte[] key, byte[] value)
+        {
+            OnBeforePut();
+            _openedDb.Put(key, value);
+        }
 
         public void RemoveSensorValues(byte[] from, byte[] to)
         {
             try
             {
-                _openedDb.DeleteValueFromTo(from, to);
+                _openedDb.DeleteValueFromTo(from, to, OnBeforeDelete);
             }
             catch (Exception e)
             {
@@ -165,6 +171,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 return [];
             }
+        }
+
+        // The loop DatabaseCore.CalculateSensorHistorySize ran over GetKeysValuesTo before #1803.
+        public (long count, long keyBytes, long valueBytes) CalculateHistorySize(byte[] from, byte[] to)
+        {
+            long count = 0, keyBytes = 0, valueBytes = 0;
+
+            foreach (var (key, value) in _openedDb.GetValueKeyPairToFrom(from, to))
+            {
+                keyBytes += key.Length;
+                valueBytes += value.Length;
+                count++;
+            }
+
+            return (count, keyBytes, valueBytes);
         }
 
         public void Compact()

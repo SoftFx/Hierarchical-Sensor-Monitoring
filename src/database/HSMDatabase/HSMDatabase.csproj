@@ -9,6 +9,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HSMDatabase.LevelDB.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\server\HSMServer.Core\HSMServer.Core.csproj" />
     <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
     <ProjectReference Include="..\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />

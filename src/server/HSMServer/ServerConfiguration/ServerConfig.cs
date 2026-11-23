@@ -88,6 +88,10 @@ namespace HSMServer.ServerConfiguration
 
         public CollectorSessionsConfig CollectorSessions { get; }
 
+        public HistorySealingConfig HistorySealing { get; }
+
+        public HistoryCompactionConfig HistoryCompaction { get; }
+
         public OidcConfig Oidc { get; }
 
         // A client secret found in the settings file (#1782): ignored, dropped by the resave,
@@ -134,6 +138,8 @@ namespace HSMServer.ServerConfiguration
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
             CollectorSessions = Register<CollectorSessionsConfig>(nameof(CollectorSessions));
+            HistorySealing = Register<HistorySealingConfig>(nameof(HistorySealing));
+            HistoryCompaction = Register<HistoryCompactionConfig>(nameof(HistoryCompaction));
             Oidc = OidcConfig.Bind(configuration.GetSection(OidcConfig.SectionName));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
@@ -155,6 +161,8 @@ namespace HSMServer.ServerConfiguration
             ApiTokens.Validate();
             Kestrel.Validate();
             CollectorSessions.Validate();
+            HistorySealing.Validate();
+            HistoryCompaction.Validate();
             OidcErrors = Oidc.Validate();
 
             ResaveSettings();

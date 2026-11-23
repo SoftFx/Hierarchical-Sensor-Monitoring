@@ -97,6 +97,10 @@ namespace HSMServer.Model.History
         {
             Reset();
 
+            // The previous read holds database iterators (and, since #1804, a lease on the week instance it reads)
+            // until its enumerator is disposed; a new read replaces it.
+            await DisposePagesAsync();
+
             _pagesEnumerator = cache.GetSensorValuesPage(_model.Id, request.FromUtc, request.ToUtc, request.Count, request.Options).GetAsyncEnumerator(_source.Token);
 
             await TryReadNextPage();
@@ -122,7 +126,35 @@ namespace HSMServer.Model.History
             return this;
         }
 
-        public void Dispose() => _source.Cancel();
+        public void Dispose()
+        {
+            _source.Cancel();
+
+            // The page iterators finish synchronously when disposed between pages (no await in their finally blocks).
+            var dispose = DisposePagesAsync();
+
+            if (!dispose.IsCompleted)
+                _ = dispose.AsTask();
+        }
+
+        private ValueTask DisposePagesAsync()
+        {
+            var enumerator = _pagesEnumerator;
+            _pagesEnumerator = null;
+
+            if (enumerator is null)
+                return ValueTask.CompletedTask;
+
+            try
+            {
+                return enumerator.DisposeAsync();
+            }
+            catch (Exception e) when (e is NotSupportedException or InvalidOperationException)
+            {
+                // A page read still running on it (two requests of one user overlapping): it ends with that read.
+                return ValueTask.CompletedTask;
+            }
+        }
 
         public void Reset()
         {
@@ -145,6 +177,9 @@ namespace HSMServer.Model.History
 
         private async Task<bool> TryReadNextPage()
         {
+            if (_pagesEnumerator is null)
+                return false;
+
             var hasNext = await _pagesEnumerator.MoveNextAsync();
 
             if (hasNext && _pagesEnumerator.Current?.Count != 0)
