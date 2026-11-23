@@ -131,6 +131,22 @@ A 60-second limit stores 25% more than the 185-second window with five columns a
 
 A two-stage variant was measured as well: the collector sends 60-second batches with a cheap encoding (coders + zstd 3: 6.37 bytes per row on the wire with five columns) and the server decodes them and re-encodes each table into batches of up to 4,096 rows. The result is the same 5.47 bytes stored; the server spends about 0.5 µs per row, 133 CPU-seconds a day for 276 M rows on one core, and writes the data a second time.
 
+What the collector sends per tick (2026-11-24, the same sample). Instead of one small batch per table, the rows of all tables in a window can travel as one block. Bytes per row on the wire, a 40-byte header per batch or per block included; on disk a per-table batch adds 68 bytes of key and index record, a block 16 bytes of key:
+
+| Arrival form, 10-second window | Three columns | Five columns | Collector CPU, five columns |
+|---|---|---|---|
+| One batch per table, HSM coders + zstd 15 | 5.88 (8.67 on disk) | 9.08 (11.88 on disk) | 0.70 µs/row |
+| One block, rows grouped by table, HSM coders per table, one zstd 15 frame | 2.69 | 5.26 | 1.00 µs/row |
+| One block, rows grouped by table, raw columns, one zstd 15 frame (no HSM coders) | 3.38 | 5.14 | 1.38 µs/row |
+| The same with zstd 3 | 3.75 | 5.75 | 0.09 µs/row |
+| One block, rows in arrival order with a table-id column, raw columns, zstd 15 | 5.78 | 7.57 | — |
+
+A block is 42–54% smaller on the wire than per-table batches and 56–69% smaller on disk, because the per-batch overhead disappears and one compression frame sees all tables. With five columns the block without HSM coders is as small as the one with them. Grouping the rows by table matters; arrival order with a table-id column is much worse. With 5-second windows the raw block takes 5.65 bytes per row (five columns, zstd 15), with 30-second windows 4.77.
+
+The price is paid by a reader of data that is not merged yet: to get one table out of an hour of 10-second blocks every block is decompressed, 130–260 ms and 207–344 MB for the raw block (50–75 ms and 35–64 MB with coders inside), against 0.1–8 ms and under 1 MB for per-table batches. Splitting a block into per-table rows costs the server 0.02–0.05 µs per row.
+
+LZMA against zstd (SharpCompress 0.30.1, strongest setting the package exposes; a native xz preset was not measured). For per-table batches coded with the HSM coders LZMA changes the size by +1.3% (three columns) and −1.1% (five) and decodes 5–7 times slower; zstd 19 equals zstd 15. On the raw block LZMA does help: 4.06 bytes per row against 5.14 with zstd 15 and 5.75 with zstd 3 (five columns), but encoding costs 9–15 µs per row inside the customer's application against 0.09 for zstd 3, and a read of unmerged data becomes about ten times slower.
+
 Client side, from package metadata and code reading: the last Parquet.Net release with a `netstandard2.0` target is 5.5.0 (later releases need net8.0) and it brings System.Text.Json 10 into net472 consumers; a C++ Parquet writer means Apache Arrow through vcpkg (OpenSSL, Thrift, Boost and more; no 32-bit x86), where the native collector depends only on curl today. The HSM integer and double coders are about 840 lines, need four trivial polyfills for net472, and ZstdSharp.Port supports net472; zstd itself is a single small vcpkg port.
 
 Not measured: more than three minutes of real data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay; whether LevelDB frees deleted space by itself after more than 60 s; batches that arrive hours late (the growing key takes them at the end by construction, which was reasoned and not run).
