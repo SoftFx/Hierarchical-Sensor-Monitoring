@@ -1,6 +1,6 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-10-08 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-23 | Canonical: yes
 > Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution. Chat lifecycle stays web-UI (admin) only; since the chat read surface the management API (`GET /api/v1/chats`) and MCP (`list_chats`/`get_chat`) expose chats read-only — the id source for `destination.chats`, webhook URLs never exposed (presence booleans only); chat detail (Telegram identifiers, author, send settings) answers only an admin or a manager of a bound folder, the same gate the web UI's chat editor applies.
 
 ---
@@ -22,6 +22,7 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, Telegram titl
 - A channel's `DeliverAsync` must not throw — Telegram's implementation keeps the historical internal `try/catch` that logs and swallows errors. Diagnostics surface via the concrete `TelegramBot` events (`MessageSending`, `MessageSended`, `ErrorHandled`), which `DataCollectorWrapper` subscribes to directly; the interface itself carries no events in this revision.
 - `INotificationChannel.Kind` is informational metadata (`NotificationKind.Telegram = 0`, `NotificationKind.Slack = 1`, `NotificationKind.Mattermost = 2`) used by diagnostics sensors and future channel-list UIs. It is no longer load-bearing for routing — each channel resolves ids against the single `IChatsManager` and then filters by its own channel field, so ids for a chat that doesn't carry this channel are skipped without an error event.
 - Telegram delivery, the "Telegram Bot" diagnostics sensors, and the existing folder↔chat event wiring are unchanged end-to-end by the seam introduction.
+- The Telegram bot token is a secret that never reaches the log (#1824): the Telegram settings change description says `BotToken: changed` without the old or the new value (`ConfigurationController.BuildTelegramChangesText` — the text `SaveTelegramSettings` logs), and a failed bot start logs the rejection with the token scrubbed from the exception text and the message returned to the settings page (`TelegramBot.RedactToken`, targeting the token that start was attempted with, so a token saved while the request is in flight cannot leak the old one). The bot's Telegram client is an `ITelegramBotClient` built through the injectable `Func<string, ITelegramBotClient>` factory (default `TelegramBot.CreateClient`) — the seam the start-failure tests run against without the network, the same seam the bot-credential write surface (#1830) will probe.
 
 ## API / Public Contracts
 

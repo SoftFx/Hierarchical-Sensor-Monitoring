@@ -26,6 +26,7 @@ namespace HSMServer.Notifications
         private const int SendMessageRetryCount = 10;
         private const string ConfigurationsError = "Invalid Bot configurations.";
         private const string TrimmedMessage = " [this message was trimmed]";
+        private const string RedactedToken = "[redacted]";
         private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
@@ -42,7 +43,8 @@ namespace HSMServer.Notifications
         private readonly TelegramConfig _config;
 
         private CancellationTokenSource _tokenSource = new();
-        private TelegramBotClient _bot;
+        private ITelegramBotClient _bot;
+        private readonly Func<string, ITelegramBotClient> _clientFactory;
 
 
         private string BotToken => _config.BotToken;
@@ -56,8 +58,12 @@ namespace HSMServer.Notifications
         public event Action<string, string> MessageSended;
         public event Action MessageSending;
 
-        internal TelegramBot(IChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
+        // clientFactory defaults to the real Telegram client; tests pass their own (#1824), so the
+        // start path runs without the network.
+        internal TelegramBot(IChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config,
+            Func<string, ITelegramBotClient> clientFactory = null)
         {
+            _clientFactory = clientFactory ?? CreateClient;
             _folderManager = folderManager;
             _chatsManager = chatsManager;
 
@@ -101,6 +107,29 @@ namespace HSMServer.Notifications
                 await SendMessageAsync(chat, message);
         }
 
+        // The one place the real Telegram client is built.
+        private static ITelegramBotClient CreateClient(string token)
+        {
+            HttpClientHandler clientHandler = new() //todo: should be removed after live ubuntu update
+            {
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+            };
+
+            return new TelegramBotClient(token, new HttpClient(clientHandler))
+            {
+                Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
+            };
+        }
+
+        // Wipes the given token from third-party text (an exception message) before the text
+        // reaches the log or the caller. The library does not put the request URL into exception
+        // messages today; this guards against that changing (#1824).
+        private static string RedactToken(string text, string token) =>
+            string.IsNullOrEmpty(text) || string.IsNullOrEmpty(token)
+                ? text
+                : text.Replace(token, RedactedToken);
+
         internal async Task<string> StartBotAsync()
         {
             if (IsBotRunning)
@@ -113,17 +142,12 @@ namespace HSMServer.Notifications
             if (!_config.IsValid)
                 return ConfigurationsError;
 
-            HttpClientHandler clientHandler = new() //todo: should be removed after live ubuntu update
-            {
-                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
-                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
-            };
-
             _tokenSource = new CancellationTokenSource();
-            _bot = new TelegramBotClient(BotToken, new HttpClient(clientHandler))
-            {
-                Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
-            };
+
+            // The token THIS start is attempted with: the redaction below must target it even when
+            // the saved token changes while the request is in flight.
+            var token = BotToken;
+            _bot = _clientFactory(token);
 
             try
             {
@@ -133,10 +157,12 @@ namespace HSMServer.Notifications
             {
                 _bot = null;
 
-                _logger.Error($"Invalid credentials: {BotToken}, name = {_config?.BotName}");
-                _logger.Error(exc);
+                // #1824: the token is a secret — the log says the credentials failed, never the
+                // value, and third-party text (the exception) is scrubbed of it too.
+                _logger.Error($"Invalid credentials, name = {_config?.BotName}");
+                _logger.Error(RedactToken(exc.ToString(), token));
 
-                return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
+                return $"An error ({RedactToken(exc.Message, token)}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
             await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);

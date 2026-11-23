@@ -299,7 +299,8 @@ namespace HSMServer.Controllers
             return $"{userName} is changing server config:{Environment.NewLine}{sb.ToString()}";
         }
 
-        private static string BuildTelegramChangesText(TelegramConfig telegramConfig, TelegramSettingsViewModel telegramSettings, string userName)
+        // internal for the #1824 pin: the change description is what SaveTelegramSettings logs.
+        internal static string BuildTelegramChangesText(TelegramConfig telegramConfig, TelegramSettingsViewModel telegramSettings, string userName)
         {
             StringBuilder sb = new StringBuilder();
 
@@ -307,7 +308,7 @@ namespace HSMServer.Controllers
                 sb.AppendLine($"IsRunning: {telegramConfig.IsRunning} -> {telegramSettings.IsEnabled}");
 
             if (telegramConfig.BotToken != telegramSettings.BotToken)
-                sb.AppendLine($"BotToken: {telegramConfig.BotToken} -> {telegramSettings.BotToken}");
+                sb.AppendLine("BotToken: changed"); // the token is a secret: say THAT it changed, never the value (#1824)
 
             if (telegramConfig.BotName != telegramSettings.BotName)
                 sb.AppendLine($"BotName: {telegramConfig.BotName} -> {telegramSettings.BotName}");
