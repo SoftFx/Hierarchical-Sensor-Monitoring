@@ -151,23 +151,22 @@ Client side, from package metadata and code reading: the last Parquet.Net releas
 
 Not measured: more than three minutes of real data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay; whether LevelDB frees deleted space by itself after more than 60 s; batches that arrive hours late (the growing key takes them at the end by construction, which was reasoned and not run).
 
-## Proposal after step 0
+## Decision (2026-11-24)
 
-Nothing below is built. The owner accepted this proposal on 2026-11-23; ADR-0021 is the decision and is authoritative where the two differ.
+ADR-0021 is the decision and is authoritative. In short, as accepted by the owner after the measurements above; nothing is built yet.
 
-| Question | Proposal |
+| Question | Decision |
 |---|---|
-| Batch format | Own format: a header (magic, version, schema id, row count, first and last time, lengths, CRC-32C) followed by the columns coded with the sealed-history integer and double coders and compressed with zstd 15. Parquet is 50–110% larger in this layout and costs a heavy dependency in both collectors. |
-| Who compresses | The collector. The coders move into a `netstandard2.0` library shared by the server and the managed collector; the native collector gets a C++ port with byte-identical output locked by conformance scenarios. |
-| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after 10 seconds, whichever comes first, and closes and sends every open batch at once when it stops. The owner wants the data on the server within seconds (2026-11-24). |
-| Merging | Decided by the owner on 2026-11-24, on the model of VictoriaLogs: when an arrival hour has closed, the server merges the small batches of each sensor in it into batches of up to 4,096 rows, once, into a second database with a growing key, verifies them and deletes the arrival batches. Stored size goes from 11.9 bytes per row (10-second batches) to 5.5 on the three-minute sample and is expected near 4.9 with full hours. |
-| Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. **Decided by the owner, 2026-11-23.** Also considered and rejected by him: batches in hour files with only their addresses in LevelDB (two stores to keep consistent), and SeaweedFS (a separate service; not measured). |
-| Deletion | Retention deletes the batches whose arrival hour is older than the limit, with their index records, and then calls `Compact` on that key range (0.1 s, 14 MB at seven days). A batch that arrived late lives longer by its delay. Removing one sensor drops its index records at once; its bytes leave when their hours expire. |
-| Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Batches do not go over the collector session. |
-| Read API | A range request returns the stored batches that overlap the range; the client library decodes them and hands the caller a matrix object. A CSV or JSON variant decodes on the server and is limited in rows, for clients without the library. |
-| Rendering | The server decodes the requested range of one column and reduces it to minimum and maximum per pixel column. Reading an hour of one instrument takes milliseconds, so this is cheap; it comes after ingest and read. |
-
-Settled in ADR-0021: one retention period per product in the first version; a batch closes after 10 seconds at the latest; unsent batches are kept in a local file and sent after the next start. Left to the storage step: whether the batch database is one or one per week or month.
+| Who packs | Two packers. The collector packs simply and cheaply for transport; the server packs for storage. No HSM column coders in the collectors. |
+| What the collector sends | Every 10 seconds one block with the rows of all its table sensors, grouped by table, raw columns under one zstd 3 frame: 5.75 bytes per row for five columns at 0.09 µs of CPU per row. On stop the open block goes at once; undelivered blocks wait in a local file. |
+| Transport | A second WebSocket connection of the collector session, binary frames, one acknowledgement per block. |
+| Ingest | The server checks the block and stores it as it arrived, in LevelDB under the key `arrival hour, sequence number`. Rows are readable at once. |
+| Merge | Once an hour the server packs the blocks of the closed hour into batches of up to 4,096 rows per table (column coders of sealed history, zstd 15), verifies them and deletes the blocks. One merge, no cascade. |
+| Where batches live | LevelDB, one database per product, key `merge hour, sequence number`, plus an index `sensor, first time`. |
+| Deletion | One retention period per product: a range delete of whole hours, then a compaction of that range. |
+| Read API | A range request returns rows as blocks of one table, from batches and from blocks not merged yet; the client library returns a matrix; CSV or JSON for clients without it. |
+| Rendering | Minimum and maximum per pixel column, computed by the server. |
+| LZMA | Not used: about one percent after the column coders, and too slow inside the collector. |
 
 ## Capacity
 
@@ -175,13 +174,13 @@ Stored size is measured on the test sample; the row counts of the future product
 
 | Quantity | Value | Basis |
 |---|---|---|
-| Stored size | 5.2 bytes per row with five columns, 2.6 with time, bid and ask | step 0; the volume column was synthetic |
-| A billion rows | 5.2 GB | the same |
+| Stored size | about 5.75 bytes per row with five columns while in blocks, about 5.5 after the merge on the three-minute sample (header, key and index included), near 4.9 expected with full hours | measured, except the last figure (scaled run); the volume column was synthetic |
+| A billion rows | 5–6 GB | the same |
 | Test feed, quotes only (about 97 M rows a day) | 0.5 GB a day, 15 GB a month, 185 GB a year | the share of quotes is estimated from three minutes |
 | Test feed, every record of the ticks file (276 M rows a day) | 1.4 GB a day, 43 GB a month, 525 GB a year | row count measured on 2026-11-20, the heaviest day |
 | A sustained 10,000 rows a second | 4.5 GB a day, 135 GB a month, 1.6 TB a year | arithmetic |
 | Free disk on production | about 550 GB | checked 2026-11-19 |
-| Server work per batch | on ingest: header and checksum check, one put of the batch and one of its index record; later one merge per closed hour | no per-row state on ingest; the merge costs about 0.5 µs per row; each row reaches the disk four times (twice on arrival, twice when merged) |
+| Server work | on ingest: checksum, decompression and directory check of one block per collector per tick; once an hour the merge, about 0.5 µs per row | each row reaches the disk four times (twice in its block, twice in its batch) |
 
 ## Work Breakdown
 
@@ -189,24 +188,24 @@ Stored size is measured on the test sample; the row counts of the future product
 |---|---|---|
 | 0 | Measure on one real day of ticks: row count, instruments, Parquet (zstd) against the HSM chunk codec against the present form; batch size against compression and read time; LevelDB values against files | Done 2026-11-23, see the results above. |
 | — | ADR-0021: the table sensor, the batch format, the schema rules, storage, retention, what the server validates | Done 2026-11-23. |
-| 1 | #1843 Batch format and codec library, shared by the server and the managed collector | Moves the sealed-history column coders into a shared library; sealed chunks must keep their bytes. |
-| 2 | #1844 Server: sensor kind, schema and the batch store with retention | Storage key formats are compatibility-sensitive. |
-| 3 | #1845 Server: batch ingest route and range read API | DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
-| 4 | #1846 Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
-| 5 | #1847 Chart of a numeric column; feed sensors from batch headers | |
-| 6 | #1848 Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
+| 1 | #1843 Block format library, shared by the server and the managed collector | The only table format outside the server. |
+| 2 | #1844 Server: sensor kind, schema and the block store | Storage key formats are compatibility-sensitive. |
+| 3 | #1845 Server: the table connection of the session and the range read API | The session protocol and the DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
+| 4 | #1846 Managed collector: a table sensor API that gathers rows and sends one block per tick | Public API of a library used by third parties: additive only. |
+| 5 | #1847 Chart of a numeric column; feed sensors from block directories | |
+| 6 | #1848 Native collector | A block writer and zstd; no port of the column coders. Conformance coverage for both collectors is required by the project rules. |
 | 7 | #1849 Rollout: a test deployment under the target volume, Linux, the disk decision | |
-| 8 | #1850 Server: merge of the small batches of a closed hour | Can follow step 2. Needs the same care as the sealing job of ADR-0020: verify before delete, safe at any crash point. |
+| 8 | #1850 Server: stored batches, the hourly merge and retention | Follows step 2. Needs the same care as the sealing job of ADR-0020: verify before delete, safe at any crash point. |
 
 ## Risks
 
 - **Scope of HSM.** This makes HSM a store of bulk data as well as a monitoring system. Disk, backup and upgrade planning change with the volume; sensor history is not part of the server's backups today.
 - **Disk.** A year of ticks does not fit on the current production disk. Retention or more storage has to be decided before the feature is switched on.
 - **Compatibility.** A new sensor type reaches the shared DTOs and the public collector API. Older collectors and servers must ignore or refuse it cleanly.
-- **A second on-disk format.** The batch format sits next to the sealed-history chunk format. They share the column coders, but each has its own header and limits, and both have to stay readable forever.
+- **Two formats.** The block is a public format that both collectors write; the batch is a storage format next to the sealed-history chunk. Each needs its own limits and versioning, and both have to stay readable forever.
 - **Large values in LevelDB.** Measured in step 0: the cost depends on the key. A sensor-first key rewrites the data 14 times at seven days; a key that only grows writes it twice. The batch database must therefore never take keys out of order, and must not share a database with sensor values.
 - **Untrusted input.** A batch is client-supplied bytes that the server later decodes for charts and trimmed reads: limits on rows, columns, decoded size and nesting are part of the format rules, and they are checked before any column is decoded. The column coders are the ones sealed history already uses; zstd comes from a maintained library.
-- **Native collector.** The C++ port must produce the same bytes as the managed coders for every input; a difference corrupts nothing but breaks parity, so it is locked by conformance scenarios.
+- **Native collector.** It writes blocks with zstd from vcpkg and opens a second session connection with binary frames through libcurl, which the project has not used before.
 
 ## Verification
 
