@@ -6,6 +6,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.Folders;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Notifications.Chats;
 using Moq;
@@ -119,9 +120,22 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             var result = await Engine.UpdateChatAsync(update, new ChatFolderBinding([], []), _initiator);
 
             Assert.False(result.Success);
-            Assert.Contains(result.Errors, e => e.Field == nameof(ChatUpdate.SlackWebhookUrl));
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Contains(nameof(ChatUpdate.SlackWebhookUrl), result.Failure.Errors.Keys);
             _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
             _folders.Verify(m => m.TryUpdate(It.IsAny<FolderUpdate>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateChat_UnknownChat_AnswersNotFound()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, chat: null);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, new ChatFolderBinding([], []), _initiator);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
         }
 
         [Fact]
@@ -171,6 +185,46 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 u.Id == folderA.Id
                 && !u.Chats.Contains(chatId))), Times.Once);
             _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u => u.Id == folderB.Id)), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateChat_FolderBinding_NeverAddsAFolderOutsideTheManagedSet()
+        {
+            var chatId = Guid.NewGuid();
+            var folderC = new FolderModel(BuildFolderEntity(Guid.NewGuid()));
+
+            var existing = new Chat(BuildChatEntity(chatId));
+            SetupChat(chatId, existing);
+            SetupFolder(folderC);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+            SetupFolderUpdate(ok: true);
+
+            // The caller asks for folderC but manages no folder at all: nothing is bound.
+            var binding = new ChatFolderBinding(Desired: [folderC.Id], Managed: []);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, binding, _initiator);
+
+            Assert.True(result.Success);
+            _folders.Verify(m => m.TryUpdate(It.IsAny<FolderUpdate>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateChat_FailedWrite_AnswersConflictAndBindsNoFolders()
+        {
+            var chatId = Guid.NewGuid();
+            var folderA = new FolderModel(BuildFolderEntity(Guid.NewGuid()));
+
+            SetupChat(chatId, chat: null);
+            SetupFolder(folderA);
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>())).ReturnsAsync(false);
+
+            var binding = new ChatFolderBinding(Desired: [folderA.Id], Managed: [folderA.Id]);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Ops" }, binding, AuthorId, _initiator);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.Conflict, result.Failure.Outcome);
+            _folders.Verify(m => m.TryUpdate(It.IsAny<FolderUpdate>()), Times.Never);
         }
 
 

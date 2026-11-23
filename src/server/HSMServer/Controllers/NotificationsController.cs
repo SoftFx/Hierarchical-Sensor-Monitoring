@@ -7,6 +7,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Configuration;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
@@ -68,7 +69,10 @@ namespace HSMServer.Controllers
 
             // The write rules live in the engine (#1825): webhook URL shape, the partial update,
             // the managed-folder binding. Field errors land under the same ModelState keys the
-            // form-level guards use, so the tab-routing below works unchanged.
+            // form-level guards use, so the tab-routing below works unchanged. Only the Invalid
+            // outcome carries field errors; a NotFound/Conflict keeps the OLD failed-write arm —
+            // no folder mutation (the engine gates it), the admin lands on the list, exactly
+            // what the pre-engine flow did when TryUpdate answered false.
             var engineResult = ModelState.IsValid
                 ? await _chatEngine.UpdateChatAsync(model.ToUpdate(), BuildFolderBinding(model), CurrentInitiator)
                 : null;
@@ -139,11 +143,10 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
             {
-                // Same re-render restoration as EditChat POST — see there for why the server-owned
-                // folder/display data must be repopulated before re-render.
-
-                // And the same tab-routing — see EditChat POST for why the failing field's tab must
-                // become active or the rejection error is rendered into a display:none pane.
+                // Same re-render restoration and tab-routing as EditChat POST — see there for why
+                // the server-owned folder/display data must be repopulated and the failing
+                // field's tab must become active (otherwise the rejection error is rendered
+                // into a display:none pane).
                 RestoreStoredDisplayState(model, stored);
                 SetTabFromWebhookErrors();
 
@@ -236,7 +239,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> ClearMattermostWebhook(Guid id) =>
             MapEngineResult(await _chatEngine.ClearChannelAsync(id, ChatChannel.Mattermost, CurrentInitiator));
 
-        private IActionResult MapEngineResult(ChatWriteResult result) =>
+        private IActionResult MapEngineResult(PolicyWriteResult result) =>
             result.Success ? Ok() : NotFound();
 
         // The binding the caller asks for (the folders the form keeps, plus the newly picked ones)
@@ -252,13 +255,16 @@ namespace HSMServer.Controllers
             return new ChatFolderBinding(desired, managed);
         }
 
-        private void ApplyEngineErrors(ChatWriteResult result)
+        // Only the Invalid outcome's field-keyed errors reach the form; the other outcomes keep
+        // the pre-engine arms (the form has no spans for them and the old flow surfaced none).
+        private void ApplyEngineErrors(PolicyWriteResult result)
         {
-            if (result?.Errors is null)
+            if (result?.Failure?.Errors is not { Count: > 0 })
                 return;
 
-            foreach (var (field, error) in result.Errors)
-                ModelState.AddModelError(field, error);
+            foreach (var (field, messages) in result.Failure.Errors)
+                foreach (var message in messages)
+                    ModelState.AddModelError(field, message);
         }
 
 

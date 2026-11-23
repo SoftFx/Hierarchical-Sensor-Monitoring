@@ -3043,17 +3043,18 @@
             The write engine behind the chat web flows (#1825): create (idempotent towards a row
             pre-created by the Telegram /start flow), partial update with the explicit channel-clear
             flags, webhook URL-shape validation in one place, and the chat-folder binding under the
-            "only folders the caller manages" rule. Every write carries the initiator. The web
-            controller delegates here; the /api/v1 + MCP surface (#1829) will call the same engine.
-            Transport-agnostic: it works with the storage managers and answers a result, never an
-            IActionResult.
+            "only folders the caller manages" rule. The web controller delegates here; the
+            /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
+            the area's write envelope (<see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult"/>), never an IActionResult.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.CreateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>
             The AddChat POST flow: when the row already exists (created by /start against the
             pre-allocated guid), the save becomes an update so it is idempotent w.r.t. the order
-            of "fill the name" and "click setup help".
+            of "fill the name" and "click setup help". A fresh row carries the creating user as
+            its author; an empty id (a crafted post — the honest form pre-allocates) gets a
+            server-generated one, as the old flow did.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.UpdateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,HSMServer.Core.TableOfChanges.InitiatorInfo)">
@@ -3069,18 +3070,6 @@
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatChannel">
             <summary>The delivery channel of a chat the clear action targets.</summary>
-        </member>
-        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFieldError">
-            <summary>One field-keyed rejection (the domain property name + the reason).</summary>
-        </member>
-        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFieldError.#ctor(System.String,System.String)">
-            <summary>One field-keyed rejection (the domain property name + the reason).</summary>
-        </member>
-        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatWriteResult">
-            <summary>The outcome of a chat write: success, or the field-keyed rejections.</summary>
-        </member>
-        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatWriteResult.#ctor(System.Boolean,System.Collections.Generic.IReadOnlyList{HSMServer.Model.ManagementApi.Chats.ChatFieldError})">
-            <summary>The outcome of a chat write: success, or the field-keyed rejections.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding">
             <summary>
