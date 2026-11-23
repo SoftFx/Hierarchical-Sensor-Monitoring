@@ -1,6 +1,6 @@
 # Initiative: Table sensors — storing matrices in HSM
 
-> Owner: shared | Last reviewed: 2026-11-23 | Status: Draft for the owner's review | Canonical: no
+> Owner: shared | Last reviewed: 2026-11-23 | Status: Decided, see ADR-0021 (`docs/decisions/0021-table-sensors.md`); epic #1842; nothing is built | Canonical: no
 
 ## Problem
 
@@ -42,7 +42,7 @@ The chunk database is, in effect, a store of small matrices of one sensor. This 
 
 ## Proposed Direction
 
-A new kind of sensor, a **table sensor** (proposed term, not yet in the glossary). Its unit of data is a **batch**: a matrix of rows ordered by time, with a fixed set of typed columns.
+A new kind of sensor, a **table sensor**. Its unit of data is a **batch**: a matrix of rows ordered by time, with a fixed set of typed columns.
 
 ```text
 client                                  server                                   reader
@@ -123,7 +123,7 @@ Not measured: more than three minutes of real data; real price and volume column
 
 ## Proposal after step 0
 
-Nothing below is built. The owner decided where batches live on 2026-11-23; the other rows wait for his decision.
+Nothing below is built. The owner accepted this proposal on 2026-11-23; ADR-0021 is the decision and is authoritative where the two differ.
 
 | Question | Proposal |
 |---|---|
@@ -132,11 +132,11 @@ Nothing below is built. The owner decided where batches live on 2026-11-23; the 
 | Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first, and closes and sends every open batch at once when it stops. |
 | Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. **Decided by the owner, 2026-11-23.** Also considered and rejected by him: batches in hour files with only their addresses in LevelDB (two stores to keep consistent), and SeaweedFS (a separate service; not measured). |
 | Deletion | Retention deletes the batches whose arrival hour is older than the limit, with their index records, and then calls `Compact` on that key range (0.1 s, 14 MB at seven days). A batch that arrived late lives longer by its delay. Removing one sensor drops its index records at once; its bytes leave when their hours expire. |
-| Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Whether a collector on a session may send binary frames instead is a question for the ADR. |
+| Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Batches do not go over the collector session. |
 | Read API | A range request returns the stored batches that overlap the range; the client library decodes them and hands the caller a matrix object. A CSV or JSON variant decodes on the server and is limited in rows, for clients without the library. |
 | Rendering | The server decodes the requested range of one column and reduces it to minimum and maximum per pixel column. Reading an hour of one instrument takes milliseconds, so this is cheap; it comes after ingest and read. |
 
-Open: per-sensor retention (batches of all sensors share the arrival-hour key range, so one retention value per product is the simple first version); whether the batch database is one or one per week or month; the session question above; the time limit of a batch; keeping unsent batches in a local file when the collector stops and the server is unreachable.
+Settled in ADR-0021: one retention period per product in the first version; a batch closes after 60 seconds at the latest; unsent batches are kept in a local file and sent after the next start. Left to the storage step: whether the batch database is one or one per week or month.
 
 ## Capacity
 
@@ -157,11 +157,14 @@ Stored size is measured on the test sample; the row counts of the future product
 | Step | Scope | Notes |
 |---|---|---|
 | 0 | Measure on one real day of ticks: row count, instruments, Parquet (zstd) against the HSM chunk codec against the present form; batch size against compression and read time; LevelDB values against files | Done 2026-11-23, see the results above. |
-| 1 | ADR: the table sensor, the batch format, the schema rules, retention, what the server validates | After step 0. |
-| 2 | Server: sensor kind and DTOs, ingest of a batch, storage, retention, the range read API | DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
-| 3 | Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
-| 4 | Chart of a numeric column; feed-health sensors from batch headers | |
-| 5 | Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
+| — | ADR-0021: the table sensor, the batch format, the schema rules, storage, retention, what the server validates | Done 2026-11-23. |
+| 1 | #1843 Batch format and codec library, shared by the server and the managed collector | Moves the sealed-history column coders into a shared library; sealed chunks must keep their bytes. |
+| 2 | #1844 Server: sensor kind, schema and the batch store with retention | Storage key formats are compatibility-sensitive. |
+| 3 | #1845 Server: batch ingest route and range read API | DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
+| 4 | #1846 Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
+| 5 | #1847 Chart of a numeric column; feed sensors from batch headers | |
+| 7 | #1849 Rollout: a test deployment under the target volume, Linux, the disk decision | |
+| 6 | #1848 Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
 
 ## Risks
 
