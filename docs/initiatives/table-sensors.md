@@ -1,6 +1,6 @@
 # Initiative: Table sensors — storing matrices in HSM
 
-> Owner: shared | Last reviewed: 2026-11-20 | Status: Draft for the owner's review | Canonical: no
+> Owner: shared | Last reviewed: 2026-11-23 | Status: Draft for the owner's review | Canonical: no
 
 ## Problem
 
@@ -73,17 +73,75 @@ Decisions to make, with the current leaning:
 
 What it reuses from #1800: the weekly layout and its retention, the chunk-style key, range reads in key order, size accounting, the Configuration page's database list. What is new: the sensor kind and its DTOs, the batch ingest path, the read API, the chart, the collector API.
 
+## Step 0 results (2026-11-23)
+
+Measured with new modes of `src/sandbox/SealedHistoryBench` on the local branch `experiment/table-sensors-step0` (not pushed, not meant for master). The input was a test sample of quote ticks: 440,555 rows, 185 seconds of one busy hour, 1,029 instrument streams, time at 1 ms precision. The sample is private; only counts, sizes and timings are recorded here.
+
+Owner's clarifications of the same day, which fix the shape of the feature:
+
+- The application hands the collector a ready matrix; the collector compresses it and sends it. A large delivery delay is acceptable.
+- The description of the matrix (number of columns, names, types) belongs to the sensor and does not change. Another shape (another book depth, prices without volumes) is another sensor. Columns are dense; nulls are not planned.
+- Adding a column to an existing sensor is not needed now. A schema id in the batch header keeps it possible later without a format change.
+
+What the sample looks like: 80.6% of rows carry the same timestamp as the previous row and 29.4% are exact duplicates of it, so a format that requires strictly ascending keys (sealed chunk format v1) cannot hold ticks. Prices have 1 to 10 decimal places; every value round-trips as a double bit for bit.
+
+Bytes per row, one table per instrument (the layout the owner chose), batches of 4,096 rows; every configuration round-trips with zero mismatches:
+
+| Codec | time, bid, ask (real data) | + price and volume (price derived, volume synthetic) | Encode, µs per row |
+|---|---|---|---|
+| Raw columns, 8 bytes per cell | 24.0 | 40.0 | 0.006 |
+| Raw columns + zstd 15 | 3.58 | 5.83 | 1.8–2.8 |
+| Parquet, library defaults, zstd 3 | 5.50 | 9.59 | 0.14–0.25 |
+| Parquet, tuned, prices as scaled integers, zstd 19 | 4.28 | 7.95 | 0.7–1.0 |
+| HSM column coders + zstd 3 | — | 5.43 | 0.19 |
+| **HSM column coders + zstd 15** | **2.60** | **5.22** | 0.20–0.33 |
+
+For comparison, the same rows are 58 bytes each as log text and 118 as JSON lines. Decoding costs 0.03–0.05 µs per row for the HSM coders. Batch size hardly matters above about 4,096 rows (5.31 bytes at 1,024 rows, 5.21 at any larger size); zstd 19 gains nothing over 15. Parquet wins only in a layout this feature will not use: one table with all instruments interleaved, encoded as a single batch of the whole sample (4.4 bytes against 7.4).
+
+Where the server keeps batches, on a scaled day (the sample repeated with shifted timestamps to 276 M rows; the mechanics are real, the compression is not the point):
+
+| | Batches as LevelDB values | Append-only file per hour + index |
+|---|---|---|
+| Size on disk | 1.37 GB | 1.37 GB |
+| Bytes written to disk | 15.2 GB (11.1× the data; 13.7× at seven days) | 1.37 GB (1.0×) |
+| Delete the oldest 6 hours | space returns only after `Compact` (3.5 s; 35 s at seven days) | 0.04 s, space returns at once |
+| Read one hour of one instrument | 0.5–6 ms | 2–7 ms |
+| Read one minute of all 1,029 instruments, 4,096-row batches | 0.19 s, 22 MB read | 0.19 s, 22 MB read |
+| The same with 65,536-row batches | 3.1 s, 346 MB read | 3.2 s, 346 MB read |
+
+Client side, from package metadata and code reading: the last Parquet.Net release with a `netstandard2.0` target is 5.5.0 (later releases need net8.0) and it brings System.Text.Json 10 into net472 consumers; a C++ Parquet writer means Apache Arrow through vcpkg (OpenSSL, Thrift, Boost and more; no 32-bit x86), where the native collector depends only on curl today. The HSM integer and double coders are about 840 lines, need four trivial polyfills for net472, and ZstdSharp.Port supports net472; zstd itself is a single small vcpkg port.
+
+Not measured: more than three minutes of data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay.
+
+## Proposal after step 0
+
+Waiting for the owner's decision; nothing below is built.
+
+| Question | Proposal |
+|---|---|
+| Batch format | Own format: a header (magic, version, schema id, row count, first and last time, lengths, CRC-32C) followed by the columns coded with the sealed-history integer and double coders and compressed with zstd 15. Parquet is 50–110% larger in this layout and costs a heavy dependency in both collectors. |
+| Who compresses | The collector. The coders move into a `netstandard2.0` library shared by the server and the managed collector; the native collector gets a C++ port with byte-identical output locked by conformance scenarios. |
+| Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first. The server appends batches to one file per hour and keeps an index record per batch. |
+| Deletion | Retention deletes whole hour files; no compaction, no rewriting. Removing one sensor drops its index records, and the bytes leave with their hour file. |
+| Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Whether a collector on a session may send binary frames instead is a question for the ADR. |
+| Read API | A range request returns the stored batches that overlap the range, as stored. A CSV variant decodes on the server and is limited in rows. |
+| Rendering | The server decodes the requested range of one column and reduces it to minimum and maximum per pixel column. Reading an hour of one instrument takes milliseconds, so this is cheap; it comes after ingest and read. |
+
+Open: per-sensor retention with shared hour files (one retention value per product is the simple first version); the session question above; the time limit of a batch.
+
 ## Capacity
 
-Nothing below is measured on the target data yet.
+Stored size is measured on the test sample; the row counts of the future product are not known.
 
-| Quantity | Estimate | Basis |
+| Quantity | Value | Basis |
 |---|---|---|
-| Rows a day | hundreds of millions | 20 GB a day at a few tens of bytes per tick as it is stored today; the format is not yet known |
-| Stored size | about 2 GB a day, 4–6 bytes per tick | what column stores reach on tick data; the HSM codec reaches 7.7 bytes on much more complex values |
-| A year | about 700 GB | the production server has about 550 GB free today |
-| Batches a day | hundreds of thousands | batches of a few thousand rows |
-| Server memory | bounded by the batch size and the number of concurrent requests | no per-row state |
+| Stored size | 5.2 bytes per row with five columns, 2.6 with time, bid and ask | step 0; the volume column was synthetic |
+| A billion rows | 5.2 GB | the same |
+| Test feed, quotes only (about 97 M rows a day) | 0.5 GB a day, 15 GB a month, 185 GB a year | the share of quotes is estimated from three minutes |
+| Test feed, every record of the ticks file (276 M rows a day) | 1.4 GB a day, 43 GB a month, 525 GB a year | row count measured on 2026-11-20, the heaviest day |
+| A sustained 10,000 rows a second | 4.5 GB a day, 135 GB a month, 1.6 TB a year | arithmetic |
+| Free disk on production | about 550 GB | checked 2026-11-19 |
+| Server work per batch | header and checksum check, one append | no per-row state; write amplification 1.0 |
 
 ## Work Breakdown
 
