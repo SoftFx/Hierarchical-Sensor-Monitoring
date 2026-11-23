@@ -21,7 +21,7 @@ The owner's requirement (2026-11-20), in priority order:
 - Storage cost close to a column store's, from the moment the data arrives — no uncompressed window.
 - The server's work per batch is independent of the number of rows in it.
 - Retention by time per sensor, enforced without rewriting data.
-- The stored data is readable by standard tools without an HSM library.
+- The stored data can be taken out without an HSM library, as CSV or JSON.
 - A basic chart of a numeric column over a time range.
 
 ## Non-Goals
@@ -56,7 +56,7 @@ one message per batch                   schema id, rows, first/last time,   <---
                                         retention: drop batches older than N
 ```
 
-Decisions to make, with the current leaning:
+Decisions to make, with the leaning of the first draft (2026-11-20). Where this table differs from "Proposal after step 0" below, the proposal is current: the format is HSM's own, not Parquet, and batches live in LevelDB under a key that only grows.
 
 | Question | Leaning | Why / alternative |
 |---|---|---|
@@ -123,14 +123,14 @@ Not measured: more than three minutes of real data; real price and volume column
 
 ## Proposal after step 0
 
-Waiting for the owner's decision; nothing below is built.
+Nothing below is built. The owner decided where batches live on 2026-11-23; the other rows wait for his decision.
 
 | Question | Proposal |
 |---|---|
 | Batch format | Own format: a header (magic, version, schema id, row count, first and last time, lengths, CRC-32C) followed by the columns coded with the sealed-history integer and double coders and compressed with zstd 15. Parquet is 50–110% larger in this layout and costs a heavy dependency in both collectors. |
 | Who compresses | The collector. The coders move into a `netstandard2.0` library shared by the server and the managed collector; the native collector gets a C++ port with byte-identical output locked by conformance scenarios. |
 | Cutting by time | The collector closes a batch of one sensor at 4,096 rows or after a time limit, whichever comes first, and closes and sends every open batch at once when it stops. |
-| Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. |
+| Where batches live | A LevelDB database of their own, never shared with sensor values: key `arrival hour, sequence number`, value = the batch as received. A second small database maps `sensor, first time` to the batch key, the last time and the row count. This is the owner's idea and the measurement confirms it: 2.0× written against 14.4× for the sensor-first key, with the LevelDB code and crash recovery the server already runs. Hour files write 1.0× and free space at once, but they are a new storage engine to write and to test against crashes; at 1.4 GB a day the saved 1.4 GB of writes does not pay for that. **Decided by the owner, 2026-11-23.** Also considered and rejected by him: batches in hour files with only their addresses in LevelDB (two stores to keep consistent), and SeaweedFS (a separate service; not measured). |
 | Deletion | Retention deletes the batches whose arrival hour is older than the limit, with their index records, and then calls `Compact` on that key range (0.1 s, 14 MB at seven days). A batch that arrived late lives longer by its delay. Removing one sensor drops its index records at once; its bytes leave when their hours expire. |
 | Ingest API | A new binary route (`application/octet-stream`, one or more batches per request). The server checks the header and the checksum only. Whether a collector on a session may send binary frames instead is a question for the ADR. |
 | Read API | A range request returns the stored batches that overlap the range; the client library decodes them and hands the caller a matrix object. A CSV or JSON variant decodes on the server and is limited in rows, for clients without the library. |
@@ -150,28 +150,28 @@ Stored size is measured on the test sample; the row counts of the future product
 | Test feed, every record of the ticks file (276 M rows a day) | 1.4 GB a day, 43 GB a month, 525 GB a year | row count measured on 2026-11-20, the heaviest day |
 | A sustained 10,000 rows a second | 4.5 GB a day, 135 GB a month, 1.6 TB a year | arithmetic |
 | Free disk on production | about 550 GB | checked 2026-11-19 |
-| Server work per batch | header and checksum check, one append | no per-row state; write amplification 1.0 |
+| Server work per batch | header and checksum check, one put of the batch and one of its index record | no per-row state; each byte reaches the disk twice (LevelDB log, then table) |
 
 ## Work Breakdown
 
 | Step | Scope | Notes |
 |---|---|---|
-| 0 | Measure on one real day of ticks: row count, instruments, Parquet (zstd) against the HSM chunk codec against the present form; batch size against compression and read time; LevelDB values against files | Decides the format and the storage layout. Needs a sample from the owner. |
+| 0 | Measure on one real day of ticks: row count, instruments, Parquet (zstd) against the HSM chunk codec against the present form; batch size against compression and read time; LevelDB values against files | Done 2026-11-23, see the results above. |
 | 1 | ADR: the table sensor, the batch format, the schema rules, retention, what the server validates | After step 0. |
 | 2 | Server: sensor kind and DTOs, ingest of a batch, storage, retention, the range read API | DTOs in `HSMSensorDataObjects` are compatibility-sensitive. |
 | 3 | Managed collector: a table sensor API that buffers rows, encodes and sends batches | Public API of a library used by third parties: additive only. |
 | 4 | Chart of a numeric column; feed-health sensors from batch headers | |
-| 5 | Native collector | Needs a Parquet writer in C++ (Arrow) — a large dependency; decide after the managed path is in use. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
+| 5 | Native collector | Needs a C++ port of the integer and double coders with byte-identical output, plus zstd. Conformance coverage for both collectors is required by the project rules once the behaviour is portable. |
 
 ## Risks
 
 - **Scope of HSM.** This makes HSM a store of bulk data as well as a monitoring system. Disk, backup and upgrade planning change with the volume; sensor history is not part of the server's backups today.
 - **Disk.** A year of ticks does not fit on the current production disk. Retention or more storage has to be decided before the feature is switched on.
 - **Compatibility.** A new sensor type reaches the shared DTOs and the public collector API. Older collectors and servers must ignore or refuse it cleanly.
-- **A second on-disk format.** Parquet next to the HSM chunk codec means two readers to keep working forever. Using one format for both is cleaner but ties ordinary sensors to a format that does not know their types.
+- **A second on-disk format.** The batch format sits next to the sealed-history chunk format. They share the column coders, but each has its own header and limits, and both have to stay readable forever.
 - **Large values in LevelDB.** Measured in step 0: the cost depends on the key. A sensor-first key rewrites the data 14 times at seven days; a key that only grows writes it twice. The batch database must therefore never take keys out of order, and must not share a database with sensor values.
-- **Untrusted input.** A batch is client-supplied bytes that the server later decodes for charts and trimmed reads: limits on rows, columns, decoded size and nesting are part of the format rules, and the decoder must come from a maintained library, not be written here.
-- **Native collector.** A C++ Parquet writer is a heavy dependency for a library distributed through vcpkg.
+- **Untrusted input.** A batch is client-supplied bytes that the server later decodes for charts and trimmed reads: limits on rows, columns, decoded size and nesting are part of the format rules, and they are checked before any column is decoded. The column coders are the ones sealed history already uses; zstd comes from a maintained library.
+- **Native collector.** The C++ port must produce the same bytes as the managed coders for every input; a difference corrupts nothing but breaks parity, so it is locked by conformance scenarios.
 
 ## Verification
 
