@@ -131,6 +131,28 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
+        [Fact]
+        public async Task TelegramTest_NetworkFailure_AnswersTheErrorWithoutThrowing()
+        {
+            await using var bot = await BuildStartedBotAsync(request =>
+                request.RequestUri.AbsolutePath.EndsWith("sendMessage")
+                    ? throw new HttpRequestException("connection refused")
+                    : BotApiOk(request));
+
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Name = "ops",
+                TelegramChatId = 12345L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+
+            var result = await bot.SendTestWithResultAsync(chat);
+
+            Assert.False(result.Delivered);
+            Assert.Contains("connection refused", result.Error);
+        }
+
         private static SlackNotificationChannel BuildSlackChannel(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
             new(new Mock<IChatsManager>().Object, new HttpClient(new RespondingHandler(respond)),
                 maxRetryAttempts: 1, initialBackoff: TimeSpan.Zero, requestTimeout: TimeSpan.FromSeconds(5));

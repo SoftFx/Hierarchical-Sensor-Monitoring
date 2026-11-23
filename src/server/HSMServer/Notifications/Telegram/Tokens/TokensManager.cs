@@ -12,7 +12,7 @@ namespace HSMServer.Notifications.Telegram.Tokens
             BuildInvitationToken(chatId: null, folderId, user);
 
         internal Guid BuildInvitationToken(Guid? chatId, Guid folderId, Model.Authentication.User user) =>
-            BuildInvitationToken(chatId, folderId, user, TimeSpan.FromMinutes(2));
+            BuildInvitationToken(chatId, folderId, user, InvitationToken.DefaultExpiration);
 
         internal Guid BuildInvitationToken(Guid? chatId, Guid folderId, Model.Authentication.User user, TimeSpan ttl)
         {

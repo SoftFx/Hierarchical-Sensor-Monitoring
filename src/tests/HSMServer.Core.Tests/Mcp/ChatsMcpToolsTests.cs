@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
-using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Model.Authentication;
 using HSMServer.Mcp;

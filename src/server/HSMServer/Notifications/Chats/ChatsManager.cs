@@ -123,10 +123,10 @@ namespace HSMServer.Notifications.Chats
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
 
         public string GetChatInvitationLink(Guid chatId, User user) =>
-            GetChatInvitationLink(chatId, user, TimeSpan.FromMinutes(2));
+            GetChatInvitationLink(chatId, user, InvitationToken.DefaultExpiration);
 
         public string GetChatGroupInvitation(Guid chatId, User user) =>
-            GetChatGroupInvitation(chatId, user, TimeSpan.FromMinutes(2));
+            GetChatGroupInvitation(chatId, user, InvitationToken.DefaultExpiration);
 
         public string GetChatInvitationLink(Guid chatId, User user, TimeSpan invitationLifetime) =>
             $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";

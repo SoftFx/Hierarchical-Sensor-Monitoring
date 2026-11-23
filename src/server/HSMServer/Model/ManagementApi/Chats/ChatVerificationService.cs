@@ -6,6 +6,8 @@ using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.ComponentModel;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -54,14 +56,17 @@ namespace HSMServer.Model.ManagementApi.Chats
             // semantics (ChatsReadService uses the same lookup shape).
             var chat = _chats[chatId];
 
-            if (chat is null)
-                return Fail(PolicyWriteOutcome.NotFound);
+            // The area's anti-enumeration split: an INVISIBLE chat answers the same 404 as an
+            // unknown one (global or bound to a folder the caller can see); only a visible
+            // chat the caller may not operate on answers 403.
+            if (chat is null || !IsChatVisible(caller, chat))
+                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.NotFound);
 
             if (!CanOperate(caller, chat))
-                return Fail(PolicyWriteOutcome.Forbidden);
+                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Forbidden);
 
             if (!TryChannel(channel, out var parsed))
-                return Fail(PolicyWriteOutcome.Invalid, field: "channel", message: string.Format(UnknownChannelMessage, channel));
+                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Invalid, field: "channel", message: string.Format(UnknownChannelMessage, channel));
 
             var carried = parsed switch
             {
@@ -72,7 +77,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             };
 
             if (!carried)
-                return Fail(PolicyWriteOutcome.Invalid, field: "channel", message: string.Format(ChannelNotCarriedMessage, parsed));
+                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Invalid, field: "channel", message: string.Format(ChannelNotCarriedMessage, parsed));
 
             var result = await _delivery.SendTestAsync(chat, parsed);
 
@@ -90,27 +95,31 @@ namespace HSMServer.Model.ManagementApi.Chats
         {
             var chat = _chats[chatId];
 
-            if (chat is null)
-                return FailInvitation(PolicyWriteOutcome.NotFound);
+            if (chat is null || !IsChatVisible(caller, chat))
+                return Fail<ChatInvitationDto>(PolicyWriteOutcome.NotFound);
 
             if (!CanOperate(caller, chat))
-                return FailInvitation(PolicyWriteOutcome.Forbidden);
+                return Fail<ChatInvitationDto>(PolicyWriteOutcome.Forbidden);
 
             var isDirect = kind is "direct";
             var isGroup = kind is "group";
 
             if (!isDirect && !isGroup)
-                return FailInvitation(PolicyWriteOutcome.Invalid, field: "kind", message: $"Unknown invitation kind '{kind}'.");
+                return Fail<ChatInvitationDto>(PolicyWriteOutcome.Invalid, field: "kind", message: $"Unknown invitation kind '{kind}'.");
 
             if (!_delivery.IsTelegramBotRunning)
-                return FailInvitation(PolicyWriteOutcome.Invalid, field: "kind", message: BotNotRunningMessage);
+                return Fail<ChatInvitationDto>(PolicyWriteOutcome.Invalid, field: "telegram", message: BotNotRunningMessage);
 
             // The invitation attributes the eventual /start to the calling user, exactly as the
             // web flow's token does — resolve the token's owner.
             var owner = ResolveOwner(caller);
 
             if (owner is null)
-                return FailInvitation(PolicyWriteOutcome.Forbidden);
+                return Fail<ChatInvitationDto>(PolicyWriteOutcome.Forbidden);
+
+            // Read the clock BEFORE the token is minted: the reported expiry must never be
+            // later than the token's real one.
+            var expiresAt = DateTime.UtcNow.Add(InvitationLifetime);
 
             var value = isDirect
                 ? _chats.GetChatInvitationLink(chatId, owner, InvitationLifetime)
@@ -120,13 +129,22 @@ namespace HSMServer.Model.ManagementApi.Chats
             {
                 Kind = kind,
                 Value = value,
-                ExpiresAt = DateTime.UtcNow.Add(InvitationLifetime),
+                ExpiresAt = expiresAt,
                 NextSteps = isDirect ? [.. ChatInvitationDto.DirectNextSteps] : [.. ChatInvitationDto.GroupNextSteps],
             });
         }
 
         private bool CanOperate(ClaimsPrincipal caller, Chat chat) =>
             _authorization.CanSeeChatDetail(caller, StableCopy.Of(() => chat.Folders));
+
+        // The chat sight rule of the read service (ChatsReadService.IsChatVisible): global, or
+        // bound to at least one folder the caller can see.
+        private bool IsChatVisible(ClaimsPrincipal caller, Chat chat)
+        {
+            var folders = StableCopy.Of(() => chat.Folders);
+
+            return folders.Count == 0 || folders.Any(id => _authorization.IsVisible(caller, ApiTokenResource.Folder(id)));
+        }
 
         private User ResolveOwner(ClaimsPrincipal caller) =>
             Guid.TryParse(caller.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value, out var ownerId)
@@ -144,14 +162,9 @@ namespace HSMServer.Model.ManagementApi.Chats
             }
         }
 
-        private static PolicyWriteResult<ChatTestMessageResultDto> Fail(PolicyWriteOutcome outcome,
+        private static PolicyWriteResult<T> Fail<T>(PolicyWriteOutcome outcome,
             string field = null, string message = null) =>
-            PolicyWriteResult<ChatTestMessageResultDto>.Fail(outcome,
-                field is null ? null : new Dictionary<string, string[]> { [field] = [message] }, message);
-
-        private static PolicyWriteResult<ChatInvitationDto> FailInvitation(PolicyWriteOutcome outcome,
-            string field = null, string message = null) =>
-            PolicyWriteResult<ChatInvitationDto>.Fail(outcome,
+            PolicyWriteResult<T>.Fail(outcome,
                 field is null ? null : new Dictionary<string, string[]> { [field] = [message] }, message);
     }
 
@@ -185,36 +198,36 @@ namespace HSMServer.Model.ManagementApi.Chats
     }
 
     /// <summary>The outcome of a chat test message: delivered, or the delivery error text.</summary>
-    [System.ComponentModel.Description("The outcome of a chat test message: delivered, or the error the delivery channel reported (the same text it logs).")]
+    [Description("The outcome of a chat test message: delivered, or the error the delivery channel reported (the same text it logs).")]
     public sealed record ChatTestMessageResultDto
     {
         /// <summary>Whether the message reached the channel.</summary>
-        [System.ComponentModel.Description("Whether the test message reached the channel.")]
+        [Description("Whether the test message reached the channel.")]
         public bool Delivered { get; init; }
 
         /// <summary>The delivery error text when not delivered; null otherwise.</summary>
-        [System.ComponentModel.Description("The delivery error text when not delivered; null otherwise. Never a response body.")]
+        [Description("The delivery error text when not delivered; null otherwise. Never a response body.")]
         public string Error { get; init; }
     }
 
     /// <summary>A one-shot Telegram invitation for a chat, issued to an orchestrator (#1826).</summary>
-    [System.ComponentModel.Description("A one-shot Telegram invitation issued through the management surface: the link (direct chat) or the group command, its expiry, and the human steps inside Telegram.")]
+    [Description("A one-shot Telegram invitation issued through the management surface: the link (direct chat) or the group command, its expiry, and the human steps inside Telegram.")]
     public sealed record ChatInvitationDto
     {
         /// <summary>The invitation kind — "direct" or "group".</summary>
-        [System.ComponentModel.Description("The invitation kind — \"direct\" or \"group\".")]
+        [Description("The invitation kind — \"direct\" or \"group\".")]
         public string Kind { get; init; }
 
         /// <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post in the group.</summary>
-        [System.ComponentModel.Description("The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post into the group.")]
+        [Description("The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post into the group.")]
         public string Value { get; init; }
 
         /// <summary>When the invitation expires (one-shot; a second /start with it is rejected).</summary>
-        [System.ComponentModel.Description("When the invitation expires (UTC ISO 8601). One-shot: a second /start with the same token is rejected.")]
+        [Description("When the invitation expires (UTC ISO 8601). One-shot: a second /start with the same token is rejected.")]
         public DateTime ExpiresAt { get; init; }
 
         /// <summary>The steps a PERSON does inside Telegram — the orchestrator cannot press Start.</summary>
-        [System.ComponentModel.Description("The steps a PERSON performs inside Telegram; the orchestrator cannot do them (ADR docs/adr/0002).")]
+        [Description("The steps a PERSON performs inside Telegram; the orchestrator cannot do them (ADR docs/adr/0002).")]
         public List<string> NextSteps { get; init; }
 
         internal static readonly string[] DirectNextSteps =
@@ -232,20 +245,20 @@ namespace HSMServer.Model.ManagementApi.Chats
     }
 
     /// <summary>The channel a test message targets.</summary>
-    [System.ComponentModel.Description("The channel a chat test message targets: \"telegram\", \"slack\" or \"mattermost\".")]
+    [Description("The channel a chat test message targets: \"telegram\", \"slack\" or \"mattermost\".")]
     public sealed record ChatTestMessageRequestDto
     {
         /// <summary>The delivery channel to test — one the chat carries.</summary>
-        [System.ComponentModel.Description("The delivery channel to test: \"telegram\", \"slack\" or \"mattermost\" — one the chat carries (see get_chat's channel flags).")]
+        [Description("The delivery channel to test: \"telegram\", \"slack\" or \"mattermost\" — one the chat carries (see get_chat's channel flags).")]
         public string Channel { get; init; }
     }
 
     /// <summary>The kind of a Telegram invitation.</summary>
-    [System.ComponentModel.Description("The kind of a Telegram invitation: \"direct\" or \"group\".")]
+    [Description("The kind of a Telegram invitation: \"direct\" or \"group\".")]
     public sealed record ChatInvitationRequestDto
     {
         /// <summary>"direct" (a link) or "group" (a command to post into the group).</summary>
-        [System.ComponentModel.Description("\"direct\" (a link to open and press Start) or \"group\" (a command to post into the group after adding the bot with admin rights).")]
+        [Description("\"direct\" (a link to open and press Start) or \"group\" (a command to post into the group after adding the bot with admin rights).")]
         public string Kind { get; init; }
     }
 }

@@ -177,7 +177,41 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
             Assert.False(result.Success);
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
-            Assert.Contains("update_telegram_bot", result.Failure.Errors["kind"][0]);
+            Assert.Contains("update_telegram_bot", result.Failure.Errors["telegram"][0]);
+        }
+
+        [Fact]
+        public async Task SendTestMessage_InvisibleChat_AnswersTheUniform404()
+        {
+            // The area's anti-enumeration rule: a chat bound only to folders the caller
+            // cannot see is indistinguishable from an unknown id.
+            var chat = BuildChat();
+            chat.Folders.Add(Guid.NewGuid());
+            SetupChat(chat);
+
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(false);
+
+            var result = await Service.SendTestMessageAsync(chat.Id, "slack", _caller);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
+        }
+
+        [Fact]
+        public async Task CreateInvitation_NotEntitled_AnswersForbidden()
+        {
+            var chat = BuildChat();
+            SetupChat(chat);
+
+            _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
+                    It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(false);
+
+            var result = await Service.CreateInvitationAsync(chat.Id, "direct", _caller);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
         }
 
         [Fact]
