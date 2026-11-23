@@ -8,8 +8,9 @@ again **provisioning only**: it stores the bot credential the human obtained fro
 webhook URLs created in Slack/Mattermost, issues Telegram invitation tokens and proves the setup with a
 test message. The steps inside the messengers — creating the bot, creating an incoming webhook, adding
 the bot to a group and sending `/start` — stay outside the server: the human does them, or the
-orchestrator does them with its own tools. The server deliberately gains no messenger-side integrations
-and never stores workspace credentials.
+orchestrator does them with its own tools. A Telegram chat is bound only by a person's `/start` in that
+chat, never by its numeric id. The server deliberately gains no messenger-side integrations and never
+stores workspace credentials.
 
 ## Considered Options
 
@@ -26,9 +27,7 @@ and never stores workspace credentials.
 - The API/MCP surface for chat setup is small: the bot credential write, chat CRUD, an invitation issuer
   and a test message, plus the messenger-side instructions in a machine-readable form. No outbound
   messenger clients beyond the existing delivery channels.
-- An invitation is a two-party hand-over (server → agent → person acting in Telegram), slower than the
-  web UI's issue-at-the-moment-of-use; the invitation's lifetime has to allow for that relay. An
-  API-issued invitation therefore lives 10 minutes (the installer-link precedent of ADR-0001); the web
-  UI keeps its 2, where issue and use coincide.
-- If messenger-side integration is ever wanted, it must come as a separate initiative with its own
-  security review; nothing in this decision's API shape blocks it, but nothing prepares it either.
+- An invitation is a two-party hand-over (server → orchestrator → person acting in Telegram), slower than
+  the web UI's issue-at-the-moment-of-use, so an invitation issued to an orchestrator has to live longer
+  than one the web UI builds at the moment of use. The lifetime itself is the initiative's decision, not
+  this one's (`docs/initiatives/chat-setup-via-mcp.md`).
