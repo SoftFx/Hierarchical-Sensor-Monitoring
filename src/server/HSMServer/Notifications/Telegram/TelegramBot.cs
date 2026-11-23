@@ -26,6 +26,7 @@ namespace HSMServer.Notifications
         private const int SendMessageRetryCount = 10;
         private const string ConfigurationsError = "Invalid Bot configurations.";
         private const string TrimmedMessage = " [this message was trimmed]";
+        private const string RedactedToken = "[redacted]";
         private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
@@ -127,7 +128,7 @@ namespace HSMServer.Notifications
         private static string RedactToken(string text, string token) =>
             string.IsNullOrEmpty(text) || string.IsNullOrEmpty(token)
                 ? text
-                : text.Replace(token, "[redacted]");
+                : text.Replace(token, RedactedToken);
 
         internal async Task<string> StartBotAsync()
         {

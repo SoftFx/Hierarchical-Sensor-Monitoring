@@ -44,12 +44,18 @@ namespace HSMServer.Core.Tests.Notifications
 
         // GetMe is an extension method over ITelegramBotClient in this library version, so the
         // mock is set on the core SendRequest the extension forwards to. Throws (not ThrowsAsync):
-        // with It.IsAnyType the async wrapper miscasts the returned task in the proxy.
-        private static Mock<ITelegramBotClient> ClientFailingWith(Exception failure)
+        // with It.IsAnyType the async wrapper miscasts the returned task in the proxy. onSend runs
+        // at the moment the request is made (the mid-flight token-change test).
+        private static Mock<ITelegramBotClient> ClientFailingWith(Exception failure, Action onSend = null)
         {
             var client = new Mock<ITelegramBotClient>();
-            client.Setup(c => c.SendRequest<It.IsAnyType>(It.IsAny<IRequest<It.IsAnyType>>(), It.IsAny<CancellationToken>()))
-                  .Throws(failure);
+            var setup = client.Setup(c => c.SendRequest<It.IsAnyType>(It.IsAny<IRequest<It.IsAnyType>>(), It.IsAny<CancellationToken>()));
+
+            if (onSend is null)
+                setup.Throws(failure);
+            else
+                setup.Callback(onSend).Throws(failure);
+
             return client;
         }
 
@@ -84,14 +90,12 @@ namespace HSMServer.Core.Tests.Notifications
         public async Task StartBotAsync_TokenReplacedWhileTheRequestIsInFlight_StillRedactsTheTokenTheStartUsed()
         {
             var config = ConfigWith(Token);
-            var client = new Mock<ITelegramBotClient>();
             // The admin saves a new token while the start request is in flight; the failure then
             // carries the token the start was attempted WITH.
-            client.Setup(c => c.SendRequest<It.IsAnyType>(It.IsAny<IRequest<It.IsAnyType>>(), It.IsAny<CancellationToken>()))
-                  .Callback(() => config.BotToken = "220301543:AAE-replaced-meanwhile-xxxxxxxxxxx")
-                  .Throws(new ApiRequestException($"Request failed for {Token}", 401));
-
-            var bot = CreateBot(config, client.Object);
+            var replacement = "220301543:AAE-replaced-meanwhile-xxxxxxxxxxx";
+            var bot = CreateBot(config, ClientFailingWith(
+                new ApiRequestException($"Request failed for {Token}", 401),
+                onSend: () => config.BotToken = replacement).Object);
 
             var message = await bot.StartBotAsync();
 
