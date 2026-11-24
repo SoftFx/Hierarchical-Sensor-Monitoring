@@ -150,10 +150,18 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// <summary>Marks a ticket done without writing anything (a put that failed before its append).</summary>
         void Skip(TableBlockTicket ticket);
 
-        /// <summary>The stored blocks of a product, in sequence order. A snapshot: blocks stored later are not in it.</summary>
+        /// <summary>
+        /// The stored blocks of a product, in sequence order. A snapshot: blocks stored later are not in it. Empty, opening
+        /// nothing, when the store was never opened and has no folder. Throws <see cref="TableBlockStoreException"/> when
+        /// the databases are closed and cannot be opened now (a reopen that failed, inside its backoff; disposed).
+        /// </summary>
         IReadOnlyList<TableBlockIndexEntry> GetBlocks(Guid productId);
 
-        /// <summary>The stored value of a block, or null when it is not there (counted as a read failure).</summary>
+        /// <summary>
+        /// The stored value of a block, or null when it is not there or cannot be read (damage, counted as a read failure).
+        /// Throws <see cref="TableBlockStoreException"/> when the databases closed since the block was listed (a reopen
+        /// failed meanwhile, or the store was disposed): a fault, not a missing block.
+        /// </summary>
         TableBlockRecord ReadBlock(in TableBlockIndexEntry entry);
     }
 }

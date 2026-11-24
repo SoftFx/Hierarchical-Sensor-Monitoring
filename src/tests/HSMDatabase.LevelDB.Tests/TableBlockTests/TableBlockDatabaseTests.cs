@@ -178,6 +178,316 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_read_after_a_failed_reopen_is_the_store_fault_and_the_same_store_reads_once_it_reopens()
+        {
+            // Review of PR #1857: a reopen that failed closed the databases but left the old index in memory, so a read
+            // answered every block of it as missing (one read failure and one Error line per block) and returned no rows.
+            var store = Open();
+            var stored = Put(store, 0);
+            var good = DamageMark(store);
+
+            var failures = store.Statistics.ReadFailures;
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+
+            // Past the backoff, with the mark repaired, the read itself reopens the store.
+            File.WriteAllText(MarkPath, good);
+            _now = _now.AddMinutes(2);
+
+            var blocks = store.GetBlocks(_product);
+            Assert.Equal([stored.Entry], blocks);
+            Assert.NotNull(store.ReadBlock(blocks[0]));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_failed_store_whose_folder_is_removed_answers_the_fault_until_its_backoff_has_passed()
+        {
+            // Review of PR #1858: the "no folder, nothing to read" shortcut came before the failure check, so a failed
+            // store whose folder was removed answered an empty successful read inside its backoff.
+            var store = Open();
+            Put(store, 0);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_folder_is_removed_stays_failed_for_reads_and_only_a_put_creates_it()
+        {
+            // Review of PR #1858: a store that has failed stays failed until an open succeeds. A read past the backoff
+            // tries the open but never creates, so a removed folder is the fault and nothing in memory is dropped.
+            var store = Open();
+            Put(store, 0);
+            var last = Put(store, 1);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            _now = _now.AddMinutes(2);
+
+            var error = Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Contains("missing or cannot be reached", error.Message);
+            Assert.Equal(2, store.BlockCount);
+            Assert.False(store.Exists);
+            Assert.Equal(0, store.Statistics.ReadFailures);
+
+            // Past the new backoff a put creates a fresh store, whose index is what is on disk: only the new block. It
+            // reuses the producer sequence of a removed block and is not its duplicate; its sequence does not go back.
+            _now = _now.AddMinutes(2);
+            var stored = Put(store, 0);
+            Assert.Equal(TableBlockAppendOutcome.Stored, stored.Outcome);
+            Assert.True(stored.Entry.Sequence > last.Entry.Sequence);
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.Equal(1, store.BlockCount);
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_folder_is_a_file_is_the_fault_for_a_read()
+        {
+            // A folder that exists under its name but cannot be opened as one (here a file in its place).
+            var store = Open();
+            Put(store, 0);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            File.WriteAllText(_root, "not a folder");
+
+            try
+            {
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    _now = _now.AddMinutes(2);
+                    Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+                    Assert.Equal(1, store.BlockCount);
+                }
+
+                // A put cannot create the store over the file either: a fault, not a new store.
+                _now = _now.AddMinutes(2);
+                Assert.Throws<TableBlockStoreException>(() => Put(store, 1));
+            }
+            finally
+            {
+                File.Delete(_root);
+            }
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_parent_folder_is_missing_is_the_fault_for_a_read()
+        {
+            var parent = Path.Combine(_root, "volume");
+            var store = new TableBlockDatabase(Path.Combine(parent, "Tables")) { Clock = () => _now };
+            _stores.Add(store);
+
+            Put(store, 0);
+            var mark = Path.Combine(parent, "Tables", TableBlockDatabase.SequenceMarkName);
+            store.FailForTest(new IOException("simulated"));
+            _now = _now.AddMinutes(2);
+            File.WriteAllText(mark, "damaged");
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+
+            Directory.Delete(parent, recursive: true);
+
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                _now = _now.AddMinutes(2);
+                Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+                Assert.Equal(1, store.BlockCount);
+            }
+
+            Assert.False(Directory.Exists(parent));
+        }
+
+        [Fact]
+        public void A_reopen_onto_a_removed_folder_never_takes_the_next_sequence_back()
+        {
+            // A failed store, its folder removed while the server runs, then a put: the fresh store has no mark, but the
+            // sequence goes on from where this process left it.
+            var store = Open();
+            for (int i = 0; i < 3; i++)
+                Put(store, i);
+            store.RaiseNextSequence(500);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            _now = _now.AddMinutes(2);
+
+            var stored = Put(store, 10);
+            Assert.Equal(TableBlockAppendOutcome.Stored, stored.Outcome);
+            Assert.Equal(500, stored.Entry.Sequence);
+
+            // The new folder's mark was written ahead before 500 was handed out: a restart goes on above it.
+            store.Dispose();
+            Assert.True(Open().NextSequence > 500);
+        }
+
+        [Fact]
+        public void A_read_during_the_first_open_waits_for_the_index_and_never_answers_an_empty_one()
+        {
+            // Review of PR #1857: the first open of a process assigns the databases at its start and the index at its end;
+            // a read that came in between answered the empty initial index, a successful read with no rows.
+            var store = Open();
+            for (int i = 0; i < 3; i++)
+                Put(store, i);
+            var entries = store.GetBlocks(_product).ToList();
+            store.Dispose();
+
+            var fresh = Open();
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            fresh.OnOpen = () =>
+            {
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(60));
+            };
+
+            var opening = Task.Run(() => fresh.Reserve());
+            Task<List<TableBlockIndexEntry>> reading;
+
+            try
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the first open never started");
+
+                // The read either answers at once (the defect) or waits on the store's lock, which the open holds: release
+                // the open only after one of the two, so the read surely came in during the open. The contention counter
+                // is process-wide, so another test may end the wait early; the read is then still in flight or not yet
+                // started, and the assertions below hold either way.
+                var contentions = Monitor.LockContentionCount;
+                reading = Task.Run(() => fresh.GetBlocks(_product).ToList());
+                SpinWait.SpinUntil(() => reading.IsCompleted || Monitor.LockContentionCount > contentions, TimeSpan.FromSeconds(30));
+
+                Assert.False(reading.IsCompleted, "the read answered while the first open was still loading the index");
+            }
+            finally
+            {
+                release.Set();
+            }
+
+            // Bounds that only matter on failure.
+            Assert.True(opening.Wait(TimeSpan.FromSeconds(30)), "the first open never finished");
+            Assert.True(reading.Wait(TimeSpan.FromSeconds(30)), "the read never finished");
+            Assert.Equal(entries, reading.Result);
+        }
+
+        [Fact]
+        public void A_block_read_after_the_store_closed_since_its_index_was_taken_is_the_store_fault()
+        {
+            // The index is taken, then another thread's reopen fails and closes the databases, then the block is read:
+            // the read ends as the fault, not as a block counted missing.
+            var store = Open();
+            Put(store, 0);
+            var blocks = store.GetBlocks(_product);
+
+            DamageMark(store);
+
+            var failures = store.Statistics.ReadFailures;
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(blocks[0]));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_read_from_a_disposed_store_is_the_store_fault()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+            store.Dispose();
+
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_store_whose_write_failed_keeps_serving_reads_while_its_databases_are_open()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+
+            store.FailForTest(new IOException("simulated"));
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+
+            // Past the backoff too: a read does not reopen databases that are open.
+            _now = _now.AddMinutes(2);
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Every_block_missing_from_the_store_is_counted()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+
+            for (int i = 1; i <= 3; i++)
+                Assert.Null(store.ReadBlock(stored.Entry with { Sequence = stored.Entry.Sequence + 100 * i }));
+
+            Assert.Equal(3, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Peeking_the_next_sequence_does_not_wait_for_a_put_that_holds_the_store_lock()
+        {
+            // Review of PR #1857: the registration of a table sensor peeks the next sequence under the tree lock, and
+            // an append holds the store's lock across its synced put. The hook below runs inside that lock.
+            var store = Open();
+            store.EnsureOpened();
+
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            store.FaultHook = _ =>
+            {
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(60));
+            };
+
+            var put = Task.Run(() => Put(store, 0));
+
+            try
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the put never reached its write");
+
+                // A generous bound that only matters on failure: the peek waits for the lock until the hook lets go.
+                var peek = Task.Run(store.PeekNextSequence);
+                Assert.True(peek.Wait(TimeSpan.FromSeconds(30)), "the peek waited for the put holding the store's lock");
+                Assert.Equal(1, peek.Result);
+            }
+            finally
+            {
+                release.Set();
+            }
+
+            Assert.Equal(TableBlockAppendOutcome.Stored, put.Result.Outcome);
+            store.FaultHook = null;
+
+            // The states it refuses are refused as before.
+            store.FailForTest(new IOException("simulated"));
+            Assert.Throws<TableBlockStoreException>(() => store.PeekNextSequence());
+            store.Dispose();
+            Assert.Throws<TableBlockStoreException>(() => store.PeekNextSequence());
+        }
+
+        [Fact]
+        public void Peeking_the_next_sequence_writes_the_mark_ahead_when_it_does_not_cover_the_value()
+        {
+            var store = Open();
+            store.EnsureOpened();
+
+            for (int i = 0; i < TableBlockDatabase.SequenceMarkStep; i++)
+                store.Skip(store.Reserve());
+
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep.ToString(), File.ReadAllText(MarkPath));
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep, store.PeekNextSequence());
+            Assert.Equal((2 * TableBlockDatabase.SequenceMarkStep).ToString(), File.ReadAllText(MarkPath));
+        }
+
+        [Fact]
         public void A_block_that_is_not_to_be_stored_writes_nothing()
         {
             var store = Open();
@@ -655,6 +965,22 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             var store = new TableBlockDatabase(_root) { Clock = () => _now };
             _stores.Add(store);
             return store;
+        }
+
+        private string MarkPath => Path.Combine(_root, TableBlockDatabase.SequenceMarkName);
+
+        // Fails the store, damages the mark and moves past the backoff: the next put reopens, the reopen fails and closes
+        // the databases. Returns the mark's text, to repair it.
+        private string DamageMark(TableBlockDatabase store)
+        {
+            var good = File.ReadAllText(MarkPath);
+
+            store.FailForTest(new IOException("simulated"));
+            _now = _now.AddMinutes(2);
+            File.WriteAllText(MarkPath, "damaged");
+
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+            return good;
         }
 
         private TableBlockAppendResult Put(TableBlockDatabase store, long producerSequence) =>

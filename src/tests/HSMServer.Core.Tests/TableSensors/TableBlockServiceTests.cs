@@ -404,6 +404,90 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Throws<TableBlockStoreException>(() => service.Read(sensor.Id, T0, T0.AddHours(1)));
         }
 
+        [Fact]
+        public async Task A_read_after_a_failed_reopen_throws_the_store_fault_and_the_same_service_reads_once_the_store_reopens()
+        {
+            // Review of PR #1857: a reopen that failed closed the databases and left the old index in memory; a read then
+            // returned a successful result with no rows, which says "no data in the range", and counted every block as
+            // a read failure.
+            var sensor = await RegisterAsync("q");
+            var store = (HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)Store;
+            var now = T0.AddMinutes(30);
+            store.Clock = () => now;
+
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            var mark = Path.Combine(_databaseCoreManager.DatabaseCore.DatabaseSettings.PathToTableBlocks, HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase.SequenceMarkName);
+            var good = File.ReadAllText(mark);
+
+            // A failed write, the backoff passed, a damaged mark: the next put reopens, the reopen fails.
+            store.FailForTest(new IOException("simulated"));
+            now = now.AddMinutes(2);
+            File.WriteAllText(mark, "damaged");
+            Assert.Throws<TableBlockStoreException>(() => Put(Table("q", (T0.AddMinutes(1), 2.0, 2L))));
+
+            var failures = store.Statistics.ReadFailures;
+            Assert.Throws<TableBlockStoreException>(() => _service.Read(sensor.Id, T0, T0.AddHours(1)));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+
+            File.WriteAllText(mark, good);
+            now = now.AddMinutes(2);
+
+            var rows = Read(sensor, T0, T0.AddHours(1));
+            Assert.Equal([1.0], rows.Columns[1].DoubleValues);
+            Assert.Equal(0, rows.BlocksFailed);
+        }
+
+        [Fact]
+        public async Task A_store_whose_folder_is_removed_while_the_server_runs_keeps_taking_the_sensors_tables()
+        {
+            // The store failed and closed, its folder was removed, and a put opened a fresh store without a mark: its
+            // sequence started again at 0, below the first sequence of every registered sensor, and their tables were all
+            // refused (SensorCreatedAfterBlock), with no restart to raise the floor again.
+            await RegisterAsync("early");
+            for (int i = 0; i < 5; i++)
+                AssertStored(Put(Table("early", (T0.AddSeconds(i), 1.0, 1L))));
+
+            var sensor = (TableSensorModel)await RegisterAsync("q");
+            Assert.True(sensor.FirstSequence > 0);
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            var store = (HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)Store;
+            var now = DateTime.UtcNow;
+            store.Clock = () => now;
+
+            var folder = _databaseCoreManager.DatabaseCore.DatabaseSettings.PathToTableBlocks;
+            var mark = Path.Combine(folder, HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase.SequenceMarkName);
+
+            // Failed and closed: a failed write, the backoff passed, a reopen that fails on a damaged mark.
+            store.FailForTest(new IOException("simulated"));
+            now = now.AddMinutes(2);
+            File.WriteAllText(mark, "damaged");
+            Assert.Throws<TableBlockStoreException>(() => Put(Table("q", (T0.AddMinutes(1), 2.0, 2L))));
+
+            Directory.Delete(folder, recursive: true);
+            now = now.AddMinutes(2);
+
+            var put = Put(Table("q", (T0.AddMinutes(2), 3.0, 3L)));
+            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
+            Assert.Empty(put.Refusals);
+            Assert.True(put.Sequence >= sensor.FirstSequence);
+
+            // The rows of the removed blocks went with the folder; the new block's are read.
+            Assert.Equal([3.0], Read(sensor, T0, T0.AddHours(1)).Columns[1].DoubleValues);
+        }
+
+        [Fact]
+        public async Task A_read_from_a_disposed_store_throws_the_store_fault()
+        {
+            var sensor = await RegisterAsync("q");
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            ((HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)Store).Dispose();
+
+            Assert.Throws<TableBlockStoreException>(() => _service.Read(sensor.Id, T0, T0.AddHours(1)));
+        }
+
         // A restart of the server over the same environment database and Tables folder. DatabaseCore.Dispose leaves the
         // layout, change-set and snapshot databases open, so the restarted core gets fresh ones of those.
         private static (HSMDatabase.DatabaseWorkCore.DatabaseCore Database, HSMServer.Core.Cache.TreeValuesCache Cache) Restart(HSMDatabase.AccessManager.IDatabaseSettings settings)

@@ -53,7 +53,10 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>
         /// Reads <paramref name="tableId"/> out of every candidate: the blocks with a sequence at or above
-        /// <paramref name="firstSequence"/> whose time range meets <c>[from, to)</c>, in sequence order.
+        /// <paramref name="firstSequence"/> whose time range meets <c>[from, to)</c>, in sequence order. A block that is
+        /// missing or damaged is counted in <see cref="BlocksFailed"/> and skipped; a <see cref="TableBlockStoreException"/>
+        /// from <see cref="ITableBlockStore.ReadBlock"/> (the store closed during the read) is not caught: the read ends as
+        /// that fault, never as rows silently missing.
         /// </summary>
         internal TableRows Collect(ITableBlockStore store, IReadOnlyList<TableBlockIndexEntry> blocks, long firstSequence, byte[] tableId)
         {
