@@ -157,7 +157,8 @@ namespace HSMServer.Core.Cache
 
             _changeSetJournal = changeSetJournal;
 
-            TableBlockSequence = () => _database.TableBlocks?.NextSequence ?? 0L;
+            OpenTableBlockStore = () => _database.TableBlocks?.EnsureOpened();
+            TableBlockSequence = () => _database.TableBlocks?.PeekNextSequence() ?? 0L;
 
             Initialize();
 
@@ -956,6 +957,13 @@ namespace HSMServer.Core.Cache
         // earlier sensor of the same path) are never read as its rows. The block store of
         // the database by default (set in the constructor); a test seam.
         internal Func<long> TableBlockSequence { get; set; }
+
+        // Opens the block store before a table sensor is created (#1844), outside the tree-structure lock: the first open
+        // of a process loads the index and may rebuild it from every block, and nothing of that may hold up the other
+        // registrations of the server. Under the lock, TableBlockSequence then only reads the open store. A test seam.
+        internal Action OpenTableBlockStore { get; set; }
+
+        internal bool IsTreeStructureLockHeld => Monitor.IsEntered(_treeStructureLock);
 
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
@@ -4242,6 +4250,23 @@ namespace HSMServer.Core.Cache
         private bool TryAddSensor(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
         {
             storeFailed = false;
+
+            // A table sensor reads the block store's next sequence under the lock below; the store is opened here, before
+            // it. A store that cannot open is a fault of the store, which a repeat can cure.
+            if (type is SensorType.Table)
+            {
+                try
+                {
+                    OpenTableBlockStore?.Invoke();
+                }
+                catch (HSMDatabase.AccessManager.TableBlocks.TableBlockStoreException ex)
+                {
+                    sensor = null;
+                    error = $"Table sensor '{request.Path}' was not created: {ex.Message}";
+                    storeFailed = true;
+                    return false;
+                }
+            }
 
             lock (_treeStructureLock)
             {

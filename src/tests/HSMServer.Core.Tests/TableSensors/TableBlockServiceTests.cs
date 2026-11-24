@@ -369,6 +369,41 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal([1.0, 3.0], service.Read(sensor.Id, T0, T0.AddHours(1)).Value.Columns[1].DoubleValues);
         }
 
+        [Fact]
+        public async Task The_store_is_opened_before_the_tree_lock_when_a_table_sensor_is_registered()
+        {
+            // Review of PR #1857: the first open of a process loads (and may rebuild) the index. It must not happen under
+            // the tree-structure lock, which every registration of the server waits for.
+            var store = (HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)Store;
+            Assert.False(store.IsOpened);
+
+            bool? heldAtOpen = null;
+            store.OnOpen = () => heldAtOpen = _valuesCache.IsTreeStructureLockHeld;
+
+            await RegisterAsync("q");
+
+            Assert.True(store.IsOpened);
+            Assert.Equal(false, heldAtOpen);
+        }
+
+        [Fact]
+        public async Task A_read_of_a_store_that_cannot_open_throws_the_store_fault()
+        {
+            // A store fault is a fault for a read as for a put (the caller answers 5xx), not an error result.
+            var sensor = await RegisterAsync("q");
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            var settings = _databaseCoreManager.DatabaseCore.DatabaseSettings;
+            _databaseCoreManager.DatabaseCore.Dispose();
+            File.WriteAllText(Path.Combine(settings.PathToTableBlocks, HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase.SequenceMarkName), "damaged");
+
+            var (database, cache) = Restart(settings);
+            await using var _ = cache;
+            var service = new TableBlockService(database, cache, new TableBlockOptions { MinFreeDiskMb = 0 });
+
+            Assert.Throws<TableBlockStoreException>(() => service.Read(sensor.Id, T0, T0.AddHours(1)));
+        }
+
         // A restart of the server over the same environment database and Tables folder. DatabaseCore.Dispose leaves the
         // layout, change-set and snapshot databases open, so the restarted core gets fresh ones of those.
         private static (HSMDatabase.DatabaseWorkCore.DatabaseCore Database, HSMServer.Core.Cache.TreeValuesCache Cache) Restart(HSMDatabase.AccessManager.IDatabaseSettings settings)

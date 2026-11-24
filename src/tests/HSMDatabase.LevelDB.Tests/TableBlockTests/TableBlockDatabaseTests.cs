@@ -128,6 +128,56 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void Duplicates_are_per_product_so_one_product_cannot_shadow_another()
+        {
+            // Review of PR #1857: the same producer pair under two products is two blocks. Keyed by producer only, the
+            // second was answered Duplicate with the first product's block and never written.
+            var store = Open();
+            var other = Guid.NewGuid();
+
+            var first = Append(store, Block(("a", 2)), producerSequence: 7);
+            var second = Append(store, Block(("b", 3)), producerSequence: 7, product: other);
+
+            Assert.Equal(TableBlockAppendOutcome.Stored, first.Outcome);
+            Assert.Equal(TableBlockAppendOutcome.Stored, second.Outcome);
+            Assert.Equal(_product, Assert.Single(store.GetBlocks(_product)).ProductId);
+            Assert.Equal(other, Assert.Single(store.GetBlocks(other)).ProductId);
+            Assert.Equal(other, store.ReadBlock(second.Entry).Envelope.ProductId);
+
+            store.Dispose();
+            var reopened = Open();
+
+            var again = Append(reopened, Block(("a", 2)), producerSequence: 7);
+            var againOther = Append(reopened, Block(("b", 3)), producerSequence: 7, product: other);
+            Assert.Equal(TableBlockAppendOutcome.Duplicate, again.Outcome);
+            Assert.Equal(first.Entry.Sequence, again.Entry.Sequence);
+            Assert.Equal(TableBlockAppendOutcome.Duplicate, againOther.Outcome);
+            Assert.Equal(second.Entry.Sequence, againOther.Entry.Sequence);
+        }
+
+        [Fact]
+        public void A_reader_during_a_reopen_sees_the_whole_old_index_never_a_cleared_one()
+        {
+            var store = Open();
+            for (int i = 0; i < 4; i++)
+                Put(store, i);
+            var before = store.GetBlocks(_product).ToList();
+
+            // A failure, the backoff passed, the next use reopens; a reader inside the reopen (before the index is
+            // loaded) sees the old index in full.
+            store.FailForTest(new IOException("simulated"));
+            _now = _now.AddMinutes(5);
+
+            List<TableBlockIndexEntry> seen = null;
+            store.OnOpen = () => seen = store.GetBlocks(_product).ToList();
+
+            _ = store.NextSequence;
+
+            Assert.Equal(before, seen);
+            Assert.Equal(before, store.GetBlocks(_product));
+        }
+
+        [Fact]
         public void A_block_that_is_not_to_be_stored_writes_nothing()
         {
             var store = Open();
@@ -611,14 +661,14 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             Append(store, Block(("a", 2), ("b", 3)), producerSequence);
 
         private TableBlockAppendResult Append(TableBlockDatabase db, byte[] block, long producerSequence,
-            TableRefusal[] refusals = null, Guid? producer = null, bool store = true)
+            TableRefusal[] refusals = null, Guid? producer = null, bool store = true, Guid? product = null)
         {
             var header = TableBlockReader.ReadHeader(block);
             var ticket = db.Reserve();
 
             try
             {
-                return db.Append(ticket, Envelope(producerSequence, refusals, producer), block, header.FirstTime, header.LastTime,
+                return db.Append(ticket, Envelope(producerSequence, refusals, producer, product), block, header.FirstTime, header.LastTime,
                     header.RowCount, header.TableCount, store);
             }
             finally
@@ -628,9 +678,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             }
         }
 
-        private TableBlockEnvelope Envelope(long producerSequence, TableRefusal[] refusals = null, Guid? producer = null) => new()
+        private TableBlockEnvelope Envelope(long producerSequence, TableRefusal[] refusals = null, Guid? producer = null, Guid? product = null) => new()
         {
-            ProductId = _product,
+            ProductId = product ?? _product,
             ProducerId = producer ?? _producer,
             ProducerSequence = producerSequence,
             Refusals = refusals ?? [],

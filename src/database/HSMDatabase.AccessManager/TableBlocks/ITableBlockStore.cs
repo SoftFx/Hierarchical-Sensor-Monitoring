@@ -114,6 +114,20 @@ namespace HSMDatabase.AccessManager.TableBlocks
         long MinFreeBytes { get; set; }
 
         /// <summary>
+        /// Opens the store if it is not open (loading the index, rebuilding it if needed) and writes the sequence mark ahead.
+        /// For a caller that must read <see cref="PeekNextSequence"/> under a lock of its own: the expensive part happens
+        /// here, before that lock. Throws <see cref="TableBlockStoreException"/> when the store cannot be opened.
+        /// </summary>
+        void EnsureOpened();
+
+        /// <summary>
+        /// The sequence the next reserved ticket will get, of a store that is open. Never opens: throws
+        /// <see cref="TableBlockStoreException"/> when the store is not open (call <see cref="EnsureOpened"/> first).
+        /// Durable like <see cref="NextSequence"/>.
+        /// </summary>
+        long PeekNextSequence();
+
+        /// <summary>
         /// Makes the next sequence at least <paramref name="floor"/>, durably (through the sequence mark). The server raises
         /// it to the largest first sequence of its table sensors, so that a store deleted or restored from an older copy
         /// does not number blocks below a sensor's first sequence. Opens the store.

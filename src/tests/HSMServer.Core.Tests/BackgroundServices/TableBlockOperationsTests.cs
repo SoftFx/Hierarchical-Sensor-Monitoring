@@ -116,8 +116,18 @@ public sealed class TableBlockOperationsTests : IDisposable
 
         Assert.Equal([0, 3], Values<int>("Blocks stored").Select(v => v.Value));
         Assert.Equal([0.0, 2.0], Values<double>("Stored").Select(v => v.Value));
-        Assert.Equal((1, SensorStatus.Error), Values<int>("Read failures")[^1] is var r ? (r.Value, r.Status) : default);
+        // A failure counter is Error in the sample in which it grew, and Ok again at the next sample without a new one.
+        Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Error), (1, SensorStatus.Ok)],
+            Values<int>("Read failures").Select(v => (v.Value, v.Status)));
         Assert.Single(Values<int>("Tables refused"));
+
+        _store.Statistics.Add(ref _store.Statistics.WriteFailures);
+        sensors.SendInfo();
+        Assert.Equal((1, SensorStatus.Error), Values<int>("Write failures")[^1] is var w ? (w.Value, w.Status) : default);
+        sensors.SendInfo();
+        Assert.Equal((1, SensorStatus.Ok), Values<int>("Write failures")[^1] is var o ? (o.Value, o.Status) : default);
+        sensors.SendInfo();
+        Assert.Equal(3, Values<int>("Write failures").Count);
     }
 
     [Fact]

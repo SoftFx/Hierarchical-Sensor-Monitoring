@@ -63,6 +63,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // The lifetime of the native databases against reads that do not take _lock: a reopen and Dispose take it
         // for writing.
         private readonly ReaderWriterLockSlim _dbLock = new(LockRecursionPolicy.NoRecursion);
+        // Not disposed in Dispose, on purpose: a read takes it without _lock (ReadBlock after a lock-free GetBlocks), so a
+        // read in flight at shutdown can enter it after Dispose released it. Disposing it then throws in Dispose
+        // (SynchronizationLockException while a reader holds it) or in the late reader (ObjectDisposedException instead of
+        // the store's own answer for a closed store, a null record). It holds no native handle until contended, and the
+        // finalizers of its wait events release those; the store lives as long as the server.
 
         private DB _blocks, _index;
         private volatile bool _opened;
@@ -86,9 +91,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         private DateTime _diskCheckedAt = DateTime.MinValue;
         private long _freeBytes = long.MaxValue;
 
-        private readonly ConcurrentDictionary<Guid, ProductBlocks> _products = new();
-        private readonly Dictionary<(Guid Producer, long Sequence), TableBlockIndexEntry> _byProducer = [];
-        private int _count;
+        // The in-memory index and the duplicate map. An open builds new ones aside and swaps them in with one assignment,
+        // so a reader never sees a cleared or half-filled index during a reopen: it reads the old one until the swap.
+        private volatile IndexMaps _maps = new();
 
 
         public TableBlockDatabase(string folder) : this(folder, DefaultWriteBufferSize) { }
@@ -107,6 +112,16 @@ namespace HSMDatabase.LevelDB.TableBlocks
         /// <summary>Called with "after-block" between the write of a block and the write of its index entry. Test seam for a crash.</summary>
         internal Action<string> FaultHook { get; set; }
 
+        /// <summary>Called by an open before it loads the index. Test seam: what the open is under, what a reader sees meanwhile.</summary>
+        internal Action OnOpen { get; set; }
+
+        /// <summary>Marks the store failed, as a failed write does. Test seam for a reopen.</summary>
+        internal void FailForTest(Exception ex)
+        {
+            lock (_lock)
+                Fail(ex, "test");
+        }
+
         /// <summary>Free bytes on the store's disk. Test seam; the drive's free space by default.</summary>
         internal Func<long> FreeBytes { get; set; }
 
@@ -116,7 +131,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
         public bool Exists => Directory.Exists(_folder);
 
-        public int BlockCount => Volatile.Read(ref _count);
+        public int BlockCount => _maps.Count;
 
         public TableBlockStoreStatistics Statistics { get; } = new();
 
@@ -137,6 +152,29 @@ namespace HSMDatabase.LevelDB.TableBlocks
             }
         }
 
+
+        public void EnsureOpened()
+        {
+            lock (_lock)
+            {
+                EnsureOpen(create: true);
+
+                // The mark ahead too, so that the PeekNextSequence that follows has nothing durable to write.
+                EnsureMark(_nextReserve);
+            }
+        }
+
+        public long PeekNextSequence()
+        {
+            lock (_lock)
+            {
+                if (_disposed || _blocks is null || _failure is not null)
+                    throw new TableBlockStoreException($"The table block store {_folder} is not open; it is opened before the next sequence is read.");
+
+                EnsureMark(_nextReserve);
+                return _nextReserve;
+            }
+        }
 
         public void RaiseNextSequence(long floor)
         {
@@ -197,7 +235,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                     if (_disposed)
                         throw new TableBlockStoreException("The table block store is closed.");
 
-                    if (_byProducer.TryGetValue((envelope.ProducerId, envelope.ProducerSequence), out var original))
+                    if (_maps.ByProducer.TryGetValue((envelope.ProductId, envelope.ProducerId, envelope.ProducerSequence), out var original))
                     {
                         Statistics.Add(ref Statistics.DuplicateBlocks);
                         return new TableBlockAppendResult(TableBlockAppendOutcome.Duplicate, original, ReadEnvelope(original));
@@ -248,7 +286,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                         Fail(ex, "write an index entry");
                     }
 
-                    Publish(entry);
+                    _maps.Publish(entry);
 
                     Statistics.Add(ref Statistics.BlocksStored);
                     Statistics.Add(ref Statistics.RowsStored, rowCount);
@@ -274,7 +312,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 }
             }
 
-            return _products.TryGetValue(productId, out var blocks) ? blocks.Snapshot() : [];
+            return _maps.Products.TryGetValue(productId, out var blocks) ? blocks.Snapshot() : [];
         }
 
         public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry)
@@ -348,13 +386,15 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 _blocks.CompactRange(from, to);
                 _index.CompactRange(from, to);
 
-                foreach (var (_, blocks) in _products)
+                var maps = _maps;
+
+                foreach (var (_, blocks) in maps.Products)
                     blocks.RemoveHour(hourTicks);
 
-                foreach (var key in _byProducer.Where(p => p.Value.ArrivalHourTicks == hourTicks).Select(p => p.Key).ToList())
-                    _byProducer.Remove(key);
+                foreach (var key in maps.ByProducer.Where(p => p.Value.ArrivalHourTicks == hourTicks).Select(p => p.Key).ToList())
+                    maps.ByProducer.Remove(key);
 
-                Interlocked.Add(ref _count, -deleted);
+                Interlocked.Add(ref maps.Count, -deleted);
                 return deleted;
             }
         }
@@ -437,9 +477,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             _blocks = new DB(Path.Combine(_folder, BlocksName), Options());
             _index = new DB(Path.Combine(_folder, IndexName), Options());
 
-            _products.Clear();
-            _byProducer.Clear();
-            _count = 0;
+            var maps = new IndexMaps();
 
             var lastBlockKey = LastKey(_blocks);
             var rebuild = File.Exists(Path.Combine(_folder, RebuildMarkerName));
@@ -449,7 +487,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
             {
                 try
                 {
-                    lastIndexKey = LoadIndex();
+                    OnOpen?.Invoke();
+                    lastIndexKey = LoadIndex(maps);
 
                     if (lastIndexKey is not null && (lastBlockKey is null || Compare(lastIndexKey, lastBlockKey) > 0))
                         throw new FormatException("the index holds blocks the store does not");
@@ -476,15 +515,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 DB.Destroy(Path.Combine(_folder, IndexName));
                 _index = new DB(Path.Combine(_folder, IndexName), Options());
 
-                _products.Clear();
-                _byProducer.Clear();
-                _count = 0;
+                maps = new IndexMaps();
                 lastIndexKey = null;
 
                 Statistics.Add(ref Statistics.IndexRebuilds);
             }
 
-            indexed = IndexBlocksAfter(lastIndexKey);
+            indexed = IndexBlocksAfter(lastIndexKey, maps);
 
             if (rebuild)
                 File.Delete(Path.Combine(_folder, RebuildMarkerName));
@@ -507,7 +544,10 @@ namespace HSMDatabase.LevelDB.TableBlocks
             _doneAhead.Clear();
             _commitGaps.Clear();
 
-            _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {_count} blocks, next sequence {_nextReserve}" +
+            // One assignment: readers see the old index or the whole new one.
+            _maps = maps;
+
+            _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {maps.Count} blocks, next sequence {_nextReserve}" +
                          (rebuild ? $", index rebuilt from {indexed} blocks" : indexed > 0 ? $", {indexed} blocks indexed again after the last index entry" : string.Empty));
         }
 
@@ -520,7 +560,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
         };
 
         // Loads every index entry into memory; the key of the last one, or null. FormatException when one is damaged.
-        private byte[] LoadIndex()
+        private byte[] LoadIndex(IndexMaps maps)
         {
             byte[] last = null;
 
@@ -529,7 +569,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
-                Publish(DecodeIndex(key, iterator.Value()));
+                maps.Publish(DecodeIndex(key, iterator.Value()));
                 last = key;
             }
 
@@ -537,7 +577,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
         }
 
         // Indexes the blocks after the given key (all of them when it is null), in memory and in the index database.
-        private int IndexBlocksAfter(byte[] after)
+        private int IndexBlocksAfter(byte[] after, IndexMaps maps)
         {
             var count = 0;
 
@@ -579,19 +619,28 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 }
 
                 _index.Put(key, EncodeIndex(entry), _plainWrite);
-                Publish(entry);
+                maps.Publish(entry);
                 count++;
             }
 
             return count;
         }
 
-        // Under _lock (or during open): makes a block visible to readers and to the duplicate check.
-        private void Publish(TableBlockIndexEntry entry)
+        // The in-memory index of the stored blocks per product, and the duplicate map. Duplicates are keyed by product,
+        // producer and producer sequence: one store holds every product's blocks, and a producer id is the client's.
+        // Changed under _lock (or by the open that builds a new one aside).
+        private sealed class IndexMaps
         {
-            _products.GetOrAdd(entry.ProductId, _ => new ProductBlocks()).Add(entry);
-            _byProducer[(entry.ProducerId, entry.ProducerSequence)] = entry;
-            Interlocked.Increment(ref _count);
+            public readonly ConcurrentDictionary<Guid, ProductBlocks> Products = new();
+            public readonly Dictionary<(Guid Product, Guid Producer, long Sequence), TableBlockIndexEntry> ByProducer = [];
+            public int Count;
+
+            public void Publish(TableBlockIndexEntry entry)
+            {
+                Products.GetOrAdd(entry.ProductId, _ => new ProductBlocks()).Add(entry);
+                ByProducer[(entry.ProductId, entry.ProducerId, entry.ProducerSequence)] = entry;
+                Interlocked.Increment(ref Count);
+            }
         }
 
         private TableBlockEnvelope ReadEnvelope(in TableBlockIndexEntry entry)

@@ -22,10 +22,11 @@ namespace HSMServer.Core.TableSensors
         /// Checks a block and stores it unchanged. The block is verified (header, checksum, frame, directory, limits); each
         /// table is matched against the table sensor with the same path in <paramref name="productId"/>, and a table that
         /// does not match is refused and recorded with the block (its rows are never served). A block whose
-        /// <paramref name="producerId"/> and <paramref name="producerSequence"/> are stored already is not stored again
-        /// and answered as it was the first time. A block every table of which is refused is not stored.
-        /// <para>Refusals are results. A fault of the store throws <see cref="TableBlockStoreException"/>: the block is not
-        /// stored and must not be acknowledged.</para>
+        /// <paramref name="producerId"/> and <paramref name="producerSequence"/> are stored already for
+        /// <paramref name="productId"/> is not stored again and answered as it was the first time. A block every table of
+        /// which is refused is not stored.
+        /// <para>Refusals are results. Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault,
+        /// the caller answers 5xx; the block is not stored and must not be acknowledged.</para>
         /// </summary>
         TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block);
 
@@ -35,6 +36,8 @@ namespace HSMServer.Core.TableSensors
         /// when more matched. An error for an unknown id or a sensor that is not a table sensor.
         /// <para>Times are UTC: a <see cref="DateTimeKind.Unspecified"/> time is taken as UTC (as the ticks of a row are),
         /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
+        /// <para>Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault, the caller answers
+        /// 5xx. It is not turned into an error result, which says the request is wrong.</para>
         /// </summary>
         TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null);
     }
