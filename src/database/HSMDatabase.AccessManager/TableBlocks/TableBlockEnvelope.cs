@@ -41,23 +41,21 @@ namespace HSMDatabase.AccessManager.TableBlocks
     /// What the server stores in front of a block, unchanged block bytes following it (#1844): the arrival time, the
     /// product the block was resolved in, the producer and its sequence number (duplicates), and the refused tables.
     /// <para>
-    /// Layout, version 1, little-endian: <c>u8 version = 1</c>, <c>u8 flags = 0</c>, <c>u16 envelope length</c> (bytes up to
-    /// the block, this field included), <c>i64 arrival ticks (UTC)</c>, <c>16 product id</c>, <c>16 producer id</c>,
-    /// <c>i64 producer sequence</c>, <c>u16 refused count</c>, then per refused table <c>i32 directory index</c> and
-    /// <c>u8 reason</c>. The block follows immediately.
+    /// Layout, version 1, little-endian: <c>u8 version = 1</c>, <c>u8 flags = 0</c>, <c>u16 reserved = 0</c>,
+    /// <c>i32 envelope length</c> (the offset of the block), <c>i64 arrival ticks (UTC)</c>, <c>16 product id</c>,
+    /// <c>16 producer id</c>, <c>i64 producer sequence</c>, <c>i32 refused count</c>, then per refused table
+    /// <c>i32 directory index</c> and <c>u8 reason</c>. The block follows immediately. The counts are 32-bit, so every
+    /// table of a block the format allows can be recorded as refused.
     /// </para>
     /// </summary>
     public sealed record TableBlockEnvelope
     {
         public const byte CurrentVersion = 1;
 
-        // version, flags, length, arrival, product, producer, producer sequence, refused count.
-        public const int FixedSize = 1 + 1 + 2 + 8 + 16 + 16 + 8 + 2;
+        // version, flags, reserved, length, arrival, product, producer, producer sequence, refused count.
+        public const int FixedSize = 1 + 1 + 2 + 4 + 8 + 16 + 16 + 8 + 4;
 
         private const int RefusalSize = 4 + 1;
-
-        /// <summary>At most this many refused tables are recorded (the u16 count); a block has at most the configured number of tables.</summary>
-        public const int MaxRefusals = ushort.MaxValue;
 
 
         public DateTime ArrivalUtc { get; init; }
@@ -76,24 +74,20 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// <summary>The value stored for a block: this envelope and the block bytes after it.</summary>
         public byte[] Encode(ReadOnlySpan<byte> block)
         {
-            if (Refusals.Count > MaxRefusals)
-                throw new ArgumentException($"at most {MaxRefusals} refused tables can be recorded, {Refusals.Count} given");
-
-            var length = Length;
-            if (length > ushort.MaxValue)
-                throw new ArgumentException($"the envelope would be {length} bytes, at most {ushort.MaxValue}");
-
-            var value = new byte[length + block.Length];
+            // A block holds at most about 82 million tables (1 GiB, 13 bytes each), so the envelope fits an int.
+            var length = checked(FixedSize + Refusals.Count * RefusalSize);
+            var value = new byte[checked(length + block.Length)];
             var span = value.AsSpan();
 
             span[0] = CurrentVersion;
             span[1] = 0;
-            BinaryPrimitives.WriteUInt16LittleEndian(span[2..], (ushort)length);
-            BinaryPrimitives.WriteInt64LittleEndian(span[4..], ArrivalUtc.Ticks);
-            ProductId.TryWriteBytes(span[12..]);
-            ProducerId.TryWriteBytes(span[28..]);
-            BinaryPrimitives.WriteInt64LittleEndian(span[44..], ProducerSequence);
-            BinaryPrimitives.WriteUInt16LittleEndian(span[52..], (ushort)Refusals.Count);
+            BinaryPrimitives.WriteUInt16LittleEndian(span[2..], 0);
+            BinaryPrimitives.WriteInt32LittleEndian(span[4..], length);
+            BinaryPrimitives.WriteInt64LittleEndian(span[8..], ArrivalUtc.Ticks);
+            ProductId.TryWriteBytes(span[16..]);
+            ProducerId.TryWriteBytes(span[32..]);
+            BinaryPrimitives.WriteInt64LittleEndian(span[48..], ProducerSequence);
+            BinaryPrimitives.WriteInt32LittleEndian(span[56..], Refusals.Count);
 
             var at = FixedSize;
             foreach (var refusal in Refusals)
@@ -119,10 +113,10 @@ namespace HSMDatabase.AccessManager.TableBlocks
             if (value[0] != CurrentVersion)
                 throw new FormatException($"envelope version {value[0]} is not supported (this build reads {CurrentVersion})");
 
-            int length = BinaryPrimitives.ReadUInt16LittleEndian(value[2..]);
-            int count = BinaryPrimitives.ReadUInt16LittleEndian(value[52..]);
+            int length = BinaryPrimitives.ReadInt32LittleEndian(value[4..]);
+            int count = BinaryPrimitives.ReadInt32LittleEndian(value[56..]);
 
-            if (length != FixedSize + count * RefusalSize || length > value.Length)
+            if (count < 0 || length < FixedSize || (long)FixedSize + (long)count * RefusalSize != length || length > value.Length)
                 throw new FormatException($"envelope length {length} does not fit {count} refused tables and a value of {value.Length} bytes");
 
             var refusals = new TableRefusal[count];
@@ -133,14 +127,18 @@ namespace HSMDatabase.AccessManager.TableBlocks
                 at += RefusalSize;
             }
 
+            var arrival = BinaryPrimitives.ReadInt64LittleEndian(value[8..]);
+            if (arrival < DateTime.MinValue.Ticks || arrival > DateTime.MaxValue.Ticks)
+                throw new FormatException($"envelope arrival time {arrival} is not a valid time");
+
             blockOffset = length;
 
             return new TableBlockEnvelope
             {
-                ArrivalUtc = new DateTime(BinaryPrimitives.ReadInt64LittleEndian(value[4..]), DateTimeKind.Utc),
-                ProductId = new Guid(value.Slice(12, 16)),
-                ProducerId = new Guid(value.Slice(28, 16)),
-                ProducerSequence = BinaryPrimitives.ReadInt64LittleEndian(value[44..]),
+                ArrivalUtc = new DateTime(arrival, DateTimeKind.Utc),
+                ProductId = new Guid(value.Slice(16, 16)),
+                ProducerId = new Guid(value.Slice(32, 16)),
+                ProducerSequence = BinaryPrimitives.ReadInt64LittleEndian(value[48..]),
                 Refusals = refusals,
             };
         }

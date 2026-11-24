@@ -71,9 +71,12 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             var reopened = Open();
 
             Assert.Equal(entries, reopened.GetBlocks(_product));
-            Assert.Equal(5, reopened.NextSequence);
+
+            // A restart continues above the sequence mark, which the store wrote ahead (in steps) before it handed
+            // out sequence 0: the sequences in between are skipped, never handed out twice.
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep, reopened.NextSequence);
             Assert.Equal(TableBlockAppendOutcome.Stored, Put(reopened, 5).Outcome);
-            Assert.Equal(5, reopened.GetBlocks(_product)[^1].Sequence);
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep, reopened.GetBlocks(_product)[^1].Sequence);
 
             reopened.Dispose();
             AssertKeysGrow();
@@ -156,7 +159,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             Assert.Equal(TableBlockAppendOutcome.Stored, Put(reopened, 2).Outcome);
 
             reopened.Dispose();
-            Assert.Equal([0L, 1, 3], Open().GetBlocks(_product).Select(e => e.Sequence));
+            Assert.Equal([0L, 1, TableBlockDatabase.SequenceMarkStep + 1], Open().GetBlocks(_product).Select(e => e.Sequence));
         }
 
         [Fact]
@@ -346,6 +349,151 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
 
             store.Dispose();
             Assert.Equal([2L, 3], Open().GetBlocks(_product).Select(e => e.Sequence));
+        }
+
+        [Fact]
+        public void Sequences_handed_out_without_a_stored_block_are_never_handed_out_again_after_a_restart()
+        {
+            // Review of #1844 2b: blocks 0..10 stored, 11..500 consumed by puts that stored nothing, then a table sensor
+            // records 501 as its first sequence. A restart used to restore 11 and refuse that sensor's tables.
+            var store = Open();
+            for (int i = 0; i <= 10; i++)
+                Put(store, i);
+
+            for (int i = 11; i <= 500; i++)
+            {
+                if (i % 2 == 0)
+                    Append(store, Block(("a", 1)), producerSequence: 1000 + i, store: false);
+                else
+                    store.Skip(store.Reserve());
+            }
+
+            var firstSequence = store.NextSequence;
+            Assert.Equal(501, firstSequence);
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.True(reopened.NextSequence >= firstSequence);
+            Assert.True(Put(reopened, 2000).Entry.Sequence >= firstSequence);
+        }
+
+        [Fact]
+        public void A_first_sequence_read_before_any_block_is_stored_holds_across_a_restart()
+        {
+            // A table sensor is registered (it reads NextSequence) and the server restarts before any block arrives.
+            var store = Open();
+            for (int i = 0; i < 5; i++)
+                store.Skip(store.Reserve());
+
+            var firstSequence = store.NextSequence;
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.Equal(0, reopened.BlockCount);
+            Assert.True(reopened.NextSequence >= firstSequence);
+            Assert.True(Put(reopened, 1).Entry.Sequence >= firstSequence);
+        }
+
+        [Fact]
+        public void The_mark_survives_an_index_rebuild_and_a_block_database_emptied_by_deletes()
+        {
+            var store = Open();
+            Put(store, 0);
+            for (int i = 0; i < 100; i++)
+                store.Skip(store.Reserve());
+            var firstSequence = store.NextSequence;
+
+            // Every block deleted (what #1850 does to merged hours): the database is empty, the mark is not.
+            store.DeleteArrivalHour(TableBlockDatabase.FloorHour(T0));
+            store.Dispose();
+
+            Directory.Delete(Path.Combine(_root, TableBlockDatabase.IndexName), recursive: true);
+
+            var reopened = Open();
+            Assert.Equal(0, reopened.BlockCount);
+            Assert.True(reopened.NextSequence >= firstSequence);
+
+            Put(reopened, 1);
+            reopened.Dispose();
+            Directory.Delete(Path.Combine(_root, TableBlockDatabase.IndexName), recursive: true);
+
+            var rebuilt = Open();
+            Assert.True(rebuilt.NextSequence > firstSequence);
+            Assert.Equal(1, rebuilt.Statistics.IndexRebuilds);
+        }
+
+        [Fact]
+        public void Raising_the_next_sequence_is_durable_and_waits_for_tickets_in_flight()
+        {
+            var store = Open();
+            var inFlight = store.Reserve();
+
+            store.RaiseNextSequence(5000);
+            Assert.Equal(5000, store.NextSequence);
+
+            // The ticket reserved before the raise is written first; the one after it waits for it, then takes 5000.
+            var after = store.Reserve();
+            Assert.Equal(5000, after.Sequence);
+            var appended = Task.Run(() => store.Append(after, Envelope(2), Block(("a", 1)), 0, 0, 1, 1));
+            Assert.False(appended.Wait(200));
+
+            store.Skip(inFlight);
+            Assert.True(appended.Wait(5000));
+            Assert.Equal(5000, appended.Result.Entry.Sequence);
+
+            // A lower floor changes nothing; the raise survives a restart.
+            store.RaiseNextSequence(10);
+            Assert.Equal(5001, store.NextSequence);
+            store.Dispose();
+
+            Assert.True(Open().NextSequence >= 5001);
+        }
+
+        [Fact]
+        public void The_mark_is_written_ahead_in_steps()
+        {
+            var store = Open();
+            var mark = Path.Combine(_root, TableBlockDatabase.SequenceMarkName);
+
+            store.Skip(store.Reserve());
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep.ToString(), File.ReadAllText(mark));
+
+            var written = File.GetLastWriteTimeUtc(mark);
+            for (int i = 1; i < TableBlockDatabase.SequenceMarkStep; i++)
+                store.Skip(store.Reserve());
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep.ToString(), File.ReadAllText(mark));
+
+            store.Skip(store.Reserve());
+            Assert.Equal((2 * TableBlockDatabase.SequenceMarkStep).ToString(), File.ReadAllText(mark));
+        }
+
+        [Fact]
+        public void A_damaged_mark_fails_the_open_as_a_fault_that_names_the_file()
+        {
+            var store = Open();
+            Put(store, 0);
+            store.Dispose();
+
+            File.WriteAllText(Path.Combine(_root, TableBlockDatabase.SequenceMarkName), "twelve");
+
+            var reopened = Open();
+            var error = Assert.Throws<TableBlockStoreException>(() => reopened.Reserve());
+            Assert.Contains(TableBlockDatabase.SequenceMarkName, error.Message);
+        }
+
+        [Fact]
+        public void An_envelope_records_more_refused_tables_than_sixteen_bits_count()
+        {
+            var refusals = Enumerable.Range(0, 70_000).Select(i => new TableRefusal(i, TableRefusalReason.UnknownSensor)).ToArray();
+            var store = Open();
+
+            var stored = Append(store, Block(("a", 1)), producerSequence: 1, refusals);
+
+            Assert.Equal(70_000, stored.Entry.RefusedCount);
+            Assert.Equal(refusals, store.ReadBlock(stored.Entry).Envelope.Refusals);
+
+            store.Dispose();
+            Assert.Equal(70_000, Open().GetBlocks(_product)[0].RefusedCount);
         }
 
         [Fact]

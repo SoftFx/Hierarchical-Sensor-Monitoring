@@ -113,6 +113,13 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// </summary>
         long MinFreeBytes { get; set; }
 
+        /// <summary>
+        /// Makes the next sequence at least <paramref name="floor"/>, durably (through the sequence mark). The server raises
+        /// it to the largest first sequence of its table sensors, so that a store deleted or restored from an older copy
+        /// does not number blocks below a sensor's first sequence. Opens the store.
+        /// </summary>
+        void RaiseNextSequence(long floor);
+
         /// <summary>Reserves the next sequence. Opens the store. Throws <see cref="TableBlockStoreException"/> when the store cannot take puts.</summary>
         TableBlockTicket Reserve();
 

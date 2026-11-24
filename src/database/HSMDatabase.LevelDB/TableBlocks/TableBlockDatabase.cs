@@ -17,7 +17,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
     /// <list type="bullet">
     /// <item><c>Blocks</c>: key <c>arrival hour ticks (i64 BE) | sequence (i64 BE)</c>, value = <see cref="TableBlockEnvelope"/>
     /// and the block bytes as they arrived. No LevelDB compression (blocks are zstd already); every put is synced.</item>
-    /// <item><c>BlockIndex</c>: the same key, value = a fixed 80-byte summary of the block (<see cref="EncodeIndex"/>). Derived:
+    /// <item><c>BlockIndex</c>: the same key, value = a fixed 84-byte summary of the block (<see cref="EncodeIndex"/>). Derived:
     /// written after the block, unsynced; at open the blocks after its last key are indexed again, and a missing,
     /// damaged or stale index is rebuilt from the blocks.</item>
     /// </list>
@@ -33,8 +33,14 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // A file in the folder that says the index lost a write and must be rebuilt at the next open.
         public const string RebuildMarkerName = "hsm-rebuild-index";
 
+        // The sequence high-water mark: a durable file holding a number above every sequence ever handed out (reserved
+        // for a put, or read as a table sensor's first sequence), so that a restart never hands out a sequence again,
+        // whether or not a block was stored under it. Written ahead in steps: one durable write per step.
+        public const string SequenceMarkName = "hsm-sequence-mark";
+        internal const long SequenceMarkStep = 1024;
+
         internal const int KeySize = 16;
-        internal const int IndexValueSize = 80;
+        internal const int IndexValueSize = 84;
         private const byte IndexVersion = 1;
 
         internal const long DefaultWriteBufferSize = 8L * 1024 * 1024;
@@ -66,6 +72,12 @@ namespace HSMDatabase.LevelDB.TableBlocks
         private DateTime _lastFailureLog = DateTime.MinValue;
 
         private long _nextReserve, _nextCommit, _lastHourTicks;
+
+        // Every sequence below it may have been handed out; the value in the mark file. Under _lock.
+        private long _markPersisted;
+
+        // Sequences skipped by RaiseNextSequence while tickets were in flight: the commit order jumps from From to To.
+        private (long From, long To)? _commitGap;
         private readonly SortedSet<long> _doneAhead = [];
 
         private DateTime _diskCheckedAt = DateTime.MinValue;
@@ -114,11 +126,40 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 lock (_lock)
                 {
                     EnsureOpen(create: true);
+
+                    // A table sensor records this as its first sequence: no later open may restore a smaller one.
+                    EnsureMark(_nextReserve);
                     return _nextReserve;
                 }
             }
         }
 
+
+        public void RaiseNextSequence(long floor)
+        {
+            lock (_lock)
+            {
+                EnsureOpen(create: true);
+
+                if (floor <= _nextReserve)
+                    return;
+
+                // Durable first: a restart restores at least the mark.
+                EnsureMark(floor);
+
+                _logger.Warn($"Table block store {_folder}: the next sequence is raised from {_nextReserve} to {floor}, " +
+                             "the largest first sequence of the registered table sensors (the store was deleted or restored from an older copy)");
+
+                // Sequences between the old next one and the floor are never handed out: the commit order jumps over them
+                // once every ticket reserved before the raise is done.
+                if (_nextCommit == _nextReserve)
+                    _nextCommit = floor;
+                else
+                    _commitGap = (_nextReserve, floor);
+
+                _nextReserve = floor;
+            }
+        }
 
         public TableBlockTicket Reserve()
         {
@@ -126,6 +167,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             {
                 EnsureOpen(create: true);
                 CheckDisk();
+                EnsureMark(_nextReserve);
 
                 return new TableBlockTicket(_nextReserve++);
             }
@@ -366,11 +408,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 CloseDatabases();
                 Open();
             }
-            catch (Exception ex) when (ex is not TableBlockStoreException)
+            catch (Exception ex)
             {
                 CloseDatabases();
                 Fail(ex, "open");
-                throw new TableBlockStoreException($"The table block store {_folder} could not be opened: {ex.Message}", ex);
+                throw ex as TableBlockStoreException ?? new TableBlockStoreException($"The table block store {_folder} could not be opened: {ex.Message}", ex);
             }
             finally
             {
@@ -442,19 +484,23 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (rebuild)
                 File.Delete(Path.Combine(_folder, RebuildMarkerName));
 
+            var mark = ReadMark();
+            _markPersisted = mark;
+
             if (lastBlockKey is not null)
             {
                 var (hour, sequence) = ParseKey(lastBlockKey);
                 _lastHourTicks = hour;
-                _nextReserve = _nextCommit = sequence + 1;
+                _nextReserve = _nextCommit = Math.Max(sequence + 1, mark);
             }
             else
             {
                 _lastHourTicks = 0;
-                _nextReserve = _nextCommit = 0;
+                _nextReserve = _nextCommit = mark;
             }
 
             _doneAhead.Clear();
+            _commitGap = null;
 
             _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {_count} blocks, next sequence {_nextReserve}" +
                          (rebuild ? $", index rebuilt from {indexed} blocks" : indexed > 0 ? $", {indexed} blocks indexed again after the last index entry" : string.Empty));
@@ -568,7 +614,55 @@ namespace HSMDatabase.LevelDB.TableBlocks
             while (_doneAhead.Remove(_nextCommit))
                 _nextCommit++;
 
+            if (_commitGap is { } gap && _nextCommit == gap.From)
+            {
+                _nextCommit = gap.To;
+                _commitGap = null;
+            }
+
             Monitor.PulseAll(_lock);
+        }
+
+        // Under _lock. Makes the mark file say more than `sequence` before `sequence` is handed out: a restart then restores
+        // at least the mark, so it never hands out a sequence twice and never one below a table sensor's first sequence.
+        // Throws TableBlockStoreException when the mark cannot be written: the sequence is then not handed out.
+        private void EnsureMark(long sequence)
+        {
+            if (sequence < _markPersisted)
+                return;
+
+            var mark = sequence + SequenceMarkStep;
+
+            try
+            {
+                Sealed.DurableFile.WriteAtomic(Path.Combine(_folder, SequenceMarkName),
+                    mark.ToString(System.Globalization.CultureInfo.InvariantCulture), strict: true);
+            }
+            catch (Exception ex)
+            {
+                Fail(ex, "write the sequence mark");
+                throw new TableBlockStoreException($"The table block sequence mark could not be written: {ex.Message}", ex);
+            }
+
+            _markPersisted = mark;
+        }
+
+        // The mark at open; 0 without a file. A damaged mark fails the open: a guess could hand out sequences again.
+        private long ReadMark()
+        {
+            var path = Path.Combine(_folder, SequenceMarkName);
+
+            if (!File.Exists(path))
+                return 0;
+
+            var text = File.ReadAllText(path).Trim();
+
+            if (!long.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var mark))
+                throw new TableBlockStoreException($"The table block sequence mark {path} holds \"{text}\", not a sequence. Write a number above " +
+                                                   "every sequence handed out (at least the last block's plus one) or, if no table sensor was created " +
+                                                   "since the last block, delete the file.");
+
+            return mark;
         }
 
         // Under _lock.
@@ -653,7 +747,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             return (BinaryPrimitives.ReadInt64BigEndian(key), BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(8)));
         }
 
-        // Index value, version 1, little-endian, 80 bytes: u8 version, u8 0, u16 refused count, i64 first time,
+        // Index value, version 1, little-endian, 84 bytes: u8 version, u8 0, u16 0, i32 refused count, i64 first time,
         // i64 last time, i32 rows, i32 tables, i32 stored length, 16 product id, 16 producer id, i64 producer sequence,
         // i64 arrival ticks.
         internal static byte[] EncodeIndex(in TableBlockIndexEntry entry)
@@ -662,17 +756,16 @@ namespace HSMDatabase.LevelDB.TableBlocks
             var span = value.AsSpan();
 
             span[0] = IndexVersion;
-            span[1] = 0;
-            BinaryPrimitives.WriteUInt16LittleEndian(span[2..], (ushort)Math.Min(entry.RefusedCount, ushort.MaxValue));
-            BinaryPrimitives.WriteInt64LittleEndian(span[4..], entry.FirstTime);
-            BinaryPrimitives.WriteInt64LittleEndian(span[12..], entry.LastTime);
-            BinaryPrimitives.WriteInt32LittleEndian(span[20..], entry.RowCount);
-            BinaryPrimitives.WriteInt32LittleEndian(span[24..], entry.TableCount);
-            BinaryPrimitives.WriteInt32LittleEndian(span[28..], entry.StoredLength);
-            entry.ProductId.TryWriteBytes(span[32..]);
-            entry.ProducerId.TryWriteBytes(span[48..]);
-            BinaryPrimitives.WriteInt64LittleEndian(span[64..], entry.ProducerSequence);
-            BinaryPrimitives.WriteInt64LittleEndian(span[72..], entry.ArrivalTicks);
+            BinaryPrimitives.WriteInt32LittleEndian(span[4..], entry.RefusedCount);
+            BinaryPrimitives.WriteInt64LittleEndian(span[8..], entry.FirstTime);
+            BinaryPrimitives.WriteInt64LittleEndian(span[16..], entry.LastTime);
+            BinaryPrimitives.WriteInt32LittleEndian(span[24..], entry.RowCount);
+            BinaryPrimitives.WriteInt32LittleEndian(span[28..], entry.TableCount);
+            BinaryPrimitives.WriteInt32LittleEndian(span[32..], entry.StoredLength);
+            entry.ProductId.TryWriteBytes(span[36..]);
+            entry.ProducerId.TryWriteBytes(span[52..]);
+            BinaryPrimitives.WriteInt64LittleEndian(span[68..], entry.ProducerSequence);
+            BinaryPrimitives.WriteInt64LittleEndian(span[76..], entry.ArrivalTicks);
 
             return value;
         }
@@ -686,16 +779,16 @@ namespace HSMDatabase.LevelDB.TableBlocks
             var span = value.AsSpan();
 
             return new TableBlockIndexEntry(sequence, hour,
-                BinaryPrimitives.ReadInt64LittleEndian(span[4..]),
-                BinaryPrimitives.ReadInt64LittleEndian(span[12..]),
-                BinaryPrimitives.ReadInt32LittleEndian(span[20..]),
+                BinaryPrimitives.ReadInt64LittleEndian(span[8..]),
+                BinaryPrimitives.ReadInt64LittleEndian(span[16..]),
                 BinaryPrimitives.ReadInt32LittleEndian(span[24..]),
                 BinaryPrimitives.ReadInt32LittleEndian(span[28..]),
-                BinaryPrimitives.ReadUInt16LittleEndian(span[2..]),
-                new Guid(span.Slice(32, 16)),
-                new Guid(span.Slice(48, 16)),
-                BinaryPrimitives.ReadInt64LittleEndian(span[64..]),
-                BinaryPrimitives.ReadInt64LittleEndian(span[72..]));
+                BinaryPrimitives.ReadInt32LittleEndian(span[32..]),
+                BinaryPrimitives.ReadInt32LittleEndian(span[4..]),
+                new Guid(span.Slice(36, 16)),
+                new Guid(span.Slice(52, 16)),
+                BinaryPrimitives.ReadInt64LittleEndian(span[68..]),
+                BinaryPrimitives.ReadInt64LittleEndian(span[76..]));
         }
 
         private static byte[] LastKey(DB db)
