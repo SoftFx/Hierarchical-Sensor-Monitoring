@@ -1,11 +1,14 @@
+using HSMDatabase.AccessManager.TableBlocks;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableSensors;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.ServerConfiguration;
+using HSMTableBlocks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using NLog;
@@ -33,6 +36,13 @@ namespace HSMServer.SensorApi.Sessions
     // an orderly close by either side, Warn otherwise), both under the session's short id,
     // and every refused upgrade (at most one line a minute for each kind of refusal). The
     // lines carry the key's name, never its value: the value is the key.
+    //
+    // The table connection (#1845, ADR-0021 point 7) runs through the same loop: a second
+    // WebSocket of a collector, subprotocol hsm.tables.v1, tied to a live ordinary session of the
+    // same key (X-Hsm-Session), taking no slot, at most one per session (a new one replaces the
+    // old) and closed when its session ends. Its requests are binary frames (TableFrame), each
+    // answered with a text ack: a block put into the block store, or a probe. One block in
+    // flight per connection: the collector sends the next after the ack (stop and wait).
     public sealed class CollectorSessionHandler
     {
         private const string MalformedBody = "malformed body";
@@ -40,6 +50,13 @@ namespace HSMServer.SensorApi.Sessions
         private const string UnknownOp = "unknown op";
         private const string StoreFailed = "failed to store the batch";
         private const string CommandsFailed = "failed to apply the commands";
+        private const string BlockStoreUnavailable = "the block store cannot take blocks now";
+        private const string BlockFailed = "failed to store the block";
+
+        private const string TableReplacedReason = "replaced by a new table connection of its session";
+        private const string SessionEndedReason = "its session ended";
+
+        private static readonly Dictionary<string, string> NoErrors = new();
 
         private const string ShutdownReason = "server is shutting down";
         private const string SilenceReason = "no progress within three heartbeats";
@@ -71,21 +88,34 @@ namespace HSMServer.SensorApi.Sessions
         private readonly ITreeValuesCache _cache;
         private readonly AgentDirectives _directives;
         private readonly TimeProvider _time;
+        private readonly ITableBlockService _tables;
+        private readonly TableBlockLimits _tableLimits;
+
+        // Blocks stored at once by all table connections (TableSensors.MaxConcurrentPuts).
+        private readonly SemaphoreSlim _putGate;
 
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
+        private long _tablesOffWarnedAtTicks;
 
         // Refused upgrades, one throttle per kind of refusal.
         private readonly RefusalThrottle _badUpgradeRefusals = new();
         private readonly RefusalThrottle _accessRefusals = new();
         private readonly RefusalThrottle _shutdownRefusals = new();
+        private readonly RefusalThrottle _tableRefusals = new();
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
-            ISensorApiTelemetry telemetry, ITreeValuesCache cache, AgentDirectives directives, IHostApplicationLifetime lifetime, TimeProvider time)
+            ISensorApiTelemetry telemetry, ITreeValuesCache cache, AgentDirectives directives, IHostApplicationLifetime lifetime, TimeProvider time,
+            ITableBlockService tables)
         {
             _config = config.CollectorSessions ?? new CollectorSessionsConfig();
+            _tables = tables;
+
+            var tableConfig = config.TableSensors ?? new TableSensorsConfig();
+            _tableLimits = tableConfig.ToOptions().Limits;
+            _putGate = new SemaphoreSlim(tableConfig.MaxConcurrentPuts, tableConfig.MaxConcurrentPuts);
             _registry = registry;
             _ingestion = ingestion;
             _telemetry = telemetry;
@@ -136,10 +166,27 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            if (!context.WebSockets.WebSocketRequestedProtocols.Contains(SessionProtocol.Subprotocol))
+            // A table connection names its own subprotocol (#1845); a server before it refuses
+            // that upgrade here, with the 400 below, before anything is upgraded.
+            var requested = context.WebSockets.WebSocketRequestedProtocols;
+            var isTable = requested.Contains(SessionProtocol.TablesSubprotocol);
+
+            if (!isTable && !requested.Contains(SessionProtocol.Subprotocol))
             {
                 LogRefusal(context, _badUpgradeRefusals, StatusCodes.Status400BadRequest, $"the subprotocol {SessionProtocol.Subprotocol} was not offered", LogLevel.Warn);
                 await Refuse(context, StatusCodes.Status400BadRequest, $"The subprotocol {SessionProtocol.Subprotocol} is required");
+                return;
+            }
+
+            if (isTable && !_config.TablesEnabled)
+            {
+                // Switched off on purpose (CollectorSessions.MaxTableFrameBytes = 0): that
+                // collector keeps its blocks and cannot deliver them.
+                if (IsTimeToWarn(ref _tablesOffWarnedAtTicks))
+                    _logger.Warn($"A collector asked for a table connection from {context.Connection.RemoteIpAddress}, but table connections are switched off on this server " +
+                                 "(CollectorSessions.MaxTableFrameBytes = 0): it is refused with 404 and cannot deliver table blocks.");
+
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 
@@ -147,6 +194,12 @@ namespace HSMServer.SensorApi.Sessions
             {
                 LogRefusal(context, _shutdownRefusals, StatusCodes.Status503ServiceUnavailable, ShutdownReason, LogLevel.Info);
                 await Refuse(context, StatusCodes.Status503ServiceUnavailable, ShutdownReason);
+                return;
+            }
+
+            if (isTable)
+            {
+                await HandleTableUpgradeAsync(context, caller);
                 return;
             }
 
@@ -209,7 +262,7 @@ namespace HSMServer.SensorApi.Sessions
             }
             finally
             {
-                _registry.Release(session, caller.RemoteIP);
+                var table = _registry.Release(session, caller.RemoteIP);
 
                 if (session is not null)
                 {
@@ -230,6 +283,116 @@ namespace HSMServer.SensorApi.Sessions
                     socket.Abort();
                     socket.Dispose();
                 }
+
+                // A table connection lives as long as its session: closed now, after the ack of a
+                // block it is storing.
+                if (table is not null)
+                    await CloseTableAsync(table, SessionEndedReason);
+            }
+        }
+
+        // A table connection (#1845): checked against the ordinary session it names, accepted,
+        // attached to it in place of an earlier one, and run through the same loop.
+        private async Task HandleTableUpgradeAsync(HttpContext context, PublicApiRequestInfo caller)
+        {
+            var named = ReadFact(context, SessionProtocol.SessionHeader);
+
+            if (named is null || !SessionProtocol.TryParseSessionId(named, out var sessionId) ||
+                _registry.FindSession(sessionId) is not { } owner || owner.KeyId != caller.Key.Id)
+            {
+                LogRefusal(context, _tableRefusals, StatusCodes.Status409Conflict,
+                    named is null ? $"no {SessionProtocol.SessionHeader}" : $"{SessionProtocol.SessionHeader} names no live session of this key", LogLevel.Warn);
+                await Refuse(context, StatusCodes.Status409Conflict,
+                    $"A table connection needs the id of a live session of the same key in {SessionProtocol.SessionHeader}: open the session first");
+                return;
+            }
+
+            CollectorSession table = null;
+            WebSocket socket = null;
+
+            try
+            {
+                socket = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext
+                {
+                    SubProtocol = SessionProtocol.TablesSubprotocol,
+                    KeepAliveInterval = _config.Heartbeat,
+                });
+
+                table = new CollectorSession(socket, caller,
+                    ReadFact(context, SessionProtocol.CollectorKindHeader),
+                    ReadFact(context, SessionProtocol.CollectorVersionHeader),
+                    agentVersion: null,
+                    _time.GetUtcNow().UtcDateTime,
+                    pairedSessionId: sessionId);
+
+                SessionProtocol.MarkUpgraded(context);
+
+                if (!_registry.TryAttachTable(table, out var replaced))
+                {
+                    // The session ended between the check and here.
+                    LogOpened(table);
+                    await table.CloseAsync(WebSocketCloseStatus.NormalClosure, SessionEndedReason);
+                    return;
+                }
+
+                LogOpened(table);
+
+                if (replaced is not null)
+                    await CloseTableAsync(replaced, TableReplacedReason);
+
+                if (_stopping)
+                    await table.CloseAsync(SessionProtocol.CloseGoingAway, ShutdownReason);
+                else
+                    await RunAsync(table, context.RequestAborted);
+            }
+            catch (Exception ex) when (IsConnectionEnd(ex))
+            {
+                table?.NoteEnd($"the connection ended without a close handshake ({ex.GetType().Name}: {ex.Message})", abnormal: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Collector table connection {table?.ShortId} failed: {ex}");
+                table?.Abort($"internal error ({ex.GetType().Name})");
+            }
+            finally
+            {
+                if (table is not null)
+                {
+                    _registry.DetachTable(table);
+
+                    try
+                    {
+                        LogClosed(table);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to log the end of collector table connection {table.ShortId}: {ex}");
+                    }
+
+                    table.Dispose();
+                }
+                else if (socket is not null)
+                {
+                    socket.Abort();
+                    socket.Dispose();
+                }
+            }
+        }
+
+        // Closes a table connection from outside its loop: at once while it waits for a frame,
+        // after the ack while it is storing a block (so a stored block is acknowledged and not
+        // sent again). A peer that does not answer the close in time is cut off.
+        private async Task CloseTableAsync(CollectorSession table, string reason)
+        {
+            using var budget = new CancellationTokenSource(ShutdownBudget);
+
+            try
+            {
+                await table.SignalCloseAsync(WebSocketCloseStatus.NormalClosure, reason, budget.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to close collector table connection {table.ShortId}: {ex}");
             }
         }
 
@@ -263,7 +426,13 @@ namespace HSMServer.SensorApi.Sessions
                     silence.Arm();
             };
 
-            SessionProtocol.WriteHello(output, _config.MaxFrameBytes, _config.HeartbeatSeconds);
+            var maxFrameBytes = session.IsTable ? _config.MaxTableFrameBytes : _config.MaxFrameBytes;
+
+            if (session.IsTable)
+                SessionProtocol.WriteTableHello(output, maxFrameBytes, _config.HeartbeatSeconds, _tableLimits);
+            else
+                SessionProtocol.WriteHello(output, maxFrameBytes, _config.HeartbeatSeconds, session.Id);
+
             _telemetry.AddResponse(session.Caller.TelemetryPath, output.WrittenCount);
 
             silence.Arm();
@@ -271,7 +440,8 @@ namespace HSMServer.SensorApi.Sessions
 
             // Directives for a directive-aware agent (#1660 step 5): the rule of the header path,
             // a client that stated X-Agent-Version. After the hello, which must be the first frame.
-            await using var push = session.AgentVersion is null
+            // A table connection states none.
+            await using var push = session.AgentVersion is null || session.IsTable
                 ? null
                 : new DirectivePush(session, _directives, _cache, _telemetry, _logger, _time, (frame, token) => PushSend(session, frame, token));
 
@@ -280,7 +450,7 @@ namespace HSMServer.SensorApi.Sessions
                 silence.Arm();
                 frameStarted = 0;
 
-                using var frame = await session.ReceiveAsync(_config.MaxFrameBytes, progressed, aborted);
+                using var frame = await session.ReceiveAsync(maxFrameBytes, progressed, aborted);
 
                 silence.Disarm();
 
@@ -299,10 +469,12 @@ namespace HSMServer.SensorApi.Sessions
                         return;
 
                     case SessionFrameKind.TooBig:
-                        await Violation(session, SessionProtocol.CloseMessageTooBig, $"a frame exceeds {_config.MaxFrameBytes} bytes");
+                        await Violation(session, SessionProtocol.CloseMessageTooBig, $"a frame exceeds {maxFrameBytes} bytes");
                         return;
 
-                    case SessionFrameKind.Binary:
+                    // Binary frames carry blocks, and only on a table connection: the ordinary
+                    // connection stays text-only.
+                    case SessionFrameKind.Binary when !session.IsTable:
                         await Violation(session, SessionProtocol.CloseUnsupportedData, "binary frames are not supported");
                         return;
                 }
@@ -319,7 +491,9 @@ namespace HSMServer.SensorApi.Sessions
                 {
                     session.Touch(_time.GetUtcNow().UtcDateTime);
 
-                    open = await HandleFrameAsync(session, frame, output, silence, aborted);
+                    open = frame.Kind == SessionFrameKind.Binary
+                        ? await HandleTableFrameAsync(session, frame, output, silence, aborted)
+                        : await HandleFrameAsync(session, frame, output, silence, aborted);
                 }
                 finally
                 {
@@ -405,13 +579,14 @@ namespace HSMServer.SensorApi.Sessions
 
                 output.Clear();
 
+                // A table connection carries blocks only: every text request is an unknown op there.
                 switch (request.Op)
                 {
-                    case SessionProtocol.OpList:
+                    case SessionProtocol.OpList when !session.IsTable:
                         await HandleListAsync(session, caller, request, id, output);
                         break;
 
-                    case SessionProtocol.OpCommands:
+                    case SessionProtocol.OpCommands when !session.IsTable:
                         await HandleCommandsAsync(session, caller, request, id, output);
                         break;
 
@@ -427,6 +602,135 @@ namespace HSMServer.SensorApi.Sessions
                 await session.SendAsync(output.WrittenMemory, aborted);
 
                 return true;
+            }
+        }
+
+        // A binary frame of a table connection (#1845). False when the connection was closed and the
+        // loop must end.
+        private async Task<bool> HandleTableFrameAsync(CollectorSession session, SessionFrame frame, ArrayBufferWriter<byte> output, SilenceWatch silence, CancellationToken aborted)
+        {
+            // Without a header it can trust there is no request id to answer: a protocol error.
+            if (!TableFrame.TryRead(frame.Payload.Span, out var header, out var error))
+            {
+                await Violation(session, SessionProtocol.CloseProtocolError, error);
+                return false;
+            }
+
+            var isProbe = header.Kind == TableFrameKind.Probe;
+
+            // Access is re-checked for every frame, as for a request on the ordinary connection; a
+            // probe, like a ping, is not a use of the key.
+            if (!TryRefreshCaller(session, countsAsKeyUsage: !isProbe, out var caller, out var accessError))
+            {
+                _logger.Debug($"Collector table connection {session.ShortId} lost its access: {accessError}");
+                await session.CloseAsync(SessionProtocol.ClosePolicyViolation, Truncate(accessError));
+                return false;
+            }
+
+            _telemetry.AddRequest(caller.TelemetryPath, frame.Length);
+
+            output.Clear();
+
+            if (isProbe)
+                SessionProtocol.WriteAck(output, header.Id, SessionProtocol.StatusOk, NoErrors);
+            else
+                await HandleBlockAsync(session, caller, header, frame.Payload[header.BlockOffset..], output, aborted);
+
+            _telemetry.AddResponse(caller.TelemetryPath, output.WrittenCount);
+
+            silence.Arm();
+            await session.SendAsync(output.WrittenMemory, aborted);
+
+            return true;
+        }
+
+        // A block: put into the block store and answered by what came of it. A refusal (of tables,
+        // of the whole block, of a block that cannot be read) is final and answered as one; a
+        // fault of the store is a 503 with a time to wait, and the block was not stored, so the
+        // collector keeps it and sends it again.
+        private async Task HandleBlockAsync(CollectorSession session, PublicApiRequestInfo caller, TableFrame header, ReadOnlyMemory<byte> payload,
+            ArrayBufferWriter<byte> output, CancellationToken aborted)
+        {
+            var id = header.Id;
+
+            if (header.ProducerId == Guid.Empty || header.ProducerSequence < 0)
+            {
+                session.CountBlockInvalid();
+                session.CountRequestRefused();
+                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest,
+                    header.ProducerId == Guid.Empty ? "invalid producer: the producer id is empty" : "invalid producer: the producer sequence is negative");
+                return;
+            }
+
+            var productId = caller.Product.Id;
+
+            // Two collectors with one producer id make each other's blocks duplicates: the rows of
+            // whichever is second are lost. Not refused (a restarted collector reconnects with its
+            // own id while its old connection may still be listed), but said.
+            if (_registry.NoteProducer(session, productId, header.ProducerId, _time.GetUtcNow().UtcTicks, out var worthLogging) is { } other && worthLogging)
+                _logger.Warn($"Two live table connections of product \"{CollectorSession.Printable(caller.Product.DisplayName)}\" send blocks of one producer id {header.ProducerId}: " +
+                             $"{session.ShortId} from {session.RemoteIP} (client \"{CollectorSession.Printable(session.ClientName)}\") and {other.ShortId} from {other.RemoteIP} " +
+                             $"(client \"{CollectorSession.Printable(other.ClientName)}\"). Their blocks are taken for each other's repeats and rows are lost: " +
+                             "each collector installation needs its own producer id (a copied data folder carries it along).");
+
+            // The store takes a whole array; the frame's buffer is the session's and is reused.
+            var block = payload.ToArray();
+
+            TableBlockPutResult result;
+
+            await _putGate.WaitAsync(aborted);
+
+            try
+            {
+                // Off the loop's thread: a put decompresses the block and makes a synced write.
+                result = await Task.Run(() => _tables.Put(productId, header.ProducerId, header.ProducerSequence, block), CancellationToken.None);
+            }
+            catch (TableBlockStoreException ex)
+            {
+                // The store logs its own failure; this is the collector's side of it.
+                _logger.Debug($"Collector table connection {session.ShortId} frame {id}: the block store refused the put as a fault: {ex.Message}");
+
+                session.CountBlockFault();
+                session.CountRequestRefused();
+                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusUnavailable, BlockStoreUnavailable, SessionProtocol.StoreRetryAfterSeconds);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to store a block of collector table connection {session.ShortId} frame {id}: {ex}");
+
+                session.CountBlockFault();
+                session.CountRequestRefused();
+                SessionProtocol.WriteAck(output, id, SessionProtocol.StatusInternalError, BlockFailed);
+                return;
+            }
+            finally
+            {
+                _putGate.Release();
+            }
+
+            switch (result.Outcome)
+            {
+                case TableBlockPutOutcome.Stored:
+                    session.CountBlockStored(result.Refusals.Count);
+                    SessionProtocol.WriteBlockAck(output, id, "stored", result.TableCount, result.Refusals);
+                    break;
+
+                case TableBlockPutOutcome.Duplicate:
+                    session.CountBlockDuplicate();
+                    SessionProtocol.WriteBlockAck(output, id, "duplicate", result.TableCount, result.RefusalsKnown ? result.Refusals : null);
+                    break;
+
+                case TableBlockPutOutcome.AllRefused:
+                    session.CountBlockAllRefused(result.Refusals.Count);
+                    SessionProtocol.WriteBlockAck(output, id, "allRefused", result.TableCount, result.Refusals);
+                    break;
+
+                default:
+                    session.CountBlockInvalid();
+                    session.CountRequestRefused();
+                    SessionProtocol.WriteAck(output, id, SessionProtocol.StatusBadRequest, $"invalid block: {result.FormatError}");
+                    break;
             }
         }
 
@@ -609,6 +913,15 @@ namespace HSMServer.SensorApi.Sessions
         {
             var caller = session.Caller;
 
+            if (session.IsTable)
+            {
+                _logger.Info($"Collector table connection {session.ShortId} of session {session.PairedShortId} opened: product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", " +
+                             $"key \"{CollectorSession.Printable(caller.Key.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", " +
+                             $"collector {CollectorSession.Printable(session.CollectorKind) ?? "(kind not stated)"} {CollectorSession.Printable(session.CollectorVersion) ?? "(version not stated)"}, " +
+                             $"from {session.RemoteIP}; {_registry.TableConnectionCount} table connection(s) open.");
+                return;
+            }
+
             // The client's words (its name, what it says it is) are made printable first.
             _logger.Info($"Collector session {session.ShortId} opened: product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", " +
                          $"key \"{CollectorSession.Printable(caller.Key.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", " +
@@ -621,11 +934,18 @@ namespace HSMServer.SensorApi.Sessions
             var caller = session.Caller;
             var end = session.End ?? new SessionEnd("it ended without a recorded cause", Abnormal: true);
 
-            var line = $"Collector session {session.ShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
-                       $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
-                       $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
-                       $"values accepted {session.ValuesAccepted}, requests refused {session.RequestsRefused}; " +
-                       $"last frame from the collector {FormatDuration(session.SinceLastFrame)} before the end; {_registry.Count} session(s) open.";
+            var line = session.IsTable
+                ? $"Collector table connection {session.ShortId} of session {session.PairedShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
+                  $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
+                  $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
+                  $"blocks stored {session.BlocksStored}, duplicate {session.BlocksDuplicate}, all refused {session.BlocksAllRefused}, invalid {session.BlocksInvalid}, " +
+                  $"faults {session.BlockFaults}; tables refused {session.TablesRefused}; " +
+                  $"last frame from the collector {FormatDuration(session.SinceLastFrame)} before the end; {_registry.TableConnectionCount} table connection(s) open."
+                : $"Collector session {session.ShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
+                  $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
+                  $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
+                  $"values accepted {session.ValuesAccepted}, requests refused {session.RequestsRefused}; " +
+                  $"last frame from the collector {FormatDuration(session.SinceLastFrame)} before the end; {_registry.Count} session(s) open.";
 
             if (end.Abnormal)
                 _logger.Warn(line);

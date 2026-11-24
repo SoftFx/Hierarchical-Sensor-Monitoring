@@ -25,6 +25,13 @@ namespace HSMServer.ServerConfiguration
         // Puts are refused (a fault, the collector keeps its blocks) while less is free on the store's disk; 0 turns it off.
         public long MinFreeDiskMb { get; set; } = TableBlockOptions.DefaultMinFreeDiskMb;
 
+        // How many blocks the table connections store at once (#1845). A put decompresses its block (up to
+        // MaxDecompressedBytes) and makes a synced write; a connection whose block waits for a turn is not answered until
+        // it got one, which is the collector's back-pressure (one block in flight per connection).
+        public int MaxConcurrentPuts { get; set; } = DefaultMaxConcurrentPuts;
+
+        public const int DefaultMaxConcurrentPuts = 4;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -36,6 +43,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxColumnsPerTable, TableBlockLimits.FormatMaxColumnsPerTable, nameof(MaxColumnsPerTable));
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
             Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
+            Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
 
             if (MinFreeDiskMb < 0)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(MinFreeDiskMb)} = {MinFreeDiskMb} is invalid: expected 0 (no check) or more megabytes.");

@@ -15,6 +15,7 @@ namespace HSMServer.ServerConfiguration
         public const int DefaultMaxSessionsPerAddress = 20;
         public const int DefaultHeartbeatSeconds = 30;
         public const int DefaultMaxFrameBytes = 4 * 1024 * 1024;
+        public const int DefaultMaxTableFrameBytes = 16 * 1024 * 1024;
 
         private const int MinHeartbeatSeconds = 5;
         private const int MaxHeartbeatSeconds = 3600;
@@ -45,8 +46,19 @@ namespace HSMServer.ServerConfiguration
         // a frame over the limit closes the session with 1009.
         public int MaxFrameBytes { get; set; } = DefaultMaxFrameBytes;
 
+        // The largest binary frame on a table connection (#1845, ADR-0021 point 7): a block of
+        // table rows with its 40-byte frame header. Announced in the table connection's hello; a
+        // collector splits a tick's block so that every frame fits. A larger frame closes the
+        // table connection with 1009. Zero turns table connections off (the upgrade answers 404)
+        // while the ordinary sessions go on: a way to stop table ingest without stopping the
+        // collectors. Reads of stored rows are not affected.
+        public int MaxTableFrameBytes { get; set; } = DefaultMaxTableFrameBytes;
+
         [JsonIgnore]
         public bool Enabled => MaxSessions > 0;
+
+        [JsonIgnore]
+        public bool TablesEnabled => Enabled && MaxTableFrameBytes > 0;
 
         [JsonIgnore]
         public TimeSpan Heartbeat => TimeSpan.FromSeconds(HeartbeatSeconds);
@@ -71,6 +83,9 @@ namespace HSMServer.ServerConfiguration
 
             if (MaxFrameBytes is < MinFrameBytes or > MaxFrameBytesCeiling)
                 throw new InvalidOperationException($"{section}.{nameof(MaxFrameBytes)} = {MaxFrameBytes} is invalid: expected {MinFrameBytes}..{MaxFrameBytesCeiling}.");
+
+            if (MaxTableFrameBytes != 0 && MaxTableFrameBytes is < MinFrameBytes or > MaxFrameBytesCeiling)
+                throw new InvalidOperationException($"{section}.{nameof(MaxTableFrameBytes)} = {MaxTableFrameBytes} is invalid: use 0 to turn table connections off, or {MinFrameBytes}..{MaxFrameBytesCeiling}.");
         }
     }
 }

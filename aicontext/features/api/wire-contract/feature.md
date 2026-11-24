@@ -214,7 +214,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 | either | `op` = `ping` / `pong` | heartbeat; no `id` |
 
 ```json
-{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30}}
+{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"sessionId":"20e46170c0a84f6e9b0d6a1f3c2e5b77"}}
 
 {"id":17,"op":"list","body":[{"Type":1,"Value":42,"Comment":null,"Time":"2026-11-10T10:00:00Z","Status":1,"Key":null,"Path":"p/int"}]}
 {"ack":17,"status":200,"body":{}}
@@ -231,7 +231,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 {"op":"directive","body":"sensor-disable:network"}
 ```
 
-- **`hello`** is the first frame the server sends.
+- **`hello`** is the first frame the server sends. Its `sessionId` (32 hex digits, #1845) is what a table connection of the same collector names in `X-Hsm-Session` (below); a collector without table sensors ignores it.
 - **`directive`** (#1660 step 5) is a push: one server directive, its `body` the text of one `X-Hsm-Directive` header line (`name:argument` or a bare name). The server pushes directives only to a session whose upgrade stated `X-Agent-Version`, as it puts the headers only on the answers to such a client. The set is the one the headers carry (`update-available:<staged>` when auto-update is on and the staged agent is newer, then `sensor-enable:` / `sensor-disable:` for `computer`, `system`, `disk`, `network`, `module`, `process`), in that order; it is pushed whole right after the `hello`, a directive again when it is not in the set of the previous check (every 15 s), and whole again every 5 minutes. A collector hands each directive, in order, to what takes a header directive (managed: the internal `ServerDirectives`; native: the host callback, as verb and payload split at the first `:`). A `directive` whose `body` is not a string, or is empty or whitespace only, carries nothing and is ignored by both collectors, on the header path as well (whitespace as .NET's `char.IsWhiteSpace` counts it). `maxFrameBytes` is the largest frame it accepts; `heartbeatSeconds` is the heartbeat interval.
 - **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **A file value is an element of a `list` frame** (#1660 step 2b): the `/list` batch takes a `FileSensorValue` (`"Type":6`, `Value` the numeric array of `List<byte>`) as it takes any other value, and the server stores it as `/file` would. There is no `file` op. A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that use the session; both collectors split `list` and `commands` batches), and an element that cannot fit on its own has no way through: both collectors drop such a value, a file included, report it and count it in `Queue overflow`. A byte of a file is up to four bytes of JSON, so the default limit of 4 MiB carries a file of about 1 MiB; larger files need `CollectorSessions.MaxFrameBytes` raised on the server (up to 64 MiB, enough for the 10 MiB the collectors accept by default). One thing has no way through a session: an element larger than any frame the server allows.
 - **`status` is the HTTP status the same request would have got** on that route. A body the server cannot parse — an unknown, missing or non-numeric `Type` discriminator above all — is `400` on both transports for `list` (#1672): `"malformed body"` on the session, a `400` problem-details answer naming the position in the body on HTTP. A `commands` body the server cannot parse is `400` on both (#1749), and so is a `commands` list with a `null` element or with a command without a `Path` (`"malformed body"` on the session): nothing of it is applied.
@@ -246,6 +246,52 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 - **What the collector expects of the server's frames.** A collector waits for an ack as long as it waits for an HTTP response (`RequestTimeout`, 30 s by default) and then closes the session, so a server that takes longer than that to store a batch loses the session as it would lose the HTTP request. The managed collector accepts frames of up to 8 MiB from the server (the native bound) and ends the session on a larger one.
 
 Server behaviour, settings and tests: `aicontext/features/server/collector-session/feature.md`.
+
+### Table connection (#1845, ADR-0021 point 7)
+
+A collector with table sensors sends their rows as blocks (`aicontext/features/api/table-block/feature.md`) on a **second WebSocket of the same session protocol**, used only for blocks, so that a large block never waits ahead of a value or a command. Table sensors need the session transport: there is no HTTP route for sending blocks.
+
+**Handshake.** `GET {base}session` with `Sec-WebSocket-Protocol: hsm.tables.v1` (echoed), the same `Key` / `ClientName` (and optional `X-Collector-Kind` / `X-Collector-Version`) headers, and `X-Hsm-Session: <sessionId>`, the id from the `hello` of the collector's live ordinary session. A refused upgrade is an HTTP status, checked in this order: `406` no usable key (as for the session); `404` sessions off, or **table connections off** (`CollectorSessions.MaxTableFrameBytes = 0`: table ingest stops, sessions go on); `400` neither subprotocol offered; `503` shutting down; **`409` `X-Hsm-Session` is missing, malformed, or names no live session of the same key** (open the session first, then the table connection). An older server knows only `hsm.sensors.v1` and answers `400` before anything is upgraded.
+
+- **The pair.** A table connection belongs to one live session of the same key. It takes **no slot**: neither `MaxSessions` nor `MaxSessionsPerAddress` counts it, so the limits count collectors and a server holds at most twice `MaxSessions` sockets. A session has at most one table connection: **a new one replaces the old** (the old is closed with `1000`, reason `replaced by a new table connection of its session`, after the ack of a block it is storing). **When the session ends, its table connection is closed** with `1000`, reason `its session ended`, again after the ack of a block in progress. A collector reconnects the session first and the table connection after it.
+- **Hello.** The server's first frame: `{"op":"hello","body":{"maxFrameBytes":16777216,"heartbeatSeconds":30,"blockLimits":{"maxDecompressedBytes":67108864,"maxTables":65536,"maxRows":8388608,"maxColumnsPerTable":64,"maxTableIdLength":1024}}}`. `maxFrameBytes` is the largest binary frame (`CollectorSessions.MaxTableFrameBytes`, 16 MiB by default), header included; `blockLimits` are the limits a block is checked against (section `TableSensors`). A collector splits a tick's rows into blocks that keep to both.
+- **Text frames** are those of the session: `ping` / `pong` (the heartbeat and the silence limit are the session's), acks. A text request with any `op` is answered `400` `unknown op`: the table connection takes no `list` or `commands`. A text frame that is not JSON closes with `1007`, a request without `id` with `1002`, as on the session.
+- **Binary frames** carry the requests. Version 1, little-endian, a 40-byte header and then the block:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | frame version, `1` |
+| 1 | 1 | kind: `1` block, `2` probe |
+| 2 | 2 | reserved, `0` |
+| 4 | 4 | header length (u32): where the block starts; `40` in version 1, the server accepts more and skips the rest |
+| 8 | 8 | request id (i64), chosen by the collector, echoed as `ack` |
+| 16 | 16 | producer id: 16 opaque bytes, read as a .NET `Guid` (`new Guid(bytes)`) and stored as they are; not all zero |
+| 32 | 8 | producer sequence (i64, ≥ 0) |
+| 40 | … | the block, to the end of the frame; nothing for a probe |
+
+  A frame shorter than 40 bytes, of another version or kind, with reserved bytes set, or with a header length below 40 or past the frame, cannot be answered (its id is not trusted) and closes the connection with **`1002`**. A frame over `maxFrameBytes` closes with **`1009`**.
+- **Probe** (kind 2): answered `{"ack":<id>,"status":200,"body":{}}`. A collector sends one after the hello to see that binary frames get through whatever is between it and the server; a path that drops them shows here, before any block waits on it.
+- **Acknowledgement of a block**, a text frame; the collector decides by `status`:
+
+```json
+{"ack":17,"status":200,"body":{"outcome":"stored","tables":1000,"refused":[{"index":3,"table":"quotes/XAUUSD","reason":"UnknownSensor"}]}}
+{"ack":18,"status":200,"body":{"outcome":"duplicate","tables":1000,"refused":[]}}
+{"ack":18,"status":200,"body":{"outcome":"duplicate","tables":1000,"refusedKnown":false}}
+{"ack":19,"status":200,"body":{"outcome":"allRefused","tables":2,"refused":[{"index":0,"table":"a/b","reason":"SchemaIdMismatch"},{"index":1,"table":"a/c","reason":"SensorBlocked"}]}}
+{"ack":20,"status":400,"error":"invalid block: ChecksumMismatch"}
+{"ack":21,"status":503,"error":"the block store cannot take blocks now","retryAfter":60}
+```
+
+  - `200` settles the block. `stored`: the tables not in `refused` were taken. `duplicate`: the producer's block with this sequence was taken before, and the answer is that first one's. `allRefused`: every table was refused and nothing was stored (the same block sent again after its sensors are registered is taken). `refused` lists the refused tables by directory index, name (the identifier as text) and reason: `UnknownSensor`, `NotATableSensor`, `SensorBlocked`, `SensorCreatedAfterBlock`, `SchemaIdMismatch`, `ColumnTypesMismatch`, `InvalidIdentifier` (strings; a collector logs a reason it does not know as it is). The rows of a refused table are dropped and counted; a refused table stays refused in a resend.
+  - **`refused` may be absent, with `"refusedKnown":false`**, on a `duplicate` whose first put's refusals the server cannot tell (today a stored envelope it cannot read; after the merge of #1850, a block already merged and deleted). A collector reads both forms; the rows were settled by the first put either way.
+  - `400` is final: a block that breaks the format or the limits (`invalid block: <TableBlockError>`), an empty producer id or a negative producer sequence (`invalid producer: …`). The collector drops the block and counts it.
+  - **`503` is a fault, never a refusal**: the block store could not take the block (a failed write, too little disk, a store reopening after a failure). Nothing was stored. The collector keeps the block and sends the same frame again (same producer id and sequence) after `retryAfter` seconds. A `500` (`failed to store the block`, an error of the server) is handled the same way.
+- **Access** is checked again for every binary frame, as for every request on the session: a key that can no longer send closes the connection with `1008`, and the block is not stored. A block counts as a use of the key; a probe does not.
+- **One block in flight (stop and wait).** A collector sends the next block after the ack of the previous one. **The order is a rule the server relies on, not only what the transport happens to do**: the merge (#1850) keeps, per product and producer, the highest producer sequence it has merged and answers anything at or below it as a duplicate. So a producer sends its blocks in sequence order; it never sends a lower sequence after a higher one was acknowledged; a block that got a final refusal (`allRefused`, `400`) is dropped and its number is not reused; its sequence never goes back, across restarts included; and a collector that cannot read its producer state (the id and the next sequence, kept with its file of undelivered blocks) takes a new producer id and starts again.
+- **Blocks in flight when a connection drops** may or may not have been stored. The collector sends the same block (same producer id and sequence) on its next table connection; one that was stored is answered `duplicate`. A block that a replaced connection is still storing when the resend arrives is stored once: the store appends in the order it reserved and the second put finds the first.
+- **A collector's rules, besides the order above**: a table goes into a block only after its registration was acknowledged without an error under its path on the session (the two connections are separate sockets, and a block could overtake its registration); the table identifier is the registered path in normal form (see "Table sensor registration"); on `UnknownSensor` for a table it registered, the collector registers that table again (an operator may have removed the sensor) and the rows of the refused block are lost and counted; each collector installation has its own producer id (the server logs a `Warn`, at most once a minute, when two live table connections of one product send blocks of one producer id, and refuses nothing).
+- **Shutdown**: the table connection is closed with `1001` like the session, after the ack of a block being stored (within the shutdown budget).
+- **Close codes from the server on a table connection**: `1000` replaced or its session ended, `1001` shutdown, `1002` a binary frame without a trusted header or a text request without `id`, `1007` a text frame that is not a JSON object, `1008` the key can no longer send, `1009` a frame over `maxFrameBytes`. The session keeps `1003` for a binary frame: it stays text-only.
 
 ## Invariants
 

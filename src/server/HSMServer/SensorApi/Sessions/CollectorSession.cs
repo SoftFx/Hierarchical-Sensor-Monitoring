@@ -93,6 +93,14 @@ namespace HSMServer.SensorApi.Sessions
         private long _valuesAccepted;
         private long _requestsRefused;
 
+        // A table connection's blocks (#1845), for its close line.
+        private long _blocksStored;
+        private long _blocksDuplicate;
+        private long _blocksAllRefused;
+        private long _blocksInvalid;
+        private long _blockFaults;
+        private long _tablesRefused;
+
         // Guards the three fields below: which of the two, the handler loop or a close
         // asked for from outside, gets to the socket first.
         private readonly object _gate = new();
@@ -119,6 +127,16 @@ namespace HSMServer.SensorApi.Sessions
         public string AgentVersion { get; }
 
         public DateTime ConnectedAtUtc { get; }
+
+        // A table connection (#1845) carries blocks only; it belongs to the ordinary session
+        // `PairedSessionId` of the same collector.
+        public bool IsTable { get; }
+
+        public Guid PairedSessionId { get; }
+
+        // The producer id of the last block of a table connection, for the check that two live
+        // connections do not share one (the registry keeps one entry per connection).
+        internal (Guid Product, Guid Producer)? LastProducer { get; set; }
 
         // Who the session acts for, as last resolved from the cache. Replaced by the
         // handler loop when the key or the product changed; read by the registry.
@@ -155,10 +173,28 @@ namespace HSMServer.SensorApi.Sessions
 
         public long RequestsRefused => Interlocked.Read(ref _requestsRefused);
 
+        public long BlocksStored => Interlocked.Read(ref _blocksStored);
 
-        public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow)
+        public long BlocksDuplicate => Interlocked.Read(ref _blocksDuplicate);
+
+        public long BlocksAllRefused => Interlocked.Read(ref _blocksAllRefused);
+
+        public long BlocksInvalid => Interlocked.Read(ref _blocksInvalid);
+
+        public long BlockFaults => Interlocked.Read(ref _blockFaults);
+
+        public long TablesRefused => Interlocked.Read(ref _tablesRefused);
+
+        // Short ids: what the log lines of the connection and of its session share.
+        public string PairedShortId => PairedSessionId.ToString("N")[..8];
+
+
+        public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow,
+            Guid? pairedSessionId = null)
         {
             _socket = socket;
+            IsTable = pairedSessionId is not null;
+            PairedSessionId = pairedSessionId ?? Guid.Empty;
 
             SetCaller(caller);
             KeyId = caller.Key.Id;
@@ -196,6 +232,24 @@ namespace HSMServer.SensorApi.Sessions
         public void CountValuesAccepted(int count) => Interlocked.Add(ref _valuesAccepted, Math.Max(count, 0));
 
         public void CountRequestRefused() => Interlocked.Increment(ref _requestsRefused);
+
+        public void CountBlockStored(int tablesRefused)
+        {
+            Interlocked.Increment(ref _blocksStored);
+            Interlocked.Add(ref _tablesRefused, tablesRefused);
+        }
+
+        public void CountBlockDuplicate() => Interlocked.Increment(ref _blocksDuplicate);
+
+        public void CountBlockAllRefused(int tablesRefused)
+        {
+            Interlocked.Increment(ref _blocksAllRefused);
+            Interlocked.Add(ref _tablesRefused, tablesRefused);
+        }
+
+        public void CountBlockInvalid() => Interlocked.Increment(ref _blocksInvalid);
+
+        public void CountBlockFault() => Interlocked.Increment(ref _blockFaults);
 
         public void NoteEnd(string text, bool abnormal)
         {

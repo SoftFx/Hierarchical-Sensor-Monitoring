@@ -142,6 +142,7 @@ namespace HSMServer.Core.TableSensors
                             Sequence = appended.Entry.Sequence,
                             TableCount = appended.Entry.TableCount,
                             Refusals = (appended.Envelope?.Refusals ?? []).Select(r => new TableRefusalInfo(r.Index, TableIdText(directory, r.Index), r.Reason)).ToList(),
+                            RefusalsKnown = appended.Envelope is not null,
                             Message = appended.Envelope is null ? "The stored block's envelope could not be read; its refusals are not known." : null,
                         };
 

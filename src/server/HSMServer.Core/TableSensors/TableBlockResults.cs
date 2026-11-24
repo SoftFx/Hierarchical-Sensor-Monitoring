@@ -57,6 +57,12 @@ namespace HSMServer.Core.TableSensors
 
         public IReadOnlyList<TableRefusalInfo> Refusals { get; init; } = [];
 
+        /// <summary>
+        /// False for a duplicate whose first put's refusals cannot be told (its envelope could not be read; after the merge
+        /// of #1850, a block already merged and deleted): <see cref="Refusals"/> is then empty and means nothing.
+        /// </summary>
+        public bool RefusalsKnown { get; init; } = true;
+
         public TableBlockError? FormatError { get; init; }
 
         public string Message { get; init; }
