@@ -439,6 +439,45 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_store_whose_folder_is_removed_while_the_server_runs_keeps_taking_the_sensors_tables()
+        {
+            // The store failed and closed, its folder was removed, and a put opened a fresh store without a mark: its
+            // sequence started again at 0, below the first sequence of every registered sensor, and their tables were all
+            // refused (SensorCreatedAfterBlock), with no restart to raise the floor again.
+            await RegisterAsync("early");
+            for (int i = 0; i < 5; i++)
+                AssertStored(Put(Table("early", (T0.AddSeconds(i), 1.0, 1L))));
+
+            var sensor = (TableSensorModel)await RegisterAsync("q");
+            Assert.True(sensor.FirstSequence > 0);
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            var store = (HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)Store;
+            var now = DateTime.UtcNow;
+            store.Clock = () => now;
+
+            var folder = _databaseCoreManager.DatabaseCore.DatabaseSettings.PathToTableBlocks;
+            var mark = Path.Combine(folder, HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase.SequenceMarkName);
+
+            // Failed and closed: a failed write, the backoff passed, a reopen that fails on a damaged mark.
+            store.FailForTest(new IOException("simulated"));
+            now = now.AddMinutes(2);
+            File.WriteAllText(mark, "damaged");
+            Assert.Throws<TableBlockStoreException>(() => Put(Table("q", (T0.AddMinutes(1), 2.0, 2L))));
+
+            Directory.Delete(folder, recursive: true);
+            now = now.AddMinutes(2);
+
+            var put = Put(Table("q", (T0.AddMinutes(2), 3.0, 3L)));
+            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
+            Assert.Empty(put.Refusals);
+            Assert.True(put.Sequence >= sensor.FirstSequence);
+
+            // The rows of the removed blocks went with the folder; the new block's are read.
+            Assert.Equal([3.0], Read(sensor, T0, T0.AddHours(1)).Columns[1].DoubleValues);
+        }
+
+        [Fact]
         public async Task A_read_from_a_disposed_store_throws_the_store_fault()
         {
             var sensor = await RegisterAsync("q");

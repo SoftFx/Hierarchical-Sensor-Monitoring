@@ -241,6 +241,29 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_reopen_onto_a_removed_folder_never_takes_the_next_sequence_back()
+        {
+            // A failed store, its folder removed while the server runs, then a put: the fresh store has no mark, but the
+            // sequence goes on from where this process left it.
+            var store = Open();
+            for (int i = 0; i < 3; i++)
+                Put(store, i);
+            store.RaiseNextSequence(500);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            _now = _now.AddMinutes(2);
+
+            var stored = Put(store, 10);
+            Assert.Equal(TableBlockAppendOutcome.Stored, stored.Outcome);
+            Assert.Equal(500, stored.Entry.Sequence);
+
+            // The new folder's mark was written ahead before 500 was handed out: a restart goes on above it.
+            store.Dispose();
+            Assert.True(Open().NextSequence > 500);
+        }
+
+        [Fact]
         public void A_read_during_the_first_open_waits_for_the_index_and_never_answers_an_empty_one()
         {
             // Review of PR #1857: the first open of a process assigns the databases at its start and the index at its end;

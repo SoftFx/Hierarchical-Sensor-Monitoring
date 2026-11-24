@@ -175,8 +175,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
         //   durable (EnsureMark) or from that file (Open), the file only grows, and the value returned is below a
         //   _markPersisted read after it;
         // - a sensor's first sequence is never above the sequence of a block reserved after the sensor became visible:
-        //   _nextReserve only grows (Reserve, RaiseNextSequence, and an open restores at least the mark, which is at or
-        //   above it), so a reservation that follows the peek reads at least the value the peek read.
+        //   _nextReserve only grows (Reserve, RaiseNextSequence, and an open never lowers it, see Open), so a reservation that follows the peek reads at least the value the peek read.
         // _nextReserve, _markPersisted, _blocks, _failure and _disposed are written under _lock and read here with
         // Volatile. A stale read is a peek that happened a moment earlier: a smaller value, still covered by the mark, or a
         // state refused a moment later. The lock-free answer needs a store opened and not failed or disposed; otherwise,
@@ -608,17 +607,32 @@ namespace HSMDatabase.LevelDB.TableBlocks
             var mark = ReadMark();
             _markPersisted = mark;
 
+            long restored;
+
             if (lastBlockKey is not null)
             {
                 var (hour, sequence) = ParseKey(lastBlockKey);
                 _lastHourTicks = hour;
-                _nextReserve = _nextCommit = Math.Max(sequence + 1, mark);
+                restored = Math.Max(sequence + 1, mark);
             }
             else
             {
                 _lastHourTicks = 0;
-                _nextReserve = _nextCommit = mark;
+                restored = mark;
             }
+
+            // A reopen in this process never takes the next sequence back. Before it, the next sequence in memory is at
+            // or above every sequence handed out in this process and every first sequence of the table sensors (the block
+            // service raised it to the largest of those before its first reservation, and a sensor created since read it
+            // here). A folder removed or replaced while the server ran (seen at a reopen after a failure) would restore a
+            // smaller one, and every existing sensor's tables would be refused until the sequence caught up. Applied here,
+            // under _lock and before the open returns, so no reservation can come between the open and the floor. The
+            // mark of the new folder is behind it; it is written ahead before the next sequence is handed out, as always.
+            if (_nextReserve > restored)
+                _logger.Warn($"Table block store {_folder}: the store on disk restores the next sequence {restored}, below {_nextReserve} handed out " +
+                             "before this reopen (its folder was removed or replaced while the server ran); the next sequence stays at " + _nextReserve);
+
+            _nextReserve = _nextCommit = Math.Max(restored, _nextReserve);
 
             _doneAhead.Clear();
             _commitGaps.Clear();
