@@ -157,6 +157,8 @@ namespace HSMServer.Core.Cache
 
             _changeSetJournal = changeSetJournal;
 
+            TableBlockSequence = () => _database.TableBlocks?.NextSequence ?? 0L;
+
             Initialize();
 
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
@@ -949,11 +951,11 @@ namespace HSMServer.Core.Cache
         // needs longer than this for one registration is not working. Settable for tests.
         internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
 
-        // The sequence number the next stored table block will get (#1844): a new table
-        // sensor records it as its FirstSequence, so blocks stored before it existed (an
-        // earlier sensor of the same path) are never read as its rows. The block store
-        // (#1844, part 2b) sets it; until then no block exists and every sensor starts at 0.
-        internal Func<long> TableBlockSequence { get; set; } = () => 0L;
+        // The sequence number the next reserved table block will get (#1844): a new table
+        // sensor records it as its FirstSequence, so blocks numbered before it existed (an
+        // earlier sensor of the same path) are never read as its rows. The block store of
+        // the database by default (set in the constructor); a test seam.
+        internal Func<long> TableBlockSequence { get; set; }
 
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
@@ -4271,12 +4273,11 @@ namespace HSMServer.Core.Cache
                     return false;
                 }
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-
-                var sensorName = request.SensorName;
-
                 // A table sensor (#1844) is created with its schema and the first block
-                // sequence its rows may come from, taken before the sensor can be seen.
+                // sequence its rows may come from: the sequence the next reserved block will
+                // get, read before the sensor can be seen (see TableBlockService, "a sensor
+                // created during a put"). Reading it opens the block store; a store that
+                // cannot open is a fault of the store, which a repeat can cure.
                 TableSensorEntity table = null;
                 if (type is SensorType.Table)
                 {
@@ -4286,8 +4287,14 @@ namespace HSMServer.Core.Cache
                         return false;
                     }
 
+                    storing = true;
                     table = TableSensorModel.ToEntity(schema, TableBlockSequence());
+                    storing = false;
                 }
+
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+
+                var sensorName = request.SensorName;
 
                 SensorEntity entity = new()
                 {

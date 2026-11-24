@@ -40,5 +40,10 @@ namespace HSMDatabase.Settings
         public string ServerLayoutDatabaseName { get; init; } = DefaultServerLayoutDatabaseName;
 
         public string ChangeSetsDatabaseName { get; init; } = DefaultChangeSetsDatabaseName;
+
+        // The folder of the table block store (#1844), under DatabaseFolder.
+        public string TableBlocksFolderName { get; init; } = "Tables";
+
+        public string PathToTableBlocks => Path.Combine(DatabaseFolder, TableBlocksFolderName);
     }
 }

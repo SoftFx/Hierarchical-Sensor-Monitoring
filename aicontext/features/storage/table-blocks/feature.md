@@ -68,6 +68,49 @@ A block whose `(producer id, producer sequence)` is already stored is not writte
 
 A failed block write (disk, LevelDB) fails the put with `TableBlockStoreException`, a fault: the put is not acknowledged and the collector keeps the block. The store then refuses puts for a minute (LevelDB keeps a background error until it is reopened) and reopens on the first put after that. Puts are refused the same way while the disk has less free space than `TableSensors.MinFreeDiskMb`. A stored block that cannot be read back is counted (`Read failures`) and skipped by reads.
 
+## The put (`ITableBlockService.Put`)
+
+`TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block)`, in this order:
+
+1. **Verify** the block with `TableBlockReader.ReadDirectory` under the configured limits (header, checksum, frame, directory, every time value; no column is copied). A block that fails is answered `Invalid` with the format's error code; nothing is reserved or stored (`Invalid blocks` counter). This decompression happens before anything is locked.
+2. **Reserve** a sequence (`Reserve`). This is the first use that opens the store.
+3. **Match** every directory entry against the sensors, outside any lock. The identifier is the sensor path in UTF-8, looked up in the root product `productId` (the product of the key that sent the block). A table is refused with the first reason that applies:
+
+   | Reason | When |
+   |---|---|
+   | `InvalidIdentifier` | the identifier is not valid UTF-8 |
+   | `UnknownSensor` | no sensor has the path in the product |
+   | `NotATableSensor` | the sensor there is of another kind |
+   | `SensorBlocked` | the table sensor is blocked (a muted one takes rows) |
+   | `SensorCreatedAfterBlock` | the table sensor's `FirstSequence` is above the block's sequence (below) |
+   | `SchemaIdMismatch` | the entry's schema id is not the sensor's |
+   | `ColumnTypesMismatch` | the entry's column types are not the sensor's (the id alone is not trusted) |
+
+4. **Append** in sequence order: a duplicate is answered `Duplicate` with the first put's sequence and refusals (nothing written); a block whose tables were all refused is answered `AllRefused` and **not stored**; otherwise the block is stored with its refusals in the envelope and answered `Stored`.
+
+Refusals are results. A fault of the store (a write that failed, too little free disk, a store that is reopening) throws `TableBlockStoreException`: the block is not stored, and the caller must not acknowledge it, so the collector sends it again. Every refused table is counted (`Tables refused`), logged at Debug, and summarised in a Warn line at most once a minute.
+
+**Why a block with every table refused is not stored.** Its bytes would never be read and would cost disk and, later, merge work; the caller learns every refusal from the result. Not storing it also means that the same block sent again after its sensors were registered is taken, not answered as a duplicate. A block with at least one accepted table is stored with its refusals, and a resend of it is a duplicate: a refused table stays refused, as ADR-0021 point 8 says.
+
+## A sensor created during a put
+
+A put reserves its sequence before it matches its tables; a new table sensor records, before it can be seen, the sequence the next reservation will get as its `FirstSequence` (`TreeValuesCache.TableBlockSequence`, which reads `ITableBlockStore.NextSequence`). Two rules follow:
+
+- a read of a sensor takes only blocks with a sequence at or above its `FirstSequence`;
+- a put refuses a table whose sensor's `FirstSequence` is above the block's sequence (`SensorCreatedAfterBlock`).
+
+So a block numbered before a sensor existed is never read for it: its tables were matched against an earlier sensor of the same path, or against none. And every table a put accepts for a sensor is in a block that sensor reads. A sensor is removed before a new one is created on its path (the product's queue), and a removed sensor is never read. Pinned by tests that remove and create the sensor between the reservation and the match.
+
+## The read (`ITableBlockService.Read`)
+
+`TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)`: the rows of a table sensor with a time in `[from, to)`.
+
+- **Finding blocks.** From the in-memory index of the sensor's root product: blocks with a sequence at or above the sensor's `FirstSequence` whose header range `[first time, last time]` meets `[from, to)`. A late block with old times is found by its header, wherever it is in the sequence. Nothing else is opened.
+- **Rows.** Each candidate is read (one LevelDB get), its table read out by identifier (`TableBlockReader.ReadTable`, which decompresses the block), skipped when the envelope marks it refused, and its rows filtered to the range.
+- **Order.** By time, then by block sequence (arrival), then by the row's position in its block: a stable sort of the rows in the order they arrived.
+- **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
+- **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
+
 ## Configuration, self-monitoring, sizes
 
 See "Operations" below (#1844, part 2b, commit 6).
@@ -79,7 +122,12 @@ See "Operations" below (#1844, part 2b, commit 6).
 | `src/database/HSMDatabase.AccessManager/TableBlocks/ITableBlockStore.cs` | The store's interface, index entry, ticket, statistics |
 | `src/database/HSMDatabase.AccessManager/TableBlocks/TableBlockEnvelope.cs` | The envelope and the refusal reasons |
 | `src/database/HSMDatabase.LevelDB/TableBlocks/TableBlockDatabase.cs` | The store |
+| `src/server/HSMServer.Core/TableSensors/TableBlockService.cs` | The put and the read; the rule for a sensor created during a put |
+| `src/server/HSMServer.Core/TableSensors/TableRowCollector.cs` | Collects, filters and sorts the rows of one table |
+| `src/server/HSMServer.Core/TableSensors/TableBlockResults.cs` | Options, results, rows |
 
 ## Tests
 
 `src/tests/HSMDatabase.LevelDB.Tests/TableBlockTests/TableBlockDatabaseTests.cs`: nothing created before first use; key order and a restart; a block read back unchanged with its envelope; duplicates (also after a restart, and per producer); a block not to be stored; a crash between the block and its index entry, then reopen and resend; a deleted and a damaged index rebuilt; a clock stepping back; tickets waiting for earlier ones and a skipped ticket; eight threads putting while a reader reads; the disk guard; the `LOG` of both databases after 5,000 puts through 16 KB memtables shows flushes and no real compaction, and the same detector sees real compactions when keys come in random order.
+
+`src/tests/HSMServer.Core.Tests/TableSensors/TableBlockServiceTests.cs`: put and read across hour boundaries with a late block and overlapping blocks, equal times in arrival order, `[from, to)` edges; the row limit; a refused table inside an accepted block for every reason and a sensor unblocked afterwards; the schema id and an identifier that is not UTF-8; a block with every table refused, then its resend after the registration; a duplicate; an invalid block and one beyond the limits as results (the store is not even opened); the disk guard as a fault; a removed sensor and a new one on its path; a sensor created between the reservation and the match (both directions); six producers putting while a reader reads; a server without table sensors creates no `Tables` folder.
