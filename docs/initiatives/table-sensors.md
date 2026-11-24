@@ -162,6 +162,19 @@ One real hour (2026-11-24): one continuous real hour: 2,420,965 rows of 1,093 ta
 
 The merge halves the store, and the column coders beat plain zstd by a third on all tables, not only the busiest (on full 1,024-row batches, which cover 89% of the rows: 2.02 against 2.95). The merge period matters: 2.75 bytes per row at 5 minutes, 2.21 at 15, 2.05 at 30, 1.95 at 60 (three columns). One batch per table for the hour with no row cap would give 1.79; one block for the whole hour 2.27. After the hourly merge 37% of the batches hold fewer than 100 rows but only 0.6% of the rows; 66% of the rows sit in full batches of 4,096; 152 of the 1,093 tables fill at least one. Per column, coded against raw under zstd 15: time 1.31 against 2.09, bid 0.21 against 0.36, ask 0.36 against 0.37, spread 0.48 against 0.38 (the coder loses). The ask figure is the work of one placeholder: 1,205 ask cells (0.05% of the rows) hold one constant of at least 1e100, with a zero bid in the same batches, and a single such cell takes the decimal mode away from its whole batch (112 batches, 16% of the rows). Without those rows ask costs what bid does (0.20), and the merged store is 1.78 bytes per row with the codec as it is and 1.45 with the mode chosen after zstd. The source text and the import were checked: no commas, the same distribution of fractional digits for bid and ask, an independent decimal parse agrees for every row, no ratios near 10 or 100 between ask and bid. Storing ask as its difference from bid, or the spread instead of ask, is larger with or without the placeholder rows (1.85 against 1.78), and bid + spread equals ask bit for bit in only 74% of the rows as doubles. Reading one table for the hour: about 60 ms and 58 MB decompressed from blocks, 1.4 ms from batches; all tables for one minute: 2.3 ms from blocks, 35 ms from batches. The merge costs 0.37 µs per row, 0.9 s for the hour. This corrects the three-minute figures above where they differ: the blocks-against-merged comparison there used batches of a median 229 rows and a synthetic volume column.
 
+One real hour of prices with sizes (2026-11-24): the same hour, records of one provider that carry a size next to every price: 2,033,985 records of 944 tables, a median of 175 rows per table, 565 records a second on average, no gaps, 414.5 MB of JSON lines. 99.8% of the records have exactly one book level per side, so the shape is time, bid price, bid size, ask price, ask size; no side is ever empty and there are no placeholders. Prices have up to four digits after the point, two in 830 of the 944 tables; sizes are whole numbers, written in exponent notation in a third of the records. In arrival order 27% of the provider's timestamps go backwards within their table; the measurement sorted the rows by that time. Bytes per row, header, key and index record included:
+
+| Stage | time, bid, ask | time, bid price, bid size, ask price, ask size |
+|---|---|---|
+| Sent by the collector: one block per 10 s, zstd 3 | 3.85 | 6.73 |
+| Stored as blocks, no merge | 3.85 | 6.73 |
+| Merged once an hour, raw columns + zstd 15 | 3.02 | 5.01 |
+| Merged once an hour, column coders + zstd 15 (the codec as it is) | 2.14 | 4.07 |
+| Merged, the smaller of coded and raw per column | 2.15 | 3.97 |
+| Merged, coder mode chosen after zstd (bench estimate) | 1.79 | 3.48 |
+
+Per column after the merge, coded against raw under zstd 15: time 1.74 against 2.38, bid price 0.17 against 0.28, ask price 0.16 against 0.27, bid size 0.95 against 0.95, ask size 0.95 against 0.95. The coders gain nothing on the sizes, and the time is the largest column. Merge period, five columns: 4.97 bytes per row at 5 minutes, 4.39 at 15, 4.19 at 30, 4.07 at 60. Reading one table for the hour: 83–112 ms from blocks, 2.8 ms from batches; all tables for one minute: 3.1 ms from blocks, 66 ms from batches. The merge costs 0.54 µs per row, 1.1 s for the hour. At this hour's rate (48 M rows a day) a year is 118 GB as blocks and 71 GB merged.
+
 Client side, from package metadata and code reading: the last Parquet.Net release with a `netstandard2.0` target is 5.5.0 (later releases need net8.0) and it brings System.Text.Json 10 into net472 consumers; a C++ Parquet writer means Apache Arrow through vcpkg (OpenSSL, Thrift, Boost and more; no 32-bit x86), where the native collector depends only on curl today. The HSM integer and double coders are about 840 lines, need four trivial polyfills for net472, and ZstdSharp.Port supports net472; zstd itself is a single small vcpkg port.
 
 Not measured: more than three minutes of real data; real price and volume columns; Linux (the run was on Windows); cold-disk reads; the collector on .NET Framework; delivery delay; whether LevelDB frees deleted space by itself after more than 60 s; batches that arrive hours late (the growing key takes them at the end by construction, which was reasoned and not run).
@@ -217,8 +230,9 @@ The life of a row: up to 10 seconds in the collector; then in a block until its 
 
 For the owner:
 
-- The exact columns of the first sensors, and a sample with real price and volume columns: in the measured samples those two were synthetic or absent.
-- The retention period for tick data: with three real columns a year of quotes is about 69 GB; with real price and volume it is not measured.
+- The exact columns of the first sensors. Measured on real data so far: time, bid, ask; and time, bid price, bid size, ask price, ask size from one provider. Book levels beyond the first were too rare in that hour (0.2% of the records) to measure.
+- Which time a row carries and in what order rows come. In the measured feed 27% of the provider's timestamps go backwards within a table in arrival order; the measurement sorted the rows, while a table sensor keeps the order the application gives.
+- The retention period for tick data: about 69 GB a year for time, bid, ask at 97 M rows a day, and about 71 GB a year for the five real columns at the measured 48 M rows a day.
 - Three choices in ADR-0021 were made without a discussion: a read returns blocks, so the storage coders live only in the server; one batch database per product; tables need the session transport, there is no HTTP route for sending.
 
 To be settled inside the steps:
@@ -231,7 +245,7 @@ To be settled inside the steps:
 
 Not measured yet:
 
-- Linux; more than one hour and quieter hours; real price and volume columns; cold-disk reads; the collector on .NET Framework; binary session frames through libcurl; blocks that arrive hours late.
+- Linux; more than one hour, quieter hours and more than one provider; rows in arrival order with timestamps that go backwards; book levels beyond the first; cold-disk reads; the collector on .NET Framework; binary session frames through libcurl; blocks that arrive hours late.
 
 ## Capacity
 
@@ -239,8 +253,8 @@ Stored size is measured on the test sample; the row counts of the future product
 
 | Quantity | Value | Basis |
 |---|---|---|
-| Stored size | 3.8 bytes per row in blocks and 1.95 after the hourly merge for time, bid, ask; 4.8 and 2.4 with the spread | the real hour; header, key and index record included |
-| A billion rows | 2.0–2.4 GB after the merge, three or four real columns | the same |
+| Stored size | time, bid, ask: 3.8 bytes per row in blocks, 1.95–2.14 after the hourly merge; time, bid price, bid size, ask price, ask size: 6.7 and 4.1 | two real hours; header, key and index record included |
+| A billion rows | 2 GB after the merge with three real columns, 4 GB with five | the same |
 | Test feed, quotes only (about 97 M rows a day), three real columns | 0.19 GB a day, 5.7 GB a month, 69 GB a year after the merge; 135 GB a year if kept as blocks | arithmetic on the real hour; the measured hour itself ran at 58 M rows a day |
 | Test feed, every record of the ticks file (276 M rows a day) | not established | the earlier 525 GB a year assumed five columns, two of them synthetic; 65% of those records are not quotes and their real columns were not measured |
 | A sustained 10,000 rows a second, three real columns | 1.7 GB a day, 51 GB a month, 615 GB a year | arithmetic |
