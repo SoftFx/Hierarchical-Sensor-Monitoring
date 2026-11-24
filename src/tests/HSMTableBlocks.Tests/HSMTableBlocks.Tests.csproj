@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net8.0 is the server's runtime, net472 the oldest runtime the collector ships for. -->
+    <TargetFrameworks>net8.0;net472</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The zip-bomb test asks zstd whether its frame declares a content size. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- System.IO.Hashing 11 warns on net8.0 (it ships netstandard2.0, net462, net10.0 and net11.0 builds);
+         the library compiles against its netstandard2.0 build, which is what net8.0 uses here. -->
+    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Golden\**\*.htb" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
