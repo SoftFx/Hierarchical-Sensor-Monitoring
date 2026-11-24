@@ -338,11 +338,13 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             var fresh = Open();
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
+            using var readAtLock = new ManualResetEventSlim();
             fresh.OnOpen = () =>
             {
                 entered.Set();
                 release.Wait(TimeSpan.FromSeconds(60));
             };
+            fresh.BeforeReadLock = readAtLock.Set;
 
             var opening = Task.Run(() => fresh.Reserve());
             Task<List<TableBlockIndexEntry>> reading;
@@ -351,15 +353,14 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             {
                 Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the first open never started");
 
-                // The read either answers at once (the defect) or waits on the store's lock, which the open holds: release
-                // the open only after one of the two, so the read surely came in during the open. The contention counter
-                // is process-wide, so another test may end the wait early; the read is then still in flight or not yet
-                // started, and the assertions below hold either way.
-                var contentions = Monitor.LockContentionCount;
+                // The read either answers without the store's lock (the defect: the empty initial index) or signals right
+                // before it takes the lock, which the blocked open holds. Wait for one of the two, then the read is either
+                // done (fail) or at the lock and cannot get past it until the open is released.
                 reading = Task.Run(() => fresh.GetBlocks(_product).ToList());
-                SpinWait.SpinUntil(() => reading.IsCompleted || Monitor.LockContentionCount > contentions, TimeSpan.FromSeconds(30));
+                SpinWait.SpinUntil(() => readAtLock.IsSet || reading.IsCompleted, TimeSpan.FromSeconds(30));
 
                 Assert.False(reading.IsCompleted, "the read answered while the first open was still loading the index");
+                Assert.True(readAtLock.IsSet, "the read never reached the store's lock");
             }
             finally
             {

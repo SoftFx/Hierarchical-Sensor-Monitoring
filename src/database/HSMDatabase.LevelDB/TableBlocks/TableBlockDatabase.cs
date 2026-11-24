@@ -120,6 +120,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         /// <summary>Called by an open before it loads the index. Test seam: what the open is under, what a reader sees meanwhile.</summary>
         internal Action OnOpen { get; set; }
 
+        /// <summary>Called by a read (GetBlocks) right before it takes the store's lock because the store is not open. Test seam.</summary>
+        internal Action BeforeReadLock { get; set; }
+
         /// <summary>Marks the store failed, as a failed write does. Test seam for a reopen.</summary>
         internal void FailForTest(Exception ex)
         {
@@ -344,6 +347,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
         {
             if (!_opened || Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
             {
+                BeforeReadLock?.Invoke();
+
                 lock (_lock)
                 {
                     if ((!_opened || _disposed || _blocks is null) && !EnsureOpen(create: false))
