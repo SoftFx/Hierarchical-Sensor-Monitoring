@@ -57,6 +57,9 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public JsonNode Hello { get; private set; }
 
+        // The session it belongs to, when the client holds it; disposed with the client.
+        public ClientWebSocket Session { get; set; }
+
 
         private TableConnectionTestClient(ClientWebSocket socket) => Socket = socket;
 
@@ -151,7 +154,11 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public Task<WebSocketCloseStatus?> ExpectCloseAsync() => ExpectCloseAsync(Socket);
 
-        public void Dispose() => Socket.Dispose();
+        public void Dispose()
+        {
+            Socket.Dispose();
+            Session?.Dispose();
+        }
 
 
         public static async Task<JsonNode> ReceiveAsync(ClientWebSocket socket)
@@ -186,8 +193,16 @@ namespace HSMServer.Core.Tests.SensorApi
                 if (result.MessageType != WebSocketMessageType.Close)
                     continue;
 
-                if (socket.State == WebSocketState.CloseReceived)
-                    await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, deadline);
+                // The answer to the server's close; a server that has let the connection go
+                // already makes it fail, which does not change the close it sent.
+                try
+                {
+                    if (socket.State == WebSocketState.CloseReceived)
+                        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, deadline);
+                }
+                catch (WebSocketException)
+                {
+                }
 
                 return socket.CloseStatus;
             }

@@ -54,6 +54,17 @@ namespace HSMServer.SensorApi.Sessions
         private const string BlockFailed = "failed to store the block";
 
         private const string TableReplacedReason = "replaced by a new table connection of its session";
+        private const string BudgetTimeoutReason = "the server holds too many table frames; try again later";
+
+        // 1013 Try Again Later (RFC 6455 registry): the end of a wait for the table frame budget.
+        private const WebSocketCloseStatus CloseTryAgainLater = (WebSocketCloseStatus)1013;
+
+        // How long a table connection waits for the frame budget before it gives up. A reservation
+        // is held for the time of one frame and its put (milliseconds when the store is well; a
+        // put that faults is answered at once), so a wait this long means puts are not coming
+        // back: twice the silence limit (3 minutes by default), past the block store's own
+        // one-minute backoff.
+        private TimeSpan BudgetWaitBound => _config.SilenceLimit * 2;
         private const string SessionEndedReason = "its session ended";
 
         private static readonly Dictionary<string, string> NoErrors = new();
@@ -94,10 +105,14 @@ namespace HSMServer.SensorApi.Sessions
         // Blocks stored at once by all table connections (TableSensors.MaxConcurrentPuts).
         private readonly SemaphoreSlim _putGate;
 
+        // What table connections hold for frames (CollectorSessions.MaxTableBytesInFlight).
+        private readonly TableFrameBudget _tableBudget;
+
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
         private long _tablesOffWarnedAtTicks;
+        private long _budgetWarnedAtTicks;
 
         // Refused upgrades, one throttle per kind of refusal.
         private readonly RefusalThrottle _badUpgradeRefusals = new();
@@ -116,6 +131,7 @@ namespace HSMServer.SensorApi.Sessions
             var tableConfig = config.TableSensors ?? new TableSensorsConfig();
             _tableLimits = tableConfig.ToOptions().Limits;
             _putGate = new SemaphoreSlim(tableConfig.MaxConcurrentPuts, tableConfig.MaxConcurrentPuts);
+            _tableBudget = new TableFrameBudget(_config.MaxTableBytesInFlight);
             _registry = registry;
             _ingestion = ingestion;
             _telemetry = telemetry;
@@ -428,6 +444,12 @@ namespace HSMServer.SensorApi.Sessions
 
             var maxFrameBytes = session.IsTable ? _config.MaxTableFrameBytes : _config.MaxFrameBytes;
 
+            // A table connection's large frames take from the server-wide budget (#1845); whatever
+            // it holds goes back when the loop ends, on every path.
+            using var memory = session.IsTable
+                ? new TableFrameMemory(_tableBudget, maxFrameBytes, token => WaitForTableBudgetAsync(session, silence, token))
+                : null;
+
             if (session.IsTable)
                 SessionProtocol.WriteTableHello(output, maxFrameBytes, _config.HeartbeatSeconds, _tableLimits);
             else
@@ -450,7 +472,22 @@ namespace HSMServer.SensorApi.Sessions
                 silence.Arm();
                 frameStarted = 0;
 
-                using var frame = await session.ReceiveAsync(maxFrameBytes, progressed, aborted);
+                SessionFrame received;
+
+                try
+                {
+                    received = await session.ReceiveAsync(maxFrameBytes, progressed, aborted, memory);
+                }
+                catch (TableFrameBudgetTimeoutException)
+                {
+                    // Mid-frame, so there is no request id to answer 503 to: the connection is
+                    // closed, the block it was sending is not stored, and the collector sends it
+                    // again on its next table connection.
+                    await session.CloseAsync(CloseTryAgainLater, BudgetTimeoutReason);
+                    return;
+                }
+
+                using var frame = received;
 
                 silence.Disarm();
 
@@ -482,7 +519,10 @@ namespace HSMServer.SensorApi.Sessions
                 // The server is closing this session (shutdown): what arrives now is left
                 // unstored and unanswered, and the loop only waits for the collector's close.
                 if (!session.TryBeginFrame())
+                {
+                    memory?.EndFrame();
                     continue;
+                }
 
                 bool open;
                 (WebSocketCloseStatus Status, string Reason)? askedToClose;
@@ -498,6 +538,9 @@ namespace HSMServer.SensorApi.Sessions
                 finally
                 {
                     askedToClose = session.EndFrame();
+
+                    // The frame and its put are done: its reservation goes back.
+                    memory?.EndFrame();
                 }
 
                 if (!open)
@@ -602,6 +645,56 @@ namespace HSMServer.SensorApi.Sessions
                 await session.SendAsync(output.WrittenMemory, aborted);
 
                 return true;
+            }
+        }
+
+        // A table connection's frame outgrew the free allowance and the budget is spent: wait for a
+        // reservation. The connection does not read on meanwhile (back-pressure through TCP), and,
+        // as while a frame is handled, the silence watch does not run: the wait is the server's,
+        // not the collector's silence. It has a bound of its own, and ends when the server ends
+        // the connection (shutdown, a replacement, the end of its session).
+        private async Task WaitForTableBudgetAsync(CollectorSession session, SilenceWatch silence, CancellationToken token)
+        {
+            if (IsTimeToWarn(ref _budgetWarnedAtTicks))
+                _logger.Warn($"The table frame budget is spent (CollectorSessions.{nameof(CollectorSessionsConfig.MaxTableBytesInFlight)} = {_config.MaxTableBytesInFlight}, " +
+                             $"{_tableBudget.InUse} bytes held, {_tableBudget.Waiting} connection(s) waiting): table connection {session.ShortId} from {session.RemoteIP} " +
+                             "stops reading its frame until frames being stored are done. Raise the budget if this is steady.");
+
+            silence.Disarm();
+
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(token, session.Ending);
+            var timedOut = 0;
+
+            await using (_time.CreateTimer(_ => TimeOut(wait, ref timedOut), null, BudgetWaitBound, Timeout.InfiniteTimeSpan))
+            {
+                try
+                {
+                    await _tableBudget.TakeAsync(_config.TableFrameReservation, wait.Token);
+                }
+                catch (OperationCanceledException) when (Volatile.Read(ref timedOut) == 1)
+                {
+                    throw new TableFrameBudgetTimeoutException();
+                }
+            }
+
+            silence.Arm();
+        }
+
+        // For the tests, which read the budget.
+        internal TableFrameBudget TableBudget => _tableBudget;
+
+        // The bound of a budget wait has passed. A timer may fire as the wait ends and its source
+        // is disposed: nothing is left to cancel then.
+        private static void TimeOut(CancellationTokenSource wait, ref int timedOut)
+        {
+            Interlocked.Exchange(ref timedOut, 1);
+
+            try
+            {
+                wait.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
             }
         }
 

@@ -699,7 +699,296 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // === The table frame budget ===
+
+        // The budget holds one large frame (CollectorSessions.MaxTableBytesInFlight = what one
+        // reservation needs): a second connection's large frame waits, unread, while the first one's
+        // put is held, and goes through when the first is done.
+        [Fact]
+        public async Task TheBudget_HoldsASecondLargeFrame_UntilTheFirstOnesPutIsDone()
+        {
+            await using var host = await StartBudgetHost();
+            var sensor = await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            Assert.Equal(BudgetReservation, budget.InUse);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame to wait for the budget");
+            Assert.Equal(1, _tables.Puts);
+            Assert.Single(host.Log.Matching("The table frame budget is spent"));
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+            await sending;
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
+            Assert.Equal(2 * LargeRows, Read(sensor).RowCount);
+        }
+
+        // A frame within the free allowance (past the session's own 4 KiB, within 64 KiB) takes
+        // nothing from the budget: an exhausted budget does not delay it.
+        [Fact]
+        public async Task ASmallFrame_IsNotDelayedByASpentBudget()
+        {
+            await using var host = await StartBudgetHost();
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+            using var third = await OpenTableAsync(host);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame to wait for the budget");
+
+            var small = LargeBlock("q", 3, rows: 2_000);
+
+            Assert.InRange(small.Length + 40, 4 * 1024 + 1, 64 * 1024);
+
+            await third.SendBlockAsync(1, Guid.NewGuid(), 1, small);
+
+            Assert.Equal("stored", (await third.ReceiveAckAsync()).Outcome);
+            Assert.Equal(1, budget.Waiting);
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+            await sending;
+
+            await TestWait.UntilAsync(() => budget.InUse == 0, "the budget to be whole again");
+        }
+
+        // The accounting on every way a frame can end.
+
+        [Fact]
+        public async Task TheBudget_IsWholeAgain_AfterAConnectionDropsMidFrame()
+        {
+            await using var host = await StartBudgetHost();
+            var budget = host.Handler.TableBudget;
+
+            using var table = await OpenTableAsync(host);
+
+            var frame = TableConnectionTestClient.Frame(1, 1, _producer, 1, new byte[200 * 1024]);
+
+            await table.Socket.SendAsync(frame.AsMemory(0, 150 * 1024), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => budget.InUse == BudgetReservation, "the frame to reserve its bytes");
+
+            table.Socket.Abort();
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && host.Registry.TableConnectionCount == 0, "the reservation to go back with the connection");
+        }
+
+        [Fact]
+        public async Task TheBudget_IsWholeAgain_AfterAFrameOverTheLimit()
+        {
+            await using var host = await StartBudgetHost();
+            var budget = host.Handler.TableBudget;
+
+            using var table = await OpenTableAsync(host);
+
+            await table.SendBlockAsync(1, _producer, 1, new byte[BudgetFrameBytes]);
+
+            Assert.Equal(WebSocketCloseStatus.MessageTooBig, await table.ExpectCloseAsync());
+            await TestWait.UntilAsync(() => budget.InUse == 0, "the reservation to go back");
+        }
+
+        [Fact]
+        public async Task TheBudget_IsWholeAgain_AfterAPutThatThrows()
+        {
+            await using var host = await StartBudgetHost();
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var table = await OpenTableAsync(host);
+
+            _tables.Throw = true;
+
+            await table.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+
+            var ack = await table.ReceiveAckAsync();
+
+            Assert.Equal(500, ack.Status);
+            Assert.Equal("failed to store the block", ack.Error);
+            await TestWait.UntilAsync(() => budget.InUse == 0, "the reservation to go back");
+        }
+
+        // A connection waiting for the budget is closed with its session: the wait ends and takes
+        // nothing.
+        [Fact]
+        public async Task TheBudget_IsWholeAgain_AfterAWaitingConnectionsSessionEnds()
+        {
+            await using var host = await StartBudgetHost();
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+
+            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, _key);
+            using var second = await TableConnectionTestClient.OpenAsync(host.SessionUri, _key, sessionId);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame to wait for the budget");
+
+            await session.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", Deadline());
+            session.Dispose();
+
+            // The wait ends with the connection's close, before the collector answers it.
+            await TestWait.UntilAsync(() => budget.Waiting == 0, "the wait to end with the session");
+            Assert.Equal(BudgetReservation, budget.InUse);
+            Assert.Equal(WebSocketCloseStatus.NormalClosure, await second.ExpectCloseAsync());
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await TestWait.UntilAsync(() => budget.InUse == 0, "the budget to be whole again");
+            await IgnoreAsync(sending);
+        }
+
+        // A wait past its bound (twice the silence limit) closes the connection with 1013: mid-frame
+        // there is no request id to answer, so the collector sends the block again on its next
+        // table connection.
+        [Fact]
+        public async Task AWaitPastItsBound_ClosesWith1013_AndTakesNothing()
+        {
+            await using var host = await StartBudgetHost();
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame to wait for the budget");
+
+            var bound = new CollectorSessionsConfig().SilenceLimit * 2;
+            ManualTimer timer = null;
+
+            await TestWait.UntilAsync(() => (timer = host.Time.Timers.FirstOrDefault(t => t.DueTime == bound)) is not null, "the bound of the wait to be set");
+
+            timer.Fire();
+
+            Assert.Equal((WebSocketCloseStatus)1013, await second.ExpectCloseAsync());
+            Assert.Equal(0, budget.Waiting);
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await TestWait.UntilAsync(() => budget.InUse == 0, "the budget to be whole again");
+            await IgnoreAsync(sending);
+        }
+
+        [Fact]
+        public async Task TheBudget_IsWholeAgain_AfterAShutdownDuringAWait()
+        {
+            var host = await StartBudgetHost();
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            try
+            {
+                using var first = await OpenTableAsync(host);
+                using var second = await OpenTableAsync(host);
+
+                var hold = _tables.HoldNextPut();
+
+                await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+                await hold.Entered.Task.WaitAsync(Patience);
+
+                var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+                await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame to wait for the budget");
+
+                var stop = Task.Run(host.StopAsync);
+
+                Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, await second.ExpectCloseAsync());
+
+                hold.Release.SetResult();
+
+                Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+                Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, await first.ExpectCloseAsync());
+
+                await stop.WaitAsync(Patience);
+                await IgnoreAsync(sending);
+            }
+            finally
+            {
+                await host.DisposeAsync();
+            }
+
+            Assert.Equal(0, budget.InUse);
+            Assert.Equal(0, budget.Waiting);
+        }
+
+
         // === Helpers ===
+
+        private const int BudgetFrameBytes = 256 * 1024;
+        private const long BudgetReservation = 2L * BudgetFrameBytes + 1;
+        private const int LargeRows = 10_000;
+
+        // Frames of at most 256 KiB, and a budget of exactly one reservation.
+        private Task<SensorApiTestHost> StartBudgetHost() =>
+            StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = BudgetReservation; });
+
+        // A block of one table whose frame is past the free allowance (64 KiB) and within 256 KiB:
+        // random values do not compress.
+        private byte[] LargeBlock(string name, int seed, int rows = LargeRows)
+        {
+            var random = new Random(seed);
+            var times = Enumerable.Range(0, rows).Select(i => T0.AddMilliseconds(seed * 100_000 + i).Ticks).ToArray();
+
+            using var writer = new TableBlockWriter();
+            writer.BeginTable(Encoding.UTF8.GetBytes($"{_root}/{name}"), Quotes.Id, rows);
+            writer.AddTimeColumn(times);
+            writer.AddDoubleColumn(Enumerable.Range(0, rows).Select(_ => random.NextDouble()).ToArray());
+            writer.AddInt64Column(Enumerable.Range(0, rows).Select(_ => (long)random.Next(1000)).ToArray());
+
+            var block = writer.ToArray();
+
+            if (rows == LargeRows)
+                Assert.InRange(block.Length + 40, 64 * 1024 + 1, BudgetFrameBytes);
+
+            return block;
+        }
+
+        // A send the server never read to its end fails when the connection goes; that is expected.
+        private static async Task IgnoreAsync(Task sending)
+        {
+            try
+            {
+                await sending.WaitAsync(Patience);
+            }
+            catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or ObjectDisposedException)
+            {
+            }
+        }
 
         private Task<SensorApiTestHost> StartHost(Action<CollectorSessionsConfig> sessions = null, Action<TableSensorsConfig> tableSensors = null)
         {
@@ -712,13 +1001,16 @@ namespace HSMServer.Core.Tests.SensorApi
             return SensorApiTestHost.StartAsync(_valuesCache, sessionsConfig, tables: _tables, tableSensors: tablesConfig);
         }
 
-        // A session of its own and its table connection; the session socket stays open for the
-        // test (it is collected with the test).
+        // A session of its own and its table connection. The client keeps the session's socket: one
+        // left to the garbage collector is closed by its finalizer, and its table connection with it.
         private async Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host)
         {
-            var (_, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, _key);
+            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, _key);
 
-            return await TableConnectionTestClient.OpenAsync(host.SessionUri, _key, sessionId);
+            var table = await TableConnectionTestClient.OpenAsync(host.SessionUri, _key, sessionId);
+
+            table.Session = session;
+            return table;
         }
 
         private (TaskCompletionSource Entered, TaskCompletionSource Release) HoldTheFirstPutAfterItsReservation()
@@ -821,9 +1113,26 @@ namespace HSMServer.Core.Tests.SensorApi
         private int _mostInside;
         private int _puts;
         private int _stored;
+        private int _holdTaken;
 
 
         public volatile bool Fault;
+
+        // A put that throws what is not a store fault: an error of the server.
+        public volatile bool Throw;
+
+        private (TaskCompletionSource Entered, TaskCompletionSource Release)? _hold;
+
+
+        // Holds the next put before it reaches the store (no sequence is reserved, so other puts
+        // are not ordered behind it) until Release.
+        public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNextPut()
+        {
+            var hold = (new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+
+            _hold = hold;
+            return hold;
+        }
 
         public int Inside => Volatile.Read(ref _inside);
 
@@ -840,6 +1149,15 @@ namespace HSMServer.Core.Tests.SensorApi
 
             if (Fault)
                 throw new TableBlockStoreException("A store fault made by the test.");
+
+            if (Throw)
+                throw new InvalidOperationException("An error made by the test.");
+
+            if (_hold is { } hold && Interlocked.CompareExchange(ref _holdTaken, 1, 0) == 0)
+            {
+                hold.Entered.TrySetResult();
+                hold.Release.Task.Wait(TimeSpan.FromSeconds(10));
+            }
 
             var inside = Interlocked.Increment(ref _inside);
 
