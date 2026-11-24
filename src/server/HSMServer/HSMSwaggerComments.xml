@@ -288,6 +288,25 @@
             <summary>Get one chat by id; its folders list is what policy writes validate against.</summary>
             <param name="id">Chat id.</param>
         </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.PostTestMessage(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto)">
+            <summary>
+            Send a test message to one of the chat's channels and answer the delivery outcome
+            (#1826) — the web test actions answer OK regardless; here the caller learns whether
+            the message arrived. Same gate as the web editor: the chat's detail rule.
+            </summary>
+            <param name="id">Chat id.</param>
+            <param name="request">The channel to test (telegram / slack / mattermost).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.PostTelegramInvitation(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto)">
+            <summary>
+            Issue a ONE-SHOT Telegram invitation for the chat (#1826): the link (direct) or the
+            group command, its expiry (+10 minutes — the relay through an orchestrator is slower
+            than the web UI's issue-at-the-moment-of-use) and the human steps. The binding lands
+            when a person completes /start in Telegram; read the chat's telegramChatId afterwards.
+            </summary>
+            <param name="id">Chat id.</param>
+            <param name="request">The invitation kind (direct / group).</param>
+        </member>
         <member name="T:HSMServer.Controllers.DownloadsController">
             <summary>
             The Downloads page (#1550): pick a product, then take its Windows agent or Linux probe bundle from
@@ -1048,10 +1067,12 @@
         </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
             <summary>
-            The two chat tools of the MCP surface: the id source an agent needs to
+            The chat tools of the MCP surface: the id source an agent needs to
             compose destination.chats when creating or editing alert policies and
-            alert templates — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>
-            (the #1393 pattern: one visibility rule behind both transports).
+            alert templates (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>,
+            the #1393 pattern: one visibility rule behind both transports), plus
+            the verification pair of #1826 — a test message that answers its
+            delivery outcome and the one-shot Telegram invitation issuer.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.FoldersMcpTools">
@@ -3180,6 +3201,56 @@
             anti-enumeration rule.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatVerificationService">
+            <summary>
+            The chat verification surface (#1826): a test message that answers its delivery
+            outcome, and the Telegram invitation issuer for the management surface. Transport-
+            agnostic — the REST controller and the MCP tools both call it; the caller supplies
+            the token principal and gets the area's write envelope back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.IChatDelivery">
+            <summary>
+            The delivery half the verification service needs: the channels and the bot behind
+            NotificationsCenter (their concrete types are sealed, so the seam is this adapter).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto">
+            <summary>The outcome of a chat test message: delivered, or the delivery error text.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.Delivered">
+            <summary>Whether the message reached the channel.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.Error">
+            <summary>The delivery error text when not delivered; null otherwise.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto">
+            <summary>A one-shot Telegram invitation for a chat, issued to an orchestrator (#1826).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.Kind">
+            <summary>The invitation kind — "direct" or "group".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.Value">
+            <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post in the group.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.ExpiresAt">
+            <summary>When the invitation expires (one-shot; a second /start with it is rejected).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.NextSteps">
+            <summary>The steps a PERSON does inside Telegram — the orchestrator cannot press Start.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto">
+            <summary>The channel a test message targets.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto.Channel">
+            <summary>The delivery channel to test — one the chat carries.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto">
+            <summary>The kind of a Telegram invitation.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto.Kind">
+            <summary>"direct" (a link) or "group" (a command to post into the group).</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">
             <summary>
             An access-grouping folder — the entity alert templates are scoped to
@@ -4061,6 +4132,20 @@
             <summary>
             True when the selected node has at least one group of >= 2 comparable child sensors to overlay
             on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.ChatDeliveryResult">
+            <summary>
+            The outcome of a chat test message (#1826): delivered, or the same error text the
+            channel logs. The web test actions ignore it (they answer OK as before); the
+            management surface renders it to the caller.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.ChatDeliveryResult.#ctor(System.Boolean,System.String)">
+            <summary>
+            The outcome of a chat test message (#1826): delivered, or the same error text the
+            channel logs. The web test actions ignore it (they answer OK as before); the
+            management surface renders it to the caller.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

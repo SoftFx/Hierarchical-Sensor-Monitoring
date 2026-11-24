@@ -123,10 +123,16 @@ namespace HSMServer.Notifications.Chats
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
 
         public string GetChatInvitationLink(Guid chatId, User user) =>
-            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatInvitationLink(chatId, user, InvitationToken.DefaultExpiration);
 
         public string GetChatGroupInvitation(Guid chatId, User user) =>
-            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatGroupInvitation(chatId, user, InvitationToken.DefaultExpiration);
+
+        public string GetChatInvitationLink(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
+
+        public string GetChatGroupInvitation(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
 
         public async Task<ChatConnectResult> TryConnect(Message message, InvitationToken token)
         {
