@@ -73,12 +73,18 @@ namespace HSMTableBlocks.Tests
 
                 var single = TableBlockReader.ReadTable(block, read.Tables[0].TableId, limits);
                 Assert.Equal(read.Tables[0].RowCount, single.RowCount);
+
+                var directory = TableBlockReader.ReadDirectory(block, limits);
+                Assert.Equal(read.Tables.Count, directory.Entries.Count);
                 return "valid";
             }
             catch (TableBlockFormatException ex)
             {
                 var single = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.ReadTable(block, new byte[] { 0x41 }, limits));
                 Assert.Equal(ex.Error, single.Error);
+
+                var directory = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.ReadDirectory(block, limits));
+                Assert.Equal(ex.Error, directory.Error);
                 return ex.Error.ToString();
             }
             catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)

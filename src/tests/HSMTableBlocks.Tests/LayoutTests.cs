@@ -101,8 +101,8 @@ namespace HSMTableBlocks.Tests
             byte[] Id(int i) => prefix.Concat(Encoding.ASCII.GetBytes(i.ToString("D5"))).ToArray();
 
             byte[] block;
-            TableBlockFormat.IdComparisons = 0;
-            using (var writer = new TableBlockWriter())
+            var writerCount = new IdComparisonCounter();
+            using (var writer = new TableBlockWriter { IdComparisonCounter = writerCount })
             {
                 var time = new[] { T0 };
                 for (int i = 0; i < count; i++)
@@ -113,11 +113,11 @@ namespace HSMTableBlocks.Tests
 
                 block = writer.ToArray();
             }
-            long written = TableBlockFormat.IdComparisons;
+            long written = writerCount.Count;
 
-            TableBlockFormat.IdComparisons = 0;
-            var result = TableBlockReader.Read(block);
-            long read = TableBlockFormat.IdComparisons;
+            var readerCount = new IdComparisonCounter();
+            var result = TableBlockReader.Read(block, null, readerCount);
+            long read = readerCount.Count;
 
             Assert.Equal(count, result.Tables.Count);
             for (int i = 0; i < count; i += 4099)
@@ -132,10 +132,15 @@ namespace HSMTableBlocks.Tests
             Id(0).CopyTo(payload, lastIdOffset);
             var duplicate = RawBlock.Seal(RawBlock.FieldsOf(block), payload);
 
-            TableBlockFormat.IdComparisons = 0;
-            var ex = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.Read(duplicate));
+            var duplicateCount = new IdComparisonCounter();
+            var ex = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.Read(duplicate, null, duplicateCount));
             Assert.Equal(TableBlockError.DuplicateTable, ex.Error);
-            Assert.True(TableBlockFormat.IdComparisons <= bound, $"reader on a duplicate: {TableBlockFormat.IdComparisons:N0} comparisons, bound {bound:N0}");
+            Assert.True(duplicateCount.Count <= bound, $"reader on a duplicate: {duplicateCount.Count:N0} comparisons, bound {bound:N0}");
+
+            // ReadDirectory runs the same check, with the same bound.
+            var directoryCount = new IdComparisonCounter();
+            Assert.Equal(count, TableBlockReader.ReadDirectory(block, null, directoryCount).Entries.Count);
+            Assert.True(directoryCount.Count > 0 && directoryCount.Count <= bound, $"directory: {directoryCount.Count:N0} comparisons, bound {bound:N0}");
         }
     }
 }
