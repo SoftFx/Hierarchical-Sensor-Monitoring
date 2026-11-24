@@ -77,8 +77,10 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // Every sequence below it may have been handed out; the value in the mark file. Under _lock.
         private long _markPersisted;
 
-        // Sequences skipped by RaiseNextSequence while tickets were in flight: the commit order jumps from From to To.
-        private (long From, long To)? _commitGap;
+        // Sequences skipped by RaiseNextSequence while tickets were in flight, by their first one: the commit order jumps
+        // from a gap's start to its end. Several can be pending: a raise after tickets were reserved past an earlier gap
+        // adds one; a raise right after another one extends it. Gaps never overlap and nothing is reserved inside one.
+        private readonly SortedDictionary<long, long> _commitGaps = [];
         private readonly SortedSet<long> _doneAhead = [];
 
         private DateTime _diskCheckedAt = DateTime.MinValue;
@@ -155,8 +157,10 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 // once every ticket reserved before the raise is done.
                 if (_nextCommit == _nextReserve)
                     _nextCommit = floor;
+                else if (_commitGaps.Count > 0 && _commitGaps.Last() is var last && last.Value == _nextReserve)
+                    _commitGaps[last.Key] = floor;
                 else
-                    _commitGap = (_nextReserve, floor);
+                    _commitGaps.Add(_nextReserve, floor);
 
                 _nextReserve = floor;
             }
@@ -501,7 +505,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             }
 
             _doneAhead.Clear();
-            _commitGap = null;
+            _commitGaps.Clear();
 
             _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {_count} blocks, next sequence {_nextReserve}" +
                          (rebuild ? $", index rebuilt from {indexed} blocks" : indexed > 0 ? $", {indexed} blocks indexed again after the last index entry" : string.Empty));
@@ -609,8 +613,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
             {
                 // Nothing reserves inside a gap left by RaiseNextSequence (it is below the raised next sequence and above
                 // every ticket reserved before the raise), so a ticket done ahead is never inside one.
-                Debug.Assert(_commitGap is not { } open || ticket.Sequence < open.From || ticket.Sequence >= open.To,
-                    $"ticket {ticket.Sequence} lies inside the skipped sequences {_commitGap}");
+                Debug.Assert(!_commitGaps.Any(g => ticket.Sequence >= g.Key && ticket.Sequence < g.Value),
+                    $"ticket {ticket.Sequence} lies inside skipped sequences");
 
                 _doneAhead.Add(ticket.Sequence);
                 return;
@@ -618,17 +622,14 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
             _nextCommit++;
 
-            // Drain the tickets done ahead and jump over the gap, until neither applies: a ticket at the gap's far end
-            // may have been done before the commit order reached the gap.
+            // Drain the tickets done ahead and jump over gaps, until neither applies: a ticket at a gap's far end may have
+            // been done before the commit order reached the gap, and that ticket may be followed by the next gap.
             while (true)
             {
                 if (_doneAhead.Remove(_nextCommit))
                     _nextCommit++;
-                else if (_commitGap is { } gap && _nextCommit == gap.From)
-                {
-                    _nextCommit = gap.To;
-                    _commitGap = null;
-                }
+                else if (_commitGaps.Remove(_nextCommit, out var to))
+                    _nextCommit = to;
                 else
                     break;
             }

@@ -481,6 +481,55 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void Two_raises_with_a_ticket_in_flight_do_not_stop_later_appends()
+        {
+            // Review of #1844 2b: ticket 5 in flight, raises to 100 and to 200 with nothing reserved between them. The
+            // second raise must extend the first gap, not replace it, or ticket 5 lands on 6 with no gap there.
+            var store = Open();
+            for (int i = 0; i < 5; i++)
+                store.Skip(store.Reserve());
+
+            var inFlight = store.Reserve();
+            store.RaiseNextSequence(100);
+            store.RaiseNextSequence(200);
+
+            var next = store.Reserve();
+            Assert.Equal(200, next.Sequence);
+            var appended = Task.Run(() => store.Append(next, Envelope(200), Block(("a", 1)), 0, 0, 1, 1));
+
+            store.Skip(inFlight);
+
+            Assert.True(appended.Wait(TimeSpan.FromSeconds(30)), "the append of ticket 200 never got its turn");
+            Assert.Equal(200, appended.Result.Entry.Sequence);
+        }
+
+        [Fact]
+        public void Two_raises_with_a_reservation_between_them_and_tickets_in_flight_do_not_stop_later_appends()
+        {
+            // Ticket 5 in flight; raise to 100; ticket 100 reserved and still in flight; raise to 200: two gaps, (6, 100)
+            // and (101, 200). Ticket 100 is done before ticket 5.
+            var store = Open();
+            for (int i = 0; i < 5; i++)
+                store.Skip(store.Reserve());
+
+            var first = store.Reserve();
+            store.RaiseNextSequence(100);
+            var second = store.Reserve();
+            Assert.Equal(100, second.Sequence);
+            store.RaiseNextSequence(200);
+
+            var next = store.Reserve();
+            Assert.Equal(200, next.Sequence);
+            var appended = Task.Run(() => store.Append(next, Envelope(200), Block(("a", 1)), 0, 0, 1, 1));
+
+            store.Skip(second);
+            store.Skip(first);
+
+            Assert.True(appended.Wait(TimeSpan.FromSeconds(30)), "the append of ticket 200 never got its turn");
+            Assert.Equal(200, appended.Result.Entry.Sequence);
+        }
+
+        [Fact]
         public void The_mark_is_written_ahead_in_steps()
         {
             var store = Open();
