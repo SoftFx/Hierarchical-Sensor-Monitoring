@@ -326,6 +326,29 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
 
 
         [Fact]
+        public void Deleting_an_arrival_hour_removes_its_blocks_everywhere_and_the_key_keeps_growing()
+        {
+            // The delete the merge step (#1850) will make; the benchmark measures it.
+            var store = Open();
+            Put(store, 0);
+            Put(store, 1);
+            _now = T0.AddHours(1);
+            Put(store, 2);
+
+            Assert.Equal(2, store.DeleteArrivalHour(TableBlockDatabase.FloorHour(T0)));
+
+            Assert.Equal([2L], store.GetBlocks(_product).Select(e => e.Sequence));
+            Assert.Equal(1, store.BlockCount);
+
+            // The duplicate map forgot the deleted blocks; the sequence still grows.
+            Assert.Equal(TableBlockAppendOutcome.Stored, Put(store, 0).Outcome);
+            Assert.Equal(3, store.GetBlocks(_product)[^1].Sequence);
+
+            store.Dispose();
+            Assert.Equal([2L, 3], Open().GetBlocks(_product).Select(e => e.Sequence));
+        }
+
+        [Fact]
         public void The_compaction_check_sees_a_real_compaction_when_keys_do_not_grow()
         {
             // The detector of the test above, proved on the case it must catch: keys in random order.

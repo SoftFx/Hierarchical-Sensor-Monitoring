@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMTableBlocks;
@@ -266,6 +267,48 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 Statistics.Add(ref Statistics.ReadFailures);
                 _logger.Error($"Table block {entry.Sequence} has a damaged envelope: {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Deletes every block of one arrival hour from both databases as one range and compacts that range: what the merge
+        /// step (#1850) will do once an hour is merged, and what the benchmark measures today. The in-memory index and the
+        /// duplicate map forget those blocks. Not called by the server yet.
+        /// </summary>
+        internal int DeleteArrivalHour(long hourTicks)
+        {
+            lock (_lock)
+            {
+                EnsureOpen(create: false);
+
+                var from = Key(hourTicks, 0);
+                var to = Key(hourTicks + TimeSpan.TicksPerHour, 0);
+                var deleted = 0;
+
+                using (var batch = new WriteBatch())
+                using (var iterator = _blocks.CreateIterator())
+                {
+                    for (iterator.Seek(from); iterator.IsValid && Compare(iterator.Key(), to) < 0; iterator.Next())
+                    {
+                        batch.Delete(iterator.Key());
+                        deleted++;
+                    }
+
+                    _blocks.Write(batch, _syncWrite);
+                    _index.Write(batch, _plainWrite);
+                }
+
+                _blocks.CompactRange(from, to);
+                _index.CompactRange(from, to);
+
+                foreach (var (_, blocks) in _products)
+                    blocks.RemoveHour(hourTicks);
+
+                foreach (var key in _byProducer.Where(p => p.Value.ArrivalHourTicks == hourTicks).Select(p => p.Key).ToList())
+                    _byProducer.Remove(key);
+
+                Interlocked.Add(ref _count, -deleted);
+                return deleted;
             }
         }
 
@@ -685,6 +728,20 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                 items[current.Count] = entry;
                 _state = new State(items, current.Count + 1);
+            }
+
+            // Under the store's lock. A new array: readers holding the old state keep reading it.
+            public void RemoveHour(long hourTicks)
+            {
+                var current = _state;
+                var kept = new TableBlockIndexEntry[Math.Max(16, current.Items.Length)];
+                var count = 0;
+
+                for (int i = 0; i < current.Count; i++)
+                    if (current.Items[i].ArrivalHourTicks != hourTicks)
+                        kept[count++] = current.Items[i];
+
+                _state = new State(kept, count);
             }
 
             public IReadOnlyList<TableBlockIndexEntry> Snapshot()

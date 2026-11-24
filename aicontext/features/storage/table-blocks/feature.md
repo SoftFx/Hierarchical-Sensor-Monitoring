@@ -140,6 +140,42 @@ The daily database sizes get `Database/Tables data size` once the folder exists.
 - A failed write or too little disk: Error, at most once a minute.
 - A stored block that cannot be read: Error.
 
+## Memory
+
+The in-memory index holds one entry per stored block (sequence, hour, first and last time, rows, tables, stored length, refused count, product, producer, producer sequence, arrival: 96 bytes) in a per-product array, and the duplicate map one entry per block (the producer pair and the entry). Measured: **450 bytes of managed memory per stored block**, so **3.8 MB for one collector-day (8,640 blocks)**. Until the merge (#1850) deletes merged hours, this grows with every block stored: about 27 MB per collector-week. After #1850 it holds only the hours not merged yet.
+
+## Measured (2026-11-24, `TableBlockStoreBenchmark`, Release, Windows, one NVMe machine)
+
+Synthetic feed shaped like the measured real hour: one collector, a block every 10 seconds, 1,000 tables, about 6,700 rows per block with a skewed share per table, columns time, bid, ask from a random walk, generated with the block writer (no real data). Its noise compresses worse than real quotes (13.5 block bytes per row against 3.8 on the real hour), so the blocks are larger (88.5 KB) and every byte figure is pessimistic; the ratios are what matter. Seven day-equivalents (60,480 blocks, 5.2 GB stored). After every hour the hour before the previous one is deleted as one range and that range compacted, which is what #1850 will do; so about two hours stay live.
+
+| | One database | One database per day-equivalent (7) |
+|---|---|---|
+| Bytes the process wrote / bytes stored, deletes included | 2.23 | 2.22 |
+| Real compactions in `LOG` during ingest | 0 | 0 |
+| Real compactions during the 166 range deletes (their total time) | 497 (11.8 s) | 491 (13.8 s) |
+| Synced put latency, median / p99 / max | 2.3 / 5.4 / 183 ms | 2.9 / 7.6 / 121 ms |
+| Open of the last database (index load) | 35 ms (720 blocks) | 29 ms (360 blocks) |
+| One table for one hour (360 blocks decompressed, 6,837 rows) | 163 ms | 77 ms |
+
+- Ingest alone, one collector-day without deletes: **1.99×** the stored bytes written, 0 real compactions; opening it (index of 8,640 blocks): 61 ms.
+- The read of one table for one hour varies between runs on the same blocks (77–163 ms here, 109–115 ms in a one-day run): it is the decompression of 360 blocks of 88.5 KB. The target is 300 ms.
+- The real compactions all come from the hourly range deletes, which LevelDB has to merge with the files below them; about 70 ms per hour of 360 blocks.
+
+**Decision: one database.** The split changes nothing that matters: the same bytes written, no compaction during ingest in either, the same work for the hourly deletes; it only adds databases, open handles and a rule for which one a block goes to. With the merge deleting each hour after it is packed, the one database holds about two hours of blocks, and nothing in it ever needs to be dropped as a whole.
+
+## What later steps must do
+
+**Step 3 (#1845), the transport:**
+- Send a **producer id** that a collector keeps across restarts (with its spool of undelivered blocks) and its own **producer sequence** per block; pass `productId` as the root product of the key that sent the block. Deliver in order per producer: a block is sent after the previous one was acknowledged, or the resends after a restart keep the order (needed for the watermark below).
+- Answer a `TableBlockPutResult` per block: `Stored` and `Duplicate` are acknowledgements (with the refused tables), `AllRefused` and `Invalid` are final refusals (4xx-like: sending again does not help unless the sensors change), and `TableBlockStoreException` is a fault (5xx-like: the collector keeps the block and sends it again).
+- Check the key's permission to send data before calling `Put`; the block service does not see keys.
+
+**The merge step (#1850):**
+- After an hour is merged, delete it from both databases as one range and compact that range (`TableBlockDatabase.DeleteArrivalHour` does this today, for the benchmark), with the blocks and index entries leaving the in-memory index and the duplicate map.
+- Keep **duplicate detection** working after the blocks are gone: a per-producer watermark (the highest producer sequence merged), persisted with the batches, so that a resend of a merged block is answered as a duplicate. This relies on in-order delivery per producer (step 3).
+- Keep the **sequence floor**: the next sequence is restored from the last key of `Blocks`; when the merge has deleted every block, it would start again at 0, below the `FirstSequence` of existing table sensors, whose tables would then be refused (`SensorCreatedAfterBlock`). The merge must leave the last block in place or record the floor (for example in the index database or the batch database) and the open must take the larger of the two.
+- Serve reads from batches and blocks joined by time, with the same order rules (time, then arrival, then row).
+
 ## Key Files
 
 | File | Purpose |
@@ -150,9 +186,14 @@ The daily database sizes get `Database/Tables data size` once the folder exists.
 | `src/server/HSMServer.Core/TableSensors/TableBlockService.cs` | The put and the read; the rule for a sensor created during a put |
 | `src/server/HSMServer.Core/TableSensors/TableRowCollector.cs` | Collects, filters and sorts the rows of one table |
 | `src/server/HSMServer.Core/TableSensors/TableBlockResults.cs` | Options, results, rows |
+| `src/server/HSMServer/ServerConfiguration/Sections/TableSensorsConfig.cs` | The configuration section |
+| `src/server/HSMServer/BackgroundServices/DatacollectorService/Nodes/Database/TableBlockSensors.cs` | Self-monitoring |
+| `src/tests/HSMServer.Core.Tests/TableSensors/TableBlockStoreBenchmark.cs` | The measurement (`HSM_TABLE_STORE_BENCH=1`) |
 
 ## Tests
 
 `src/tests/HSMDatabase.LevelDB.Tests/TableBlockTests/TableBlockDatabaseTests.cs`: nothing created before first use; key order and a restart; a block read back unchanged with its envelope; duplicates (also after a restart, and per producer); a block not to be stored; a crash between the block and its index entry, then reopen and resend; a deleted and a damaged index rebuilt; a clock stepping back; tickets waiting for earlier ones and a skipped ticket; eight threads putting while a reader reads; the disk guard; the `LOG` of both databases after 5,000 puts through 16 KB memtables shows flushes and no real compaction, and the same detector sees real compactions when keys come in random order.
 
 `src/tests/HSMServer.Core.Tests/TableSensors/TableBlockServiceTests.cs`: put and read across hour boundaries with a late block and overlapping blocks, equal times in arrival order, `[from, to)` edges; the row limit; a refused table inside an accepted block for every reason and a sensor unblocked afterwards; the schema id and an identifier that is not UTF-8; a block with every table refused, then its resend after the registration; a duplicate; an invalid block and one beyond the limits as results (the store is not even opened); the disk guard as a fault; a removed sensor and a new one on its path; a sensor created between the reservation and the match (both directions); six producers putting while a reader reads; a server without table sensors creates no `Tables` folder.
+
+`src/tests/HSMServer.Core.Tests/BackgroundServices/TableBlockOperationsTests.cs`: the configuration's defaults and an error naming the key for each value out of range; no self-monitoring sensor and no value before the store is opened, counters posted when they change, failures as errors; the size sensor appears once the store exists. `TableBlockDatabaseTests.Deleting_an_arrival_hour_...`: the hour delete of #1850.
