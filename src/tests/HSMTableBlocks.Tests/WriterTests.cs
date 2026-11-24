@@ -142,6 +142,27 @@ namespace HSMTableBlocks.Tests
         }
 
         [Fact]
+        public void A_reused_writer_writes_correct_blocks_smaller_and_larger_than_the_previous_one()
+        {
+            // The writer keeps its payload and compressed buffers between blocks: a block after a larger one must not
+            // carry its leftovers, a block after a smaller one must grow them.
+            var medium = Enumerable.Range(0, 100).Select(i => Samples.Quotes($"m{i}", 50, (ulong)i)).ToList();
+            var small = new[] { Samples.Quotes("s", 3, 77) };
+            var large = Enumerable.Range(0, 400).Select(i => Samples.Quotes($"l{i}", 300, (ulong)i + 1000)).ToList();
+            using var writer = new TableBlockWriter();
+
+            foreach (var tables in new IReadOnlyList<TestTable>[] { medium, small, large, small })
+            {
+                writer.Reset();
+                Samples.Add(writer, tables);
+                var block = writer.ToArray();
+
+                Samples.AssertSame(tables, TableBlockReader.Read(block));
+                Assert.Equal(Samples.Write(tables), block);
+            }
+        }
+
+        [Fact]
         public void Arguments_of_the_constructor_and_limits_are_checked()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new TableBlockWriter(23));

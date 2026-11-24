@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Text;
 using HSMTableBlocks;
 using Xunit;
@@ -86,19 +85,23 @@ namespace HSMTableBlocks.Tests
         }
 
         /// <summary>
-        /// 65,536 tables (the default limit) whose 1,000-byte identifiers share a 995-byte prefix: the uniqueness check
-        /// sorts by identifier bytes, so this costs O(n log n) comparisons. A duplicate among them is still found.
+        /// 65,536 tables (the default limit) whose identifiers share a long prefix and differ only in their last bytes:
+        /// the worst input for a check that groups by an unkeyed hash. Writer and reader sort the identifiers bytewise,
+        /// so the number of identifier comparisons stays within c * n * log2(n). The work is counted, not timed: a busy
+        /// machine cannot fail this test. 64-byte identifiers keep the payload at 5.5 MB; the comparison count does not
+        /// depend on the identifier length.
         /// </summary>
         [Fact]
-        public void The_largest_default_table_count_with_long_shared_prefixes_reads_in_bounded_time()
+        public void Identifier_checks_at_the_largest_default_table_count_stay_n_log_n()
         {
             const int count = TableBlockLimits.DefaultMaxTables;
-            const int idLength = 1000;
+            const int idLength = 64;
+            long bound = (long)(3 * count * Math.Log(count, 2));
             var prefix = Enumerable.Repeat((byte)'p', idLength - 5).ToArray();
             byte[] Id(int i) => prefix.Concat(Encoding.ASCII.GetBytes(i.ToString("D5"))).ToArray();
 
             byte[] block;
-            var write = Stopwatch.StartNew();
+            TableBlockFormat.IdComparisons = 0;
             using (var writer = new TableBlockWriter())
             {
                 var time = new[] { T0 };
@@ -110,26 +113,29 @@ namespace HSMTableBlocks.Tests
 
                 block = writer.ToArray();
             }
-            write.Stop();
+            long written = TableBlockFormat.IdComparisons;
 
-            var read = Stopwatch.StartNew();
+            TableBlockFormat.IdComparisons = 0;
             var result = TableBlockReader.Read(block);
-            read.Stop();
+            long read = TableBlockFormat.IdComparisons;
 
             Assert.Equal(count, result.Tables.Count);
-            Assert.True(write.Elapsed < TimeSpan.FromSeconds(30), $"write took {write.Elapsed}");
-            Assert.True(read.Elapsed < TimeSpan.FromSeconds(30), $"read took {read.Elapsed}");
+            for (int i = 0; i < count; i += 4099)
+                Assert.Equal(Id(i), result.Tables[i].TableId);
+            Assert.True(written > 0 && written <= bound, $"writer: {written:N0} comparisons, bound {bound:N0}");
+            Assert.True(read > 0 && read <= bound, $"reader: {read:N0} comparisons, bound {bound:N0}");
 
-            // The last identifier made equal to the first: found, in the same bounded time.
+            // The last identifier made equal to the first: found, with the same bound.
             var payload = RawBlock.Payload(block);
             int lastIdOffset = (count - 1) * (TableBlockFormat.EntryFixedSize + idLength + 1) + 2;
             Assert.Equal(Id(count - 1), payload.Skip(lastIdOffset).Take(idLength).ToArray());
             Id(0).CopyTo(payload, lastIdOffset);
             var duplicate = RawBlock.Seal(RawBlock.FieldsOf(block), payload);
 
-            var refused = Stopwatch.StartNew();
-            Samples.AssertRefused(TableBlockError.DuplicateTable, duplicate);
-            Assert.True(refused.Elapsed < TimeSpan.FromSeconds(60), $"refusing took {refused.Elapsed}");
+            TableBlockFormat.IdComparisons = 0;
+            var ex = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.Read(duplicate));
+            Assert.Equal(TableBlockError.DuplicateTable, ex.Error);
+            Assert.True(TableBlockFormat.IdComparisons <= bound, $"reader on a duplicate: {TableBlockFormat.IdComparisons:N0} comparisons, bound {bound:N0}");
         }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -34,6 +33,10 @@ namespace HSMTableBlocks
         private byte[] _data = new byte[16 * 1024];
         private int _dataLength;
         private TableInfo[] _tables = new TableInfo[64];
+
+        // The payload before compression and the compressed frame, kept between blocks.
+        private byte[] _payload;
+        private byte[] _compressed;
         private int _maxColumns;
 
         private int _tableCount;
@@ -179,32 +182,34 @@ namespace HSMTableBlocks
             if (duplicate >= 0)
                 throw new ArgumentException($"table {duplicate} has the identifier of another table: a table appears once in a block");
 
+            // The payload and compressed buffers are the writer's own and kept between blocks: the shared array pool
+            // of netstandard2.0 consumers (net472) does not keep arrays above about 1 MB, so renting them would
+            // allocate and drop two large arrays every tick.
             int payloadLength = DecompressedLength;
-            var pool = ArrayPool<byte>.Shared;
-            byte[] payload = pool.Rent(payloadLength);
-            byte[] compressed = pool.Rent(Compressor.GetCompressBound(payloadLength));
+            var payload = EnsureSize(ref _payload, payloadLength);
+            var compressed = EnsureSize(ref _compressed, Compressor.GetCompressBound(payloadLength));
 
-            try
-            {
-                _directory.AsSpan(0, _directoryLength).CopyTo(payload);
-                LayOutColumnMajor(payload.AsSpan(_directoryLength, _dataLength));
+            _directory.AsSpan(0, _directoryLength).CopyTo(payload);
+            LayOutColumnMajor(payload.AsSpan(_directoryLength, _dataLength));
 
-                int written = _compressor.Wrap(payload.AsSpan(0, payloadLength), compressed);
+            int written = _compressor.Wrap(payload.AsSpan(0, payloadLength), compressed);
 
-                var block = new byte[TableBlockFormat.HeaderSize + written];
-                var header = block.AsSpan(0, TableBlockFormat.HeaderSize);
-                TableBlockFormat.WriteHeader(header, _rowCount, _tableCount, _firstTime, _lastTime, written, payloadLength);
-                compressed.AsSpan(0, written).CopyTo(block.AsSpan(TableBlockFormat.HeaderSize));
-                BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(TableBlockFormat.ChecksumOffset),
-                    TableBlockFormat.Checksum(header, block.AsSpan(TableBlockFormat.HeaderSize)));
+            var block = new byte[TableBlockFormat.HeaderSize + written];
+            var header = block.AsSpan(0, TableBlockFormat.HeaderSize);
+            TableBlockFormat.WriteHeader(header, _rowCount, _tableCount, _firstTime, _lastTime, written, payloadLength);
+            compressed.AsSpan(0, written).CopyTo(block.AsSpan(TableBlockFormat.HeaderSize));
+            BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(TableBlockFormat.ChecksumOffset),
+                TableBlockFormat.Checksum(header, block.AsSpan(TableBlockFormat.HeaderSize)));
 
-                return block;
-            }
-            finally
-            {
-                pool.Return(payload);
-                pool.Return(compressed);
-            }
+            return block;
+        }
+
+        private static byte[] EnsureSize(ref byte[] buffer, int size)
+        {
+            if (buffer == null || buffer.Length < size)
+                buffer = new byte[Math.Max(size, buffer == null ? 0 : (int)Math.Min(int.MaxValue, buffer.Length * 2L))];
+
+            return buffer;
         }
 
         /// <summary>Forgets every table and keeps the buffers, ready for the next block.</summary>
@@ -223,7 +228,7 @@ namespace HSMTableBlocks
             _maxColumns = 0;
         }
 
-        /// <summary>Releases the zstd context.</summary>
+        /// <summary>Releases the zstd context and the buffers.</summary>
         public void Dispose()
         {
             if (_disposed)
@@ -231,6 +236,8 @@ namespace HSMTableBlocks
 
             _disposed = true;
             _compressor.Dispose();
+            _payload = null;
+            _compressed = null;
         }
 
 
@@ -368,6 +375,7 @@ namespace HSMTableBlocks
             {
                 var a = _writer._tables[x];
                 var b = _writer._tables[y];
+                TableBlockFormat.IdComparisons++;
                 return _writer._directory.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_writer._directory.AsSpan(b.IdOffset, b.IdLength));
             }
         }

@@ -363,6 +363,7 @@ namespace HSMTableBlocks
             {
                 var a = _entries[x];
                 var b = _entries[y];
+                TableBlockFormat.IdComparisons++;
                 return _payload.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_payload.AsSpan(b.IdOffset, b.IdLength));
             }
         }
