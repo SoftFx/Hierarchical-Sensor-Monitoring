@@ -175,8 +175,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
         //   durable (EnsureMark) or from that file (Open), the file only grows, and the value returned is below a
         //   _markPersisted read after it;
         // - a sensor's first sequence is never above the sequence of a block reserved after the sensor became visible:
-        //   _nextReserve only grows (Reserve, RaiseNextSequence, and an open restores at least the mark, which is at or
-        //   above it), so a reservation that follows the peek reads at least the value the peek read.
+        //   _nextReserve only grows (Reserve, RaiseNextSequence, and an open never lowers it, see Open), so a reservation that follows the peek reads at least the value the peek read.
         // _nextReserve, _markPersisted, _blocks, _failure and _disposed are written under _lock and read here with
         // Volatile. A stale read is a peek that happened a moment earlier: a smaller value, still covered by the mark, or a
         // state refused a moment later. The lock-free answer needs a store opened and not failed or disposed; otherwise,
@@ -500,19 +499,31 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (_blocks is not null && _failure is null)
                 return true;
 
-            if (!create && _blocks is null && !Directory.Exists(_folder))
-                return false;
-
             if (_failure is not null)
             {
+                // A failed store answers the fault until its backoff has passed, whatever happened to its folder.
                 if (Clock() - _failedAt < ReopenBackoff)
                     throw new TableBlockStoreException($"The table block store failed at {_failedAt:O} and reopens after {ReopenBackoff.TotalSeconds:0} s: {_failure.Message}", _failure);
 
                 if (_nextReserve != _nextCommit)
                     throw new TableBlockStoreException("The table block store failed and waits for the puts in flight before it reopens.", _failure);
 
+                // Past it, with its databases closed and its folder gone (removed while the server ran), a read has nothing
+                // to read and creates nothing: the failure is over, and the in-memory index of the blocks that went with
+                // the folder is dropped, so that no block is listed that cannot be read. The next put creates the store.
+                if (!create && _blocks is null && !Directory.Exists(_folder))
+                {
+                    _logger.Warn($"The table block store {_folder} failed and its folder is gone: it holds no blocks now, and the next put creates it again");
+
+                    _failure = null;
+                    _maps = new IndexMaps();
+                    return false;
+                }
+
                 _logger.Warn($"Reopening the table block store {_folder} after a failure: {_failure.Message}");
             }
+            else if (!create && _blocks is null && !Directory.Exists(_folder))
+                return false;
 
             _dbLock.EnterWriteLock();
             try
@@ -523,7 +534,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             catch (Exception ex)
             {
                 CloseDatabases();
-                Fail(ex, "open");
+                Fail(ex, "open", open: true);
                 throw ex as TableBlockStoreException ?? new TableBlockStoreException($"The table block store {_folder} could not be opened: {ex.Message}", ex);
             }
             finally
@@ -596,17 +607,32 @@ namespace HSMDatabase.LevelDB.TableBlocks
             var mark = ReadMark();
             _markPersisted = mark;
 
+            long restored;
+
             if (lastBlockKey is not null)
             {
                 var (hour, sequence) = ParseKey(lastBlockKey);
                 _lastHourTicks = hour;
-                _nextReserve = _nextCommit = Math.Max(sequence + 1, mark);
+                restored = Math.Max(sequence + 1, mark);
             }
             else
             {
                 _lastHourTicks = 0;
-                _nextReserve = _nextCommit = mark;
+                restored = mark;
             }
+
+            // A reopen in this process never takes the next sequence back. Before it, the next sequence in memory is at
+            // or above every sequence handed out in this process and every first sequence of the table sensors (the block
+            // service raised it to the largest of those before its first reservation, and a sensor created since read it
+            // here). A folder removed or replaced while the server ran (seen at a reopen after a failure) would restore a
+            // smaller one, and every existing sensor's tables would be refused until the sequence caught up. Applied here,
+            // under _lock and before the open returns, so no reservation can come between the open and the floor. The
+            // mark of the new folder is behind it; it is written ahead before the next sequence is handed out, as always.
+            if (_nextReserve > restored)
+                _logger.Warn($"Table block store {_folder}: the store on disk restores the next sequence {restored}, below {_nextReserve} handed out " +
+                             "before this reopen (its folder was removed or replaced while the server ran); the next sequence stays at " + _nextReserve);
+
+            _nextReserve = _nextCommit = Math.Max(restored, _nextReserve);
 
             _doneAhead.Clear();
             _commitGaps.Clear();
@@ -795,8 +821,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
             return mark;
         }
 
-        // Under _lock.
-        private void Fail(Exception ex, string what)
+        // Under _lock. A failed open counts as a write failure whether a put or a read started it: the store cannot take
+        // puts either way. Its log line says what it means for both.
+        private void Fail(Exception ex, string what, bool open = false)
         {
             _failure = ex;
             _failedAt = Clock();
@@ -805,7 +832,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (_failedAt - _lastFailureLog >= FailureLogInterval)
             {
                 _lastFailureLog = _failedAt;
-                _logger.Error(ex, $"The table block store {_folder} failed to {what}; puts are refused and the store reopens after {ReopenBackoff.TotalSeconds:0} s");
+
+                if (open)
+                    _logger.Error(ex, $"The table block store {_folder} could not be opened; puts and reads are refused until it opens, tried again after {ReopenBackoff.TotalSeconds:0} s by the next put or read");
+                else
+                    _logger.Error(ex, $"The table block store {_folder} failed to {what}; puts are refused and the store reopens after {ReopenBackoff.TotalSeconds:0} s");
             }
         }
 

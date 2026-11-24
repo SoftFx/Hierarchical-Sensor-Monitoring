@@ -70,7 +70,7 @@ namespace HSMServer.BackgroundServices
             Add("Invalid blocks", () => Interlocked.Read(ref stats.InvalidBlocks), true,
                 "Blocks refused since the server started because they break the block format or the configured limits. Error in the sample in which it grew.");
             Add("Write failures", () => Interlocked.Read(ref stats.WriteFailures), true,
-                "Puts that failed since the server started (disk, LevelDB, too little free space): the blocks were not stored and not acknowledged, so their collectors keep them. Error in the sample in which it grew, Ok again at the next sample without a new failure.");
+                "Puts that failed since the server started (disk, LevelDB, too little free space): the blocks were not stored and not acknowledged, so their collectors keep them. A failed open of the store counts here too, whether a put or a read started it (the store cannot take puts until it opens). Error in the sample in which it grew, Ok again at the next sample without a new failure.");
             Add("Read failures", () => Interlocked.Read(ref stats.ReadFailures), true,
                 "Stored blocks that could not be read since the server started (missing or damaged); their rows are not served. Error in the sample in which it grew.");
             Add("Index rebuilds", () => Interlocked.Read(ref stats.IndexRebuilds), false,
