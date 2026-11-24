@@ -12,12 +12,13 @@ HSM stores one value at a time: every value passes the sensor model and becomes 
 
 The owner's requirement: store such tables efficiently, delete them on time, take them in and give them back, and draw them in some basic way. The application hands the collector ready rows. The data must be visible on the server within seconds, and the collector must stay simple and cheap for the application it runs in.
 
-The measurements are in `docs/initiatives/table-sensors.md`, on a real sample of 440,555 rows of 1,029 tables in 185 seconds. Bytes per row below are for five columns unless stated.
+The measurements are in `docs/initiatives/table-sensors.md`. Two real samples were used. The first is 440,555 rows of 1,029 tables in 185 seconds, with a derived price and a synthetic volume added to make five columns; the comparisons of formats below come from it, and bytes per row there are for five columns unless stated. The second is one continuous real hour: 2,420,965 rows of 1,093 tables, a median of 102 rows per table, 38% of rows exact duplicates of an earlier row, with the real columns time, bid, ask and spread; the sizes of what is sent and what is stored come from it.
 
 - **A stored batch of one table.** With up to 4,096 rows per batch the sealed-history column coders with zstd 15 give 5.22, plain zstd 15 over raw columns 5.83, Parquet 7.95–9.59. With three columns: 2.60, 3.58 and 4.28–5.50. LZMA instead of zstd after the coders changes the size by about one percent and decodes 5–7 times slower.
 - **Small batches are expensive.** A typical table has 14 rows in 10 seconds. One batch per table every 10 seconds costs 9.08 on the wire and 11.88 on disk, because every batch pays for its header, its key and its index record.
 - **One block for all tables is not.** The rows of all tables of a 10-second window in one block, grouped by table, as raw columns under one zstd frame: 5.14 with zstd 15, 5.75 with zstd 3. The same block with the column coders inside: 5.26. Rows in arrival order with a table-id column: 7.57. Encoding the raw block with zstd 3 costs the collector 0.09 µs per row, against 0.70 for per-table batches with the coders and 9–15 with LZMA.
 - **A block is slow to read for one table.** To get one table out of an hour of 10-second blocks every block is decompressed: 130–260 ms and 207–344 MB, against 0.1–8 ms for per-table batches.
+- **The real hour, three real columns (time, bid, ask), header, key and index record included.** Sent and stored as 10-second blocks with zstd 3: 3.81 bytes per row. Packed once an hour into batches per table with the column coders and zstd 15: 1.95. The same batches with plain zstd 15 over raw columns: 2.90. With the spread as a fourth column: 4.78, 2.42 and 3.27. A merge every 5 minutes gives 2.75, every 15 minutes 2.21, every 30 minutes 2.05. Reading one table for the hour takes about 60 ms from blocks and 1.4 ms from batches; reading all tables for one minute takes 2.3 ms from blocks and 35 ms from batches.
 - **The LevelDB key decides the write cost.** Under the key `sensor, first time` each stored byte is written 14.4 times at seven days of data, because the values of different sensors arrive interleaved and every new file overlaps the old ones. Under a key that only grows it is written 2.0 times, with no compaction at all.
 
 Constraints:
@@ -47,10 +48,10 @@ Constraints:
 
 ## Consequences
 
-- A row of five-column tick data takes about 5.75 bytes on the wire and on disk from the moment it arrives, and about 5.5 after the merge on the measured three-minute sample (header, key and index record included). With full hours to merge, the merged size is expected near 4.9 (from a scaled run; to be confirmed in the rollout step). The merge is there for the speed of reading one table, not for the size.
-- Data reaches the server at most one tick after the application produced it, and is readable at once. Until its hour is merged, reading one table costs a decompression of every block of the range: 130–260 ms for an hour. After the merge it costs about a millisecond.
+- On the real hour a row of time, bid and ask takes 3.8 bytes on the wire and on disk from the moment it arrives, and 1.95 after the merge; with the spread 4.8 and 2.4. The merge halves the store and makes a read of one table fast. The size with real price and volume columns is not measured.
+- Data reaches the server at most one tick after the application produced it, and is readable at once. Until its hour is merged, reading one table costs a decompression of every block of the range: about 60 ms for the measured hour, 130–260 ms at the higher rate of the first sample. After the merge it costs about a millisecond. Reading all tables for a short range is the opposite: cheaper from blocks.
 - The collector spends about 0.09 µs of CPU per row and needs zstd as its only new dependency. The native collector needs no port of the column coders, and no byte-identical output between .NET and C++ is required: two zstd libraries may compress the same block to different bytes, and conformance compares the decoded rows.
-- The server's storage format can change with a server release alone. Its cost is the server's: about 0.5 µs of CPU per row for the merge, about 133 seconds a day for 276 M rows on one core.
+- The server's storage format can change with a server release alone. Its cost is the server's: about 0.4 µs of CPU per row for the merge, 0.9 seconds for the measured hour on one core.
 - Every row reaches the disk four times: twice when its block arrives (the LevelDB log, then a table file) and twice when it is merged. All databases take keys in growing order only, so none compacts during writes. Space freed by the merge and by retention returns when the server compacts the deleted range, which cost 0.1 s and 14 MB at seven days of data.
 - The merge is a background job that must survive a crash at any point: an hour is served either from its blocks or from its batches, never from both and never from neither, and a repeated run of the same hour changes nothing.
 - The server decompresses client-supplied bytes on ingest. The limits on decompressed size, tables, rows and columns are part of the block format and are checked from the header before anything is allocated.
@@ -58,9 +59,10 @@ Constraints:
 - A script without the collector library cannot send tables in the first version: it would have to build a block. It can read them as CSV or JSON.
 - A crash of the application loses the rows of the open block: up to one tick. A clean stop loses nothing.
 - A block that arrives late is stored and merged with its arrival hour, so its rows live longer than the retention period by the delay, and the batches of one sensor can overlap in time. A reader joins them by time.
-- A table with few rows in an hour ends up in small batches, one per hour. They are the price of a single merge.
+- Real data carries placeholders. On the real hour 1,205 ask cells (0.05% of the rows) hold one huge constant beside a zero bid, and with the coders as they are one such cell costs its whole batch the decimal mode: 8.5% of the merged store. The stored batch therefore sets aside the few values that do not fit a column's mode instead of giving the mode up (#1850). Columns stay dense in the first version: what stands for "no value" is the application's choice.
+- A table with few rows in an hour ends up in small batches, one per hour. On the real hour 37% of the batches hold fewer than 100 rows, but together only 0.6% of the rows; two thirds of the rows sit in full batches. Small batches are the price of a single merge.
 - Per-sensor retention is not available in the first version.
-- Disk becomes a planning question. On the test feed (276 M rows a day) a year is about 500–550 GB, which the roughly 550 GB free on production cannot take together with everything else; the retention period or the disk has to be decided before the feature is switched on there.
+- Disk becomes a planning question. With three real columns, 97 M quote rows a day are about 69 GB a year after the merge (135 GB if they stayed in blocks). An earlier estimate of 500–550 GB a year was for every record of the feed with five columns, two of them synthetic; it is not established for real data. The retention period is decided in the rollout step, on real columns.
 
 ## Alternatives Considered
 
@@ -71,6 +73,8 @@ Constraints:
 - **LZMA:** on the raw block 4.06 bytes per row, but 9–15 µs of CPU per row inside the application and reads of unmerged data ten times slower. For stored batches it gains about one percent and decodes 5–7 times slower.
 - **A long tick or a long time limit instead of the merge:** the simplest server, but the data is late by that limit; the owner wants it within seconds.
 - **No merge at all:** blocks are already compact, but reading one table for a day would decompress 8,640 blocks.
+- **A shorter merge period:** 2.75 bytes per row at 5 minutes and 2.21 at 15 against 1.95 at an hour; the hour stays.
+- **Coding one column as a difference from another (ask from bid), or storing the spread instead of ask:** 2–4% larger on the real hour, and bid + spread equals ask bit for bit in only 74% of the rows as doubles.
 - **A cascade of merges, as VictoriaLogs does:** each level writes the data again; one merge per hour already gives a typical table full batches.
 - **HTTPS requests for blocks:** works, one request per tick, but a continuous stream fits a persistent connection better, and it would be the one place where a collector on a session used HTTP.
 - **Binary frames on the existing session connection:** one connection for everything, but a large block would hold back values and commands.
