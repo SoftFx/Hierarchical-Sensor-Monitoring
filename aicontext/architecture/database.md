@@ -71,7 +71,7 @@ Each background compaction logs the shard path and its size before and after. Th
 
 ## Table Blocks (#1844)
 
-The blocks of table sensors (ADR-0021) live in `Tables/` under the database folder: `Tables/Blocks` (key `arrival hour | sequence`, both big-endian, value = envelope + the block as received, no compression, synced puts) and `Tables/BlockIndex` (the same key, a derived 80-byte summary per block). Both keys only grow, so LevelDB never compacts during ingest. Nothing is created until the first table sensor or block. Neither the manual Compact nor the background history compaction touch these databases (they compact the environment database and the weekly shards only); freeing the space of deleted hours is the merge step's job (#1850). They are not backed up, like sensor history. Details: `aicontext/features/storage/table-blocks/feature.md`.
+The blocks of table sensors (ADR-0021) live in `Tables/` under the database folder: `Tables/Blocks` (key `arrival hour | sequence`, both big-endian, value = envelope + the block as received, no compression, synced puts) and `Tables/BlockIndex` (the same key, a derived 84-byte summary per block), plus the durable sequence mark `Tables/hsm-sequence-mark`. Both keys only grow, so LevelDB never compacts during ingest. Nothing is created until the first table sensor or block. Neither the manual Compact nor the background history compaction touch these databases (they compact the environment database and the weekly shards only); freeing the space of deleted hours is the merge step's job (#1850). They are not backed up, like sensor history. Details: `aicontext/features/storage/table-blocks/feature.md`.
 
 ## Native Libraries
 

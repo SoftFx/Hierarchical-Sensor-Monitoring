@@ -19,14 +19,15 @@ Two parts:
 | Path | Holds |
 |---|---|
 | `<DatabaseFolder>/Tables/Blocks` | LevelDB. Key `arrival hour ticks (i64, big-endian) | sequence (i64, big-endian)`, 16 bytes. Value: the envelope, then the block bytes exactly as received. No LevelDB compression (blocks are zstd already). Every put is synced. |
-| `<DatabaseFolder>/Tables/BlockIndex` | LevelDB. The same key; value: 80 bytes describing the block (below). Derived from `Blocks`; written after the block, not synced. |
+| `<DatabaseFolder>/Tables/BlockIndex` | LevelDB. The same key; value: 84 bytes describing the block (below). Derived from `Blocks`; written after the block, not synced. |
+| `<DatabaseFolder>/Tables/hsm-sequence-mark` | The sequence high-water mark: a decimal number above every sequence ever handed out (below). Written durably. |
 | `<DatabaseFolder>/Tables/hsm-rebuild-index` | Present only after an index write failed: the next open rebuilds the index. |
 
 The folder is created by the first use that needs it: the registration of a table sensor (which asks for the next sequence) or a put. A read on a server without the folder opens nothing.
 
 ### Key
 
-`arrival hour` is the UTC hour (ticks at the start of the hour) in which the server stored the block; `sequence` is a number that only grows, restored at open as the last key's sequence plus one. The hour of a key is never below the hour of the key before it: if the clock steps back, the hour stays where it was (the true arrival time is in the envelope). So both parts only grow and every write lands after every key already written: LevelDB never rewrites the data during ingest (measured below, and pinned by a test that reads LevelDB's `LOG`).
+`arrival hour` is the UTC hour (ticks at the start of the hour) in which the server stored the block; `sequence` is a number that only grows, restored at open as the larger of the sequence mark and the last key's sequence plus one (section "Sequence mark"). The hour of a key is never below the hour of the key before it: if the clock steps back, the hour stays where it was (the true arrival time is in the envelope). So both parts only grow and every write lands after every key already written: LevelDB never rewrites the data during ingest (measured below, and pinned by a test that reads LevelDB's `LOG`).
 
 ### Envelope (version 1, little-endian)
 
@@ -34,19 +35,30 @@ The folder is created by the first use that needs it: the registration of a tabl
 |---|---|---|
 | 0 | 1 | version, `1` |
 | 1 | 1 | flags, `0` |
-| 2 | 2 | envelope length: the offset of the block bytes |
-| 4 | 8 | arrival time, UTC ticks (the true clock) |
-| 12 | 16 | product id: the product the block's tables were resolved in |
-| 28 | 16 | producer id: who sent the block (the collector's stream id, #1845) |
-| 44 | 8 | producer sequence: the producer's number of the block |
-| 52 | 2 | refused table count n |
-| 54 | 5·n | per refused table: directory index (i32), reason (u8, `TableRefusalReason`) |
+| 2 | 2 | reserved, `0` |
+| 4 | 4 | envelope length (i32): the offset of the block bytes |
+| 8 | 8 | arrival time, UTC ticks (the true clock) |
+| 16 | 16 | product id: the product the block's tables were resolved in |
+| 32 | 16 | producer id: who sent the block (the collector's stream id, #1845) |
+| 48 | 8 | producer sequence: the producer's number of the block |
+| 56 | 4 | refused table count n (i32) |
+| 60 | 5·n | per refused table: directory index (i32), reason (u8, `TableRefusalReason`) |
 
-The block follows at the envelope length. A refused table's rows are never served.
+The block follows at the envelope length. A refused table's rows are never served. The counts are 32-bit, so every table of any block the format allows can be recorded as refused, whatever `TableSensors.MaxTables` is configured to (the first layout had 16-bit counts, too small for the default of 65,536 tables; changed in review, before anything was stored).
 
-### Index value (version 1, 80 bytes, little-endian)
+### Index value (version 1, 84 bytes, little-endian)
 
-`u8 version (1), u8 0, u16 refused count, i64 first time, i64 last time, i32 rows, i32 tables, i32 stored length, 16 product id, 16 producer id, i64 producer sequence, i64 arrival ticks`. First and last time are the block header's (the minimum and maximum time of all its rows).
+`u8 version (1), u8 0, u16 0, i32 refused count, i64 first time, i64 last time, i32 rows, i32 tables, i32 stored length, 16 product id, 16 producer id, i64 producer sequence, i64 arrival ticks`. First and last time are the block header's (the minimum and maximum time of all its rows).
+
+### Sequence mark
+
+Sequences are also used up without a stored block: a ticket skipped by a put that failed, a block whose tables were all refused, the sequence a new table sensor records as its `FirstSequence`. Restored from the last stored key alone, the next sequence would go back after a restart, and a table sensor created meanwhile would have every table refused (`SensorCreatedAfterBlock`) until the sequence passed its `FirstSequence` again; the collector takes a refusal as final, so those rows would be lost.
+
+So before the store hands out a sequence `s` (a `Reserve`, or `NextSequence` read for a new sensor), the file `hsm-sequence-mark` holds a number above `s`. The store writes it ahead in steps of 1,024 (`DurableFile.WriteAtomic`: a temporary file renamed with write-through on Windows, a directory sync elsewhere), so it costs one durable write per 1,024 sequences, about every three hours per collector. The open restores `max(mark, last key + 1)`: a restart skips at most 1,024 sequences and never hands one out twice. The mark lives outside both databases, so an index rebuild keeps it, and a `Blocks` database emptied by the merge (#1850) keeps it. A mark that cannot be written fails the reservation (a fault: nothing is handed out); a mark that cannot be read fails the open with an error naming the file, because a guess could hand out sequences again.
+
+### Sequence floor from the sensors
+
+The mark covers a restart, not the loss of the folder: an operator who deletes `Tables/` (or restores it from an older copy) takes the mark with it, and the sequence would start below the `FirstSequence` of every registered table sensor, whose tables would then all be refused. So when the block service is built (`TableBlockService` constructor), it raises the store's next sequence to the largest `FirstSequence` of the table sensors in the tree (`ITableBlockStore.RaiseNextSequence`: through the mark, so durably, and in order with tickets in flight, which are written first). The tree is loaded by then: `TreeValuesCache` loads it in its constructor, and the service is built from the cache; every put and read goes through the service, so no block is numbered before the floor is in place. Without table sensors nothing is raised and nothing opened. What a deleted folder costs: the rows of the deleted blocks are gone; the sensors take rows again from the next block, with a Warn line naming the old and the new sequence.
 
 ## The order of appends
 
@@ -103,13 +115,17 @@ So a block numbered before a sensor existed is never read for it: its tables wer
 
 ## The read (`ITableBlockService.Read`)
 
-`TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)`: the rows of a table sensor with a time in `[from, to)`.
+`TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)`: the rows of a table sensor with a time in `[from, to)`. Times are UTC: a time of kind `Unspecified` is taken as UTC (as row times are), a `Local` one is converted.
 
 - **Finding blocks.** From the in-memory index of the sensor's root product: blocks with a sequence at or above the sensor's `FirstSequence` whose header range `[first time, last time]` meets `[from, to)`. A late block with old times is found by its header, wherever it is in the sequence. Nothing else is opened.
 - **Rows.** Each candidate is read (one LevelDB get), its table read out by identifier (`TableBlockReader.ReadTable`, which decompresses the block), skipped when the envelope marks it refused, and its rows filtered to the range.
 - **Order.** By time, then by block sequence (arrival), then by the row's position in its block: a stable sort of the rows in the order they arrived.
 - **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
 - **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
+
+## The identifier is the registered path, byte for byte
+
+Registration normalizes a sensor path (`BaseUpdateRequest`: a leading separator, empty segments and the spaces around segments are dropped), and the sensor's `Path` is that normalized form; the tree's path index is keyed by it (`AddSensorToCache`), ordinally. A put looks a block's identifier up in that index exactly, without normalizing it, and a read looks for the sensor's `Path`. So a table is only ever accepted under the exact bytes a read looks for: nothing is stored under an identifier no read would find. A collector that sends the raw form it registered (`/a/ b`) gets `UnknownSensor` for it, a refusal it is told about; step 3 must send the normalized path (`a/b`). Pinned by `A_block_is_taken_only_under_the_exact_path_the_registration_stored`.
 
 ## Configuration
 
@@ -118,7 +134,7 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 | Key | Default | Meaning |
 |---|---|---|
 | `MaxDecompressedBytes` | 67,108,864 (64 MiB) | A block's limits on a put (`TableBlockLimits`); the format's maxima bound them. A stored block is read back with the format's maxima, so lowering a limit later does not hide it. |
-| `MaxTables` | 65,536 | |
+| `MaxTables` | 65,536 | Any value the format allows: the envelope's refusal count is 32-bit. |
 | `MaxRows` | 8,388,608 | |
 | `MaxColumnsPerTable` | 64 | |
 | `MaxTableIdLength` | 1,024 | |
@@ -173,7 +189,7 @@ Synthetic feed shaped like the measured real hour: one collector, a block every 
 **The merge step (#1850):**
 - After an hour is merged, delete it from both databases as one range and compact that range (`TableBlockDatabase.DeleteArrivalHour` does this today, for the benchmark), with the blocks and index entries leaving the in-memory index and the duplicate map.
 - Keep **duplicate detection** working after the blocks are gone: a per-producer watermark (the highest producer sequence merged), persisted with the batches, so that a resend of a merged block is answered as a duplicate. This relies on in-order delivery per producer (step 3).
-- Keep the **sequence floor**: the next sequence is restored from the last key of `Blocks`; when the merge has deleted every block, it would start again at 0, below the `FirstSequence` of existing table sensors, whose tables would then be refused (`SensorCreatedAfterBlock`). The merge must leave the last block in place or record the floor (for example in the index database or the batch database) and the open must take the larger of the two.
+- The sequence is kept by the sequence mark (above): deleting every block does not take the next sequence back.
 - Serve reads from batches and blocks joined by time, with the same order rules (time, then arrival, then row).
 
 ## Key Files
@@ -192,8 +208,8 @@ Synthetic feed shaped like the measured real hour: one collector, a block every 
 
 ## Tests
 
-`src/tests/HSMDatabase.LevelDB.Tests/TableBlockTests/TableBlockDatabaseTests.cs`: nothing created before first use; key order and a restart; a block read back unchanged with its envelope; duplicates (also after a restart, and per producer); a block not to be stored; a crash between the block and its index entry, then reopen and resend; a deleted and a damaged index rebuilt; a clock stepping back; tickets waiting for earlier ones and a skipped ticket; eight threads putting while a reader reads; the disk guard; the `LOG` of both databases after 5,000 puts through 16 KB memtables shows flushes and no real compaction, and the same detector sees real compactions when keys come in random order.
+`src/tests/HSMDatabase.LevelDB.Tests/TableBlockTests/TableBlockDatabaseTests.cs`: nothing created before first use; key order and a restart; a block read back unchanged with its envelope; duplicates (also after a restart, and per producer); a block not to be stored; a crash between the block and its index entry, then reopen and resend; a deleted and a damaged index rebuilt; a clock stepping back; tickets waiting for earlier ones and a skipped ticket; eight threads putting while a reader reads; the disk guard; the sequence mark (sequences used without a stored block are not handed out again after a restart, a first sequence read before any block, the mark through an index rebuild and an emptied database, writes in steps, a damaged mark); an envelope with 70,000 refused tables; raising the next sequence durably with a ticket in flight; the `LOG` of both databases after 5,000 puts through 16 KB memtables shows flushes and no real compaction, and the same detector sees real compactions when keys come in random order.
 
-`src/tests/HSMServer.Core.Tests/TableSensors/TableBlockServiceTests.cs`: put and read across hour boundaries with a late block and overlapping blocks, equal times in arrival order, `[from, to)` edges; the row limit; a refused table inside an accepted block for every reason and a sensor unblocked afterwards; the schema id and an identifier that is not UTF-8; a block with every table refused, then its resend after the registration; a duplicate; an invalid block and one beyond the limits as results (the store is not even opened); the disk guard as a fault; a removed sensor and a new one on its path; a sensor created between the reservation and the match (both directions); six producers putting while a reader reads; a server without table sensors creates no `Tables` folder.
+`src/tests/HSMServer.Core.Tests/TableSensors/TableBlockServiceTests.cs`: put and read across hour boundaries with a late block and overlapping blocks, equal times in arrival order, `[from, to)` edges; the row limit; a refused table inside an accepted block for every reason and a sensor unblocked afterwards; the schema id and an identifier that is not UTF-8; a block with every table refused, then its resend after the registration; a duplicate; an invalid block and one beyond the limits as results (the store is not even opened); the disk guard as a fault; a removed sensor and a new one on its path; a sensor created between the reservation and the match (both directions); six producers putting while a reader reads; a server without table sensors creates no `Tables` folder; unspecified and local times of a read; a service without a store refused at construction; the `Tables` folder deleted under a registered sensor, then a restart: its block is stored and read; the identifier must be the registered path byte for byte.
 
 `src/tests/HSMServer.Core.Tests/BackgroundServices/TableBlockOperationsTests.cs`: the configuration's defaults and an error naming the key for each value out of range; no self-monitoring sensor and no value before the store is opened, counters posted when they change, failures as errors; the size sensor appears once the store exists. `TableBlockDatabaseTests.Deleting_an_arrival_hour_...`: the hour delete of #1850.

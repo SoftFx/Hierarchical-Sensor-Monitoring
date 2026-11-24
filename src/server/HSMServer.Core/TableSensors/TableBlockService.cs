@@ -33,6 +33,8 @@ namespace HSMServer.Core.TableSensors
         /// The rows of a table sensor with a time in <c>[from, to)</c>, sorted by time, equal times in the order they
         /// arrived; at most <paramref name="maxRows"/> (null: the configured maximum), the earliest ones, marked truncated
         /// when more matched. An error for an unknown id or a sensor that is not a table sensor.
+        /// <para>Times are UTC: a <see cref="DateTimeKind.Unspecified"/> time is taken as UTC (as the ticks of a row are),
+        /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
         /// </summary>
         TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null);
     }
@@ -70,8 +72,12 @@ namespace HSMServer.Core.TableSensors
             _cache = cache;
             _options = options ?? new TableBlockOptions();
 
-            if (_database.TableBlocks is { } store)
-                store.MinFreeBytes = _options.MinFreeDiskMb * 1024 * 1024;
+            // Mandatory: a database without a block store cannot take table blocks, and saying so at construction is
+            // clearer than a null reference at the first put.
+            var store = _database.TableBlocks ?? throw new ArgumentException("The database has no table block store.", nameof(database));
+            store.MinFreeBytes = _options.MinFreeDiskMb * 1024 * 1024;
+
+            RaiseSequenceFloor(store);
         }
 
 
@@ -166,8 +172,8 @@ namespace HSMServer.Core.TableSensors
                 return TaskResult<TableRows>.FromError($"Sensor '{sensor.FullPath}' is not a table sensor.");
 
             var limit = maxRows is > 0 ? Math.Min(maxRows.Value, _options.MaxReadRows) : _options.MaxReadRows;
-            var fromTicks = from.ToUniversalTime().Ticks;
-            var toTicks = to.ToUniversalTime().Ticks;
+            var fromTicks = Utc(from).Ticks;
+            var toTicks = Utc(to).Ticks;
 
             var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
             var rows = collector.Collect(Store, Store.GetBlocks(table.Root.Id), table.FirstSequence, Encoding.UTF8.GetBytes(table.Path));
@@ -252,6 +258,30 @@ namespace HSMServer.Core.TableSensors
                 _refusalsSinceLog.Clear();
             }
         }
+
+        // The sequence floor from the sensors. The tree is loaded by now: the cache loads it in its constructor, and this
+        // service is built from the cache. Every put and read goes through this service, so no block is numbered before
+        // the floor is in place. If the block store was deleted (or restored from an older copy), its sequence would start
+        // below the first sequences of the registered table sensors and all their tables would be refused; raising it to
+        // the largest one keeps them taking rows. Without table sensors nothing is opened.
+        private void RaiseSequenceFloor(ITableBlockStore store)
+        {
+            var floor = -1L;
+
+            foreach (var sensor in _cache.GetSensors())
+                if (sensor is TableSensorModel table && table.FirstSequence > floor)
+                    floor = table.FirstSequence;
+
+            if (floor >= 0)
+                store.RaiseNextSequence(floor);
+        }
+
+        // Unspecified is UTC here: ToUniversalTime would take it as local time and shift the range by the server's offset.
+        private static DateTime Utc(DateTime time) => time.Kind switch
+        {
+            DateTimeKind.Local => time.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(time, DateTimeKind.Utc),
+        };
 
         private static string TableIdText(TableBlockDirectory directory, int index) =>
             index >= 0 && index < directory.Entries.Count ? Printable(directory.Entries[index].TableId) : $"#{index}";

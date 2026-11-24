@@ -247,6 +247,109 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(1, Read(sensor, T0, T0.AddHours(1)).RowCount);
         }
 
+        [Fact]
+        public async Task A_read_takes_unspecified_times_as_UTC_and_converts_local_ones()
+        {
+            var sensor = await RegisterAsync("q");
+            AssertStored(Put(Table("q", (T0.AddMinutes(10), 1.0, 1L), (T0.AddMinutes(30), 2.0, 2L))));
+
+            var from = T0.AddMinutes(5);
+            var to = T0.AddMinutes(20);
+
+            var utc = Read(sensor, from, to);
+            var unspecified = Read(sensor, DateTime.SpecifyKind(from, DateTimeKind.Unspecified), DateTime.SpecifyKind(to, DateTimeKind.Unspecified));
+            var local = Read(sensor, from.ToLocalTime(), to.ToLocalTime());
+
+            Assert.Equal([1.0], utc.Columns[1].DoubleValues);
+            Assert.Equal(utc.Time, unspecified.Time);
+            Assert.Equal(utc.Time, local.Time);
+        }
+
+        [Fact]
+        public void A_service_over_a_database_without_a_block_store_is_refused_at_construction()
+        {
+            var database = new Moq.Mock<HSMServer.Core.DataLayer.IDatabaseCore>();
+
+            var error = Assert.Throws<ArgumentException>(() => new TableBlockService(database.Object, _valuesCache));
+            Assert.Contains("no table block store", error.Message);
+        }
+
+        [Fact]
+        public async Task A_block_is_taken_only_under_the_exact_path_the_registration_stored()
+        {
+            // Registration normalizes a path (BaseUpdateRequest: a leading separator, empty segments and the spaces around
+            // segments go); the block's identifier is looked up exactly, case included. So a block accepted for a sensor
+            // always carries the sensor's Path byte for byte, which is what Read looks for: nothing can be accepted under
+            // an identifier the read would not find. An identifier in the raw form is refused (UnknownSensor), not lost.
+            var raw = $"/{_root}/ spaced ";
+            var registered = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, raw)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = Quotes,
+            });
+            Assert.True(registered.IsOk, registered.Error);
+
+            var sensor = GetSensorByPath($"{_root}/spaced");
+            Assert.Equal($"{_root}/spaced", sensor.Path);
+
+            foreach (var identifier in new[] { raw, $"/{_root}/spaced", $"{_root}/Spaced", $"{_root}//spaced" })
+            {
+                var refused = _service.Put(_product, _producer, NextProducerSequence(), RawTable(identifier, T0));
+                Assert.Equal(TableBlockPutOutcome.AllRefused, refused.Outcome);
+                Assert.Equal(TableRefusalReason.UnknownSensor, Assert.Single(refused.Refusals).Reason);
+            }
+
+            AssertStored(_service.Put(_product, _producer, NextProducerSequence(), RawTable(sensor.Path, T0)));
+            Assert.Equal(1, Read(sensor, T0, T0.AddHours(1)).RowCount);
+        }
+
+        [Fact]
+        public async Task A_deleted_store_numbers_its_blocks_from_the_sensors_first_sequences_after_a_restart()
+        {
+            // The operator deletes Tables/ (the sequence mark goes with it): the sequence would start again at 0, below the
+            // first sequence of every registered table sensor, and their tables would be refused. The service raises the
+            // store's next sequence to the largest first sequence when it is built.
+            await RegisterAsync("early");
+            for (int i = 0; i < 5; i++)
+                AssertStored(Put(Table("early", (T0.AddSeconds(i), 1.0, 1L))));
+
+            var late = (TableSensorModel)await RegisterAsync("late");
+            Assert.True(late.FirstSequence > 0);
+
+            var settings = _databaseCoreManager.DatabaseCore.DatabaseSettings;
+            _databaseCoreManager.DatabaseCore.Dispose();
+            Directory.Delete(settings.PathToTableBlocks, recursive: true);
+
+            // The same environment database and Tables folder; DatabaseCore.Dispose leaves the layout, change-set and
+            // snapshot databases open, so the restarted core gets fresh ones of those.
+            var restart = ((HSMDatabase.Settings.DatabaseSettings)settings) with
+            {
+                ServerLayoutDatabaseName = settings.ServerLayoutDatabaseName + "_restart",
+                ChangeSetsDatabaseName = settings.ChangeSetsDatabaseName + "_restart",
+                SnaphotsDatabaseName = settings.SnaphotsDatabaseName + "_restart",
+            };
+            var database = new HSMDatabase.DatabaseWorkCore.DatabaseCore(restart);
+            var snapshot = new Moq.Mock<HSMServer.Core.TreeStateSnapshot.ITreeStateSnapshot>();
+            snapshot.Setup(s => s.Keys).Returns(new HSMServer.Core.TreeStateSnapshot.StateCollection<
+                HSMServer.Core.TreeStateSnapshot.States.LastKeyState, HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity.LastKeyStateEntity>());
+
+            await using var cache = new HSMServer.Core.Cache.TreeValuesCache(database, snapshot.Object, new HSMServer.Core.Journal.JournalService(database),
+                new HSMServer.Core.Schedule.AlertScheduleProvider(database), new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
+            var service = new TableBlockService(database, cache, new TableBlockOptions { MinFreeDiskMb = 0 });
+
+            var put = service.Put(_product, Guid.NewGuid(), 1, Table("late", (T0, 2.0, 2L)));
+
+            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
+            Assert.Empty(put.Refusals);
+            Assert.True(put.Sequence >= late.FirstSequence);
+
+            var rows = service.Read(late.Id, T0, T0.AddHours(1));
+            Assert.True(rows.IsOk, rows.Error);
+            Assert.Equal([2.0], rows.Value.Columns[1].DoubleValues);
+        }
+
         // === Sensors that come and go ===
 
         [Fact]
@@ -453,6 +556,22 @@ namespace HSMServer.Core.Tests.TableSensors
                 }
             }
 
+            return writer.ToArray();
+        }
+
+        private BaseSensorModel GetSensorByPath(string path)
+        {
+            Assert.True(_valuesCache.TryGetSensorByPath(_product, path, out var sensor), $"no sensor at {path}");
+            return sensor;
+        }
+
+        private static byte[] RawTable(string identifier, DateTime time)
+        {
+            using var writer = new TableBlockWriter();
+            writer.BeginTable(Encoding.UTF8.GetBytes(identifier), Quotes.Id, 1);
+            writer.AddTimeColumn([time.Ticks]);
+            writer.AddDoubleColumn([1.0]);
+            writer.AddInt64Column([1L]);
             return writer.ToArray();
         }
 
