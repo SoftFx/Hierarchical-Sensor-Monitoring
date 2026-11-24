@@ -93,13 +93,23 @@ namespace HSMDatabase.SealedHistory
         /// <summary>Column streams written as raw 8-byte values because that was smaller after zstd 1.</summary>
         public long TimeRaw, Int64Raw, DoubleRaw;
 
-        /// <summary>Double values set aside as exceptions so that their column kept the decimal mode.</summary>
+        /// <summary>
+        /// Double values set aside as exceptions in the columns counted in <see cref="DecimalKeptByExceptions"/>. Exceptions
+        /// before a constant stream are not counted: that column was not stored in the decimal mode.
+        /// </summary>
         public long ExceptionCells;
 
-        /// <summary>Double columns (with at least two distinct values) that kept the decimal mode only thanks to exceptions.</summary>
+        /// <summary>
+        /// Double columns stored coded in the decimal mode only thanks to exceptions: the exception list and the decimal
+        /// writer is what was written. Not a column stored raw, nor one whose values left are constant.
+        /// </summary>
         public long DecimalKeptByExceptions;
 
-        /// <summary>Double columns (with at least two distinct values) that have no decimal mode, even with exceptions.</summary>
+        /// <summary>
+        /// Double columns (with at least two distinct values) stored without the decimal mode because no exponent fits
+        /// them even with exceptions: coded by the double coder (also in <see cref="DoubleCoded"/>) or raw (also in
+        /// <see cref="DoubleRaw"/>).
+        /// </summary>
         public long DecimalGivenUp;
 
         /// <summary>Null cells of value columns, left out of the coded streams.</summary>

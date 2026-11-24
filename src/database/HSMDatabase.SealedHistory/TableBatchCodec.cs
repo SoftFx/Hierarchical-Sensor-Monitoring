@@ -281,6 +281,7 @@ namespace HSMDatabase.SealedHistory
             var mantissas = new long[bits.Length];
             bool constant = IsConstant(bits);
             bool isDecimal = false;
+            bool keptByExceptions = false, givenUp = false;
             int exponent = -1;
 
             if (!constant)
@@ -298,12 +299,11 @@ namespace HSMDatabase.SealedHistory
                     if (!isDecimal)
                         throw new InvalidOperationException("The values left after the exceptions have no decimal exponent.");
 
-                    if (stats is not null)
-                        stats.DecimalKeptByExceptions++;
+                    keptByExceptions = true;
                 }
-                else if (stats is not null)
+                else
                 {
-                    stats.DecimalGivenUp++;
+                    givenUp = true;
                 }
             }
 
@@ -320,7 +320,9 @@ namespace HSMDatabase.SealedHistory
 
             rule.WriteByte(EncodingDouble);
 
-            if (isDecimal && !IsConstant(clean))
+            bool writesDecimal = isDecimal && !IsConstant(clean);
+
+            if (writesDecimal)
                 DoubleColumn.WriteDecimal(rule, mantissas, exponent);
             else
                 DoubleColumn.Write(rule, clean);
@@ -332,6 +334,9 @@ namespace HSMDatabase.SealedHistory
             bool useRaw = Smaller(chooser, raw.Written, rule.Written);
             payload.WriteBytes(useRaw ? raw.Written : rule.Written);
 
+            // Counted from what was stored. A column kept in the decimal mode by exceptions counts so only when the decimal
+            // writer after its exceptions is what was written (not raw, not a constant left after the exceptions). A column
+            // that gave the decimal mode up is stored without it either way, coded by the double coder or raw.
             if (stats is not null)
             {
                 if (useRaw)
@@ -341,8 +346,16 @@ namespace HSMDatabase.SealedHistory
                 else
                 {
                     stats.DoubleCoded++;
-                    stats.ExceptionCells += exceptions.Count;
+
+                    if (keptByExceptions && writesDecimal)
+                    {
+                        stats.DecimalKeptByExceptions++;
+                        stats.ExceptionCells += exceptions.Count;
+                    }
                 }
+
+                if (givenUp)
+                    stats.DecimalGivenUp++;
             }
         }
 

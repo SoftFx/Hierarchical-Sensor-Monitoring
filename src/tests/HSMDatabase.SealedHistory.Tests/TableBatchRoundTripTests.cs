@@ -204,6 +204,44 @@ namespace HSMDatabase.SealedHistory.Tests
         }
 
         [Fact]
+        public void A_column_constant_after_its_exceptions_does_not_count_as_kept_in_the_decimal_mode()
+        {
+            // One value 1.5 everywhere but one outlier: the exception leaves a constant, written by the double coder in its
+            // constant mode, not by the decimal writer.
+            var time = Enumerable.Range(0, 4096).Select(i => 1_000_000L + i * 10).ToArray();
+            var values = Enumerable.Repeat(1.5, 4096).ToArray();
+            values[100] = 1e100;
+
+            var stats = new TableBatchEncodeStats();
+            RoundTrip(Batch(TableBatchColumn.Time(time), TableBatchColumn.Double(values)), stats);
+
+            Assert.Equal((1, 0), (stats.DoubleCoded, stats.DoubleRaw));
+            Assert.Equal(0, stats.DecimalKeptByExceptions);
+            Assert.Equal(0, stats.ExceptionCells);
+            Assert.Equal(0, stats.DecimalGivenUp);
+        }
+
+        [Fact]
+        public void A_column_stored_raw_counts_as_raw_only()
+        {
+            // Four decimals of 15 digits in random order, and one outlier: the decimal mode holds them with one exception,
+            // but the differences of their mantissas take twelve values against the four raw values, so raw is smaller.
+            var g = new SeededRows(12);
+            double[] set = [0.123456789012345, 8.76543210987654, 5.55555555555555, 3.14159265358979];
+            var time = Enumerable.Range(0, 4096).Select(i => 1_000_000L + i * 10).ToArray();
+            var values = Enumerable.Range(0, 4096).Select(_ => set[g.Next() % 4]).ToArray();
+            values[100] = 1e100;
+
+            var stats = new TableBatchEncodeStats();
+            RoundTrip(Batch(TableBatchColumn.Time(time), TableBatchColumn.Double(values)), stats);
+
+            Assert.Equal((0, 1), (stats.DoubleCoded, stats.DoubleRaw));
+            Assert.Equal(0, stats.DecimalKeptByExceptions);
+            Assert.Equal(0, stats.ExceptionCells);
+            Assert.Equal(0, stats.DecimalGivenUp);
+        }
+
+        [Fact]
         public void A_column_of_nulls_and_outliers_counts_exceptions_among_its_present_values()
         {
             const int rows = 512;
