@@ -1,6 +1,6 @@
 # Initiative: Table sensors — storing matrices in HSM
 
-> Owner: shared | Last reviewed: 2026-11-23 | Status: Decided, see ADR-0021 (`docs/decisions/0021-table-sensors.md`); epic #1842; nothing is built | Canonical: no
+> Owner: shared | Last reviewed: 2026-11-24 | Status: Decided, see ADR-0021 (`docs/decisions/0021-table-sensors.md`); epic #1842; nothing is built | Canonical: no
 
 ## Problem
 
@@ -19,8 +19,8 @@ The owner's requirement (2026-11-20), in priority order:
 
 - A client sends a table (a batch of rows with typed columns) as one message; HSM stores it compressed and returns it on request.
 - Storage cost close to a column store's, from the moment the data arrives — no uncompressed window.
-- The server's work per batch is independent of the number of rows in it.
-- Retention by time per sensor, enforced without rewriting data.
+- The server's work on ingest is small and bounded per block. *(First draft: "independent of the number of rows"; the decision has the server decompress and check each block.)*
+- Retention by time, enforced without rewriting data. *(First draft: per sensor; the decision is one period per product.)*
 - The stored data can be taken out without an HSM library, as CSV or JSON.
 - A basic chart of a numeric column over a time range.
 
@@ -56,7 +56,7 @@ one message per batch                   schema id, rows, first/last time,   <---
                                         retention: drop batches older than N
 ```
 
-Decisions to make, with the leaning of the first draft (2026-11-20). Where this table differs from "Proposal after step 0" below, the proposal is current: the format is HSM's own, not Parquet, and batches live in LevelDB under a key that only grows.
+Decisions to make, with the leaning of the first draft (2026-11-20), kept as the record of where the work started. It is superseded by the section "Decision (2026-11-24)" below and by ADR-0021: the collector sends simple blocks, the server packs them, and nothing here about Parquet, per-sensor retention or batches sent by the client still holds.
 
 | Question | Leaning | Why / alternative |
 |---|---|---|
@@ -279,7 +279,7 @@ Stored size is measured on the test sample; the row counts of the future product
 ## Risks
 
 - **Scope of HSM.** This makes HSM a store of bulk data as well as a monitoring system. Disk, backup and upgrade planning change with the volume; sensor history is not part of the server's backups today.
-- **Disk.** A year of ticks does not fit on the current production disk. Retention or more storage has to be decided before the feature is switched on.
+- **Disk.** Measured on real data a year is about 70 GB for one feed (see Capacity), not the 525 GB of the first estimate. It still grows with every feed and column, so the retention period is decided before the feature is switched on.
 - **Compatibility.** A new sensor type reaches the shared DTOs and the public collector API. Older collectors and servers must ignore or refuse it cleanly.
 - **Two formats.** The block is a public format that both collectors write; the batch is a storage format next to the sealed-history chunk. Each needs its own limits and versioning, and both have to stay readable forever.
 - **Large values in LevelDB.** Measured in step 0: the cost depends on the key. A sensor-first key rewrites the data 14 times at seven days; a key that only grows writes it twice. The batch database must therefore never take keys out of order, and must not share a database with sensor values.
@@ -289,7 +289,7 @@ Stored size is measured on the test sample; the row counts of the future product
 ## Verification
 
 - Step 0 produces numbers on real data and is recorded here.
-- Round trip: what a client sends is what a reader gets, byte for byte, for every batch.
+- Round trip: the rows a reader gets are the rows the application gave, value for value, in time order with equal times in the given order. *(Not byte for byte: the server re-encodes blocks into batches.)*
 - Retention removes exactly the expired batches; a restart in the middle loses and resurrects nothing.
 - Ingest and read under the target volume on a test deployment: server CPU and memory, disk growth, read latency of a one-hour range.
 - A batch that fails validation is refused with a reason and is counted; it never becomes a partly stored table.
