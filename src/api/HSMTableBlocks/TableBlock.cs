@@ -86,16 +86,32 @@ namespace HSMTableBlocks
         /// <summary>The number of rows of the table.</summary>
         public int RowCount { get; }
 
-        /// <summary>The column types in order; the first is <see cref="TableColumnType.Time"/>.</summary>
+        /// <summary>
+        /// The column types in order; the first is <see cref="TableColumnType.Time"/>. Plain types: whether a column has
+        /// nulls in this block is <see cref="HasNulls"/>, so the types compare with a schema's as they are.
+        /// </summary>
         public IReadOnlyList<TableColumnType> ColumnTypes { get; }
 
+        private readonly bool[] _nulls;
 
-        internal TableDirectoryEntry(byte[] tableId, uint schemaId, int rowCount, IReadOnlyList<TableColumnType> columnTypes)
+
+        internal TableDirectoryEntry(byte[] tableId, uint schemaId, int rowCount, IReadOnlyList<TableColumnType> columnTypes, bool[] nulls = null)
         {
             TableId = tableId;
             SchemaId = schemaId;
             RowCount = rowCount;
             ColumnTypes = columnTypes;
+            _nulls = nulls;
+        }
+
+
+        /// <summary>True when column <paramref name="column"/> carries a null map in this block: at least one of its rows is null.</summary>
+        public bool HasNulls(int column)
+        {
+            if ((uint)column >= (uint)ColumnTypes.Count)
+                throw new ArgumentOutOfRangeException(nameof(column), column, $"the table has {ColumnTypes.Count} columns");
+
+            return _nulls != null && _nulls[column];
         }
     }
 
@@ -112,12 +128,33 @@ namespace HSMTableBlocks
         /// <summary>The values of a <see cref="TableColumnType.Double"/> column; null otherwise.</summary>
         public double[] DoubleValues { get; }
 
+        /// <summary>
+        /// The rows of this column that hold no value, as the block carries them (<see cref="TableNullMap"/>: bit i set
+        /// = row i is null); null when the column has no null in this block. A null row holds 0 in
+        /// <see cref="Int64Values"/> or <see cref="DoubleValues"/>: a consumer that does not look here reads that 0.
+        /// </summary>
+        public byte[] NullMap { get; }
 
-        internal BlockColumn(TableColumnType type, long[] int64Values, double[] doubleValues)
+        /// <summary>True when at least one row of this column is null in this block.</summary>
+        public bool HasNulls => NullMap != null;
+
+        /// <summary>True when row <paramref name="row"/> holds no value.</summary>
+        public bool IsNull(int row)
+        {
+            int rows = Int64Values?.Length ?? DoubleValues.Length;
+            if ((uint)row >= (uint)rows)
+                throw new ArgumentOutOfRangeException(nameof(row), row, $"the column has {rows} rows");
+
+            return NullMap != null && TableNullMap.IsNull(NullMap, row);
+        }
+
+
+        internal BlockColumn(TableColumnType type, long[] int64Values, double[] doubleValues, byte[] nullMap = null)
         {
             Type = type;
             Int64Values = int64Values;
             DoubleValues = doubleValues;
+            NullMap = nullMap;
         }
     }
 }

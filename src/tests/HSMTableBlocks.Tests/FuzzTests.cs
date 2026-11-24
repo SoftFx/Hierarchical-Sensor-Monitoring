@@ -31,6 +31,8 @@ namespace HSMTableBlocks.Tests
                 Samples.Write(new[] { new TestTable("one", 1, new[] { Samples.T0 }) }),
                 Samples.Write(Enumerable.Range(0, 12).Select(i => Samples.Quotes($"T{i}", 1 + i, (ulong)i)).ToList()),
                 Samples.Write(new[] { new TestTable("x", 2, RoundTripTests.ExtremeTimes, RoundTripTests.ExtremeDoubles, RoundTripTests.ExtremeLongs) }),
+                // Null maps: mutations of the payload reach the map checks.
+                Samples.Write(GoldenInputs.Build("nulls")),
             };
             var payloads = sources.Select(RawBlock.Payload).ToArray();
             var limits = new TableBlockLimits(maxDecompressedBytes: 1 << 20);
@@ -66,8 +68,11 @@ namespace HSMTableBlocks.Tests
                 var read = TableBlockReader.Read(block, limits);
 
                 // A block that reads is valid: writing its tables again gives the same content.
-                var again = TableBlockReader.Read(Rewrite(read), limits);
+                var rewritten = Rewrite(read);
+                var again = TableBlockReader.Read(rewritten, limits);
                 Assert.Equal(read.Header.RowCount, again.Header.RowCount);
+                // One payload for one set of rows: the maps make no exception.
+                Assert.Equal(RawBlock.Payload(block), RawBlock.Payload(rewritten));
                 Assert.Equal(read.Header.FirstTime, again.Header.FirstTime);
                 Assert.Equal(read.Header.LastTime, again.Header.LastTime);
 
@@ -99,11 +104,14 @@ namespace HSMTableBlocks.Tests
             foreach (var t in read.Tables)
             {
                 writer.BeginTable(t.TableId, t.SchemaId, t.RowCount);
-                foreach (var c in t.Columns)
+                for (int i = 0; i < t.Columns.Count; i++)
                 {
-                    if (c.Type == TableColumnType.Time) writer.AddTimeColumn(c.Int64Values);
-                    else if (c.Type == TableColumnType.Int64) writer.AddInt64Column(c.Int64Values);
-                    else writer.AddDoubleColumn(c.DoubleValues);
+                    var c = t.Columns[i];
+                    var nulls = c.NullMap ?? Array.Empty<byte>();
+                    if (c.Type == TableColumnType.Time && i == 0) writer.AddTimeColumn(c.Int64Values);
+                    else if (c.Type == TableColumnType.Time) writer.AddTimeColumn(c.Int64Values, nulls);
+                    else if (c.Type == TableColumnType.Int64) writer.AddInt64Column(c.Int64Values, nulls);
+                    else writer.AddDoubleColumn(c.DoubleValues, nulls);
                 }
             }
 

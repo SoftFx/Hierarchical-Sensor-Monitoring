@@ -15,7 +15,12 @@ namespace HSMTableBlocks.Tests
     /// </list>
     /// A change to the payload or the header for the same input is a format change: bump the format version, run this
     /// class with HSM_WRITE_GOLDEN_TABLE_BLOCKS=1 to write the new set next to the old ones, and commit it. Never
-    /// overwrite or delete a committed set; the writer refuses to write into an existing directory.
+    /// overwrite or delete a committed block; the writer writes only the cases whose file is missing.
+    /// <para>
+    /// Adding a case to an existing set (as "nulls" was added to format1 with the null maps, #1859) is legitimate only
+    /// while that format version is unreleased: once a version has shipped, its set is closed and a new case of new
+    /// content belongs to a new version.
+    /// </para>
     /// </summary>
     public class GoldenBlockTests
     {
@@ -69,15 +74,15 @@ namespace HSMTableBlocks.Tests
             if (Environment.GetEnvironmentVariable(WriteVariable) != "1")
                 return;
 
+            // Only the missing cases: a committed block is never overwritten (FileMode.CreateNew refuses an existing file).
             string dir = Path.Combine(GoldenRoot(SourceDirectory()), CurrentSet);
-            if (Directory.Exists(dir))
-                throw new InvalidOperationException($"{dir} exists: a committed golden set is never overwritten");
-
-            var blocks = GoldenInputs.Names.ToDictionary(n => n, n => Samples.Write(GoldenInputs.Build(n)));
+            var missing = GoldenInputs.Names.Where(n => !File.Exists(Path.Combine(dir, n + ".htb"))).ToList();
+            var blocks = missing.ToDictionary(n => n, n => Samples.Write(GoldenInputs.Build(n)));
 
             Directory.CreateDirectory(dir);
             foreach (var block in blocks)
-                File.WriteAllBytes(Path.Combine(dir, block.Key + ".htb"), block.Value);
+                using (var file = new FileStream(Path.Combine(dir, block.Key + ".htb"), FileMode.CreateNew))
+                    file.Write(block.Value, 0, block.Value.Length);
         }
 
 
@@ -94,7 +99,7 @@ namespace HSMTableBlocks.Tests
     /// <summary>The fixed inputs of the golden blocks. Each case has its own seeds; nothing depends on System.Random.</summary>
     public static class GoldenInputs
     {
-        public static readonly string[] Names = { "mixed", "single-row" };
+        public static readonly string[] Names = { "mixed", "nulls", "single-row" };
 
         public static IReadOnlyList<TestTable> Build(string name)
         {
@@ -108,6 +113,22 @@ namespace HSMTableBlocks.Tests
                         Samples.Quotes("lp1/EURUSD", 20, 0x601D_0001),
                         new TestTable(new byte[] { 0x00, 0xFF, 0x80 }, 0, new[] { TableColumnType.Time, TableColumnType.Int64 },
                             new object[] { new[] { Samples.T0, Samples.T0, Samples.T0 - 1 }, new[] { 3L, 2L, 1L } }),
+                    };
+                case "nulls":
+                    // The worked example of the specification (a, b), then nulls in every nullable column kind: a map
+                    // over two bytes with padding, a later time column, a row of nulls only, an int64 column null in
+                    // every row, and a table without nulls between tables with them.
+                    var nine = Enumerable.Range(0, 9).Select(i => Samples.T0 + 3 + i).ToArray();
+                    return new[]
+                    {
+                        new TestTable("a", 7, new[] { Samples.T0, Samples.T0 + 1 }, new[] { 1.5, 0.0 }).WithNulls(1, 1),
+                        new TestTable("b", 7, new[] { Samples.T0 + 2 }, new[] { 2.5 }),
+                        new TestTable("wide", 9, nine, Enumerable.Range(0, 9).Select(i => 10L * i).ToArray(),
+                                Enumerable.Range(0, 9).Select(i => i / 4.0).ToArray(), new TimeColumn(nine.Reverse().ToArray()))
+                            .WithNulls(1, 0, 8).WithNulls(2, 0, 3, 7).WithNulls(3, 0),
+                        Samples.Quotes("lp1/EURUSD", 12, 0x601D_0002),
+                        new TestTable(new byte[] { 0x00, 0xFF }, 0, new[] { TableColumnType.Time, TableColumnType.Int64 },
+                            new object[] { new[] { Samples.T0, Samples.T0 - 1, Samples.T0 }, new[] { 0L, 0L, 0L } }).WithNulls(1, 0, 1, 2),
                     };
                 case "single-row":
                     return new[] { new TestTable("t", 42, new[] { Samples.T0 }, new[] { 1.5 }) };

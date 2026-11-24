@@ -47,6 +47,12 @@ namespace HSMTableBlocks
 
         /// <summary>The header disagrees with the content: the row count, or the first and last time.</summary>
         HeaderMismatch = 13,
+
+        /// <summary>
+        /// A null map breaks its rules: a map on the first (time) column, padding bits set, a map without a null row, or
+        /// a null cell whose value bytes are not zero.
+        /// </summary>
+        CorruptNullMap = 14,
     }
 
 
