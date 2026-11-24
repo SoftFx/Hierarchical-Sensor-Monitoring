@@ -50,7 +50,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 MessagesAggregationTimeSec = 30,
                 SlackWebhookUrl = "https://hooks.slack.com/services/X",
             };
-            var binding = new ChatFolderBinding(Desired: [folderA.Id], Managed: [folderA.Id, Guid.NewGuid()]);
+            var binding = new ChatFolderBinding(Keep: [], Add: [folderA.Id], Managed: [folderA.Id, Guid.NewGuid()]);
 
             var result = await Engine.CreateChatAsync(update, binding, AuthorId, _initiator);
 
@@ -80,11 +80,37 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
             var update = new ChatUpdate { Id = chatId, Name = "Renamed" };
 
-            var result = await Engine.CreateChatAsync(update, new ChatFolderBinding([], []), AuthorId, _initiator);
+            var result = await Engine.CreateChatAsync(update, new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
 
             Assert.True(result.Success);
             _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
             _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Renamed")), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task CreateChat_EmptyId_GeneratesTheId_AndBindsTheFoldersToIt()
+        {
+            // A crafted post without a pre-allocated id gets a server-generated one (the
+            // old flow's rule); the folder binding must land on THAT id, not on Guid.Empty.
+            var folderA = new FolderModel(BuildFolderEntity(Guid.NewGuid()));
+
+            SetupNoChatAnywhere();
+            SetupFolder(folderA);
+            Guid addedId = Guid.Empty;
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>()))
+                .Callback<Chat>(c => addedId = c.Id)
+                .ReturnsAsync(true);
+            SetupFolderUpdate(ok: true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "Ops" },
+                new ChatFolderBinding(Keep: [], Add: [folderA.Id], Managed: [folderA.Id]), AuthorId, _initiator);
+
+            Assert.True(result.Success);
+            Assert.NotEqual(Guid.Empty, addedId);
+            _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u =>
+                u.Id == folderA.Id
+                && u.Chats.Contains(addedId))), Times.Once);
         }
 
 
@@ -99,7 +125,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
             var update = new ChatUpdate { Id = chatId, Name = "Renamed", ClearSlackWebhook = true };
 
-            var result = await Engine.UpdateChatAsync(update, new ChatFolderBinding([], []), _initiator);
+            var result = await Engine.UpdateChatAsync(update, new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
 
             Assert.True(result.Success);
             _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u =>
@@ -117,7 +143,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
             var update = new ChatUpdate { Id = chatId, SlackWebhookUrl = "ftp://not-a-webhook" };
 
-            var result = await Engine.UpdateChatAsync(update, new ChatFolderBinding([], []), _initiator);
+            var result = await Engine.UpdateChatAsync(update, new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
 
             Assert.False(result.Success);
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
@@ -132,7 +158,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             var chatId = Guid.NewGuid();
             SetupChat(chatId, chat: null);
 
-            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, new ChatFolderBinding([], []), _initiator);
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
 
             Assert.False(result.Success);
             Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
@@ -158,6 +184,21 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
 
         [Fact]
+        public async Task ClearChannel_UnknownChat_AnswersNotFound()
+        {
+            // The outcome the three web Remove buttons map to their 404.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, chat: null);
+
+            var result = await Engine.ClearChannelAsync(chatId, ChatChannel.Slack, _initiator);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+
+        [Fact]
         public async Task UpdateChat_FolderBinding_RemovesOnlyManagedFolders_UnmanagedKeepsItsBinding()
         {
             var chatId = Guid.NewGuid();
@@ -176,7 +217,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
             // The caller manages only folderA and wants the chat in no folder: folderA is
             // unbound, folderB (outside the managed set) keeps its binding untouched.
-            var binding = new ChatFolderBinding(Desired: [], Managed: [folderA.Id]);
+            var binding = new ChatFolderBinding(Keep: [], Add: [], Managed: [folderA.Id]);
 
             var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, binding, _initiator);
 
@@ -200,13 +241,42 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             SetupFolderUpdate(ok: true);
 
             // The caller asks for folderC but manages no folder at all: nothing is bound.
-            var binding = new ChatFolderBinding(Desired: [folderC.Id], Managed: []);
+            var binding = new ChatFolderBinding(Keep: [], Add: [folderC.Id], Managed: []);
 
             var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, binding, _initiator);
 
             Assert.True(result.Success);
             _folders.Verify(m => m.TryUpdate(It.IsAny<FolderUpdate>()), Times.Never);
         }
+
+        [Fact]
+        public async Task UpdateChat_StaleKeptRow_UnboundInTheMeantime_IsNotRebound()
+        {
+            // Two-admin race (#1840 review round 2): B removed the binding while A's form
+            // was open; A's stale kept row must NOT re-bind it — kept rows decide removals
+            // only, the old SyncFolders rule. Only the newly picked half adds. The kept row
+            // that is STILL bound must not be removed either: no folder write at all.
+            var chatId = Guid.NewGuid();
+            var folderX = new FolderModel(BuildFolderEntity(Guid.NewGuid())); // stale kept, B unbound it
+            var folderY = new FolderModel(BuildFolderEntity(Guid.NewGuid())); // kept and still bound
+
+            var existing = new Chat(BuildChatEntity(chatId));
+            existing.Folders.Add(folderY.Id);
+
+            SetupChat(chatId, existing);
+            SetupFolder(folderX);
+            SetupFolder(folderY);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+            SetupFolderUpdate(ok: true);
+
+            var binding = new ChatFolderBinding(Keep: [folderX.Id, folderY.Id], Add: [], Managed: [folderX.Id, folderY.Id]);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, binding, _initiator);
+
+            Assert.True(result.Success);
+            _folders.Verify(m => m.TryUpdate(It.IsAny<FolderUpdate>()), Times.Never);
+        }
+
 
         [Fact]
         public async Task CreateChat_FailedWrite_AnswersConflictAndBindsNoFolders()
@@ -218,7 +288,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             SetupFolder(folderA);
             _chats.Setup(m => m.TryAdd(It.IsAny<Chat>())).ReturnsAsync(false);
 
-            var binding = new ChatFolderBinding(Desired: [folderA.Id], Managed: [folderA.Id]);
+            var binding = new ChatFolderBinding(Keep: [], Add: [folderA.Id], Managed: [folderA.Id]);
 
             var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Ops" }, binding, AuthorId, _initiator);
 
@@ -251,6 +321,12 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             _chats.Setup(m => m.TryGetValue(chatId, out It.Ref<Chat>.IsAny))
                 .Callback(new OutChat((Guid _, out Chat found) => found = chat))
                 .Returns(chat is not null);
+
+        // For the server-generated-id path: no id is known up front, so every id misses.
+        private void SetupNoChatAnywhere() =>
+            _chats.Setup(m => m.TryGetValue(It.IsAny<Guid>(), out It.Ref<Chat>.IsAny))
+                .Callback(new OutChat((Guid _, out Chat found) => found = null))
+                .Returns(false);
 
         private void SetupFolder(FolderModel folder) =>
             _folders.Setup(m => m.TryGetValue(folder.Id, out It.Ref<FolderModel>.IsAny))

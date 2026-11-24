@@ -18,6 +18,10 @@ namespace HSMServer.Model.ManagementApi.Chats
     /// "only folders the caller manages" rule. The web controller delegates here; the
     /// /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
     /// the area's write envelope (<see cref="PolicyWriteResult"/>), never an IActionResult.
+    /// The NAME rule (required, at most 100 characters) is not here yet — it lives in the
+    /// view model's DataAnnotations, so the web flow enforces it but a non-MVC caller does
+    /// not; #1829 moves it behind the shared name validator of the chat-setup initiative
+    /// (docs/initiatives/chat-setup-via-mcp.md) before the API/MCP write surface ships.
     /// </summary>
     public sealed class ChatAdministrationService
     {
@@ -161,26 +165,28 @@ namespace HSMServer.Model.ManagementApi.Chats
                 MattermostWebhookUrl = update.MattermostWebhookUrl,
             });
 
-        // The SyncFolders rule: add the desired folders the caller manages, remove the managed
-        // ones that dropped out of the desired set — folders outside the managed set are never
-        // touched (they keep their binding as it is). Adds first, then removals, matching the
-        // web flow's order. Equivalent to the old SyncFolders on every honest form post (the
-        // form's kept rows and newly picked folders never overlap); a crafted post naming one
-        // folder in both halves keeps the binding instead of ending unbound — no honest flow
-        // reaches that and no privilege is gained either way. The chat instance is the one the
-        // caller already holds; its Folders is the live index, snapshotted before diffing (the
-        // read service's rule — it mutates from concurrent binding edits without a lock).
+        // The old SyncFolders rule (the controller's, before #1825). Adds come ONLY from the Add
+        // half: a kept row whose binding another admin removed while the form was open stays
+        // unbound — kept rows decide removals, they never re-bind (the #1840 review). Removals
+        // are the managed currently-bound folders missing from the kept rows; folders outside
+        // the managed set are never touched (they keep their binding as it is). Adds first,
+        // then removals, the web flow's order. Two write-level differences from SyncFolders
+        // remain, neither changing an honest post's result: an Add folder the chat is already
+        // bound to is not rewritten, and the chat is the instance the caller holds, not a
+        // fresh read (they diverge only when the chat is removed mid-write). Its Folders is
+        // the live index, snapshotted before diffing (the read service's rule — it mutates
+        // from concurrent binding edits without a lock).
         private async Task BindFoldersAsync(Chat chat, ChatFolderBinding binding, InitiatorInfo initiator)
         {
             var chatId = chat.Id;
             var managed = binding.Managed;
             var current = StableCopy.Of(() => chat.Folders);
 
-            foreach (var folderId in binding.Desired.Where(managed.Contains).Where(id => !current.Contains(id)))
+            foreach (var folderId in binding.Add.Where(managed.Contains).Where(id => !current.Contains(id)))
                 if (_folders.TryGetValue(folderId, out var folder))
                     await UpdateFolderChats(folderId, [.. folder.Chats, chatId], initiator);
 
-            foreach (var folderId in current.Except(binding.Desired).Where(managed.Contains))
+            foreach (var folderId in current.Except(binding.Keep).Where(managed.Contains))
                 if (_folders.TryGetValue(folderId, out var folder))
                 {
                     var folderChats = new HashSet<Guid>(folder.Chats);
@@ -208,12 +214,14 @@ namespace HSMServer.Model.ManagementApi.Chats
     }
 
     /// <summary>
-    /// The folder binding of a chat write: the folders the caller wants the chat bound to
-    /// (Desired) and the folders the caller manages (Managed). Adds touch Desired ∩ Managed,
-    /// removals touch (the chat's current folders minus Desired) ∩ Managed — folders the
-    /// caller cannot manage are never touched. Managed is the scope the engine applies, not
-    /// something it derives: it must be built from the authenticated caller's own folders,
-    /// never taken from request data.
+    /// The folder binding of a chat write. Keep: the bindings the caller still wants (the edit
+    /// form's kept rows) — they decide only removals. Add: the folders to bind (the form's
+    /// SelectedFolders half) — the only source of new bindings. Managed: the folders the
+    /// caller manages. Adds touch Add ∩ Managed; removals touch (the chat's current folders
+    /// minus Keep) ∩ Managed — folders the caller cannot manage are never touched. A caller
+    /// holding one desired list passes it as both Keep and Add. Managed is the scope the
+    /// engine applies, not something it derives: it must be built from the authenticated
+    /// caller's own folders, never taken from request data.
     /// </summary>
-    public sealed record ChatFolderBinding(IReadOnlyCollection<Guid> Desired, IReadOnlyCollection<Guid> Managed);
+    public sealed record ChatFolderBinding(IReadOnlyCollection<Guid> Keep, IReadOnlyCollection<Guid> Add, IReadOnlyCollection<Guid> Managed);
 }
