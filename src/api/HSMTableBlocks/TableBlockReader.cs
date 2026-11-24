@@ -31,11 +31,11 @@ namespace HSMTableBlocks
             limits ??= TableBlockLimits.Default;
             var header = ParseHeader(block, limits);
 
-            return WithPayload(block, header, limits, (payload, entries) =>
+            return WithPayload(block, header, limits, (payload, directory) =>
             {
-                var tables = new BlockTable[entries.Length];
-                for (int i = 0; i < entries.Length; i++)
-                    tables[i] = Materialize(payload, entries[i]);
+                var tables = new BlockTable[directory.Entries.Length];
+                for (int i = 0; i < tables.Length; i++)
+                    tables[i] = Materialize(payload, directory, directory.Entries[i]);
 
                 return new TableBlock(header, tables);
             });
@@ -51,18 +51,18 @@ namespace HSMTableBlocks
             var header = ParseHeader(block, limits);
             var id = tableId.ToArray();
 
-            return WithPayload(block, header, limits, (payload, entries) =>
+            return WithPayload(block, header, limits, (payload, directory) =>
             {
-                foreach (var entry in entries)
+                foreach (var entry in directory.Entries)
                     if (payload.Slice(entry.IdOffset, entry.IdLength).SequenceEqual(id))
-                        return Materialize(payload, entry);
+                        return Materialize(payload, directory, entry);
 
                 return null;
             });
         }
 
 
-        private delegate T PayloadFunc<T>(ReadOnlySpan<byte> payload, Entry[] entries);
+        private delegate T PayloadFunc<T>(ReadOnlySpan<byte> payload, Directory directory);
 
         private static T WithPayload<T>(ReadOnlySpan<byte> block, TableBlockHeader header, TableBlockLimits limits, PayloadFunc<T> func)
         {
@@ -74,10 +74,11 @@ namespace HSMTableBlocks
                 var payload = rented.AsSpan(0, header.DecompressedLength);
                 Decompress(block.Slice(TableBlockFormat.HeaderSize, header.CompressedLength), payload);
 
-                var entries = ParseDirectory(payload, header, limits);
-                CheckTimes(payload, entries, header);
+                var directory = ParseDirectory(payload, header, limits);
+                CheckUniqueIds(rented, directory.Entries);
+                CheckTimes(payload, directory, header);
 
-                return func(payload, entries);
+                return func(payload, directory);
             }
             finally
             {
@@ -115,7 +116,7 @@ namespace HSMTableBlocks
             var compressed = block.Slice(TableBlockFormat.HeaderSize);
             uint checksum = BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(TableBlockFormat.ChecksumOffset));
             if (TableBlockFormat.Checksum(block, compressed) != checksum)
-                throw Error(TableBlockError.ChecksumMismatch, "the CRC-32C over the header and the payload does not match");
+                throw Error(TableBlockError.ChecksumMismatch, "the CRC-32 over the header and the payload does not match");
 
             int rowCount = ReadInt32(block, TableBlockFormat.RowCountOffset);
             int tableCount = ReadInt32(block, TableBlockFormat.TableCountOffset);
@@ -202,13 +203,13 @@ namespace HSMTableBlocks
         }
 
 
-        /// <summary>A parsed directory entry: where its identifier, column types and values are in the payload.</summary>
+        /// <summary>A parsed directory entry: where its identifier and column types are in the payload, and where its column offsets are in <see cref="Directory.ColumnOffsets"/>.</summary>
         private readonly struct Entry
         {
-            public readonly int IdOffset, IdLength, TypesOffset, ColumnCount, RowCount, DataOffset;
+            public readonly int IdOffset, IdLength, TypesOffset, ColumnCount, RowCount, FirstColumn;
             public readonly uint SchemaId;
 
-            public Entry(int idOffset, int idLength, uint schemaId, int rowCount, int typesOffset, int columnCount, int dataOffset)
+            public Entry(int idOffset, int idLength, uint schemaId, int rowCount, int typesOffset, int columnCount, int firstColumn)
             {
                 IdOffset = idOffset;
                 IdLength = idLength;
@@ -216,17 +217,22 @@ namespace HSMTableBlocks
                 RowCount = rowCount;
                 TypesOffset = typesOffset;
                 ColumnCount = columnCount;
-                DataOffset = dataOffset;
+                FirstColumn = firstColumn;
             }
         }
 
-        private static Entry[] ParseDirectory(ReadOnlySpan<byte> payload, TableBlockHeader header, TableBlockLimits limits)
+        /// <summary>The parsed directory and the payload offset of every column (entry e, column c at <c>ColumnOffsets[e.FirstColumn + c]</c>).</summary>
+        private sealed class Directory
+        {
+            public Entry[] Entries;
+            public int[] ColumnOffsets;
+        }
+
+        private static Directory ParseDirectory(ReadOnlySpan<byte> payload, TableBlockHeader header, TableBlockLimits limits)
         {
             // Bounded: the header check proved TableCount <= MaxTables and TableCount * MinTableBytes <= payload length.
             var entries = new Entry[header.TableCount];
-            var columnCounts = new int[header.TableCount];
-            var rowCounts = new int[header.TableCount];
-            int pos = 0;
+            int pos = 0, columns = 0, maxColumns = 0;
             long rows = 0, data = 0;
 
             for (int t = 0; t < entries.Length; t++)
@@ -264,13 +270,15 @@ namespace HSMTableBlocks
                 if (rows > header.RowCount)
                     throw Error(TableBlockError.HeaderMismatch, $"the directory holds more than the header's {header.RowCount} rows");
 
+                // In 64 bits: rowCount * columnCount * 8 can pass int.MaxValue.
                 data += (long)rowCount * columnCount * TableBlockFormat.ValueSize;
                 if (data > payload.Length)
                     throw Error(TableBlockError.DirectoryOutOfBounds, $"the columns up to table {t} need {data} bytes, the payload holds {payload.Length}");
 
-                entries[t] = new Entry(idOffset, idLength, schemaId, rowCount, pos, columnCount, 0);
-                columnCounts[t] = columnCount;
-                rowCounts[t] = rowCount;
+                entries[t] = new Entry(idOffset, idLength, schemaId, rowCount, pos, columnCount, columns);
+                columns += columnCount;
+                if (columnCount > maxColumns)
+                    maxColumns = columnCount;
                 pos += columnCount;
             }
 
@@ -283,16 +291,33 @@ namespace HSMTableBlocks
             if (end < payload.Length)
                 throw Error(TableBlockError.LengthMismatch, $"{payload.Length - end} bytes after the last column");
 
-            int offset = pos;
-            for (int t = 0; t < entries.Length; t++)
+            // Column-major: column 0 of every table in directory order, then column 1 of every table that has one, and so
+            // on. Every offset is below payload.Length (end == payload.Length above), so int arithmetic is safe here. The
+            // tables still in play shrink pass by pass, so the work is the number of columns, not passes times tables.
+            // Bounded: one offset per column type byte of the directory.
+            var offsets = new int[columns];
+            var active = new int[entries.Length];
+            for (int t = 0; t < active.Length; t++)
+                active[t] = t;
+
+            int count = active.Length, at = pos;
+            for (int c = 0; c < maxColumns; c++)
             {
-                var e = entries[t];
-                entries[t] = new Entry(e.IdOffset, e.IdLength, e.SchemaId, e.RowCount, e.TypesOffset, e.ColumnCount, offset);
-                offset += rowCounts[t] * columnCounts[t] * TableBlockFormat.ValueSize;
+                int kept = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    var e = entries[active[i]];
+                    offsets[e.FirstColumn + c] = at;
+                    at += e.RowCount * TableBlockFormat.ValueSize;
+
+                    if (e.ColumnCount > c + 1)
+                        active[kept++] = active[i];
+                }
+
+                count = kept;
             }
 
-            CheckUniqueIds(payload, entries);
-            return entries;
+            return new Directory { Entries = entries, ColumnOffsets = offsets };
         }
 
         private static void Need(ReadOnlySpan<byte> payload, int pos, int count, int table)
@@ -301,45 +326,60 @@ namespace HSMTableBlocks
                 throw Error(TableBlockError.DirectoryOutOfBounds, $"the directory entry of table {table} runs past the payload");
         }
 
-        private static void CheckUniqueIds(ReadOnlySpan<byte> payload, Entry[] entries)
+        /// <summary>
+        /// No two entries share an identifier. The entry indexes are sorted by identifier bytes (ordinal) and neighbours
+        /// compared: O(n log n) comparisons whatever the identifiers are, so crafted identifiers cannot make it quadratic.
+        /// </summary>
+        private static void CheckUniqueIds(byte[] payload, Entry[] entries)
         {
             if (entries.Length < 2)
                 return;
 
-            // Sort entry indexes by identifier and compare neighbours: no per-identifier allocation.
-            var hashes = new int[entries.Length];
             var order = new int[entries.Length];
-            for (int i = 0; i < entries.Length; i++)
-            {
-                hashes[i] = IdHash.Of(payload.Slice(entries[i].IdOffset, entries[i].IdLength));
+            for (int i = 0; i < order.Length; i++)
                 order[i] = i;
+
+            var comparer = new IdComparer(payload, entries);
+            Array.Sort(order, comparer);
+
+            for (int i = 1; i < order.Length; i++)
+                if (comparer.Compare(order[i - 1], order[i]) == 0)
+                    throw Error(TableBlockError.DuplicateTable,
+                        $"tables {Math.Min(order[i - 1], order[i])} and {Math.Max(order[i - 1], order[i])} have the same identifier");
+        }
+
+        private sealed class IdComparer : IComparer<int>
+        {
+            private readonly byte[] _payload;
+            private readonly Entry[] _entries;
+
+            public IdComparer(byte[] payload, Entry[] entries)
+            {
+                _payload = payload;
+                _entries = entries;
             }
 
-            Array.Sort(hashes, order);
-
-            for (int i = 0; i < order.Length; i++)
-                for (int j = i + 1; j < order.Length && hashes[j] == hashes[i]; j++)
-                {
-                    var a = entries[order[i]];
-                    var b = entries[order[j]];
-                    if (payload.Slice(a.IdOffset, a.IdLength).SequenceEqual(payload.Slice(b.IdOffset, b.IdLength)))
-                        throw Error(TableBlockError.DuplicateTable, $"tables {Math.Min(order[i], order[j])} and {Math.Max(order[i], order[j])} have the same identifier");
-                }
+            public int Compare(int x, int y)
+            {
+                var a = _entries[x];
+                var b = _entries[y];
+                return _payload.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_payload.AsSpan(b.IdOffset, b.IdLength));
+            }
         }
 
         /// <summary>Every time column is within range; the first columns' minimum and maximum equal the header's first and last time.</summary>
-        private static void CheckTimes(ReadOnlySpan<byte> payload, Entry[] entries, TableBlockHeader header)
+        private static void CheckTimes(ReadOnlySpan<byte> payload, Directory directory, TableBlockHeader header)
         {
             long min = long.MaxValue, max = long.MinValue;
 
-            foreach (var e in entries)
+            foreach (var e in directory.Entries)
             {
                 for (int c = 0; c < e.ColumnCount; c++)
                 {
                     if (payload[e.TypesOffset + c] != (byte)TableColumnType.Time)
                         continue;
 
-                    var column = payload.Slice(e.DataOffset + c * e.RowCount * TableBlockFormat.ValueSize, e.RowCount * TableBlockFormat.ValueSize);
+                    var column = payload.Slice(directory.ColumnOffsets[e.FirstColumn + c], e.RowCount * TableBlockFormat.ValueSize);
                     for (int i = 0; i < e.RowCount; i++)
                     {
                         long t = BinaryPrimitives.ReadInt64LittleEndian(column.Slice(i * TableBlockFormat.ValueSize));
@@ -359,7 +399,7 @@ namespace HSMTableBlocks
                 throw Error(TableBlockError.HeaderMismatch, $"the rows span {min}..{max}, the header {header.FirstTime}..{header.LastTime}");
         }
 
-        private static BlockTable Materialize(ReadOnlySpan<byte> payload, Entry e)
+        private static BlockTable Materialize(ReadOnlySpan<byte> payload, Directory directory, Entry e)
         {
             var columns = new BlockColumn[e.ColumnCount];
             int size = e.RowCount * TableBlockFormat.ValueSize;
@@ -367,7 +407,7 @@ namespace HSMTableBlocks
             for (int c = 0; c < e.ColumnCount; c++)
             {
                 var type = (TableColumnType)payload[e.TypesOffset + c];
-                var source = payload.Slice(e.DataOffset + c * size, size);
+                var source = payload.Slice(directory.ColumnOffsets[e.FirstColumn + c], size);
 
                 if (type == TableColumnType.Double)
                 {

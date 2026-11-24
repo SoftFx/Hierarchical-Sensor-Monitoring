@@ -21,7 +21,7 @@ namespace HSMTableBlocks
         /// </summary>
         LengthMismatch = 4,
 
-        /// <summary>The CRC-32C over the header fields and the compressed payload does not match.</summary>
+        /// <summary>The CRC-32 over the header fields and the compressed payload does not match.</summary>
         ChecksumMismatch = 5,
 
         /// <summary>The block exceeds one of the reader's <see cref="TableBlockLimits"/>.</summary>

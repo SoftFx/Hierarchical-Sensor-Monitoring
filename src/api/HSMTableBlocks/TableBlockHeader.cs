@@ -26,7 +26,7 @@ namespace HSMTableBlocks
         /// <summary>The length of the payload after decompression.</summary>
         public int DecompressedLength { get; }
 
-        /// <summary>The CRC-32C stored in the header.</summary>
+        /// <summary>The CRC-32 stored in the header.</summary>
         public uint Checksum { get; }
 
         /// <summary><see cref="FirstTime"/> as a UTC <see cref="DateTime"/>.</summary>

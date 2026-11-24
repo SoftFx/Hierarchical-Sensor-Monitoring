@@ -61,8 +61,12 @@ namespace HSMTableBlocks.Tests
             using var writer = new TableBlockWriter();
             writer.BeginTable(Id, 1, 1);
             writer.AddTimeColumn(new[] { 1L });
+            writer.BeginTable(Encoding.UTF8.GetBytes("other"), 2, 1);
+            writer.AddTimeColumn(new[] { 1L });
+            writer.BeginTable(Encoding.UTF8.GetBytes("id"), 3, 1);
+            writer.AddTimeColumn(new[] { 1L });
 
-            Assert.Throws<ArgumentException>(() => writer.BeginTable(Encoding.UTF8.GetBytes("id"), 2, 1));
+            Assert.Throws<ArgumentException>(() => writer.ToArray());
 
             writer.Reset();
             writer.BeginTable(Id, 1, 1);

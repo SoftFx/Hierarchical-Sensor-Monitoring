@@ -7,9 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- The zip-bomb test asks zstd whether its frame declares a content size. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- System.IO.Hashing 11 warns on net8.0 (it ships netstandard2.0, net462, net10.0 and net11.0 builds);
-         the library compiles against its netstandard2.0 build, which is what net8.0 uses here. -->
-    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>

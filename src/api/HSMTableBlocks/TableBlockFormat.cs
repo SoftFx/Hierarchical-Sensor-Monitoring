@@ -46,10 +46,10 @@ namespace HSMTableBlocks
         internal const uint ZstdFrameMagic = 0xFD2FB528;
 
 
-        /// <summary>CRC-32C (Castagnoli) over header bytes 0..39 and the compressed payload.</summary>
+        /// <summary>CRC-32 (IEEE 802.3, as in zlib and gzip) over header bytes 0..39 and the compressed payload.</summary>
         internal static uint Checksum(ReadOnlySpan<byte> header, ReadOnlySpan<byte> compressed)
         {
-            var crc = new Crc32(Crc32ParameterSet.Crc32C);
+            var crc = new Crc32();
             crc.Append(header.Slice(0, ChecksumOffset));
             crc.Append(compressed);
             return crc.GetCurrentHashAsUInt32();

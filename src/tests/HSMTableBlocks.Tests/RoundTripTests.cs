@@ -161,10 +161,17 @@ namespace HSMTableBlocks.Tests
         }
 
         [Fact]
-        public void The_checksum_is_standard_crc32c()
+        public void The_checksum_is_standard_crc32()
         {
-            // The CRC-32C check value (RFC 3720, iSCSI): the same algorithm as the sealed history chunks.
-            Assert.Equal(0xE3069283u, Crc32.HashToUInt32(Crc32ParameterSet.Crc32C, Encoding.ASCII.GetBytes("123456789")));
+            // The standard CRC-32 (IEEE 802.3, zlib, gzip) check value.
+            Assert.Equal(0xCBF43926u, BitConverter.ToUInt32(Crc32.Hash(Encoding.ASCII.GetBytes("123456789")), 0));
+
+            // The header stores the value little-endian, as the reader compares it.
+            var block = Samples.Write(new[] { Samples.Quotes("A", 3, 1) });
+            var crc = new Crc32();
+            crc.Append(block.AsSpan(0, 40));
+            crc.Append(block.AsSpan(TableBlockFormat.HeaderSize));
+            Assert.Equal(crc.GetCurrentHashAsUInt32(), TableBlockReader.ReadHeader(block).Checksum);
         }
     }
 }

@@ -237,7 +237,7 @@ namespace HSMTableBlocks.Tests
         /// <summary>Recomputes the checksum over whatever the block holds now.</summary>
         public static void Reseal(byte[] block)
         {
-            var crc = new Crc32(Crc32ParameterSet.Crc32C);
+            var crc = new Crc32();
             crc.Append(block.AsSpan(0, 40));
             crc.Append(block.AsSpan(TableBlockFormat.HeaderSize));
             BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(40), crc.GetCurrentHashAsUInt32());

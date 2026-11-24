@@ -17,9 +17,10 @@
     <!-- MIT, pure managed port of zstd (no native binaries); the version the server's sealed history uses.
          Brings System.Memory (spans, BinaryPrimitives) to netstandard2.0. -->
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
-    <!-- MIT, Microsoft: CRC-32C (Crc32ParameterSet.Crc32C), the checksum of the sealed chunks. 11.0.0 is the
-         first version with CRC-32C; its netstandard2.0 build is what this library compiles against. -->
-    <PackageReference Include="System.IO.Hashing" Version="11.0.0" />
+    <!-- MIT, Microsoft: CRC-32 (IEEE). 8.0.0 matches the collector's other Microsoft packages and builds without a
+         target-framework support warning on net472, net6.0 and net8.0 consumers. (CRC-32C needs 11.0.0, whose
+         build warns on every net6.0..net9.0 consumer of the collector package.) -->
+    <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

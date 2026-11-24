@@ -11,7 +11,8 @@ namespace HSMTableBlocks
     /// Builds one table block: the rows of several tables, grouped by table, as raw little-endian columns under one zstd
     /// frame with a fixed header in front (ADR-0021). Add tables with <see cref="BeginTable"/> followed by the time
     /// column and then the other columns; <see cref="ToArray"/> returns the block. The rows are written in the order
-    /// given: the writer neither sorts nor requires time order, and times may repeat.
+    /// given: the writer neither sorts nor requires time order, and times may repeat. In the payload the columns are
+    /// laid out column-major: column 0 of every table, then column 1 of every table that has one, and so on.
     /// <para>
     /// Not thread-safe: use one instance from one thread at a time. An instance is meant to be reused, one block per
     /// tick: <see cref="Reset"/> keeps its buffers. After any exception from a method of the writer, call
@@ -25,12 +26,15 @@ namespace HSMTableBlocks
 
         private readonly TableBlockLimits _limits;
         private readonly Compressor _compressor;
-        private readonly HashSet<IdRef> _ids;
+        private readonly IdOrder _idOrder;
 
         private byte[] _directory = new byte[1024];
         private int _directoryLength;
+        // Columns as added, table after table; ToArray lays them out column-major.
         private byte[] _data = new byte[16 * 1024];
         private int _dataLength;
+        private TableInfo[] _tables = new TableInfo[64];
+        private int _maxColumns;
 
         private int _tableCount;
         private int _rowCount;
@@ -73,13 +77,14 @@ namespace HSMTableBlocks
             CompressionLevel = compressionLevel;
             _limits = limits ?? TableBlockLimits.Default;
             _compressor = new Compressor(compressionLevel);
-            _ids = new HashSet<IdRef>(new IdComparer(this));
+            _idOrder = new IdOrder(this);
         }
 
 
         /// <summary>
         /// Opens a new table of <paramref name="rowCount"/> rows and closes the previous one. The next column must be the
-        /// time column (<see cref="AddTimeColumn"/>). The identifier is opaque bytes, unique within the block.
+        /// time column (<see cref="AddTimeColumn"/>). The identifier is opaque bytes, unique within the block;
+        /// <see cref="ToArray"/> checks that.
         /// </summary>
         public void BeginTable(ReadOnlySpan<byte> tableId, uint schemaId, int rowCount)
         {
@@ -102,16 +107,13 @@ namespace HSMTableBlocks
             var entry = Grow(ref _directory, ref _directoryLength, entryLength);
             BinaryPrimitives.WriteUInt16LittleEndian(entry, (ushort)tableId.Length);
             tableId.CopyTo(entry.Slice(2));
-
-            if (!_ids.Add(new IdRef(start + 2, tableId.Length)))
-            {
-                _directoryLength = start;
-                throw new ArgumentException("the block already holds a table with this identifier", nameof(tableId));
-            }
-
             BinaryPrimitives.WriteUInt32LittleEndian(entry.Slice(2 + tableId.Length), schemaId);
             BinaryPrimitives.WriteInt32LittleEndian(entry.Slice(6 + tableId.Length), rowCount);
             entry[10 + tableId.Length] = 0;
+
+            if (_tableCount == _tables.Length)
+                Array.Resize(ref _tables, _tables.Length * 2);
+            _tables[_tableCount] = new TableInfo(start + 2, tableId.Length, _dataLength, rowCount);
 
             _columnCountOffset = start + entryLength - 1;
             _openRows = rowCount;
@@ -162,7 +164,8 @@ namespace HSMTableBlocks
 
         /// <summary>
         /// Closes the open table and returns the block: header and one zstd frame. The writer keeps its content; call
-        /// <see cref="Reset"/> to start the next block. A block holds at least one table.
+        /// <see cref="Reset"/> to start the next block. A block holds at least one table, and no two tables share an
+        /// identifier (<see cref="ArgumentException"/> otherwise).
         /// </summary>
         public byte[] ToArray()
         {
@@ -172,6 +175,10 @@ namespace HSMTableBlocks
             if (_tableCount == 0)
                 throw new InvalidOperationException("a block holds at least one table");
 
+            int duplicate = _idOrder.FindDuplicate(_tableCount);
+            if (duplicate >= 0)
+                throw new ArgumentException($"table {duplicate} has the identifier of another table: a table appears once in a block");
+
             int payloadLength = DecompressedLength;
             var pool = ArrayPool<byte>.Shared;
             byte[] payload = pool.Rent(payloadLength);
@@ -180,7 +187,7 @@ namespace HSMTableBlocks
             try
             {
                 _directory.AsSpan(0, _directoryLength).CopyTo(payload);
-                _data.AsSpan(0, _dataLength).CopyTo(payload.AsSpan(_directoryLength));
+                LayOutColumnMajor(payload.AsSpan(_directoryLength, _dataLength));
 
                 int written = _compressor.Wrap(payload.AsSpan(0, payloadLength), compressed);
 
@@ -213,7 +220,7 @@ namespace HSMTableBlocks
             _columnCountOffset = -1;
             _openRows = 0;
             _openColumns = 0;
-            _ids.Clear();
+            _maxColumns = 0;
         }
 
         /// <summary>Releases the zstd context.</summary>
@@ -251,6 +258,28 @@ namespace HSMTableBlocks
             TableBlockFormat.WriteValues(values, Grow(ref _data, ref _dataLength, values.Length * TableBlockFormat.ValueSize));
             _openColumns++;
             _directory[_columnCountOffset] = (byte)_openColumns;
+            _tables[_tableCount - 1].Columns = _openColumns;
+            if (_openColumns > _maxColumns)
+                _maxColumns = _openColumns;
+        }
+
+        /// <summary>Copies the columns, stored table after table, into the payload column-major.</summary>
+        private void LayOutColumnMajor(Span<byte> destination)
+        {
+            int at = 0;
+            for (int c = 0; c < _maxColumns; c++)
+            {
+                for (int t = 0; t < _tableCount; t++)
+                {
+                    var table = _tables[t];
+                    if (c >= table.Columns)
+                        continue;
+
+                    int size = table.Rows * TableBlockFormat.ValueSize;
+                    _data.AsSpan(table.DataOffset + c * size, size).CopyTo(destination.Slice(at));
+                    at += size;
+                }
+            }
         }
 
         private void CloseTable()
@@ -289,42 +318,58 @@ namespace HSMTableBlocks
         }
 
 
-        /// <summary>An identifier inside the directory buffer, compared by its bytes.</summary>
-        private readonly struct IdRef
+        private struct TableInfo
         {
-            public readonly int Offset, Length;
+            public readonly int IdOffset, IdLength, DataOffset, Rows;
+            public int Columns;
 
-            public IdRef(int offset, int length)
+            public TableInfo(int idOffset, int idLength, int dataOffset, int rows)
             {
-                Offset = offset;
-                Length = length;
+                IdOffset = idOffset;
+                IdLength = idLength;
+                DataOffset = dataOffset;
+                Rows = rows;
+                Columns = 0;
             }
         }
 
-        private sealed class IdComparer : IEqualityComparer<IdRef>
+        /// <summary>
+        /// Finds a repeated identifier by sorting the table indexes by identifier bytes (ordinal) and comparing
+        /// neighbours: O(n log n) comparisons whatever the identifiers are. The index buffer is kept between blocks.
+        /// </summary>
+        private sealed class IdOrder : IComparer<int>
         {
             private readonly TableBlockWriter _writer;
+            private int[] _order = new int[64];
 
-            public IdComparer(TableBlockWriter writer) => _writer = writer;
+            public IdOrder(TableBlockWriter writer) => _writer = writer;
 
-            public bool Equals(IdRef x, IdRef y) =>
-                _writer._directory.AsSpan(x.Offset, x.Length).SequenceEqual(_writer._directory.AsSpan(y.Offset, y.Length));
+            /// <summary>The smaller index of two tables with the same identifier, or -1.</summary>
+            public int FindDuplicate(int count)
+            {
+                if (count < 2)
+                    return -1;
 
-            public int GetHashCode(IdRef id) => IdHash.Of(_writer._directory.AsSpan(id.Offset, id.Length));
-        }
-    }
+                if (_order.Length < count)
+                    _order = new int[Math.Max(count, _order.Length * 2)];
+                for (int i = 0; i < count; i++)
+                    _order[i] = i;
 
+                Array.Sort(_order, 0, count, this);
 
-    internal static class IdHash
-    {
-        /// <summary>FNV-1a over the identifier bytes; only used to bucket identifiers in memory.</summary>
-        public static int Of(ReadOnlySpan<byte> id)
-        {
-            uint hash = 2166136261;
-            foreach (byte b in id)
-                hash = (hash ^ b) * 16777619;
+                for (int i = 1; i < count; i++)
+                    if (Compare(_order[i - 1], _order[i]) == 0)
+                        return Math.Min(_order[i - 1], _order[i]);
 
-            return (int)hash;
+                return -1;
+            }
+
+            public int Compare(int x, int y)
+            {
+                var a = _writer._tables[x];
+                var b = _writer._tables[y];
+                return _writer._directory.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_writer._directory.AsSpan(b.IdOffset, b.IdLength));
+            }
         }
     }
 }
