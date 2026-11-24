@@ -45,6 +45,11 @@ namespace HSMTableBlocks
 
         internal const uint ZstdFrameMagic = 0xFD2FB528;
 
+        // A column type byte of the directory: the type in the low seven bits, and the null flag in bit 7, set when the
+        // column of this table carries a null map in this block (#1859).
+        internal const byte NullFlag = 0x80;
+        internal const byte TypeMask = 0x7F;
+
 
         /// <summary>CRC-32 (IEEE 802.3, as in zlib and gzip) over header bytes 0..39 and the compressed payload.</summary>
         internal static uint Checksum(ReadOnlySpan<byte> header, ReadOnlySpan<byte> compressed)
@@ -76,6 +81,10 @@ namespace HSMTableBlocks
 
         internal static bool IsKnownType(byte type) =>
             type == (byte)TableColumnType.Time || type == (byte)TableColumnType.Int64 || type == (byte)TableColumnType.Double;
+
+        internal static TableColumnType TypeOf(byte typeByte) => (TableColumnType)(typeByte & TypeMask);
+
+        internal static bool HasNullMap(byte typeByte) => (typeByte & NullFlag) != 0;
 
 
         /// <summary>Copies 64-bit values into little-endian bytes; <paramref name="destination"/> is <c>values.Length * 8</c> long.</summary>

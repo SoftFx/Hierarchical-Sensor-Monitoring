@@ -65,8 +65,25 @@ namespace HSMServer.Core.TableSensors
     }
 
 
-    /// <summary>One column of <see cref="TableRows"/>.</summary>
-    public sealed record TableRowsColumn(string Name, TableColumnType Type, long[] Int64Values, double[] DoubleValues);
+    /// <summary>
+    /// One column of <see cref="TableRows"/>. <see cref="NullMap"/> says which rows hold no value (#1859), in the bit order
+    /// of <see cref="TableNullMap"/>, <c>ceil(RowCount / 8)</c> bytes; it is null when no row of the column is null in this
+    /// result. A null row holds 0 in the value array: a consumer has to look at the map.
+    /// </summary>
+    public sealed record TableRowsColumn(string Name, TableColumnType Type, long[] Int64Values, double[] DoubleValues, byte[] NullMap = null)
+    {
+        public bool HasNulls => NullMap is not null;
+
+        /// <summary>True when row <paramref name="row"/> of this column holds no value.</summary>
+        public bool IsNull(int row)
+        {
+            var rows = Int64Values?.Length ?? DoubleValues.Length;
+            if ((uint)row >= (uint)rows)
+                throw new ArgumentOutOfRangeException(nameof(row), row, $"the column has {rows} rows");
+
+            return NullMap is not null && TableNullMap.IsNull(NullMap, row);
+        }
+    }
 
 
     /// <summary>

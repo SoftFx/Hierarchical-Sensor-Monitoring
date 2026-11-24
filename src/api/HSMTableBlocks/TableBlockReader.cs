@@ -10,8 +10,8 @@ namespace HSMTableBlocks
 {
     /// <summary>
     /// Reads table blocks written by <see cref="TableBlockWriter"/> or by any writer that follows the format. Every
-    /// method verifies the whole block (header, checksum, zstd frame, directory, lengths, time ranges, first and last
-    /// time) and throws <see cref="TableBlockFormatException"/> for anything wrong; it never returns a partial result.
+    /// method verifies the whole block (header, checksum, zstd frame, directory, lengths, null maps, time ranges, first
+    /// and last time) and throws <see cref="TableBlockFormatException"/> for anything wrong; it never returns a partial result.
     /// Limits are checked from the header before anything is allocated or decompressed, and decompression never
     /// writes more than the declared decompressed length.
     /// <para>Stateless: safe to call from any thread.</para>
@@ -102,10 +102,16 @@ namespace HSMTableBlocks
                 {
                     var e = directory.Entries[i];
                     var types = new TableColumnType[e.ColumnCount];
+                    bool[] nulls = null;
                     for (int c = 0; c < types.Length; c++)
-                        types[c] = (TableColumnType)payload[e.TypesOffset + c];
+                    {
+                        byte typeByte = payload[e.TypesOffset + c];
+                        types[c] = TableBlockFormat.TypeOf(typeByte);
+                        if (TableBlockFormat.HasNullMap(typeByte))
+                            (nulls ??= new bool[e.ColumnCount])[c] = true;
+                    }
 
-                    entries[i] = new TableDirectoryEntry(payload.Slice(e.IdOffset, e.IdLength).ToArray(), e.SchemaId, e.RowCount, types);
+                    entries[i] = new TableDirectoryEntry(payload.Slice(e.IdOffset, e.IdLength).ToArray(), e.SchemaId, e.RowCount, types, nulls);
                 }
 
                 return new TableBlockDirectory(header, entries);
@@ -128,6 +134,7 @@ namespace HSMTableBlocks
 
                 var directory = ParseDirectory(payload, header, limits);
                 CheckUniqueIds(rented, directory.Entries, counter);
+                CheckNullMaps(payload, directory);
                 CheckTimes(payload, directory, header);
 
                 return func(payload, directory);
@@ -273,18 +280,23 @@ namespace HSMTableBlocks
             }
         }
 
-        /// <summary>The parsed directory and the payload offset of every column (entry e, column c at <c>ColumnOffsets[e.FirstColumn + c]</c>).</summary>
+        /// <summary>
+        /// The parsed directory, the payload offset of every column (entry e, column c at <c>ColumnOffsets[e.FirstColumn + c]</c>)
+        /// and of every null map (<c>NullMapOffsets</c>, same index, meaningful for flagged columns only; null when the
+        /// block has no map).
+        /// </summary>
         private sealed class Directory
         {
             public Entry[] Entries;
             public int[] ColumnOffsets;
+            public int[] NullMapOffsets;
         }
 
         private static Directory ParseDirectory(ReadOnlySpan<byte> payload, TableBlockHeader header, TableBlockLimits limits)
         {
             // Bounded: the header check proved TableCount <= MaxTables and TableCount * MinTableBytes <= payload length.
             var entries = new Entry[header.TableCount];
-            int pos = 0, columns = 0, maxColumns = 0;
+            int pos = 0, columns = 0, maxColumns = 0, maps = 0;
             long rows = 0, data = 0;
 
             for (int t = 0; t < entries.Length; t++)
@@ -312,20 +324,29 @@ namespace HSMTableBlocks
                     throw Error(TableBlockError.LimitExceeded, $"table {t} has {columnCount} columns, the limit is {limits.MaxColumnsPerTable}");
 
                 Need(payload, pos, columnCount, t);
+                int flagged = 0;
                 for (int c = 0; c < columnCount; c++)
-                    if (!TableBlockFormat.IsKnownType(payload[pos + c]))
-                        throw Error(TableBlockError.CorruptDirectory, $"table {t} column {c} has unknown type {payload[pos + c]}");
-                if (payload[pos] != (byte)TableColumnType.Time)
+                {
+                    byte typeByte = payload[pos + c];
+                    if (!TableBlockFormat.IsKnownType((byte)TableBlockFormat.TypeOf(typeByte)))
+                        throw Error(TableBlockError.CorruptDirectory, $"table {t} column {c} has unknown type {typeByte & TableBlockFormat.TypeMask}");
+                    if (TableBlockFormat.HasNullMap(typeByte))
+                        flagged++;
+                }
+                if (TableBlockFormat.TypeOf(payload[pos]) != TableColumnType.Time)
                     throw Error(TableBlockError.CorruptDirectory, $"the first column of table {t} is not time");
+                if (TableBlockFormat.HasNullMap(payload[pos]))
+                    throw Error(TableBlockError.CorruptNullMap, $"table {t} column 0 (the time) carries a null map: the time is never null");
 
                 rows += rowCount;
                 if (rows > header.RowCount)
                     throw Error(TableBlockError.HeaderMismatch, $"the directory holds more than the header's {header.RowCount} rows");
 
-                // In 64 bits: rowCount * columnCount * 8 can pass int.MaxValue.
-                data += (long)rowCount * columnCount * TableBlockFormat.ValueSize;
+                // In 64 bits: rowCount * columnCount * 8 can pass int.MaxValue. Every flagged column adds its null map.
+                data += (long)rowCount * columnCount * TableBlockFormat.ValueSize + (long)flagged * TableNullMap.ByteLength(rowCount);
+                maps += flagged;
                 if (data > payload.Length)
-                    throw Error(TableBlockError.DirectoryOutOfBounds, $"the columns up to table {t} need {data} bytes, the payload holds {payload.Length}");
+                    throw Error(TableBlockError.DirectoryOutOfBounds, $"the columns and null maps up to table {t} need {data} bytes, the payload holds {payload.Length}");
 
                 entries[t] = new Entry(idOffset, idLength, schemaId, rowCount, pos, columnCount, columns);
                 columns += columnCount;
@@ -341,26 +362,57 @@ namespace HSMTableBlocks
             if (end > payload.Length)
                 throw Error(TableBlockError.DirectoryOutOfBounds, $"the directory and the columns need {end} bytes, the payload holds {payload.Length}");
             if (end < payload.Length)
-                throw Error(TableBlockError.LengthMismatch, $"{payload.Length - end} bytes after the last column");
+                throw Error(TableBlockError.LengthMismatch, $"{payload.Length - end} bytes after the last {(maps > 0 ? "null map" : "column")}");
 
             // Column-major: column 0 of every table in directory order, then column 1 of every table that has one, and so
             // on. Every offset is below payload.Length (end == payload.Length above), so int arithmetic is safe here. The
             // tables still in play shrink pass by pass, so the work is the number of columns, not passes times tables.
             // Bounded: one offset per column type byte of the directory.
             var offsets = new int[columns];
+            int at = ColumnMajor(entries, maxColumns, pos, offsets, payload, mapsOnly: false);
+
+            // The null maps follow the last column, in the same order: pass by pass, table by table, only the columns
+            // whose type byte carries the flag. Allocated only when the block has a map.
+            int[] mapOffsets = null;
+            if (maps > 0)
+            {
+                mapOffsets = new int[columns];
+                ColumnMajor(entries, maxColumns, at, mapOffsets, payload, mapsOnly: true);
+            }
+
+            return new Directory { Entries = entries, ColumnOffsets = offsets, NullMapOffsets = mapOffsets };
+        }
+
+        /// <summary>
+        /// Walks the columns in payload order (pass by pass, table by table) from <paramref name="start"/> and stores each
+        /// one's offset in <paramref name="offsets"/>: every column with its 8-byte values, or (<paramref name="mapsOnly"/>)
+        /// only the flagged columns with their null maps. Returns the offset after the last one.
+        /// </summary>
+        private static int ColumnMajor(Entry[] entries, int maxColumns, int start, int[] offsets,
+            ReadOnlySpan<byte> payload, bool mapsOnly)
+        {
             var active = new int[entries.Length];
             for (int t = 0; t < active.Length; t++)
                 active[t] = t;
 
-            int count = active.Length, at = pos;
+            int count = active.Length, at = start;
             for (int c = 0; c < maxColumns; c++)
             {
                 int kept = 0;
                 for (int i = 0; i < count; i++)
                 {
                     var e = entries[active[i]];
-                    offsets[e.FirstColumn + c] = at;
-                    at += e.RowCount * TableBlockFormat.ValueSize;
+
+                    if (!mapsOnly)
+                    {
+                        offsets[e.FirstColumn + c] = at;
+                        at += e.RowCount * TableBlockFormat.ValueSize;
+                    }
+                    else if (TableBlockFormat.HasNullMap(payload[e.TypesOffset + c]))
+                    {
+                        offsets[e.FirstColumn + c] = at;
+                        at += TableNullMap.ByteLength(e.RowCount);
+                    }
 
                     if (e.ColumnCount > c + 1)
                         active[kept++] = active[i];
@@ -369,7 +421,7 @@ namespace HSMTableBlocks
                 count = kept;
             }
 
-            return new Directory { Entries = entries, ColumnOffsets = offsets };
+            return at;
         }
 
         private static void Need(ReadOnlySpan<byte> payload, int pos, int count, int table)
@@ -423,6 +475,57 @@ namespace HSMTableBlocks
             }
         }
 
+        /// <summary>
+        /// Every null map keeps its rules, so one set of rows has exactly one payload: its padding bits are zero, at least
+        /// one row is null, and every null cell holds eight zero bytes. One pass over each map and eight bytes per null
+        /// cell, for flagged columns only; nothing for a block without maps.
+        /// </summary>
+        private static void CheckNullMaps(ReadOnlySpan<byte> payload, Directory directory)
+        {
+            if (directory.NullMapOffsets == null)
+                return;
+
+            for (int t = 0; t < directory.Entries.Length; t++)
+            {
+                var e = directory.Entries[t];
+
+                for (int c = 1; c < e.ColumnCount; c++)
+                {
+                    if (!TableBlockFormat.HasNullMap(payload[e.TypesOffset + c]))
+                        continue;
+
+                    var map = payload.Slice(directory.NullMapOffsets[e.FirstColumn + c], TableNullMap.ByteLength(e.RowCount));
+                    int tail = e.RowCount & 7;
+                    if (tail != 0 && (map[map.Length - 1] >> tail) != 0)
+                        throw Error(TableBlockError.CorruptNullMap, $"table {t} column {c}: padding bits of the null map are set");
+
+                    var column = payload.Slice(directory.ColumnOffsets[e.FirstColumn + c], e.RowCount * TableBlockFormat.ValueSize);
+                    bool any = false;
+
+                    for (int b = 0; b < map.Length; b++)
+                    {
+                        int bits = map[b];
+                        if (bits == 0)
+                            continue;
+
+                        any = true;
+                        for (int bit = 0; bit < 8; bit++)
+                        {
+                            if ((bits & (1 << bit)) == 0)
+                                continue;
+
+                            int row = b * 8 + bit;
+                            if (BinaryPrimitives.ReadInt64LittleEndian(column.Slice(row * TableBlockFormat.ValueSize)) != 0)
+                                throw Error(TableBlockError.CorruptNullMap, $"table {t} column {c} row {row} is null but its value bytes are not zero");
+                        }
+                    }
+
+                    if (!any)
+                        throw Error(TableBlockError.CorruptNullMap, $"table {t} column {c} carries a null map with no null row");
+                }
+            }
+        }
+
         /// <summary>Every time column is within range; the first columns' minimum and maximum equal the header's first and last time.</summary>
         private static void CheckTimes(ReadOnlySpan<byte> payload, Directory directory, TableBlockHeader header)
         {
@@ -432,7 +535,8 @@ namespace HSMTableBlocks
             {
                 for (int c = 0; c < e.ColumnCount; c++)
                 {
-                    if (payload[e.TypesOffset + c] != (byte)TableColumnType.Time)
+                    // A null cell of a later time column holds 0 (CheckNullMaps), which is in range.
+                    if (TableBlockFormat.TypeOf(payload[e.TypesOffset + c]) != TableColumnType.Time)
                         continue;
 
                     var column = payload.Slice(directory.ColumnOffsets[e.FirstColumn + c], e.RowCount * TableBlockFormat.ValueSize);
@@ -462,20 +566,24 @@ namespace HSMTableBlocks
 
             for (int c = 0; c < e.ColumnCount; c++)
             {
-                var type = (TableColumnType)payload[e.TypesOffset + c];
+                byte typeByte = payload[e.TypesOffset + c];
+                var type = TableBlockFormat.TypeOf(typeByte);
                 var source = payload.Slice(directory.ColumnOffsets[e.FirstColumn + c], size);
+                var nullMap = TableBlockFormat.HasNullMap(typeByte)
+                    ? payload.Slice(directory.NullMapOffsets[e.FirstColumn + c], TableNullMap.ByteLength(e.RowCount)).ToArray()
+                    : null;
 
                 if (type == TableColumnType.Double)
                 {
                     var values = new double[e.RowCount];
                     TableBlockFormat.ReadValues(source, MemoryMarshal.Cast<double, long>(values.AsSpan()));
-                    columns[c] = new BlockColumn(type, null, values);
+                    columns[c] = new BlockColumn(type, null, values, nullMap);
                 }
                 else
                 {
                     var values = new long[e.RowCount];
                     TableBlockFormat.ReadValues(source, values);
-                    columns[c] = new BlockColumn(type, values, null);
+                    columns[c] = new BlockColumn(type, values, null, nullMap);
                 }
             }
 

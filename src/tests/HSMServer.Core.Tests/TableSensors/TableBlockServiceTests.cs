@@ -113,6 +113,98 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.False(Read(sensor, T0, T0.AddHours(1)).Truncated);
         }
 
+        // === Null cells (#1859) ===
+
+        [Fact]
+        public async Task Nulls_stay_with_their_rows_across_blocks_with_and_without_a_map()
+        {
+            var sensor = await RegisterAsync("q");
+
+            // Block 1: a null bid. Block 2: no nulls at all (no map in it). Block 3: a null size and a row of nulls only.
+            AssertStored(Put(NullableTable("q", (T0.AddMinutes(5), null, 50), (T0.AddMinutes(1), 1.0, 10))));
+            AssertStored(Put(NullableTable("q", (T0.AddMinutes(3), 3.0, 30), (T0.AddMinutes(2), 2.0, 20))));
+            AssertStored(Put(NullableTable("q", (T0.AddMinutes(4), 4.0, null), (T0.AddMinutes(6), null, null))));
+
+            var rows = Read(sensor, T0, T0.AddHours(1));
+
+            Assert.Equal(Enumerable.Range(1, 6).Select(m => T0.AddMinutes(m).Ticks), rows.Time);
+            AssertCells(rows, [1.0, 2.0, 3.0, 4.0, null, null], [10, 20, 30, null, 50, null]);
+            Assert.False(rows.Columns[0].HasNulls);
+
+            // A range that leaves every null row out returns no map at all.
+            var dense = Read(sensor, T0.AddMinutes(1), T0.AddMinutes(4));
+            AssertCells(dense, [1.0, 2.0, 3.0], [10, 20, 30]);
+            Assert.False(dense.Columns[1].HasNulls);
+            Assert.False(dense.Columns[2].HasNulls);
+            Assert.Null(dense.Columns[1].NullMap);
+        }
+
+        [Fact]
+        public async Task Equal_times_keep_a_null_with_its_row_when_only_the_earlier_block_has_it()
+        {
+            var sensor = await RegisterAsync("q");
+
+            // Both blocks hold T0 + 10 min; only the earlier block's row is null. The sort moves rows around them.
+            AssertStored(Put(NullableTable("q", (T0.AddMinutes(20), 5.0, 5), (T0.AddMinutes(10), null, 1))));
+            AssertStored(Put(NullableTable("q", (T0.AddMinutes(10), 2.0, 2), (T0.AddMinutes(1), 3.0, 3))));
+
+            var rows = Read(sensor, T0, T0.AddHours(1));
+
+            Assert.Equal([T0.AddMinutes(1).Ticks, T0.AddMinutes(10).Ticks, T0.AddMinutes(10).Ticks, T0.AddMinutes(20).Ticks], rows.Time);
+            AssertCells(rows, [3.0, null, 2.0, 5.0], [3, 1, 2, 5]);
+        }
+
+        [Fact]
+        public async Task The_row_limit_cuts_exactly_at_a_null_row()
+        {
+            var sensor = await RegisterAsync("q");
+
+            // Five blocks of ten rows (51..60, then 61..70, ...), each falling in time, so the limit trims while it
+            // collects and the earliest rows, with the nulls, go through every trim. Second 57 has a null bid and second
+            // 58 a null size.
+            for (int block = 0; block < 5; block++)
+                AssertStored(Put(NullableTable("q", Enumerable.Range(0, 10).Select(i =>
+                {
+                    var second = 51 + block * 10 + (9 - i);
+                    return (T0.AddSeconds(second), second == 57 ? (double?)null : second, second == 58 ? (long?)null : second);
+                }).ToArray())));
+
+            // The last row kept is the null one.
+            var seven = _service.Read(sensor.Id, T0, T0.AddHours(1), maxRows: 7).Value;
+            Assert.True(seven.Truncated);
+            Assert.Equal(Enumerable.Range(51, 7).Select(s => T0.AddSeconds(s).Ticks), seven.Time);
+            AssertCells(seven, [51, 52, 53, 54, 55, 56, null], [51, 52, 53, 54, 55, 56, 57]);
+            Assert.False(seven.Columns[2].HasNulls);
+
+            // The first row dropped is the null one: no map is left for its column.
+            var six = _service.Read(sensor.Id, T0, T0.AddHours(1), maxRows: 6).Value;
+            AssertCells(six, [51, 52, 53, 54, 55, 56], [51, 52, 53, 54, 55, 56]);
+            Assert.False(six.Columns[1].HasNulls);
+
+            var eight = _service.Read(sensor.Id, T0, T0.AddHours(1), maxRows: 8).Value;
+            AssertCells(eight, [51, 52, 53, 54, 55, 56, null, 58], [51, 52, 53, 54, 55, 56, 57, null]);
+        }
+
+        [Fact]
+        public async Task A_block_with_nulls_passes_the_type_check_of_the_put_and_a_malformed_map_is_refused_there()
+        {
+            var sensor = await RegisterAsync("q");
+            var block = NullableTable("q", (T0, null, 1), (T0.AddSeconds(1), 2.0, null));
+
+            Assert.True(TableBlockReader.ReadDirectory(block).Entries[0].HasNulls(1));
+            var stored = Put(block);
+            AssertStored(stored);
+
+            // The same block with its last map byte (the size column, row 1) cleared: a map with no null row.
+            var broken = ResealedWithPayload(block, payload => payload[^1] = 0);
+            var invalid = Put(broken);
+            Assert.Equal(TableBlockPutOutcome.Invalid, invalid.Outcome);
+            Assert.Equal(TableBlockError.CorruptNullMap, invalid.FormatError);
+
+            AssertCells(Read(sensor, T0, T0.AddHours(1)), [null, 2.0], [1, null]);
+        }
+
+
         [Fact]
         public async Task A_refused_table_inside_an_accepted_block_is_recorded_and_never_served()
         {
@@ -692,6 +784,67 @@ namespace HSMServer.Core.Tests.TableSensors
             writer.AddDoubleColumn(rows.Select(r => r.Bid).ToArray());
             writer.AddInt64Column(rows.Select(r => r.Size).ToArray());
             return writer.ToArray();
+        }
+
+        // One table of the schema; a null bid or size is a cell without a value.
+        private byte[] NullableTable(string name, params (DateTime Time, double? Bid, long? Size)[] rows)
+        {
+            var bidNulls = new byte[TableNullMap.ByteLength(rows.Length)];
+            var sizeNulls = new byte[TableNullMap.ByteLength(rows.Length)];
+            for (int i = 0; i < rows.Length; i++)
+            {
+                if (rows[i].Bid is null) TableNullMap.SetNull(bidNulls, i);
+                if (rows[i].Size is null) TableNullMap.SetNull(sizeNulls, i);
+            }
+
+            using var writer = new TableBlockWriter();
+            writer.BeginTable(Encoding.UTF8.GetBytes($"{_root}/{name}"), Quotes.Id, rows.Length);
+            writer.AddTimeColumn(rows.Select(r => r.Time.Ticks).ToArray());
+            // A value under a null is ignored by the writer: put a non-zero one there to show it.
+            writer.AddDoubleColumn(rows.Select(r => r.Bid ?? -7.0).ToArray(), bidNulls);
+            writer.AddInt64Column(rows.Select(r => r.Size ?? -7L).ToArray(), sizeNulls);
+            return writer.ToArray();
+        }
+
+        // Every cell of the bid and size columns: a value, or null where the row holds none (its value array holds 0).
+        private static void AssertCells(TableRows rows, double?[] bids, long?[] sizes)
+        {
+            Assert.Equal(bids.Length, rows.RowCount);
+            Assert.Equal(bids, Enumerable.Range(0, rows.RowCount).Select(r => rows.Columns[1].IsNull(r) ? null : (double?)rows.Columns[1].DoubleValues[r]));
+            Assert.Equal(sizes, Enumerable.Range(0, rows.RowCount).Select(r => rows.Columns[2].IsNull(r) ? null : (long?)rows.Columns[2].Int64Values[r]));
+            Assert.All(Enumerable.Range(0, rows.RowCount).Where(rows.Columns[1].IsNull), r => Assert.Equal(0.0, rows.Columns[1].DoubleValues[r]));
+            Assert.All(Enumerable.Range(0, rows.RowCount).Where(rows.Columns[2].IsNull), r => Assert.Equal(0L, rows.Columns[2].Int64Values[r]));
+
+            // A map is there exactly when a row of its column is null, and is ceil(rows / 8) bytes.
+            Assert.Equal(bids.Any(b => b is null), rows.Columns[1].HasNulls);
+            Assert.Equal(sizes.Any(s => s is null), rows.Columns[2].HasNulls);
+            foreach (var column in rows.Columns.Where(c => c.HasNulls))
+                Assert.Equal(TableNullMap.ByteLength(rows.RowCount), column.NullMap.Length);
+        }
+
+        // The block with its decompressed payload changed, compressed and checksummed again.
+        private static byte[] ResealedWithPayload(byte[] block, Action<byte[]> change)
+        {
+            byte[] payload;
+            using (var decompressor = new ZstdSharp.Decompressor())
+                payload = decompressor.Unwrap(block.AsSpan(TableBlockFormat.HeaderSize)).ToArray();
+
+            change(payload);
+
+            byte[] compressed;
+            using (var compressor = new ZstdSharp.Compressor(3))
+                compressed = compressor.Wrap(payload).ToArray();
+
+            var resealed = new byte[TableBlockFormat.HeaderSize + compressed.Length];
+            block.AsSpan(0, TableBlockFormat.HeaderSize).CopyTo(resealed);
+            compressed.CopyTo(resealed, TableBlockFormat.HeaderSize);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(resealed.AsSpan(32), compressed.Length);
+
+            var crc = new System.IO.Hashing.Crc32();
+            crc.Append(resealed.AsSpan(0, 40));
+            crc.Append(resealed.AsSpan(TableBlockFormat.HeaderSize));
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(resealed.AsSpan(40), crc.GetCurrentHashAsUInt32());
+            return resealed;
         }
 
         // One row per table, of the given types and schema id.

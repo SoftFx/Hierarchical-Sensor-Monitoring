@@ -13,6 +13,11 @@ namespace HSMTableBlocks
     /// given: the writer neither sorts nor requires time order, and times may repeat. In the payload the columns are
     /// laid out column-major: column 0 of every table, then column 1 of every table that has one, and so on.
     /// <para>
+    /// Every column but the first (the time) may have rows without a value: the overloads with a null map
+    /// (<see cref="TableNullMap"/>). A column with at least one null carries its map after all columns; a block without
+    /// nulls is byte for byte what it would be without the overloads.
+    /// </para>
+    /// <para>
     /// Not thread-safe: use one instance from one thread at a time. An instance is meant to be reused, one block per
     /// tick: <see cref="Reset"/> keeps its buffers. After any exception from a method of the writer, call
     /// <see cref="Reset"/> before using it again.
@@ -33,6 +38,13 @@ namespace HSMTableBlocks
         private byte[] _data = new byte[16 * 1024];
         private int _dataLength;
         private TableInfo[] _tables = new TableInfo[64];
+
+        // Null maps as added, and per column (in the order added, every table's columns in turn) the offset of its map in
+        // _nullData or -1. Kept between blocks like the other buffers.
+        private byte[] _nullData = new byte[256];
+        private int _nullDataLength;
+        private int[] _columnMaps = new int[256];
+        private int _columnCount;
 
         // The payload before compression and the compressed frame, kept between blocks.
         private byte[] _payload;
@@ -57,8 +69,8 @@ namespace HSMTableBlocks
         /// <summary>The number of rows added so far, over all tables.</summary>
         public int RowCount => _rowCount;
 
-        /// <summary>The length the payload would have now, before compression: the directory and every column added.</summary>
-        public int DecompressedLength => _directoryLength + _dataLength;
+        /// <summary>The length the payload would have now, before compression: the directory, every column and every null map added.</summary>
+        public int DecompressedLength => _directoryLength + _dataLength + _nullDataLength;
 
         /// <summary>The zstd level of this writer.</summary>
         public int CompressionLevel { get; }
@@ -119,7 +131,7 @@ namespace HSMTableBlocks
 
             if (_tableCount == _tables.Length)
                 Array.Resize(ref _tables, _tables.Length * 2);
-            _tables[_tableCount] = new TableInfo(start + 2, tableId.Length, _dataLength, rowCount);
+            _tables[_tableCount] = new TableInfo(start + 2, tableId.Length, _dataLength, rowCount, _columnCount);
 
             _columnCountOffset = start + entryLength - 1;
             _openRows = rowCount;
@@ -132,13 +144,31 @@ namespace HSMTableBlocks
         /// Adds a time column (UTC ticks within <c>0..DateTime.MaxValue.Ticks</c>). The first column of every table is
         /// a time column; its values set the block's first and last time.
         /// </summary>
-        public void AddTimeColumn(ReadOnlySpan<long> ticks)
+        public void AddTimeColumn(ReadOnlySpan<long> ticks) => AddTimeColumn(ticks, ReadOnlySpan<byte>.Empty);
+
+        /// <summary>
+        /// Adds a time column whose rows marked in <paramref name="nulls"/> hold no value (see
+        /// <see cref="AddInt64Column(ReadOnlySpan{long}, ReadOnlySpan{byte})"/>); the map is checked by the same rules. The
+        /// time of a row is never null: for the first column a map that marks a row throws
+        /// <see cref="InvalidOperationException"/>, while an empty map or one that marks no row is no map, as for every
+        /// column. The value of a null row is not checked.
+        /// </summary>
+        public void AddTimeColumn(ReadOnlySpan<long> ticks, ReadOnlySpan<byte> nulls)
         {
-            CheckColumn(ticks.Length, TableColumnType.Time);
+            // The map is checked (length, padding) first, as for every column; only a marked row is refused here.
+            bool first = _columnCountOffset >= 0 && _openColumns == 0;
+            if (first && HasNulls(nulls, ticks.Length))
+                throw new InvalidOperationException("the first column is the time of the row, which is never null: its map may mark no row");
+
+            bool hasNulls = CheckColumn(ticks.Length, TableColumnType.Time, first ? ReadOnlySpan<byte>.Empty : nulls);
 
             long min = long.MaxValue, max = long.MinValue;
-            foreach (long t in ticks)
+            for (int i = 0; i < ticks.Length; i++)
             {
+                if (hasNulls && TableNullMap.IsNull(nulls, i))
+                    continue;
+
+                long t = ticks[i];
                 if (t < 0 || t > TableBlockFormat.MaxTimeTicks)
                     throw new ArgumentOutOfRangeException(nameof(ticks), t, $"a time must be within 0..{TableBlockFormat.MaxTimeTicks}");
                 if (t < min) min = t;
@@ -151,21 +181,36 @@ namespace HSMTableBlocks
                 if (max > _lastTime) _lastTime = max;
             }
 
-            AppendColumn(TableColumnType.Time, ticks);
+            AppendColumn(TableColumnType.Time, ticks, hasNulls ? nulls : ReadOnlySpan<byte>.Empty);
         }
 
         /// <summary>Adds a 64-bit integer column.</summary>
-        public void AddInt64Column(ReadOnlySpan<long> values)
+        public void AddInt64Column(ReadOnlySpan<long> values) => AddInt64Column(values, ReadOnlySpan<byte>.Empty);
+
+        /// <summary>
+        /// Adds a 64-bit integer column whose rows marked in <paramref name="nulls"/> hold no value. <paramref name="nulls"/>
+        /// is empty (no nulls: the same as the overload without it) or a map of exactly
+        /// <see cref="TableNullMap.ByteLength"/>(row count) bytes in the order of <see cref="TableNullMap"/>, its padding
+        /// bits zero (<see cref="ArgumentException"/> otherwise). The values of null rows are ignored and written as 0. A
+        /// map with no row set is the same as no map: the column is written exactly as without nulls.
+        /// </summary>
+        public void AddInt64Column(ReadOnlySpan<long> values, ReadOnlySpan<byte> nulls)
         {
-            CheckColumn(values.Length, TableColumnType.Int64);
-            AppendColumn(TableColumnType.Int64, values);
+            bool hasNulls = CheckColumn(values.Length, TableColumnType.Int64, nulls);
+            AppendColumn(TableColumnType.Int64, values, hasNulls ? nulls : ReadOnlySpan<byte>.Empty);
         }
 
         /// <summary>Adds a double column; every value is stored bit for bit.</summary>
-        public void AddDoubleColumn(ReadOnlySpan<double> values)
+        public void AddDoubleColumn(ReadOnlySpan<double> values) => AddDoubleColumn(values, ReadOnlySpan<byte>.Empty);
+
+        /// <summary>
+        /// Adds a double column whose rows marked in <paramref name="nulls"/> hold no value; the rules of
+        /// <see cref="AddInt64Column(ReadOnlySpan{long}, ReadOnlySpan{byte})"/> apply. Every other value is stored bit for bit.
+        /// </summary>
+        public void AddDoubleColumn(ReadOnlySpan<double> values, ReadOnlySpan<byte> nulls)
         {
-            CheckColumn(values.Length, TableColumnType.Double);
-            AppendColumn(TableColumnType.Double, MemoryMarshal.Cast<double, long>(values));
+            bool hasNulls = CheckColumn(values.Length, TableColumnType.Double, nulls);
+            AppendColumn(TableColumnType.Double, MemoryMarshal.Cast<double, long>(values), hasNulls ? nulls : ReadOnlySpan<byte>.Empty);
         }
 
         /// <summary>
@@ -194,6 +239,7 @@ namespace HSMTableBlocks
 
             _directory.AsSpan(0, _directoryLength).CopyTo(payload);
             LayOutColumnMajor(payload.AsSpan(_directoryLength, _dataLength));
+            LayOutNullMaps(payload.AsSpan(_directoryLength + _dataLength, _nullDataLength));
 
             int written = _compressor.Wrap(payload.AsSpan(0, payloadLength), compressed);
 
@@ -221,6 +267,8 @@ namespace HSMTableBlocks
             ThrowIfDisposed();
             _directoryLength = 0;
             _dataLength = 0;
+            _nullDataLength = 0;
+            _columnCount = 0;
             _tableCount = 0;
             _rowCount = 0;
             _firstTime = long.MaxValue;
@@ -244,7 +292,8 @@ namespace HSMTableBlocks
         }
 
 
-        private void CheckColumn(int length, TableColumnType type)
+        /// <summary>Checks a column before anything is copied; true when <paramref name="nulls"/> marks at least one row.</summary>
+        private bool CheckColumn(int length, TableColumnType type, ReadOnlySpan<byte> nulls)
         {
             ThrowIfDisposed();
 
@@ -257,20 +306,96 @@ namespace HSMTableBlocks
             if (length != _openRows)
                 throw new ArgumentException($"the column has {length} values, the table {_openRows} rows");
 
-            // The table's column type byte and its values (the first column was counted by BeginTable).
-            if (_openColumns > 0)
-                CheckPayloadGrowth(1L + (long)length * TableBlockFormat.ValueSize);
+            bool hasNulls = HasNulls(nulls, length);
+
+            // The table's column type byte, its values (the first column was counted by BeginTable) and its null map.
+            long growth = (_openColumns > 0 ? 1L + (long)length * TableBlockFormat.ValueSize : 0) + (hasNulls ? TableNullMap.ByteLength(length) : 0);
+            if (growth > 0)
+                CheckPayloadGrowth(growth);
+
+            return hasNulls;
         }
 
-        private void AppendColumn(TableColumnType type, ReadOnlySpan<long> values)
+        /// <summary>Checks a null map given for a column of <paramref name="rows"/> rows; true when it marks at least one row.</summary>
+        private static bool HasNulls(ReadOnlySpan<byte> nulls, int rows)
         {
-            Grow(ref _directory, ref _directoryLength, 1)[0] = (byte)type;
-            TableBlockFormat.WriteValues(values, Grow(ref _data, ref _dataLength, values.Length * TableBlockFormat.ValueSize));
+            if (nulls.IsEmpty)
+                return false;
+
+            if (nulls.Length != TableNullMap.ByteLength(rows))
+                throw new ArgumentException($"the null map has {nulls.Length} bytes, a column of {rows} rows needs {TableNullMap.ByteLength(rows)}", nameof(nulls));
+
+            int tail = rows & 7;
+            if (tail != 0 && (nulls[nulls.Length - 1] >> tail) != 0)
+                throw new ArgumentException($"the null map has bits set past row {rows - 1}", nameof(nulls));
+
+            foreach (byte b in nulls)
+                if (b != 0)
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>Appends a column and, when <paramref name="nulls"/> is not empty (it then marks a row), its null map.</summary>
+        private void AppendColumn(TableColumnType type, ReadOnlySpan<long> values, ReadOnlySpan<byte> nulls)
+        {
+            bool hasNulls = !nulls.IsEmpty;
+            Grow(ref _directory, ref _directoryLength, 1)[0] = (byte)((byte)type | (hasNulls ? TableBlockFormat.NullFlag : 0));
+
+            var destination = Grow(ref _data, ref _dataLength, values.Length * TableBlockFormat.ValueSize);
+            TableBlockFormat.WriteValues(values, destination);
+
+            if (_columnCount == _columnMaps.Length)
+                Array.Resize(ref _columnMaps, _columnMaps.Length * 2);
+
+            if (hasNulls)
+            {
+                // A null cell holds eight zero bytes, whatever the caller left in it.
+                for (int b = 0; b < nulls.Length; b++)
+                    for (int bit = 0; nulls[b] >> bit != 0; bit++)
+                        if ((nulls[b] & (1 << bit)) != 0)
+                            destination.Slice((b * 8 + bit) * TableBlockFormat.ValueSize, TableBlockFormat.ValueSize).Clear();
+
+                _columnMaps[_columnCount] = _nullDataLength;
+                nulls.CopyTo(Grow(ref _nullData, ref _nullDataLength, nulls.Length));
+            }
+            else
+            {
+                _columnMaps[_columnCount] = -1;
+            }
+
+            _columnCount++;
             _openColumns++;
             _directory[_columnCountOffset] = (byte)_openColumns;
             _tables[_tableCount - 1].Columns = _openColumns;
             if (_openColumns > _maxColumns)
                 _maxColumns = _openColumns;
+        }
+
+        /// <summary>Copies the null maps after the columns, in the order of the columns: pass by pass, table by table.</summary>
+        private void LayOutNullMaps(Span<byte> destination)
+        {
+            if (_nullDataLength == 0)
+                return;
+
+            int at = 0;
+            for (int c = 0; c < _maxColumns; c++)
+            {
+                for (int t = 0; t < _tableCount; t++)
+                {
+                    var table = _tables[t];
+                    if (c >= table.Columns)
+                        continue;
+
+                    int offset = _columnMaps[table.FirstColumn + c];
+                    if (offset < 0)
+                        continue;
+
+                    int size = TableNullMap.ByteLength(table.Rows);
+                    _nullData.AsSpan(offset, size).CopyTo(destination.Slice(at));
+                    at += size;
+                }
+            }
         }
 
         /// <summary>Copies the columns, stored table after table, into the payload column-major.</summary>
@@ -330,15 +455,16 @@ namespace HSMTableBlocks
 
         private struct TableInfo
         {
-            public readonly int IdOffset, IdLength, DataOffset, Rows;
+            public readonly int IdOffset, IdLength, DataOffset, Rows, FirstColumn;
             public int Columns;
 
-            public TableInfo(int idOffset, int idLength, int dataOffset, int rows)
+            public TableInfo(int idOffset, int idLength, int dataOffset, int rows, int firstColumn)
             {
                 IdOffset = idOffset;
                 IdLength = idLength;
                 DataOffset = dataOffset;
                 Rows = rows;
+                FirstColumn = firstColumn;
                 Columns = 0;
             }
         }

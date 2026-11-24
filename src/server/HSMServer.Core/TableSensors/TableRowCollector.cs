@@ -11,7 +11,8 @@ namespace HSMServer.Core.TableSensors
     /// found by the time range of their header and decompressed one by one; a row is in the result when its time is in
     /// <c>[from, to)</c>, and the result is sorted by time, then by block sequence, then by the row's position in its block
     /// (a stable sort of the rows in the order they arrived). Memory stays within about twice the row limit: past it the
-    /// rows collected so far are sorted and the latest ones dropped.
+    /// rows collected so far are sorted and the latest ones dropped. A null cell (#1859) stays with its row through all of
+    /// it and comes out in the column's null map.
     /// </summary>
     internal sealed class TableRowCollector
     {
@@ -29,6 +30,9 @@ namespace HSMServer.Core.TableSensors
         private long[] _time = new long[256];
         private long[] _order = new long[256];
         private readonly object[] _columns;
+        // Per value column, whether each collected row is null (#1859); created at the first null row of the column, so a
+        // column without nulls costs nothing. The rows before it are false, as the array starts zeroed.
+        private readonly bool[][] _nulls;
         private int _count;
         private bool _truncated;
 
@@ -41,6 +45,7 @@ namespace HSMServer.Core.TableSensors
             _maxRows = Math.Max(1, maxRows);
 
             _columns = new object[schema.Columns.Count];
+            _nulls = new bool[schema.Columns.Count][];
             for (int c = 1; c < _columns.Length; c++)
                 _columns[c] = schema.Columns[c].Type == TableColumnType.Double ? new double[256] : new long[256];
         }
@@ -147,6 +152,9 @@ namespace HSMServer.Core.TableSensors
                     ((double[])_columns[c])[_count] = column.DoubleValues[row];
                 else
                     ((long[])_columns[c])[_count] = column.Int64Values[row];
+
+                if (column.NullMap is { } map && TableNullMap.IsNull(map, row))
+                    (_nulls[c] ??= new bool[_time.Length])[_count] = true;
             }
 
             _count++;
@@ -159,6 +167,9 @@ namespace HSMServer.Core.TableSensors
 
             for (int c = 1; c < _columns.Length; c++)
             {
+                if (_nulls[c] is not null)
+                    Array.Resize(ref _nulls[c], size);
+
                 if (_columns[c] is double[] doubles)
                 {
                     Array.Resize(ref doubles, size);
@@ -210,7 +221,13 @@ namespace HSMServer.Core.TableSensors
             _order = Pick(_order, permutation, keep, size);
 
             for (int c = 1; c < _columns.Length; c++)
+            {
                 _columns[c] = _columns[c] is double[] doubles ? Pick(doubles, permutation, keep, size) : Pick((long[])_columns[c], permutation, keep, size);
+
+                // The null flags move with their rows.
+                if (_nulls[c] is not null)
+                    _nulls[c] = Pick(_nulls[c], permutation, keep, size);
+            }
 
             _count = keep;
         }
@@ -234,9 +251,10 @@ namespace HSMServer.Core.TableSensors
             for (int c = 1; c < _columns.Length; c++)
             {
                 var column = _schema.Columns[c];
+                var nullMap = NullMap(_nulls[c]);
                 columns[c] = _columns[c] is double[] doubles
-                    ? new TableRowsColumn(column.Name, column.Type, null, Exact(doubles))
-                    : new TableRowsColumn(column.Name, column.Type, Exact((long[])_columns[c]), null);
+                    ? new TableRowsColumn(column.Name, column.Type, null, Exact(doubles), nullMap)
+                    : new TableRowsColumn(column.Name, column.Type, Exact((long[])_columns[c]), null, nullMap);
             }
 
             return new TableRows
@@ -248,6 +266,21 @@ namespace HSMServer.Core.TableSensors
                 BlocksRead = BlocksRead,
                 BlocksFailed = BlocksFailed,
             };
+        }
+
+        // The flags of the rows returned as a null map; null when none of them is null (the null rows of the column may
+        // all have fallen outside the range or past the limit).
+        private byte[] NullMap(bool[] nulls)
+        {
+            if (nulls is null)
+                return null;
+
+            byte[] map = null;
+            for (int row = 0; row < _count; row++)
+                if (nulls[row])
+                    TableNullMap.SetNull(map ??= new byte[TableNullMap.ByteLength(_count)], row);
+
+            return map;
         }
 
         private T[] Exact<T>(T[] values)

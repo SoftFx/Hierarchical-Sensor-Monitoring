@@ -16,6 +16,19 @@ namespace HSMTableBlocks.Tests
         public object[] Columns { get; }
         public int Rows => Columns[0] is long[] l ? l.Length : ((double[])Columns[0]).Length;
 
+        /// <summary>Per column, the rows that hold no value (null or empty: none). The values of those rows are ignored.</summary>
+        public int[][] NullRows { get; private set; }
+
+        public bool HasNulls(int column) => NullRows != null && NullRows[column] != null && NullRows[column].Length > 0;
+
+        /// <summary>Marks <paramref name="rows"/> of <paramref name="column"/> as holding no value.</summary>
+        public TestTable WithNulls(int column, params int[] rows)
+        {
+            NullRows ??= new int[Columns.Length][];
+            NullRows[column] = rows;
+            return this;
+        }
+
 
         public TestTable(byte[] id, uint schemaId, TableColumnType[] types, object[] columns)
         {
@@ -88,14 +101,30 @@ namespace HSMTableBlocks.Tests
 
                 for (int c = 0; c < table.Columns.Length; c++)
                 {
+                    // Only when the test gave nulls: a table without them goes through the overloads without a map.
+                    bool nullable = table.NullRows != null && table.NullRows[c] != null;
+                    var nulls = nullable ? NullMap(table.Rows, table.NullRows[c]) : null;
+
                     switch (table.Types[c])
                     {
+                        case TableColumnType.Time when nullable: writer.AddTimeColumn((long[])table.Columns[c], nulls); break;
                         case TableColumnType.Time: writer.AddTimeColumn((long[])table.Columns[c]); break;
+                        case TableColumnType.Int64 when nullable: writer.AddInt64Column((long[])table.Columns[c], nulls); break;
                         case TableColumnType.Int64: writer.AddInt64Column((long[])table.Columns[c]); break;
+                        case TableColumnType.Double when nullable: writer.AddDoubleColumn((double[])table.Columns[c], nulls); break;
                         case TableColumnType.Double: writer.AddDoubleColumn((double[])table.Columns[c]); break;
                     }
                 }
             }
+        }
+
+        /// <summary>The null map of <paramref name="rows"/> rows with <paramref name="nullRows"/> set.</summary>
+        public static byte[] NullMap(int rows, IEnumerable<int> nullRows)
+        {
+            var map = new byte[TableNullMap.ByteLength(rows)];
+            foreach (int row in nullRows)
+                TableNullMap.SetNull(map, row);
+            return map;
         }
 
         public static void AssertSame(TestTable expected, BlockTable actual)
@@ -107,15 +136,26 @@ namespace HSMTableBlocks.Tests
 
             for (int c = 0; c < expected.Columns.Length; c++)
             {
+                var nullRows = expected.HasNulls(c) ? new HashSet<int>(expected.NullRows[c]) : new HashSet<int>();
+                var column = actual.Columns[c];
+
+                // A column with a null carries the map; one without carries none (no allocation, no flag).
+                Assert.Equal(nullRows.Count > 0, column.HasNulls);
+                if (nullRows.Count > 0)
+                    Assert.Equal(NullMap(expected.Rows, nullRows), column.NullMap);
+                for (int r = 0; r < expected.Rows; r++)
+                    Assert.Equal(nullRows.Contains(r), column.IsNull(r));
+
+                // A null row reads 0.
                 if (expected.Columns[c] is double[] doubles)
                 {
-                    Assert.Null(actual.Columns[c].Int64Values);
-                    Assert.Equal(doubles.Select(BitConverter.DoubleToInt64Bits), actual.Columns[c].DoubleValues.Select(BitConverter.DoubleToInt64Bits));
+                    Assert.Null(column.Int64Values);
+                    Assert.Equal(doubles.Select((v, r) => nullRows.Contains(r) ? 0L : BitConverter.DoubleToInt64Bits(v)), column.DoubleValues.Select(BitConverter.DoubleToInt64Bits));
                 }
                 else
                 {
-                    Assert.Null(actual.Columns[c].DoubleValues);
-                    Assert.Equal((long[])expected.Columns[c], actual.Columns[c].Int64Values);
+                    Assert.Null(column.DoubleValues);
+                    Assert.Equal(((long[])expected.Columns[c]).Select((v, r) => nullRows.Contains(r) ? 0L : v), column.Int64Values);
                 }
             }
         }
@@ -253,6 +293,7 @@ namespace HSMTableBlocks.Tests
     {
         private readonly List<byte> _directory = new();
         private readonly List<byte> _data = new();
+        private readonly List<byte> _maps = new();
 
         public PayloadBuilder Entry(byte[] id, uint schemaId, int rowCount, params byte[] types)
         {
@@ -281,7 +322,14 @@ namespace HSMTableBlocks.Tests
             return this;
         }
 
-        public byte[] Build() => _directory.Concat(_data).ToArray();
+        /// <summary>Appends bytes of the null map region, which follows every column.</summary>
+        public PayloadBuilder Maps(params byte[] bytes)
+        {
+            _maps.AddRange(bytes);
+            return this;
+        }
+
+        public byte[] Build() => _directory.Concat(_data).Concat(_maps).ToArray();
     }
 }
 
