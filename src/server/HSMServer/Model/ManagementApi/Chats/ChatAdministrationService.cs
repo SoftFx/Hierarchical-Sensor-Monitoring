@@ -209,8 +209,11 @@ namespace HSMServer.Model.ManagementApi.Chats
 
     /// <summary>
     /// The folder binding of a chat write: the folders the caller wants the chat bound to
-    /// (Desired) and the folders the caller manages (Managed). Add and remove touch only
-    /// Desired ∩ Managed — folders the caller cannot manage are never touched.
+    /// (Desired) and the folders the caller manages (Managed). Adds touch Desired ∩ Managed,
+    /// removals touch (the chat's current folders minus Desired) ∩ Managed — folders the
+    /// caller cannot manage are never touched. Managed is the scope the engine applies, not
+    /// something it derives: it must be built from the authenticated caller's own folders,
+    /// never taken from request data.
     /// </summary>
     public sealed record ChatFolderBinding(IReadOnlyCollection<Guid> Desired, IReadOnlyCollection<Guid> Managed);
 }

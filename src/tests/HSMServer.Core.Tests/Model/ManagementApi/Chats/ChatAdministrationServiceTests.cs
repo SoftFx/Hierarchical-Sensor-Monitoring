@@ -57,6 +57,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.True(result.Success);
             _chats.Verify(m => m.TryAdd(It.Is<Chat>(c =>
                 c.Id == chatId
+                && c.AuthorId == AuthorId
                 && c.Name == "Ops alerts"
                 && c.Description == "on-call"
                 && c.SendMessages
@@ -68,7 +69,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
 
-        // Moq needs a delegate type for a callback with an out parameter.
         [Fact]
         public async Task CreateChat_RowAlreadyExists_UpdatesInsteadOfAdding()
         {
@@ -241,6 +241,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             };
 
 
+        // Moq needs a delegate type for a callback with an out parameter.
         private delegate void OutChat(Guid id, out Chat chat);
 
         private delegate void OutFolder(Guid id, out FolderModel folder);
