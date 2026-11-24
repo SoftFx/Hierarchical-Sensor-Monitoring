@@ -172,8 +172,14 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // Called under the tree lock, so it does not wait for _lock (which an append holds across a synced put) when it has
         // nothing durable to do. What it keeps:
         // - the mark on disk is above every value it returns: _markPersisted is set only after the mark file holding it is
-        //   durable (EnsureMark) or from that file (Open), the file only grows, and the value returned is below a
-        //   _markPersisted read after it;
+        //   durable (EnsureMark) or from that file (Open), and the value returned is below a _markPersisted read after it.
+        //   The file only grows, with one exception: a put that reopens a failed store whose folder was removed creates a
+        //   new folder whose mark starts behind the next sequence. That open runs with _failure set (every open does,
+        //   except the first, when _opened is false), so the lock-free path is closed during it; after it, the next
+        //   sequence is at or above every value returned before (Open never lowers it) and the new mark is written ahead
+        //   before the next sequence is handed out, through the locked path. Only a peek stalled across the failure, the
+        //   backoff and the reopen could return a value the new folder's mark does not cover yet, and a restart before
+        //   that mark is written is then covered by the block service's floor (the sensor's first sequence);
         // - a sensor's first sequence is never above the sequence of a block reserved after the sensor became visible:
         //   _nextReserve only grows (Reserve, RaiseNextSequence, and an open never lowers it, see Open), so a reservation that follows the peek reads at least the value the peek read.
         // _nextReserve, _markPersisted, _blocks, _failure and _disposed are written under _lock and read here with
@@ -392,7 +398,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (Volatile.Read(ref _disposed))
                 return new TableBlockStoreException("The table block store is closed.");
 
+            // Not reached with no failure recorded except for a store never opened (a block read without a listing).
             var failure = Volatile.Read(ref _failure);
+            if (failure is null)
+                return new TableBlockStoreException($"The table block store {_folder} is not open.");
+
             return new TableBlockStoreException($"The table block store {_folder} is closed after a failure and reopens at its next use: {failure?.Message}", failure);
         }
 
@@ -499,37 +509,33 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (_blocks is not null && _failure is null)
                 return true;
 
+            // A store that has failed stays failed until an open succeeds: inside the backoff it answers the fault; past it,
+            // the caller tries the open. A read (create false) never creates: a folder that is missing or cannot be reached
+            // fails that open as a fault, the backoff starts again, and nothing in memory is dropped (a store cannot tell a
+            // removed folder from an unreachable one). Only a put or a registration (create true) creates a fresh store.
+            var mayCreate = create || _failure is null;
+
             if (_failure is not null)
             {
-                // A failed store answers the fault until its backoff has passed, whatever happened to its folder.
                 if (Clock() - _failedAt < ReopenBackoff)
                     throw new TableBlockStoreException($"The table block store failed at {_failedAt:O} and reopens after {ReopenBackoff.TotalSeconds:0} s: {_failure.Message}", _failure);
 
                 if (_nextReserve != _nextCommit)
                     throw new TableBlockStoreException("The table block store failed and waits for the puts in flight before it reopens.", _failure);
 
-                // Past it, with its databases closed and its folder gone (removed while the server ran), a read has nothing
-                // to read and creates nothing: the failure is over, and the in-memory index of the blocks that went with
-                // the folder is dropped, so that no block is listed that cannot be read. The next put creates the store.
-                if (!create && _blocks is null && !Directory.Exists(_folder))
-                {
-                    _logger.Warn($"The table block store {_folder} failed and its folder is gone: it holds no blocks now, and the next put creates it again");
-
-                    _failure = null;
-                    _maps = new IndexMaps();
-                    return false;
-                }
-
                 _logger.Warn($"Reopening the table block store {_folder} after a failure: {_failure.Message}");
             }
-            else if (!create && _blocks is null && !Directory.Exists(_folder))
+            else if (!create && !_opened && _blocks is null && !Directory.Exists(_folder))
+            {
+                // Never opened and never failed, without a folder: nothing to read, and a read creates nothing.
                 return false;
+            }
 
             _dbLock.EnterWriteLock();
             try
             {
                 CloseDatabases();
-                Open();
+                Open(mayCreate);
             }
             catch (Exception ex)
             {
@@ -547,12 +553,21 @@ namespace HSMDatabase.LevelDB.TableBlocks
             return true;
         }
 
-        private void Open()
+        // mayCreate false: a reopen started by a read; the folder and the Blocks database must be there (the index is
+        // derived and may be rebuilt).
+        private void Open(bool mayCreate)
         {
             var started = DateTime.UtcNow;
+
+            if (!mayCreate && !Directory.Exists(_folder))
+                throw new TableBlockStoreException($"The table block store folder {_folder} is missing or cannot be reached; a read does not create it " +
+                                                   "(the next put creates a new store if it is missing)");
+
             Directory.CreateDirectory(_folder);
 
-            _blocks = new DB(Path.Combine(_folder, BlocksName), Options());
+            var blocksOptions = Options();
+            blocksOptions.CreateIfMissing = mayCreate;
+            _blocks = new DB(Path.Combine(_folder, BlocksName), blocksOptions);
             _index = new DB(Path.Combine(_folder, IndexName), Options());
 
             var maps = new IndexMaps();
