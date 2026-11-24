@@ -165,28 +165,22 @@ namespace HSMServer.Notifications
                 catch (HttpRequestException ex)
                 {
                     lastError = $"Slack POST to {destinationName} failed (attempt {attempt}/{_maxRetryAttempts}): {ex.Message}";
+                    OnError(lastError);
 
                     if (attempt >= _maxRetryAttempts)
-                    {
-                        OnError(lastError);
                         return lastError;
-                    }
 
-                    OnError(lastError);
                     await Task.Delay(backoff);
                     backoff *= 2;
                 }
                 catch (TaskCanceledException)
                 {
                     lastError = $"Slack POST to {destinationName} timed out (attempt {attempt}/{_maxRetryAttempts})";
+                    OnError(lastError);
 
                     if (attempt >= _maxRetryAttempts)
-                    {
-                        OnError(lastError);
                         return lastError;
-                    }
 
-                    OnError(lastError);
                     await Task.Delay(backoff);
                     backoff *= 2;
                 }

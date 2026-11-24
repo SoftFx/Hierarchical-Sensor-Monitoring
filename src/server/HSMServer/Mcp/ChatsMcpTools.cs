@@ -10,17 +10,20 @@ using ModelContextProtocol.Server;
 namespace HSMServer.Mcp
 {
     /// <summary>
-    /// The two chat tools of the MCP surface: the id source an agent needs to
+    /// The chat tools of the MCP surface: the id source an agent needs to
     /// compose destination.chats when creating or editing alert policies and
-    /// alert templates — a thin rendering of <see cref="ChatsReadService"/>
-    /// (the #1393 pattern: one visibility rule behind both transports).
+    /// alert templates (a thin rendering of <see cref="ChatsReadService"/>,
+    /// the #1393 pattern: one visibility rule behind both transports), plus
+    /// the verification pair of #1826 — a test message that answers its
+    /// delivery outcome and the one-shot Telegram invitation issuer.
     /// </summary>
     // The same bearer token, the same caller-wide gate and folder sight, the
     // same DTOs as the REST surface; expected failures surface as tool errors
     // (isError) for the calling agent to self-correct, never as
-    // protocol-level crashes. Read-only like every tool of the current
-    // surface: chat lifecycle (create/edit/delete, webhook and Telegram
-    // bindings) stays web-UI-only.
+    // protocol-level crashes. Not all read-only: the verification pair writes
+    // (ReadOnly = false) and the invitation starts a Telegram binding. The
+    // rest of the chat lifecycle (create/edit/delete, webhook changes) stays
+    // web-UI-only until #1829.
     [McpServerToolType]
     public sealed class ChatsMcpTools
     {

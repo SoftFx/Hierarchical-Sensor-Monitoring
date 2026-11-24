@@ -129,8 +129,11 @@ namespace HSMServer.ServiceExtensions
             // The chat verification surface (#1826): the result-carrying test
             // message and the Telegram invitation issuer, behind both the REST
             // actions and the MCP tools. The delivery half adapts the concrete
-            // channels of NotificationsCenter (their types are sealed).
-            services.AddScoped<NotificationsCenterChatDelivery>();
+            // channels of NotificationsCenter (their types are sealed) and is
+            // registered under the seam it is consumed through — the service
+            // asks for the interface, so a concrete-only registration leaves
+            // every chat API action and MCP chat tool unresolvable.
+            services.AddScoped<IChatDelivery, NotificationsCenterChatDelivery>();
             services.AddScoped<ChatVerificationService>();
 
             // The shared folder read implementation — same shape: behind both

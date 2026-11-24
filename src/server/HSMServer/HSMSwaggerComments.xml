@@ -1067,10 +1067,12 @@
         </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
             <summary>
-            The two chat tools of the MCP surface: the id source an agent needs to
+            The chat tools of the MCP surface: the id source an agent needs to
             compose destination.chats when creating or editing alert policies and
-            alert templates — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>
-            (the #1393 pattern: one visibility rule behind both transports).
+            alert templates (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>,
+            the #1393 pattern: one visibility rule behind both transports), plus
+            the verification pair of #1826 — a test message that answers its
+            delivery outcome and the one-shot Telegram invitation issuer.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.FoldersMcpTools">

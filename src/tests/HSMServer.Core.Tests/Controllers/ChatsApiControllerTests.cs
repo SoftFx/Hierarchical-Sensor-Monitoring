@@ -9,14 +9,19 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
+using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.Authentication;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
+using HSMServer.ServerConfiguration;
+using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using Xunit;
 
@@ -526,6 +531,57 @@ namespace HSMServer.Core.Tests.Controllers
             var answer = await CreateController().PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
 
             Assert.Equal(422, StatusCodeOf(answer));
+        }
+
+
+        // === The DI composition is load-bearing (#1841 review, P0) ===
+
+        // ChatVerificationService asks for the IChatDelivery SEAM, so the
+        // registration must map that interface to the NotificationsCenter
+        // adapter. The concrete-only registration of the finding left
+        // IChatDelivery unresolvable: every action of this controller — the
+        // new POSTs AND the pre-existing GET surface alert/template writes
+        // resolve chat ids through — answered 500, and every MCP chat tool
+        // failed the same way. The provider below is the real
+        // AddApplicationServices registration (which also carries
+        // AddHsmMcpServer's tool types and the HTTP context accessor); the
+        // storage managers and the delivery seam are replaced by this
+        // suite's mocks so no LevelDB or live channel is touched — the
+        // SensorPoliciesApiControllerTests precedent.
+        [Fact]
+        public void AddApplicationServices_ResolvesTheChatSurfaceThroughTheIChatDeliverySeam()
+        {
+            // AddApplicationServices registers config.ApiTokens as an instance
+            // at registration time — it must be non-null (everything else is
+            // only resolved lazily and is replaced below anyway).
+            var config = new Mock<IServerConfig>();
+            config.Setup(c => c.ApiTokens).Returns(new ApiTokensConfig());
+
+            var services = new ServiceCollection()
+                .AddApplicationServices(config.Object);
+
+            // The pin itself: the seam is registered, and it maps to the
+            // adapter over NotificationsCenter's concrete channels.
+            Assert.Equal(typeof(NotificationsCenterChatDelivery),
+                services.FirstOrDefault(d => d.ServiceType == typeof(IChatDelivery))?.ImplementationType);
+
+            services.Replace(ServiceDescriptor.Singleton(_chats.Object));
+            services.Replace(ServiceDescriptor.Singleton(_authorization.Object));
+            services.Replace(ServiceDescriptor.Singleton(_users.Object));
+            services.Replace(ServiceDescriptor.Singleton(_delivery.Object));
+
+            using var provider = services.BuildServiceProvider();
+
+            Assert.NotNull(provider.GetRequiredService<ChatVerificationService>());
+
+            // MVC builds controllers through the type activator over the
+            // request provider, and the MCP SDK constructs tool instances the
+            // same way in the request scope (WithTools reflects over the
+            // type; it does not register the class itself as a service) —
+            // so both are resolved through ActivatorUtilities here, the
+            // construction path each transport really takes.
+            Assert.NotNull(ActivatorUtilities.CreateInstance<ChatsApiController>(provider));
+            Assert.NotNull(ActivatorUtilities.CreateInstance<ChatsMcpTools>(provider));
         }
     }
 }
