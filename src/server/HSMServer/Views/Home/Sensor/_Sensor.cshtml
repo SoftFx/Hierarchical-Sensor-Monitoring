@@ -19,6 +19,10 @@
     {
         @await Html.PartialAsync("Sensor/History/_SensorFileContent", Model);
     }
+    else if (Model.IsTableSensor)
+    {
+        @await Html.PartialAsync("Sensor/History/_SensorTableSchema", Model);
+    }
     else
     {
         <div id="sensorHistorySpinner" class="center-relative-history-spinner">

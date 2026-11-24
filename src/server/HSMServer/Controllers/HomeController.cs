@@ -450,6 +450,8 @@ namespace HSMServer.Controllers
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
+            // A table sensor's rows are not cleared (#1844): the core refuses that clear, and a node
+            // clear leaves its table sensors alone.
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 await _treeValuesCache.ClearNodeHistoryAsync(GetRequest(node.Id));
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
@@ -865,7 +867,10 @@ namespace HSMServer.Controllers
             // id — in that case sensor is null and BuildAlert produces a default block.
             _treeViewModel.Sensors.TryGetValue(entityId, out var sensor);
 
-            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, sensor);
+            // A table sensor has no alerts (#1844); neither has any other type without an alert block.
+            if (DataAlertViewModel.BuildAlert(type, sensor) is not { } viewModel)
+                return BadRequest(NoAlertsFor(type));
+
             viewModel.Schedules = GetAlertSchedulesSelectList();
 
             if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
@@ -880,8 +885,14 @@ namespace HSMServer.Controllers
 
         public IActionResult AddAlertCondition(byte type)
         {
-            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(type));
+            if (BuildAlertCondition(type) is not { } condition)
+                return BadRequest(NoAlertsFor(type));
+
+            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition);
         }
+
+        private static string NoAlertsFor(byte type) =>
+            type == (byte)SensorType.Table ? "Table sensors have no alerts." : $"Sensors of type {type} have no alerts.";
 
         public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl, Guid? folderId = null)
         {
@@ -896,7 +907,8 @@ namespace HSMServer.Controllers
 
         public IActionResult GetOperation(byte type, AlertProperty property)
         {
-            var condition = BuildAlertCondition(type);
+            if (BuildAlertCondition(type) is not { } condition)
+                return BadRequest(NoAlertsFor(type));
 
             return property switch
             {
@@ -972,6 +984,10 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
+
+            // A table sensor has no values to edit (#1844).
+            if (_treeViewModel.Sensors.TryGetValue(modal.SensorId, out var edited) && edited.IsTableSensor)
+                return BadRequest("Table sensors have no values to edit.");
 
             var comment = modal.Comment;
             var updateRequest = new UpdateSensorValueRequestModel (modal.SensorId, modal.Path)

@@ -237,6 +237,10 @@ namespace HSMServer.Controllers
             if (data.PathTemplates == null || data.PathTemplates.All(string.IsNullOrWhiteSpace))
                 ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
 
+            // A table sensor has no alerts (#1844).
+            if (data.Type == (byte)SensorType.Table)
+                ModelState.AddModelError(nameof(data.Type), "Table sensors have no alerts: no template can target them.");
+
             Dictionary<Guid, string> availableChats = null;
             if (_folders.TryGetValue(data.FolderId, out var folder))
                 availableChats = folder.GetAvailableChats(_chats);

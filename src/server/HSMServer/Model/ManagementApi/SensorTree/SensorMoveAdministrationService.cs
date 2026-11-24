@@ -275,6 +275,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             SensorMoveOutcome.SensorNotFound => NotFound,
             SensorMoveOutcome.DestinationNotFound => NotFound,
             SensorMoveOutcome.InvalidPath => "invalidPath",
+            SensorMoveOutcome.NotSupported => "notSupported",
             _ => "failed",
         };
 

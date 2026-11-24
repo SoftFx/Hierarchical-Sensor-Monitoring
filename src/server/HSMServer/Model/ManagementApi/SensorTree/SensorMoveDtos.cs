@@ -58,7 +58,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         [Description("The sensor id.")]
         public Guid SensorId { get; init; }
 
-        [Description("Value table: `moved`, `merged` (moved and absorbed the sensor that held the path), `unchanged` (already there), `conflict` (a sensor holds the path and no merge was asked, or the types differ), `notFound` (unknown or invisible sensor), `forbidden` (the token's owner may not write this sensor), `invalidPath`, `failed`.")]
+        [Description("Value table: `moved`, `merged` (moved and absorbed the sensor that held the path), `unchanged` (already there), `conflict` (a sensor holds the path and no merge was asked, or the types differ), `notFound` (unknown or invisible sensor), `forbidden` (the token's owner may not write this sensor), `invalidPath`, `notSupported` (a table sensor: it never moves), `failed`.")]
         public string Outcome { get; init; }
 
         [Description("Full path before the move; null when the sensor was not found.")]
