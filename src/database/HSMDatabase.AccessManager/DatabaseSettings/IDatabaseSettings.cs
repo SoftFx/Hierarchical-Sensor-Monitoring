@@ -41,6 +41,9 @@ namespace HSMDatabase.AccessManager
 
         public string PathToExport => Path.Combine(DatabaseFolder, ExportFolder);
 
+        // The block store of table sensors (#1844): the Blocks and BlockIndex databases. Created on first use only.
+        public string PathToTableBlocks => Path.Combine(DatabaseFolder, "Tables");
+
 
         public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(PathToJournalDb, JournalValuesDatabaseName, from, to);
 

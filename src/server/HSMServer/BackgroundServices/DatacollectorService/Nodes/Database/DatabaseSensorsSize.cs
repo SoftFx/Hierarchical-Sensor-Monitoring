@@ -16,6 +16,13 @@ namespace HSMServer.BackgroundServices
         internal const string TotalDbName = "Total";
         internal const string EnvironmentDbName = "Environment";
         internal const string DashboardsDbName = "Dashboards";
+        internal const string TablesDbName = "Tables";
+
+        private const string TablesDescription = "The block store of table sensors (Tables: Blocks and BlockIndex). " +
+            "It is NOT included in the database backups, like sensor history. The sensor appears once the store exists.";
+
+        // Created when the block store's folder first exists (#1844): a server without table sensors gets no such sensor.
+        private DatabaseSizeSensor _tables;
 
 
         private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
@@ -31,7 +38,7 @@ namespace HSMServer.BackgroundServices
             { DashboardsDbName, new("The ServerLayout database contains information about dashboards (meta information, information about charts, panels and etc.). " +
                                     "It is backed up on the backup schedule (see the Backup node).") },
             { JournalsDbName, new("The database contains journal records for each sensor.") },
-            { TotalDbName, new("All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases.") },
+            { TotalDbName, new("All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout, Journals and Tables databases.") },
         };
 
 
@@ -51,24 +58,33 @@ namespace HSMServer.BackgroundServices
         {
             foreach (var (_, sensor) in Sensors)
                 sensor.SendInfo();
+
+            if (_tables is null && _database.TableBlocks?.Exists == true)
+            {
+                _tables = new DatabaseSizeSensor(TablesDescription) { GetSize = () => _database.TableBlocksDbSize };
+                _tables.Sensor = _collector.CreateDoubleSensor($"{NodeName}/{TablesDbName} data size", SizeOptions(TablesDbName, TablesDescription));
+            }
+
+            _tables?.SendInfo();
         }
 
         private void CreateDataSizeSensor(string databaseName, Func<long> getSizeFunc)
         {
             var sensor = Sensors[databaseName];
-            var options = new InstantSensorOptions
-            {
-                Alerts = [],
-                TTL = TimeSpan.MaxValue,
-                EnableForGrafana = true,
-                SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
-                KeepHistory = TimeSpan.MaxValue,
-                Description = $"The sensor sends information about {databaseName} database size in MB, posted once a day. {sensor.Description}"
-            };
 
             sensor.GetSize = getSizeFunc;
-            sensor.Sensor = _collector.CreateDoubleSensor($"{NodeName}/{databaseName} data size", options);
+            sensor.Sensor = _collector.CreateDoubleSensor($"{NodeName}/{databaseName} data size", SizeOptions(databaseName, sensor.Description));
         }
+
+        private static InstantSensorOptions SizeOptions(string databaseName, string description) => new()
+        {
+            Alerts = [],
+            TTL = TimeSpan.MaxValue,
+            EnableForGrafana = true,
+            SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
+            KeepHistory = TimeSpan.MaxValue,
+            Description = $"The sensor sends information about {databaseName} database size in MB, posted once a day. {description}"
+        };
 
 
         private sealed record DatabaseSizeSensor

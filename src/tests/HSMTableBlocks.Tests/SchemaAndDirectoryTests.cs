@@ -149,6 +149,17 @@ namespace HSMTableBlocks.Tests
             }
 
             Assert.True(Schema(("t", T.Time), ("i", T.Int64), ("d", T.Double)).HasColumnTypes(directory.Entries[0].ColumnTypes));
+
+            // ReadTable gives the table's position in the directory, which is how the server names a refused table.
+            for (int i = 0; i < tables.Length; i++)
+            {
+                var table = TableBlockReader.ReadTable(block, tables[i].Id, out var index);
+                Assert.Equal(i, index);
+                Samples.AssertSame(tables[i], table);
+            }
+
+            Assert.Null(TableBlockReader.ReadTable(block, Encoding.ASCII.GetBytes("none"), out var missing));
+            Assert.Equal(-1, missing);
         }
     }
 }

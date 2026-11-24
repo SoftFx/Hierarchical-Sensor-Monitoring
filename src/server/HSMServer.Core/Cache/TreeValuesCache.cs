@@ -157,6 +157,9 @@ namespace HSMServer.Core.Cache
 
             _changeSetJournal = changeSetJournal;
 
+            OpenTableBlockStore = () => _database.TableBlocks?.EnsureOpened();
+            TableBlockSequence = () => _database.TableBlocks?.PeekNextSequence() ?? 0L;
+
             Initialize();
 
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
@@ -949,11 +952,18 @@ namespace HSMServer.Core.Cache
         // needs longer than this for one registration is not working. Settable for tests.
         internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
 
-        // The sequence number the next stored table block will get (#1844): a new table
-        // sensor records it as its FirstSequence, so blocks stored before it existed (an
-        // earlier sensor of the same path) are never read as its rows. The block store
-        // (#1844, part 2b) sets it; until then no block exists and every sensor starts at 0.
-        internal Func<long> TableBlockSequence { get; set; } = () => 0L;
+        // The sequence number the next reserved table block will get (#1844): a new table
+        // sensor records it as its FirstSequence, so blocks numbered before it existed (an
+        // earlier sensor of the same path) are never read as its rows. The block store of
+        // the database by default (set in the constructor); a test seam.
+        internal Func<long> TableBlockSequence { get; set; }
+
+        // Opens the block store before a table sensor is created (#1844), outside the tree-structure lock: the first open
+        // of a process loads the index and may rebuild it from every block, and nothing of that may hold up the other
+        // registrations of the server. Under the lock, TableBlockSequence then only reads the open store. A test seam.
+        internal Action OpenTableBlockStore { get; set; }
+
+        internal bool IsTreeStructureLockHeld => Monitor.IsEntered(_treeStructureLock);
 
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
@@ -4241,6 +4251,23 @@ namespace HSMServer.Core.Cache
         {
             storeFailed = false;
 
+            // A table sensor reads the block store's next sequence under the lock below; the store is opened here, before
+            // it. A store that cannot open is a fault of the store, which a repeat can cure.
+            if (type is SensorType.Table)
+            {
+                try
+                {
+                    OpenTableBlockStore?.Invoke();
+                }
+                catch (HSMDatabase.AccessManager.TableBlocks.TableBlockStoreException ex)
+                {
+                    sensor = null;
+                    error = $"Table sensor '{request.Path}' was not created: {ex.Message}";
+                    storeFailed = true;
+                    return false;
+                }
+            }
+
             lock (_treeStructureLock)
             {
                 if (TryGetSensorFromCache(productId, request.Path, out sensor))
@@ -4271,12 +4298,11 @@ namespace HSMServer.Core.Cache
                     return false;
                 }
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-
-                var sensorName = request.SensorName;
-
                 // A table sensor (#1844) is created with its schema and the first block
-                // sequence its rows may come from, taken before the sensor can be seen.
+                // sequence its rows may come from: the sequence the next reserved block will
+                // get, read before the sensor can be seen (see TableBlockService, "a sensor
+                // created during a put"). Reading it opens the block store; a store that
+                // cannot open is a fault of the store, which a repeat can cure.
                 TableSensorEntity table = null;
                 if (type is SensorType.Table)
                 {
@@ -4286,8 +4312,14 @@ namespace HSMServer.Core.Cache
                         return false;
                     }
 
+                    storing = true;
                     table = TableSensorModel.ToEntity(schema, TableBlockSequence());
+                    storing = false;
                 }
+
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+
+                var sensorName = request.SensorName;
 
                 SensorEntity entity = new()
                 {

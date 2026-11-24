@@ -22,6 +22,8 @@
 
         HistoryCompactionConfig HistoryCompaction { get; }
 
+        TableSensorsConfig TableSensors { get; }
+
         OidcConfig Oidc { get; }
 
 

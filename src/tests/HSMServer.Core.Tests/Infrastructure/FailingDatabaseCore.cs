@@ -50,6 +50,10 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public long TotalDbSize => _inner.TotalDbSize;
 
+        public HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks => _inner.TableBlocks;
+
+        public long TableBlocksDbSize => _inner.TableBlocksDbSize;
+
         public int SensorValuesPageCount => _inner.SensorValuesPageCount;
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => _inner.SensorValuesDatabases;

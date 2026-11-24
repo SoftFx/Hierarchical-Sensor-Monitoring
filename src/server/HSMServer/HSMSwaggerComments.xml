@@ -31,6 +31,15 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
+            <summary>
+            Self-monitoring of the block store of table sensors (#1844), under <c>Database/Tables</c>, posted from the 5-minute
+            self-monitoring sample. Inert until the store has been opened in this process: a server that never sees a table
+            sensor creates none of these sensors and posts nothing. The values are counters since the process started, posted
+            when they change. A failure counter is Error in the sample in which it grew and Ok again at the next sample without
+            a new failure (posted once more with the same value), so one transient failure does not stay Error until a restart.
+            </summary>
+        </member>
         <member name="T:HSMServer.Controllers.AccessKeysApiController">
             <summary>
             A product's access keys (#1787) — the id-discovery surface of the

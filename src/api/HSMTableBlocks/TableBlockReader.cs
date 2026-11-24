@@ -32,20 +32,37 @@ namespace HSMTableBlocks
         /// Reads the one table whose identifier is <paramref name="tableId"/>, or returns null when the block has no
         /// such table. The block is verified as a whole, but only that table's columns are copied out.
         /// </summary>
-        public static BlockTable ReadTable(ReadOnlySpan<byte> block, ReadOnlySpan<byte> tableId, TableBlockLimits limits = null)
+        public static BlockTable ReadTable(ReadOnlySpan<byte> block, ReadOnlySpan<byte> tableId, TableBlockLimits limits = null) =>
+            ReadTable(block, tableId, out _, limits);
+
+        /// <summary>
+        /// Reads the one table whose identifier is <paramref name="tableId"/>, as <see cref="ReadTable(ReadOnlySpan{byte}, ReadOnlySpan{byte}, TableBlockLimits)"/>
+        /// does, and gives its position in the directory (<paramref name="index"/>; -1 when the block has no such table).
+        /// </summary>
+        public static BlockTable ReadTable(ReadOnlySpan<byte> block, ReadOnlySpan<byte> tableId, out int index, TableBlockLimits limits = null)
         {
             limits ??= TableBlockLimits.Default;
             var header = ParseHeader(block, limits);
             var id = tableId.ToArray();
+            var found = -1;
 
-            return WithPayload(block, header, limits, null, (payload, directory) =>
+            var table = WithPayload(block, header, limits, null, (payload, directory) =>
             {
-                foreach (var entry in directory.Entries)
+                for (int i = 0; i < directory.Entries.Length; i++)
+                {
+                    var entry = directory.Entries[i];
                     if (payload.Slice(entry.IdOffset, entry.IdLength).SequenceEqual(id))
+                    {
+                        found = i;
                         return Materialize(payload, directory, entry);
+                    }
+                }
 
                 return null;
             });
+
+            index = found;
+            return table;
         }
 
         /// <summary>

@@ -36,6 +36,12 @@ namespace HSMServer.Core.DataLayer
 
         long TotalDbSize { get; }
 
+        // The block store of table sensors (#1844). Nothing is opened before its first use.
+        HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks { get; }
+
+        // The size of its folder on disk; 0 when it does not exist (nothing is opened).
+        long TableBlocksDbSize { get; }
+
         int SensorValuesPageCount { get; }
 
         List<ISensorValuesDatabase> SensorValuesDatabases { get; }

@@ -35,6 +35,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly JournalValuesDatabaseDictionary _journalValuesDatabases;
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
+        private readonly HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase _tableBlocks;
 
         public IDashboardCollection Dashboards { get; }
 
@@ -96,6 +97,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long JournalDbSize => _settings.PathToJournalDb.GetSize();
 
+        public HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks => _tableBlocks;
+
+        public long TableBlocksDbSize => _settings.PathToTableBlocks.GetSize();
+
         public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => [.. _sensorValuesDatabases.OrderBy(x => x.From)];
@@ -131,6 +136,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
             ChangeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
+
+            // No IO here: the store opens on its first use (#1844).
+            _tableBlocks = new HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase(_settings.PathToTableBlocks);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -1751,6 +1759,9 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 item?.Dispose();
             }
+
+            // Waits for a put in flight, then closes the block store (#1844).
+            _tableBlocks.Dispose();
             
             _logger.Info($"{nameof(DatabaseCore)} dispposed");
         }
