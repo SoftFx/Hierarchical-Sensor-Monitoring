@@ -148,15 +148,19 @@ namespace HSMTableBlocks
 
         /// <summary>
         /// Adds a time column whose rows marked in <paramref name="nulls"/> hold no value (see
-        /// <see cref="AddInt64Column(ReadOnlySpan{long}, ReadOnlySpan{byte})"/>). Not for the first column: the time of a
-        /// row is never null (<see cref="InvalidOperationException"/>). The value of a null row is not checked.
+        /// <see cref="AddInt64Column(ReadOnlySpan{long}, ReadOnlySpan{byte})"/>); the map is checked by the same rules. The
+        /// time of a row is never null: for the first column a map that marks a row throws
+        /// <see cref="InvalidOperationException"/>, while an empty map or one that marks no row is no map, as for every
+        /// column. The value of a null row is not checked.
         /// </summary>
         public void AddTimeColumn(ReadOnlySpan<long> ticks, ReadOnlySpan<byte> nulls)
         {
-            if (!nulls.IsEmpty && _columnCountOffset >= 0 && _openColumns == 0)
-                throw new InvalidOperationException("the first column is the time of the row, which is never null: it takes no null map");
+            // The map is checked (length, padding) first, as for every column; only a marked row is refused here.
+            bool first = _columnCountOffset >= 0 && _openColumns == 0;
+            if (first && HasNulls(nulls, ticks.Length))
+                throw new InvalidOperationException("the first column is the time of the row, which is never null: its map may mark no row");
 
-            bool hasNulls = CheckColumn(ticks.Length, TableColumnType.Time, nulls);
+            bool hasNulls = CheckColumn(ticks.Length, TableColumnType.Time, first ? ReadOnlySpan<byte>.Empty : nulls);
 
             long min = long.MaxValue, max = long.MinValue;
             for (int i = 0; i < ticks.Length; i++)

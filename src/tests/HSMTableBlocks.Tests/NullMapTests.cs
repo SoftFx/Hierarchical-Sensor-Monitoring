@@ -212,13 +212,50 @@ namespace HSMTableBlocks.Tests
         }
 
         [Fact]
+        public void The_first_column_takes_a_map_that_marks_no_row_as_every_column_does()
+        {
+            // A collector that keeps a map buffer per column passes one for the time too: all zero, it is no map.
+            var tables = new[] { Samples.Quotes("q", 9, 11), Samples.Quotes("r", 1, 12) };
+            var plain = Samples.Write(tables);
+
+            using var writer = new TableBlockWriter();
+            foreach (var t in tables)
+            {
+                writer.BeginTable(t.Id, t.SchemaId, t.Rows);
+                writer.AddTimeColumn((long[])t.Columns[0], new byte[TableNullMap.ByteLength(t.Rows)]);
+                writer.AddDoubleColumn((double[])t.Columns[1]);
+                writer.AddDoubleColumn((double[])t.Columns[2]);
+                writer.AddInt64Column((long[])t.Columns[3]);
+            }
+
+            Assert.Equal(plain, writer.ToArray());
+        }
+
+        [Fact]
+        public void The_first_column_refuses_a_marked_row_and_a_map_of_the_wrong_length()
+        {
+            using var writer = new TableBlockWriter();
+            writer.BeginTable(new byte[] { 1 }, 1, 9);
+            var ticks = Enumerable.Repeat(T0, 9).ToArray();
+
+            Assert.Throws<InvalidOperationException>(() => writer.AddTimeColumn(ticks, new byte[] { 0, 0x01 }));
+            Assert.Throws<ArgumentException>(() => writer.AddTimeColumn(ticks, new byte[1]));
+            Assert.Throws<ArgumentException>(() => writer.AddTimeColumn(ticks, new byte[3]));
+            Assert.Throws<ArgumentException>(() => writer.AddTimeColumn(ticks, new byte[] { 0, 0x02 }));
+
+            // Nothing was added: the time column can still be added.
+            writer.AddTimeColumn(ticks);
+            Assert.Single(TableBlockReader.Read(writer.ToArray()).Tables);
+        }
+
+        [Fact]
         public void The_writer_checks_its_null_maps()
         {
             using var writer = new TableBlockWriter();
             writer.BeginTable(new byte[] { 1 }, 1, 9);
 
             // The time of a row is never null.
-            Assert.Throws<InvalidOperationException>(() => writer.AddTimeColumn(new long[9], new byte[2]));
+            Assert.Throws<InvalidOperationException>(() => writer.AddTimeColumn(new long[9], new byte[] { 0x01, 0 }));
             writer.AddTimeColumn(Enumerable.Repeat(T0, 9).ToArray());
 
             Assert.Throws<ArgumentException>(() => writer.AddInt64Column(new long[9], new byte[1]));
