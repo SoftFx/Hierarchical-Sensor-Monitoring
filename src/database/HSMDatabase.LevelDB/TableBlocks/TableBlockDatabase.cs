@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -606,18 +607,30 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
             if (ticket.Sequence != _nextCommit)
             {
+                // Nothing reserves inside a gap left by RaiseNextSequence (it is below the raised next sequence and above
+                // every ticket reserved before the raise), so a ticket done ahead is never inside one.
+                Debug.Assert(_commitGap is not { } open || ticket.Sequence < open.From || ticket.Sequence >= open.To,
+                    $"ticket {ticket.Sequence} lies inside the skipped sequences {_commitGap}");
+
                 _doneAhead.Add(ticket.Sequence);
                 return;
             }
 
             _nextCommit++;
-            while (_doneAhead.Remove(_nextCommit))
-                _nextCommit++;
 
-            if (_commitGap is { } gap && _nextCommit == gap.From)
+            // Drain the tickets done ahead and jump over the gap, until neither applies: a ticket at the gap's far end
+            // may have been done before the commit order reached the gap.
+            while (true)
             {
-                _nextCommit = gap.To;
-                _commitGap = null;
+                if (_doneAhead.Remove(_nextCommit))
+                    _nextCommit++;
+                else if (_commitGap is { } gap && _nextCommit == gap.From)
+                {
+                    _nextCommit = gap.To;
+                    _commitGap = null;
+                }
+                else
+                    break;
             }
 
             Monitor.PulseAll(_lock);

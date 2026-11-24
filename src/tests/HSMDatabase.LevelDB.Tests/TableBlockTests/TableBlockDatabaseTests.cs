@@ -450,6 +450,37 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_ticket_done_at_the_far_end_of_a_raised_gap_does_not_stop_later_appends()
+        {
+            // Review of #1844 2b: ticket 5 in flight, the next sequence raised to 100, ticket 100 reserved and skipped
+            // before ticket 5 is done, then ticket 5 done. The commit order must jump over the gap and drain ticket 100,
+            // or the append of ticket 101 waits for good.
+            var store = Open();
+            for (int i = 0; i < 5; i++)
+                store.Skip(store.Reserve());
+
+            var inFlight = store.Reserve();
+            Assert.Equal(5, inFlight.Sequence);
+
+            store.RaiseNextSequence(100);
+
+            var farEnd = store.Reserve();
+            Assert.Equal(100, farEnd.Sequence);
+            store.Skip(farEnd);
+
+            var next = store.Reserve();
+            Assert.Equal(101, next.Sequence);
+            var appended = Task.Run(() => store.Append(next, Envelope(101), Block(("a", 1)), 0, 0, 1, 1));
+
+            store.Skip(inFlight);
+
+            // A generous bound that only matters when the order is stuck: the test fails instead of hanging.
+            Assert.True(appended.Wait(TimeSpan.FromSeconds(30)), "the append of ticket 101 never got its turn");
+            Assert.Equal(TableBlockAppendOutcome.Stored, appended.Result.Outcome);
+            Assert.Equal(101, appended.Result.Entry.Sequence);
+        }
+
+        [Fact]
         public void The_mark_is_written_ahead_in_steps()
         {
             var store = Open();
