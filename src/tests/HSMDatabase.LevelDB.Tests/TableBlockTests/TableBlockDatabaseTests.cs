@@ -558,7 +558,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             Assert.Equal(0, store.OpenRetries);
         }
 
-        [Fact]
+        [OnlyOnWindowsFact]
         public void An_open_while_another_handle_holds_CURRENT_without_delete_sharing_is_cured_by_the_retry()
         {
             // The real error: CURRENT open elsewhere without delete sharing (as a scanner opens a new file) makes LevelDB's
@@ -1167,6 +1167,16 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             }
 
             return text.ToString();
+        }
+
+        private sealed class OnlyOnWindowsFactAttribute : FactAttribute
+        {
+            public OnlyOnWindowsFactAttribute()
+            {
+                if (!OperatingSystem.IsWindows())
+                    Skip = "Windows only: a handle without delete sharing blocks LevelDB's replace of CURRENT there; on Linux rename(2) " +
+                           "replaces an open file and FileShare blocks nothing, so the error this retry cures cannot be made";
+            }
         }
     }
 }

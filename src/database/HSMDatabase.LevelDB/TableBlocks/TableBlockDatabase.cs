@@ -715,7 +715,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
         private long _openRetries;
 
-        /// <summary>Retries of a database open after a transient file error, since the process started. For tests.</summary>
+        /// <summary>Retries of a database open after a transient file error, since this store was created. For tests.</summary>
         internal long OpenRetries => Interlocked.Read(ref _openRetries);
 
         /// <summary>Opens a LevelDB database. Test seam for an open that fails.</summary>
