@@ -15,6 +15,19 @@ namespace HSMServer.Core.Model.Requests
         // such a registration must not displace a moved sensor's alias (#1718).
         public bool TypeIsExplicit { get; init; }
 
+        // The schema of a table sensor (Type == Table, ADR-0021, #1844): required for a
+        // table registration, ignored for every other type. A table sensor is created with
+        // it; registering an existing table sensor again needs the same schema.
+        public HSMTableBlocks.TableSchema Schema { get; init; }
+
+        // Written by the cache when it refused a table registration (#1844): another
+        // schema than the registered one, a path held by a sensor of another kind, a
+        // missing schema. Unlike a failed registration of any other kind, which is
+        // answered Ok, AddOrUpdateSensorAsync answers this as an error: the caller must
+        // learn that its rows will be refused. Unlike Fault, sending it again changes
+        // nothing. Null when the registration was not refused.
+        public string Refusal { get; internal set; }
+
         // Written by the cache while it applies the request, read by
         // TreeValuesCache.AddOrUpdateSensorAsync once the queue has answered (#1756):
         // the text of a failure of the store, which the queue handler would otherwise only

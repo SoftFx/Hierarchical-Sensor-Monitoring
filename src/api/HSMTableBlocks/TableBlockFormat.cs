@@ -45,13 +45,6 @@ namespace HSMTableBlocks
 
         internal const uint ZstdFrameMagic = 0xFD2FB528;
 
-        /// <summary>
-        /// Identifier comparisons made by the uniqueness checks on this thread. Lets the tests prove the checks stay
-        /// O(n log n) by counting work instead of measuring time.
-        /// </summary>
-        [ThreadStatic]
-        internal static long IdComparisons;
-
 
         /// <summary>CRC-32 (IEEE 802.3, as in zlib and gzip) over header bytes 0..39 and the compressed payload.</summary>
         internal static uint Checksum(ReadOnlySpan<byte> header, ReadOnlySpan<byte> compressed)

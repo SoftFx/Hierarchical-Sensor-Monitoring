@@ -1,7 +1,7 @@
 # Feature: Table block format
 
 > Owner: api | Last reviewed: 2026-11-24 | Canonical: yes
-> Scope: the byte format of a table block (ADR-0021, points 2, 3 and 5; step 1 of epic #1842, #1843), its limits, its error codes, its versioning rule, and the library `HSMTableBlocks` that writes and reads it.
+> Scope: the byte format of a table block (ADR-0021, points 2, 3 and 5; step 1 of epic #1842, #1843), its limits, its error codes, its versioning rule, the table schema and its id (#1844), and the library `HSMTableBlocks` that writes and reads it.
 
 ---
 
@@ -11,7 +11,7 @@ A **block** is what a collector sends for table sensors at every tick: the rows 
 
 A block is a fixed 44-byte header followed by exactly one zstd frame. Inside the frame: a directory with one entry per table (identifier, schema id, row count, column types), then the columns as raw fixed-width little-endian arrays, column-major: column 0 of every table, then column 1 of every table that has one, and so on. No HSM column coders are used.
 
-`HSMTableBlocks` (`src/api/HSMTableBlocks`, netstandard2.0) is a pure library: no storage, no transport, no server or collector dependency. Nothing uses it yet; the collector (step 2), the server ingest (step 3) and the read path (step 4) will.
+`HSMTableBlocks` (`src/api/HSMTableBlocks`, netstandard2.0) is a pure library: no storage, no transport, no server or collector dependency. The server uses `TableSchema` for table sensors (#1844, `aicontext/features/server/table-sensors/feature.md`); the server's block store, its read path and the collectors will use the block reader and writer.
 
 This document is the format specification: it is meant to be precise enough to write a second writer or reader from it.
 
@@ -24,7 +24,7 @@ This document is the format specification: it is meant to be precise enough to w
 - **Unique identifiers.** A table identifier appears at most once in a block. Writer (in `ToArray`) and reader check it by sorting the identifiers bytewise and comparing neighbours: O(n log n) comparisons for any input.
 - **Fail loudly, never partially.** Every read verifies the whole block and throws `TableBlockFormatException` (one type, with a `TableBlockError` code) for anything wrong. It never returns a partial block. Block bytes are untrusted input: every read is bounds-checked.
 - **Bounded memory.** The limits (below) are checked from the header before anything is allocated or decompressed. Decompression writes into a buffer of exactly the declared decompressed length and stops there: a frame that would produce more is refused. A reader allocates at most the declared decompressed length (rented) plus the arrays it returns.
-- **Thread safety.** `TableBlockReader` is stateless and safe from any thread. A `TableBlockWriter` is not thread-safe: one instance per thread (or per tick loop); it is meant to be reused with `Reset()`. `TableBlockLimits` is immutable.
+- **Thread safety.** `TableBlockReader` is stateless and safe from any thread. A `TableBlockWriter` is not thread-safe: one instance per thread (or per tick loop); it is meant to be reused with `Reset()`. `TableBlockLimits` and `TableSchema` are immutable.
 
 ## Primary Workflows
 
@@ -32,7 +32,7 @@ This document is the format specification: it is meant to be precise enough to w
 |---|---|---|
 | 1 | Write the rows of every table sensor of a tick into one block | collector (step 2) |
 | 2 | Read a block's header to check its size and limits before anything else | server ingest (step 3) |
-| 3 | Read every table of a block to check it against the registered sensors and store it | server ingest (step 3) |
+| 3 | Read the directory of a block (`ReadDirectory`) to check it against the registered sensors and store it | server ingest (#1844) |
 | 4 | Read one table out of a block | server range read (step 4), client library |
 | 5 | Write a block of one table as the answer to a range read | server range read (step 4) |
 
@@ -46,6 +46,8 @@ This document is the format specification: it is meant to be precise enough to w
 | `TableBlockReader.ReadHeader(ReadOnlySpan<byte>, TableBlockLimits = null) -> TableBlockHeader` | `src/api/HSMTableBlocks/TableBlockReader.cs` | Verifies the header, checksum, limits and frame shape; no decompression. |
 | `TableBlockReader.Read(ReadOnlySpan<byte>, TableBlockLimits = null) -> TableBlock` | same | Header and every `BlockTable` in directory order. |
 | `TableBlockReader.ReadTable(ReadOnlySpan<byte>, ReadOnlySpan<byte> tableId, TableBlockLimits = null) -> BlockTable` | same | One table, or null if the block has none with that identifier. Verifies the whole block; copies out only that table's columns. |
+| `TableBlockReader.ReadDirectory(ReadOnlySpan<byte>, TableBlockLimits = null) -> TableBlockDirectory` | same | The header and every `TableDirectoryEntry` (identifier, schema id, row count, column types) in directory order. Verifies the whole block exactly as `Read` does, values and times included, but copies no column: what the server's ingest check needs. |
+| `TableSchema(IEnumerable<TableSchemaColumn>, TableBlockLimits = null)`: `Id`, `Columns`, `ColumnTypes`, `CanonicalBytes`, `HasColumnTypes(types)`, `SameAs(other)`; `TableSchemaColumn(name, type)` | `src/api/HSMTableBlocks/TableSchema.cs` | The schema of a table sensor and its id (section "Table schema"). Throws `ArgumentException` for a schema outside the rules. |
 | `TableBlockLimits(maxDecompressedBytes, maxTables, maxRows, maxColumnsPerTable, maxTableIdLength)` | `src/api/HSMTableBlocks/TableBlockLimits.cs` | All optional; `TableBlockLimits.Default`. |
 | `TableBlockFormatException.Error : TableBlockError` | `src/api/HSMTableBlocks/TableBlockFormatException.cs` | Derives from `IOException`. |
 | `TableColumnType { Time = 1, Int64 = 2, Double = 3 }` | `src/api/HSMTableBlocks/TableColumnType.cs` | The numbers are format constants. |
@@ -94,6 +96,31 @@ There is no padding and no alignment: the columns start right after the last dir
 Example: one table `"a"` (schema 7) with rows (t1, 1.5) and (t2, −0.0) is the directory `01 00 61 07 00 00 00 02 00 00 00 02 01 03` (14 bytes), then `t1 t2` as two int64 and `1.5 −0.0` as two doubles: a 46-byte payload. With a second table `"b"` of one row (t3) and only a time column, the columns are `t1 t2 t3` (pass 0) and then `1.5 −0.0` (pass 1).
 
 **Why column-major.** Measured on two real hours (#1842), the table-major layout (all columns of one table, then the next table) is 1.5–2.2% larger with three columns and 5.8% larger with five, because like columns of different tables sit next to each other for zstd. Encoding, decoding and taking one table out cost the same in both layouts. Keeping the rows in arrival order costs under 0.1%.
+
+## Table schema
+
+A table sensor's schema (ADR-0021, point 2) is an ordered list of named, typed columns. Its **schema id** is what a block's directory entry carries in `schemaId`: the CRC-32 of the schema's **canonical bytes**, the same CRC-32 as the block checksum (zlib's `crc32()`). A collector and the server compute it independently; it is never exchanged. The server does not trust the id alone: on ingest it also compares the entry's column types with the registered schema.
+
+Rules (`TableSchema` throws `ArgumentException` for any other):
+
+- 1 to `MaxColumnsPerTable` columns (64 by default, 255 at most);
+- the first column has the type time (1); every type is 1, 2 or 3;
+- every name is non-empty, contains no control character (`char.IsControl`: U+0000..U+001F and U+007F..U+009F), is valid UTF-16 (no lone surrogate), takes at most 255 bytes in UTF-8, and is unique within the schema (ordinal: `Bid` and `bid` are two names).
+
+Canonical bytes, version 1:
+
+```
+uint8   canonical version     1
+uint8   column count          1..255
+per column, in order:
+  uint8   type                1 time, 2 int64, 3 double
+  uint8   name length         1..255: the bytes of the name in UTF-8
+  byte[]  name                UTF-8, no BOM, no Unicode normalization
+```
+
+Example: time, bid, ask (double), size (int64) is `01 04 | 01 04 74 69 6D 65 | 03 03 62 69 64 | 03 03 61 73 6B | 02 04 73 69 7A 65`, and its id is `0x8BF94DAC`. A schema of the single column `time` has the id `0x7FF3E67F`. The tests pin both, computed with zlib outside .NET.
+
+Names are not normalized: a precomposed and a decomposed `é` are two names with two ids. Any change to the canonical bytes or to the rules changes ids that collectors already send, so it needs a new canonical version and a server that accepts both.
 
 ## Limits
 
@@ -160,6 +187,7 @@ Two writers need not produce the same bytes: conformance compares decoded rows a
 | `src/api/HSMTableBlocks/TableBlockReader.cs` | Verifies and decodes a block; single-table read |
 | `src/api/HSMTableBlocks/TableBlockLimits.cs` | Limits and their defaults |
 | `src/api/HSMTableBlocks/TableBlockFormatException.cs` | The exception and its codes |
+| `src/api/HSMTableBlocks/TableSchema.cs` | The table schema, its rules and its id |
 | `src/tests/HSMTableBlocks.Tests/` | Round trips, golden blocks, malformed input, fuzz, benchmark |
 
 ## Data Flow
@@ -177,7 +205,7 @@ Not operator-visible.
 ## Dependencies
 
 - Depends on: `ZstdSharp.Port` 0.8.8 (zstd, the version the sealed history uses), `System.IO.Hashing` 8.0.0 (CRC-32). Both bring `System.Memory` to netstandard2.0. CRC-32 and not the CRC-32C of the sealed chunks: CRC-32C is only in `System.IO.Hashing` 11.0.0, whose build warns "doesn't support net6.0/net8.0" in every net6.0–net9.0 project that consumes the collector package; 8.0.0 builds without a warning on net472, net6.0 and net8.0.
-- Used by: nothing yet; the collector, server and client library in steps 2–4 of #1842.
+- Used by: the server (`TableSchema`, #1844); the server's block store and read path, the collectors and the client library in the later steps of #1842.
 
 ## Tests
 
@@ -187,7 +215,9 @@ Not operator-visible.
 - the column-major layout pinned against a hand-written payload; tables of different column counts; one table read from the middle of a hand-made block;
 - golden blocks `Golden/format1/*.htb` (decode forever; header fields and decompressed payload pinned); `HSM_WRITE_GOLDEN_TABLE_BLOCKS=1` writes a new set and refuses to overwrite one;
 - malformed input, one fault per case with its code: truncation at every length, wrong lengths, header fields out of range, counts that overflow, a directory outside the payload, duplicate identifiers, invalid times, limits, damaged frames, damaged checksum, zip bombs (declared above the limit; frame content size above the declared length; no content size and 100 MB of zeros) with managed allocation bounded on net8.0;
-- uniqueness of identifiers at 65,536 tables (the default limit) with 64-byte identifiers that share a 59-byte prefix, valid and with one duplicate, with the number of identifier comparisons counted (not timed) and bounded by 3·n·log2(n): both the writer and the reader sort by identifier bytes and compare neighbours, O(n log n) comparisons whatever the identifiers are (no unkeyed hash a client could collide);
+- uniqueness of identifiers at 65,536 tables (the default limit) with 64-byte identifiers that share a 59-byte prefix, valid and with one duplicate, with the number of identifier comparisons counted (not timed) and bounded by 3·n·log2(n): both the writer and the reader sort by identifier bytes and compare neighbours, O(n log n) comparisons whatever the identifiers are (no unkeyed hash a client could collide). The test hands the writer and the reader an internal `IdComparisonCounter`; production code passes none;
+- `ReadDirectory`: every malformed-block case and the fuzz test check that it refuses with the same code as `Read`, and gives the entries of every block `Read` accepts;
+- the table schema: canonical bytes and ids pinned against zlib's crc32 (ASCII and Cyrillic names), every rule refused, the column limit;
 - a fuzz test with a fixed seed: 20,000 mutations (raw bytes, header fields re-checksummed, payload re-compressed) either read as a valid block or throw `TableBlockFormatException`;
 - a benchmark (`Category=Benchmark`, runs only with `HSM_TABLE_BLOCK_BENCH=1`).
 
@@ -196,4 +226,4 @@ Not operator-visible.
 - Reading one table decompresses the whole block: the cost is the block's, not the table's (ADR-0021).
 - No per-row null: what stands for "no value" is the application's choice (ADR-0021, Consequences).
 - The block carries no sequence number; deduplication of a block sent twice (ADR-0021, point 6) belongs to the transport step.
-- Which identifier a table carries (sensor path or a server-issued id) is decided in a later step; the format treats it as opaque bytes.
+- The format treats a table identifier as opaque bytes. The server reads it as the sensor path in UTF-8 (#1844, `aicontext/features/server/table-sensors/feature.md`).

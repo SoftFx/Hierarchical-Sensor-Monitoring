@@ -811,6 +811,20 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Create_TableSensorType_Is400_TableSensorsHaveNoAlerts()
+        {
+            // 11 is a defined type since #1844, the table sensor; it has no alerts.
+            var result = await CreateController().CreateTemplate(BuildDto(sensorType: (byte)SensorType.Table));
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            var details = Assert.IsType<Dictionary<string, object>>(body.Details);
+            Assert.Contains("have no alerts", Assert.IsType<string[]>(details["sensorType"]).Single());
+            Assert.DoesNotContain(details.Keys, key => key.StartsWith("policies["));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
         public async Task Create_AnyType_IsAccepted()
         {
             // AnyType policies are stored Boolean-shaped (the domain builds a

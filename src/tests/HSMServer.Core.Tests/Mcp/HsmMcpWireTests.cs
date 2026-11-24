@@ -395,7 +395,7 @@ namespace HSMServer.Core.Tests.Mcp
             // The item DTO's value table and null-semantics — the tables an
             // agent needs to interpret status/state without guessing.
             var sensor = Descriptions(tools["get_sensor"]);
-            Assert.Contains("Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum.", sensor);
+            Assert.Contains("Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum, Table (a table sensor: rows, no values).", sensor);
             Assert.Contains("null when the sensor has no data yet", sensor);
 
             // #1569: the muted-until semantics on every sensor echo — an agent

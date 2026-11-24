@@ -67,6 +67,36 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
         }
 
 
+        // A table sensor has no alerts (#1844): neither kind of policy is written on it.
+        [Fact]
+        public async Task SensorPolicies_OnATableSensor_AreRefused()
+        {
+            var path = "ProductA_concurrency/svcTable";
+            var registered = await _valuesCache.AddOrUpdateSensorAsync(new Core.Model.Requests.SensorAddOrUpdateRequest(_fixture.ProductAId, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = new HSMTableBlocks.TableSchema([new HSMTableBlocks.TableSchemaColumn("time", HSMTableBlocks.TableColumnType.Time)]),
+            });
+            Assert.True(registered.IsOk, registered.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var table));
+
+            var data = await _service.CreateSensorPolicyAsync(table.Id, DataPolicy(), User);
+            var ttl = await _service.CreateSensorTtlPolicyAsync(table.Id, TtlPolicy("00:30:00"), User);
+
+            foreach (var refused in new[] { data.Failure, ttl.Failure })
+            {
+                Assert.NotNull(refused);
+                Assert.Equal(PolicyWriteOutcome.Invalid, refused.Outcome);
+                Assert.Contains("table sensor", refused.Errors["sensor"].Single());
+            }
+
+            Assert.Empty(table.Policies);
+            Assert.Empty(table.Policies.TTLPolicies);
+        }
+
+
         // === Slice A: data-policy merge on a sensor ===
 
         [Fact]

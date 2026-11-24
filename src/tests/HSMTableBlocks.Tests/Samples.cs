@@ -140,6 +140,9 @@ namespace HSMTableBlocks.Tests
             var single = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.ReadTable(block, new byte[] { 1 }, limits));
             Assert.Equal(error, single.Error);
 
+            var directory = Assert.Throws<TableBlockFormatException>(() => TableBlockReader.ReadDirectory(block, limits));
+            Assert.Equal(error, directory.Error);
+
             return ex;
         }
 

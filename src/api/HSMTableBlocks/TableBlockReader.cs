@@ -26,20 +26,7 @@ namespace HSMTableBlocks
             ParseHeader(block, limits ?? TableBlockLimits.Default);
 
         /// <summary>Reads every table of the block, in directory order.</summary>
-        public static TableBlock Read(ReadOnlySpan<byte> block, TableBlockLimits limits = null)
-        {
-            limits ??= TableBlockLimits.Default;
-            var header = ParseHeader(block, limits);
-
-            return WithPayload(block, header, limits, (payload, directory) =>
-            {
-                var tables = new BlockTable[directory.Entries.Length];
-                for (int i = 0; i < tables.Length; i++)
-                    tables[i] = Materialize(payload, directory, directory.Entries[i]);
-
-                return new TableBlock(header, tables);
-            });
-        }
+        public static TableBlock Read(ReadOnlySpan<byte> block, TableBlockLimits limits = null) => Read(block, limits, null);
 
         /// <summary>
         /// Reads the one table whose identifier is <paramref name="tableId"/>, or returns null when the block has no
@@ -51,7 +38,7 @@ namespace HSMTableBlocks
             var header = ParseHeader(block, limits);
             var id = tableId.ToArray();
 
-            return WithPayload(block, header, limits, (payload, directory) =>
+            return WithPayload(block, header, limits, null, (payload, directory) =>
             {
                 foreach (var entry in directory.Entries)
                     if (payload.Slice(entry.IdOffset, entry.IdLength).SequenceEqual(id))
@@ -61,10 +48,58 @@ namespace HSMTableBlocks
             });
         }
 
+        /// <summary>
+        /// Reads the directory of the block: every table's identifier, schema id, row count and column types, without
+        /// copying any column. The block is verified exactly as <see cref="Read(ReadOnlySpan{byte}, TableBlockLimits)"/>
+        /// verifies it (values included), so a block this accepts reads with <c>Read</c> and <c>ReadTable</c>.
+        /// </summary>
+        public static TableBlockDirectory ReadDirectory(ReadOnlySpan<byte> block, TableBlockLimits limits = null) =>
+            ReadDirectory(block, limits, null);
+
+
+        // The overloads with a counter are for the tests of the identifier check (IdComparisonCounter).
+        internal static TableBlock Read(ReadOnlySpan<byte> block, TableBlockLimits limits, IdComparisonCounter counter)
+        {
+            limits ??= TableBlockLimits.Default;
+            var header = ParseHeader(block, limits);
+
+            return WithPayload(block, header, limits, counter, (payload, directory) =>
+            {
+                var tables = new BlockTable[directory.Entries.Length];
+                for (int i = 0; i < tables.Length; i++)
+                    tables[i] = Materialize(payload, directory, directory.Entries[i]);
+
+                return new TableBlock(header, tables);
+            });
+        }
+
+        internal static TableBlockDirectory ReadDirectory(ReadOnlySpan<byte> block, TableBlockLimits limits, IdComparisonCounter counter)
+        {
+            limits ??= TableBlockLimits.Default;
+            var header = ParseHeader(block, limits);
+
+            return WithPayload(block, header, limits, counter, (payload, directory) =>
+            {
+                var entries = new TableDirectoryEntry[directory.Entries.Length];
+                for (int i = 0; i < entries.Length; i++)
+                {
+                    var e = directory.Entries[i];
+                    var types = new TableColumnType[e.ColumnCount];
+                    for (int c = 0; c < types.Length; c++)
+                        types[c] = (TableColumnType)payload[e.TypesOffset + c];
+
+                    entries[i] = new TableDirectoryEntry(payload.Slice(e.IdOffset, e.IdLength).ToArray(), e.SchemaId, e.RowCount, types);
+                }
+
+                return new TableBlockDirectory(header, entries);
+            });
+        }
+
 
         private delegate T PayloadFunc<T>(ReadOnlySpan<byte> payload, Directory directory);
 
-        private static T WithPayload<T>(ReadOnlySpan<byte> block, TableBlockHeader header, TableBlockLimits limits, PayloadFunc<T> func)
+        private static T WithPayload<T>(ReadOnlySpan<byte> block, TableBlockHeader header, TableBlockLimits limits,
+            IdComparisonCounter counter, PayloadFunc<T> func)
         {
             // The header has been checked against the limits: this allocation is bounded by MaxDecompressedBytes.
             byte[] rented = ArrayPool<byte>.Shared.Rent(header.DecompressedLength);
@@ -75,7 +110,7 @@ namespace HSMTableBlocks
                 Decompress(block.Slice(TableBlockFormat.HeaderSize, header.CompressedLength), payload);
 
                 var directory = ParseDirectory(payload, header, limits);
-                CheckUniqueIds(rented, directory.Entries);
+                CheckUniqueIds(rented, directory.Entries, counter);
                 CheckTimes(payload, directory, header);
 
                 return func(payload, directory);
@@ -330,7 +365,7 @@ namespace HSMTableBlocks
         /// No two entries share an identifier. The entry indexes are sorted by identifier bytes (ordinal) and neighbours
         /// compared: O(n log n) comparisons whatever the identifiers are, so crafted identifiers cannot make it quadratic.
         /// </summary>
-        private static void CheckUniqueIds(byte[] payload, Entry[] entries)
+        private static void CheckUniqueIds(byte[] payload, Entry[] entries, IdComparisonCounter counter)
         {
             if (entries.Length < 2)
                 return;
@@ -339,7 +374,7 @@ namespace HSMTableBlocks
             for (int i = 0; i < order.Length; i++)
                 order[i] = i;
 
-            var comparer = new IdComparer(payload, entries);
+            var comparer = new IdComparer(payload, entries, counter);
             Array.Sort(order, comparer);
 
             for (int i = 1; i < order.Length; i++)
@@ -352,18 +387,21 @@ namespace HSMTableBlocks
         {
             private readonly byte[] _payload;
             private readonly Entry[] _entries;
+            private readonly IdComparisonCounter _counter;
 
-            public IdComparer(byte[] payload, Entry[] entries)
+            public IdComparer(byte[] payload, Entry[] entries, IdComparisonCounter counter)
             {
                 _payload = payload;
                 _entries = entries;
+                _counter = counter;
             }
 
             public int Compare(int x, int y)
             {
                 var a = _entries[x];
                 var b = _entries[y];
-                TableBlockFormat.IdComparisons++;
+                if (_counter != null)
+                    _counter.Count++;
                 return _payload.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_payload.AsSpan(b.IdOffset, b.IdLength));
             }
         }

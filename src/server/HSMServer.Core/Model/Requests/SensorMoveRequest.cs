@@ -19,6 +19,8 @@ namespace HSMServer.Core.Model.Requests
         Failed,
         /// <summary>The sensor moved onto an occupied path and absorbed the occupant's history (#1720).</summary>
         Merged,
+        /// <summary>The sensor is of a kind that never moves: a table sensor (#1844).</summary>
+        NotSupported,
     }
 
 

@@ -53,6 +53,53 @@ namespace HSMTableBlocks
     }
 
 
+    /// <summary>
+    /// The directory of a verified block (<see cref="TableBlockReader.ReadDirectory"/>): its header and one entry per
+    /// table, in directory order, without the column values.
+    /// </summary>
+    public sealed class TableBlockDirectory
+    {
+        /// <summary>The verified header.</summary>
+        public TableBlockHeader Header { get; }
+
+        /// <summary>The entries in the order of the directory; the index of an entry is its table's position in the block.</summary>
+        public IReadOnlyList<TableDirectoryEntry> Entries { get; }
+
+
+        internal TableBlockDirectory(TableBlockHeader header, IReadOnlyList<TableDirectoryEntry> entries)
+        {
+            Header = header;
+            Entries = entries;
+        }
+    }
+
+
+    /// <summary>One directory entry: a table's identifier, schema id, row count and column types.</summary>
+    public sealed class TableDirectoryEntry
+    {
+        /// <summary>The opaque table identifier, as written.</summary>
+        public byte[] TableId { get; }
+
+        /// <summary>The schema id, as written.</summary>
+        public uint SchemaId { get; }
+
+        /// <summary>The number of rows of the table.</summary>
+        public int RowCount { get; }
+
+        /// <summary>The column types in order; the first is <see cref="TableColumnType.Time"/>.</summary>
+        public IReadOnlyList<TableColumnType> ColumnTypes { get; }
+
+
+        internal TableDirectoryEntry(byte[] tableId, uint schemaId, int rowCount, IReadOnlyList<TableColumnType> columnTypes)
+        {
+            TableId = tableId;
+            SchemaId = schemaId;
+            RowCount = rowCount;
+            ColumnTypes = columnTypes;
+        }
+    }
+
+
     /// <summary>One column of a <see cref="BlockTable"/>.</summary>
     public sealed class BlockColumn
     {

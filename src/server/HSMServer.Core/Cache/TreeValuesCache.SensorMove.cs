@@ -67,6 +67,9 @@ namespace HSMServer.Core.Cache
                 if (!TryGetSensorById(sensorId, out var sensor))
                     return new SensorMoveResult(SensorMoveOutcome.SensorNotFound, $"Sensor {sensorId} was not found.");
 
+                if (sensor is TableSensorModel)
+                    return TableSensorNotMoved(sensor);
+
                 SensorAbsorbRequest absorb = null;
 
                 if (onConflict is SensorMoveConflict.Merge && TryGetOccupant(sensorId, destinationProductId, destinationPath, out var occupant, out var occupantPath))
@@ -114,6 +117,9 @@ namespace HSMServer.Core.Cache
         {
             if (!TryGetSensorById(sensorId, out var sensor) || sensor.Parent is null)
                 return new SensorMovePreview(SensorMoveOutcome.SensorNotFound, $"Sensor {sensorId} was not found.");
+
+            if (sensor is TableSensorModel)
+                return new SensorMovePreview(SensorMoveOutcome.NotSupported, TableSensorNotMoved(sensor).Error) { OldPath = sensor.FullPath };
 
             var check = new SensorPathCheck(destinationProductId, destinationPath ?? string.Empty);
 
@@ -549,6 +555,12 @@ namespace HSMServer.Core.Cache
             {
                 var (previousPath, old) = found[i];
 
+                if (old is TableSensorModel)
+                {
+                    _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: {TableSensorNotMoved(old).Error}");
+                    continue;
+                }
+
                 if (old.Type != reference)
                 {
                     _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: it is a {old.Type} sensor, the registration's is {reference}");
@@ -709,6 +721,14 @@ namespace HSMServer.Core.Cache
                 MergeCollisions = absorb.Collisions,
             };
         }
+
+        // A table sensor never moves, under any name (#1844): its stored blocks name it by its
+        // path, and a block cannot be re-keyed. That covers a move, a rename, a move onto an
+        // occupied path (merge) and a move a collector asks for with previous paths.
+        private static SensorMoveResult TableSensorNotMoved(BaseSensorModel sensor) =>
+            new(SensorMoveOutcome.NotSupported,
+                $"Sensor '{sensor.FullPath}' (id {sensor.Id}) is a table sensor: table sensors cannot be moved, renamed or merged.")
+            { OldPath = sensor.FullPath };
 
         private static SensorMoveResult TypeConflict(BaseSensorModel occupant, BaseSensorModel sensor, string fullPath) =>
             new(SensorMoveOutcome.Conflict,

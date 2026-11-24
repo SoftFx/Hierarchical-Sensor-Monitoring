@@ -28,6 +28,9 @@ namespace HSMCommon.Model
         Version,
         Rate,
         Enum,
+        // A table sensor (ADR-0021, #1844): its data is rows stored as blocks, not values.
+        // Persisted as the byte 11 in SensorEntity.Type: never renumber.
+        Table,
     }
 
 

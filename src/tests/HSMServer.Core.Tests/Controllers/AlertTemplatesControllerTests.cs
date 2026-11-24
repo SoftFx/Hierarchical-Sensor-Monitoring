@@ -232,6 +232,23 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Fact]
         [Trait("Category", "Alert Template authoring")]
+        public async Task TableSensorType_IsRefused_TableSensorsHaveNoAlerts()
+        {
+            _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<BaseSensorModel>());
+
+            var controller = CreateController();
+            var data = BuildData((byte)SensorType.Table, "*/ticks");
+
+            var result = await controller.AlertTemplate(data);
+
+            Assert.False(controller.ModelState.IsValid);
+            Assert.Contains(controller.ModelState[nameof(DataAlertTemplateViewModel.Type)].Errors, e => e.ErrorMessage.Contains("no alerts"));
+            Assert.IsType<PartialViewResult>(result);
+        }
+
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
         public async Task AllCompatiblePaths_ModelStateValid()
         {
             // Two paths, both match Integer sensors (same as template type) — save must proceed.

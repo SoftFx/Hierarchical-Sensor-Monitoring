@@ -66,6 +66,9 @@ namespace HSMTableBlocks
         /// <summary>The limits this writer keeps to.</summary>
         public TableBlockLimits Limits => _limits;
 
+        /// <summary>Counts the identifier comparisons of the uniqueness check, for the tests; null in production.</summary>
+        internal IdComparisonCounter IdComparisonCounter { get; set; }
+
 
         /// <summary>Creates a writer with zstd level <see cref="DefaultCompressionLevel"/> and the default limits.</summary>
         public TableBlockWriter() : this(DefaultCompressionLevel) { }
@@ -375,7 +378,9 @@ namespace HSMTableBlocks
             {
                 var a = _writer._tables[x];
                 var b = _writer._tables[y];
-                TableBlockFormat.IdComparisons++;
+                var counter = _writer.IdComparisonCounter;
+                if (counter != null)
+                    counter.Count++;
                 return _writer._directory.AsSpan(a.IdOffset, a.IdLength).SequenceCompareTo(_writer._directory.AsSpan(b.IdOffset, b.IdLength));
             }
         }

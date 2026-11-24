@@ -37,9 +37,9 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// <summary>
         /// SensorType enum value, or 100 (AnyType) to match every sensor type:
         /// 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
-        /// 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
+        /// 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType. 11=Table is refused: table sensors have no alerts.
         /// </summary>
-        [Description("SensorType enum value the template matches: 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File, 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType (match every sensor type).")]
+        [Description("SensorType enum value the template matches: 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File, 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 11=Table (refused: table sensors have no alerts), 100=AnyType (match every sensor type but Table).")]
         public int SensorType { get; init; }
 
         /// <summary>Target folder id; required on create and update.</summary>

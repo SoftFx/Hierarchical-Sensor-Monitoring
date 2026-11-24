@@ -51,9 +51,16 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
-        public bool IsChartSupported => Type is not SensorType.String;
+        public bool IsChartSupported => Type is not SensorType.String and not SensorType.Table;
 
-        public bool IsTableFormatSupported => Type is not SensorType.File;
+        public bool IsTableFormatSupported => Type is not SensorType.File and not SensorType.Table;
+
+        // A table sensor (#1844): its data is rows in blocks, not values. Its page shows its schema.
+        public bool IsTableSensor => Type is SensorType.Table;
+
+        public IReadOnlyList<HSMTableBlocks.TableSchemaColumn> TableColumns { get; private set; } = [];
+
+        public uint TableSchemaId { get; private set; }
 
         public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
@@ -113,6 +120,12 @@ namespace HSMServer.Model.TreeViewModel
             AggregateValues = model.AggregateValues;
             CreationTime = model.CreationDate;
             EnumOptions = model.EnumOptions;
+
+            if (model is TableSensorModel table)
+            {
+                TableColumns = table.Schema.Columns;
+                TableSchemaId = table.Schema.Id;
+            }
 
             if (model.Type == SensorType.Rate)
                 DisplayUnit = model.DisplayUnit;

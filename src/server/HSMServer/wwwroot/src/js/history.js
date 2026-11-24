@@ -202,7 +202,7 @@ window.InitializeHistory = function () {
             if (Object.keys(sensorInfo).length === 0)
                 return;
             
-            if (isFileSensor(sensorInfo.realType))
+            if (isFileSensor(sensorInfo.realType) || isTableSensor(sensorInfo.realType))
                 return;
 
             if (isTableHistorySelected(encodedId))
@@ -485,12 +485,17 @@ function isFileSensor(type) {
     return type === 6;
 }
 
+// A table sensor (#1844): its data is rows, not values, so it has no value history to draw or list.
+function isTableSensor(type) {
+    return type === 11;
+}
+
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6);
+    return !(type === 3 || type === 6 || type === 11);
 }
 
 function isTableAvailable(type) {
-    return type !== 6
+    return type !== 6 && type !== 11
 }
 
 function isTableHistorySelected(encodedId) {
