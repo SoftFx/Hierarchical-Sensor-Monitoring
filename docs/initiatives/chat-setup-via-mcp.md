@@ -56,13 +56,16 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
   webhook URL would exfiltrate every alert sent to it; edit / delete / clear-channel / test / invitation
   are admin or `ProductManager` on any folder the chat is bound to, so a global chat is admin-only.
 - The chat↔folder binding lives on the folder (`FolderEntity.Chats`); `Chat.Folders` is an in-memory
-  reverse index. `NotificationsController.SyncFolders` rewrites it through `FolderUpdate`, touching
-  only the folders the caller manages. That folder write is already journaled ("Folder chats update",
-  kind `folder`).
+  reverse index. `ChatAdministrationService.BindFoldersAsync` (#1825 — the write engine behind the web
+  POST flows, ex-`NotificationsController.SyncFolders`) rewrites it through `FolderUpdate`, touching
+  only the folders the caller manages (`ChatFolderBinding.Managed`, built by the web from
+  `GetUserFolders(CurrentUser)` — never from request data). That folder write is already journaled
+  ("Folder chats update", kind `folder`).
 - Validation: the name is required and at most 100 characters, with no uniqueness check — although the
   `ChatDto` doc says "unique per server" and alert import resolves chats by name. A webhook must be an
-  absolute http/https URL (`ValidateWebhooks`); nothing else is checked. Clearing a channel is an
-  explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`, `ClearTelegramBinding`): at the model an
+  absolute http/https URL (`ChatAdministrationService.ValidateWebhooks`, #1825); nothing else is
+  checked. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
+  `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
   at the per-channel Remove button.
 - The test actions answer `OK` regardless of the outcome; delivery failures go to the channel's

@@ -1,9 +1,13 @@
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Notifications.Chats
 {
     public record ChatUpdate : BaseUpdateRequest
     {
+        // Who performs this write (#1825) — stamped by the write engine, consumed by the chat
+        // journal subscription (#1828); the storage itself ignores it.
+        public InitiatorInfo Initiator { get; init; }
         // Common
         public bool? SendMessages { get; init; }
 
