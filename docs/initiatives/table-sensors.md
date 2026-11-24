@@ -170,6 +170,56 @@ ADR-0021 is the decision and is authoritative. In short, as accepted by the owne
 | Rendering | Minimum and maximum per pixel column, computed by the server. |
 | LZMA | Not used: about one percent after the column coders, and too slow inside the collector. |
 
+## The decision in pictures
+
+The way of a row from the application to the disk:
+
+```mermaid
+flowchart TD
+    A["Application<br/>rows: time, bid, ask, ..."] --> B["Collector, every 10 seconds<br/>rows of ALL its table sensors in one block<br/>grouped by table, raw columns, zstd 3"]
+    B -->|"second WebSocket of the session:<br/>one binary frame, one acknowledgement"| C["Server, ingest<br/>checks the block and stores it as it arrived"]
+    C --> D[("Block database, LevelDB<br/>key: arrival hour + number<br/>value: ONE block = all tables, about 24,000 rows")]
+    D -->|"once an hour, for the closed hour"| E["Merge job<br/>splits by table, column coders + zstd 15<br/>verifies, then deletes the blocks"]
+    E --> F[("Batch database of the product, LevelDB<br/>key: merge hour + number<br/>value: ONE batch = up to 4,096 rows of one table")]
+    E --> G[("Index<br/>key: sensor + first time<br/>value: batch key, last time, row count")]
+    F -->|"retention: whole hours of a product"| H["Deleted, the range is compacted"]
+```
+
+How a read is answered:
+
+```mermaid
+flowchart TD
+    R["Reader: sensor, from, to"] --> S["Server"]
+    S --> I[("Index")]
+    I --> F[("Batches: merged hours<br/>about 1 ms for an hour of one table")]
+    S --> D[("Blocks: hours not merged yet<br/>130-260 ms for an hour of one table")]
+    F --> J["Rows joined by time"]
+    D --> J
+    J --> O["Answer: blocks of that one table for the client library,<br/>CSV or JSON, or minimum and maximum per pixel for the chart"]
+```
+
+The life of a row: up to 10 seconds in the collector; then in a block until its hour is merged (5.75 bytes per row for five columns; readable at once, a read of one table is slow); then in a batch until retention (about 5 bytes per row, a read is fast).
+
+## Open questions
+
+For the owner:
+
+- The exact columns of the first sensors, and a sample with real price and volume columns: in the measured sample those two were synthetic.
+- The retention period for tick data, or more disk: a year of the test feed does not fit on production.
+- Three choices in ADR-0021 were made without a discussion: a read returns blocks, so the storage coders live only in the server; one batch database per product; tables need the session transport, there is no HTTP route for sending.
+
+To be settled inside the steps:
+
+- How a table is named in the directory of a block, and what exactly happens to a block with a refused table (#1843, #1844).
+- One block database, or one per week or month (#1844).
+- How the limits on sessions per address count the second connection (#1845).
+- How the encoding of a column is chosen by its size after zstd without compressing every candidate (#1850).
+- How an older client library reads what a newer server answers (#1845).
+
+Not measured yet:
+
+- Linux; windows longer than 185 seconds; the merged size on full hours (about 4.9 bytes per row expected); cold-disk reads; the collector on .NET Framework; binary session frames through libcurl; blocks that arrive hours late.
+
 ## Capacity
 
 Stored size is measured on the test sample; the row counts of the future product are not known.
