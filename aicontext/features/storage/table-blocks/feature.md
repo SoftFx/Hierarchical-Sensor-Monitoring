@@ -92,7 +92,7 @@ While the server runs:
 | Disposed (shutdown) | Fault | Fault |
 | Never opened, no folder | Opens and creates the store | No rows; nothing created |
 
-A failed block write (disk, LevelDB) fails the put with `TableBlockStoreException`, a fault: the put is not acknowledged and the collector keeps the block. The store then refuses puts for a minute (LevelDB keeps a background error until it is reopened) and reopens on the first put after that. Puts are refused the same way while the disk has less free space than `TableSensors.MinFreeDiskMb`. A stored block that cannot be read back (missing from `Blocks`, a damaged envelope, a LevelDB read error) is counted (`Read failures`, every one) and skipped by reads; its Error line is written at most once a minute, with the count of the ones not logged since.
+A failed block write (disk, LevelDB) fails the put with `TableBlockStoreException`, a fault: the put is not acknowledged and the collector keeps the block. The store then refuses puts for a minute (LevelDB keeps a background error until it is reopened) and reopens on the first put after that. Puts are refused the same way while the disk has less free space than `TableSensors.MinFreeDiskMb`. A stored block that cannot be read back (missing from `Blocks`, a damaged envelope, a LevelDB read error) is counted (`Read failures`, every one) and skipped by reads; its Error line is written at most once a minute, with the count of the ones not logged since. That count appears only with the next failure after the minute: a burst followed by nothing leaves one line, and the rest of the burst is in the counter only.
 
 ## The put (`ITableBlockService.Put`)
 
@@ -136,7 +136,7 @@ So a block numbered before a sensor existed is never read for it: its tables wer
 - **Order.** By time, then by block sequence (arrival), then by the row's position in its block: a stable sort of the rows in the order they arrived.
 - **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
 - **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
-- **A store that cannot be used.** `GetBlocks` is lock-free while the databases are open, also after a failed write. When they are closed (a reopen that failed, disposed) it goes through the same open as a put: inside the backoff it throws the fault, past it the read reopens the store (so a server that only reads recovers too), disposed it throws. It never answers the in-memory index of closed databases, whose blocks would all read as missing. `ReadBlock` tells a closed store (it throws `TableBlockStoreException`) from a missing block (damage, counted). `TableRowCollector` and `Read` do not catch the exception, so a read whose store closed under it ends as the fault, and the caller answers 5xx, not 200 with no rows.
+- **A store that cannot be used.** `GetBlocks` is lock-free while the databases are open, also after a failed write, once the first open of the process has finished: during that open it waits for it on the store's lock (the index in memory is still the empty initial one), never answering no blocks. When they are closed (a reopen that failed, disposed) it goes through the same open as a put: inside the backoff it throws the fault, past it the read reopens the store (so a server that only reads recovers too), disposed it throws. It never answers the in-memory index of closed databases, whose blocks would all read as missing. `ReadBlock` tells a closed store (it throws `TableBlockStoreException`) from a missing block (damage, counted). `TableRowCollector` and `Read` do not catch the exception, so a read whose store closed under it ends as the fault, and the caller answers 5xx, not 200 with no rows.
 
 ## The identifier is the registered path, byte for byte
 
@@ -169,7 +169,7 @@ The daily database sizes get `Database/Tables data size` once the folder exists.
 - Open: `Table block store <folder> opened in <ms> ms: <n> blocks, next sequence <s>[, index rebuilt from <n> blocks | , <n> blocks indexed again after the last index entry]` (Info); a missing or damaged index, a reopen after a failure (Warn).
 - A refused table: Debug per table; a Warn summary of the reasons at most once a minute.
 - A failed write or too little disk: Error, at most once a minute.
-- A stored block that cannot be read: Error, at most once a minute, with the count of the ones not logged since (every one is counted in `Read failures`).
+- A stored block that cannot be read: Error, at most once a minute, with the count of the ones not logged since; that count is written only with the next failure after the minute, so a burst followed by nothing leaves one line (every failure is counted in `Read failures`).
 
 ## Memory
 

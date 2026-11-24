@@ -201,6 +201,54 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_read_during_the_first_open_waits_for_the_index_and_never_answers_an_empty_one()
+        {
+            // Review of PR #1857: the first open of a process assigns the databases at its start and the index at its end;
+            // a read that came in between answered the empty initial index, a successful read with no rows.
+            var store = Open();
+            for (int i = 0; i < 3; i++)
+                Put(store, i);
+            var entries = store.GetBlocks(_product).ToList();
+            store.Dispose();
+
+            var fresh = Open();
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            fresh.OnOpen = () =>
+            {
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(60));
+            };
+
+            var opening = Task.Run(() => fresh.Reserve());
+            Task<List<TableBlockIndexEntry>> reading;
+
+            try
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the first open never started");
+
+                // The read either answers at once (the defect) or waits on the store's lock, which the open holds: release
+                // the open only after one of the two, so the read surely came in during the open. The contention counter
+                // is process-wide, so another test may end the wait early; the read is then still in flight or not yet
+                // started, and the assertions below hold either way.
+                var contentions = Monitor.LockContentionCount;
+                reading = Task.Run(() => fresh.GetBlocks(_product).ToList());
+                SpinWait.SpinUntil(() => reading.IsCompleted || Monitor.LockContentionCount > contentions, TimeSpan.FromSeconds(30));
+
+                Assert.False(reading.IsCompleted, "the read answered while the first open was still loading the index");
+            }
+            finally
+            {
+                release.Set();
+            }
+
+            // Bounds that only matter on failure.
+            Assert.True(opening.Wait(TimeSpan.FromSeconds(30)), "the first open never finished");
+            Assert.True(reading.Wait(TimeSpan.FromSeconds(30)), "the read never finished");
+            Assert.Equal(entries, reading.Result);
+        }
+
+        [Fact]
         public void A_block_read_after_the_store_closed_since_its_index_was_taken_is_the_store_fault()
         {
             // The index is taken, then another thread's reopen fails and closes the databases, then the block is read:

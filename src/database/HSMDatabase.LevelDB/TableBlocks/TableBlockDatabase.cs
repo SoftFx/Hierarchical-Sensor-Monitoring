@@ -331,14 +331,16 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // after a failure it throws the fault, past it the read reopens the store itself (a server that only reads would
         // otherwise never recover), and a disposed store throws. A store never opened and without a folder answers no
         // blocks and creates nothing. It never answers the in-memory index of databases that are closed: their blocks
-        // would all read as missing.
+        // would all read as missing. Nor the empty initial index during the first open of the process: Open assigns
+        // _blocks at its start and swaps the index in at its end, and _opened is set after that, so until then a read waits
+        // on _lock for the open. (During a reopen the index in memory is the whole previous one.)
         public IReadOnlyList<TableBlockIndexEntry> GetBlocks(Guid productId)
         {
-            if (Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
+            if (!_opened || Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
             {
                 lock (_lock)
                 {
-                    if ((_disposed || _blocks is null) && !EnsureOpen(create: false))
+                    if ((!_opened || _disposed || _blocks is null) && !EnsureOpen(create: false))
                         return [];
                 }
             }
