@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The block format is shared by the managed collector (net6.0, net472), the server (net8.0) and client
+         libraries, so it targets netstandard2.0 like HSMSensorDataObjects. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <!-- The zstd frame checks call ZstdSharp.Unsafe.Methods over a pinned span, as ChunkCodec does. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <Description>Writes and reads table blocks: the rows of several table sensors for one collector tick (ADR-0021).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MIT, pure managed port of zstd (no native binaries); the version the server's sealed history uses.
+         Brings System.Memory (spans, BinaryPrimitives) to netstandard2.0. -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+    <!-- MIT, Microsoft: CRC-32C (Crc32ParameterSet.Crc32C), the checksum of the sealed chunks. 11.0.0 is the
+         first version with CRC-32C; its netstandard2.0 build is what this library compiles against. -->
+    <PackageReference Include="System.IO.Hashing" Version="11.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HSMTableBlocks.Tests" />
+  </ItemGroup>
+
+</Project>
