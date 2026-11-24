@@ -178,6 +178,144 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_read_after_a_failed_reopen_is_the_store_fault_and_the_same_store_reads_once_it_reopens()
+        {
+            // Review of PR #1857: a reopen that failed closed the databases but left the old index in memory, so a read
+            // answered every block of it as missing (one read failure and one Error line per block) and returned no rows.
+            var store = Open();
+            var stored = Put(store, 0);
+            var good = DamageMark(store);
+
+            var failures = store.Statistics.ReadFailures;
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+
+            // Past the backoff, with the mark repaired, the read itself reopens the store.
+            File.WriteAllText(MarkPath, good);
+            _now = _now.AddMinutes(2);
+
+            var blocks = store.GetBlocks(_product);
+            Assert.Equal([stored.Entry], blocks);
+            Assert.NotNull(store.ReadBlock(blocks[0]));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_block_read_after_the_store_closed_since_its_index_was_taken_is_the_store_fault()
+        {
+            // The index is taken, then another thread's reopen fails and closes the databases, then the block is read:
+            // the read ends as the fault, not as a block counted missing.
+            var store = Open();
+            Put(store, 0);
+            var blocks = store.GetBlocks(_product);
+
+            DamageMark(store);
+
+            var failures = store.Statistics.ReadFailures;
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(blocks[0]));
+            Assert.Equal(failures, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_read_from_a_disposed_store_is_the_store_fault()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+            store.Dispose();
+
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_store_whose_write_failed_keeps_serving_reads_while_its_databases_are_open()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+
+            store.FailForTest(new IOException("simulated"));
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+
+            // Past the backoff too: a read does not reopen databases that are open.
+            _now = _now.AddMinutes(2);
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Every_block_missing_from_the_store_is_counted()
+        {
+            var store = Open();
+            var stored = Put(store, 0);
+
+            for (int i = 1; i <= 3; i++)
+                Assert.Null(store.ReadBlock(stored.Entry with { Sequence = stored.Entry.Sequence + 100 * i }));
+
+            Assert.Equal(3, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Peeking_the_next_sequence_does_not_wait_for_a_put_that_holds_the_store_lock()
+        {
+            // Review of PR #1857: the registration of a table sensor peeks the next sequence under the tree lock, and
+            // an append holds the store's lock across its synced put. The hook below runs inside that lock.
+            var store = Open();
+            store.EnsureOpened();
+
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            store.FaultHook = _ =>
+            {
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(60));
+            };
+
+            var put = Task.Run(() => Put(store, 0));
+
+            try
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the put never reached its write");
+
+                // A generous bound that only matters on failure: the peek waits for the lock until the hook lets go.
+                var peek = Task.Run(store.PeekNextSequence);
+                Assert.True(peek.Wait(TimeSpan.FromSeconds(30)), "the peek waited for the put holding the store's lock");
+                Assert.Equal(1, peek.Result);
+            }
+            finally
+            {
+                release.Set();
+            }
+
+            Assert.Equal(TableBlockAppendOutcome.Stored, put.Result.Outcome);
+            store.FaultHook = null;
+
+            // The states it refuses are refused as before.
+            store.FailForTest(new IOException("simulated"));
+            Assert.Throws<TableBlockStoreException>(() => store.PeekNextSequence());
+            store.Dispose();
+            Assert.Throws<TableBlockStoreException>(() => store.PeekNextSequence());
+        }
+
+        [Fact]
+        public void Peeking_the_next_sequence_writes_the_mark_ahead_when_it_does_not_cover_the_value()
+        {
+            var store = Open();
+            store.EnsureOpened();
+
+            for (int i = 0; i < TableBlockDatabase.SequenceMarkStep; i++)
+                store.Skip(store.Reserve());
+
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep.ToString(), File.ReadAllText(MarkPath));
+            Assert.Equal(TableBlockDatabase.SequenceMarkStep, store.PeekNextSequence());
+            Assert.Equal((2 * TableBlockDatabase.SequenceMarkStep).ToString(), File.ReadAllText(MarkPath));
+        }
+
+        [Fact]
         public void A_block_that_is_not_to_be_stored_writes_nothing()
         {
             var store = Open();
@@ -655,6 +793,22 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             var store = new TableBlockDatabase(_root) { Clock = () => _now };
             _stores.Add(store);
             return store;
+        }
+
+        private string MarkPath => Path.Combine(_root, TableBlockDatabase.SequenceMarkName);
+
+        // Fails the store, damages the mark and moves past the backoff: the next put reopens, the reopen fails and closes
+        // the databases. Returns the mark's text, to repair it.
+        private string DamageMark(TableBlockDatabase store)
+        {
+            var good = File.ReadAllText(MarkPath);
+
+            store.FailForTest(new IOException("simulated"));
+            _now = _now.AddMinutes(2);
+            File.WriteAllText(MarkPath, "damaged");
+
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+            return good;
         }
 
         private TableBlockAppendResult Put(TableBlockDatabase store, long producerSequence) =>

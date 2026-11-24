@@ -28,6 +28,9 @@ namespace HSMDatabase.AccessManager
         // separate from the sharded presentation Journal.
         public string ChangeSetsDatabaseName { get; init; }
 
+        // The folder of the table block store (#1844), under DatabaseFolder.
+        public string TableBlocksFolderName { get; init; }
+
 
         public string PathToServerLayoutDb => Path.Combine(DatabaseFolder, ServerLayoutDatabaseName);
 
@@ -42,7 +45,7 @@ namespace HSMDatabase.AccessManager
         public string PathToExport => Path.Combine(DatabaseFolder, ExportFolder);
 
         // The block store of table sensors (#1844): the Blocks and BlockIndex databases. Created on first use only.
-        public string PathToTableBlocks => Path.Combine(DatabaseFolder, "Tables");
+        public string PathToTableBlocks => Path.Combine(DatabaseFolder, TableBlocksFolderName);
 
 
         public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(PathToJournalDb, JournalValuesDatabaseName, from, to);

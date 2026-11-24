@@ -16,6 +16,7 @@ namespace HSMDatabase.Settings
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
         private const string DefaultChangeSetsDatabaseName = "ChangeSets";
+        private const string DefaultTableBlocksFolderName = "Tables";
 
         private const string DefaultExportFolder = "Export";
 
@@ -41,9 +42,6 @@ namespace HSMDatabase.Settings
 
         public string ChangeSetsDatabaseName { get; init; } = DefaultChangeSetsDatabaseName;
 
-        // The folder of the table block store (#1844), under DatabaseFolder.
-        public string TableBlocksFolderName { get; init; } = "Tables";
-
-        public string PathToTableBlocks => Path.Combine(DatabaseFolder, TableBlocksFolderName);
+        public string TableBlocksFolderName { get; init; } = DefaultTableBlocksFolderName;
     }
 }
