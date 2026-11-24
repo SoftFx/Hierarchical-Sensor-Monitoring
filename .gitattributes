@@ -22,3 +22,4 @@ src/probe-linux/**/fixtures/**/*.txt text eol=lf
 src/tests/HSMDatabase.SealedHistory.Tests/Golden/*.bin binary
 # Golden table blocks (src/tests/HSMTableBlocks.Tests/Golden) are compared byte for byte.
 *.htb binary
+*.htbatch binary
