@@ -68,7 +68,7 @@ The table identifier inside a block is the sensor's path as the collector regist
 | The alert editor | `HomeController.AddDataPolicy`, `AddAlertCondition`, `GetOperation`; `_MetaInfo.cshtml` hides the alerts block | 400 |
 | A history clear of the sensor | `TreeValuesCache.ClearSensorHistoryAsync` | error "clearing its history is not supported" |
 | A history clear of a node | `ClearNodeHistoryAsync` | the table sensor is skipped |
-| Per-sensor retention (KeepHistory) | `CheckSensorHistory` | skipped (retention is one period per product, #1850) |
+| Per-sensor retention (KeepHistory) | `CheckSensorHistory` | skipped here: the sensor's history setting is applied by the retention of batches (#1850, ADR-0021 point 12) |
 | Self-destroy | `BaseSensorModel.ShouldDestroy` | never |
 
 ### Operations that change a table sensor's path

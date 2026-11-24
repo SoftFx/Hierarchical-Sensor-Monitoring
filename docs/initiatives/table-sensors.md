@@ -228,6 +228,8 @@ The life of a row: up to 10 seconds in the collector; then in a block until its 
 
 ## Open questions
 
+Decided by the owner on 2026-11-25, after step 2 (recorded in ADR-0021, points 2 and 12): the first sensors carry time, bid and ask, without sizes; a cell may hold no value (every column except the time is nullable), so the question of a placeholder below is closed; retention is set per sensor by the sensor's history setting, inherited as for any sensor, which replaces the single period per product. The lines below are kept as the record of what was open.
+
 For the owner:
 
 - The exact columns of the first sensors. Measured on real data so far: time, bid, ask; and time, bid price, bid size, ask price, ask size from one provider. Book levels beyond the first were too rare in that hour (0.2% of the records) to measure.
