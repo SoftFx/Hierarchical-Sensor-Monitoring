@@ -215,29 +215,90 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
-        public void Past_the_backoff_a_failed_store_whose_folder_is_removed_holds_no_blocks_and_creates_nothing_until_a_put()
+        public void Past_the_backoff_a_failed_store_whose_folder_is_removed_stays_failed_for_reads_and_only_a_put_creates_it()
         {
+            // Review of PR #1858: a store that has failed stays failed until an open succeeds. A read past the backoff
+            // tries the open but never creates, so a removed folder is the fault and nothing in memory is dropped.
             var store = Open();
             Put(store, 0);
-            Put(store, 1);
+            var last = Put(store, 1);
             DamageMark(store);
 
             Directory.Delete(_root, recursive: true);
             _now = _now.AddMinutes(2);
 
-            // Nothing to read and nothing listed that cannot be read; the read creates nothing.
-            Assert.Empty(store.GetBlocks(_product));
-            Assert.Equal(0, store.BlockCount);
+            var error = Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+            Assert.Contains("missing or cannot be reached", error.Message);
+            Assert.Equal(2, store.BlockCount);
             Assert.False(store.Exists);
             Assert.Equal(0, store.Statistics.ReadFailures);
 
-            // The failure is over: the next put creates the store and is the only block in it. It reuses the producer
-            // sequence of a block that went with the folder: the duplicate map forgot it too.
+            // Past the new backoff a put creates a fresh store, whose index is what is on disk: only the new block. It
+            // reuses the producer sequence of a removed block and is not its duplicate; its sequence does not go back.
+            _now = _now.AddMinutes(2);
             var stored = Put(store, 0);
             Assert.Equal(TableBlockAppendOutcome.Stored, stored.Outcome);
+            Assert.True(stored.Entry.Sequence > last.Entry.Sequence);
             Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.Equal(1, store.BlockCount);
             Assert.NotNull(store.ReadBlock(stored.Entry));
             Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_folder_is_a_file_is_the_fault_for_a_read()
+        {
+            // A folder that exists under its name but cannot be opened as one (here a file in its place).
+            var store = Open();
+            Put(store, 0);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            File.WriteAllText(_root, "not a folder");
+
+            try
+            {
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    _now = _now.AddMinutes(2);
+                    Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+                    Assert.Equal(1, store.BlockCount);
+                }
+
+                // A put cannot create the store over the file either: a fault, not a new store.
+                _now = _now.AddMinutes(2);
+                Assert.Throws<TableBlockStoreException>(() => Put(store, 1));
+            }
+            finally
+            {
+                File.Delete(_root);
+            }
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_parent_folder_is_missing_is_the_fault_for_a_read()
+        {
+            var parent = Path.Combine(_root, "volume");
+            var store = new TableBlockDatabase(Path.Combine(parent, "Tables")) { Clock = () => _now };
+            _stores.Add(store);
+
+            Put(store, 0);
+            var mark = Path.Combine(parent, "Tables", TableBlockDatabase.SequenceMarkName);
+            store.FailForTest(new IOException("simulated"));
+            _now = _now.AddMinutes(2);
+            File.WriteAllText(mark, "damaged");
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+
+            Directory.Delete(parent, recursive: true);
+
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                _now = _now.AddMinutes(2);
+                Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+                Assert.Equal(1, store.BlockCount);
+            }
+
+            Assert.False(Directory.Exists(parent));
         }
 
         [Fact]
