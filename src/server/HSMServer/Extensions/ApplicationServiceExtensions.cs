@@ -67,7 +67,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<IJournalService, JournalService>();
 
             // The put and read of table blocks (#1844), for the transport of step 3 (#1845). Constructed on first
-            // resolve; it opens nothing by itself.
+            // resolve; its constructor opens nothing (the store opens on the first put or read, and the first put raises
+            // the sequence floor), so a block store that cannot open costs table puts only.
             services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => new HSMServer.Core.TableSensors.TableBlockService(
                 provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
 

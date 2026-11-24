@@ -77,11 +77,16 @@ namespace HSMServer.Core.TableSensors
             var store = _database.TableBlocks ?? throw new ArgumentException("The database has no table block store.", nameof(database));
             store.MinFreeBytes = _options.MinFreeDiskMb * 1024 * 1024;
 
-            RaiseSequenceFloor(store);
+            // Nothing is opened here: a store that cannot open costs table puts only, never the construction of this
+            // service or of whatever it is injected into. The sequence floor is raised by the first put (EnsureSequenceFloor).
         }
 
 
         private ITableBlockStore Store => _database.TableBlocks;
+
+        // Set once the sequence floor from the sensors is in the store; guarded by _floorLock.
+        private readonly object _floorLock = new();
+        private volatile bool _floorRaised;
 
         // Called with the reserved sequence before the tables are matched. Test seam for a sensor created during a put.
         internal Action<long> AfterReserve { get; set; }
@@ -105,6 +110,8 @@ namespace HSMServer.Core.TableSensors
 
             var store = Store;
             var header = directory.Header;
+
+            EnsureSequenceFloor(store);
             var ticket = store.Reserve();
 
             try
@@ -259,21 +266,36 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        // The sequence floor from the sensors. The tree is loaded by now: the cache loads it in its constructor, and this
-        // service is built from the cache. Every put and read goes through this service, so no block is numbered before
-        // the floor is in place. If the block store was deleted (or restored from an older copy), its sequence would start
-        // below the first sequences of the registered table sensors and all their tables would be refused; raising it to
-        // the largest one keeps them taking rows. Without table sensors nothing is opened.
-        private void RaiseSequenceFloor(ITableBlockStore store)
+        // The sequence floor from the sensors, raised once, by the first put, before its reservation. If the block store was
+        // deleted (or restored from an older copy), its sequence would start below the first sequences of the registered
+        // table sensors and all their tables would be refused; raising it to the largest one keeps them taking rows.
+        // - The tree is loaded by then: the cache loads it in its constructor, and this service is built from the cache.
+        // - Every put goes through this service, so no block is numbered before the floor is in place. A read needs none.
+        // - A sensor registered before the first put reads the store's next sequence directly and may get a small first
+        //   sequence: harmless, the floor only has to be at or above every first sequence.
+        // - If the raise throws (the store cannot open), the flag stays unset: the put fails as the fault it is, and the
+        //   next put tries again. Without table sensors nothing is raised and nothing is opened here.
+        private void EnsureSequenceFloor(ITableBlockStore store)
         {
-            var floor = -1L;
+            if (_floorRaised)
+                return;
 
-            foreach (var sensor in _cache.GetSensors())
-                if (sensor is TableSensorModel table && table.FirstSequence > floor)
-                    floor = table.FirstSequence;
+            lock (_floorLock)
+            {
+                if (_floorRaised)
+                    return;
 
-            if (floor >= 0)
-                store.RaiseNextSequence(floor);
+                var floor = -1L;
+
+                foreach (var sensor in _cache.GetSensors())
+                    if (sensor is TableSensorModel table && table.FirstSequence > floor)
+                        floor = table.FirstSequence;
+
+                if (floor >= 0)
+                    store.RaiseNextSequence(floor);
+
+                _floorRaised = true;
+            }
         }
 
         // Unspecified is UTC here: ToUniversalTime would take it as local time and shift the range by the server's offset.

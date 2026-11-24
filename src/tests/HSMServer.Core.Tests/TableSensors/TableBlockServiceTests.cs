@@ -309,8 +309,8 @@ namespace HSMServer.Core.Tests.TableSensors
         public async Task A_deleted_store_numbers_its_blocks_from_the_sensors_first_sequences_after_a_restart()
         {
             // The operator deletes Tables/ (the sequence mark goes with it): the sequence would start again at 0, below the
-            // first sequence of every registered table sensor, and their tables would be refused. The service raises the
-            // store's next sequence to the largest first sequence when it is built.
+            // first sequence of every registered table sensor, and their tables would be refused. The first put raises the
+            // store's next sequence to the largest first sequence; building the service opens nothing.
             await RegisterAsync("early");
             for (int i = 0; i < 5; i++)
                 AssertStored(Put(Table("early", (T0.AddSeconds(i), 1.0, 1L))));
@@ -322,8 +322,57 @@ namespace HSMServer.Core.Tests.TableSensors
             _databaseCoreManager.DatabaseCore.Dispose();
             Directory.Delete(settings.PathToTableBlocks, recursive: true);
 
-            // The same environment database and Tables folder; DatabaseCore.Dispose leaves the layout, change-set and
-            // snapshot databases open, so the restarted core gets fresh ones of those.
+            var (database, cache) = Restart(settings);
+            await using var _ = cache;
+            var service = new TableBlockService(database, cache, new TableBlockOptions { MinFreeDiskMb = 0 });
+
+            Assert.False(Directory.Exists(settings.PathToTableBlocks), "building the service created the store");
+
+            var put = service.Put(_product, Guid.NewGuid(), 1, Table("late", (T0, 2.0, 2L)));
+
+            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
+            Assert.Empty(put.Refusals);
+            Assert.True(put.Sequence >= late.FirstSequence);
+
+            var rows = service.Read(late.Id, T0, T0.AddHours(1));
+            Assert.True(rows.IsOk, rows.Error);
+            Assert.Equal([2.0], rows.Value.Columns[1].DoubleValues);
+        }
+
+        [Fact]
+        public async Task A_store_that_cannot_open_costs_the_puts_only_and_the_same_service_recovers()
+        {
+            // A damaged sequence mark makes the store refuse to open. The service is still built (it opens nothing), every
+            // put is a fault, and once the mark is repaired the same service raises the floor and stores the block.
+            var sensor = (TableSensorModel)await RegisterAsync("q");
+            AssertStored(Put(Table("q", (T0, 1.0, 1L))));
+
+            var settings = _databaseCoreManager.DatabaseCore.DatabaseSettings;
+            _databaseCoreManager.DatabaseCore.Dispose();
+            var mark = Path.Combine(settings.PathToTableBlocks, HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase.SequenceMarkName);
+            File.WriteAllText(mark, "damaged");
+
+            var (database, cache) = Restart(settings);
+            await using var _ = cache;
+
+            var service = new TableBlockService(database, cache, new TableBlockOptions { MinFreeDiskMb = 0 });
+
+            Assert.Throws<TableBlockStoreException>(() => service.Put(_product, _producer, NextProducerSequence(), Table("q", (T0.AddMinutes(1), 2.0, 2L))));
+
+            File.WriteAllText(mark, "100000");
+            var now = DateTime.UtcNow;
+            ((HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)database.TableBlocks).Clock = () => now.AddMinutes(2);
+
+            var put = service.Put(_product, _producer, NextProducerSequence(), Table("q", (T0.AddMinutes(2), 3.0, 3L)));
+            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
+            Assert.True(put.Sequence >= sensor.FirstSequence);
+            Assert.Equal([1.0, 3.0], service.Read(sensor.Id, T0, T0.AddHours(1)).Value.Columns[1].DoubleValues);
+        }
+
+        // A restart of the server over the same environment database and Tables folder. DatabaseCore.Dispose leaves the
+        // layout, change-set and snapshot databases open, so the restarted core gets fresh ones of those.
+        private static (HSMDatabase.DatabaseWorkCore.DatabaseCore Database, HSMServer.Core.Cache.TreeValuesCache Cache) Restart(HSMDatabase.AccessManager.IDatabaseSettings settings)
+        {
             var restart = ((HSMDatabase.Settings.DatabaseSettings)settings) with
             {
                 ServerLayoutDatabaseName = settings.ServerLayoutDatabaseName + "_restart",
@@ -335,19 +384,10 @@ namespace HSMServer.Core.Tests.TableSensors
             snapshot.Setup(s => s.Keys).Returns(new HSMServer.Core.TreeStateSnapshot.StateCollection<
                 HSMServer.Core.TreeStateSnapshot.States.LastKeyState, HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity.LastKeyStateEntity>());
 
-            await using var cache = new HSMServer.Core.Cache.TreeValuesCache(database, snapshot.Object, new HSMServer.Core.Journal.JournalService(database),
+            var cache = new HSMServer.Core.Cache.TreeValuesCache(database, snapshot.Object, new HSMServer.Core.Journal.JournalService(database),
                 new HSMServer.Core.Schedule.AlertScheduleProvider(database), new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
-            var service = new TableBlockService(database, cache, new TableBlockOptions { MinFreeDiskMb = 0 });
 
-            var put = service.Put(_product, Guid.NewGuid(), 1, Table("late", (T0, 2.0, 2L)));
-
-            Assert.Equal(TableBlockPutOutcome.Stored, put.Outcome);
-            Assert.Empty(put.Refusals);
-            Assert.True(put.Sequence >= late.FirstSequence);
-
-            var rows = service.Read(late.Id, T0, T0.AddHours(1));
-            Assert.True(rows.IsOk, rows.Error);
-            Assert.Equal([2.0], rows.Value.Columns[1].DoubleValues);
+            return (database, cache);
         }
 
         // === Sensors that come and go ===
