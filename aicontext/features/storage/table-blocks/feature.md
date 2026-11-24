@@ -209,7 +209,7 @@ Synthetic feed shaped like the measured real hour: one collector, a block every 
 - Answer a `TableBlockPutResult` per block: `Stored` and `Duplicate` are acknowledgements (with the refused tables), `AllRefused` and `Invalid` are final refusals (4xx-like: sending again does not help unless the sensors change), and `TableBlockStoreException` is a fault (5xx-like: the collector keeps the block and sends it again). `Read` throws the same exception when the store cannot be used (cannot open, failed and in its backoff): a fault, answered 5xx, not an error result, which would say the request is wrong.
 - Check the key's permission to send data before calling `Put`; the block service does not see keys.
 
-**The merge step (#1850):**
+**The merge step (#1850):** the block store's part is built (`CloseHour`, `DeleteMergedHour`, watermarks in memory; `aicontext/features/storage/table-batches/feature.md`, section "The block store's part"); the merge job that calls it is #1850 part 3.
 - After an hour is merged, delete it from both databases as one range and compact that range (`TableBlockDatabase.DeleteArrivalHour` does this today, for the benchmark), with the blocks and index entries leaving the in-memory index and the duplicate map.
 - Keep **duplicate detection** working after the blocks are gone: a per-producer watermark per product (the highest producer sequence merged for a product and producer, the same key as the duplicate map), persisted with the batches, so that a resend of a merged block is answered as a duplicate. This relies on in-order delivery per producer (step 3).
 - The sequence is kept by the sequence mark (above): deleting every block does not take the next sequence back.

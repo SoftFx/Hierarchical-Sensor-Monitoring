@@ -84,6 +84,14 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
         private long _nextReserve, _nextCommit, _lastHourTicks;
 
+        // The first hour an append may use: one past the newest hour the merge closed (CloseHour). Under _lock; kept across
+        // reopens (it is not on disk: the merge closes its newest hour again after a restart).
+        private long _minHourTicks;
+
+        // The producers' watermarks of merged hours (#1850), per product and producer. Under _lock; kept across reopens (the
+        // durable ones are in the batch store, which the merge loads them from).
+        private readonly Dictionary<(Guid Product, Guid Producer), long> _watermarks = [];
+
         // Every sequence below it may have been handed out; the value in the mark file. Under _lock.
         private long _markPersisted;
 
@@ -271,6 +279,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                         return new TableBlockAppendResult(TableBlockAppendOutcome.Duplicate, original, ReadEnvelope(original));
                     }
 
+                    // Merged and deleted: the watermark says it was stored; its envelope is gone (#1850).
+                    if (_watermarks.TryGetValue((envelope.ProductId, envelope.ProducerId), out var watermark) && envelope.ProducerSequence <= watermark)
+                    {
+                        Statistics.Add(ref Statistics.DuplicateBlocks);
+                        return new TableBlockAppendResult(TableBlockAppendOutcome.Duplicate, default, null) { Merged = true };
+                    }
+
                     if (!store)
                     {
                         Statistics.Add(ref Statistics.BlocksNotStored);
@@ -283,7 +298,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                     CheckDisk();
 
                     var now = Clock();
-                    var hour = Math.Max(FloorHour(now), _lastHourTicks);
+                    var hour = Math.Max(Math.Max(FloorHour(now), _lastHourTicks), _minHourTicks);
                     var key = Key(hour, ticket.Sequence);
                     var stored = envelope with { ArrivalUtc = now };
                     var value = stored.Encode(block);
@@ -431,49 +446,128 @@ namespace HSMDatabase.LevelDB.TableBlocks
             }
         }
 
-        /// <summary>
-        /// Deletes every block of one arrival hour from both databases as one range and compacts that range: what the merge
-        /// step (#1850) will do once an hour is merged, and what the benchmark measures today. The in-memory index and the
-        /// duplicate map forget those blocks. Not called by the server yet.
-        /// </summary>
-        internal int DeleteArrivalHour(long hourTicks)
+        public void CloseHour(long hourTicks)
         {
             lock (_lock)
+                _minHourTicks = Math.Max(_minHourTicks, hourTicks + TimeSpan.TicksPerHour);
+        }
+
+        public void RaiseWatermarks(IEnumerable<TableBlockWatermark> watermarks)
+        {
+            ArgumentNullException.ThrowIfNull(watermarks);
+
+            lock (_lock)
+                Raise(watermarks);
+        }
+
+        public long? GetWatermark(Guid productId, Guid producerId)
+        {
+            lock (_lock)
+                return _watermarks.TryGetValue((productId, producerId), out var watermark) ? watermark : null;
+        }
+
+        // Under _lock.
+        private void Raise(IEnumerable<TableBlockWatermark> watermarks)
+        {
+            foreach (var w in watermarks)
             {
-                EnsureOpen(create: false);
+                var key = (w.ProductId, w.ProducerId);
+                if (!_watermarks.TryGetValue(key, out var current) || w.ProducerSequence > current)
+                    _watermarks[key] = w.ProducerSequence;
+            }
+        }
 
-                var from = Key(hourTicks, 0);
-                var to = Key(hourTicks + TimeSpan.TicksPerHour, 0);
-                var deleted = 0;
+        public int DeleteMergedHour(long hourTicks, IReadOnlyCollection<long> keep, IEnumerable<TableBlockWatermark> watermarks)
+        {
+            ArgumentNullException.ThrowIfNull(keep);
+            ArgumentNullException.ThrowIfNull(watermarks);
 
-                using (var batch = new WriteBatch())
-                using (var iterator = _blocks.CreateIterator())
+            var from = Key(hourTicks, 0);
+            var to = Key(hourTicks + TimeSpan.TicksPerHour, 0);
+            int deleted;
+
+            lock (_lock)
+            {
+                // The watermarks first: from here on a resend of a merged block is a duplicate whether its entry is still in
+                // the duplicate map or not.
+                Raise(watermarks);
+
+                if (!EnsureOpen(create: false))
+                    return 0;
+
+                // The keys of the hour in either database: after a crash between the two writes below the index may hold
+                // entries whose blocks are gone, and a repeat must remove those too.
+                var keys = new SortedSet<byte[]>(Comparer<byte[]>.Create(Compare));
+                foreach (var db in new[] { _blocks, _index })
                 {
+                    using var iterator = db.CreateIterator();
                     for (iterator.Seek(from); iterator.IsValid && Compare(iterator.Key(), to) < 0; iterator.Next())
                     {
-                        batch.Delete(iterator.Key());
-                        deleted++;
+                        var key = iterator.Key();
+                        if (!keep.Contains(ParseKey(key).Sequence))
+                            keys.Add(key);
                     }
-
-                    _blocks.Write(batch, _syncWrite);
-                    _index.Write(batch, _plainWrite);
                 }
 
-                _blocks.CompactRange(from, to);
-                _index.CompactRange(from, to);
+                if (keys.Count > 0)
+                {
+                    try
+                    {
+                        using var batch = new WriteBatch();
+                        foreach (var key in keys)
+                            batch.Delete(key);
+
+                        // Blocks first, synced: an index entry without its block is removed by a repeat, while a block
+                        // without its index entry would be indexed again only if it were the tail.
+                        _blocks.Write(batch, _syncWrite);
+                        FaultHook?.Invoke("after-hour-blocks-deleted");
+                        _index.Write(batch, _plainWrite);
+                    }
+                    catch (Exception ex) when (ex is not TableBlockStoreException)
+                    {
+                        Fail(ex, "delete a merged hour");
+                        throw new TableBlockStoreException($"The blocks of the merged hour {new DateTime(hourTicks, DateTimeKind.Utc):O} could not be deleted: {ex.Message}", ex);
+                    }
+                }
 
                 var maps = _maps;
+                deleted = 0;
 
                 foreach (var (_, blocks) in maps.Products)
-                    blocks.RemoveHour(hourTicks);
+                    deleted += blocks.RemoveHour(hourTicks, keep);
 
-                foreach (var key in maps.ByProducer.Where(p => p.Value.ArrivalHourTicks == hourTicks).Select(p => p.Key).ToList())
+                foreach (var key in maps.ByProducer.Where(p => p.Value.ArrivalHourTicks == hourTicks && !keep.Contains(p.Value.Sequence)).Select(p => p.Key).ToList())
                     maps.ByProducer.Remove(key);
 
                 Interlocked.Add(ref maps.Count, -deleted);
-                return deleted;
             }
+
+            // The space back, outside the lock appends take (about 70 ms an hour measured, #1844). The databases cannot close
+            // meanwhile: a reopen and Dispose take _dbLock for writing.
+            _dbLock.EnterReadLock();
+            try
+            {
+                if (_blocks is not null && _index is not null)
+                {
+                    _blocks.CompactRange(from, to);
+                    _index.CompactRange(from, to);
+                }
+            }
+            catch (Exception ex)
+            {
+                // The deletes are durable; a failed compaction only leaves the space for LevelDB to take back later.
+                _logger.Warn(ex, $"Compacting the deleted table block hour {new DateTime(hourTicks, DateTimeKind.Utc):O} failed");
+            }
+            finally
+            {
+                _dbLock.ExitReadLock();
+            }
+
+            return deleted;
         }
+
+        /// <summary>Deletes every block of one arrival hour (the benchmark's hourly delete): <see cref="DeleteMergedHour"/> keeping nothing.</summary>
+        internal int DeleteArrivalHour(long hourTicks) => DeleteMergedHour(hourTicks, Array.Empty<long>(), Array.Empty<TableBlockWatermark>());
 
         public void Dispose()
         {
@@ -999,18 +1093,19 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 _state = new State(items, current.Count + 1);
             }
 
-            // Under the store's lock. A new array: readers holding the old state keep reading it.
-            public void RemoveHour(long hourTicks)
+            // Under the store's lock. A new array: readers holding the old state keep reading it. Returns the entries removed.
+            public int RemoveHour(long hourTicks, IReadOnlyCollection<long> keep)
             {
                 var current = _state;
                 var kept = new TableBlockIndexEntry[Math.Max(16, current.Items.Length)];
                 var count = 0;
 
                 for (int i = 0; i < current.Count; i++)
-                    if (current.Items[i].ArrivalHourTicks != hourTicks)
+                    if (current.Items[i].ArrivalHourTicks != hourTicks || keep.Contains(current.Items[i].Sequence))
                         kept[count++] = current.Items[i];
 
                 _state = new State(kept, count);
+                return current.Count - count;
             }
 
             public IReadOnlyList<TableBlockIndexEntry> Snapshot()
