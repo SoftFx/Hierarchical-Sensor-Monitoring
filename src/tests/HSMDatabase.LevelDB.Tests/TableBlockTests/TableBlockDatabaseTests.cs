@@ -201,6 +201,46 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_failed_store_whose_folder_is_removed_answers_the_fault_until_its_backoff_has_passed()
+        {
+            // Review of PR #1858: the "no folder, nothing to read" shortcut came before the failure check, so a failed
+            // store whose folder was removed answered an empty successful read inside its backoff.
+            var store = Open();
+            Put(store, 0);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+
+            Assert.Throws<TableBlockStoreException>(() => store.GetBlocks(_product));
+        }
+
+        [Fact]
+        public void Past_the_backoff_a_failed_store_whose_folder_is_removed_holds_no_blocks_and_creates_nothing_until_a_put()
+        {
+            var store = Open();
+            Put(store, 0);
+            Put(store, 1);
+            DamageMark(store);
+
+            Directory.Delete(_root, recursive: true);
+            _now = _now.AddMinutes(2);
+
+            // Nothing to read and nothing listed that cannot be read; the read creates nothing.
+            Assert.Empty(store.GetBlocks(_product));
+            Assert.Equal(0, store.BlockCount);
+            Assert.False(store.Exists);
+            Assert.Equal(0, store.Statistics.ReadFailures);
+
+            // The failure is over: the next put creates the store and is the only block in it. It reuses the producer
+            // sequence of a block that went with the folder: the duplicate map forgot it too.
+            var stored = Put(store, 0);
+            Assert.Equal(TableBlockAppendOutcome.Stored, stored.Outcome);
+            Assert.Equal([stored.Entry], store.GetBlocks(_product));
+            Assert.NotNull(store.ReadBlock(stored.Entry));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
         public void A_read_during_the_first_open_waits_for_the_index_and_never_answers_an_empty_one()
         {
             // Review of PR #1857: the first open of a process assigns the databases at its start and the index at its end;
