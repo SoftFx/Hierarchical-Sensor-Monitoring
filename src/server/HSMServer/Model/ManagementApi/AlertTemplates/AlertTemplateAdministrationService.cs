@@ -703,6 +703,8 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
             if (dto.SensorType != AlertTemplateModel.AnyType && !IsDefinedByteEnum<SensorType>(dto.SensorType))
                 Add(errors, "sensorType", $"Unknown sensor type {dto.SensorType}.");
+            else if (dto.SensorType == (int)SensorType.Table)
+                Add(errors, "sensorType", "Table sensors (11) have no alerts: no template can target them.");
 
             if ((dto.TtlPolicies?.Count ?? 0) != (dto.Ttls?.Count ?? 0))
                 Add(errors, "ttlPolicies", "ttlPolicies and ttls must be parallel lists of the same length.");

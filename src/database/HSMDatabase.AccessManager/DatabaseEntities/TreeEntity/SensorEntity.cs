@@ -35,5 +35,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         /// Paths the sensor was moved away from (#1718, ADR-0018). Appended and
         /// optional: null on rows written before sensor move existed.
         public List<SensorAliasEntity> Aliases { get; init; }
+
+        /// The schema of a table sensor (Type 11, ADR-0021, #1844). Appended and
+        /// optional: null on every other sensor. A server that does not know
+        /// type 11 skips the whole entity at load and never writes it back.
+        public TableSensorEntity Table { get; init; }
     }
 }

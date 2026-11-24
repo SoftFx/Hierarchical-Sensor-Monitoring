@@ -280,6 +280,11 @@ namespace HSMServer.Core.Model
             // a predicate emit TTL-expired alerts for a sensor this very check may delete.
             var interval = Settings.SelfDestroy.Value;
 
+            // A table sensor (#1844) keeps no values, so nothing here would ever see it active: its
+            // activity is its blocks, which this predicate cannot see. It is never self-destroyed.
+            if (Type is SensorType.Table)
+                return false;
+
             if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
@@ -526,7 +531,11 @@ namespace HSMServer.Core.Model
             EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
             TableSettings = TableSettings.ToEntity(),
             Aliases = AliasEntities(),
+            Table = ToTableEntity(),
         };
+
+        // The schema of a table sensor (#1844); null for every other kind.
+        internal virtual TableSensorEntity ToTableEntity() => null;
 
         private List<SensorAliasEntity> AliasEntities()
         {

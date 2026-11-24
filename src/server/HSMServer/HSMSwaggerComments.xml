@@ -2597,7 +2597,7 @@
             <summary>
             SensorType enum value, or 100 (AnyType) to match every sensor type:
             0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
-            7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
+            7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType. 11=Table is refused: table sensors have no alerts.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.FolderId">
@@ -3394,7 +3394,7 @@
             <summary>
             Sensor type. Value table (see the sensor endpoint for the full meaning):
             Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan,
-            Version, Rate, Enum.
+            Version, Rate, Enum, Table.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeDto">
@@ -3590,7 +3590,8 @@
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Type">
             <summary>
             Sensor type. Value table: Boolean, Integer, Double, String, IntegerBar,
-            DoubleBar, File, TimeSpan, Version, Rate, Enum.
+            DoubleBar, File, TimeSpan, Version, Rate, Enum, Table (a table sensor: rows,
+            no values; #1844).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Unit">

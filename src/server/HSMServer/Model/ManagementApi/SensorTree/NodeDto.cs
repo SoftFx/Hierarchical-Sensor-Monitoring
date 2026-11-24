@@ -38,9 +38,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>
         /// Sensor type. Value table (see the sensor endpoint for the full meaning):
         /// Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan,
-        /// Version, Rate, Enum.
+        /// Version, Rate, Enum, Table.
         /// </summary>
-        [Description("Sensor type. Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum.")]
+        [Description("Sensor type. Value table: Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan, Version, Rate, Enum, Table (a table sensor: rows, no values).")]
         public string Type { get; init; }
     }
 
