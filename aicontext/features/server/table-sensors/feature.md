@@ -35,7 +35,7 @@ The table identifier inside a block is the sensor's path as the collector regist
 | Contract | Location | Notes |
 |---|---|---|
 | `SensorType.Table = 11` | `src/server/HSMCommon/SensorValues/BaseValue.cs` | Server enum only. The DTO `HSMSensorDataObjects.SensorType` gets its member with the wire (#1845); until then `ApiConverters.Convert` has no mapping and nothing from outside can name the type. |
-| `SensorAddOrUpdateRequest.Schema` (`HSMTableBlocks.TableSchema`), `.Refusal` | `src/server/HSMServer.Core/Model/Requests/SensorAddOrUpdateRequest.cs` | A refused table registration is answered by `AddOrUpdateSensorAsync` as an error with the reason in `Refusal` (unlike every other failed registration, which is answered Ok), and is not a store fault: sending it again changes nothing. |
+| `SensorAddOrUpdateRequest.Schema` (`HSMTableBlocks.TableSchema`), `.Refusal` | `src/server/HSMServer.Core/Model/Requests/SensorAddOrUpdateRequest.cs` | A refused table registration is answered by `AddOrUpdateSensorAsync` as an error (`TaskResult.FromError`, `IsFault` false) with the reason in `Refusal`, unlike every other failed registration, which is answered Ok. It is never a fault: sending it again changes nothing. A store failure while the sensor is written stays a fault (#1756). |
 | `TableSensorModel.Schema`, `.FirstSequence` | `src/server/HSMServer.Core/Model/Sensors/SensorModels/TableSensorModel.cs` | |
 | `SensorEntity.Table` (`TableSensorEntity`: `SchemaId`, `Columns` of `{Name, Type}`, `FirstSequence`) | `src/database/HSMDatabase.AccessManager/DatabaseEntities/TreeEntity/` | Appended, nullable; JSON like the rest of the entity. Column types are the block format's numbers (1 time, 2 int64, 3 double). |
 | `SensorMoveOutcome.NotSupported` ("notSupported" in the management API) | `src/server/HSMServer.Core/Model/Requests/SensorMoveRequest.cs` | The answer to any move of a table sensor. |
@@ -51,7 +51,10 @@ The table identifier inside a block is the sensor's path as the collector regist
 | Table | a sensor of another kind | refused: "cannot become a table sensor" |
 | Table without a schema | anything | refused |
 | Another explicit type | a table sensor | refused: "is a table sensor" |
-| No explicit type | a table sensor | applied as an update, subject to the update rules below |
+| No explicit type | a table sensor | applied as an update; refused if it carries alerts, TTL policies or aggregation |
+| Table, carrying alerts, TTL policies or aggregation | anything | refused before anything is created: "is a table sensor" |
+
+**What the caller receives.** A refusal is a non-fault error all the way out. `SensorIngestionService.AddOrUpdateSensorAsync` turns only `IsFault` into `RegistrationFaultException` (answered 500, repeated by the collector every cycle) and returns any other error as it is. So a refused registration is answered `406` with the reason as the body on `POST /api/sensors/addOrUpdate`, an entry `{path: reason}` in a `200` on `POST /api/sensors/commands`, and an entry in the errors map of a `200` acknowledgement on the session: a per-command refusal the collector does not send again. Today a collector cannot name the table type at all (the DTO enum has no member yet, #1845); a registration with `SensorType` 11 is refused by the ingestion as "cannot be converted", with the same answers. Pinned by `RegistrationStatusTests.Registration_RefusedByATableSensor_IsARefusal_NotAFault`.
 
 ### What a table sensor refuses
 
@@ -126,7 +129,8 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## Tests
 
-- `HSMServer.Core.Tests/TreeValuesCacheTests/TableSensorTests.cs`: registration (create, persist, restart; same schema; three kinds of other schema; another kind's path; no schema; another explicit type on a table path), a value addressed to a table sensor (rejected, nothing stored, value edit refused), no TTL inheritance and refused policy/TTL/aggregation updates, no template match, every move form (move, rename, other node, merge both ways, previous paths, dry run), node rename refused, history clear and retention, self-destroy, the rollback behaviour above.
+- `HSMServer.Core.Tests/TreeValuesCacheTests/TableSensorTests.cs`: registration (create, persist, restart; same schema; three kinds of other schema; another kind's path; no schema; another explicit type on a table path), a value addressed to a table sensor (rejected, nothing stored, value edit refused), no TTL inheritance and refused policy/TTL/aggregation updates, no template match, every move form (move, rename, other node, merge both ways, previous paths, dry run), node rename refused, history clear and retention, self-destroy, the rollback behaviour above. Every refusal is asserted to be a non-fault error; a table registration carrying alerts is refused before anything is created; a store failure during a table registration stays a fault (`A_store_fault_during_a_table_registration_is_still_a_fault`).
+- `SensorApi/RegistrationStatusTests.Registration_RefusedByATableSensor_IsARefusal_NotAFault`: what the HTTP routes answer (200 with a per-path entry, 406).
 - `Model/ManagementApi/PolicyAdministrationServiceTests.SensorPolicies_OnATableSensor_AreRefused`, `Controllers/AlertTemplatesApiControllerTests.Create_TableSensorType_Is400_TableSensorsHaveNoAlerts`, `Controllers/AlertTemplatesControllerTests.TableSensorType_IsRefused_TableSensorsHaveNoAlerts`; `Mcp/AlertTemplateEnumTableDocsTests` pins that the template DTO documents type 11.
 - `HSMTableBlocks.Tests/SchemaAndDirectoryTests.cs`: the schema rules and the pinned id.
 

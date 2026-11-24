@@ -987,8 +987,11 @@ namespace HSMServer.Core.Cache
             if (request.Fault is not null)
                 return TaskResult.FromFault(request.Fault);
 
+            // A refusal is not a fault: sending it again cannot change the answer, so it
+            // must not reach the caller as one (a fault is answered 500 and repeated by
+            // the collector every cycle).
             if (request.Refusal is not null)
-                return TaskResult.FromFault(request.Refusal);
+                return TaskResult.FromError(request.Refusal);
 
             if (request.Forwarded is { } forwarded)
             {
@@ -1070,7 +1073,9 @@ namespace HSMServer.Core.Cache
         // does not become a table, and a table path takes no registration of an explicit
         // other type. Path only: an alias is never a table sensor's (they do not move), and
         // a table registration on an alias of another sensor displaces it as any other
-        // explicit type does (ResolveAlias).
+        // explicit type does (ResolveAlias). A registration of a table sensor that carries
+        // what a table sensor cannot take (alerts, aggregation) is refused before anything
+        // is created: it would fail the same way on every repeat.
         private bool TryCheckTableRegistration(SensorAddOrUpdateRequest request, out string error)
         {
             error = null;
@@ -1080,12 +1085,16 @@ namespace HSMServer.Core.Cache
             {
                 if (existing is TableSensorModel && request.TypeIsExplicit)
                     error = $"Sensor '{request.Path}' is a table sensor: it cannot be registered as a {request.Type} sensor.";
+                else if (existing is TableSensorModel && request.Update is not null)
+                    error = RefuseTableUpdate(request.Path, request.Update);
 
                 return error is null;
             }
 
             if (request.Schema is null)
                 error = $"Table sensor '{request.Path}': a table registration needs a schema.";
+            else if (request.Update is not null && RefuseTableUpdate(request.Path, request.Update) is { } updateError)
+                error = updateError;
             else if (existing is null)
                 return true;
             else if (existing is not TableSensorModel table)
@@ -1102,16 +1111,16 @@ namespace HSMServer.Core.Cache
 
         // Updates a table sensor cannot take (#1844): alerts of any kind, TTL policies included
         // (it has no values to judge), and aggregation of values. Null when the update is fine.
-        private static string RefuseForTableSensor(BaseSensorModel sensor, SensorUpdate update)
-        {
-            if (sensor is not TableSensorModel)
-                return null;
+        private static string RefuseForTableSensor(BaseSensorModel sensor, SensorUpdate update) =>
+            sensor is TableSensorModel ? RefuseTableUpdate(sensor.FullPath, update) : null;
 
+        private static string RefuseTableUpdate(string path, SensorUpdate update)
+        {
             if (update.Policies is { Count: > 0 } || update.TTLPolicies is { Count: > 0 })
-                return $"Sensor '{sensor.FullPath}' is a table sensor: {TableSensorPolicyCollection.NoAlertsError}";
+                return $"Sensor '{path}' is a table sensor: {TableSensorPolicyCollection.NoAlertsError}";
 
             if (update.AggregateValues is true)
-                return $"Sensor '{sensor.FullPath}' is a table sensor: it has no values to aggregate.";
+                return $"Sensor '{path}' is a table sensor: it has no values to aggregate.";
 
             return null;
         }

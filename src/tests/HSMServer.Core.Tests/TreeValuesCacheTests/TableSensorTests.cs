@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 var refused = await RegisterTableAsync(path, other, "changed");
 
-                Assert.False(refused.IsOk);
+                AssertRefusal(refused);
                 Assert.Contains("is registered with the schema (time Time, bid Double, ask Double)", refused.Error);
                 Assert.Contains("is refused", refused.Error);
             }
@@ -114,12 +114,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var integer = await CreateIntSensorAsync($"{root}/int");
 
             var onInteger = await RegisterTableAsync($"{root}/int", Quotes);
-            Assert.False(onInteger.IsOk);
+            AssertRefusal(onInteger);
             Assert.Contains("cannot become a table sensor", onInteger.Error);
             Assert.Same(integer, GetSensor($"{root}/int"));
 
             var noSchema = await RegisterTableAsync($"{root}/none", null);
-            Assert.False(noSchema.IsOk);
+            AssertRefusal(noSchema);
             Assert.Contains("needs a schema", noSchema.Error);
             Assert.False(_valuesCache.TryGetSensorByPath(_fixture.Product, $"{root}/none", out _));
 
@@ -130,7 +130,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Type = SensorType.Double,
                 TypeIsExplicit = true,
             });
-            Assert.False(asDouble.IsOk);
+            AssertRefusal(asDouble);
             Assert.Contains("is a table sensor", asDouble.Error);
             Assert.IsType<TableSensorModel>(GetSensor($"{root}/table"));
         }
@@ -162,7 +162,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Value = "1",
                 Initiator = InitiatorInfo.System,
             });
-            Assert.False(edit.IsOk);
+            AssertRefusal(edit);
             Assert.Contains("table sensor", edit.Error);
             Assert.Null(sensor.LastValue);
         }
@@ -200,7 +200,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 var result = await _valuesCache.UpdateSensorAsync(update);
 
-                Assert.False(result.IsOk);
+                AssertRefusal(result);
                 Assert.Contains("is a table sensor", result.Error);
             }
 
@@ -287,7 +287,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = node.Id, Name = "renamed" }, default);
 
-                Assert.False(result.IsOk);
+                AssertRefusal(result);
                 Assert.Contains(table.FullPath, result.Error);
                 Assert.Contains(table.Id.ToString(), result.Error);
             }
@@ -305,7 +305,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var integer = await CreateIntSensorAsync($"{root}/int");
 
             var direct = await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(table.Id));
-            Assert.False(direct.IsOk);
+            AssertRefusal(direct);
             Assert.Contains("not supported", direct.Error);
 
             // A node clear clears the other sensors and leaves the table sensor alone.
@@ -332,6 +332,68 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(table.SelfDestroyIsActive);
             Assert.False(table.ShouldDestroy());
+        }
+
+        [Fact]
+        public async Task A_table_registration_that_carries_alerts_or_aggregation_is_refused_before_anything_is_created()
+        {
+            var root = Unique();
+
+            foreach (var (name, update) in new[]
+            {
+                ("ttl", new SensorUpdate { Id = Guid.Empty, TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5))] }),
+                ("alert", new SensorUpdate { Id = Guid.Empty, Policies = [DataPolicy()] }),
+                ("aggregate", new SensorUpdate { Id = Guid.Empty, AggregateValues = true }),
+            })
+            {
+                var result = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_fixture.Product, $"{root}/{name}")
+                {
+                    Update = update,
+                    Type = SensorType.Table,
+                    TypeIsExplicit = true,
+                    Schema = Quotes,
+                });
+
+                AssertRefusal(result);
+                Assert.Contains("is a table sensor", result.Error);
+                Assert.False(_valuesCache.TryGetSensorByPath(_fixture.Product, $"{root}/{name}", out _), $"{name}: a sensor was created");
+            }
+
+            // The same for a registration without a type on an existing table sensor.
+            Assert.True((await RegisterTableAsync($"{root}/table", Quotes)).IsOk);
+            var untyped = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_fixture.Product, $"{root}/table")
+            {
+                Update = new SensorUpdate { Id = Guid.Empty, Policies = [DataPolicy()] },
+                Type = SensorType.Boolean,
+                TypeIsExplicit = false,
+            });
+            AssertRefusal(untyped);
+            Assert.Empty(GetSensor($"{root}/table").Policies);
+        }
+
+        [Fact]
+        public async Task A_store_fault_during_a_table_registration_is_still_a_fault()
+        {
+            // The other side of the refusals (#1756): a write the store failed on can pass on a repeat,
+            // so it stays a fault, which the transports answer 500 and the collector sends again.
+            var path = $"{Unique()}/quotes";
+            var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailSensorAdd = e => e.Type == (byte)SensorType.Table,
+            };
+            await using var cache = BuildCacheOverTheSameDatabase(failing);
+
+            var result = await cache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_fixture.Product, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = Quotes,
+            });
+
+            Assert.False(result.IsOk);
+            Assert.True(result.IsFault, result.Error);
+            Assert.False(cache.TryGetSensorByPath(_fixture.Product, path, out _));
         }
 
         [Fact]
@@ -385,6 +447,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(Quotes.Id, entity.Table.SchemaId);
         }
 
+
+        // A refusal: an error that a repeat cannot cure, so never a fault (a fault is answered 500 and the
+        // collector sends it again on every cycle).
+        private static void AssertRefusal(HSMCommon.TaskResult.TaskResult result)
+        {
+            Assert.False(result.IsOk);
+            Assert.False(result.IsFault, $"a refusal reported as a fault: {result.Error}");
+            Assert.False(string.IsNullOrEmpty(result.Error));
+        }
 
         private static TableSchema Schema(params (string Name, TableColumnType Type)[] columns) =>
             new(columns.Select(c => new TableSchemaColumn(c.Name, c.Type)));
@@ -460,12 +531,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Initiator = InitiatorInfo.System,
         };
 
-        private TreeValuesCache BuildCacheOverTheSameDatabase()
+        private TreeValuesCache BuildCacheOverTheSameDatabase(HSMServer.Core.DataLayer.IDatabaseCore database = null)
         {
             var snapshot = new Mock<ITreeStateSnapshot>();
             snapshot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
 
-            var database = _databaseCoreManager.DatabaseCore;
+            database ??= _databaseCoreManager.DatabaseCore;
 
             return new TreeValuesCache(database, snapshot.Object, _journalService, _alertScheduleProvider,
                 new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
