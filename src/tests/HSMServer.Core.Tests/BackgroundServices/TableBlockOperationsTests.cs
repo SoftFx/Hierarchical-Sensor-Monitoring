@@ -1,0 +1,163 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using HSMDataCollector.Core;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
+using HSMDatabase.AccessManager.TableBlocks;
+using HSMDatabase.LevelDB.TableBlocks;
+using HSMSensorDataObjects;
+using HSMServer.BackgroundServices;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.TableSensors;
+using HSMServer.ServerConfiguration;
+using Moq;
+using Xunit;
+
+namespace HSMServer.Core.Tests.BackgroundServices;
+
+// #1844: the configuration section of table sensors and the self-monitoring of the block store.
+public sealed class TableBlockOperationsTests : IDisposable
+{
+    private readonly Dictionary<string, object> _sensors = [];
+    private readonly Mock<IDataCollector> _collector = new(MockBehavior.Strict);
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), $"hsm-table-ops-{Guid.NewGuid():N}");
+    private readonly TableBlockDatabase _store;
+
+
+    public TableBlockOperationsTests()
+    {
+        _collector.Setup(c => c.CreateIntSensor(It.IsAny<string>(), It.IsAny<InstantSensorOptions>()))
+                  .Returns((string path, InstantSensorOptions _) => Register<int>(path));
+        _collector.Setup(c => c.CreateDoubleSensor(It.IsAny<string>(), It.IsAny<InstantSensorOptions>()))
+                  .Returns((string path, InstantSensorOptions _) => Register<double>(path));
+
+        _store = new TableBlockDatabase(_folder);
+    }
+
+    public void Dispose()
+    {
+        _store.Dispose();
+
+        try
+        {
+            Directory.Delete(_folder, recursive: true);
+        }
+        catch (IOException) { }
+    }
+
+
+    [Fact]
+    public void The_configuration_defaults_are_the_block_format_limits_a_million_rows_and_a_gigabyte_free()
+    {
+        var options = new TableSensorsConfig().ToOptions();
+
+        Assert.Equal(1_000_000, options.MaxReadRows);
+        Assert.Equal(1024, options.MinFreeDiskMb);
+        Assert.Equal(64 * 1024 * 1024, options.Limits.MaxDecompressedBytes);
+        Assert.Equal(65_536, options.Limits.MaxTables);
+        Assert.Equal(8 * 1024 * 1024, options.Limits.MaxRows);
+        Assert.Equal(64, options.Limits.MaxColumnsPerTable);
+        Assert.Equal(1024, options.Limits.MaxTableIdLength);
+    }
+
+    [Theory]
+    [InlineData(nameof(TableSensorsConfig.MaxDecompressedBytes), 0)]
+    [InlineData(nameof(TableSensorsConfig.MaxDecompressedBytes), (1 << 30) + 1)]
+    [InlineData(nameof(TableSensorsConfig.MaxTables), 0)]
+    [InlineData(nameof(TableSensorsConfig.MaxRows), -1)]
+    [InlineData(nameof(TableSensorsConfig.MaxColumnsPerTable), 256)]
+    [InlineData(nameof(TableSensorsConfig.MaxTableIdLength), 65_536)]
+    [InlineData(nameof(TableSensorsConfig.MaxReadRows), 0)]
+    [InlineData(nameof(TableSensorsConfig.MinFreeDiskMb), -1)]
+    public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
+    {
+        var config = new TableSensorsConfig();
+        var property = typeof(TableSensorsConfig).GetProperty(key);
+        property.SetValue(config, property.PropertyType == typeof(long) ? value : (object)(int)value);
+
+        var error = Assert.Throws<InvalidOperationException>(() => config.Validate());
+
+        Assert.Contains($"TableSensors.{key} = {value}", error.Message);
+    }
+
+    [Fact]
+    public void The_self_monitoring_posts_nothing_and_creates_no_sensor_until_the_store_is_opened()
+    {
+        var sensors = new TableBlockSensors(_collector.Object, _store);
+
+        sensors.SendInfo();
+
+        Assert.False(sensors.IsCreated);
+        Assert.Empty(_sensors);
+        Assert.False(Directory.Exists(_folder));
+
+        _ = _store.NextSequence;
+        sensors.SendInfo();
+
+        Assert.True(sensors.IsCreated);
+        Assert.Equal(0, Single<int>("Blocks stored").Value);
+        Assert.Equal((0, SensorStatus.Ok), Single<int>("Write failures") is var w ? (w.Value, w.Status) : default);
+    }
+
+    [Fact]
+    public void The_self_monitoring_posts_a_counter_when_it_changes_and_failures_as_errors()
+    {
+        var sensors = new TableBlockSensors(_collector.Object, _store);
+        _ = _store.NextSequence;
+        sensors.SendInfo();
+
+        _store.Statistics.Add(ref _store.Statistics.BlocksStored, 3);
+        _store.Statistics.Add(ref _store.Statistics.BytesStored, 2L << 20);
+        _store.Statistics.Add(ref _store.Statistics.ReadFailures);
+        sensors.SendInfo();
+        sensors.SendInfo();
+
+        Assert.Equal([0, 3], Values<int>("Blocks stored").Select(v => v.Value));
+        Assert.Equal([0.0, 2.0], Values<double>("Stored").Select(v => v.Value));
+        Assert.Equal((1, SensorStatus.Error), Values<int>("Read failures")[^1] is var r ? (r.Value, r.Status) : default);
+        Assert.Single(Values<int>("Tables refused"));
+    }
+
+    [Fact]
+    public void The_size_sensor_of_the_store_appears_once_the_store_exists()
+    {
+        var database = new Mock<IDatabaseCore>();
+        database.Setup(d => d.TableBlocks).Returns(_store);
+        database.Setup(d => d.TableBlocksDbSize).Returns(3L << 20);
+
+        var sizes = new DatabaseSensorsSize(_collector.Object, database.Object, Mock.Of<IServerConfig>());
+        sizes.SendInfo();
+        Assert.DoesNotContain("Database/Tables data size", _sensors.Keys);
+
+        _ = _store.NextSequence;
+        sizes.SendInfo();
+
+        Assert.Equal(3.0, Assert.Single(((Recording<double>)_sensors["Database/Tables data size"]).Values).Value);
+    }
+
+
+    private IInstantValueSensor<T> Register<T>(string path)
+    {
+        var sensor = new Recording<T>();
+        _sensors[path] = sensor;
+        return sensor;
+    }
+
+    private List<(T Value, SensorStatus Status, string Comment)> Values<T>(string name) => ((Recording<T>)_sensors[$"{TableBlockSensors.NodeName}/{name}"]).Values;
+
+    private (T Value, SensorStatus Status, string Comment) Single<T>(string name) => Assert.Single(Values<T>(name));
+
+
+    private sealed class Recording<T> : IInstantValueSensor<T>
+    {
+        public List<(T Value, SensorStatus Status, string Comment)> Values { get; } = [];
+
+        public void AddValue(T value) => Values.Add((value, SensorStatus.Ok, string.Empty));
+
+        public void AddValue(T value, string comment = "") => Values.Add((value, SensorStatus.Ok, comment));
+
+        public void AddValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "") => Values.Add((value, status, comment));
+    }
+}

@@ -66,6 +66,11 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                     .AddSingleton<IJournalService, JournalService>();
 
+            // The put and read of table blocks (#1844), for the transport of step 3 (#1845). Constructed on first
+            // resolve; it opens nothing by itself.
+            services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => new HSMServer.Core.TableSensors.TableBlockService(
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
+
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
             // Singleton like the cache and the presentation Journal it

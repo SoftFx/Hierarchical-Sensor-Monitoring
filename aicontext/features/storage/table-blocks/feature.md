@@ -111,9 +111,34 @@ So a block numbered before a sensor existed is never read for it: its tables wer
 - **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
 - **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
 
-## Configuration, self-monitoring, sizes
+## Configuration
 
-See "Operations" below (#1844, part 2b, commit 6).
+Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read once at startup, written back with its defaults, validated with an error that names the key (`TableSensors.MaxReadRows = 0 is invalid: expected 1..2147483647.`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `MaxDecompressedBytes` | 67,108,864 (64 MiB) | A block's limits on a put (`TableBlockLimits`); the format's maxima bound them. A stored block is read back with the format's maxima, so lowering a limit later does not hide it. |
+| `MaxTables` | 65,536 | |
+| `MaxRows` | 8,388,608 | |
+| `MaxColumnsPerTable` | 64 | |
+| `MaxTableIdLength` | 1,024 | |
+| `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request). |
+| `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. |
+
+There is no switch: the feature does nothing until a table sensor exists.
+
+## Self-monitoring
+
+Under `Database/Tables` (`TableBlockSensors`), posted from the 5-minute self-monitoring sample, **only once the store has been opened in this process**: a server without table sensors creates none of these sensors. Counters since the process started, posted when they change: `Blocks stored`, `Rows stored`, `Stored` (MB), `Blocks in store`, `Duplicate blocks`, `Tables refused`, `Blocks not stored` (every table refused), `Invalid blocks`, `Write failures`, `Read failures`, `Index rebuilds`. `Invalid blocks`, `Write failures` and `Read failures` are Error above 0.
+
+The daily database sizes get `Database/Tables data size` once the folder exists. `IDatabaseCore.TableBlocksDbSize` is the folder's size (0 without the folder; nothing is opened); `TotalDbSize` includes it. The Configuration page shows it read-only as "Table blocks (MB)". The weekly export list, the Unseal button and the Compact button do not concern it.
+
+## Log lines
+
+- Open: `Table block store <folder> opened in <ms> ms: <n> blocks, next sequence <s>[, index rebuilt from <n> blocks | , <n> blocks indexed again after the last index entry]` (Info); a missing or damaged index, a reopen after a failure (Warn).
+- A refused table: Debug per table; a Warn summary of the reasons at most once a minute.
+- A failed write or too little disk: Error, at most once a minute.
+- A stored block that cannot be read: Error.
 
 ## Key Files
 

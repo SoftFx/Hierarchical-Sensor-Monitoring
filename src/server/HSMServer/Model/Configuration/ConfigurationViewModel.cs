@@ -20,6 +20,9 @@ namespace HSMServer.Model.Configuration
 
         public double TotalDbSize => Math.Round(database.TotalDbSize / (double)(1<<20), 2, MidpointRounding.AwayFromZero);
 
+        // The block store of table sensors (#1844); 0 when it does not exist. Part of the total above.
+        public double TableBlocksDbSize => Math.Round(database.TableBlocksDbSize / (double)(1 << 20), 2, MidpointRounding.AwayFromZero);
+
         public bool IsCompactRunning => database.IsCompactRunning;
 
         public bool IsExportRunning => database.IsExportRunning;
