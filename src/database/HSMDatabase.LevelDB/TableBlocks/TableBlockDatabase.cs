@@ -570,8 +570,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
             var blocksOptions = Options();
             blocksOptions.CreateIfMissing = mayCreate;
-            _blocks = new DB(Path.Combine(_folder, BlocksName), blocksOptions);
-            _index = new DB(Path.Combine(_folder, IndexName), Options());
+            _blocks = OpenDatabase(BlocksName, blocksOptions);
+            _index = OpenDatabase(IndexName, Options());
 
             var maps = new IndexMaps();
 
@@ -609,7 +609,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             {
                 _index.Dispose();
                 DB.Destroy(Path.Combine(_folder, IndexName));
-                _index = new DB(Path.Combine(_folder, IndexName), Options());
+                _index = OpenDatabase(IndexName, Options());
 
                 maps = new IndexMaps();
                 lastIndexKey = null;
@@ -661,6 +661,63 @@ namespace HSMDatabase.LevelDB.TableBlocks
             _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {maps.Count} blocks, next sequence {_nextReserve}" +
                          (rebuild ? $", index rebuilt from {indexed} blocks" : indexed > 0 ? $", {indexed} blocks indexed again after the last index entry" : string.Empty));
         }
+
+        // Opens one database of the store, retrying a transient failure to replace its CURRENT file. Every open writes a new
+        // MANIFEST and points CURRENT at it through a temporary "<n>.dbtmp" file; on Windows LevelDB moves it over CURRENT
+        // with MoveFileA, then ReplaceFileA, which fails (ERROR_UNABLE_TO_REMOVE_REPLACED and the like) while another process,
+        // such as a virus scanner or the search indexer, has CURRENT open without delete sharing, typically just after it
+        // was written. Only that step is retried: an IO error whose file is a .dbtmp, recognised by the wrapper's message
+        // ("IO error: <path>.dbtmp: <Windows message>"), whatever the Windows message says (it is localized). Any other
+        // error, a missing database or corruption included, fails at once as before. The pauses grow (OpenRetryPauses,
+        // 220 ms in all per database) and run under the store's lock; past them the open fails as the fault it was.
+        private DB OpenDatabase(string name, Options options)
+        {
+            var path = Path.Combine(_folder, name);
+            string firstError = null;
+
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    var db = DatabaseOpener(path, options);
+
+                    if (attempt > 0)
+                        _logger.Warn($"Table block store {_folder}: {name} opened after {attempt} retries of a transient file error: {firstError}");
+
+                    return db;
+                }
+                catch (Exception ex) when (attempt < OpenRetryPauses.Length && IsTransientReplaceError(ex))
+                {
+                    firstError ??= ex.Message;
+                    Interlocked.Increment(ref _openRetries);
+                    RetryPause(OpenRetryPauses[attempt]);
+                }
+                catch (Exception ex) when (attempt > 0)
+                {
+                    _logger.Warn($"Table block store {_folder}: {name} could not be opened after {attempt} retries of a transient file error ({firstError}); last error: {ex.Message}");
+                    throw;
+                }
+            }
+        }
+
+        internal static readonly TimeSpan[] OpenRetryPauses =
+            [TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(120)];
+
+        private static readonly System.Text.RegularExpressions.Regex TransientReplaceError =
+            new(@"^IO error: .*\.dbtmp: ", System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        internal static bool IsTransientReplaceError(Exception ex) => ex is not TableBlockStoreException && ex.Message is { } message && TransientReplaceError.IsMatch(message);
+
+        private long _openRetries;
+
+        /// <summary>Retries of a database open after a transient file error, since the process started. For tests.</summary>
+        internal long OpenRetries => Interlocked.Read(ref _openRetries);
+
+        /// <summary>Opens a LevelDB database. Test seam for an open that fails.</summary>
+        internal Func<string, Options, DB> DatabaseOpener { get; set; } = (path, options) => new DB(path, options);
+
+        /// <summary>The pause between two attempts to open a database. Test seam (no sleeping in tests).</summary>
+        internal Action<TimeSpan> RetryPause { get; set; } = Thread.Sleep;
 
         private Options Options() => new()
         {
