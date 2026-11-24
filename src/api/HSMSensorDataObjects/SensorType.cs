@@ -66,5 +66,13 @@
         /// </summary>
         EnumSensor = 10,
 
+        /// <summary>
+        /// A table sensor (ADR-0021): its data is rows of a fixed schema, sent in blocks on the table connection of
+        /// the collector session, not as values. A registration of this type carries
+        /// <see cref="SensorRequests.AddOrUpdateSensorRequest.TableColumns"/>. A server that does not know the type
+        /// refuses the registration under its path.
+        /// </summary>
+        TableSensor = 11,
+
     }
 }

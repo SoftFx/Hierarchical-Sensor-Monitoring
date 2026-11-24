@@ -227,7 +227,9 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
-                    .AddSingleton<SensorIngestionService>()
+                    // The table schema of a registration is checked against the configured limits (#1845).
+                    .AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
+                        provider.GetRequiredService<ISensorApiTelemetry>(), config.TableSensors.ToOptions().Limits))
                     .AddSingleton<AgentDirectives>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()

@@ -204,6 +204,45 @@ namespace HSMDataCollector.IntegrationTests
             Assert.Contains("\"PreviousPaths\":[]", WireCommand(registration));
         }
 
+        // A table sensor (#1845): SensorType 11 and its columns, the member right after PreviousPaths
+        // (the DTO declaration order), column types as numbers. The registrations without columns
+        // above keep their bytes: the member is left out when null. The native collector pins the
+        // same bytes when it registers tables (#1848).
+        [Fact]
+        public void Registration_of_a_table_sensor_carries_its_columns_after_previous_paths()
+        {
+            var registration = new AddOrUpdateSensorRequest
+            {
+                Path = "quotes/EURUSD",
+                SensorType = SensorType.TableSensor,
+                TableColumns = new List<TableColumnRequest>
+                {
+                    new TableColumnRequest { Name = "time", Type = TableColumnType.Time },
+                    new TableColumnRequest { Name = "bid", Type = TableColumnType.Double },
+                    new TableColumnRequest { Name = "volume", Type = TableColumnType.Int64 },
+                },
+            };
+
+            Assert.Equal("{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":11,\"Description\":null,\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":null,\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":null,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"TableColumns\":[{\"Name\":\"time\",\"Type\":1},{\"Name\":\"bid\",\"Type\":3},{\"Name\":\"volume\",\"Type\":2}],\"Key\":null,\"Path\":\"quotes/EURUSD\"}", WireCommand(registration));
+
+            registration.PreviousPaths = new List<string> { "old/EURUSD" };
+
+            Assert.Contains("\"PreviousPaths\":[\"old/EURUSD\"],\"TableColumns\":[{", WireCommand(registration));
+        }
+
+        [Fact]
+        public void Registration_without_table_columns_omits_the_member()
+        {
+            var registration = new AddOrUpdateSensorRequest { Path = "p/plain", SensorType = SensorType.IntSensor };
+
+            Assert.DoesNotContain("TableColumns", WireCommand(registration));
+
+            registration.PreviousPaths = new List<string> { "old/plain" };
+
+            Assert.DoesNotContain("TableColumns", WireCommand(registration));
+            Assert.Contains("\"PreviousPaths\":[\"old/plain\"]", WireCommand(registration));
+        }
+
         // Registration carrying a data alert (Alerts) and a TTL alert (TtlAlerts + TTLs). The same
         // bytes are pinned by the native NativeWireRegistrationWithAlertsMatchesNetByteLayout unit
         // test, which builds this exact alert through the C ABI. Locks: AlertUpdateRequest field

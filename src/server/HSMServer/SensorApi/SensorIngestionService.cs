@@ -9,6 +9,7 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi.Sessions;
+using HSMTableBlocks;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -27,7 +28,10 @@ namespace HSMServer.SensorApi
     // answers as a refusal (a collector does not send that registration again); an
     // exception that leaves this service is a fault of the server, which the caller
     // answers 500 (a collector sends the package again).
-    public sealed class SensorIngestionService(ITreeValuesCache _cache, ISensorApiTelemetry _telemetry)
+    //
+    // `_tableLimits` are the limits a table schema is checked against at registration (the
+    // configured TableSensors section; the format's defaults when none is given).
+    public sealed class SensorIngestionService(ITreeValuesCache _cache, ISensorApiTelemetry _telemetry, TableBlockLimits _tableLimits = null)
     {
         public const string InvalidRequest = "Public API request info not found";
         public const string UnsupportedCommand = "This type of command is not supported";
@@ -36,6 +40,8 @@ namespace HSMServer.SensorApi
         public const string MissingPath = "it has no path";
         public const string NullAlert = "one of its alerts is null";
         public const string NullAlertCondition = "one of its alert conditions is null";
+        public const string TableRefused = "The table sensor registration is refused";
+        public const string ColumnsWithoutTableType = "only a registration of a table sensor (SensorType 11) carries table columns";
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
@@ -210,11 +216,25 @@ namespace HSMServer.SensorApi
                 return RefuseUnconvertible(request, UnknownValue, ex);
             }
 
+            // The schema of a table sensor (#1845). What is wrong with it is wrong on every
+            // repeat, so it is a refusal.
+            TableSchema schema = null;
+
+            if (request.TableColumns is not null)
+            {
+                if (request.SensorType is not HSMSensorDataObjects.SensorType.TableSensor)
+                    return RefuseTable(request, ColumnsWithoutTableType);
+
+                if (!TryBuildSchema(request.TableColumns, out schema, out var schemaError))
+                    return RefuseTable(request, $"its table schema is invalid: {schemaError}");
+            }
+
             var coreRequest = new SensorAddOrUpdateRequest(productId, request.Path)
             {
                 Update = update,
                 Type = type,
                 TypeIsExplicit = request.SensorType is not null,
+                Schema = schema,
             };
 
             // A path with no part in it ("" or "/") names no sensor. The cache has no check
@@ -222,6 +242,14 @@ namespace HSMServer.SensorApi
             // fault there (#1756); it is the request's, so it is refused here.
             if (coreRequest.PathParts.Length == 0)
                 return RefuseUnconvertible(request, MissingPath, cause: null);
+
+            // A block names its tables by the registered path byte for byte (#1844), and the
+            // server stores a path in its normalized form. A table registered under another
+            // spelling would have every block refused as an unknown sensor, so it is refused
+            // here, once, naming the form the collector has to use.
+            if (type is HSMCommon.Model.SensorType.Table && coreRequest.Path != request.Path)
+                return RefuseTable(request, $"a table sensor is registered under its normalized path \"{coreRequest.Path}\", " +
+                                            $"and blocks name it so; this registration names \"{request.Path}\"");
 
             // Sensor move from the collector (#1724): the sensor registered under an old path
             // moves here first, so the registration below updates it instead of a new one. It
@@ -272,6 +300,69 @@ namespace HSMServer.SensorApi
             }
 
             return null;
+        }
+
+        // The schema of a table registration, checked by the rules of the table schema and the
+        // configured column limit. The column types are mapped one by one: a cast would read
+        // 257 as 1, the time.
+        private bool TryBuildSchema(List<TableColumnRequest> columns, out TableSchema schema, out string error)
+        {
+            schema = null;
+            error = null;
+
+            var built = new List<TableSchemaColumn>(columns.Count);
+
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var column = columns[i];
+
+                if (column is null)
+                {
+                    error = $"column {i} is null";
+                    return false;
+                }
+
+                HSMTableBlocks.TableColumnType columnType;
+
+                switch (column.Type)
+                {
+                    case HSMSensorDataObjects.SensorRequests.TableColumnType.Time:
+                        columnType = HSMTableBlocks.TableColumnType.Time;
+                        break;
+                    case HSMSensorDataObjects.SensorRequests.TableColumnType.Int64:
+                        columnType = HSMTableBlocks.TableColumnType.Int64;
+                        break;
+                    case HSMSensorDataObjects.SensorRequests.TableColumnType.Double:
+                        columnType = HSMTableBlocks.TableColumnType.Double;
+                        break;
+                    default:
+                        error = $"column {i} has the unknown type {(int)column.Type}";
+                        return false;
+                }
+
+                built.Add(new TableSchemaColumn(column.Name, columnType));
+            }
+
+            // Only the schema's own rules throw here, on what the request carries; the message
+            // names the rule (e.g. "column name 'bid' is used twice").
+            try
+            {
+                schema = new TableSchema(built, _tableLimits);
+                return true;
+            }
+            catch (ArgumentException ex)
+            {
+                // Without the runtime's " (Parameter 'columns')": the reader is a collector's log.
+                error = ex.ParamName is null ? ex.Message : ex.Message.Replace($" (Parameter '{ex.ParamName}')", string.Empty);
+                return false;
+            }
+        }
+
+        private static TaskResult RefuseTable(AddOrUpdateSensorRequest request, string reason)
+        {
+            _logger.Warn($"A table sensor registration of \"{CollectorSession.Printable(request.Path, 200)}\" is refused: {CollectorSession.Printable(reason, 300)}");
+
+            return TaskResult.FromError($"{TableRefused}: {reason}");
         }
 
         private static TaskResult RefuseUnconvertible(AddOrUpdateSensorRequest request, string reason, Exception cause)
