@@ -149,6 +149,84 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(1, chart.BucketRows[0]);
         }
 
+        [Theory]
+        [InlineData("hours", 24)]
+        [InlineData("hours", 0)]
+        [InlineData("blocks", 24)]
+        [InlineData("blocks", 0)]
+        public async Task A_merge_between_the_steps_of_a_plan_never_lets_the_answer_certify_past_a_row(string step, int deleteAfterHours)
+        {
+            // The second review's sequence: one-minute buckets, scan limit 1. The plan lists hour 0 with its earliest row at
+            // T + 80; between two steps of the plan a row at T + 10 reaches hour 0, a row at T + 0 reaches hour 1, both
+            // hours are merged and, with no deletion delay, their blocks deleted.
+            Build(new TableBlockOptions { MinFreeDiskMb = 0, MaxChartScanRows = 1, DeleteMergedBlocksAfterHours = deleteAfterHours });
+            var a = await RegisterAsync("a");
+            var t = Hour0.AddHours(-4);
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(t.AddMinutes(80).Ticks, 80, 80)])));
+
+            var merged = false;
+            _service.PlanStep = name =>
+            {
+                if (name != step || merged)
+                    return;
+
+                merged = true;
+                _now = Hour0.AddMinutes(20);
+                Put(Block(("a", [Row(t.AddMinutes(10).Ticks, 10, 10)])));
+                _now = Hour0.AddMinutes(70);
+                Put(Block(("a", [Row(t.Ticks, 0, 0)])));
+                Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+                Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(4)).Fault);
+            };
+
+            var result = _service.Reduce(a.Id, t, t.AddMinutes(100), Columns, 100);
+            Assert.True(result.IsOk, result.Error);
+            var chart = result.Value;
+
+            var counted = chart.BucketRows[10] == 1;
+            Assert.True(counted || chart.CompleteToTicks <= t.AddMinutes(10).Ticks,
+                $"complete to {chart.CompleteToTicks}, row at T + 10 counted: {counted}");
+            Assert.Equal(1, chart.BucketRows[0]);
+
+            // A read of the same range after it agrees on what it holds.
+            var read = _service.Read(a.Id, t, t.AddMinutes(100)).Value;
+            Assert.Equal(3, read.RowCount);
+        }
+
+        [Fact]
+        public async Task A_new_plan_after_sources_were_read_counts_their_rows_once()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1), Row(Hour0.AddMinutes(2).Ticks, 2, 2)])));
+            _now = Hour0.AddMinutes(70);
+            Put(Block(("a", [Row(Hour0.AddMinutes(65).Ticks, 65, 65)])));
+
+            // While the first source (hour 0) is read, the merge commits both hours (their blocks stay: the default delay),
+            // so the second source (hour 1) is found merged after the first was counted.
+            var replans = new List<long>();
+            _service.BeforeChartReplan = replans.Add;
+            var merged = false;
+            _service.BeforeBlockRead = _ =>
+            {
+                if (merged)
+                    return;
+
+                merged = true;
+                Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            };
+
+            var chart = Reduce(a, 100);
+
+            Assert.Equal(new[] { Hour0.AddHours(1).Ticks }, replans);
+            Assert.Equal(3, chart.RowCount);
+            Assert.True(chart.BatchesRead > 0);
+            AssertMatchesReference(chart, [Row(Hour0.AddMinutes(1).Ticks, 1, 1), Row(Hour0.AddMinutes(2).Ticks, 2, 2), Row(Hour0.AddMinutes(65).Ticks, 65, 65)],
+                From.Ticks, To.Ticks, Columns);
+        }
+
         [Fact]
         public async Task An_hour_committed_with_a_block_kept_unreadable_after_the_plan_is_answered_as_a_chart_planned_after_the_commit()
         {
