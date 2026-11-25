@@ -222,15 +222,28 @@ namespace HSMDatabase.AccessManager.TableBatches
 
         /// <summary>
         /// The product's generation: a number that changes, under the product's lock, with every change of what a read's
-        /// plan can see in the store: every commit of an hour (one without any batch class included), a week database
-        /// created by the write of an hour (also one that does not reach its commit), every <see cref="DropWeek"/>, every
-        /// <see cref="SetPlacement"/> (a placement gives the class of each hour), every <see cref="ForgetHours"/> that
-        /// removes an hour, a rebuild of the hours database or of the placements, a write of moved batches. Read under the
-        /// same lock. Two equal readings mean nothing a plan sees changed between them (#1847, #1850 part 4b): it is the
-        /// only test of a plan's staleness, so a new write that changes what a plan sees must change it as well. A product
-        /// without a folder answers 0.
+        /// plan of any of its sensors can see in the store: every change <see cref="GetGeneration(Guid, Guid)"/> of any
+        /// sensor of the product makes. Read under the same lock; it never goes back. A product without a folder answers 0.
         /// </summary>
         long GetGeneration(Guid productId);
+
+        /// <summary>
+        /// The generation of one sensor's plan (#1850 part 4c): the product's term plus the sensor's own, read together under
+        /// the product's lock. Both only grow, so two equal readings mean nothing a plan of this sensor sees changed between
+        /// them (#1847, #1850 part 4b): it is the only test of a plan's staleness, so a new write that changes what a plan
+        /// sees must change it as well.
+        /// <para>
+        /// The product's term changes with every write any plan of the product can see: every commit of an hour (one
+        /// without any batch class included), a week database created by the write of an hour (also one that does not reach
+        /// its commit), every <see cref="DropWeek"/>, every <see cref="ForgetHours"/> that removes an hour, a rebuild of the
+        /// hours database or of the placements. The sensor's term changes with a write that only this sensor's plan sees:
+        /// <see cref="SetPlacement"/> of this sensor (a placement gives the class of each of its hours; a plan reads no other
+        /// sensor's placement) and a write of this sensor's moved batches (every key of it carries the sensor's id; a week
+        /// database it creates holds no row of another sensor). So a placement write or a move of one sensor never makes a
+        /// plan of another one stale. A product without a folder answers 0.
+        /// </para>
+        /// </summary>
+        long GetGeneration(Guid productId, Guid sensorId);
 
         /// <summary>
         /// The record of a committed hour of a product, or null when the hour is not committed. Unlike <see cref="GetHours"/>
