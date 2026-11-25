@@ -32,9 +32,10 @@ The run-time DLLs are whatever vcpkg's app-local deployment puts next to `HSMCpp
   fallback to HTTP.
 - **`DataCollectorProxy::UseHttpTransport()`** (new, the only ABI addition of 2.0.0) is for a server
   too old to have sessions: called before `Start` (or after `Stop`), the collector sends over the HTTP
-  Sensor API instead and never asks for a session. From `Start` or `StartAsync` until `Stop` it throws
-  `hsm::collector::Error` and changes nothing (also right after a `StartAsync` whose start has not begun
-  yet); after `StopAsync` it waits for that stop, then applies.
+  Sensor API instead and never asks for a session. Otherwise it throws `hsm::collector::Error` and
+  changes nothing: after `Start` until `Stop`; after `StartAsync` until that start and a later stop have
+  finished (also while the asynchronous start has not begun yet); after `StopAsync` until that stop has
+  finished. Do not call it while another thread starts the collector: the two are not ordered.
 - **Table sensors** come through `proxy.Native()`: include `<hsm_collector/tables.hpp>` (shipped under
   `include/hsm_collector/`) and call `proxy.Native().CreateTableSensor(path, options)`. They need the
   session **and a server with table sensors**: the first HSMServer release with the table connection

@@ -17,6 +17,7 @@
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -221,17 +222,32 @@ namespace
 		proxy.Stop();
 	}
 
-	// A StopAsync in flight is waited for: UseHttpTransport after it is accepted, and the next Start
-	// sends over HTTP with no upgrade.
-	void StopAsyncThenUseHttpTransportWaitsForTheStop()
+	// After StopAsync, UseHttpTransport throws until that stop has finished, then applies. Whether
+	// the first call lands before or after the stop's thread has run is timing, so only the stable
+	// ends are asserted: a call that is accepted finds the collector stopped, and calls are accepted
+	// once the stop has finished; then the next Start sends over HTTP with no upgrade.
+	void StopAsyncThenUseHttpTransportAppliesOnceStopped()
 	{
 		hsm::test::HttpRecordingServer server;
 		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
 		auto sensor = proxy.CreateIntSensor("wrapper/stopasync_int", "an int");
 
-		proxy.StartAsync();
+		proxy.Start(); // on the session: this server has none, so nothing is delivered
 		proxy.StopAsync();
-		proxy.UseHttpTransport(); // must not throw: it waits for the stop
+		bool accepted = false;
+		Require(WaitUntil([&] {
+			try
+			{
+				proxy.UseHttpTransport();
+				accepted = true;
+			}
+			catch (const hsm::collector::Error&)
+			{
+			}
+			return accepted;
+		}),
+			"UseHttpTransport must be accepted once the StopAsync has finished");
+		Require(proxy.Native().Status() == hsm::collector::CollectorStatus::Stopped, "an accepted call must find the collector stopped");
 		const size_t upgrades = UpgradeRequests(server);
 
 		proxy.Start();
@@ -280,6 +296,39 @@ namespace
 		Require(WaitUntil([&] { return HttpRequests(server, "/list", "\"Value\":4949") >= 1; }), "the second run must send over HTTP too");
 		proxy.Stop();
 		Require(!AnyUpgradeRequest(server), "a collector on HTTP must never ask for the session");
+	}
+
+	// A function sensor's callback runs on the collector's scheduler thread, which the native Stop
+	// joins. A callback (a watchdog) that calls StopAsync while the host thread is inside Stop must
+	// not wait for anything that thread holds: Stop must return. A hang here is a failure by the
+	// ctest TIMEOUT of this case.
+	void StopAsyncFromACallbackDuringStopFinishes()
+	{
+		hsm::test::WebSocketTestServer server(SessionServerOptions());
+		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
+
+		std::atomic<int> calls{ 0 };
+		std::atomic<bool> entered{ false };
+		std::atomic<bool> saw_stopping{ false };
+		std::atomic<bool> callback_done{ false };
+		std::function<int()> watchdog = [&]() -> int {
+			if (calls.fetch_add(1) != 0)
+				return 0;
+			entered.store(true);
+			// The latch: wait (polling) until the host's Stop has begun, i.e. the collector left
+			// Running, so StopAsync below is called while the host thread is inside Stop.
+			saw_stopping.store(WaitUntil([&] { return proxy.Native().Status() != hsm::collector::CollectorStatus::Running; }));
+			proxy.StopAsync();
+			callback_done.store(true);
+			return 1;
+		};
+		auto sensor = proxy.CreateNoParamsFuncSensor<int>("wrapper/watchdog", "watchdog", watchdog, std::chrono::milliseconds(50));
+
+		proxy.Start();
+		Require(WaitUntil([&] { return entered.load(); }), "the function sensor's callback must run");
+		proxy.Stop(); // joins the scheduler thread, which is inside the callback
+		Require(saw_stopping.load(), "the callback must have run while the host's Stop was in progress");
+		Require(callback_done.load(), "the callback's StopAsync must have returned");
 	}
 
 	void TableSensorDeliversOnTheDefaultTransport()
@@ -349,9 +398,10 @@ namespace
 			{ "wrapper_use_http_transport_sends_over_http_without_upgrade", &UseHttpTransportSendsOverHttpWithoutUpgrade },
 			{ "wrapper_use_http_transport_after_start_throws_and_keeps_the_session", &UseHttpTransportAfterStartThrowsAndKeepsTheSession },
 			{ "wrapper_start_async_then_use_http_transport_throws_and_keeps_the_session", &StartAsyncThenUseHttpTransportThrowsAndKeepsTheSession },
-			{ "wrapper_stop_async_then_use_http_transport_waits_for_the_stop", &StopAsyncThenUseHttpTransportWaitsForTheStop },
+			{ "wrapper_stop_async_then_use_http_transport_applies_once_stopped", &StopAsyncThenUseHttpTransportAppliesOnceStopped },
 			{ "wrapper_use_http_transport_after_stop_sends_over_http", &UseHttpTransportAfterStopSendsOverHttp },
 			{ "wrapper_use_http_transport_is_kept_across_restarts", &UseHttpTransportIsKeptAcrossRestarts },
+			{ "wrapper_stop_async_from_a_callback_during_stop_finishes", &StopAsyncFromACallbackDuringStopFinishes },
 			{ "wrapper_table_sensor_delivers_on_the_default_transport", &TableSensorDeliversOnTheDefaultTransport },
 			{ "wrapper_table_sensor_is_unavailable_on_http", &TableSensorIsUnavailableOnHttp },
 		};

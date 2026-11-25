@@ -64,27 +64,28 @@ namespace hsm_wrapper
 			collector_.UseSessionTransport();
 	}
 
-	void DataCollectorImpl::WaitForPendingStop()
+	namespace
 	{
-		if (stop_future_.valid())
+		// A lifecycle task launched and not finished yet. wait_for(0) only looks: it never blocks.
+		bool Pending(const std::future<void>& future)
 		{
-			stop_future_.wait();
-			stop_future_ = {};
+			return future.valid() && future.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
 		}
-		if (lifecycle_ == Lifecycle::StopRequested)
-			lifecycle_ = Lifecycle::Idle;
 	}
 
 	void DataCollectorImpl::UseHttpTransport()
 	{
-		// Serialized with Start/StartAsync/Stop/StopAsync by lifecycle_mutex_: the transport may only
-		// change while no start is requested, because the native collector reads it on the thread
-		// that runs Start, and a StartAsync returns before that thread has entered Start (the
-		// collector's own status is still Stopped then, so it cannot be the test).
-		std::lock_guard<std::mutex> guard(lifecycle_mutex_);
-		// A StopAsync still in flight is waited for: once it has finished, the collector is stopped.
-		WaitForPendingStop();
-		if (lifecycle_ == Lifecycle::StartRequested || collector_.Status() != hsm::collector::CollectorStatus::Stopped)
+		// The collector's own status is not enough: after StartAsync it stays Stopped until the start's
+		// thread enters Start, and after StopAsync it reads Running until the stop's thread has run.
+		// So a StartAsync or StopAsync whose task has not finished refuses the call too. Once the start's
+		// task is finished, its Start has returned, so the status read after this check is current. The
+		// lock covers only the look at the two handles (no wait, no native call under it).
+		{
+			std::lock_guard<std::mutex> guard(futures_mutex_);
+			if (Pending(start_future_) || Pending(stop_future_))
+				throw hsm::collector::Error("UseHttpTransport must be called before Start (or after Stop); the transport was not changed.");
+		}
+		if (collector_.Status() != hsm::collector::CollectorStatus::Stopped)
 			throw hsm::collector::Error("UseHttpTransport must be called before Start (or after Stop); the transport was not changed.");
 		collector_.UseHttpTransport();
 		transport_chosen_.store(true);
@@ -98,67 +99,47 @@ namespace hsm_wrapper
 
 	void DataCollectorImpl::Start()
 	{
-		std::lock_guard<std::mutex> guard(lifecycle_mutex_);
-		WaitForPendingStop();
 #ifdef _WIN32
 		collector_.InstallWindowsMetricSources();
 #endif
 		EnsureTransport();
-		lifecycle_ = Lifecycle::StartRequested;
-		try
-		{
-			collector_.Start();
-		}
-		catch (...)
-		{
-			// A Start that failed and left the collector stopped requests nothing.
-			if (collector_.Status() == hsm::collector::CollectorStatus::Stopped)
-				lifecycle_ = Lifecycle::Idle;
-			throw;
-		}
+		collector_.Start();
 	}
 
 	void DataCollectorImpl::StartAsync()
 	{
-		std::lock_guard<std::mutex> guard(lifecycle_mutex_);
-		WaitForPendingStop();
 #ifdef _WIN32
 		collector_.InstallWindowsMetricSources();
 #endif
 		EnsureTransport();
-		// Set before the start is launched, so a UseHttpTransport after this call returns is refused
-		// whether or not the start's thread has run yet. A start that fails on that thread leaves the
-		// request in place until Stop or StopAsync (its error stays in the future, as before).
-		lifecycle_ = Lifecycle::StartRequested;
-		start_future_ = collector_.StartAsync().share();
+		auto launched = collector_.StartAsync();
+		// The handle is stored before this call returns, so a UseHttpTransport after it sees the start.
+		// A previous start's handle is moved out under the lock and released after it: releasing a
+		// pending std::async future waits for its task (as the plain assignment always did), and that
+		// wait must not happen under the lock.
+		std::future<void> previous;
+		{
+			std::lock_guard<std::mutex> guard(futures_mutex_);
+			previous = std::move(start_future_);
+			start_future_ = std::move(launched);
+		}
 	}
 
 	void DataCollectorImpl::Stop()
 	{
-		std::lock_guard<std::mutex> guard(lifecycle_mutex_);
-		// A pending StartAsync runs to its end first, so this Stop cannot be overtaken by it.
-		if (start_future_.valid())
-			start_future_.wait();
-		WaitForPendingStop();
 		collector_.Stop();
-		lifecycle_ = Lifecycle::Idle;
 	}
 
 	void DataCollectorImpl::StopAsync()
 	{
-		std::lock_guard<std::mutex> guard(lifecycle_mutex_);
-		// The stop runs on its own thread after a pending StartAsync, as Stop does. Until it has
-		// finished, UseHttpTransport, Start and StartAsync wait for it.
-		auto pending_start = start_future_;
-		auto previous_stop = std::move(stop_future_);
-		stop_future_ = std::async(std::launch::async, [this, pending_start, previous = std::move(previous_stop)]() mutable {
-			if (previous.valid())
-				previous.wait();
-			if (pending_start.valid())
-				pending_start.wait();
-			collector_.Stop();
-		});
-		lifecycle_ = Lifecycle::StopRequested;
+		auto launched = collector_.StopAsync();
+		// As in StartAsync: the old handle is released outside the lock.
+		std::future<void> previous;
+		{
+			std::lock_guard<std::mutex> guard(futures_mutex_);
+			previous = std::move(stop_future_);
+			stop_future_ = std::move(launched);
+		}
 	}
 
 	// The boolean sub-flags select individual sub-sensors in the managed API; the native group helpers

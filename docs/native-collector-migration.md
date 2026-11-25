@@ -117,10 +117,12 @@ HTTP.
 - **No fallback.** A proxy on the session never switches to HTTP by itself, and one on HTTP never tries
   the session (it sends no upgrade request).
 - **`UseHttpTransport()`** is the one new method. Call it before `Start` (or after `Stop`; the next
-  `Start` then uses HTTP). From `Start` or `StartAsync` until `Stop` it throws `hsm::collector::Error`
-  and the transport stays as it is, also right after a `StartAsync` whose thread has not begun the start
-  yet; after `StopAsync` it waits for that stop to finish and then applies. There is no call back to the
-  session on the proxy.
+  `Start` then uses HTTP). Otherwise it throws `hsm::collector::Error` and the transport stays as it
+  is: after `Start` until `Stop`; after `StartAsync` until that start and a later stop have finished
+  (also while the asynchronous start has not begun yet); after `StopAsync` until that stop has finished.
+  A call made concurrently with a `StartAsync` on another thread is not ordered with it, so do not change
+  the transport while another thread starts the collector. There is no call back to the session on the
+  proxy.
 - **Files are limited by the server's frame on the session.** `SendFileAsync` sends a file as one
   element of a `list` frame, in the wire JSON form where every byte of the file is a decimal number
   followed by a comma (2 to 4 JSON bytes per file byte: 4 for every byte from 100 to 255, about 3.6 on

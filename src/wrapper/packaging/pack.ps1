@@ -171,8 +171,8 @@ Two ways to consume this bundle:
 
 **Transport (2.0.0).** The wrapper talks to the server over the collector session, one WebSocket on
 `/api/sensors/session`, which needs **HSMServer 3.43.0 or later**. Update the server first; a host that
-must keep talking to an older server calls `proxy.UseHttpTransport()` before `Start` (from `Start` or
-`StartAsync` until `Stop` the call throws `hsm::collector::Error`). There is no automatic fallback:
+must keep talking to an older server calls `proxy.UseHttpTransport()` before `Start` (after `Start`
+or `StartAsync` it throws `hsm::collector::Error` until a stop has finished). There is no automatic fallback:
 against a server without sessions a host on the default sends nothing.
 
 **Files on the session.** `SendFileAsync` sends a file as one element of a session frame, each file byte

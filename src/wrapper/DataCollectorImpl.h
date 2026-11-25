@@ -42,7 +42,8 @@ namespace hsm_wrapper
 		void StopAsync();
 
 		// For a server too old to have collector sessions: this collector sends over HTTP instead.
-		// Before Start (or after Stop); throws hsm::collector::Error on a starting/running collector.
+		// Before Start (or after Stop); throws hsm::collector::Error while the collector is not stopped
+		// or a StartAsync/StopAsync task has not finished.
 		void UseHttpTransport();
 
 		// The underlying native collector — lets a consumer create new sensors directly against
@@ -141,17 +142,6 @@ namespace hsm_wrapper
 	private:
 		// Applies the transport choice if none is in place yet (see transport_chosen_).
 		void EnsureTransport();
-		// Caller holds lifecycle_mutex_: waits for a StopAsync in flight and settles its request.
-		void WaitForPendingStop();
-
-		// What the host last asked of the lifecycle, guarded by lifecycle_mutex_. The collector's own
-		// status cannot serve here: after StartAsync it stays Stopped until the start's thread runs.
-		enum class Lifecycle
-		{
-			Idle,           // no start requested since the last stop (or ever)
-			StartRequested, // Start or StartAsync was called and no stop since
-			StopRequested,  // StopAsync was called; stop_future_ finishes it
-		};
 
 		hsm::collector::Collector collector_;
 		// True once collector_ has a transport: the session, chosen by the constructor, or HTTP,
@@ -162,16 +152,12 @@ namespace hsm_wrapper
 		// StartAsync/StopAsync blocks in its destructor until the task completes, which would make the
 		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget). Expected
 		// usage is one-shot (a single StartAsync, a single StopAsync); calling StartAsync again while a
-		// prior start is still pending blocks on the move-assignment until the prior task finishes.
-		//
-		// lifecycle_mutex_ serializes Start, StartAsync, Stop, StopAsync and UseHttpTransport, so the
-		// transport never changes while a start is requested or running. Stop waits for a pending
-		// StartAsync; a StopAsync runs after it on its own thread, and the next Start, StartAsync or
-		// UseHttpTransport waits for that stop. Declared after collector_, so they are destroyed (and a
-		// pending task waited for) before it.
-		std::mutex lifecycle_mutex_;
-		Lifecycle lifecycle_ = Lifecycle::Idle;
-		std::shared_future<void> start_future_;
+		// prior start is still pending blocks until the prior task finishes (its handle is released).
+		// UseHttpTransport reads them: a task not finished yet refuses it. futures_mutex_ guards only
+		// reading and replacing the two handles, never a wait and never a native call. Declared after
+		// collector_, so they are destroyed (and a pending task waited for) before it.
+		std::mutex futures_mutex_;
+		std::future<void> start_future_;
 		std::future<void> stop_future_;
 		std::mutex file_sensors_mutex_;
 		std::unordered_map<std::string, hsm::collector::FileSensor> file_sensors_;

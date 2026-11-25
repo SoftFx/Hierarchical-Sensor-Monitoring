@@ -181,11 +181,15 @@ if(HSMWRAPPER_BUILD_TESTS AND HSM_COLLECTOR_HTTP AND HSM_COLLECTOR_TABLES)
             wrapper_use_http_transport_sends_over_http_without_upgrade
             wrapper_use_http_transport_after_start_throws_and_keeps_the_session
             wrapper_start_async_then_use_http_transport_throws_and_keeps_the_session
-            wrapper_stop_async_then_use_http_transport_waits_for_the_stop
+            wrapper_stop_async_then_use_http_transport_applies_once_stopped
             wrapper_use_http_transport_after_stop_sends_over_http
             wrapper_use_http_transport_is_kept_across_restarts
+            wrapper_stop_async_from_a_callback_during_stop_finishes
             wrapper_table_sensor_delivers_on_the_default_transport
             wrapper_table_sensor_is_unavailable_on_http)
         add_test(NAME ${_case} COMMAND WrapperTransportTests ${_case})
+        # A hang (a lifecycle deadlock) must fail the case, not stall the runner. A passing case takes
+        # a second or two; the waits inside give up after 30 s.
+        set_tests_properties(${_case} PROPERTIES TIMEOUT 90)
     endforeach()
 endif()

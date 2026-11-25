@@ -118,11 +118,14 @@ namespace hsm_wrapper
 		// (HSMServer before 3.43.0), and makes this collector send over the HTTP Sensor API instead.
 		// Table sensors (Native().CreateTableSensor) need the session and a server that has them: on
 		// HTTP they are Unavailable. Call it before Start (or after Stop; the next Start then uses
-		// HTTP). After Start or StartAsync, until Stop, it throws hsm::collector::Error and the
-		// transport stays as it is, even while an asynchronous start has not begun yet; after
-		// StopAsync it waits for that stop and then applies. There is no way back to the session on
-		// this proxy, and no automatic switch either way: a collector on the session never falls back
-		// to HTTP. On the session a file larger than about 1 MiB is dropped (see the note above).
+		// HTTP). Otherwise it throws hsm::collector::Error and the transport stays as it is: after
+		// Start until Stop; after StartAsync until that start and a later stop have finished (also
+		// while the asynchronous start has not begun yet); after StopAsync until that stop has
+		// finished. A call made concurrently with a StartAsync on ANOTHER thread is not ordered with
+		// it: either may come first, so do not change the transport while another thread starts the
+		// collector. There is no way back to the session on this proxy, and no automatic switch
+		// either way: a collector on the session never falls back to HTTP. On the session a file
+		// larger than about 1 MiB is dropped (see the note above).
 		void UseHttpTransport();
 
 		// Escape hatch for incremental migration off the wrapper: returns the underlying native
