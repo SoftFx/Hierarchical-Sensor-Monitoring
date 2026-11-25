@@ -103,6 +103,33 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public async Task A_frame_that_faults_does_not_hold_the_other_frames_back()
+        {
+            // Frames of one registration each: a registration with this description does not fit twice in 1,100 bytes.
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 1100 })
+            {
+                server.FaultCommandsCarrying("a/fault", 500);
+
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var description = new string('d', 400);
+                    var faulting = collector.CreateTableSensor("a/fault", new TableSensorOptions { SensorLocation = SensorLocation.Product, Description = description, Columns = { TableColumn.Double("v") } });
+                    var healthy = collector.CreateTableSensor("b/ok", new TableSensorOptions { SensorLocation = SensorLocation.Product, Description = description, Columns = { TableColumn.Double("v") } });
+
+                    await collector.Start();
+                    await TickUntilAsync(collector, () => healthy.State != TableSensorState.Pending);
+
+                    Assert.Equal(TableSensorState.Registered, healthy.State);
+                    Assert.Equal(TableSensorState.Pending, faulting.State);
+
+                    // The paths went in frames of their own, the faulting one first (path order).
+                    var tableFrames = server.Requests.Where(r => r.Op == "commands" && (r.Body.Contains("a/fault") || r.Body.Contains("b/ok"))).ToList();
+                    Assert.All(tableFrames, r => Assert.False(r.Body.Contains("a/fault") && r.Body.Contains("b/ok")));
+                }
+            }
+        }
+
+        [Fact]
         public async Task A_fault_is_sent_again_and_a_4xx_is_final()
         {
             using (var server = new ScriptedSessionServer())

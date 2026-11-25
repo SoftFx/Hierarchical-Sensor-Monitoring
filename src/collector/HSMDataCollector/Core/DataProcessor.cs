@@ -99,6 +99,7 @@ namespace HSMDataCollector.Core
         public bool Start()
         {
             Volatile.Write(ref _diagnosticsSuppressedFlag, 0);
+            Volatile.Write(ref _sensorsStopped, 0);
 
             var dataStarted = _dataQueue.Start();
             var priorityStarted = dataStarted && _priorityQueue.Start();
@@ -132,6 +133,9 @@ namespace HSMDataCollector.Core
 
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
+
+            // The sensors have published their last bars: a table loss reported from now on goes to the stop line.
+            Volatile.Write(ref _sensorsStopped, 1);
 
             if (mode.FlushAcceptedWork())
                 await StopWithFlushAsync(mode, failures).ConfigureAwait(false);
@@ -175,7 +179,11 @@ namespace HSMDataCollector.Core
             {
                 // The table blocks go on a connection of their own (ADR-0021 point 7): their drain runs beside the
                 // value queues' under the same budget, so it does not make the stop longer.
-                var tablesDrain = Tables != null ? Tables.FlushAsync(drainBudget.Token) : Task.CompletedTask;
+                var budget = drainBudget.Token;
+                var tables = Tables;
+
+                // On a thread of its own: packing the last rows must not hold the value queues' drain back (#1846 review, item 4).
+                var tablesDrain = tables != null ? Task.Run(() => tables.FlushAsync(budget)) : Task.CompletedTask;
 
                 // Registrations first: the values behind them are of little use to a server that
                 // was never told what those sensors are. Their package diagnostics are suppressed
@@ -487,7 +495,15 @@ namespace HSMDataCollector.Core
             if (rows <= 0)
                 return;
 
-            DefaultSensors.QueueOverflowSensor?.AddValue(TablePipeline.DroppedRowsQueueName, (int)Math.Min(rows, int.MaxValue));
+            var sensor = DefaultSensors.QueueOverflowSensor;
+
+            // Once the sensors have stopped, the Queue overflow bar has been published for the last time this run: a
+            // loss counted into it now would never be seen. It goes to the stop line instead, as it does without the
+            // sensor (#1846 review, item 7). Each loss is counted in exactly one of the two.
+            if (sensor != null && Volatile.Read(ref _sensorsStopped) == 0)
+                sensor.AddValue(TablePipeline.DroppedRowsQueueName, (int)Math.Min(rows, int.MaxValue));
+            else
+                Interlocked.Add(ref _unreportedTableRows, rows);
         }
 
         private void EmitOverflowDrops(string queueName, int droppedCount)
@@ -508,6 +524,12 @@ namespace HSMDataCollector.Core
         // Values evicted from a full queue while no Queue overflow sensor was registered.
         private long _unreportedOverflow;
 
+        // Table rows lost while no Queue overflow sensor could count them (none registered, or the sensors had stopped).
+        private long _unreportedTableRows;
+
+        // 1 from the moment the sensors stopped in a stop until the next Start.
+        private int _sensorsStopped;
+
         /// <summary>
         /// One line per run for the drops no sensor counted, at Error: it is the only report of
         /// that loss. Same wording as the native collector's stop line. Taken with an exchange,
@@ -519,6 +541,11 @@ namespace HSMDataCollector.Core
 
             if (lost > 0)
                 _logger.Error($"Collector stop: {lost} value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).");
+
+            var lostRows = Interlocked.Exchange(ref _unreportedTableRows, 0);
+
+            if (lostRows > 0)
+                _logger.Error($"Collector stop: {lostRows} table row(s) were lost during this run and are not in the Queue overflow sensor (not registered, or reported after it published its last bar).");
         }
 
         private void LogDiscardedItems(int count, string queueName)

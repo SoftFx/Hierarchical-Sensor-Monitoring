@@ -45,6 +45,7 @@ namespace HSMDataCollector.Client.Session
 
             var accepted = new List<string>();
             var refused = new Dictionary<string, string>(StringComparer.Ordinal);
+            string unsettled = null;
             var index = 0;
 
             while (index < registrations.Count)
@@ -105,7 +106,7 @@ namespace HSMDataCollector.Client.Session
                 }
 
                 // A 4xx is final for the whole request (wire contract, "Statuses of the registration routes"); a 5xx or
-                // no ack leaves this frame and the ones after it unsettled, to be sent again.
+                // no ack leaves the paths of this frame unsettled, to be sent again.
                 if (ack.Acked && ack.Status >= 400 && ack.Status < 500)
                 {
                     foreach (var path in paths)
@@ -114,12 +115,12 @@ namespace HSMDataCollector.Client.Session
                     continue;
                 }
 
-                var why = ack.Acked ? $"status {ack.Status}: {ack.Error}".TrimEnd(' ', ':') : ack.Error;
-
-                return new TableRegistrationResult(accepted, refused, why);
+                // The paths of this frame stay unsettled; the frames after it are tried all the same, so one path
+                // that faults on every repeat does not hold the healthy ones back (#1846 review, item 8).
+                unsettled = ack.Acked ? $"status {ack.Status}: {ack.Error}".TrimEnd(' ', ':') : ack.Error;
             }
 
-            return new TableRegistrationResult(accepted, refused, null);
+            return new TableRegistrationResult(accepted, refused, unsettled);
         }
 
         private Dictionary<string, string> ReadPathErrors(string body)

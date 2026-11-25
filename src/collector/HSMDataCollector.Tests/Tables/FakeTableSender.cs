@@ -125,7 +125,14 @@ namespace HSMDataCollector.Tests.Tables
 
         public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
-        public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => Ok();
+        /// <summary>Set at the first value send.</summary>
+        public ManualResetEventSlim ValueSent { get; } = new ManualResetEventSlim();
+
+        public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        {
+            ValueSent.Set();
+            return Ok();
+        }
 
         public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => Ok();
 

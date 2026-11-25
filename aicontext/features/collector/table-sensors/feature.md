@@ -133,21 +133,30 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
 ## Data Flow
 
 1. **Add.** `TableSensor.AddRow` checks the shape (throws), then asks the pipeline whether rows are taken now (the
-   sensor's state, the collector's data gate), reserves room in the collector-wide buffer bound with `Interlocked`, and
-   appends under the sensor's own lock. A dropped row costs two counters; the words are written by the next tick.
+   sensor's state, the collector's data gate, and whether the run still takes rows), reserves room in the collector-wide
+   buffer bound with a compare-and-swap that never overshoots (a request larger than the bound is refused before it
+   touches the counter), and appends under the sensor's own lock after checking the same conditions again there: a
+   write that a refusal or the stop's final tick overtook gives its room back and is counted as dropped. A dropped row costs two counters; the words are written by the next tick.
 2. **Tick** (`TablePipeline.TickAsync`, on the collector's `CollectorScheduler`, which skips a tick while the previous
    one runs): reports the losses since the last tick, starts the registration of `Pending` sensors, then **packs**: each
    `Registered` sensor's buffer is swapped for its spare under the sensor's lock (writers never wait for packing), the
    rows are cut into pieces that keep to the block limits, the pieces are grouped into blocks (a table once per block),
    each block is written with one `TableBlockWriter` (reused) and checked against the frame limit: a block too large is
    split by tables, then by rows, and packed again. Blocks get the next producer sequence and go to the end of the
-   backlog; the buffer room goes back. The tick then signals the delivery loop.
+   backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
+   compression pass: the rows it has not packed when the token fires are dropped and counted. The tick then signals the
+   delivery loop.
 3. **Delivery** (`DeliverAsync`, a loop of its own): the head of the backlog is put; the next block goes only after
-   the answer to the one before.
-4. **Stop** (`FlushAsync`, inside `DataProcessor.StopWithFlushAsync`): runs beside the value queues' drain under the
-   same budget (one connection each, so the stop is not longer), ends the tick and the loop, packs everything, delivers
-   until the budget is spent or a block is not delivered, and drops and counts the rest (the backlog, and rows of
-   sensors still `Pending`). A start rollback drops without delivering.
+   the answer to the one before. A block stays in flight, out of reach of the backlog bound, until its answer is
+   applied: the removal from the backlog, the end of in-flight and the accounting are one step under the backlog's lock.
+4. **Stop** (`FlushAsync`, inside `DataProcessor.StopWithFlushAsync`): runs on a thread of its own beside the value
+   queues' drain under the same budget (one connection each, so the stop is not longer and packing never holds the value
+   drain back). It ends the tick and the loop and waits for a pack of the run that is under way (a late tick can never
+   enqueue a block after the stop cleared the backlog), then runs the final tick: from that moment rows are refused and
+   counted until the next `Start`, also while the collector is still `Stopping` for its value queues. It packs within
+   the budget, delivers until the budget is spent or a block is not delivered, and drops and counts the rest (the
+   backlog, and rows of sensors still `Pending`). A start rollback does the same without delivering. An answer to a
+   registration request of an earlier run changes nothing: every run registers its sensors itself.
 
 ### Registration
 
@@ -171,7 +180,9 @@ Every `Start` registers every sensor again (`Registered` goes back to `Pending`)
 
 | Answer | What the collector does |
 |---|---|
-| `stored` | settled; each listed refused table: rows counted; `UnknownSensor` puts the sensor back to `Pending` (registered again; the rows of this block are lost); `NotATableSensor`, `SchemaIdMismatch`, `ColumnTypesMismatch`, `InvalidIdentifier` make it `Refused`; `SensorBlocked`, `SensorCreatedAfterBlock` and reasons it does not know are counted and reported only. More refused than listed (`refusedCount` > 100): reported |
+| `stored` | settled; each listed refused table: rows counted; `UnknownSensor` puts the sensor back to `Pending` (registered again; the rows of this block are lost); `NotATableSensor`, `SchemaIdMismatch`, `ColumnTypesMismatch`, `InvalidIdentifier` make it `Refused`; `SensorBlocked` (a sensor its user blocked on the server and can unblock there, so not final: the sensor stays
+`Registered` and its later rows go out), `SensorCreatedAfterBlock` and reasons it does not know are counted and
+reported only. More refused than listed (`refusedCount` > 100): reported |
 | `duplicate` | settled, refusals as for `stored` (`refusedKnown: false` carries none) |
 | `allRefused` | final: dropped, every row counted, the listed reasons applied |
 | `400` | final: dropped, every row counted, reported as an invalid block |
@@ -182,6 +193,11 @@ Every `Start` registers every sensor again (`Registered` goes back to `Pending`)
 Every lost row is counted in its sensor's `RowsDropped`, then at the next tick (or at stop) summed into the
 `Queue overflow` diagnostic sensor under the queue **"Table rows"** (when the host registered that sensor) and reported
 through `Collector errors` with one deduplicated line per reason:
+
+Every loss is in exactly one of two places: a `Queue overflow` bar that is published, or the stop line
+(`Collector stop: N table row(s) were lost during this run and are not in the Queue overflow sensor ...`), which takes
+what no sensor can show: losses of a collector without that sensor, and losses reported after the sensors published
+their last bars in a stop.
 
 | Reason | When |
 |---|---|
@@ -215,7 +231,8 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - Unit, net48 (the net472 build) and net8.0 (the net6.0 build, linked): `TableSensorTests` (API, shapes, unavailable
   sensors, registration answers, buffer and backlog bounds, splits, answers to blocks, stop, many threads against ticks),
   `TableRegistrationSessionTests` (registration over the scripted session: alone in its request, refusals final, faults
-  retried).
+  retried). `TablePipelineRaceTests`: the orders of events found in review (a discard or a refusal racing a
+  write, a stop racing a tick, an answer racing the bound, a stale registration answer), forced through internal hooks.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver; the native driver
   marks the table verbs `CONFORMANCE-UNSUPPORTED (#1848)` and does not run the fixture until step 6.
 
@@ -223,5 +240,15 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 
 - Part 1 has no table connection: blocks are not delivered by the session sender yet (part 2).
 - No local file: a crash or a stop that cannot deliver loses what is held (counted); a restart takes a new producer id.
-- The buffer bound counts row payload, not the capacity of the arrays behind it: a sensor's two buffers keep the
-  capacity of its busiest tick.
+- `MaxTableBufferBytes` bounds the rows waiting for the tick (8 bytes per column per row). The arrays behind them are
+  bounded apart from it: a buffer that grew past 256 rows gives its arrays up when a tick has packed it, so a quiet
+  sensor keeps at most two buffers of 256 rows (4 KiB per column); the arrays of a busy sensor follow its rows. A busy
+  sensor therefore allocates its arrays again every tick.
+- Rows of refused tables beyond the first 100 of one acknowledgement are not in `RowsDropped`: the server lists at
+  most 100 refusals and gives only the number of the rest (`refusedCount`), so the collector knows neither their tables
+  nor their rows. The collector logs both numbers.
+
+## Open Points
+
+- Wire contract: an acknowledgement could carry the number of refused rows (or the indexes of all refused tables), so
+  that a collector can count every lost row on its sensor also beyond the first 100 refused tables. A server change.

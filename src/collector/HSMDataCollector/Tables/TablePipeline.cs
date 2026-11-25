@@ -222,17 +222,50 @@ namespace HSMDataCollector.Tables
                 case TableSensorState.Unavailable: return TableDropReason.SensorUnavailable;
             }
 
+            // Rows are taken from Start until the stop's final tick takes them, not while the collector is still
+            // Stopping after it: such a row would be in no report, or go out in the next run (#1846 review, item 2).
+            if (Volatile.Read(ref _acceptingRows) == 0)
+                return TableDropReason.NotRunning;
+
             return _diagnostics.CanAcceptData ? TableDropReason.None : TableDropReason.NotRunning;
         }
 
+        // 1 from Start until the stop or the rollback closes the run for rows.
+        private int _acceptingRows;
+
+        /// <summary>
+        /// Takes <paramref name="bytes"/> of the collector-wide bound, or nothing. A compare-and-swap that never
+        /// overshoots: a request that cannot fit is refused before it touches the counter, so it never makes a
+        /// concurrent request that fits look like one that does not (#1846 review, item 10).
+        /// </summary>
         internal bool TryReserveBuffer(long bytes)
         {
-            if (Interlocked.Add(ref _bufferedBytes, bytes) <= _maxBufferBytes)
-                return true;
+            if (bytes > _maxBufferBytes)
+            {
+                OnReservationForTests?.Invoke();
+                return false;
+            }
 
-            Interlocked.Add(ref _bufferedBytes, -bytes);
-            return false;
+            while (true)
+            {
+                var current = Interlocked.Read(ref _bufferedBytes);
+
+                if (current + bytes > _maxBufferBytes)
+                {
+                    OnReservationForTests?.Invoke();
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _bufferedBytes, current + bytes, current) == current)
+                {
+                    OnReservationForTests?.Invoke();
+                    return true;
+                }
+            }
         }
+
+        /// <summary>For tests: runs once a reservation has decided, whatever it decided.</summary>
+        internal Action OnReservationForTests { get; set; }
 
         internal void ReleaseBuffer(long bytes) => Interlocked.Add(ref _bufferedBytes, -bytes);
 
@@ -305,6 +338,8 @@ namespace HSMDataCollector.Tables
                 _producer = Guid.NewGuid();
                 _nextSequence = 0;
                 Interlocked.Exchange(ref _retryNotBeforeTicks, 0);
+                Interlocked.Increment(ref _runGeneration);
+                Volatile.Write(ref _acceptingRows, 1);
 
                 foreach (var sensor in _sensors.Values)
                     sensor.TryMove(TableSensorState.Registered, TableSensorState.Pending);
@@ -341,7 +376,13 @@ namespace HSMDataCollector.Tables
 
             try
             {
-                await PackAsync().ConfigureAwait(false);
+                // The final tick: what it takes is the last of this run. Rows added after it are refused and
+                // counted until the next Start (#1846 review, item 2); a writer that reserved before is checked
+                // again under its sensor's lock, and what lands after the pack is discarded and counted below.
+                Volatile.Write(ref _acceptingRows, 0);
+
+                // Observes the budget between passes: what is not packed in time is dropped and counted (item 4).
+                await PackAsync(drainBudget, TableDropReason.NotDeliveredAtStop).ConfigureAwait(false);
 
                 if (_channel != null && !drainBudget.IsCancellationRequested)
                     await DeliverAsync(drainBudget, atStop: true).ConfigureAwait(false);
@@ -361,6 +402,8 @@ namespace HSMDataCollector.Tables
         /// <summary>A stop that does not drain (the rollback of a failed start): everything held is dropped and counted.</summary>
         internal async Task StopWithoutFlushAsync()
         {
+            Volatile.Write(ref _acceptingRows, 0);
+
             if (!await EndRunAsync().ConfigureAwait(false))
                 return;
 
@@ -403,6 +446,14 @@ namespace HSMDataCollector.Tables
 
             if (loop != null)
                 await Task.WhenAny(loop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+            // A tick of this run that is packing (a scheduled one, or one a test drives) finishes before the stop goes
+            // on: it observes the cancelled run between passes, so this is short, and a block it packs can never be
+            // enqueued after the stop cleared the backlog, to go out under the next run's producer (item 5).
+            OnStopWaitsForPackForTests?.Invoke();
+
+            await _packGate.WaitAsync().ConfigureAwait(false);
+            _packGate.Release();
 
             run.Dispose();
             return true;
@@ -459,6 +510,7 @@ namespace HSMDataCollector.Tables
         {
             var channel = _channel;
             CancellationToken token;
+            long run;
 
             lock (_runLock)
             {
@@ -466,27 +518,37 @@ namespace HSMDataCollector.Tables
                     return;
 
                 token = _run.Token;
+                run = Interlocked.Read(ref _runGeneration);
             }
 
             Observe(Task.Run(async () =>
             {
                 await channel.WaitUntilReadyAsync(token).ConfigureAwait(false);
-                await RegisterPendingAsync(token).ConfigureAwait(false);
+                await RegisterPendingAsync(token, run).ConfigureAwait(false);
             }));
         }
+
+        // The number of the current run, rising at every Start: an answer of an earlier run changes nothing.
+        private long _runGeneration;
+
+        /// <summary>For tests: runs after a registration request is answered, before the answer is applied.</summary>
+        internal Func<Task> OnRegistrationAnsweredForTests { get; set; }
 
         /// <summary>
         /// Registers every Pending sensor not already in a request, in one request of table registrations. Accepted
         /// sensors are Registered, refused ones Refused for good; the rest stay Pending and go again on the next tick.
         /// </summary>
-        internal async Task RegisterPendingAsync(CancellationToken token)
+        internal async Task RegisterPendingAsync(CancellationToken token, long run)
         {
             var channel = _channel;
 
             if (channel == null)
                 return;
 
-            var batch = _sensors.Values.Where(s => s.State == TableSensorState.Pending && s.TryBeginRegistration()).ToList();
+            // In path order, so the frames of a large request are cut the same way every time.
+            var batch = _sensors.Values.Where(s => s.State == TableSensorState.Pending && s.TryBeginRegistration(run))
+                                       .OrderBy(s => s.Path, StringComparer.Ordinal)
+                                       .ToList();
 
             if (batch.Count == 0)
                 return;
@@ -507,6 +569,16 @@ namespace HSMDataCollector.Tables
                 {
                     result = TableRegistrationResult.NotSent(ex.Message);
                 }
+
+                var answered = OnRegistrationAnsweredForTests;
+
+                if (answered != null)
+                    await answered().ConfigureAwait(false);
+
+                // An answer to a request of an earlier run: the run that is going now registers its sensors itself
+                // (#1846 review, item 9).
+                if (run != Interlocked.Read(ref _runGeneration))
+                    return;
 
                 var unsettled = 0;
 
@@ -536,7 +608,7 @@ namespace HSMDataCollector.Tables
             finally
             {
                 foreach (var sensor in batch)
-                    sensor.EndRegistration();
+                    sensor.EndRegistration(run);
             }
         }
 
@@ -551,6 +623,7 @@ namespace HSMDataCollector.Tables
         internal async Task TickAsync()
         {
             CancellationToken token;
+            long run;
 
             lock (_runLock)
             {
@@ -558,20 +631,21 @@ namespace HSMDataCollector.Tables
                     return;
 
                 token = _run.Token;
+                run = Interlocked.Read(ref _runGeneration);
             }
 
             try
             {
                 ReportDrops();
 
-                var registration = RegisterPendingAsync(token);
+                var registration = RegisterPendingAsync(token, run);
 
                 if (_manualTick)
                     await registration.ConfigureAwait(false);
                 else
                     Observe(registration);
 
-                await PackAsync().ConfigureAwait(false);
+                await PackAsync(token, TableDropReason.NotDeliveredAtStop).ConfigureAwait(false);
 
                 if (_manualTick)
                     await DeliverAsync(token, atStop: false).ConfigureAwait(false);
@@ -602,8 +676,12 @@ namespace HSMDataCollector.Tables
             internal int Count { get; }
         }
 
-        /// <summary>Takes the rows of every registered sensor and packs them into blocks at the end of the backlog.</summary>
-        internal async Task PackAsync()
+        /// <summary>
+        /// Takes the rows of every registered sensor and packs them into blocks at the end of the backlog. Observes
+        /// <paramref name="token"/> before every compression pass: the rows not packed when it fires are dropped under
+        /// <paramref name="cancelledReason"/> and counted (#1846 review, items 4 and 5).
+        /// </summary>
+        internal async Task PackAsync(CancellationToken token, TableDropReason cancelledReason)
         {
             await _packGate.WaitAsync().ConfigureAwait(false);
 
@@ -632,8 +710,13 @@ namespace HSMDataCollector.Tables
                 foreach (var entry in taken)
                     Cut(entry.Key, entry.Value, limits, pieces);
 
+                var abandoned = 0L;
+
                 foreach (var group in Group(pieces, limits))
-                    EncodeAndQueue(group, maxBlock);
+                    abandoned += EncodeAndQueue(group, maxBlock, token, cancelledReason);
+
+                if (abandoned > 0)
+                    _logger?.Error($"Packing table rows was cut short ({abandoned} row(s) not packed in time); they are dropped and counted.");
             }
             catch (Exception ex)
             {
@@ -704,22 +787,37 @@ namespace HSMDataCollector.Tables
         }
 
         // One block per group; a block larger than a frame allows is split, by tables first and then by rows.
-        private void EncodeAndQueue(List<Piece> group, int maxBlock)
+        // Returns the rows left unpacked because the token fired (dropped and counted here).
+        private long EncodeAndQueue(List<Piece> group, int maxBlock, CancellationToken token, TableDropReason cancelledReason)
         {
+            if (token.IsCancellationRequested)
+            {
+                long rows = 0;
+
+                foreach (var cut in group)
+                {
+                    cut.Sensor.Drop(cut.Count, cancelledReason);
+                    rows += cut.Count;
+                }
+
+                return rows;
+            }
+
+            OnPackPassForTests?.Invoke();
+
             var block = Encode(group);
 
             if (block.Length <= maxBlock)
             {
                 Enqueue(block, group);
-                return;
+                return 0;
             }
 
             if (group.Count > 1)
             {
                 var half = group.Count / 2;
-                EncodeAndQueue(group.GetRange(0, half), maxBlock);
-                EncodeAndQueue(group.GetRange(half, group.Count - half), maxBlock);
-                return;
+                return EncodeAndQueue(group.GetRange(0, half), maxBlock, token, cancelledReason)
+                     + EncodeAndQueue(group.GetRange(half, group.Count - half), maxBlock, token, cancelledReason);
             }
 
             var piece = group[0];
@@ -727,14 +825,23 @@ namespace HSMDataCollector.Tables
             if (piece.Count > 1)
             {
                 var first = piece.Count / 2;
-                EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock);
-                EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock);
-                return;
+                return EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, token, cancelledReason)
+                     + EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, token, cancelledReason);
             }
 
             piece.Sensor.Drop(1, TableDropReason.RowTooLarge);
             _diagnostics.AddError($"A row of the table sensor {piece.Sensor.Path} does not fit a frame of the table connection ({maxBlock} bytes) and is dropped.");
+            return 0;
         }
+
+        /// <summary>For tests: runs when a stop is about to wait for a pack of its run to finish.</summary>
+        internal Action OnStopWaitsForPackForTests { get; set; }
+
+        /// <summary>For tests: runs after a block got its answer and before the answer is applied.</summary>
+        internal Action OnAckForTests { get; set; }
+
+        /// <summary>For tests: runs before every compression pass of a pack.</summary>
+        internal Action OnPackPassForTests { get; set; }
 
         private byte[] Encode(List<Piece> group)
         {
@@ -891,12 +998,19 @@ namespace HSMDataCollector.Tables
                     }
                     finally
                     {
-                        lock (_backlogLock)
-                            _inFlight = null;
+                        // A cancelled put leaves the block where it is, no longer in flight.
+                        if (token.IsCancellationRequested)
+                            lock (_backlogLock)
+                                _inFlight = null;
                     }
+
+                    OnAckForTests?.Invoke();
 
                     if (ack.Outcome == TableBlockOutcome.NotDelivered)
                     {
+                        lock (_backlogLock)
+                            _inFlight = null;
+
                         if (ack.RetryAfter.HasValue)
                         {
                             var wait = ack.RetryAfter.Value < MaxRetryAfter ? ack.RetryAfter.Value : MaxRetryAfter;
@@ -917,14 +1031,26 @@ namespace HSMDataCollector.Tables
         }
 
         // A block with a final answer leaves the backlog; its refused tables are counted and acted on.
+        // The block stays in flight, and so out of reach of the backlog bound, until this step removes it: the removal,
+        // the end of in-flight and the accounting are one step under the backlog's lock (#1846 review, item 6). A
+        // block the bound took anyway (only a stop's DropEverything does) was counted there and is not counted again.
         private void Settle(PendingBlock block, TableBlockAck ack)
         {
+            bool removed;
+
             lock (_backlogLock)
             {
-                // Dropped for the bound while it was away? Then it is not in the list any more.
-                if (_backlog.Remove(block))
+                removed = _backlog.Remove(block);
+
+                if (removed)
                     Interlocked.Add(ref _backlogBytes, -block.Bytes.Length);
+
+                if (ReferenceEquals(_inFlight, block))
+                    _inFlight = null;
             }
+
+            if (!removed)
+                return;
 
             switch (ack.Outcome)
             {

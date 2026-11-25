@@ -67,9 +67,38 @@ namespace HSMDataCollector.Tables
             Count += rows;
         }
 
-        /// <summary>Forgets the rows and keeps the arrays, so a buffer that goes back to its sensor does not grow again.</summary>
+        /// <summary>
+        /// The capacity in rows a cleared buffer keeps. A buffer that grew past it gives its arrays up when it is
+        /// cleared: the bytes of the rows left the collector-wide bound when they were packed, and arrays kept beyond
+        /// that would be memory no bound covers (#1846 review, item 1). A sensor has two buffers, so a quiet sensor
+        /// keeps at most 2 x 256 rows' worth of arrays: 4 KiB per column, the time included.
+        /// </summary>
+        internal const int RetainedCapacity = 256;
+
+        /// <summary>The rows the arrays can take now without growing.</summary>
+        internal int Capacity => _times?.Length ?? 0;
+
+        /// <summary>
+        /// Forgets the rows. A buffer within <see cref="RetainedCapacity"/> keeps its arrays, so a quiet sensor does not
+        /// allocate every tick; a larger one gives them up.
+        /// </summary>
         internal void Clear()
         {
+            if (Capacity > RetainedCapacity)
+            {
+                _times = null;
+
+                for (var column = 0; column < _columnCount; column++)
+                {
+                    _values[column] = null;
+                    _nulls[column] = null;
+                    _hasNulls[column] = false;
+                }
+
+                Count = 0;
+                return;
+            }
+
             for (var column = 0; column < _columnCount; column++)
                 if (_hasNulls[column])
                 {

@@ -114,6 +114,23 @@ namespace HSMDataCollector.Tests.Transport
         /// </summary>
         public void RefuseRegistrationOf(string path, string error) => _registrationErrors[path] = error;
 
+        private readonly ConcurrentDictionary<string, int> _faultingPaths = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+
+        /// <summary>A <c>commands</c> request whose body carries <paramref name="path"/> is answered <paramref name="status"/>, every time.</summary>
+        public void FaultCommandsCarrying(string path, int status) => _faultingPaths[path] = status;
+
+        private int? FaultFor(string op, string body)
+        {
+            if (op != "commands" || _faultingPaths.IsEmpty || string.IsNullOrEmpty(body))
+                return null;
+
+            foreach (var fault in _faultingPaths)
+                if (body.Contains("\"Path\":\"" + fault.Key + "\""))
+                    return fault.Value;
+
+            return null;
+        }
+
         // The per-path errors of a commands ack: the scripted refusals of the paths the request carries.
         private string RegistrationErrorsFor(string op, string body)
         {
@@ -385,7 +402,7 @@ namespace HSMDataCollector.Tests.Transport
             if (!id.HasValue)
                 return;
 
-            var status = _ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200;
+            var status = FaultFor(op, body) ?? (_ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200);
 
             lock (_script)
             {

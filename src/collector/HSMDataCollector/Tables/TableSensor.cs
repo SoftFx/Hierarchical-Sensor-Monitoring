@@ -34,8 +34,8 @@ namespace HSMDataCollector.Tables
         private long _rowsAccepted;
         private long _rowsDropped;
 
-        // 1 while a registration request carries this sensor.
-        private int _registering;
+        // The run whose registration request carries this sensor; 0 when none does.
+        private long _registering;
 
 
         internal TableSensor(TablePipeline pipeline, string path, IReadOnlyList<TableColumn> columns, TableSchema schema,
@@ -91,6 +91,16 @@ namespace HSMDataCollector.Tables
 
         internal HSMTableBlocks.TableColumnType ColumnType(int column) => _types[column];
 
+        /// <summary>For tests: the rows the arrays of both buffers can hold without growing.</summary>
+        internal int RetainedRowCapacity
+        {
+            get
+            {
+                lock (_lock)
+                    return (_active?.Capacity ?? 0) + (_spare?.Capacity ?? 0);
+            }
+        }
+
 
         public bool AddRow(DateTime time, TableCell first)
         {
@@ -143,8 +153,17 @@ namespace HSMDataCollector.Tables
             if (!TryReserve(1))
                 return false;
 
+            BeforeAppendForTests?.Invoke();
+
             lock (_lock)
+            {
+                // Checked again under the lock that a refusal and a discard take: a row reserved while the
+                // sensor was writable is not appended once it is not (#1846 review, items 2 and 3).
+                if (!CanAppend(1))
+                    return false;
+
                 _active.Append(ticks, cells);
+            }
 
             Interlocked.Increment(ref _rowsAccepted);
             return true;
@@ -180,8 +199,15 @@ namespace HSMDataCollector.Tables
             if (!TryReserve(rows))
                 return 0;
 
+            BeforeAppendForTests?.Invoke();
+
             lock (_lock)
+            {
+                if (!CanAppend(rows))
+                    return 0;
+
                 _active.Append(times, cells, rows);
+            }
 
             Interlocked.Add(ref _rowsAccepted, rows);
             return rows;
@@ -221,6 +247,24 @@ namespace HSMDataCollector.Tables
         }
 
 
+        /// <summary>For tests: runs between the reservation of a row and its append under the sensor's lock.</summary>
+        internal Action BeforeAppendForTests { get; set; }
+
+        // Under _lock: whether reserved rows may still be appended. When not, the reservation goes back and the rows
+        // are counted as dropped.
+        private bool CanAppend(int rows)
+        {
+            var reason = _pipeline.WhyRowsAreRefused(this);
+
+            if (reason == TableDropReason.None)
+                return true;
+
+            _pipeline.ReleaseBuffer((long)rows * RowBytes);
+            Drop(rows, reason);
+
+            return false;
+        }
+
         internal void Drop(long rows, TableDropReason reason)
         {
             if (rows <= 0)
@@ -230,9 +274,27 @@ namespace HSMDataCollector.Tables
             _pipeline.CountDropped(rows, reason);
         }
 
-        internal bool TryBeginRegistration() => Interlocked.CompareExchange(ref _registering, 1, 0) == 0;
+        /// <summary>
+        /// Marks the sensor as carried by a registration request of run <paramref name="run"/> (a positive number).
+        /// False when a request of the same run carries it already; a request of an earlier run does not hold a new
+        /// run back (#1846 review, item 9).
+        /// </summary>
+        internal bool TryBeginRegistration(long run)
+        {
+            while (true)
+            {
+                var current = Interlocked.Read(ref _registering);
 
-        internal void EndRegistration() => Volatile.Write(ref _registering, 0);
+                if (current == run)
+                    return false;
+
+                if (Interlocked.CompareExchange(ref _registering, run, current) == current)
+                    return true;
+            }
+        }
+
+        /// <summary>Ends the mark of run <paramref name="run"/>; a mark of a later run stays.</summary>
+        internal void EndRegistration(long run) => Interlocked.CompareExchange(ref _registering, 0, run);
 
         /// <summary>Moves the state from <paramref name="from"/> to <paramref name="to"/>; false when it was not <paramref name="from"/>.</summary>
         internal bool TryMove(TableSensorState from, TableSensorState to, string reason = null)
