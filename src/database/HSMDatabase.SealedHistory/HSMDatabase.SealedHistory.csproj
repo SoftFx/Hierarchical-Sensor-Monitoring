@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
+    <!-- The batch codec of table sensors (#1850) takes the column types and the null map bit order of the block format. -->
+    <ProjectReference Include="..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

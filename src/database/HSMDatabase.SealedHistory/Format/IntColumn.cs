@@ -133,6 +133,27 @@ namespace HSMDatabase.SealedHistory.Format
         }
 
 
+        /// <summary>
+        /// Writes the column in varint mode with the given residual order, whatever the other modes would cost: the
+        /// stored batch of table sensors (#1850) chooses its encoding by size after zstd, where varints of the
+        /// differences win over the bit mode that <see cref="Write"/> prefers before zstd. The bytes are the varint
+        /// mode of the layout above, so <see cref="Read"/> decodes them. Used by the batch codec only; the sealed
+        /// chunk encoder keeps calling <see cref="Write"/>.
+        /// </summary>
+        internal static void WriteVarint(ByteSink sink, ReadOnlySpan<long> values, int order)
+        {
+            if (values.Length == 0)
+                throw new InvalidOperationException("An integer column holds at least one value.");
+            if (order < OrderRaw || order > OrderDeltaOfDelta)
+                throw new ArgumentOutOfRangeException(nameof(order));
+
+            sink.WriteByte(ModeVarint);
+            sink.WriteByte((byte)order);
+
+            foreach (var r in Residuals(values, order))
+                sink.WriteVarInt(r);
+        }
+
         internal static bool IsConstant(ReadOnlySpan<long> values)
         {
             for (int i = 1; i < values.Length; i++)
