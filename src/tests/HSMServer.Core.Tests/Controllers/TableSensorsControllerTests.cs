@@ -478,6 +478,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_first_page_at_the_limit_that_shows_one_more_row_is_refused_before_the_first_byte()
+        {
+            // The first page holds two rows and was cut before the third: the range holds more than the limit.
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 2, MaxDownloadRows = 2 };
+            var table = await SeedAsync(3);
+
+            var (status, text, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString());
+
+            Assert.Equal((400, Pages().TooMany()), (status, text));
+            Assert.False(Aborted(context));
+        }
+
+        [Fact]
         public async Task More_rows_than_the_download_limit_found_while_writing_abort_the_connection()
         {
             _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5, MaxDownloadRows = 7 };

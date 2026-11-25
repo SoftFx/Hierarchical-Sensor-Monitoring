@@ -356,7 +356,8 @@ namespace HSMServer.TablePages
             if (first.RowsAtTimeOmitted)
                 return Refuse(StatusCodes.Status400BadRequest, TooManyAtOneTime(first));
 
-            if (first.RowCount > _maxDownloadRows)
+            // A first page at the limit that was cut (a row was left out) already shows a row past the limit.
+            if (first.RowCount > _maxDownloadRows || (first.RowCount >= _maxDownloadRows && first.Truncated))
                 return Refuse(StatusCodes.Status400BadRequest, TooMany());
 
             return new TableDownloadResult(this, user, table.Id, toUtc, first, FileName(table.FullPath, fromUtc, toUtc));
