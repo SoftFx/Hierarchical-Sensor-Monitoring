@@ -409,6 +409,9 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_large_file_three_discards_give_up
             native_large_file_close_1008_is_final
             native_large_file_empty_file_is_stored
+            native_large_file_cpp_wrapper
+            native_large_file_corrupt_state_is_set_aside
+            native_large_file_checksum_mismatch_sends_the_piece_again
             native_large_file_http_transport_is_unavailable
             native_large_file_argument_mistakes_and_dispose
             native_large_file_stop_and_dispose_in_the_middle)

@@ -5,6 +5,7 @@
 // fails it when it expires.
 
 #include "hsm_collector/hsm_collector.h"
+#include "hsm_collector/hsm_collector.hpp"
 
 #include <functional>
 #include <map>
@@ -581,6 +582,101 @@ namespace
         hsm_large_file_release(file);
     }
 
+    // The C++ wrapper: the options map to the C ABI's (zero = default, a zero limit = none), and the handles
+    // read the outcome and the watch state.
+    void NativeLargeFileCppWrapper()
+    {
+        hsm::collector::LargeFileOptions options;
+        auto native = hsm::collector::detail::ToNative(options);
+        Check(native.struct_size == sizeof native && native.settle_ms == 60000 && native.max_bytes_per_second == 10000000 && native.no_new_file_alert == 0 &&
+                  native.keep_source == 0,
+              "the wrapper's defaults are the ABI's");
+        options.max_bytes_per_second = 0;
+        options.new_file_alert = false;
+        options.keep_source = true;
+        native = hsm::collector::detail::ToNative(options);
+        Check(native.max_bytes_per_second == HSM_LARGE_FILE_NO_SPEED_LIMIT && native.no_new_file_alert == 1 && native.keep_source == 1, "the wrapper maps its fields");
+
+        Rig rig;
+        const std::string source = rig.folder.File("wrapped.dmp");
+        WriteFile(source, Content(1000, 1));
+        rig.Start();
+        auto c_options = NoLimit();
+        hsm_large_file_t* handle = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &c_options, &handle) == HSM_RESULT_OK, "send");
+        hsm::collector::LargeFile file(handle);
+        Check(WaitFor([&] { return file.Outcome() != hsm::collector::LargeFileOutcome::Pending; }), "settled");
+        Check(file.Outcome() == hsm::collector::LargeFileOutcome::Stored && file.SourceDeleted() && file.StoredTime().has_value() && file.Reason().empty(),
+              "the wrapper reads the outcome: " + file.Reason());
+        hsm_large_file_watch_t* watch_handle = nullptr;
+        Check(hsm_collector_watch_large_files(rig.collector, "dumps", rig.folder.Str().c_str(), "*.dmp", &c_options, &watch_handle) == HSM_RESULT_OK, "watch");
+        {
+            hsm::collector::LargeFileWatch watch(watch_handle);
+            Check(watch.State() == hsm::collector::LargeFileWatchState::Active && watch.FilesStored() == 0, "the wrapper reads the watch");
+        }
+        // The watch was released with its wrapper: an equal one is allowed again.
+        Check(hsm_collector_watch_large_files(rig.collector, "dumps", rig.folder.Str().c_str(), "*.dmp", &c_options, nullptr) == HSM_RESULT_OK, "watch again");
+    }
+
+    // A state file that cannot be read is set aside and said; the kept file is offered again and the server
+    // answers that it has it.
+    void NativeLargeFileCorruptStateIsSetAside()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("state.dmp");
+        WriteFile(source, Content(1000, 1));
+        rig.Start();
+        auto options = NoLimit();
+        options.keep_source = 1;
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored");
+        hsm_large_file_release(file);
+        rig.Destroy();
+
+        std::string state;
+        for (const auto& entry : fs::recursive_directory_iterator(rig.data.path))
+            if (entry.path().filename().u8string().rfind("sent-", 0) == 0 && entry.path().extension() == ".json")
+                state = entry.path().u8string();
+        Check(!state.empty(), "the state of handed-over files is written");
+        WriteFile(state, "{ not json");
+
+        rig.Make();
+        rig.Start();
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send again");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored again: " + Reason(file));
+        Check(rig.script->Begins().size() == 2 && rig.script->StoredFiles().size() == 1, "begun again; the server answered stored");
+        Check(rig.log.Count("could not be read") == 1, "the corrupt state is said");
+        bool aside = false;
+        for (const auto& entry : fs::recursive_directory_iterator(rig.data.path))
+            aside = aside || entry.path().filename().u8string().find(".corrupt-") != std::string::npos;
+        Check(aside, "the corrupt file is kept aside");
+        Check(Exists(source), "a kept file stays");
+        hsm_large_file_release(file);
+    }
+
+    // A piece with a wrong checksum is sent again; three in a row reconnect and begin again.
+    void NativeLargeFileChecksumMismatchSendsThePieceAgain()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("crc.dmp");
+        const std::string bytes = Content(3 * 65536, 2);
+        WriteFile(source, bytes);
+        rig.script->CorruptNextPieceCrcs(4);
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
+        std::vector<std::int64_t> numbers;
+        for (const auto& piece : rig.script->Pieces())
+            numbers.push_back(piece.number);
+        Check(numbers == std::vector<std::int64_t>{ 0, 0, 0, 0, 0, 1, 2 }, "the same piece again until it passes");
+        Check(rig.script->Begins().size() == 2, "three in a row: a new connection and a begin");
+        Check(rig.script->StoredFiles().begin()->second == bytes, "the bytes");
+        hsm_large_file_release(file);
+    }
+
     void NativeLargeFileEmptyFileIsStored()
     {
         Rig rig;
@@ -726,7 +822,14 @@ namespace
         Check(WaitFor([&] { return rig.script->Pieces().size() == 1; }), "a piece in flight");
         AppendFile(source, Content(10, 1));
         // The unanswered piece ends with the request timeout; the collector then reads on and finds the change.
-        Check(WaitFor([&] { return rig.script->Discards().size() == 1; }, 30), "the upload is discarded");
+        // The connection that lost the piece is opened again after a pause on the collector's clock.
+        Check(WaitFor(
+                  [&] {
+                      rig.Advance(1000);
+                      return rig.script->Discards().size() == 1;
+                  },
+                  30),
+              "the upload is discarded" + rig.log.All());
         rig.Settle(60000);
         Check(WaitFor([&] { return rig.script->StoredFiles().size() == 1; }, 30), "sent again once settled");
         Check(rig.script->StoredFiles().begin()->second.size() == 3 * 65536 + 10, "the changed file");
@@ -751,6 +854,9 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_no_room_is_tried_again", [](const std::string&) { NativeLargeFileNoRoomIsTriedAgain(); } },
         { "native_large_file_three_discards_give_up", [](const std::string&) { NativeLargeFileThreeDiscardsGiveUp(); } },
         { "native_large_file_close_1008_is_final", [](const std::string&) { NativeLargeFileClose1008IsFinal(); } },
+        { "native_large_file_corrupt_state_is_set_aside", [](const std::string&) { NativeLargeFileCorruptStateIsSetAside(); } },
+        { "native_large_file_checksum_mismatch_sends_the_piece_again", [](const std::string&) { NativeLargeFileChecksumMismatchSendsThePieceAgain(); } },
+        { "native_large_file_cpp_wrapper", [](const std::string&) { NativeLargeFileCppWrapper(); } },
         { "native_large_file_empty_file_is_stored", [](const std::string&) { NativeLargeFileEmptyFileIsStored(); } },
         { "native_large_file_http_transport_is_unavailable", [](const std::string&) { NativeLargeFileHttpTransportIsUnavailable(); } },
         { "native_large_file_argument_mistakes_and_dispose", [](const std::string&) { NativeLargeFileArgumentMistakesAndDispose(); } },
